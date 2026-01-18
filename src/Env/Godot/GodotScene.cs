@@ -1,0 +1,31 @@
+using AlleyCat.Actor;
+using Godot;
+using LanguageExt;
+
+namespace AlleyCat.Env.Godot;
+
+public class GodotScene(SceneTree sceneTree) : IScene
+{
+    public const string ActorGroupName = "Actors";
+
+    public Eff<IEnv, Seq<IActor>> Actors => sceneTree
+        .GetNodesInGroup(ActorGroupName)
+        .Cast<ActorFactory>()
+        .AsIterable()
+        .Traverse(x => x.TypedService)
+        .Map(x => x.ToSeq())
+        .As();
+
+    public IO<Viewport> GetViewport() => IO.lift(() => sceneTree.GetRoot().GetViewport());
+
+    public IO<T> AddNode<T>(T node) where T : Node => IO.lift(() =>
+    {
+        var root = sceneTree.Root;
+
+        root.AddChild(node, @internal: Node.InternalMode.Back);
+
+        node.Owner = root;
+
+        return node;
+    });
+}

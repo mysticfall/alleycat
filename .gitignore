@@ -1,0 +1,16 @@
+# Assets
+data/
+
+# Godot 4+ specific ignores
+.godot/
+addons/
+android/
+
+# JetBrains IDE
+.idea/
+
+# .NET
+obj/
+
+# Misc.
+*.blend1

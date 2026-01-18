@@ -1,0 +1,16 @@
+using AlleyCat.Actor;
+using AlleyCat.Env;
+using Godot;
+using LanguageExt;
+using static LanguageExt.Prelude;
+
+namespace AlleyCat.Tests.Env;
+
+public readonly struct MockScene(Seq<IActor> actors) : IScene
+{
+    public Eff<IEnv, Seq<IActor>> Actors => SuccessEff(actors);
+
+    public IO<Viewport> GetViewport() => throw new NotImplementedException();
+
+    public IO<T> AddNode<T>(T node) where T : Node => throw new NotImplementedException();
+}
