@@ -45,6 +45,10 @@ public abstract partial class ResourceFactory<TService> : ResourceFactory, IServ
         from loggerFactory in service<ILoggerFactory>()
         from instance in
             from service in CreateService(loggerFactory)
+                .MapFail(e => new ServiceCreationError(
+                    $"Failed to initialise service: {ResourceName}",
+                    e
+                ))
             from cleanup in service is IRunnable i
                 ? Some(i.Run()).Traverse(identity).As()
                 : SuccessEff<Option<IDisposable>>(None)
