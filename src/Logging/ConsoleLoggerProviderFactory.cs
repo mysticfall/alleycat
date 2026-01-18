@@ -76,13 +76,6 @@ public class ConsoleLogger(
             _builder.Append(id);
         });
 
-        if (eventId != null)
-        {
-            _builder.Append(" (");
-            _builder.Append(eventId);
-            _builder.Append(')');
-        }
-
         _builder.Append("] ");
         _builder.Append(message);
 
