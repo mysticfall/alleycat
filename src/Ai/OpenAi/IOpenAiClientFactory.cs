@@ -30,12 +30,12 @@ public interface IOpenAiClientFactory
         from config in service<IConfiguration>()
         from section in config.RequireSection(sectionName)
         from model in IO
-            .pure(section.GetValue<string>("model", "default"))
+            .pure(section.GetValue<string>("Model", "default"))
         from endpoint in IO
-            .pure(section.GetValue<string>("endpoint", "https://openrouter.ai/api/v1"))
+            .pure(section.GetValue<string>("Endpoint", "https://openrouter.ai/api/v1"))
             .Map(x => new Uri(x, UriKind.Absolute))
         from apiKey in IO
-            .pure(section.GetValue<string>("apiKey", "secret"))
+            .pure(section.GetValue<string>("ApiKey", "secret"))
             .Map(x => new ApiKeyCredential(x))
         let client = new OpenAIClient(apiKey, new OpenAIClientOptions
         {
