@@ -19,7 +19,7 @@ public partial class NeuroSyncGenFactory : LipSyncGeneratorFactory
     ) =>
         from env in runtime<IEnv>()
         from uri in IO
-            .pure(config.GetValue<string>("endpoint", "http://localhost:8000"))
+            .pure(config.GetValue<string>("Endpoint", "http://localhost:8000"))
             .Map(x => new Uri(x, UriKind.Absolute))
         from service in liftEff(ILipSyncGenerator () =>
         {
