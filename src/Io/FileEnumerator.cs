@@ -30,14 +30,22 @@ public struct FileEnumerator : IEnumerator<IFileInfo?>
         _endsWithSeparator = _path.EndsWith(FileInfo.Separator);
 
         _directory = DirAccess.Open(path);
-        _directory.ListDirBegin().ThrowOnError();
+
+        if (_directory == null)
+        {
+            DirAccess
+                .GetOpenError()
+                .ThrowOnError(e => $"Failed to open directory '{path}': {e}");
+        }
+
+        _directory!.ListDirBegin().ThrowOnError();
     }
 
     public bool MoveNext()
     {
         var path = _directory.GetNext();
 
-        while (path == CurrentDir || path == ParentDir)
+        while (path is CurrentDir or ParentDir)
         {
             path = _directory.GetNext();
         }
