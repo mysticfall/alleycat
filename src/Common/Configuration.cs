@@ -15,7 +15,7 @@ public static class ConfigurationExtensions
 
             return section.Exists()
                 ? SuccessEff(section)
-                : Error.New("No such config section exists: '{name}'");
+                : Error.New($"No such config section exists: '{name}'");
         }
 
         public Eff<T> RequireValue<T>(string name) =>
