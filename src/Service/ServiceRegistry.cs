@@ -72,7 +72,6 @@ public partial class ServiceRegistry : DeferredQueueNode
                 _ => minEnv,
                 Services
                     .AsIterable()
-                    .Filter(x => x.ServiceType.IsClass)
                     .Traverse(x =>
                         from service in x.Service
                         from _ in liftEff(() =>
