@@ -1,0 +1,32 @@
+<Project Sdk="Godot.NET.Sdk/4.6.0-rc.1">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <EnableDynamicLoading>true</EnableDynamicLoading>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+        <Nullable>enable</Nullable>
+        <LangVersion>default</LangVersion>
+        <NoWarn>OPENAI001</NoWarn>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile Remove="test/**/*.cs" />
+        <PackageReference Update="GodotSharp" Version="4.6.0-rc.1" />
+        <PackageReference Include="Ensure.That" Version="11.0.0-p3" />
+        <PackageReference Include="Handlebars.Net" Version="2.1.6" />
+        <PackageReference Include="LanguageExt.Core" Version="5.0.0-beta-77" />
+        <PackageReference Include="LanguageExt.Rx" Version="5.0.0-beta-77" />
+        <PackageReference Include="LanguageExt.Streaming" Version="5.0.0-beta-77" />
+        <PackageReference Include="Markdig" Version="0.44.0" />
+        <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260108.1" />
+        <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-preview.260108.1" />
+        <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-preview.260108.1" />
+        <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-preview.260108.1" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.2" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.1" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.1" />
+        <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.14.0" />
+        <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    </ItemGroup>
+</Project>

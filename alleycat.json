@@ -1,0 +1,18 @@
+{
+  "LLM": {
+    "EndPoint": "https://openrouter.ai/api/v1",
+    "Model": "mistralai/mistral-medium-3.1"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "AlleyCat": "Trace",
+      "System.ClientModel.Primitives.MessageLoggingPolicy": "Trace"
+    },
+    "Console": {
+      "LogLevel": {
+        "Default": "Debug"
+      }
+    }
+  }
+}
