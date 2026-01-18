@@ -46,6 +46,11 @@ public partial class ServiceRegistry : DeferredQueueNode
 
                         foreach (var provider in Loggers)
                         {
+                            GD.Print(
+                                "Registering a logger provider: ",
+                                provider.GetType().FullName
+                            );
+
                             provider
                                 .Configure(builder)
                                 .Run(initEnv)
