@@ -47,6 +47,10 @@ public abstract partial class NodeFactory<TService> : NodeFactory, IServiceFacto
         from loggerFactory in service<ILoggerFactory>()
         from instance in
             from service in CreateService(loggerFactory)
+                .MapFail(e => new ServiceCreationError(
+                    $"Failed to initialise service: {GetPath()}",
+                    e
+                ))
             from cleanup in service is IRunnable i
                 ? Some(i.Run()).Traverse(identity).As()
                 : SuccessEff<Option<IDisposable>>(None)
@@ -88,7 +92,7 @@ public abstract partial class NodeFactory<TService> : NodeFactory, IServiceFacto
             {
                 if (log.IsEnabled(LogLevel.Error))
                 {
-                    log.LogError(e, "Service failed to initialise: {}", e);
+                    log.LogError(e.ToException(), "Service failed to initialise.");
                 }
             }, () =>
             {
