@@ -9,7 +9,7 @@ namespace AlleyCat.Actor.Action;
 [GlobalClass]
 public abstract partial class AiActionFactory : ActionFactory
 {
-    [Export] public string? Name { get; set; }
+    [Export] public virtual string? Name { get; set; }
 
     protected override Eff<IEnv, IAction> CreateService(ILoggerFactory loggerFactory) =>
         from name in AiFunctionName.Create(Name?.Trim()).ToEff(identity)
