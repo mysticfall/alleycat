@@ -11,7 +11,7 @@ namespace AlleyCat.Template.Handlebars;
 [GlobalClass]
 public partial class HandlebarsCompilerFactory : TemplateCompilerFactory
 {
-    [Export] public string PartialsPath { get; set; } = "res://prompt/partial";
+    [Export] public string PartialsPath { get; set; } = "res://data/prompt/partial";
 
     [Export] public HandlebarsHelperFactory[] Helpers { get; set; } = [];
 
