@@ -9,6 +9,8 @@ namespace AlleyCat.Actor.Action;
 [GlobalClass]
 public partial class SpeakActionFactory : AiActionFactory
 {
+    [Export] public override string? Name { get; set; } = "speak";
+
     protected override Eff<IEnv, IAiAction> CreateService(
         AiFunctionName name,
         ILoggerFactory loggerFactory
