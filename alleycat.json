@@ -1,7 +1,19 @@
 {
   "LLM": {
-    "EndPoint": "https://openrouter.ai/api/v1",
+    "Endpoint": "https://openrouter.ai/api/v1",
     "Model": "mistralai/mistral-medium-3.1"
+  },
+  "TTS": {
+    "Endpoint": "http://localhost:8880/v1",
+    "Model": "tts-1-hd",
+    "ApiKey": "sk-unused"
+  },
+  "STT": {
+    "Endpoint": "http://localhost:8000/v1",
+    "Model": "Systran/faster-whisper-small.en"
+  },
+  "LipSync": {
+    "Endpoint": "http://localhost:8000"
   },
   "Logging": {
     "LogLevel": {
