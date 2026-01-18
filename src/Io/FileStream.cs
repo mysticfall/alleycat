@@ -10,8 +10,7 @@ public class FileStream : Stream
 {
     public override bool CanSeek => _file.IsOpen();
 
-    public override bool CanRead =>
-        _file.IsOpen() && (_access & FileAccess.Read) != 0 && !_file.EofReached();
+    public override bool CanRead => _file.IsOpen() && (_access & FileAccess.Read) != 0;
 
     public override bool CanWrite => _file.IsOpen() && (_access & FileAccess.Write) != 0;
 
@@ -74,7 +73,7 @@ public class FileStream : Stream
 
         CheckClosed();
 
-        var remaining = (int)(Length - Position);
+        var remaining = Length - Position;
 
         var size = Math.Min(Math.Min(buffer.Length - offset, count), remaining);
         var data = _file.GetBuffer(size);
@@ -84,6 +83,32 @@ public class FileStream : Stream
         Array.Copy(data, 0, buffer, offset, data.Length);
 
         return data.Length;
+    }
+
+    public override Task<int> ReadAsync(
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken cancellationToken
+    )
+    {
+        // Since Godot's FileAccess is synchronous, we wrap the sync operation
+        // Use Task.FromResult for truly synchronous operations to avoid freezing.
+        try
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromCanceled<int>(cancellationToken);
+            }
+
+            var bytesRead = Read(buffer, offset, count);
+
+            return Task.FromResult(bytesRead);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<int>(ex);
+        }
     }
 
     public override void Write(byte[] buffer, int offset, int count)
@@ -110,6 +135,30 @@ public class FileStream : Stream
         }
 
         CheckErrors();
+    }
+
+    public override Task WriteAsync(
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromCanceled(cancellationToken);
+            }
+
+            Write(buffer, offset, count);
+
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException(ex);
+        }
     }
 
     public override void SetLength(long value) => throw new NotImplementedException();
