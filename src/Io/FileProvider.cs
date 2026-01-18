@@ -26,9 +26,12 @@ public static class FileProviderExtensions
             return Error.New($"File not found: {path}");
         }
 
-        using var stream = file.CreateReadStream();
-        using var reader = new StreamReader(stream);
+        return liftIO(async () =>
+        {
+            await using var stream = file.CreateReadStream();
+            using var reader = new StreamReader(stream);
 
-        return liftIO(async () => await reader.ReadToEndAsync());
+            return await reader.ReadToEndAsync();
+        });
     }
 }
