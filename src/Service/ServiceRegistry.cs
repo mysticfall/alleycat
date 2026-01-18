@@ -84,12 +84,13 @@ public partial class ServiceRegistry : DeferredQueueNode
                             if (logger.IsEnabled(LogLevel.Information))
                             {
                                 logger.LogInformation(
-                                    "Registering a global service: {service}.",
+                                    "Registering a global service: {type}({impl}).",
+                                    x.ServiceType.FullName,
                                     service.GetType().FullName
                                 );
                             }
 
-                            services.AddSingleton(service);
+                            services.AddSingleton(x.ServiceType, service);
                         })
                         select unit
                     )
