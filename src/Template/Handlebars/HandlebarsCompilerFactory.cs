@@ -23,6 +23,10 @@ public partial class HandlebarsCompilerFactory : TemplateCompilerFactory
             .AsIterable()
             .ToSeq()
             .Traverse(x => x.TypedService)
-        from service in HandlebarsCompiler.Create(path, helpers)
+        from service in HandlebarsCompiler.Create(
+            path,
+            helpers,
+            loggerFactory: loggerFactory
+        )
         select service;
 }
