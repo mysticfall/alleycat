@@ -14,7 +14,7 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="GodotSharp" Version="4.6.0-rc.1"/>
+        <PackageReference Include="GodotSharp" Version="4.6.0-rc.2" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.2"/>
         <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.2"/>
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1"/>
