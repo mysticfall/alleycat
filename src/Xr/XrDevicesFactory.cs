@@ -25,6 +25,7 @@ public partial class XrDevicesFactory : NodeFactory<XrDevices>
     protected override Eff<IEnv, XrDevices> CreateService(ILoggerFactory loggerFactory) =>
         from env in runtime<IEnv>()
         from xr in Optional(XRServer.FindInterface("OpenXR"))
+            .Map(x => (OpenXRInterface)x)
             .Filter(x => x.IsInitialized())
             .ToEff(Error.New("OpenXR not initialised, please check if your headset is connected."))
         from origin in Origin.Require("Origin is not set")
@@ -33,7 +34,6 @@ public partial class XrDevicesFactory : NodeFactory<XrDevices>
         from leftController in LeftController.Require("Left controller is not set")
         from maxFps in FrameRate.Create(MaximumRefreshRate).ToEff(identity)
         let logger = loggerFactory.CreateLogger<XrDevicesFactory>()
-        let openXr = (OpenXRInterface)xr
         from viewport in env.Scene.GetViewport()
         from _ in liftIO(async () =>
         {
@@ -57,8 +57,8 @@ public partial class XrDevicesFactory : NodeFactory<XrDevices>
                 await ToSignal(xr, OpenXRInterface.SignalName.SessionBegun);
             }
 
-            var currentRefreshRate = (int)openXr.DisplayRefreshRate;
-            var availableRates = openXr.GetAvailableDisplayRefreshRates();
+            var currentRefreshRate = (int)xr.DisplayRefreshRate;
+            var availableRates = xr.GetAvailableDisplayRefreshRates();
 
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -77,7 +77,7 @@ public partial class XrDevicesFactory : NodeFactory<XrDevices>
                 {
                     if (x != currentRefreshRate)
                     {
-                        openXr.DisplayRefreshRate = x;
+                        xr.DisplayRefreshRate = x;
                     }
 
                     if (logger.IsEnabled(LogLevel.Information))
