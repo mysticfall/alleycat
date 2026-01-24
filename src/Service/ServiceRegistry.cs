@@ -1,4 +1,5 @@
 ﻿using AlleyCat.Async;
+using AlleyCat.Common;
 using AlleyCat.Env;
 using AlleyCat.Env.Godot;
 using AlleyCat.Logging;
@@ -21,6 +22,12 @@ public partial class ServiceRegistry : DeferredQueueNode
 
     public override void _Ready()
     {
+        var nodeFactories = this
+            .GetDescendants()
+            .OfType<IServiceFactory>();
+
+        var factories = Services.Concat(nodeFactories);
+
         //FIXME: Resolve dependencies of global services using DI.
         var register =
             from services in SuccessEff(new ServiceCollection())
@@ -75,7 +82,7 @@ public partial class ServiceRegistry : DeferredQueueNode
             })
             from _1 in localEff<MinRT, IEnv, Unit>(
                 _ => minEnv,
-                Services
+                factories
                     .AsIterable()
                     .Traverse(x =>
                         from service in x.Service
