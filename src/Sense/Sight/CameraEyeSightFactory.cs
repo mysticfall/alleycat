@@ -2,9 +2,11 @@ using AlleyCat.Animation;
 using AlleyCat.Common;
 using AlleyCat.Env;
 using AlleyCat.Service.Typed;
+using AlleyCat.Xr;
 using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
+using static AlleyCat.Env.Prelude;
 using static LanguageExt.Prelude;
 
 namespace AlleyCat.Sense.Sight;
@@ -41,7 +43,8 @@ public partial class CameraEyeSightFactory : NodeFactory<ISight>
         "parameters/BlendTree/Eyes Right Left/seek_request";
 
     protected override Eff<IEnv, ISight> CreateService(ILoggerFactory loggerFactory) =>
-        from camera in Camera.Require("Camera is not set.")
+        from camera in Camera.Require("Camera is not set.") | 
+                       service<XrDevices>().Map(Camera3D (x) => x.Camera)
         from animationTree in AnimationTree.Require("AnimationTree is not set.")
         from eyesBlinkParameter in AnimationParam
             .Create(EyesBlinkParameter)
