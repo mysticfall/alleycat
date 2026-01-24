@@ -8,7 +8,7 @@ public readonly record struct XrTrackers(
 );
 
 public readonly record struct XrDevices(
-    XRInterface Interface,
+    OpenXRInterface Interface,
     XROrigin3D Origin,
     XRCamera3D Camera,
     XrTrackers Trackers
