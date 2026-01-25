@@ -1,8 +1,9 @@
 using AlleyCat.Actor;
+using AlleyCat.Env;
 using Godot;
 using LanguageExt;
 
-namespace AlleyCat.Env.Godot;
+namespace AlleyCat.Scene;
 
 public class GodotScene(SceneTree sceneTree) : IScene
 {

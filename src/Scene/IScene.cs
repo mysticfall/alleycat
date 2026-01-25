@@ -2,7 +2,7 @@ using AlleyCat.Actor;
 using Godot;
 using LanguageExt;
 
-namespace AlleyCat.Env;
+namespace AlleyCat.Scene;
 
 public interface IScene : IActorContainer
 {

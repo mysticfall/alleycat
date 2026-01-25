@@ -1,4 +1,5 @@
 using AlleyCat.Async;
+using AlleyCat.Scene;
 using AlleyCat.Service;
 using LanguageExt;
 using LanguageExt.Effects;
@@ -28,6 +29,12 @@ public static class Prelude
     public static Eff<IEnv, T> callDeferred<T>(Eff<T> task) =>
         from env in runtime<IEnv>()
         from result in env.TaskQueue.Enqueue(task)
+        select result;
+
+    // ReSharper disable once InconsistentNaming
+    public static Eff<IEnv, T> callDeferred<T>(IO<T> task) =>
+        from env in runtime<IEnv>()
+        from result in env.TaskQueue.Enqueue(Eff.lift(task))
         select result;
 
     // ReSharper disable once InconsistentNaming

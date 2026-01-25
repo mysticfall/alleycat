@@ -1,6 +1,7 @@
 using AlleyCat.Actor;
 using AlleyCat.Async;
 using AlleyCat.Env;
+using AlleyCat.Scene;
 using AlleyCat.Tests.Async;
 using LanguageExt;
 using Microsoft.Extensions.FileProviders;

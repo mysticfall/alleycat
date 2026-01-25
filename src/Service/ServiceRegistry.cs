@@ -1,7 +1,6 @@
 ﻿using AlleyCat.Async;
 using AlleyCat.Common;
 using AlleyCat.Env;
-using AlleyCat.Env.Godot;
 using AlleyCat.Logging;
 using Godot;
 using LanguageExt;
