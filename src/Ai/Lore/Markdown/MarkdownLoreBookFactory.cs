@@ -14,7 +14,7 @@ public partial class MarkdownLoreBookFactory : LoreBookFactory
     protected override Eff<IEnv, ILoreBook> CreateService(
         ILoggerFactory loggerFactory
     ) =>
-        from path in Common.ResourcePath.Create(ContentRoot).ToEff(identity)
+        from path in Io.ResourcePath.Create(ContentRoot).ToEff(identity)
         from book in MarkdownLoreBook.Create(path, loggerFactory)
         select book;
 }

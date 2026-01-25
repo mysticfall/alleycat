@@ -1,6 +1,7 @@
 using AlleyCat.Ai.Lore;
 using AlleyCat.Ai.Lore.Markdown;
 using AlleyCat.Common;
+using AlleyCat.Io;
 using LanguageExt.UnsafeValueAccess;
 using static LanguageExt.Prelude;
 

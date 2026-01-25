@@ -4,7 +4,7 @@ using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
 using static LanguageExt.Prelude;
-using Path = AlleyCat.Common.ResourcePath;
+using Path = AlleyCat.Io.ResourcePath;
 
 namespace AlleyCat.Template.Handlebars;
 
