@@ -1,10 +1,11 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using AlleyCat.Common;
 using LanguageExt;
 using LanguageExt.UnsafeValueAccess;
 using static LanguageExt.Prelude;
 
-namespace AlleyCat.Common;
+namespace AlleyCat.Io;
 
 public readonly partial record struct ResourcePath
 {
