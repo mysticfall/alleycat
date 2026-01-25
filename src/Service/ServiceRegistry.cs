@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using static LanguageExt.Prelude;
+using Error = LanguageExt.Common.Error;
 
 namespace AlleyCat.Service;
 
@@ -116,11 +117,21 @@ public partial class ServiceRegistry : DeferredQueueNode
         register
             .As()
             .Run()
-            .IfFail(e =>
+            .IfFail(err =>
             {
-                GD.PushError("Error registering services: ", e.ToException());
+                PushError(err, topLevel: true);
 
                 GetTree().Quit(-1);
+                return;
+
+                void PushError(Error e, bool topLevel = false)
+                {
+                    var message = topLevel ? "Error registering services: " : "Caused by:";
+
+                    GD.PushError(message, e.ToException());
+
+                    e.Inner.IfSome(x => PushError(x));
+                }
             });
     }
 }
