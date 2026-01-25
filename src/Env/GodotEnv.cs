@@ -1,9 +1,10 @@
 using AlleyCat.Async;
 using AlleyCat.Io;
+using AlleyCat.Scene;
 using Godot;
 using Microsoft.Extensions.FileProviders;
 
-namespace AlleyCat.Env.Godot;
+namespace AlleyCat.Env;
 
 public readonly struct GodotEnv(
     SceneTree sceneTree,

@@ -1,5 +1,6 @@
 using AlleyCat.Actor;
 using AlleyCat.Env;
+using AlleyCat.Scene;
 using Godot;
 using LanguageExt;
 using static LanguageExt.Prelude;
