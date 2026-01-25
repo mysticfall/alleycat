@@ -60,6 +60,8 @@ public readonly partial record struct ResourcePath
 
     public static implicit operator string(ResourcePath path) => path.Value;
 
+    public override string ToString() => Value;
+
     public static Either<ParseError, ResourcePath> Create(string? path) =>
         Optional(path)
             .Filter(p => !string.IsNullOrWhiteSpace(p))
