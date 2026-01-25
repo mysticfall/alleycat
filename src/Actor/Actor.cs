@@ -72,7 +72,7 @@ public interface IActor : IEntity<ActorId>,
     IGendered,
     IRigged<HumanBone>,
     ITemplateRenderable,
-    IAnimatable,
+    IStatefulAnimatable,
     IMarked
 {
     Seq<IAction> Actions { get; }
