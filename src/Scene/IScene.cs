@@ -4,7 +4,7 @@ using LanguageExt;
 
 namespace AlleyCat.Scene;
 
-public interface IScene : IActorContainer
+public interface IScene : ISceneLoader, IActorContainer
 {
     IO<Viewport> GetViewport();
 
