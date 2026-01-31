@@ -24,6 +24,8 @@ namespace AlleyCat.Actor;
 [JsonConverter(typeof(ActorIdJsonConverter))]
 public readonly record struct ActorId : IEntityId
 {
+    public static readonly ActorId Player = new ("Player");
+
     public string Value { get; }
 
     private ActorId(string value)
@@ -135,6 +137,9 @@ public class Actor(
 
 public interface IActorContainer
 {
+    Eff<IEnv, IActor> Player => FindActorById(ActorId.Player)
+        .Bind(x => x.ToEff(Error.New("The player actor does not exist.")));
+
     Eff<IEnv, Seq<IActor>> Actors { get; }
 
     Eff<IEnv, Option<IActor>> FindActor(Func<IActor, bool> predicate) =>
