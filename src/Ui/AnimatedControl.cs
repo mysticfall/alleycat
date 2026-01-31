@@ -1,9 +1,10 @@
+using AlleyCat.Animation;
 using AlleyCat.Common;
 using LanguageExt;
 
-namespace AlleyCat.Animation;
+namespace AlleyCat.Ui;
 
-public interface IAnimatedHideable : IAnimatable, IHideable
+public interface IAnimatedControl : IAnimatable, IControl
 {
     Option<AnimationName> ShowAnimation { get; }
 
