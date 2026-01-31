@@ -52,7 +52,15 @@ public abstract partial class ResourceFactory<TService> : ResourceFactory, IServ
             from cleanup in service is IRunnable i
                 ? Some(i.Run()).Traverse(identity).As()
                 : SuccessEff<Option<IDisposable>>(None)
-            from _ in liftEff(() => { cleanup.Iter(_disposables.Add); })
+            from _ in liftEff(() =>
+            {
+                cleanup.Iter(_disposables.Add);
+                
+                if (service is IDisposable disposable)
+                {
+                    _disposables.Add(disposable);
+                }
+            })
             select service
         from _1 in liftEff(() =>
         {
