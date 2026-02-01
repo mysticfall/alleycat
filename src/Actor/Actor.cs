@@ -133,6 +133,8 @@ public class Actor(
     IEntityId IEntity.Id => Id;
 
     IRig IRigged.Rig => Rig;
+
+    public override string ToString() => $"Actor({Id})";
 }
 
 public interface IActorContainer
