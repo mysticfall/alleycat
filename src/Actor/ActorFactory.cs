@@ -9,6 +9,7 @@ using AlleyCat.Service.Typed;
 using AlleyCat.Speech.Voice;
 using AlleyCat.Template;
 using AlleyCat.Common;
+using AlleyCat.Control;
 using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
@@ -41,6 +42,8 @@ public partial class ActorFactory : NodeFactory<IActor>, IServiceFactory
 
     [Export] public ActionFactory[] Actions { get; set; } = [];
 
+    [Export] public ControlFactory[] Controls { get; set; } = [];
+
     [Export] public TemplateContextProviderFactory[] ContextProviders { get; set; } = [];
 
     InstantiationOption IServiceFactory.Instantiation => InstantiationOption.Singleton;
@@ -70,6 +73,10 @@ public partial class ActorFactory : NodeFactory<IActor>, IServiceFactory
             .AsIterable()
             .ToSeq()
             .Traverse(x => x.TypedService)
+        from controls in Controls
+            .AsIterable()
+            .ToSeq()
+            .Traverse(x => x.TypedService)
         from contextProviders in ContextProviders
             .AsIterable()
             .Traverse(x => x.TypedService)
@@ -90,6 +97,7 @@ public partial class ActorFactory : NodeFactory<IActor>, IServiceFactory
             // locomotion: locomotion,
             animationTree: animationTree,
             actions: actions,
+            controls: controls,
             markers: markers,
             templateContextProviders: contextProviders
                 .Add(new ActorContextProvider())
