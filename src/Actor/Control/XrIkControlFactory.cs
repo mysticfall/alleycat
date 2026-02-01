@@ -27,15 +27,17 @@ public partial class XrIkControlFactory : ControlFactory
             .Bind(x => x.TypedService)
         from viewpoint in Viewpoint
             .Require("Viewpoint is not set.")
-            .Map(x => IO.lift(() => x.GlobalTransform))
-        from root in Root
+        let headToView = viewpoint.Transform
+        let viewTransform = IO.lift(() => viewpoint.GlobalTransform)
+        from globalTransform in Root
             .Require("Root is not set.")
             .Map(x => IO.lift(() => x.GlobalTransform))
         from xr in service<XrDevices>()
         select (IControl)new XrIkControl(
             rig,
-            viewpoint,
-            root,
+            headToView,
+            viewTransform,
+            globalTransform,
             xr,
             OnPhysicsProcess,
             loggerFactory

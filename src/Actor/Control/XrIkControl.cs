@@ -12,8 +12,9 @@ namespace AlleyCat.Actor.Control;
 
 public class XrIkControl(
     IRig<HumanBone> rig,
-    IO<Transform3D> viewpoint,
-    IO<Transform3D> root,
+    Transform3D headToView,
+    IO<Transform3D> viewTransform,
+    IO<Transform3D> globalTransform,
     XrDevices xr,
     IObservable<Duration> onPhysicsProcess,
     ILoggerFactory? loggerFactory = null
@@ -21,8 +22,11 @@ public class XrIkControl(
 {
     private readonly ILogger _logger = loggerFactory.GetLogger<XrIkControl>();
 
-    private IO<Unit> AdjustWorldScale() =>
-        from virtualHeight in viewpoint.Map(x => x.Origin.Y.Metres())
+    private Eff<Unit> AdjustWorldScale() =>
+        from virtualHeight in rig
+            .GetRest(HumanBone.Head)
+            .Map(x => x * headToView)
+            .Map(x => x.Origin.Y.Metres())
         from physicalHeight in xr.BaseEyeHeight
         from currentScale in IO.lift(() => xr.Origin.WorldScale)
         let scale = virtualHeight * currentScale / physicalHeight
@@ -38,12 +42,12 @@ public class XrIkControl(
         select unit;
 
     private IO<Unit> SyncOrigin() =>
-        from transform in root
+        from transform in globalTransform
         from _1 in IO.lift(() => { xr.Origin.GlobalTransform = transform; })
         select unit;
 
     private IO<Unit> SyncCamera() =>
-        from transform in viewpoint
+        from transform in viewTransform
         from _1 in IO.lift(() => { xr.Camera.GlobalTransform = transform; })
         select unit;
 
