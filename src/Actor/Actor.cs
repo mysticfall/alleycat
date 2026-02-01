@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AlleyCat.Actor.Action;
 using AlleyCat.Animation;
 using AlleyCat.Common;
+using AlleyCat.Control;
 using AlleyCat.Entity;
 using AlleyCat.Env;
 using AlleyCat.Metadata;
@@ -24,7 +25,7 @@ namespace AlleyCat.Actor;
 [JsonConverter(typeof(ActorIdJsonConverter))]
 public readonly record struct ActorId : IEntityId
 {
-    public static readonly ActorId Player = new ("Player");
+    public static readonly ActorId Player = new("Player");
 
     public string Value { get; }
 
@@ -75,7 +76,8 @@ public interface IActor : IEntity<ActorId>,
     IRigged<HumanBone>,
     ITemplateRenderable,
     IStatefulAnimatable,
-    IMarked
+    IMarked,
+    IControllable
 {
     Seq<IAction> Actions { get; }
 
@@ -103,6 +105,7 @@ public class Actor(
     IRig<HumanBone> rig,
     AnimationTree animationTree,
     Seq<IAction> actions,
+    Seq<IControl> controls,
     Seq<IMarker> markers,
     Seq<ITemplateContextProvider> templateContextProviders,
     IO<Transform3D> globalTransform) : IActor
@@ -123,6 +126,8 @@ public class Actor(
 
     public Seq<ITemplateContextProvider> TemplateContextProviders { get; } =
         templateContextProviders;
+
+    public Seq<IControl> Controls { get; } = controls;
 
     public Seq<IMarker> Markers { get; } = markers;
 

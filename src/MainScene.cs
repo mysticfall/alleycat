@@ -1,5 +1,7 @@
 using System.Reactive.Disposables;
+using AlleyCat.Actor;
 using AlleyCat.Common;
+using AlleyCat.Control;
 using AlleyCat.Env;
 using AlleyCat.Io;
 using AlleyCat.Logging;
@@ -16,6 +18,7 @@ public class MainScene(
     ResourcePath startScene,
     Node sceneRoot,
     ILoadingScreen loadingScreen,
+    IController<IActor> actorController,
     XRInterface xr,
     ILoggerFactory? loggerFactory = null
 ) : IRunnable, IResourceLoader
@@ -35,10 +38,18 @@ public class MainScene(
 
         var process =
             from env in runtime<IEnv>()
-            from _ in env.Scene.LoadScene(startScene, sceneRoot, option)
+            from _1 in env.Scene.LoadScene(startScene, sceneRoot, option)
+            from actor in env.Scene.Player
+            from _2 in actorController.Control(actor)
             select unit;
 
         return process
+            .IfFail(e =>
+            {
+                _logger.LogCritical(e,"Failed to start the main scene.");
+
+                return unit;
+            })
             .ForkIO()
             .IgnoreF()
             .As()

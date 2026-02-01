@@ -1,4 +1,6 @@
+using AlleyCat.Actor;
 using AlleyCat.Common;
+using AlleyCat.Control;
 using AlleyCat.Env;
 using AlleyCat.Io;
 using AlleyCat.Service;
@@ -26,11 +28,13 @@ public partial class MainSceneFactory : NodeFactory<MainScene>, IServiceFactory
         from startScene in ResourcePath.Create(StartScene).ToEff(identity)
         from sceneRoot in SceneRoot.Require("Scene root is not set.")
         from loadingScreen in service<ILoadingScreen>()
+        from actorController in service<IController<IActor>>()
         from xr in service<XrDevices>()
         select new MainScene(
             startScene,
             sceneRoot,
             loadingScreen,
+            actorController,
             xr.Interface,
             loggerFactory
         );
