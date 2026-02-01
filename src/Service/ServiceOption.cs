@@ -6,3 +6,9 @@ public enum InstantiationOption
     LazySingleton,
     Factory
 }
+
+public enum RunOption
+{
+    OnCreation,
+    Never
+}
