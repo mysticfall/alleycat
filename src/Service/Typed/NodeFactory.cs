@@ -19,13 +19,13 @@ public abstract partial class NodeFactory<TService> : NodeFactory, IServiceFacto
 
             return instantiation switch
             {
-                Instantiation.Singleton => _instance,
-                Instantiation.LazySingleton => _instance.RunIfNotReady(
+                InstantiationOption.Singleton => _instance,
+                InstantiationOption.LazySingleton => _instance.RunIfNotReady(
                     from instance in CreateService()
                     from _1 in liftEff(() => { _instance = instance; })
                     select instance
                 ),
-                Instantiation.Factory => CreateService(),
+                InstantiationOption.Factory => CreateService(),
                 _ => throw new ArgumentOutOfRangeException()
             };
         }
@@ -77,7 +77,7 @@ public abstract partial class NodeFactory<TService> : NodeFactory, IServiceFacto
     {
         base._Ready();
 
-        if (((IServiceFactory)this).Instantiation != Instantiation.Singleton)
+        if (((IServiceFactory)this).Instantiation != InstantiationOption.Singleton)
         {
             return;
         }

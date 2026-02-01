@@ -1,6 +1,6 @@
 namespace AlleyCat.Service;
 
-public enum Instantiation
+public enum InstantiationOption
 {
     Singleton,
     LazySingleton,

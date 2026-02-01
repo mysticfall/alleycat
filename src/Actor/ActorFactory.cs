@@ -43,7 +43,7 @@ public partial class ActorFactory : NodeFactory<IActor>, IServiceFactory
 
     [Export] public TemplateContextProviderFactory[] ContextProviders { get; set; } = [];
 
-    Instantiation IServiceFactory.Instantiation => Instantiation.Singleton;
+    InstantiationOption IServiceFactory.Instantiation => InstantiationOption.Singleton;
 
     protected override Eff<IEnv, IActor> CreateService(
         ILoggerFactory loggerFactory

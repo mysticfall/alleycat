@@ -9,7 +9,7 @@ public interface IServiceFactory
 {
     Type ServiceType { get; }
 
-    Instantiation Instantiation => Instantiation.LazySingleton;
+    InstantiationOption Instantiation => InstantiationOption.LazySingleton;
 
     Eff<IEnv, object> Service { get; }
 }

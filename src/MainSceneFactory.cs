@@ -20,7 +20,7 @@ public partial class MainSceneFactory : NodeFactory<MainScene>, IServiceFactory
 
     [Export] public Node? SceneRoot { get; set; }
 
-    Instantiation IServiceFactory.Instantiation => Instantiation.Singleton;
+    InstantiationOption IServiceFactory.Instantiation => InstantiationOption.Singleton;
 
     protected override Eff<IEnv, MainScene> CreateService(ILoggerFactory loggerFactory) =>
         from startScene in ResourcePath.Create(StartScene).ToEff(identity)

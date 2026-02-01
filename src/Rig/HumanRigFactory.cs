@@ -14,7 +14,7 @@ public partial class HumanRigFactory : NodeFactory<IRig<HumanBone>>, IServiceFac
     [Export] public Skeleton3D? Skeleton { get; set; }
 
     //Need eager initialisation to trigger idle animations (i.e. ShowRestOnly = false).
-    Instantiation IServiceFactory.Instantiation => Instantiation.Singleton;
+    InstantiationOption IServiceFactory.Instantiation => InstantiationOption.Singleton;
 
     protected override Eff<IEnv, IRig<HumanBone>> CreateService(
         ILoggerFactory loggerFactory

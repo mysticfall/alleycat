@@ -18,13 +18,13 @@ public abstract partial class ResourceFactory<TService> : ResourceFactory, IServ
 
             return instantiation switch
             {
-                Instantiation.Singleton or Instantiation.LazySingleton =>
+                InstantiationOption.Singleton or InstantiationOption.LazySingleton =>
                     _instance.RunIfNotReady(
                         from instance in CreateService()
                         from _1 in liftEff(() => { _instance = instance; })
                         select instance
                     ),
-                Instantiation.Factory => CreateService(),
+                InstantiationOption.Factory => CreateService(),
                 _ => throw new ArgumentOutOfRangeException()
             };
         }
