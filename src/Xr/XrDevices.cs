@@ -1,5 +1,4 @@
 using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using AlleyCat.Common;
 using AlleyCat.Env;
 using AlleyCat.Logging;
@@ -21,7 +20,7 @@ public class XrDevices(
     XRCamera3D camera,
     XrTrackers trackers,
     ILoggerFactory? loggerFactory = null
-) : IRunnable, IDisposable
+) : IRunnable
 {
     public OpenXRInterface Interface => xr;
 
@@ -31,9 +30,13 @@ public class XrDevices(
 
     public XrTrackers Trackers => trackers;
 
-    public IObservable<Length> OnEyeHeightChange => _eyeHeightSubject.AsObservable();
+    public IO<Length> EyeHeight => IO.lift(() =>
+        (camera.GlobalPosition.Y - origin.GlobalPosition.Y).Metres()
+    );
 
-    private readonly Subject<Length> _eyeHeightSubject = new();
+    public IO<Length> BaseEyeHeight => _baseEyeHeight.ValueIO;
+
+    private readonly Atom<Length> _baseEyeHeight = Atom(1.2.Metres());
 
     private readonly ILogger _logger = loggerFactory.GetLogger<XrDevices>();
 
@@ -46,21 +49,19 @@ public class XrDevices(
 
         return liftEff(() => onRecenter.Subscribe(_ =>
         {
-            var height = (camera.GlobalPosition.Y - origin.GlobalPosition.Y).Metres();
+            var reset =
+                from height in EyeHeight
+                from _1 in _baseEyeHeight.SwapIO(_ => height)
+                from _2 in IO.lift(() =>
+                {
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation("Adjusted the eye height to {height} metres.", height);
+                    }
+                })
+                select unit;
 
-            _eyeHeightSubject.OnNext(height);
-
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation("Adjusted the eye height to {height} metres.", height);
-            }
+            reset.Run();
         }));
-    }
-
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-
-        _eyeHeightSubject.Dispose();
     }
 }
