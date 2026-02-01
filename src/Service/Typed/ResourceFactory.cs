@@ -49,7 +49,8 @@ public abstract partial class ResourceFactory<TService> : ResourceFactory, IServ
                     $"Failed to initialise service: {ResourceName}",
                     e
                 ))
-            from cleanup in service is IRunnable i
+            from cleanup in 
+                ((IServiceFactory)this).AutoRun == RunOption.OnCreation && service is IRunnable i
                 ? Some(i.Run()).Traverse(identity).As()
                 : SuccessEff<Option<IDisposable>>(None)
             from _ in liftEff(() =>

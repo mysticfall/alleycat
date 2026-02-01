@@ -11,6 +11,8 @@ public interface IServiceFactory
 
     InstantiationOption Instantiation => InstantiationOption.LazySingleton;
 
+    RunOption AutoRun => RunOption.OnCreation;
+
     Eff<IEnv, object> Service { get; }
 }
 

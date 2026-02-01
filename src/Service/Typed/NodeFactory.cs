@@ -50,9 +50,10 @@ public abstract partial class NodeFactory<TService> : NodeFactory, IServiceFacto
                     $"Failed to initialise service: {GetPath()}",
                     e
                 ))
-            from cleanup in service is IRunnable i
-                ? Some(i.Run()).Traverse(identity).As()
-                : SuccessEff<Option<IDisposable>>(None)
+            from cleanup in
+                ((IServiceFactory)this).AutoRun == RunOption.OnCreation && service is IRunnable i
+                    ? Some(i.Run()).Traverse(identity).As()
+                    : SuccessEff<Option<IDisposable>>(None)
             from _ in liftEff(() =>
             {
                 cleanup.Iter(_disposables.Add);
