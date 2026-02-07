@@ -18,7 +18,7 @@ public partial class XrControllerTriggerFactory : TriggerFactory
     protected override Eff<IEnv, ITrigger> CreateService(ILoggerFactory loggerFactory) =>
         from xr in service<XrDevices>()
         let trackers = xr.Trackers
-        let controller = Side == XrControllerSide.Right ? trackers.RightHand : trackers.LeftHand
+        let tracker = Side == XrControllerSide.Right ? trackers.RightHand : trackers.LeftHand
         from action in InputEventName.Create(EventName).ToEff(identity)
-        select (ITrigger)new XrControllerTrigger(action, controller, loggerFactory);
+        select (ITrigger)new XrControllerTrigger(action, tracker.Controller, loggerFactory);
 }

@@ -12,13 +12,17 @@ namespace AlleyCat.Xr;
 [GlobalClass]
 public partial class XrDevicesFactory : NodeFactory<XrDevices>
 {
-    [Export] private XROrigin3D? Origin { get; set; }
+    [Export] public XROrigin3D? Origin { get; set; }
 
-    [Export] private XRCamera3D? Camera { get; set; }
+    [Export] public XRCamera3D? Camera { get; set; }
 
-    [Export] private XRController3D? RightController { get; set; }
+    [Export] public XRController3D? RightController { get; set; }
 
-    [Export] private XRController3D? LeftController { get; set; }
+    [Export] public XRController3D? LeftController { get; set; }
+
+    [Export] public Node3D? RightHandPlaceholder { get; set; }
+
+    [Export] public Node3D? LeftHandPlaceholder { get; set; }
 
     [Export] public int MaximumRefreshRate { get; set; } = 90;
 
@@ -32,6 +36,8 @@ public partial class XrDevicesFactory : NodeFactory<XrDevices>
         from camera in Camera.Require("Camera is not set")
         from rightController in RightController.Require("Right controller is not set")
         from leftController in LeftController.Require("Left controller is not set")
+        from rightPlaceholder in RightHandPlaceholder.Require("Right hand placeholder is not set")
+        from leftPlaceholder in LeftHandPlaceholder.Require("Left hand placeholder is not set")
         from maxFps in FrameRate.Create(MaximumRefreshRate).ToEff(identity)
         let logger = loggerFactory.CreateLogger<XrDevicesFactory>()
         from viewport in env.Scene.GetViewport()
@@ -99,6 +105,9 @@ public partial class XrDevicesFactory : NodeFactory<XrDevices>
 
             logger.LogInformation("OpenXR session started.");
         })
-        let trackers = new XrTrackers(rightController, leftController)
+        let trackers = new XrTrackers(
+            new XrHandTracker(rightController, rightPlaceholder),
+            new XrHandTracker(leftController, leftPlaceholder)
+        )
         select new XrDevices(xr, origin, camera, trackers);
 }

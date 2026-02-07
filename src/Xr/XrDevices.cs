@@ -9,9 +9,14 @@ using static LanguageExt.Prelude;
 
 namespace AlleyCat.Xr;
 
+public readonly record struct XrHandTracker(
+    XRController3D Controller,
+    Node3D Placeholder
+);
+
 public readonly record struct XrTrackers(
-    XRController3D RightHand,
-    XRController3D LeftHand
+    XrHandTracker RightHand,
+    XrHandTracker LeftHand
 );
 
 public class XrDevices(
