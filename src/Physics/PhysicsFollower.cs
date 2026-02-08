@@ -6,13 +6,17 @@ namespace AlleyCat.Physics;
 
 public class PhysicalTracker(
     CharacterBody3D body,
-    Node3D target,
+    IO<Transform3D> target,
     float returnVelocityRatio = 0.2f
 )
 {
-    public CharacterBody3D Body => body;
-
-    public Node3D Target => target;
+    public PhysicalTracker(
+        CharacterBody3D body,
+        Node3D target,
+        float returnVelocityRatio = 0.2f
+    ) : this(body, IO.lift(() => target.GlobalTransform), returnVelocityRatio)
+    {
+    }
 
     private readonly NormalisedRatio _returnVelocityRatio = NormalisedRatio.Coerce(returnVelocityRatio);
 
@@ -35,21 +39,32 @@ public class PhysicalTracker(
         return (toDest * (1 - _returnVelocityRatio) + toTarget * _returnVelocityRatio) * speed / deltaInSeconds;
     }
 
-    public IO<Vector3> Process(Vector3 lastTargetPos, Duration duration) => IO.lift(() =>
-    {
-        var bodyTrans = body.GlobalTransform;
-        var targetTrans = target.GlobalTransform;
+    public IO<Transform3D> Initialise() =>
+        from transform in target
+        from _ in IO.lift(() =>
+        {
+            body.GlobalTransform = transform;
+            body.Velocity = Vector3.Zero;
+        })
+        select transform;
 
-        body.Velocity = CalculateVelocity(
-            bodyTrans.Origin,
-            targetTrans.Origin,
-            lastTargetPos,
-            duration
-        );
+    public IO<Vector3> Process(Vector3 lastTargetPos, Duration duration) =>
+        from transform in target
+        from position in IO.lift(() =>
+        {
+            var bodyTrans = body.GlobalTransform;
 
-        body.GlobalBasis = target.GlobalBasis;
-        body.MoveAndSlide();
+            body.Velocity = CalculateVelocity(
+                bodyTrans.Origin,
+                transform.Origin,
+                lastTargetPos,
+                duration
+            );
+            
+            body.GlobalBasis = transform.Basis;
+            body.MoveAndSlide();
 
-        return targetTrans.Origin;
-    });
+            return transform.Origin;
+        })
+        select position;
 }
