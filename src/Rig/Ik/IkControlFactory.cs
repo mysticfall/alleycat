@@ -3,16 +3,16 @@ using System.Reactive.Subjects;
 using AlleyCat.Common;
 using AlleyCat.Control;
 using AlleyCat.Env;
-using AlleyCat.Rig;
+using AlleyCat.Xr;
 using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
 using static AlleyCat.Env.Prelude;
 
-namespace AlleyCat.Xr.Control;
+namespace AlleyCat.Rig.Ik;
 
 [GlobalClass]
-public partial class XrIkControlFactory : ControlFactory
+public partial class IkControlFactory : ControlFactory
 {
     [Export] public HumanRigFactory? Rig { get; set; }
 
@@ -83,7 +83,7 @@ public partial class XrIkControlFactory : ControlFactory
             return subject.AsObservable();
         })
         from xr in service<XrDevices>()
-        select (IControl)new XrIkControl(
+        select (IControl)new IkControl(
             rig,
             head,
             rightHand,
