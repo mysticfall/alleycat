@@ -22,6 +22,8 @@ public partial class IkControlFactory : ControlFactory
 
     [Export] public CharacterBody3D? LeftHand { get; set; }
 
+    [Export] public Node3D? Hips { get; set; }
+
     [Export] public Node3D? RightFoot { get; set; }
 
     [Export] public Node3D? LeftFoot { get; set; }
@@ -59,6 +61,8 @@ public partial class IkControlFactory : ControlFactory
             .Require("Right hand is not set.")
         from leftHand in LeftHand
             .Require("Left hand is not set.")
+        from hips in Hips
+            .Require("Hips are not set.")
         from rightFoot in RightFoot
             .Require("Right foot is not set.")
         from leftFoot in LeftFoot
@@ -68,17 +72,27 @@ public partial class IkControlFactory : ControlFactory
         from globalTransform in Root
             .Require("Root is not set.")
             .Map(x => IO.lift(() => x.GlobalTransform))
-        from onModificationProcess in IO.lift(() =>
+        let skeleton = rig.Skeleton
+        from onBeforeIkProcess in IO.lift(() =>
         {
             var subject = new Subject<Duration>();
-            var skeleton = rig.Skeleton;
+            var modifier = new ControlModifier(subject);
 
-            var _modifier = new ControlModifier(subject);
+            skeleton.AddChild(modifier, false, InternalMode.Front);
 
-            skeleton.AddChild(_modifier, false, InternalMode.Back);
-            // skeleton.MoveChild(_modifier, 0);
+            modifier.Owner = skeleton;
 
-            _modifier.Owner = skeleton;
+            return subject.AsObservable();
+        })
+        from onAfterIkProcess in IO.lift(() =>
+        {
+            var subject = new Subject<Duration>();
+
+            var modifier = new ControlModifier(subject);
+
+            skeleton.AddChild(modifier, false, InternalMode.Back);
+
+            modifier.Owner = skeleton;
 
             return subject.AsObservable();
         })
@@ -88,12 +102,14 @@ public partial class IkControlFactory : ControlFactory
             head,
             rightHand,
             leftHand,
+            hips,
             rightFoot,
             leftFoot,
             viewpoint,
             globalTransform,
             xr,
-            onModificationProcess,
+            onBeforeIkProcess,
+            onAfterIkProcess,
             loggerFactory
         );
 }
