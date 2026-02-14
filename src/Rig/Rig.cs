@@ -1,6 +1,3 @@
-using System.Reactive.Disposables;
-using AlleyCat.Common;
-using AlleyCat.Env;
 using AlleyCat.Transform;
 using Godot;
 using LanguageExt;
@@ -9,15 +6,11 @@ using Error = LanguageExt.Common.Error;
 
 namespace AlleyCat.Rig;
 
-public interface IRig : ILocatable3d, IRunnable
+public interface IRig : ILocatable3d
 {
     Skeleton3D Skeleton { get; }
 
     IO<Transform3D> ILocatable3d.GlobalTransform => IO.lift(() => Skeleton.GlobalTransform);
-
-    Eff<IEnv, IDisposable> IRunnable.Run() =>
-        from _ in liftEff(() => Skeleton.ShowRestOnly = false)
-        select (IDisposable)new CompositeDisposable();
 }
 
 public interface IRig<in TBone> : IRig where TBone : struct, Enum;

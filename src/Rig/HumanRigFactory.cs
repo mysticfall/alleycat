@@ -20,5 +20,6 @@ public partial class HumanRigFactory : NodeFactory<IRig<HumanBone>>, IServiceFac
         ILoggerFactory loggerFactory
     ) =>
         from skeleton in Skeleton.Require("Skeleton is not set.")
+        from _ in IO.lift(() => skeleton.ShowRestOnly = false)
         select new HumanRig(skeleton) as IRig<HumanBone>;
 }
