@@ -4,13 +4,13 @@ using LanguageExt;
 
 namespace AlleyCat.Physics;
 
-public class PhysicalTracker(
+public class PhysicsBodyFollower(
     CharacterBody3D body,
     IO<Transform3D> target,
     float returnVelocityRatio = 0.2f
 )
 {
-    public PhysicalTracker(
+    public PhysicsBodyFollower(
         CharacterBody3D body,
         Node3D target,
         float returnVelocityRatio = 0.2f

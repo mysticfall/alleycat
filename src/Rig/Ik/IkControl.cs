@@ -41,9 +41,9 @@ public class IkControl : IControl
         var physicalHead = IO.lift(() => xr.Camera.GlobalTransform * viewToHead);
 
         var trackers = Seq(
-            new PhysicalTracker(head, physicalHead),
-            new PhysicalTracker(rightHand, xr.Trackers.RightHand.Placeholder),
-            new PhysicalTracker(leftHand, xr.Trackers.LeftHand.Placeholder)
+            new PhysicsBodyFollower(head, physicalHead),
+            new PhysicsBodyFollower(rightHand, xr.Trackers.RightHand.Placeholder),
+            new PhysicsBodyFollower(leftHand, xr.Trackers.LeftHand.Placeholder)
         );
 
         var adjustWorldScale =
@@ -70,7 +70,7 @@ public class IkControl : IControl
             from _ in IO.lift(() => xr.Origin.GlobalTransform = transform)
             select unit;
 
-        var syncPose =
+        var adjustHips =
             from toSkeleton in IO.lift(() => rig.Skeleton.GlobalTransform)
             let fromSkeleton = toSkeleton.Inverse()
             from pHead in IO.lift(() => head.GlobalTransform)
@@ -82,7 +82,26 @@ public class IkControl : IControl
             from _ in IO.lift(() => { hips.GlobalTransform = hipsGlobalPose; })
             select unit;
 
-        var syncHead =
+        var adjustFeet =
+            from animRightFoot in rig.GetGlobalPose(HumanBone.RightFoot)
+            from animLeftFoot in rig.GetGlobalPose(HumanBone.LeftFoot)
+            from _1 in IO.lift(() =>
+            {
+                rightFoot.GlobalTransform = animRightFoot;
+                leftFoot.GlobalTransform = animLeftFoot;
+            })
+            select unit;
+
+        var adjustPose =
+            from _1 in adjustHips
+            from _2 in adjustFeet
+            select unit;
+
+        var movePoleTargets =
+            from _ in IO.lift(() => { })
+            select unit;
+
+        var adjustOrigin =
             from toSkeleton in IO.lift(() => rig.Skeleton.GlobalTransform)
             let fromSkeleton = toSkeleton.Inverse()
             from pHead in physicalHead
@@ -97,21 +116,6 @@ public class IkControl : IControl
 
                 xr.Origin.GlobalTransform = vHead * pHeadLocal.Inverse();
             })
-            select unit;
-
-        var syncFeet =
-            from animRightFoot in rig.GetGlobalPose(HumanBone.RightFoot)
-            from animLeftFoot in rig.GetGlobalPose(HumanBone.LeftFoot)
-            from _1 in IO.lift(() =>
-            {
-                rightFoot.GlobalTransform = animRightFoot;
-                leftFoot.GlobalTransform = animLeftFoot;
-            })
-            select unit;
-
-        var postSync =
-            from _1 in syncHead
-            from _2 in syncFeet
             select unit;
 
         _run =
@@ -138,7 +142,8 @@ public class IkControl : IControl
                         var sync =
                             from _1 in resetOrigin
                             from nextPos in syncTrackers
-                            from _2 in syncPose
+                            from _2 in adjustPose
+                            from _3 in movePoleTargets
                             select nextPos;
 
                         return sync.Run().Match(identity, e =>
@@ -152,10 +157,10 @@ public class IkControl : IControl
             )
             from d2 in IO.lift(() =>
                 onAfterIkProcess.Subscribe(_ =>
-                    postSync
+                    adjustOrigin
                         .Run()
                         .IfFail(e =>
-                            logger.LogError(e, "Failed to run post-IK processes")
+                            logger.LogError(e, "Failed to adjust XR origin.")
                         )
                 )
             )

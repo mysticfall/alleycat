@@ -28,6 +28,15 @@ public partial class IkControlFactory : ControlFactory
 
     [Export] public Node3D? LeftFoot { get; set; }
 
+    [ExportGroup("Pole Targets")]
+    [Export] public Node3D? RightElbow { get; set; }
+
+    [Export] public Node3D? LeftElbow { get; set; }
+
+    [Export] public Node3D? RightKnee { get; set; }
+
+    [Export] public Node3D? LeftKnee { get; set; }
+
     [ExportGroup("References")] [Export] public Marker3D? Viewpoint { get; set; }
 
     [Export] public Node3D? Root { get; set; }
@@ -67,6 +76,14 @@ public partial class IkControlFactory : ControlFactory
             .Require("Right foot is not set.")
         from leftFoot in LeftFoot
             .Require("Left foot is not set.")
+        from rightElbow in RightElbow
+            .Require("Right elbow is not set.")
+        from leftElbow in LeftElbow
+            .Require("Left elbow is not set.")
+        from rightKnee in RightElbow
+            .Require("Right knee is not set.")
+        from leftKnee in LeftElbow
+            .Require("Left knee is not set.")
         from viewpoint in Viewpoint
             .Require("Viewpoint is not set.")
         from globalTransform in Root
