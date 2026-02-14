@@ -20,7 +20,7 @@ public class PositionContextProvider(Length? nearThreshold = null) : ITemplateCo
     )
     {
         // ReSharper disable once SuspiciousTypeConversion.Global
-        if (subject is not IObject3d subject3d || observer is not IObject3d observer3d)
+        if (subject is not ILocatable3d subject3d || observer is not ILocatable3d observer3d)
         {
             return SuccessEff(Map<object, object?>());
         }

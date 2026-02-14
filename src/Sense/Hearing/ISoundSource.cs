@@ -7,7 +7,7 @@ using static LanguageExt.Prelude;
 
 namespace AlleyCat.Sense.Hearing;
 
-public interface ISoundSource : IObject3d, ILoggable
+public interface ISoundSource : ILocatable3d, ILoggable
 {
     Eff<IEnv, Unit> EmitSound(ISound data, Length range)
     {

@@ -26,7 +26,7 @@ public readonly record struct MarkerId
     public override string ToString() => Value;
 }
 
-public interface IMarker : IObject3d, ITagged
+public interface IMarker : ILocatable3d, ITagged
 {
     MarkerId Id { get; }
 }
