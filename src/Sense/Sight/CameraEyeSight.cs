@@ -37,11 +37,11 @@ public class CameraEyeSight(
 
     public ILoggerFactory? LoggerFactory => loggerFactory;
 
-    public IO<Option<IObject3d>> LookAt => _lookAt.ValueIO;
+    public IO<Option<ILocatable3d>> LookAt => _lookAt.ValueIO;
 
-    public IO<Unit> SetLookAt(IObject3d target) => _lookAt.SwapIO(_ => Some(target)).IgnoreF().As();
+    public IO<Unit> SetLookAt(ILocatable3d target) => _lookAt.SwapIO(_ => Some(target)).IgnoreF().As();
 
     public IO<Unit> ClearLookAt() => _lookAt.SwapIO(_ => None).IgnoreF().As();
 
-    private readonly Atom<Option<IObject3d>> _lookAt = Atom<Option<IObject3d>>(None);
+    private readonly Atom<Option<ILocatable3d>> _lookAt = Atom<Option<ILocatable3d>>(None);
 }

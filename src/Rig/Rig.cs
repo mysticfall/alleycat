@@ -9,11 +9,11 @@ using Error = LanguageExt.Common.Error;
 
 namespace AlleyCat.Rig;
 
-public interface IRig : IObject3d, IRunnable
+public interface IRig : ILocatable3d, IRunnable
 {
     Skeleton3D Skeleton { get; }
 
-    IO<Transform3D> IObject3d.GlobalTransform => IO.lift(() => Skeleton.GlobalTransform);
+    IO<Transform3D> ILocatable3d.GlobalTransform => IO.lift(() => Skeleton.GlobalTransform);
 
     Eff<IEnv, IDisposable> IRunnable.Run() =>
         from _ in liftEff(() => Skeleton.ShowRestOnly = false)

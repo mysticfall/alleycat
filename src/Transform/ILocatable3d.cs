@@ -3,14 +3,14 @@ using LanguageExt;
 
 namespace AlleyCat.Transform;
 
-public interface IObject3d
+public interface ILocatable3d
 {
     IO<Transform3D> GlobalTransform { get; }
 }
 
-public static class Object3dExtensions
+public static class Locatable3dExtensions
 {
-    extension(IObject3d obj)
+    extension(ILocatable3d obj)
     {
         public IO<Vector3> Origin => obj.GlobalTransform.Map(x => x.Origin);
 

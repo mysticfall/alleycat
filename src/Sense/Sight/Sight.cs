@@ -5,11 +5,11 @@ namespace AlleyCat.Sense.Sight;
 
 public interface IVision : IPercept;
 
-public interface ISight : IActiveSense<IVision>, IObject3d
+public interface ISight : IActiveSense<IVision>, ILocatable3d
 {
-    IO<Option<IObject3d>> LookAt { get; }
+    IO<Option<ILocatable3d>> LookAt { get; }
 
-    IO<Unit> SetLookAt(IObject3d target);
+    IO<Unit> SetLookAt(ILocatable3d target);
 
     IO<Unit> ClearLookAt();
 }

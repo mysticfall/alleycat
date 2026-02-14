@@ -14,7 +14,7 @@ public interface ICameraSight : ISight
 {
     Camera3D Camera { get; }
 
-    IO<Transform3D> IObject3d.GlobalTransform => lift(() => Camera.GlobalTransform);
+    IO<Transform3D> ILocatable3d.GlobalTransform => lift(() => Camera.GlobalTransform);
 
     SourceT<IO, IVision> IActiveSense<IVision>.Perceptions =>
         SourceT.foreverM(CaptureImage().Map<IVision>(i => new CameraVision(i, DateTime.Now)));
