@@ -19,67 +19,65 @@ public static class RigExtensions
 {
     extension<TBone>(IRig<TBone> rig) where TBone : struct, Enum
     {
-        public Eff<int> GetBoneIndex(TBone bone)
+        public Either<Error, int> GetBoneIndex(TBone bone)
         {
             var name = bone.ToString();
             var index = rig.Skeleton.FindBone(name);
 
             if (index == -1)
             {
-                return FailEff<int>(
-                    Error.New($"No such bone found in skeleton '{rig.Skeleton.Name}': {bone}")
-                );
+                return Error.New($"No such bone found in skeleton '{rig.Skeleton.Name}': {bone}");
             }
 
-            return SuccessEff(index);
+            return index;
         }
 
         public Eff<Transform3D> GetGlobalPose(TBone bone) =>
             from globalTransform in rig.GlobalTransform
-            from index in rig.GetBoneIndex(bone)
-            from pose in liftEff(() => globalTransform * rig.Skeleton.GetBoneGlobalPose(index))
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from pose in IO.lift(() => globalTransform * rig.Skeleton.GetBoneGlobalPose(index))
             select pose;
 
         public Eff<Transform3D> GetPose(TBone bone) =>
-            from index in rig.GetBoneIndex(bone)
-            from pose in liftEff(() => rig.Skeleton.GetBoneGlobalPose(index))
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from pose in IO.lift(() => rig.Skeleton.GetBoneGlobalPose(index))
             select pose;
 
         public Eff<Transform3D> GetLocalPose(TBone bone) =>
-            from index in rig.GetBoneIndex(bone)
-            from pose in liftEff(() => rig.Skeleton.GetBonePose(index))
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from pose in IO.lift(() => rig.Skeleton.GetBonePose(index))
             select pose;
 
         public Eff<Quaternion> GetPoseRotation(TBone bone) =>
-            from index in rig.GetBoneIndex(bone)
-            from rotation in liftEff(() => rig.Skeleton.GetBonePoseRotation(index))
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from rotation in IO.lift(() => rig.Skeleton.GetBonePoseRotation(index))
             select rotation;
 
         public Eff<Transform3D> GetGlobalRest(TBone bone) =>
             from globalTransform in rig.GlobalTransform
-            from index in rig.GetBoneIndex(bone)
-            from pose in liftEff(() => globalTransform * rig.Skeleton.GetBoneGlobalRest(index))
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from pose in IO.lift(() => globalTransform * rig.Skeleton.GetBoneGlobalRest(index))
             select pose;
 
         public Eff<Transform3D> GetRest(TBone bone) =>
             from globalTransform in rig.GlobalTransform
-            from index in rig.GetBoneIndex(bone)
-            from pose in liftEff(() => rig.Skeleton.GetBoneGlobalRest(index))
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from pose in IO.lift(() => rig.Skeleton.GetBoneGlobalRest(index))
             select pose;
 
         public Eff<Transform3D> GetLocalRest(TBone bone) =>
-            from index in rig.GetBoneIndex(bone)
-            from pose in liftEff(() => rig.Skeleton.GetBoneRest(index))
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from pose in IO.lift(() => rig.Skeleton.GetBoneRest(index))
             select pose;
 
         public Eff<Unit> SetPose(TBone bone, Transform3D pose) =>
-            from index in rig.GetBoneIndex(bone)
-            from _ in liftEff(() => { rig.Skeleton.SetBoneGlobalPose(index, pose); })
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from _ in IO.lift(() => { rig.Skeleton.SetBoneGlobalPose(index, pose); })
             select unit;
 
         public Eff<Unit> SetLocalPose(TBone bone, Transform3D pose) =>
-            from index in rig.GetBoneIndex(bone)
-            from _ in liftEff(() => { rig.Skeleton.SetBonePose(index, pose); })
+            from index in rig.GetBoneIndex(bone).ToEff()
+            from _ in IO.lift(() => { rig.Skeleton.SetBonePose(index, pose); })
             select unit;
     }
 }
