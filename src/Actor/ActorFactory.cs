@@ -1,7 +1,6 @@
 using AlleyCat.Actor.Action;
 using AlleyCat.Env;
 using AlleyCat.Metadata;
-using AlleyCat.Rig;
 using AlleyCat.Sense.Hearing;
 using AlleyCat.Sense.Sight;
 using AlleyCat.Service;
@@ -10,6 +9,7 @@ using AlleyCat.Speech.Voice;
 using AlleyCat.Template;
 using AlleyCat.Common;
 using AlleyCat.Control;
+using AlleyCat.Rig.Human;
 using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Rig;
+namespace AlleyCat.Rig.Human;
 
 public enum HumanBone
 {

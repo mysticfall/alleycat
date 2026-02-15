@@ -4,7 +4,7 @@ using LanguageExt;
 using Microsoft.Extensions.Logging;
 using static LanguageExt.Prelude;
 
-namespace AlleyCat.Rig;
+namespace AlleyCat.Rig.Human;
 
 [GlobalClass]
 public partial class HumanRigFactory : RigFactory<HumanBone>
