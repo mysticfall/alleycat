@@ -16,4 +16,6 @@ public static class Locatable3dExtensions
 
         public IO<Basis> Basis => obj.GlobalTransform.Map(x => x.Basis);
     }
+
+    public static ILocatable3d AsLocatable(this Node3D node) => new GenericMovable(node);
 }

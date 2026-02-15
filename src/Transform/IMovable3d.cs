@@ -23,4 +23,26 @@ public static class Movable3dExtensions
             from _ in obj.SetGlobalTransform(transform.Translated(offset))
             select unit;
     }
+
+    public static IMovable3d AsMovable(this Node3D node) => new GenericMovable(node);
+}
+
+internal readonly struct GenericMovable(Node3D node) : IMovable3d
+{
+    public IO<Transform3D> GlobalTransform
+    {
+        get
+        {
+            var source = node;
+
+            return IO.lift(() => source.GlobalTransform);
+        }
+    }
+
+    public IO<Unit> SetGlobalTransform(Transform3D transform)
+    {
+        var source = node;
+
+        return IO.lift(() => { source.GlobalTransform = transform; });
+    }
 }
