@@ -11,17 +11,17 @@ namespace AlleyCat.Rig.Human.Modifier;
 [GlobalClass]
 public partial class AdjustHipsIkFactory : HumanIkModifierFactory
 {
-    [Export] public Node3D? HeadIkTarget { get; set; }
+    [Export] public Node3D? HeadTarget { get; set; }
 
-    [Export] public Node3D? HipsIkTarget { get; set; }
+    [Export] public Node3D? HipsTarget { get; set; }
 
     protected override Eff<IEnv, IIkModifier> CreateService(
         IRig<HumanBone> rig,
         IObservable<Duration> onIkProcess,
         ILoggerFactory loggerFactory
     ) =>
-        from head in HeadIkTarget.Require("Head target is not set.")
-        from hips in HipsIkTarget.Require("Hips target is not set.")
+        from head in HeadTarget.Require("Head target is not set.")
+        from hips in HipsTarget.Require("Hips target is not set.")
         select (IIkModifier)new AdjustHipsIk(
             head.AsLocatable(),
             hips.AsMovable(),
