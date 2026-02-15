@@ -8,6 +8,7 @@ using AlleyCat.Entity;
 using AlleyCat.Env;
 using AlleyCat.Metadata;
 using AlleyCat.Rig;
+using AlleyCat.Rig.Human;
 using AlleyCat.Sense;
 using AlleyCat.Sense.Hearing;
 using AlleyCat.Sense.Sight;

@@ -1,6 +1,7 @@
 using AlleyCat.Entity;
 using AlleyCat.Env;
 using AlleyCat.Rig;
+using AlleyCat.Rig.Human;
 using AlleyCat.Template;
 using Godot;
 using LanguageExt;
