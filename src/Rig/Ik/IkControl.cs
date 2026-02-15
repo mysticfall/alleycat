@@ -4,6 +4,8 @@ using AlleyCat.Control;
 using AlleyCat.Env;
 using AlleyCat.Logging;
 using AlleyCat.Physics;
+using AlleyCat.Rig.Human;
+using AlleyCat.Transform;
 using AlleyCat.Xr;
 using Godot;
 using LanguageExt;
@@ -18,16 +20,13 @@ public class IkControl : IControl
     private readonly Eff<IEnv, IDisposable> _run;
 
     public IkControl(
+        XrDevices xr,
         IRig<HumanBone> rig,
+        ILocatable3d root,
         CharacterBody3D head,
         CharacterBody3D rightHand,
         CharacterBody3D leftHand,
-        Node3D hips,
-        Node3D rightFoot,
-        Node3D leftFoot,
         Node3D viewpoint,
-        IO<Transform3D> globalTransform,
-        XrDevices xr,
         IObservable<Duration> onBeforeIkProcess,
         IObservable<Duration> onAfterIkProcess,
         ILoggerFactory? loggerFactory = null
@@ -40,10 +39,18 @@ public class IkControl : IControl
 
         var physicalHead = IO.lift(() => xr.Camera.GlobalTransform * viewToHead);
 
+        var headTracker = new PhysicsBodyFollower(head, physicalHead);
+
         var trackers = Seq(
-            new PhysicsBodyFollower(head, physicalHead),
-            new PhysicsBodyFollower(rightHand, xr.Trackers.RightHand.Placeholder),
-            new PhysicsBodyFollower(leftHand, xr.Trackers.LeftHand.Placeholder)
+            headTracker,
+            new PhysicsBodyFollower(
+                rightHand,
+                xr.Trackers.RightHand.Placeholder.AsLocatable().GlobalTransform
+            ),
+            new PhysicsBodyFollower(
+                leftHand,
+                xr.Trackers.LeftHand.Placeholder.AsLocatable().GlobalTransform
+            )
         );
 
         var adjustWorldScale =
@@ -66,62 +73,25 @@ public class IkControl : IControl
             select unit;
 
         var resetOrigin =
-            from transform in globalTransform
+            from transform in root.GlobalTransform
             from _ in IO.lift(() => xr.Origin.GlobalTransform = transform)
             select unit;
 
-        var adjustHips =
-            from toSkeleton in IO.lift(() => rig.Skeleton.GlobalTransform)
-            let fromSkeleton = toSkeleton.Inverse()
-            from pHead in IO.lift(() => head.GlobalTransform)
-            let pHeadOrigin = (fromSkeleton * pHead).Origin
-            from vHeadOrigin in rig.GetPose(HumanBone.Head).Map(x => x.Origin)
-            let headOffset = pHeadOrigin - vHeadOrigin
-            from hipsPose in rig.GetPose(HumanBone.Hips).Map(x => x.Translated(headOffset))
-            let hipsGlobalPose = toSkeleton * hipsPose
-            from _ in IO.lift(() => { hips.GlobalTransform = hipsGlobalPose; })
-            select unit;
-
-        var adjustFeet =
-            from animRightFoot in rig.GetGlobalPose(HumanBone.RightFoot)
-            from animLeftFoot in rig.GetGlobalPose(HumanBone.LeftFoot)
-            from _1 in IO.lift(() =>
-            {
-                rightFoot.GlobalTransform = animRightFoot;
-                leftFoot.GlobalTransform = animLeftFoot;
-            })
-            select unit;
-
-        var adjustPose =
-            from _1 in adjustHips
-            from _2 in adjustFeet
-            select unit;
-
-        var movePoleTargets =
-            from _ in IO.lift(() => { })
-            select unit;
-
         var adjustOrigin =
-            from toSkeleton in IO.lift(() => rig.Skeleton.GlobalTransform)
-            let fromSkeleton = toSkeleton.Inverse()
-            from pHead in physicalHead
-            from vHeadOrigin in rig.GetPose(HumanBone.Head).Map(x => x.Origin)
-            from vHeadBasis in IO.lift(() => (fromSkeleton * head.GlobalTransform).Basis)
-            let vHeadPose = new Transform3D(vHeadBasis, vHeadOrigin)
-            let vHead = toSkeleton * vHeadPose
-            from _1 in rig.SetPose(HumanBone.Head, vHeadPose)
-            from _2 in IO.lift(() =>
+            from physicalPose in physicalHead
+            from virtualPose in rig.GetGlobalPose(HumanBone.Head)
+            from _ in IO.lift(() =>
             {
-                var pHeadLocal = xr.Origin.GlobalTransform.Inverse() * pHead;
+                var localPose = xr.Origin.GlobalTransform.Inverse() * physicalPose;
 
-                xr.Origin.GlobalTransform = vHead * pHeadLocal.Inverse();
+                xr.Origin.GlobalTransform = virtualPose * localPose.Inverse();
             })
             select unit;
 
         _run =
             from _1 in adjustWorldScale
             from initPos in callDeferred(
-                from initTrans in globalTransform
+                from initTrans in root.GlobalTransform
                 from _ in IO.lift(() => { xr.Origin.GlobalTransform = initTrans; })
                 from initPos in trackers
                     .Traverse(t => t
@@ -142,27 +112,20 @@ public class IkControl : IControl
                         var sync =
                             from _1 in resetOrigin
                             from nextPos in syncTrackers
-                            from _2 in adjustPose
-                            from _3 in movePoleTargets
                             select nextPos;
 
-                        return sync.Run().Match(identity, e =>
-                        {
-                            logger.LogError(e, "Failed to run IK processes.");
-
-                            return lastPos;
-                        });
+                        return sync.Run();
                     })
                     .Subscribe()
             )
             from d2 in IO.lift(() =>
                 onAfterIkProcess.Subscribe(_ =>
-                    adjustOrigin
-                        .Run()
-                        .IfFail(e =>
-                            logger.LogError(e, "Failed to adjust XR origin.")
-                        )
-                )
+                {
+                    adjustOrigin.Run().IfFail(e =>
+                    {
+                        logger.LogError(e, "Failed to run the IK post-process.");
+                    });
+                })
             )
             select (IDisposable)new CompositeDisposable(d1, d2);
     }
