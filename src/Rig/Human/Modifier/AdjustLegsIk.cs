@@ -9,8 +9,8 @@ using static LanguageExt.Prelude;
 namespace AlleyCat.Rig.Human.Modifier;
 
 public class AdjustLegsIk(
-    IMovable3d rightFootIkTarget,
-    IMovable3d leftFootIkTarget,
+    IMovable3d rightFootTarget,
+    IMovable3d leftFootTarget,
     IRig<HumanBone> rig,
     IObservable<Duration> onIkProcess,
     ILoggerFactory? loggerFactory = null
@@ -25,7 +25,7 @@ public class AdjustLegsIk(
     public Eff<IEnv, Unit> Process(Duration delta) =>
         from animRightFoot in rig.GetGlobalPose(HumanBone.RightFoot)
         from animLeftFoot in rig.GetGlobalPose(HumanBone.LeftFoot)
-        from _1 in rightFootIkTarget.SetGlobalTransform(animRightFoot)
-        from _2 in leftFootIkTarget.SetGlobalTransform(animLeftFoot)
+        from _1 in rightFootTarget.SetGlobalTransform(animRightFoot)
+        from _2 in leftFootTarget.SetGlobalTransform(animLeftFoot)
         select unit;
 }
