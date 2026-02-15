@@ -1,24 +1,20 @@
 using AlleyCat.Common;
+using AlleyCat.Transform;
 using Godot;
 using LanguageExt;
+using LanguageExt.UnsafeValueAccess;
 
 namespace AlleyCat.Physics;
 
 public class PhysicsBodyFollower(
     CharacterBody3D body,
     IO<Transform3D> target,
-    float returnVelocityRatio = 0.2f
-)
+    NormalisedRatio? returnVelocityRatio = null
+) : ILocatable3d
 {
-    public PhysicsBodyFollower(
-        CharacterBody3D body,
-        Node3D target,
-        float returnVelocityRatio = 0.2f
-    ) : this(body, IO.lift(() => target.GlobalTransform), returnVelocityRatio)
-    {
-    }
+    public IO<Transform3D> GlobalTransform => IO.lift(() => body.GlobalTransform);
 
-    private readonly NormalisedRatio _returnVelocityRatio = NormalisedRatio.Coerce(returnVelocityRatio);
+    private readonly NormalisedRatio _returnVelocityRatio = returnVelocityRatio ?? NormalisedRatio.Create(0.2f).Value();
 
     private Vector3 CalculateVelocity(
         Vector3 bodyPos,
@@ -36,7 +32,9 @@ public class PhysicsBodyFollower(
         var toTarget = (targetPos - bodyPos).Normalized();
         var toDest = targetOffset.Normalized();
 
-        return (toDest * (1 - _returnVelocityRatio) + toTarget * _returnVelocityRatio) * speed / deltaInSeconds;
+        return (toDest * (1 - _returnVelocityRatio) + toTarget * _returnVelocityRatio) *
+               speed /
+               deltaInSeconds;
     }
 
     public IO<Transform3D> Initialise() =>
@@ -60,7 +58,7 @@ public class PhysicsBodyFollower(
                 lastTargetPos,
                 duration
             );
-            
+
             body.GlobalBasis = transform.Basis;
             body.MoveAndSlide();
 
