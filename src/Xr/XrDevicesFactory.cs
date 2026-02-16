@@ -40,7 +40,7 @@ public partial class XrDevicesFactory : NodeFactory<XrDevices>
         from leftPlaceholder in LeftHandPlaceholder.Require("Left hand placeholder is not set")
         from maxFps in FrameRate.Create(MaximumRefreshRate).ToEff(identity)
         let logger = loggerFactory.CreateLogger<XrDevicesFactory>()
-        from viewport in env.Scene.GetViewport()
+        let viewport = env.Scene.SceneTree.GetRoot().GetViewport()
         from _ in liftIO(async () =>
         {
             DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);

@@ -11,7 +11,7 @@ public readonly struct MockScene(Seq<IActor> actors) : IScene
 {
     public Eff<IEnv, Seq<IActor>> Actors => SuccessEff(actors);
 
-    public IO<Viewport> GetViewport() => throw new NotImplementedException();
+    public SceneTree SceneTree => throw new NotImplementedException();
 
     public IO<T> AddNode<T>(T node) where T : Node => throw new NotImplementedException();
 }
