@@ -6,7 +6,7 @@ namespace AlleyCat.Scene;
 
 public interface IScene : ISceneLoader, IActorContainer
 {
-    IO<Viewport> GetViewport();
+    SceneTree SceneTree { get; }
 
     IO<T> AddNode<T>(T node) where T : Node;
 }

@@ -17,7 +17,7 @@ public class GodotScene(SceneTree sceneTree) : IScene
         .Map(x => x.ToSeq())
         .As();
 
-    public IO<Viewport> GetViewport() => IO.lift(() => sceneTree.GetRoot().GetViewport());
+    public SceneTree SceneTree => sceneTree;
 
     public IO<T> AddNode<T>(T node) where T : Node => IO.lift(() =>
     {
