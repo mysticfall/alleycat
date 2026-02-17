@@ -37,7 +37,7 @@ public class AdjustLegsIk : IIkModifier
         Logger = loggerFactory.GetLogger<AdjustLegsIk>();
         LoggerFactory = loggerFactory;
 
-        _poleLength = poleLength ?? 1.Metres();
+        _poleLength = poleLength ?? 50.Centimetres();
 
         _process =
             from toSkeleton in rig.GlobalTransform
