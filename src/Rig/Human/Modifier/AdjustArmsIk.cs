@@ -34,7 +34,7 @@ public class AdjustArmsIk : IIkModifier
     {
         OnIkProcess = onIkProcess;
 
-        Logger = loggerFactory.GetLogger<AdjustLegsIk>();
+        Logger = loggerFactory.GetLogger<AdjustArmsIk>();
         LoggerFactory = loggerFactory;
 
         _poleLength = poleLength ?? 50.Centimetres();
