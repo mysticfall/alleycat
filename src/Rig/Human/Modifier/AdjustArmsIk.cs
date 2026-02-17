@@ -72,9 +72,6 @@ public class AdjustArmsIk : IIkModifier
         )
         {
             return
-                from env in runtime<IEnv>()
-                let tree = env.Scene.SceneTree
-                let label = tree.GetRoot().GetNode<Label>("/root/Global/SubViewport/DebugOverlay/Label")
                 from shoulder in rig.GetPose(upperArmBone).Map(x => x.Origin)
                 from hand in handRef.GlobalTransform.Map(x => fromSkeleton * x)
                 let arm = hand.Origin - shoulder
@@ -89,11 +86,7 @@ public class AdjustArmsIk : IIkModifier
                 let dot = armDir.Dot(handBack)
                 let dir = dir2.Lerp(dir1, dot)
                 let pole = toSkeleton * (centre + dir * (float)_poleLength.Metres)
-                from _2 in poleTarget.SetGlobalTransform(new Transform3D(Basis.Identity, pole))
-                from _ in IO.lift(() =>
-                {
-                    label.Text = $"Dot: {dot:F2}";
-                })
+                from _ in poleTarget.SetGlobalTransform(new Transform3D(Basis.Identity, pole))
                 select unit;
         }
     }
