@@ -19,7 +19,7 @@ public partial class AdjustLegsIkFactory : HumanIkModifierFactory
 
     [Export] public Marker3D? LeftKneePole { get; set; }
 
-    [Export(PropertyHint.Range, "0.1,3")] public float PoleLength { get; set; } = 1f;
+    [Export(PropertyHint.Range, "0.1")] public float PoleLength { get; set; } = 0.5f;
 
     protected override Eff<IEnv, IIkModifier> CreateService(
         IRig<HumanBone> rig,
