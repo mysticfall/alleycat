@@ -1,5 +1,4 @@
 using AlleyCat.Env;
-using AlleyCat.Logging;
 using AlleyCat.Rig.Ik;
 using AlleyCat.Transform;
 using LanguageExt;
@@ -14,23 +13,15 @@ public class AdjustHipsIk(
     IRig<HumanBone> rig,
     IObservable<Duration> onIkProcess,
     ILoggerFactory? loggerFactory = null
-) : IIkModifier
+) : SimpleIkModifier<HumanBone>(rig, onIkProcess, loggerFactory)
 {
-    public IObservable<Duration> OnIkProcess => onIkProcess;
-
-    public ILogger Logger { get; } = loggerFactory.GetLogger<AdjustHipsIk>();
-
-    public ILoggerFactory? LoggerFactory => loggerFactory;
-
-    public Eff<IEnv, Unit> Process(Duration delta) =>
-        from toSkeleton in rig.GlobalTransform
-        let fromSkeleton = toSkeleton.Inverse()
+    protected override Eff<IEnv, Unit> Process(SimpleIkContext context, Duration delta) =>
         from headTarget in headTarget.GlobalTransform
-        let targetOrigin = (fromSkeleton * headTarget).Origin
-        from headOrigin in rig.GetPose(HumanBone.Head).Map(x => x.Origin)
+        let targetOrigin = (context.FromSkeleton * headTarget).Origin
+        from headOrigin in Rig.GetPose(HumanBone.Head).Map(x => x.Origin)
         let headOffset = targetOrigin - headOrigin
-        from hipsPose in rig.GetPose(HumanBone.Hips).Map(x => x.Translated(headOffset))
-        let hipsGlobalPose = toSkeleton * hipsPose
+        from hipsPose in Rig.GetPose(HumanBone.Hips).Map(x => x.Translated(headOffset))
+        let hipsGlobalPose = context.ToSkeleton * hipsPose
         from _ in hipsTarget.SetGlobalTransform(hipsGlobalPose)
         select unit;
 }
