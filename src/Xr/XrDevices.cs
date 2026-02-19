@@ -6,6 +6,7 @@ using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
 using static LanguageExt.Prelude;
+using Side = AlleyCat.Common.Side;
 
 namespace AlleyCat.Xr;
 
@@ -17,7 +18,10 @@ public readonly record struct XrHandTracker(
 public readonly record struct XrTrackers(
     XrHandTracker RightHand,
     XrHandTracker LeftHand
-);
+)
+{
+    public XrHandTracker this[Side side] => side == Side.Right ? RightHand : LeftHand;
+};
 
 public class XrDevices(
     OpenXRInterface xr,
