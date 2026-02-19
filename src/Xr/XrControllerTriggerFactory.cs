@@ -5,6 +5,7 @@ using LanguageExt;
 using Microsoft.Extensions.Logging;
 using static AlleyCat.Env.Prelude;
 using static LanguageExt.Prelude;
+using Side = AlleyCat.Common.Side;
 
 namespace AlleyCat.Xr;
 
@@ -17,8 +18,7 @@ public partial class XrControllerTriggerFactory : TriggerFactory
 
     protected override Eff<IEnv, ITrigger> CreateService(ILoggerFactory loggerFactory) =>
         from xr in service<XrDevices>()
-        let trackers = xr.Trackers
-        let tracker = Side == Side.Right ? trackers.RightHand : trackers.LeftHand
-        from action in InputEventName.Create(EventName).ToEff(identity)
-        select (ITrigger)new XrControllerTrigger(action, tracker.Controller, loggerFactory);
+        let controller = xr.Trackers[Side].Controller
+        from eventName in InputEventName.Create(EventName).ToEff(identity)
+        select (ITrigger)new XrControllerTrigger(eventName, controller, loggerFactory);
 }
