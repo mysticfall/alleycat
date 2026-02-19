@@ -1,4 +1,5 @@
 using AlleyCat.Common;
+using Godot;
 using LanguageExt;
 using static LanguageExt.Prelude;
 
@@ -14,6 +15,8 @@ public readonly record struct InputEventName
     }
 
     public static implicit operator string(InputEventName name) => name.Value;
+
+    public static implicit operator StringName(InputEventName name) => name.Value;
 
     public override string ToString() => Value;
 
