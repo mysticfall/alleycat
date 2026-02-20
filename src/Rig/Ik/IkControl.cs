@@ -17,7 +17,7 @@ namespace AlleyCat.Rig.Ik;
 
 public class IkControl : IControl
 {
-    private readonly Eff<IEnv, IDisposable> _run;
+    public Eff<IEnv, IDisposable> Run { get; }
 
     public IkControl(
         XrDevices xr,
@@ -88,7 +88,7 @@ public class IkControl : IControl
             })
             select unit;
 
-        _run =
+        Run =
             from _1 in adjustWorldScale
             from initPos in callDeferred(
                 from initTrans in root.GlobalTransform
@@ -129,6 +129,4 @@ public class IkControl : IControl
             )
             select (IDisposable)new CompositeDisposable(d1, d2);
     }
-
-    public Eff<IEnv, IDisposable> Run() => _run;
 }

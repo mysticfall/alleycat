@@ -51,7 +51,7 @@ public abstract partial class ResourceFactory<TService> : ResourceFactory, IServ
                 ))
             from cleanup in 
                 ((IServiceFactory)this).AutoRun == RunOption.OnCreation && service is IRunnable i
-                ? Some(i.Run()).Traverse(identity).As()
+                ? Some(i.Run).Traverse(identity).As()
                 : SuccessEff<Option<IDisposable>>(None)
             from _ in liftEff(() =>
             {

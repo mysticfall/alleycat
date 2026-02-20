@@ -23,49 +23,60 @@ public readonly record struct XrTrackers(
     public XrHandTracker this[Side side] => side == Side.Right ? RightHand : LeftHand;
 };
 
-public class XrDevices(
-    OpenXRInterface xr,
-    XROrigin3D origin,
-    XRCamera3D camera,
-    XrTrackers trackers,
-    ILoggerFactory? loggerFactory = null
-) : IRunnable
+public class XrDevices : IRunnable
 {
-    public OpenXRInterface Interface => xr;
+    public OpenXRInterface Interface { get; }
 
-    public XROrigin3D Origin => origin;
+    public XROrigin3D Origin { get; }
 
-    public XRCamera3D Camera => camera;
+    public XRCamera3D Camera { get; }
 
-    public XrTrackers Trackers => trackers;
+    public XrTrackers Trackers { get; }
 
-    public IO<Length> EyeHeight => IO.lift(() =>
-        (camera.GlobalPosition.Y - origin.GlobalPosition.Y).Metres()
-    );
+    public IO<Length> EyeHeight { get; }
 
     public IO<Length> BaseEyeHeight => _baseEyeHeight.ValueIO;
 
+    public Eff<IEnv, IDisposable> Run { get; }
+
     private readonly Atom<Length> _baseEyeHeight = Atom(1.2.Metres());
 
-    private readonly ILogger _logger = loggerFactory.GetLogger<XrDevices>();
-
-    public Eff<IEnv, IDisposable> Run()
+    public XrDevices(
+        OpenXRInterface xr,
+        XROrigin3D origin,
+        XRCamera3D camera,
+        XrTrackers trackers,
+        ILoggerFactory? loggerFactory = null
+    )
     {
+        Interface = xr;
+        Origin = origin;
+        Camera = camera;
+        Trackers = trackers;
+        EyeHeight = IO.lift(() =>
+            (camera.GlobalPosition.Y - origin.GlobalPosition.Y).Metres()
+        );
+
+        var logger = loggerFactory.GetLogger<XrDevices>();
+
         var onRecenter = Observable
             .FromEvent(
                 add => xr.PoseRecentered += add,
                 remove => xr.PoseRecentered -= remove);
 
-        return liftEff(() => onRecenter.Subscribe(_ =>
+        Run = IO.lift(() => onRecenter.Subscribe(_ =>
         {
             var reset =
                 from height in EyeHeight
                 from _1 in _baseEyeHeight.SwapIO(_ => height)
                 from _2 in IO.lift(() =>
                 {
-                    if (_logger.IsEnabled(LogLevel.Information))
+                    if (logger.IsEnabled(LogLevel.Information))
                     {
-                        _logger.LogInformation("Adjusted the eye height to {height} metres.", height);
+                        logger.LogInformation(
+                            "Adjusted the eye height to {height} metres.",
+                            height
+                        );
                     }
                 })
                 select unit;

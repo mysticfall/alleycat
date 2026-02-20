@@ -13,57 +13,72 @@ using static LanguageExt.Prelude;
 
 namespace AlleyCat.Speech.Voice;
 
-public class PlayerVoice(
-    VoiceId id,
-    AudioEffectRecord recorder,
-    ITranscriber transcriber,
-    ITrigger trigger,
-    IO<Transform3D> globalTransform,
-    ILoggerFactory? loggerFactory = null
-) : IVoice, IInteractiveRecorder, IRunnable
+public class PlayerVoice : IVoice, IInteractiveRecorder, IRunnable
 {
-    public VoiceId Id => id;
+    public VoiceId Id { get; }
 
-    public IO<bool> IsSpeaking => ((IAudioRecorder)this)
-        .IsRecording
-        .Map(x => x || _transcribing);
+    public IO<bool> IsSpeaking { get; }
 
-    public AudioEffectRecord Recorder => recorder;
+    public AudioEffectRecord Recorder { get; }
 
-    public ITrigger Trigger => trigger;
+    public ITrigger Trigger { get; }
 
-    public IO<Transform3D> GlobalTransform => globalTransform;
+    public IO<Transform3D> GlobalTransform { get; }
 
-    public ILogger Logger { get; } = loggerFactory.GetLogger<PlayerVoice>();
+    public ILogger Logger { get; }
 
-    public ILoggerFactory? LoggerFactory => loggerFactory;
+    public ILoggerFactory? LoggerFactory { get; }
 
-    //FIXME: Need a more robust way to track transcription state.
-    private bool _transcribing;
+    public Eff<IEnv, IDisposable> Run { get; }
 
-    public Eff<IEnv, IDisposable> Run() =>
-        from env in runtime<IEnv>()
-        from onRecord in ((IInteractiveRecorder)this).OnRecord
-        from dispose in liftEff(() =>
-        {
-            var onSpeech = onRecord
-                .Select(audio => (
-                    from _1 in liftEff(() => { _transcribing = true; })
-                    from dialogue in transcriber.Transcribe(audio)
-                    from _2 in callDeferred(((IVoice)this).Speak(dialogue))
-                    select unit
-                ).RunIO(env));
+    public PlayerVoice(
+        VoiceId id,
+        AudioEffectRecord recorder,
+        ITranscriber transcriber,
+        ITrigger trigger,
+        IO<Transform3D> globalTransform,
+        ILoggerFactory? loggerFactory = null
+    )
+    {
+        Id = id;
+        Recorder = recorder;
+        Trigger = trigger;
+        GlobalTransform = globalTransform;
 
-            return onSpeech
-                .Do(_ => { _transcribing = false; },
-                    e =>
-                    {
-                        _transcribing = false;
+        LoggerFactory = loggerFactory;
+        Logger = loggerFactory.GetLogger<PlayerVoice>();
 
-                        Logger.LogError(e, "Failed to process the player's speech.");
-                    })
-                .Retry()
-                .Subscribe();
-        })
-        select dispose;
+        //FIXME: Need a more robust way to track transcription state.
+        var transcribing = false;
+
+        IsSpeaking = ((IAudioRecorder)this)
+            .IsRecording
+            .Map(x => x || transcribing);
+
+        Run =
+            from env in runtime<IEnv>()
+            from onRecord in ((IInteractiveRecorder)this).OnRecord
+            from dispose in IO.lift(() =>
+            {
+                var onSpeech = onRecord
+                    .Select(audio => (
+                        from _1 in IO.lift(() => { transcribing = true; })
+                        from dialogue in transcriber.Transcribe(audio)
+                        from _2 in callDeferred(((IVoice)this).Speak(dialogue))
+                        select unit
+                    ).RunIO(env));
+
+                return onSpeech
+                    .Do(_ => { transcribing = false; },
+                        e =>
+                        {
+                            transcribing = false;
+
+                            Logger.LogError(e, "Failed to process the player's speech.");
+                        })
+                    .Retry()
+                    .Subscribe();
+            })
+            select dispose;
+    }
 }

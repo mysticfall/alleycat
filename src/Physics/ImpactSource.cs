@@ -18,7 +18,7 @@ public interface IImpactSource : IAudioSource, IRunnable, ILoggable
 
     protected SoundSet SoundSet { get; }
 
-    Eff<IEnv, IDisposable> IRunnable.Run() => liftEff(() =>
+    Eff<IEnv, IDisposable> IRunnable.Run => IO.lift(() =>
     {
         var onAreaEntered = Observable
             .FromEvent<Area3D.AreaEnteredEventHandler, Area3D>(

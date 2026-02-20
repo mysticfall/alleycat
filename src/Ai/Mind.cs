@@ -1,3 +1,4 @@
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Channels;
 using AlleyCat.Actor;
@@ -19,50 +20,52 @@ public interface IMind : IRunnable, ILoggable
 
     Option<IObservation> Observe(IPercept percept);
 
-    Eff<IEnv, IDisposable> IRunnable.Run()
+    Eff<IEnv, IDisposable> IRunnable.Run
     {
-        var channel = Channel.CreateBounded<IObservation>(new BoundedChannelOptions(100));
-        var source = channel.AsSourceT<IO, IObservation>();
+        get
+        {
+            var channel = Channel.CreateBounded<IObservation>(new BoundedChannelOptions(100));
+            var source = channel.AsSourceT<IO, IObservation>();
 
-        return
-            from env in runtime<IEnv>()
-            from sensoryInput in IO.pure(
-                Actor.Senses
-                    .OfType<IPassiveSense>()
-                    .Select(x => x.OnPerceive)
-                    .Merge()
-                    .Select(Observe)
-                    .SelectMany(x => x.ToObservable())
-            )
-            from _ in IO.lift(() =>
-            {
-                return Think(source).IfFail(e =>
-                {
-                    Logger.LogError(e, "Failed to think.");
-
-                    return unit;
-                }).ForkIO().RunAsync(env);
-            })
-            from disposables in liftEff(() =>
-                sensoryInput
-                    .Do(e =>
-                        {
-                            if (Logger.IsEnabled(LogLevel.Debug))
-                            {
-                                Logger.LogDebug("Observed event: {event}", e);
-                            }
-                        },
-                        e => Logger.LogError(e, "Failed to observe events.")
-                    )
-                    .Retry()
-                    .Subscribe(x =>
+            return
+                from env in runtime<IEnv>()
+                from sensoryInput in IO.pure(
+                    Actor.Senses
+                        .OfType<IPassiveSense>()
+                        .Select(x => x.OnPerceive)
+                        .Merge()
+                        .Select(Observe)
+                        .SelectMany(x => x.ToObservable())
+                )
+                from d1 in Think(source).IfFail(e =>
                     {
-                        if (!channel.Writer.TryWrite(x) && Logger.IsEnabled(LogLevel.Warning))
-                        {
-                            Logger.LogWarning("Failed to write to channel for event: {event}", x);
-                        }
+                        Logger.LogError(e, "Failed to think.");
+
+                        return unit;
                     })
-            )
-            select disposables;
+                    .ForkIO()
+                    .Map(x => x.AsDisposable())
+                from d2 in IO.lift(() =>
+                    sensoryInput
+                        .Do(e =>
+                            {
+                                if (Logger.IsEnabled(LogLevel.Debug))
+                                {
+                                    Logger.LogDebug("Observed event: {event}", e);
+                                }
+                            },
+                            e => Logger.LogError(e, "Failed to observe events.")
+                        )
+                        .Retry()
+                        .Subscribe(x =>
+                        {
+                            if (!channel.Writer.TryWrite(x) && Logger.IsEnabled(LogLevel.Warning))
+                            {
+                                Logger.LogWarning("Failed to write to channel for event: {event}", x);
+                            }
+                        })
+                )
+                select (IDisposable)new CompositeDisposable(d1, d2);
+        }
     }
 }
