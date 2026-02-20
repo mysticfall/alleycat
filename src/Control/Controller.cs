@@ -19,31 +19,33 @@ public interface IController<T> where T : IControllable
     IO<Unit> Control(T target);
 }
 
-public class Controller<T>(
-    ILoggerFactory? loggerFactory
-) : IController<T>, IRunnable, IDisposable where T : IControllable
+public class Controller<T> : IController<T>, IRunnable, IDisposable where T : IControllable
 {
     public IObservable<T> Target => _target.AsObservable();
 
     public IO<Unit> Control(T target) => IO.lift(() => _target.OnNext(target));
 
+    public Eff<IEnv, IDisposable> Run { get; }
+
     private readonly Subject<T> _target = new();
 
-    private readonly ILogger _logger = loggerFactory.GetLogger<Controller<T>>();
-
-    Eff<IEnv, IDisposable> IRunnable.Run()
+    public Controller(
+        ILoggerFactory? loggerFactory
+    )
     {
-        var onTargetChange = Target.Do(x =>
+        var logger = loggerFactory.GetLogger<Controller<T>>();
+
+        var onTargetChange = _target.Do(x =>
         {
-            if (_logger.IsEnabled(LogLevel.Information))
+            if (logger.IsEnabled(LogLevel.Information))
             {
-                _logger.LogInformation("Controlling target: {target}.", x);
+                logger.LogInformation("Controlling target: {target}.", x);
             }
         });
 
         var onControlsChange = onTargetChange.Select(x => x.Controls);
 
-        return
+        Run =
             from env in runtime<IEnv>()
             from cleanup in liftEff(() => onControlsChange
                 .Append(Seq<IControl>())
@@ -57,15 +59,16 @@ public class Controller<T>(
                         }
 
                         var switchControl = controls
-                            .Traverse(control => control.Run().Match(
+                            .Traverse(control => control.Run.Match(
                                     Seq,
                                     e =>
                                     {
-                                        if (_logger.IsEnabled(LogLevel.Error))
+                                        if (logger.IsEnabled(LogLevel.Error))
                                         {
-                                            _logger.LogError(
+                                            logger.LogError(
                                                 e,
-                                                "Failed to initialise a control: {control}.", control
+                                                "Failed to initialise a control: {control}.",
+                                                control
                                             );
                                         }
 
@@ -81,7 +84,7 @@ public class Controller<T>(
                             x => new CompositeDisposable(x),
                             e =>
                             {
-                                _logger.LogError(e, "Failed to initialise controls.");
+                                logger.LogError(e, "Failed to initialise controls.");
 
                                 return new CompositeDisposable();
                             });

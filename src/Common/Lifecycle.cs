@@ -5,5 +5,5 @@ namespace AlleyCat.Common;
 
 public interface IRunnable
 {
-    Eff<IEnv, IDisposable> Run();
+    Eff<IEnv, IDisposable> Run { get; }
 }

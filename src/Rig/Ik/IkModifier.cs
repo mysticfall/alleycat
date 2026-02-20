@@ -1,4 +1,3 @@
-using System.Reactive.Linq;
 using AlleyCat.Common;
 using AlleyCat.Env;
 using AlleyCat.Logging;
@@ -10,25 +9,47 @@ using static LanguageExt.Prelude;
 
 namespace AlleyCat.Rig.Ik;
 
-public interface IIkModifier : IRunnable, ILoggable
-{
-    IObservable<Duration> OnIkProcess { get; }
-}
+public interface IIkModifier : IRunnable, ILoggable;
 
-public abstract class IkModifier<TBone, TContext>(
-    IRig<TBone> rig,
-    IObservable<Duration> onIkProcess,
-    ILoggerFactory? loggerFactory = null
-) : IIkModifier
+public abstract class IkModifier<TBone, TContext> : IIkModifier
     where TBone : struct, Enum where TContext : IIkContext
 {
-    public IRig<TBone> Rig => rig;
+    protected IRig<TBone> Rig { get; }
 
-    public IObservable<Duration> OnIkProcess => onIkProcess;
+    public Eff<IEnv, IDisposable> Run { get; }
 
-    public ILoggerFactory LoggerFactory => loggerFactory ?? NullLoggerFactory.Instance;
+    public ILoggerFactory LoggerFactory { get; }
 
-    public ILogger Logger => field ??= LoggerFactory.CreateLogger(GetType());
+    public ILogger Logger { get; }
+
+    protected IkModifier(
+        IRig<TBone> rig,
+        IObservable<Duration> onIkProcess,
+        ILoggerFactory? loggerFactory = null
+    )
+    {
+        Rig = rig;
+
+        LoggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
+        Logger = loggerFactory.GetLogger(GetType());
+
+        Run =
+            from env in runtime<IEnv>()
+            from toSkeleton in Rig.GlobalTransform
+            let fromSkeleton = toSkeleton.Inverse()
+            from context in CreateContext(toSkeleton, fromSkeleton)
+            from disposable in IO.lift(() => onIkProcess
+                .Subscribe(duration =>
+                {
+                    Process(context, duration).Run(env).IfFail(e =>
+                    {
+                        Logger.LogError(
+                            e, "Failed to run IK process.");
+                    });
+                })
+            )
+            select disposable;
+    }
 
     protected abstract Eff<IEnv, TContext> CreateContext(
         Transform3D toSkeleton,
@@ -36,21 +57,4 @@ public abstract class IkModifier<TBone, TContext>(
     );
 
     protected abstract Eff<IEnv, Unit> Process(TContext context, Duration duration);
-
-    public Eff<IEnv, IDisposable> Run() =>
-        from env in runtime<IEnv>()
-        from toSkeleton in Rig.GlobalTransform
-        let fromSkeleton = toSkeleton.Inverse()
-        from context in CreateContext(toSkeleton, fromSkeleton)
-        from disposable in IO.lift(() => OnIkProcess
-            .Subscribe(duration =>
-            {
-                Process(context, duration).Run(env).IfFail(e =>
-                {
-                    Logger.LogError(
-                        e, "Failed to run IK process.");
-                });
-            })
-        )
-        select disposable;
 }

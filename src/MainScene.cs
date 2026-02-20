@@ -1,4 +1,3 @@
-using System.Reactive.Disposables;
 using AlleyCat.Actor;
 using AlleyCat.Common;
 using AlleyCat.Control;
@@ -14,22 +13,24 @@ using static LanguageExt.Prelude;
 
 namespace AlleyCat;
 
-public class MainScene(
-    ResourcePath startScene,
-    Node sceneRoot,
-    ILoadingScreen loadingScreen,
-    IController<IActor> actorController,
-    XRInterface xr,
-    ILoggerFactory? loggerFactory = null
-) : IRunnable, IResourceLoader
+public class MainScene : IRunnable, IResourceLoader
 {
-    private readonly ILogger _logger = loggerFactory.GetLogger<MainScene>();
+    public Eff<IEnv, IDisposable> Run { get; }
 
-    public Eff<IEnv, IDisposable> Run()
+    public MainScene(
+        ResourcePath startScene,
+        Node sceneRoot,
+        ILoadingScreen loadingScreen,
+        IController<IActor> actorController,
+        XRInterface xr,
+        ILoggerFactory? loggerFactory = null
+    )
     {
+        var logger = loggerFactory.GetLogger<MainScene>();
+
         var waitForReset = liftIO(async () =>
         {
-            _logger.LogDebug("Waiting for the headset position to reset.");
+            logger.LogDebug("Waiting for the headset position to reset.");
 
             await xr.ToSignal(xr, OpenXRInterface.SignalName.PoseRecentered);
         });
@@ -43,16 +44,15 @@ public class MainScene(
             from _2 in actorController.Control(actor)
             select unit;
 
-        return process
+        Run = process
             .IfFail(e =>
             {
-                _logger.LogCritical(e,"Failed to start the main scene.");
+                logger.LogCritical(e, "Failed to start the main scene.");
 
                 return unit;
             })
             .ForkIO()
-            .IgnoreF()
             .As()
-            .Map(IDisposable (_) => new CompositeDisposable());
+            .Map(x => x.AsDisposable());
     }
 }

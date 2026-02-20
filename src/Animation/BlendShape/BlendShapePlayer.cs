@@ -24,7 +24,7 @@ public interface IBlendShapePlayer : IRunnable, IFrameAware, ILoggable
 
     IO<Unit> Stop();
 
-    Eff<IEnv, IDisposable> IRunnable.Run() => liftEff(() =>
+    Eff<IEnv, IDisposable> IRunnable.Run => IO.lift(() =>
     {
         var mappings = Meshes.AsIterable()
             .Map(m => (m, BlendShapeMapping.FromMesh(m, BlendShapes)))

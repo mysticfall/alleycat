@@ -7,7 +7,6 @@ using AlleyCat.Logging;
 using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
-using static LanguageExt.Prelude;
 using static Godot.AnimationNodeOneShot;
 
 namespace AlleyCat.Sense.Sight;
@@ -30,7 +29,7 @@ public interface IEyeSight : ISight, IPhysicsFrameAware, IRunnable, ILoggable
 
     protected Duration EyesBlinkVariation { get; }
 
-    Eff<IEnv, IDisposable> IRunnable.Run() => SuccessEff(
+    Eff<IEnv, IDisposable> IRunnable.Run => IO.lift(() =>
         OnPhysicsProcess
             .Scan(State.Initial, (s, delta) => (
                 from s1 in ProcessRotation(s, delta)

@@ -4,34 +4,41 @@ using AlleyCat.Common;
 using AlleyCat.Env;
 using Godot;
 using LanguageExt;
-using static LanguageExt.Prelude;
 using Range = Godot.Range;
 
 namespace AlleyCat.Ui;
 
 public interface ILoadingScreen : IProgressReporterControl, IAnimatedControl;
 
-public class LoadingScreen(
-    Label label,
-    ProgressBar progressBar,
-    Godot.Control control,
-    AnimationPlayer animationPlayer,
-    Option<AnimationName> showAnimation = default,
-    Option<AnimationName> hideAnimation = default
-) : ILoadingScreen, IRunnable
+public class LoadingScreen : ILoadingScreen, IRunnable
 {
-    public ProgressBar ProgressBar => progressBar;
+    public ProgressBar ProgressBar { get; }
 
-    public Godot.Control Control => control;
+    public Godot.Control Control { get; }
 
-    public AnimationPlayer AnimationPlayer => animationPlayer;
+    public AnimationPlayer AnimationPlayer { get; }
 
-    public Option<AnimationName> ShowAnimation => showAnimation;
+    public Option<AnimationName> ShowAnimation { get; }
 
-    public Option<AnimationName> HideAnimation => hideAnimation;
+    public Option<AnimationName> HideAnimation { get; }
 
-    public Eff<IEnv, IDisposable> Run()
+    public Eff<IEnv, IDisposable> Run { get; }
+
+    public LoadingScreen(
+        Label label,
+        ProgressBar progressBar,
+        Godot.Control control,
+        AnimationPlayer animationPlayer,
+        Option<AnimationName> showAnimation = default,
+        Option<AnimationName> hideAnimation = default
+    )
     {
+        ProgressBar = progressBar;
+        Control = control;
+        AnimationPlayer = animationPlayer;
+        ShowAnimation = showAnimation;
+        HideAnimation = hideAnimation;
+
         var onProgress = Observable
             .FromEvent<Range.ValueChangedEventHandler, double>(
                 handler => new Range.ValueChangedEventHandler(handler),
@@ -42,10 +49,12 @@ public class LoadingScreen(
             .Select(x => x >= progressBar.MaxValue)
             .DistinctUntilChanged();
 
-        return liftEff(() => onJobStateChange.Subscribe(finished =>
-        {
-            label.Visible = finished;
-            progressBar.Visible = !finished;
-        }));
+        Run = IO.lift(() =>
+            onJobStateChange.Subscribe(finished =>
+            {
+                label.Visible = finished;
+                ProgressBar.Visible = !finished;
+            })
+        );
     }
 }
