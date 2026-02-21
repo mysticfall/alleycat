@@ -6,6 +6,7 @@ using AlleyCat.Common;
 using AlleyCat.Control;
 using AlleyCat.Entity;
 using AlleyCat.Env;
+using AlleyCat.Locomotion;
 using AlleyCat.Metadata;
 using AlleyCat.Rig;
 using AlleyCat.Rig.Human;
@@ -75,6 +76,7 @@ public interface IActor : IEntity<ActorId>,
     ISpeaker,
     IGendered,
     IRigged<HumanBone>,
+    ILocomotive,
     ITemplateRenderable,
     IStatefulAnimatable,
     IMarked,
@@ -104,6 +106,7 @@ public class Actor(
     IVoice voice,
     IHearing hearing,
     IRig<HumanBone> rig,
+    ILocomotion locomotion,
     AnimationTree animationTree,
     Seq<IAction> actions,
     Seq<IControl> controls,
@@ -122,6 +125,8 @@ public class Actor(
     public IHearing Hearing { get; } = hearing;
 
     public IRig<HumanBone> Rig { get; } = rig;
+
+    public ILocomotion Locomotion { get; } = locomotion;
 
     public AnimationTree AnimationTree { get; } = animationTree;
 

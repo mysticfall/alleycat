@@ -9,6 +9,7 @@ using AlleyCat.Speech.Voice;
 using AlleyCat.Template;
 using AlleyCat.Common;
 using AlleyCat.Control;
+using AlleyCat.Locomotion;
 using AlleyCat.Rig.Human;
 using Godot;
 using LanguageExt;
@@ -34,7 +35,7 @@ public partial class ActorFactory : NodeFactory<IActor>, IServiceFactory
 
     [Export] public HumanRigFactory? Rig { get; set; }
 
-    // [Export] public LocomotionFactory? Locomotion { get; set; }
+    [Export] public LocomotionFactory? Locomotion { get; set; }
 
     [Export] public AnimationTree? AnimationTree { get; set; }
 
@@ -64,9 +65,9 @@ public partial class ActorFactory : NodeFactory<IActor>, IServiceFactory
         from rig in Rig
             .Require("Rig is not set.")
             .Bind(v => v.TypedService)
-        // from locomotion in Locomotion
-        //     .Require("Locomotion is not set.")
-        //     .Bind(x => x.Service)
+        from locomotion in Locomotion
+            .Require("Locomotion is not set.")
+            .Bind(x => x.TypedService)
         from animationTree in AnimationTree.Require("AnimationTree is not set.")
         from root in Root.Require("Root is not set.")
         from actions in Actions
@@ -94,7 +95,7 @@ public partial class ActorFactory : NodeFactory<IActor>, IServiceFactory
             voice: voice,
             hearing: hearing,
             rig: rig,
-            // locomotion: locomotion,
+            locomotion: locomotion,
             animationTree: animationTree,
             actions: actions,
             controls: controls,
