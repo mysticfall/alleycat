@@ -17,12 +17,12 @@ public class AdjustLegsIk(
     IObservable<Duration> onIkProcess,
     Length? poleLength = null,
     ILoggerFactory? loggerFactory = null
-) : SimpleIkModifier<HumanBone>(rig, onIkProcess, loggerFactory)
+) :IkModifier<HumanBone>(rig, onIkProcess, loggerFactory)
 {
     private readonly Length _poleLength = poleLength ?? 50.Centimetres();
 
     private Eff<Unit> SyncLeg(
-        SimpleIkContext context,
+        Transform3D toSkeleton,
         HumanBone upperLegBone,
         HumanBone lowerLegBone,
         HumanBone footBone,
@@ -35,14 +35,14 @@ public class AdjustLegsIk(
         let poleDir = lowerLeg.Basis * Vector3.Forward
         let poleOrigin = lowerLeg.Origin + poleDir * (float)_poleLength.Metres
         let pole = new Transform3D(Basis.Identity, poleOrigin)
-        let toSkeleton = context.ToSkeleton
         from _1 in footTarget.SetGlobalTransform(toSkeleton * foot)
         from _2 in poleTarget.SetGlobalTransform(toSkeleton * pole)
         select unit;
 
-    protected override Eff<IEnv, Unit> Process(SimpleIkContext context, Duration duration) =>
+    protected override Eff<IEnv, Unit> Process(Duration duration) =>
+        from toSkeleton in Rig.GlobalTransform
         from _1 in SyncLeg(
-            context,
+            toSkeleton,
             HumanBone.RightUpperLeg,
             HumanBone.RightLowerLeg,
             HumanBone.RightFoot,
@@ -50,7 +50,7 @@ public class AdjustLegsIk(
             rightKneePole
         )
         from _2 in SyncLeg(
-            context,
+            toSkeleton,
             HumanBone.LeftUpperLeg,
             HumanBone.LeftLowerLeg,
             HumanBone.LeftFoot,
