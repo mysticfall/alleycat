@@ -13,15 +13,17 @@ public class AdjustHipsIk(
     IRig<HumanBone> rig,
     IObservable<Duration> onIkProcess,
     ILoggerFactory? loggerFactory = null
-) : SimpleIkModifier<HumanBone>(rig, onIkProcess, loggerFactory)
+) : IkModifier<HumanBone>(rig, onIkProcess, loggerFactory)
 {
-    protected override Eff<IEnv, Unit> Process(SimpleIkContext context, Duration delta) =>
+    protected override Eff<IEnv, Unit> Process(Duration delta) =>
+        from toSkeleton in Rig.GlobalTransform
+        let fromSkeleton = toSkeleton.Inverse()
         from headTarget in headTarget.GlobalTransform
-        let targetOrigin = (context.FromSkeleton * headTarget).Origin
+        let targetOrigin = (fromSkeleton * headTarget).Origin
         from headOrigin in Rig.GetPose(HumanBone.Head).Map(x => x.Origin)
         let headOffset = targetOrigin - headOrigin
         from hipsPose in Rig.GetPose(HumanBone.Hips).Map(x => x.Translated(headOffset))
-        let hipsGlobalPose = context.ToSkeleton * hipsPose
+        let hipsGlobalPose = toSkeleton * hipsPose
         from _ in hipsTarget.SetGlobalTransform(hipsGlobalPose)
         select unit;
 }

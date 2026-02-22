@@ -16,12 +16,10 @@ public readonly record struct ArmsIkRest(
 );
 
 public readonly record struct ArmsIkContext(
-    Transform3D ToSkeleton,
-    Transform3D FromSkeleton,
     Basis RestBasis,
     Map<Side, ArmsIkRest> Rests,
     Length ArmLength
-) : IIkContext;
+);
 
 public class AdjustArmsIk(
     ILocatable3d rightHand,
@@ -34,7 +32,7 @@ public class AdjustArmsIk(
     IObservable<Duration> onIkProcess,
     Length? poleLength = null,
     ILoggerFactory? loggerFactory = null
-) : IkModifier<HumanBone, ArmsIkContext>(rig, onIkProcess, loggerFactory)
+) : ContextAwareIkModifier<HumanBone, ArmsIkContext>(rig, onIkProcess, loggerFactory)
 {
     private readonly Length _poleLength = poleLength ?? 50.Centimetres();
 
@@ -52,10 +50,7 @@ public class AdjustArmsIk(
         return new Basis(right, up, forward * -1);
     }
 
-    protected override Eff<IEnv, ArmsIkContext> CreateContext(
-        Transform3D toSkeleton,
-        Transform3D fromSkeleton
-    ) =>
+    protected override Eff<IEnv, ArmsIkContext> CreateContext() =>
         from neck in Rig.GetRest(HumanBone.Neck)
         from hips in Rig.GetRest(HumanBone.Hips)
         from rightShoulderLocal in Rig.GetLocalRest(HumanBone.RightShoulder)
@@ -88,12 +83,14 @@ public class AdjustArmsIk(
         )
         let basis = CalculateBasis(neck, rightUpperArm, leftUpperArm, hips)
         let armLength = rightHand.Origin.DistanceTo(rightUpperArm.Origin)
-        select new ArmsIkContext(toSkeleton, fromSkeleton, basis, rests, armLength.Metres());
+        select new ArmsIkContext(basis, rests, armLength.Metres());
 
     private Eff<IEnv, Unit> SyncArm(
         Side side,
         ArmsIkContext context,
         Basis basis,
+        Transform3D toSkeleton,
+        Transform3D fromSkeleton,
         Transform3D upperChest,
         HumanBone shoulderBone,
         HumanBone upperArmBone,
@@ -107,7 +104,7 @@ public class AdjustArmsIk(
         return
             from shoulder in Rig.GetPose(shoulderBone)
             from upperArm in Rig.GetPose(upperArmBone)
-            from handTarget in handRef.GlobalTransform.Map(x => context.FromSkeleton * x)
+            from handTarget in handRef.GlobalTransform.Map(x => fromSkeleton * x)
             let arm = handTarget.Origin - upperArm.Origin
             let armDir = arm.Normalized()
             let armCentre = upperArm.Origin + armDir * arm.Length() / 2
@@ -127,7 +124,7 @@ public class AdjustArmsIk(
                 .IfNone(handBack)
             let dot = armDir.Dot(handBack)
             let poleDir = poleDirForHandDir.Lerp(poleDirForArmDir, Math.Abs(dot))
-            let pole = context.ToSkeleton * (armCentre + poleDir * (float)_poleLength.Metres)
+            let pole = toSkeleton * (armCentre + poleDir * (float)_poleLength.Metres)
             from _1 in poleTarget.SetGlobalTransform(new Transform3D(Basis.Identity, pole))
             let fromUpperArmRest = rests.UpperArm.Inverse()
             let elbowFromUpperArmRest =
@@ -149,11 +146,13 @@ public class AdjustArmsIk(
                 rests.LocalShoulder.Basis.Rotated(shoulderLocalRotAxis, upperArmRot.GetAngle() * 0.25f),
                 rests.LocalShoulder.Origin)
             let shoulderPose = upperChest * shoulderLocalPose
-            from _2 in shoulderTarget.SetGlobalTransform(context.ToSkeleton * shoulderPose)
+            from _2 in shoulderTarget.SetGlobalTransform(toSkeleton * shoulderPose)
             select unit;
     }
 
     protected override Eff<IEnv, Unit> Process(ArmsIkContext context, Duration duration) =>
+        from toSkeleton in Rig.GlobalTransform
+        let fromSkeleton = toSkeleton.Inverse()
         from neck in Rig.GetPose(HumanBone.Neck)
         from upperChest in Rig.GetPose(HumanBone.UpperChest)
         from rightUpperArm in Rig.GetPose(HumanBone.RightUpperArm)
@@ -164,6 +163,8 @@ public class AdjustArmsIk(
             Side.Right,
             context,
             basis,
+            toSkeleton,
+            fromSkeleton,
             upperChest,
             HumanBone.RightShoulder,
             HumanBone.RightUpperArm,
@@ -175,6 +176,8 @@ public class AdjustArmsIk(
             Side.Left,
             context,
             basis,
+            toSkeleton,
+            fromSkeleton,
             upperChest,
             HumanBone.LeftShoulder,
             HumanBone.LeftUpperArm,
