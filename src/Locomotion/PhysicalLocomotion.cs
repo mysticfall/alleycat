@@ -19,7 +19,7 @@ public class PhysicalLocomotion(
 
     protected override IO<Unit> Process(Vector3 velocity, Quaternion rotation) => IO.lift(() =>
     {
-        body.Basis = body.Basis.Rotated(rotation.GetAxis(), rotation.GetAngle());
+        body.Basis *= new Basis(rotation);
         body.Velocity = body.GlobalBasis * velocity + gravity;
 
         body.MoveAndSlide();
