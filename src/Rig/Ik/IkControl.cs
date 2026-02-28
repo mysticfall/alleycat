@@ -39,10 +39,8 @@ public class IkControl : IControl
 
         var physicalHead = IO.lift(() => xr.Camera.GlobalTransform * viewToHead);
 
-        var headTracker = new PhysicsBodyFollower(head, physicalHead);
-
         var trackers = Seq(
-            headTracker,
+            new PhysicsBodyFollower(head, physicalHead),
             new PhysicsBodyFollower(
                 rightHand,
                 xr.Trackers.RightHand.Placeholder.AsLocatable().GlobalTransform
