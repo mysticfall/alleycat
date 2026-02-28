@@ -1,6 +1,6 @@
+using System.Reactive.Linq;
 using AlleyCat.Common;
 using Godot;
-using LanguageExt;
 
 namespace AlleyCat.Locomotion.Rotation;
 
@@ -8,11 +8,15 @@ public class SmoothTurnCalculator(
     AngularVelocity maxTurnRate
 ) : IRotationCalculator
 {
-    public IO<Quaternion> CalculateRotation(Vector2 input, Duration duration)
-    {
-        var angle = -maxTurnRate.Radians * input.X * (float)duration.Seconds;
-        var rotation = new Vector3(0, angle, 0);
+    public IObservable<Quaternion> ObserveRequests(IObservable<TurnRequest> request) =>
+        request.Select(x =>
+        {
+            var input = x.Input.X;
+            var timeDelta = (float)x.TimeDelta.Seconds;
 
-        return IO.pure(Quaternion.FromEuler(rotation));
-    }
+            var angle = -maxTurnRate.Radians * timeDelta * input;
+            var rotation = new Vector3(0, angle, 0);
+
+            return Quaternion.FromEuler(rotation);
+        });
 }

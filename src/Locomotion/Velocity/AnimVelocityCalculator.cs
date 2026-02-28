@@ -1,7 +1,7 @@
+using System.Reactive.Linq;
 using AlleyCat.Animation;
 using AlleyCat.Common;
 using Godot;
-using LanguageExt;
 
 namespace AlleyCat.Locomotion.Velocity;
 
@@ -13,24 +13,27 @@ public class AnimVelocityCalculator(
     AnimationStateName movingState
 ) : IVelocityCalculator
 {
-    public IO<Vector3> CalculateVelocity(Vector2 input, Duration duration) => IO.lift(() =>
-    {
-        var currentState = playback.GetCurrentNode();
-
-        var hasInput = !Mathf.IsEqualApprox(input.Y, 0);
-
-        switch (hasInput)
+    public IObservable<Vector3> ObserveRequests(IObservable<MoveRequest> request) =>
+        request.Select(x =>
         {
-            case true when currentState == idleState:
-                playback.Travel(movingState);
-                break;
-            case false when currentState == movingState:
-                playback.Travel(idleState);
-                break;
-        }
+            var currentState = playback.GetCurrentNode();
 
-        animationTree.Set(parameter, input.Y);
+            var hasInput = !Mathf.IsEqualApprox(x.Input.Y, 0);
 
-        return -animationTree.GetRootMotionPosition() / (float)duration.Seconds;
-    });
+            switch (hasInput)
+            {
+                case true when currentState == idleState:
+                    playback.Travel(movingState);
+                    break;
+                case false when currentState == movingState:
+                    playback.Travel(idleState);
+                    break;
+            }
+
+            animationTree.Set(parameter, x.Input.Y);
+
+            var timeDelta = (float)x.TimeDelta.Seconds;
+
+            return -animationTree.GetRootMotionPosition() / timeDelta;
+        });
 }

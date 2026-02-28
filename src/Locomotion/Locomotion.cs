@@ -8,7 +8,6 @@ using AlleyCat.Logging;
 using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
-using static LanguageExt.Prelude;
 
 namespace AlleyCat.Locomotion;
 
@@ -42,53 +41,41 @@ public abstract class Locomotion : ILocomotion, IRunnable
         ILoggerFactory? loggerFactory = null
     )
     {
-        var onMoveInput = _moveInput.AsObservable();
-        var onTurnInput = _turnInput.AsObservable();
+        var moveRequests = onProcess
+            .WithLatestFrom(_moveInput)
+            .Select(x => new MoveRequest(x.Second, x.First));
+        var turnRequests = onProcess
+            .WithLatestFrom(_turnInput)
+            .Select(x => new TurnRequest(x.Second, x.First));
 
-        var onInput = onProcess
-            .WithLatestFrom(onMoveInput, (delta, move) => (delta, move))
-            .WithLatestFrom(onTurnInput, (prev, turn) =>
-                new InputData(prev.move, turn, prev.delta)
-            );
+        var movements = velocityCalculator.ObserveRequests(moveRequests);
+        var turns = rotationCalculator.ObserveRequests(turnRequests);
+
+        var locomotion = movements.Zip(turns);
 
         var logger = loggerFactory.GetLogger(GetType());
 
         Run = IO.lift(() =>
-            onInput.Subscribe(x =>
+            locomotion.Subscribe(x =>
             {
-                var process =
-                    from rotation in rotationCalculator.CalculateRotation(x.Turn, x.Duration)
-                    from velocity in velocityCalculator.CalculateVelocity(x.Movement, x.Duration)
-                    from _1 in IO.lift(() =>
-                    {
-                        if (logger.IsEnabled(LogLevel.Trace))
-                        {
-                            logger.LogTrace(
-                                "Velocity: {velocity}, Rotation: {rotation}",
-                                velocity,
-                                rotation.GetEuler()
-                            );
-                        }
-                    })
-                    from _2 in Process(velocity, rotation, x.Duration)
-                    select unit;
+                var velocity = x.First;
+                var rotation = x.Second;
 
-                process.Run();
+                if (logger.IsEnabled(LogLevel.Trace))
+                {
+                    logger.LogTrace(
+                        "Velocity: {velocity}, Rotation: {rotation:F2}",
+                        velocity,
+                        Mathf.RadToDeg(rotation.GetEuler().Y)
+                    );
+                }
+
+                Process(velocity, rotation).Run();
             })
         );
     }
 
-    protected abstract IO<Unit> Process(
-        Vector3 velocity,
-        Quaternion rotation,
-        Duration duration
-    );
-
-    private readonly record struct InputData(
-        Vector2 Movement,
-        Vector2 Turn,
-        Duration Duration
-    );
+    protected abstract IO<Unit> Process(Vector3 velocity, Quaternion rotation);
 }
 
 public interface ILocomotive
