@@ -8,10 +8,10 @@ using static LanguageExt.Prelude;
 namespace AlleyCat.Locomotion.Rotation;
 
 [GlobalClass]
-public partial class SimpleRotationCalculatorFactory : RotationCalculatorFactory
+public partial class SmoothTurnCalculatorFactory : RotationCalculatorFactory
 {
     protected override Eff<IEnv, IRotationCalculator> CreateService(
         AngularVelocity maxTurnRate,
         ILoggerFactory loggerFactory
-    ) => SuccessEff<IRotationCalculator>(new SimpleRotationCalculator(maxTurnRate));
+    ) => SuccessEff<IRotationCalculator>(new SmoothTurnCalculator(maxTurnRate));
 }
