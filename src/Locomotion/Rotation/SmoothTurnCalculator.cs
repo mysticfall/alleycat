@@ -4,7 +4,7 @@ using LanguageExt;
 
 namespace AlleyCat.Locomotion.Rotation;
 
-public class SimpleRotationCalculator(
+public class SmoothTurnCalculator(
     AngularVelocity maxTurnRate
 ) : IRotationCalculator
 {
