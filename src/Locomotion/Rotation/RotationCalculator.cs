@@ -3,7 +3,9 @@ using LanguageExt;
 
 namespace AlleyCat.Locomotion.Rotation;
 
+public readonly record struct TurnRequest(Vector2 Input, Duration TimeDelta);
+
 public interface IRotationCalculator
 {
-    IO<Quaternion> CalculateRotation(Vector2 input, Duration duration);
+    IObservable<Quaternion> ObserveRequests(IObservable<TurnRequest> request);
 }

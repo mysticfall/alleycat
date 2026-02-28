@@ -3,7 +3,9 @@ using LanguageExt;
 
 namespace AlleyCat.Locomotion.Velocity;
 
+public readonly record struct MoveRequest(Vector2 Input, Duration TimeDelta);
+
 public interface IVelocityCalculator
 {
-    IO<Vector3> CalculateVelocity(Vector2 input, Duration duration);
+    IObservable<Vector3> ObserveRequests(IObservable<MoveRequest> request);
 }

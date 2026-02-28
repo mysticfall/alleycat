@@ -17,11 +17,7 @@ public class PhysicalLocomotion(
 {
     public override IO<bool> IsMoving { get; } = IO.lift(() => !body.Velocity.IsZeroApprox());
 
-    protected override IO<Unit> Process(
-        Vector3 velocity,
-        Quaternion rotation,
-        Duration duration
-    ) => IO.lift(() =>
+    protected override IO<Unit> Process(Vector3 velocity, Quaternion rotation) => IO.lift(() =>
     {
         body.Basis = body.Basis.Rotated(rotation.GetAxis(), rotation.GetAngle());
         body.Velocity = body.GlobalBasis * velocity + gravity;
