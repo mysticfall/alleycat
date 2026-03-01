@@ -13,7 +13,7 @@ public abstract partial class RigFactory<TBone> : NodeFactory<IRig<TBone>>, ISer
 {
     [Export] public Skeleton3D? Skeleton { get; set; }
 
-    //Need eager initialisation to trigger idle animations (i.e. ShowRestOnly = false).
+    //FIXME: Temporary workaround until a bug with EagerSingleton gets fixed:
     InstantiationOption IServiceFactory.Instantiation => InstantiationOption.Singleton;
 
     protected override Eff<IEnv, IRig<TBone>> CreateService(
