@@ -21,14 +21,12 @@ public class IkControl : IControl
 
     public IkControl(
         XrDevices xr,
-        IRig<HumanBone> rig,
+        IIkRig<HumanBone> rig,
         ILocatable3d root,
         CharacterBody3D head,
         CharacterBody3D rightHand,
         CharacterBody3D leftHand,
         Node3D viewpoint,
-        IObservable<Duration> onBeforeIkProcess,
-        IObservable<Duration> onAfterIkProcess,
         ILoggerFactory? loggerFactory = null
     )
     {
@@ -100,7 +98,7 @@ public class IkControl : IControl
                 select initPos
             )
             from d1 in IO.lift(() =>
-                onBeforeIkProcess
+                rig.OnBeforeIk
                     .Scan(initPos, (lastPos, duration) =>
                     {
                         var syncTrackers = trackers
@@ -117,12 +115,9 @@ public class IkControl : IControl
                     .Subscribe()
             )
             from d2 in IO.lift(() =>
-                onAfterIkProcess.Subscribe(_ =>
+                rig.OnAfterIk.Subscribe(_ =>
                 {
-                    adjustOrigin.Run().IfFail(e =>
-                    {
-                        logger.LogError(e, "Failed to run the IK post-process.");
-                    });
+                    adjustOrigin.Run().IfFail(e => { logger.LogError(e, "Failed to run the IK post-process."); });
                 })
             )
             select (IDisposable)new CompositeDisposable(d1, d2);

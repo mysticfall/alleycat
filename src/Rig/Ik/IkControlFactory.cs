@@ -72,8 +72,6 @@ public partial class IkControlFactory : ControlFactory
             rightHand,
             leftHand,
             viewpoint,
-            onBeforeIkProcess,
-            onAfterIkProcess,
             loggerFactory
         );
 }

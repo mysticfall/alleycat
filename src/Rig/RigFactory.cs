@@ -8,15 +8,15 @@ using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Rig;
 
-public abstract partial class RigFactory<TBone> : NodeFactory<IRig<TBone>>, IServiceFactory
-    where TBone : struct, Enum
+[GlobalClass]
+public abstract partial class RigFactory : NodeFactory<IRig>, IServiceFactory
 {
     [Export] public Skeleton3D? Skeleton { get; set; }
 
     //FIXME: Temporary workaround until a bug with EagerSingleton gets fixed:
     InstantiationOption IServiceFactory.Instantiation => InstantiationOption.Singleton;
 
-    protected override Eff<IEnv, IRig<TBone>> CreateService(
+    protected override Eff<IEnv, IRig> CreateService(
         ILoggerFactory loggerFactory
     ) =>
         from skeleton in Skeleton.Require("Skeleton is not set.")
@@ -24,7 +24,23 @@ public abstract partial class RigFactory<TBone> : NodeFactory<IRig<TBone>>, ISer
         from rig in CreateService(skeleton, loggerFactory)
         select rig;
 
-    protected abstract Eff<IEnv, IRig<TBone>> CreateService(
+    protected abstract Eff<IEnv, IRig> CreateService(
+        Skeleton3D skeleton,
+        ILoggerFactory loggerFactory
+    );
+}
+
+public abstract partial class TypedRigFactory<TBone> : RigFactory, IServiceFactory<IRig<TBone>>
+    where TBone : struct, Enum
+{
+    public new Eff<IEnv, IRig<TBone>> TypedService => base.TypedService.Map(x => (IRig<TBone>)x);
+
+    protected override Eff<IEnv, IRig> CreateService(
+        Skeleton3D skeleton,
+        ILoggerFactory loggerFactory
+    ) => CreateTypedService(skeleton, loggerFactory).Map(IRig (x) => x);
+
+    protected abstract Eff<IEnv, IRig<TBone>> CreateTypedService(
         Skeleton3D skeleton,
         ILoggerFactory loggerFactory
     );
