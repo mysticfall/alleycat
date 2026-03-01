@@ -39,7 +39,7 @@ public class AdjustLegsIk(
         from _2 in poleTarget.SetGlobalTransform(toSkeleton * pole)
         select unit;
 
-    protected override Eff<IEnv, Unit> Process(Duration duration) =>
+    protected override Eff<IEnv, Unit> Process(Duration timeDelta) =>
         from toSkeleton in Rig.GlobalTransform
         from _1 in SyncLeg(
             toSkeleton,

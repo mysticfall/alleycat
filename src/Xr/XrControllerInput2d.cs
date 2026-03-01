@@ -10,5 +10,5 @@ public class XrControllerInput2d(
     IObservable<Duration> onProcess
 ) : Input2d(onProcess)
 {
-    protected override Vector2 Process(Duration duration) => controller.GetVector2(eventName);
+    protected override Vector2 Process(Duration timeDelta) => controller.GetVector2(eventName);
 }

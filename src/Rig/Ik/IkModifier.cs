@@ -40,5 +40,5 @@ public abstract class IkModifier<TBone> : IIkModifier
             select disposable;
     }
 
-    protected abstract Eff<IEnv, Unit> Process(Duration duration);
+    protected abstract Eff<IEnv, Unit> Process(Duration timeDelta);
 }
