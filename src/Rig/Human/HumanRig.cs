@@ -1,4 +1,6 @@
+using AlleyCat.Rig.Ik;
 using Godot;
+using LanguageExt;
 
 namespace AlleyCat.Rig.Human;
 
@@ -26,4 +28,8 @@ public enum HumanBone
     LeftFoot
 }
 
-public readonly record struct HumanRig(Skeleton3D Skeleton) : IRig<HumanBone>;
+public readonly record struct HumanRig(
+    Skeleton3D Skeleton,
+    IObservable<Duration> OnBeforeIk,
+    IObservable<Duration> OnAfterIk
+) : IIkRig<HumanBone>;
