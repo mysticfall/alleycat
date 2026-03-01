@@ -1,7 +1,7 @@
 using AlleyCat.Common;
 using AlleyCat.Control;
 using AlleyCat.Env;
-using AlleyCat.Rig.Human;
+using AlleyCat.Rig.Ik;
 using AlleyCat.Transform;
 using AlleyCat.Xr;
 using Godot;
@@ -9,10 +9,10 @@ using LanguageExt;
 using Microsoft.Extensions.Logging;
 using static AlleyCat.Env.Prelude;
 
-namespace AlleyCat.Rig.Ik;
+namespace AlleyCat.Rig.Human;
 
 [GlobalClass]
-public partial class IkControlFactory : ControlFactory
+public partial class HumanIkControlFactory : ControlFactory
 {
     [Export] public HumanRigFactory? Rig { get; set; }
 
@@ -64,7 +64,7 @@ public partial class IkControlFactory : ControlFactory
 
             return node.OnIkProcess;
         })
-        select (IControl)new IkControl(
+        select (IControl)new HumanIkControl(
             xr,
             rig,
             root.AsLocatable(),

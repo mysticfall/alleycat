@@ -4,7 +4,7 @@ using AlleyCat.Control;
 using AlleyCat.Env;
 using AlleyCat.Logging;
 using AlleyCat.Physics;
-using AlleyCat.Rig.Human;
+using AlleyCat.Rig.Ik;
 using AlleyCat.Transform;
 using AlleyCat.Xr;
 using Godot;
@@ -13,13 +13,13 @@ using Microsoft.Extensions.Logging;
 using static AlleyCat.Env.Prelude;
 using static LanguageExt.Prelude;
 
-namespace AlleyCat.Rig.Ik;
+namespace AlleyCat.Rig.Human;
 
-public class IkControl : IControl
+public class HumanIkControl : IControl
 {
     public Eff<IEnv, IDisposable> Run { get; }
 
-    public IkControl(
+    public HumanIkControl(
         XrDevices xr,
         IIkRig<HumanBone> rig,
         ILocatable3d root,
@@ -30,7 +30,7 @@ public class IkControl : IControl
         ILoggerFactory? loggerFactory = null
     )
     {
-        var logger = loggerFactory.GetLogger<IkControl>();
+        var logger = loggerFactory.GetLogger<HumanIkControl>();
 
         var headToView = viewpoint.Transform;
         var viewToHead = headToView.Inverse();
