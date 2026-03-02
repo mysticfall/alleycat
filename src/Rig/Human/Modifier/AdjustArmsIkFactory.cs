@@ -19,7 +19,7 @@ public partial class AdjustArmsIkFactory : HumanIkModifierFactory
 
     [Export] public Node3D? LeftShoulder { get; set; }
 
-    [ExportGroup("IK Poles")] [Export] public Node3D? RightElbowPole { get; set; }
+    [ExportGroup("IK Poles")] [Export] public Marker3D? RightElbowPole { get; set; }
 
     [Export] public Marker3D? LeftElbowPole { get; set; }
 
