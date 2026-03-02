@@ -13,14 +13,12 @@ public partial class MarkerFactory : NodeFactory<IMarker>
 {
     [Export] public Marker3D? Marker { get; set; }
 
-    [Export] public TagListFactory? Tags { get; set; }
+    [Export] public string[] Tags { get; set; } = [];
 
     protected override Eff<IEnv, IMarker> CreateService(ILoggerFactory loggerFactory) =>
         from id in MarkerId.Create(Name).ToEff(identity)
         from marker in Marker.Require("Marker node is not set.")
-        from tagList in Tags
-            .Require("Tag list is not set.")
-            .Bind(x => x.TypedService)
+        from tags in Tags.AsTags().ToEff(identity)
         let globalTransform = IO.lift(() => marker.GlobalTransform)
-        select (IMarker)new Marker(id, tagList.Tags, globalTransform);
+        select (IMarker)new Marker(id, tags, globalTransform);
 }

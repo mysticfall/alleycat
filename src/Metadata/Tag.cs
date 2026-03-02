@@ -46,9 +46,11 @@ public interface ITagged
     bool MatchesAll(IEnumerable<Tag> tags) => tags.All(Tags.Contains);
 }
 
-//TODO Only needed for satisfying the generic constraint of IServiceCollection.AddSingleton.
-//  Should find a better way.
-public class TagList(Set<Tag> tags)
+public static class TagExtensions
 {
-    public Set<Tag> Tags => tags;
+    public static Either<ParseError, Set<Tag>> AsTags(this string[] tags) =>
+        toSet(tags)
+            .Map(x => x.Trim())
+            .Traverse(Tag.Create)
+            .As();
 }
