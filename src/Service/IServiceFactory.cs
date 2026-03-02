@@ -36,6 +36,15 @@ public static class ServiceFactoryExtensions
                 .Traverse(x => x.TypedService)
                 .As();
 
+        public Eff<IEnv, Seq<T>> FindServices<T>() =>
+            node
+                .GetDescendants()
+                .OfType<IServiceFactory<T>>()
+                .AsIterable()
+                .ToSeq()
+                .Traverse(x => x.TypedService)
+                .As();
+
         public Eff<IEnv, T> GetService<T>() =>
             node
                 .FindService<T>()
