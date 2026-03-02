@@ -15,7 +15,7 @@ public partial class AdjustLegsIkFactory : HumanIkModifierFactory
 
     [Export] public Marker3D? LeftFootTarget { get; set; }
 
-    [ExportGroup("IK Poles")] [Export] public Node3D? RightKneePole { get; set; }
+    [ExportGroup("IK Poles")] [Export] public Marker3D? RightKneePole { get; set; }
 
     [Export] public Marker3D? LeftKneePole { get; set; }
 
