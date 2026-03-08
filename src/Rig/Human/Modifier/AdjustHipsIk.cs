@@ -1,6 +1,7 @@
 using AlleyCat.Env;
 using AlleyCat.Rig.Ik;
 using AlleyCat.Transform;
+using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
 using static LanguageExt.Prelude;
@@ -19,10 +20,18 @@ public class AdjustHipsIk(
         from toSkeleton in Rig.GlobalTransform
         let fromSkeleton = toSkeleton.Inverse()
         from headTarget in headTarget.GlobalTransform
-        let targetOrigin = (fromSkeleton * headTarget).Origin
         from headOrigin in Rig.GetPose(HumanBone.Head).Map(x => x.Origin)
+        from hips in Rig.GetPose(HumanBone.Hips)
+        let targetOrigin = (fromSkeleton * headTarget).Origin
+        let animHeadDir = (headOrigin - hips.Origin).Normalized()
+        let physicalHeadDir = (targetOrigin - hips.Origin).Normalized()
+        let minDot = 0.5f
+        let dot = Math.Abs(animHeadDir.Dot(physicalHeadDir))
+        let influence = Math.Max(dot - minDot, 0) / minDot
         let headOffset = targetOrigin - headOrigin
-        from hipsPose in Rig.GetPose(HumanBone.Hips).Map(x => x.Translated(headOffset))
+        let modifier = hips.Basis * new Vector3(-0.2f, 1f, -0.2f)
+        let hipsOffset = headOffset  * modifier * influence
+        from hipsPose in Rig.GetPose(HumanBone.Hips).Map(x => x.Translated(hipsOffset))
         let hipsGlobalPose = toSkeleton * hipsPose
         from _ in hipsTarget.SetGlobalTransform(hipsGlobalPose)
         select unit;
