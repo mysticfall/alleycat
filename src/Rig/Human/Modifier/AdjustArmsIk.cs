@@ -19,7 +19,10 @@ public readonly record struct ArmsIkContext(
     Basis RestBasis,
     Map<Side, ArmsIkRest> Rests,
     Length ArmLength
-);
+)
+{
+    public readonly Basis InverseRestBasis = RestBasis.Inverse();
+}
 
 public class AdjustArmsIk(
     ILocatable3d rightHand,
@@ -105,25 +108,24 @@ public class AdjustArmsIk(
             from shoulder in Rig.GetPose(shoulderBone)
             from upperArm in Rig.GetPose(upperArmBone)
             from handTarget in handRef.GlobalTransform.Map(x => fromSkeleton * x)
+            let fromUpperArm = upperArm.Basis.Inverse()
             let arm = handTarget.Origin - upperArm.Origin
             let armDir = arm.Normalized()
-            let armCentre = upperArm.Origin + armDir * arm.Length() / 2
-            let handRestFromUpperArmLocal = rests.UpperArm.Inverse() * rests.Hand.Origin
-            let armRestDirFromUpperArmLocal = handRestFromUpperArmLocal.Normalized()
-            let handFromUpperArmLocal = upperArm.Basis.Inverse() * handTarget.Origin
-            let armDirFromUpperArmLocal = handFromUpperArmLocal.Normalized()
-            let armRotFromUpperArmLocal =
-                new Quaternion(armRestDirFromUpperArmLocal, armDirFromUpperArmLocal)
-            let backDirFromUpperArmLocal = upperArm.Basis.Inverse() * basis * Vector3.Back
-            let poleDirFromUpperArmLocal = armRotFromUpperArmLocal * backDirFromUpperArmLocal
-            let poleDirForArmDir = upperArm.Basis * poleDirFromUpperArmLocal
+            let armLength = arm.Length()
+            let armCentre = upperArm.Origin + armDir * armLength / 2
+            let armRestDir = (rests.Hand.Origin - rests.UpperArm.Origin).Normalized()
+            let armRestDirFromRestBasis = context.InverseRestBasis * armRestDir
+            let armDirFromBasis = basis.Inverse() * armDir
+            let armRotFromBasis = new Quaternion(armRestDirFromRestBasis, armDirFromBasis)
+            let backDirFromBasis = context.InverseRestBasis * Vector3.Forward
+            let poleDirForArmDir = basis * (armRotFromBasis * backDirFromBasis)
             let handBack = handTarget.Basis * Vector3.Back
             let plane = new Plane(armDir, armCentre)
             let poleDirForHandDir = Optional(plane.IntersectsRay(handTarget.Origin, handBack))
                 .Map(x => (x - armCentre).Normalized())
-                .IfNone(handBack)
-            let dot = armDir.Dot(handBack)
-            let poleDir = poleDirForHandDir.Lerp(poleDirForArmDir, Math.Abs(dot))
+                .IfNone(poleDirForArmDir)
+            let lengthRatio = armLength / (float)context.ArmLength.Metres
+            let poleDir = poleDirForHandDir.Lerp(poleDirForArmDir, lengthRatio)
             let pole = toSkeleton * (armCentre + poleDir * (float)_poleLength.Metres)
             from _1 in poleTarget.SetGlobalTransform(new Transform3D(Basis.Identity, pole))
             let fromUpperArmRest = rests.UpperArm.Inverse()
