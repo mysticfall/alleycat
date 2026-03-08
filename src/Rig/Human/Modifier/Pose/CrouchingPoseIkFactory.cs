@@ -2,7 +2,6 @@ using AlleyCat.Animation;
 using AlleyCat.Common;
 using AlleyCat.Env;
 using AlleyCat.Rig.Ik;
-using AlleyCat.Transform;
 using Godot;
 using LanguageExt;
 using Microsoft.Extensions.Logging;
@@ -13,8 +12,6 @@ namespace AlleyCat.Rig.Human.Modifier.Pose;
 [GlobalClass]
 public partial class CrouchingPoseIkFactory : HumanIkModifierFactory
 {
-    [Export] public Node3D? HeadTarget { get; set; }
-
     [Export] public AnimationTree? AnimationTree { get; set; }
 
     [ExportGroup("Animation Parameters")]
@@ -38,7 +35,6 @@ public partial class CrouchingPoseIkFactory : HumanIkModifierFactory
         IObservable<Duration> onIkProcess,
         ILoggerFactory loggerFactory
     ) =>
-        from head in HeadTarget.Require("Head target is not set.")
         from animationTree in AnimationTree.Require("AnimationTree is not set.")
         from rootPlaybackParam in AnimationParam.Create(RootPlaybackParameter).ToEff(identity)
         from rootPlayback in animationTree
@@ -55,7 +51,6 @@ public partial class CrouchingPoseIkFactory : HumanIkModifierFactory
         from standingState in AnimationStateName.Create(StandingState).ToEff(identity)
         from crouchingState in AnimationStateName.Create(CrouchingState).ToEff(identity)
         select (IIkModifier)new CrouchingPoseIk(
-            head.AsLocatable(),
             rig,
             animationTree,
             rootPlayback,
