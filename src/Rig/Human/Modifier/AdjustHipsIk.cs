@@ -29,7 +29,7 @@ public class AdjustHipsIk(
         let dot = Math.Abs(animHeadDir.Dot(physicalHeadDir))
         let influence = Math.Max(dot - minDot, 0) / minDot
         let headOffset = targetOrigin - headOrigin
-        let modifier = hips.Basis * new Vector3(-0.2f, 1f, -0.2f)
+        let modifier = hips.Basis * new Vector3(-0.4f, 1f, -0.4f)
         let hipsOffset = headOffset  * modifier * influence
         from hipsPose in Rig.GetPose(HumanBone.Hips).Map(x => x.Translated(hipsOffset))
         let hipsGlobalPose = toSkeleton * hipsPose
