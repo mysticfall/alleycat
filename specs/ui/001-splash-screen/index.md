@@ -21,7 +21,7 @@ The splash screen should fade in from black to the project logo over 2 seconds.
 ### Godot
 
 Scenes:
-- @game/ui/splash_screen.tscn
+- @game/assets/ui/splash_screen.tscn
 
 Resources:
 - @game/assets/images/logo.svg

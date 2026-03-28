@@ -13,5 +13,8 @@ obj/
 # Godot-generated solution in game project
 game/AlleyCat.sln
 
+# AI agents
+.opencode/temp
+
 # Misc.
 *.blend1

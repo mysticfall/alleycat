@@ -8,7 +8,7 @@ handoff readiness for gameplay, systems, and tooling changes.
 
 ## Reviewer Checklist
 
-### C# coding essentials
+### C# Coding Essentials
 
 - [ ] Changes align with the relevant spec in `specs/` and keep scope focused.
 - [ ] Naming, file/class structure, and access modifiers follow project C# conventions.
@@ -16,9 +16,9 @@ handoff readiness for gameplay, systems, and tooling changes.
 - [ ] New/changed contracts (save data, config, messages) remain backwards-compatible or document migration.
 - [ ] Relevant tests/checks were run, and manual verification is noted where automation is not enough.
 
-### Godot essentials
+### Godot Essentials
 
-- [ ] Node lifecycle usage is correct (`_EnterTree`, `_Ready`, `_Process`, `_PhysicsProcess`, `_ExitTree`).
+- [ ] Node lifecycle usage is correct (`_Ready`, `_Process`, `_PhysicsProcess`, etc.).
 - [ ] Signal connections and disconnections are safe; no leaked subscriptions.
 - [ ] Scene/node ownership is clear, with minimal justified autoload/global state.
 - [ ] Exported properties/resources/scene refs are serialisation-safe and editor-friendly.

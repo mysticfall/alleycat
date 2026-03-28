@@ -8,6 +8,13 @@ specifications wiki, with each spec acting as the source of truth for planning a
 
 - [Project Specifications](specs/index.md)
 
+## Running the game and tests
+
+- Run the game from the project root with `godot-mono --path game`.
+- Run C# tests with `dotnet test tests/AlleyCat.test/AlleyCat.test.csproj`.
+- For pre-handoff verification, also run `dotnet format --verify-no-changes AlleyCat.sln` and
+  `dotnet build AlleyCat.sln -warnaserror`.
+
 ## Language
 
 Use British English, except when the instruction specifies otherwise.
