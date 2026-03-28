@@ -1,4 +1,4 @@
-[![AlleyCat logo](logo.svg)](https://github.com/mysticfall/alleycat)
+[![AlleyCat logo](game/assets/images/logo.svg)](https://github.com/mysticfall/alleycat)
 
 # Alley Cat
 
