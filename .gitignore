@@ -1,0 +1,17 @@
+# Godot 4+ specific ignores
+.godot/
+addons/
+android/
+
+# JetBrains IDE
+.idea/
+
+# .NET
+bin/
+obj/
+
+# Godot-generated solution in game project
+game/AlleyCat.sln
+
+# Misc.
+*.blend1

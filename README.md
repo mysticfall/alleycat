@@ -12,16 +12,23 @@ the [Godot Engine](https://github.com/godotengine/godot).
 This project is in a very early stage of development. It is currently intended for exploration and inspiration rather
 than practical use in production projects.
 
-### 📦 Asset Notice
+## 🧹 C# Linting and Formatting
 
-Please note that this repository **does not include the assets** required to run the game.
+This repository uses Roslyn analysers, Microsoft.CodeAnalysis.NetAnalyzers, and `dotnet format`.
 
-While Alley Cat serves as the foundation for my own game development, I cannot release my private game data under an
-open-source license at this time. I may provide a set of demo assets in the future; until then, this project serves
-primarily as a reference for other developers.
+Enable the repository hook once after cloning:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Every commit then runs:
+
+- `dotnet format --verify-no-changes AlleyCat.sln`
+- `dotnet build AlleyCat.sln -warnaserror`
 
 ---
 
-## 📜 License
+## 📜 Licence
 
-This project is open-source and available under the terms of the [MIT License](LICENSE).
+This project is open-source and available under the terms of the [MIT Licence](LICENSE).

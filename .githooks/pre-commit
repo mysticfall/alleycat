@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running format and lint checks..."
+
+dotnet format --verify-no-changes AlleyCat.sln
+dotnet build AlleyCat.sln -warnaserror -nologo -clp:Summary
