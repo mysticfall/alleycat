@@ -7,7 +7,8 @@ namespace AlleyCat.UI;
 /// </summary>
 public partial class SplashScreen : Control
 {
-    private const float FadeDurationSeconds = 2.0f;
+    private const float FadeDelaySeconds = 2.0f;
+    private const float FadeDurationSeconds = 3.0f;
 
     private TextureRect _logo = null!;
 
@@ -22,7 +23,7 @@ public partial class SplashScreen : Control
         modulate.A = 0.0f;
         WriteLogoModulate(_logo, modulate);
 
-        TweenLogoAlpha(_logo, 1.0f, FadeDurationSeconds);
+        TweenLogoAlpha(_logo, 1.0f, FadeDelaySeconds, FadeDurationSeconds);
     }
 
     /// <summary>
@@ -49,10 +50,13 @@ public partial class SplashScreen : Control
     /// </summary>
     /// <param name="logo">The logo control.</param>
     /// <param name="targetAlpha">The alpha value to tween to.</param>
+    /// <param name="delaySeconds">The delay before fade starts, in seconds.</param>
     /// <param name="durationSeconds">The fade duration in seconds.</param>
-    protected virtual void TweenLogoAlpha(TextureRect logo, float targetAlpha, float durationSeconds)
+    protected virtual void TweenLogoAlpha(TextureRect logo, float targetAlpha, float delaySeconds, float durationSeconds)
     {
         Tween tween = CreateTween();
-        _ = tween.TweenProperty(logo, "modulate:a", targetAlpha, durationSeconds);
+        _ = tween
+            .TweenProperty(logo, "modulate:a", targetAlpha, durationSeconds)
+            .SetDelay(delaySeconds);
     }
 }

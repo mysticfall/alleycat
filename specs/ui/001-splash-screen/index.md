@@ -6,7 +6,9 @@ id: UI-001
 
 ## Requirement
 
-The splash screen should fade in from black to the project logo over 2 seconds.
+The splash screen must show the project logo at approximately 50% of the viewport width.
+After the scene starts, the screen must remain black for 2 seconds.
+The fade-in from black to the full logo must then complete in 3 seconds.
 
 ## References
 
@@ -16,7 +18,7 @@ The splash screen should fade in from black to the project logo over 2 seconds.
 
 ### Tests
 
-- @tests/src/UI/SplashScreenTests.cs
+- @integration-tests/src/UI/SplashScreenIntegrationTests.cs
 
 ### Godot
 
