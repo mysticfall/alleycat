@@ -6,6 +6,14 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(MSBuildProjectName)' == 'AlleyCat.TestFramework'">
+        <MSBuildProjectExtensionsPath>obj/AlleyCat.TestFramework/</MSBuildProjectExtensionsPath>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(MSBuildProjectName)' == 'AlleyCat.TestFramework.Tests'">
+        <MSBuildProjectExtensionsPath>obj/AlleyCat.TestFramework.Tests/</MSBuildProjectExtensionsPath>
+    </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.201" PrivateAssets="all"/>
     </ItemGroup>

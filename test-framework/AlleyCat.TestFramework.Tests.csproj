@@ -6,12 +6,11 @@
         <IsPackable>false</IsPackable>
         <Nullable>enable</Nullable>
         <LangVersion>default</LangVersion>
-        <RootNamespace>AlleyCat.Test</RootNamespace>
-        <GodotProjectDir>../game</GodotProjectDir>
+        <RootNamespace>AlleyCat.TestFramework.Tests</RootNamespace>
+        <NoWarn>$(NoWarn);IDE0130</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-        <CompilerVisibleProperty Include="GodotProjectDir"/>
         <CompilerVisibleProperty Include="RootNamespace"/>
         <CompilerVisibleProperty Include="ProjectDir"/>
     </ItemGroup>
@@ -21,6 +20,7 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <PackageReference Include="Microsoft.Testing.Platform" Version="2.1.0" PrivateAssets="all"/>
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0"/>
         <PackageReference Include="xunit" Version="2.9.3"/>
         <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
@@ -30,10 +30,11 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="src/**"/>
+        <Compile Remove="src/**/*.cs"/>
+        <Folder Include="test/**"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../game/AlleyCat.csproj"/>
+        <ProjectReference Include="AlleyCat.TestFramework.csproj"/>
     </ItemGroup>
 </Project>

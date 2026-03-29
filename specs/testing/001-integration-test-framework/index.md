@@ -1,0 +1,82 @@
+---
+id: TEST-001
+title: Integration Test Framework
+---
+
+# Integration Test Framework
+
+## Requirement
+
+Provide a dependable integration test framework for behaviours that require Godot runtime APIs. It must support local and headless execution, selective runs, stable test identity, and actionable diagnostics.
+
+## Current State
+
+- Project split is complete:
+  - framework code is in `test-framework/`
+  - integration tests are in `integration-tests/`
+- Microsoft Testing Platform hook is wired and registers a custom Godot-backed test framework.
+- Discovery scans parameterless `[Fact]` methods and publishes deterministic node UIDs.
+- Two Godot-backed execution paths exist:
+  - **probe mode** (`--integration-probe`) validates dynamic load and runtime readiness
+  - **run-fact mode** (`--integration-run-fact`) executes one test method in Godot
+- Runtime command runner exists in game code and performs dynamic assembly loading and dependency resolution.
+- Process execution is hardened:
+  - start failure handling
+  - concurrent stdout/stderr draining
+  - configurable preflight/run/cleanup timeouts
+  - forced process-tree cleanup on timeout/cancellation
+- Structured result parsing is implemented using `ALLEYCAT_INTEGRATION_TEST_RESULT:` JSON payloads, mapped to passed/failed/error outcomes.
+- Baseline sample integration test exists and validates end-to-end discovery + execution.
+
+## In Scope
+
+- Discovery and execution of Godot-dependent integration tests.
+- Headless local execution.
+- Selective execution using filters/UID selection.
+- Clear separation of framework/runtime errors versus assertion failures.
+- Minimal, practical guidance for authoring and running tests.
+
+## Out of Scope
+
+- Replacing unit tests in `tests/`.
+- Defining gameplay-specific assertions for all systems.
+- Non-essential editor UX work.
+- Load/performance benchmarking infrastructure.
+
+## Remaining Work
+
+1. **Multi-test session model (highest priority)**
+   - Move beyond one-process-per-test where safe.
+   - Reuse runtime sessions to cut startup cost while preserving determinism.
+2. **Isolation fixtures and lifecycle contracts**
+   - Add standard setup/teardown fixtures for scene tree, autoloads, and temporary data.
+   - Define explicit reset guarantees between tests.
+3. **Richer filtering and metadata**
+   - Add trait/category filtering and clearer filter-to-selection feedback.
+   - Print the selected test list before execution for easier debugging.
+4. **Diagnostics and reporting**
+   - Improve failure summaries (command, timeout source, relevant output tail).
+   - Emit machine-readable artefacts for local tooling and reports.
+5. **Documentation and run flow**
+   - Add concise authoring and troubleshooting guides.
+   - Finalise defaults/prerequisites for stable integration runs.
+
+## Acceptance Criteria
+
+1. A new contributor can add and run a Godot-backed integration test locally using documented steps.
+2. The integration suite runs headlessly with deterministic pass/fail/error mapping.
+3. Selective execution runs only the requested subset in normal feature workflows.
+4. Framework/runtime failures are clearly distinguishable from assertion failures.
+5. Isolation fixtures and guidance prevent cross-test contamination across repeated runs.
+6. Docs cover quick start, filtering, diagnostics, and common recovery steps.
+
+## References
+
+- @test-framework/src/TestingPlatformBuilderHook.cs
+- @test-framework/src/GodotTestFramework.cs
+- @test-framework/AlleyCat.TestFramework.csproj
+- @test-framework/AlleyCat.TestFramework.Tests.csproj
+- @integration-tests/AlleyCat.IntegrationTests.csproj
+- @integration-tests/src/Sample/SampleIntegrationTests.cs
+- @game/src/Testing/TestRuntimeRunner.cs
+- @specs/index.md

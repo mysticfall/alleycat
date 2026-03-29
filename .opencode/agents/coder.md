@@ -21,7 +21,8 @@ using C# and engine best practices.
 - Use expression-bodied members for methods when it improves readability and the method body is a single expression.
 - Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in
   `AlleyCat.UI` belong in `src/UI`).
-- Use `AlleyCat.Test` as the root namespace for `AlleyCat.Test.csproj` and `AlleyCat.Integration.Test.csproj`.
+- Use `AlleyCat.Tests` as the root namespace for `AlleyCat.Tests.csproj`.
+- Use `AlleyCat.IntegrationTests` as the root namespace for `AlleyCat.IntegrationTests.csproj`.
 - Format changed files before handoff:
     ```bash
     dotnet format --verify-no-changes AlleyCat.sln 2>&1

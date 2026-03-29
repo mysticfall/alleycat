@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <IsTestProject>true</IsTestProject>
+        <IsPackable>false</IsPackable>
+        <Nullable>enable</Nullable>
+        <LangVersion>default</LangVersion>
+        <RootNamespace>AlleyCat.IntegrationTests</RootNamespace>
+        <OutputType>Exe</OutputType>
+        <GodotProjectDir>../game</GodotProjectDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <CompilerVisibleProperty Include="GodotProjectDir"/>
+        <CompilerVisibleProperty Include="RootNamespace"/>
+        <CompilerVisibleProperty Include="ProjectDir"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="GodotSharp" Version="4.6.1"/>
+        <PackageReference Include="Microsoft.Testing.Platform" Version="2.1.0"/>
+        <PackageReference Include="Microsoft.Testing.Platform.MSBuild" Version="2.1.0"/>
+        <PackageReference Include="xunit.assert" Version="2.9.3"/>
+        <PackageReference Include="xunit.extensibility.core" Version="2.9.3"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <TestingPlatformBuilderHook Include="E48052F3-6A71-4C6D-B4F8-1DE4E23B258B">
+            <DisplayName>AlleyCat Godot Test Framework</DisplayName>
+            <TypeFullName>AlleyCat.TestFramework.TestingPlatformBuilderHook</TypeFullName>
+        </TestingPlatformBuilderHook>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Folder Include="src/**"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../game/AlleyCat.csproj"/>
+        <ProjectReference Include="../test-framework/AlleyCat.TestFramework.csproj"/>
+    </ItemGroup>
+</Project>

@@ -16,7 +16,7 @@ The splash screen should fade in from black to the project logo over 2 seconds.
 
 ### Tests
 
-- @tests/AlleyCat.test/src/UI/SplashScreenTests.cs
+- @tests/src/UI/SplashScreenTests.cs
 
 ### Godot
 

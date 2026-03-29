@@ -8,10 +8,37 @@ specifications wiki, with each spec acting as the source of truth for planning a
 
 - [Project Specifications](specs/index.md)
 
+## Project Structure
+
+```text
+game/
+├── src/                          # C# gameplay and systems code
+├── assets/                       # Scenes, models, textures, and audio assets
+├── data/                         # Gameplay data and content definitions
+├── project.godot                 # Godot project configuration
+└── AlleyCat.csproj               # Game C# project file
+specs/
+└── index.md                      # Specifications index and navigation
+tests/
+├── src/                          # C# unit tests without Godot API dependencies
+└── AlleyCat.Tests.csproj         # Unit test project file
+integration-tests/
+├── src/                          # Godot-running unit tests for game components
+└── AlleyCat.IntegrationTests.csproj # Integration test project file
+test-framework/
+├── src/                          # Shared integration test framework implementation
+├── test/                         # Unit tests for the test framework
+├── AlleyCat.TestFramework.csproj
+└── AlleyCat.TestFramework.Tests.csproj
+AlleyCat.sln                      # Root .NET solution wiring game and test projects
+AGENTS.md                         # Agent operating rules and project-specific instructions
+README.md                         # Repository overview and developer onboarding
+```
+
 ## Running the game and tests
 
 - Run the game from the project root with `godot-mono --path game`.
-- Run C# tests with `dotnet test tests/AlleyCat.test/AlleyCat.test.csproj`.
+- Run C# tests with `dotnet test tests/AlleyCat.Tests.csproj`.
 - For pre-handoff verification, also run `dotnet format --verify-no-changes AlleyCat.sln` and
   `dotnet build AlleyCat.sln -warnaserror`.
 

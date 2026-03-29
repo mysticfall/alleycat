@@ -116,8 +116,8 @@ dotnet_naming_rule.private_fields_underscore.severity = warning
 
 dotnet_analyzer_diagnostic.category-Style.severity = warning
 
-dotnet_diagnostic.IDE0005.severity = error
 dotnet_diagnostic.IDE0003.severity = warning
+dotnet_diagnostic.IDE0005.severity = error
 dotnet_diagnostic.IDE0009.severity = warning
 dotnet_diagnostic.IDE0055.severity = error
 dotnet_diagnostic.IDE0060.severity = warning
@@ -132,7 +132,16 @@ dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1716.severity = none
 dotnet_diagnostic.CA1822.severity = warning
 
+[tests/src/*.cs]
+dotnet_diagnostic.IDE0130.severity = none
+
 [tests/src/**/*.cs]
+dotnet_diagnostic.IDE0130.severity = none
+
+[integration-tests/src/*.cs]
+dotnet_diagnostic.IDE0130.severity = none
+
+[integration-tests/src/**/*.cs]
 dotnet_diagnostic.IDE0130.severity = none
 
 [*.g.cs]

@@ -15,6 +15,10 @@ run/main_scene="res://assets/ui/splash_screen.tscn"
 config/features=PackedStringArray("4.6", "C#", "Forward Plus")
 config/icon="uid://pxfkxvp2stfj"
 
+[autoload]
+
+TestRuntimeRunner="*res://src/Testing/TestRuntimeRunner.cs"
+
 [audio]
 
 driver/enable_input=true

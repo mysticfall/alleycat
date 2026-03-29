@@ -1,12 +1,12 @@
 using AlleyCat.UI;
 using Xunit;
 
-namespace AlleyCat.Test.UI;
+namespace AlleyCat.Tests.UI;
 
 /// <summary>
 /// Unit tests for <see cref="SplashScreen"/>.
 /// </summary>
-public sealed partial class SplashScreenTests
+public sealed class SplashScreenTests
 {
     /// <summary>
     /// Verifies that the splash screen makes the logo transparent and starts a fade tween.
