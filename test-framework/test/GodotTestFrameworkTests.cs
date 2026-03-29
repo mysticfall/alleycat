@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading.Channels;
 using Xunit;
 
 namespace AlleyCat.TestFramework.Tests;
@@ -171,12 +173,293 @@ public sealed class GodotTestFrameworkTests
         Assert.Equal("Godot run-fact reported an unknown failure.", message);
     }
 
+    /// <summary>
+    /// Ensures structured test failures take precedence over timeout wrappers.
+    /// </summary>
+    [Fact]
+    public void BuildRunFactExecutionResult_ReturnsFailedOutcome_WhenStructuredFailureWasEmittedBeforeTimeout()
+    {
+        string failedPayload = JsonSerializer.Serialize(new
+        {
+            Outcome = "failed",
+            Message = "boom",
+            Stack = "trace"
+        });
+
+        object runResult = CreateGodotProcessRunResult(
+            exitCode: null,
+            stdOut: [ResultMarkerPrefix + failedPayload],
+            stdErr: [],
+            failureException: new TimeoutException("Godot process timed out after 120000ms."));
+
+        object executionResult = InvokePrivateStatic<object>("BuildRunFactExecutionResult", runResult);
+
+        Assert.Equal("Failed", ReadStructuredResultProperty(executionResult, "Outcome")?.ToString());
+        var capturedError = ReadStructuredResultProperty(executionResult, "Error") as Exception;
+        Assert.NotNull(capturedError);
+        Assert.Equal($"boom{Environment.NewLine}trace", capturedError.Message);
+    }
+
+    /// <summary>
+    /// Ensures run-fact early-exit detection includes both structured result and Godot error lines.
+    /// </summary>
+    [Fact]
+    public void IsRunFactEarlyExitSignalLine_RecognisesStructuredResultAndGodotErrors()
+    {
+        bool structuredResultMatch = InvokePrivateStatic<bool>(
+            "IsRunFactEarlyExitSignalLine",
+            $"{ResultMarkerPrefix}{{}}");
+        bool godotErrorMatch = InvokePrivateStatic<bool>(
+            "IsRunFactEarlyExitSignalLine",
+            "ERROR: test runtime fault");
+        bool nonSignalMatch = InvokePrivateStatic<bool>(
+            "IsRunFactEarlyExitSignalLine",
+            "INFO: unrelated line");
+
+        Assert.True(structuredResultMatch);
+        Assert.True(godotErrorMatch);
+        Assert.False(nonSignalMatch);
+    }
+
+    /// <summary>
+    /// Ensures process execution short-circuits once a structured run-fact line is emitted.
+    /// </summary>
+    [Fact]
+    public void RunGodotProcessAsync_CompletesEarly_WhenStructuredRunFactResultLineIsObserved()
+    {
+        const int timeoutMs = 4_000;
+
+        var fakeProcess = FakeGodotProcess.Create(
+            outputEvents:
+            [
+                new FakeOutputEvent(TimeSpan.FromMilliseconds(20), Stream: FakeOutputStream.StdOut, Line: "boot"),
+                new FakeOutputEvent(TimeSpan.FromMilliseconds(60), Stream: FakeOutputStream.StdOut, Line: ResultMarkerPrefix + JsonSerializer.Serialize(new
+                {
+                    Outcome = "failed",
+                    Message = "boom",
+                    Stack = (string?)null,
+                })),
+            ],
+            naturalExitDelay: TimeSpan.FromSeconds(5));
+
+        object framework = CreateFrameworkInstance(new FakeGodotProcessFactory(fakeProcess));
+
+        var stopwatch = Stopwatch.StartNew();
+#pragma warning disable xUnit1031
+        object runResult = InvokePrivateInstanceAsync<object>(
+                framework,
+                "RunGodotProcessAsync",
+                (IReadOnlyList<string>)["--ignored"],
+                timeoutMs,
+                CancellationToken.None,
+                new Func<string, bool>(line => line.StartsWith(ResultMarkerPrefix, StringComparison.Ordinal)))
+            .GetAwaiter()
+            .GetResult();
+#pragma warning restore xUnit1031
+        stopwatch.Stop();
+
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromMilliseconds(timeoutMs),
+            $"Expected early completion before timeout, elapsed {stopwatch.Elapsed.TotalMilliseconds}ms.");
+        Assert.Null(ReadStructuredResultProperty(runResult, "FailureException") as Exception);
+        Assert.True(fakeProcess.KillCalled);
+    }
+
+    /// <summary>
+    /// Ensures process execution short-circuits when a Godot ERROR line is emitted on stderr.
+    /// </summary>
+    [Fact]
+    public void RunGodotProcessAsync_CompletesEarly_WhenGodotErrorLineIsObservedOnStandardError()
+    {
+        const int timeoutMs = 4_000;
+
+        var fakeProcess = FakeGodotProcess.Create(
+            outputEvents:
+            [
+                new FakeOutputEvent(TimeSpan.FromMilliseconds(30), Stream: FakeOutputStream.StdErr, Line: "ERROR: simulated runtime fault"),
+            ],
+            naturalExitDelay: TimeSpan.FromSeconds(5));
+
+        object framework = CreateFrameworkInstance(new FakeGodotProcessFactory(fakeProcess));
+
+        var stopwatch = Stopwatch.StartNew();
+#pragma warning disable xUnit1031
+        object runResult = InvokePrivateInstanceAsync<object>(
+                framework,
+                "RunGodotProcessAsync",
+                (IReadOnlyList<string>)["--ignored"],
+                timeoutMs,
+                CancellationToken.None,
+                new Func<string, bool>(line => line.StartsWith("ERROR:", StringComparison.Ordinal)))
+            .GetAwaiter()
+            .GetResult();
+#pragma warning restore xUnit1031
+        stopwatch.Stop();
+
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromMilliseconds(timeoutMs),
+            $"Expected early completion before timeout, elapsed {stopwatch.Elapsed.TotalMilliseconds}ms.");
+        Assert.Null(ReadStructuredResultProperty(runResult, "FailureException") as Exception);
+        Assert.True(fakeProcess.KillCalled);
+        Assert.Contains("ERROR: simulated runtime fault", (IReadOnlyList<string>)ReadStructuredResultProperty(runResult, "StdErr")!);
+    }
+
+    private static object CreateFrameworkInstance(object? processFactory = null)
+    {
+        Type selectorType = _godotTestFrameworkType.Assembly
+            .GetType("AlleyCat.TestFramework.GodotCliTestSelector", throwOnError: true)!;
+        object selector = selectorType.GetProperty("None", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+            ?? throw new MissingMemberException(selectorType.FullName, "None");
+
+        ConstructorInfo constructor = _godotTestFrameworkType
+            .GetConstructors(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)
+            .Single(candidate => candidate.GetParameters().Length == 3);
+
+        return constructor.Invoke([Assembly.GetExecutingAssembly(), selector, processFactory]);
+    }
+
+    private sealed class FakeGodotProcessFactory(FakeGodotProcess process) : GodotTestFramework.IGodotProcessFactory
+    {
+        public GodotTestFramework.IGodotProcess Create(IReadOnlyList<string> commandLineArguments) => process;
+    }
+
+    private enum FakeOutputStream
+    {
+        StdOut,
+        StdErr,
+    }
+
+    private sealed record FakeOutputEvent(TimeSpan Delay, FakeOutputStream Stream, string Line);
+
+    private sealed class FakeGodotProcess : GodotTestFramework.IGodotProcess
+    {
+        private readonly Channel<string> _stdOutChannel = Channel.CreateUnbounded<string>();
+        private readonly Channel<string> _stdErrChannel = Channel.CreateUnbounded<string>();
+        private readonly IReadOnlyList<FakeOutputEvent> _outputEvents;
+        private readonly TimeSpan _naturalExitDelay;
+        private readonly TaskCompletionSource _exitTaskSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly CancellationTokenSource _lifetimeCancellationTokenSource = new();
+
+        private FakeGodotProcess(IReadOnlyList<FakeOutputEvent> outputEvents, TimeSpan naturalExitDelay)
+        {
+            _outputEvents = outputEvents;
+            _naturalExitDelay = naturalExitDelay;
+        }
+
+        public bool KillCalled
+        {
+            get; private set;
+        }
+
+        public bool HasExited => _exitTaskSource.Task.IsCompleted;
+
+        public int ExitCode
+        {
+            get; private set;
+        }
+
+        public static FakeGodotProcess Create(IReadOnlyList<FakeOutputEvent> outputEvents, TimeSpan naturalExitDelay)
+            => new(outputEvents, naturalExitDelay);
+
+        public bool Start()
+        {
+            _ = RunLifecycleAsync();
+            return true;
+        }
+
+        public async Task WaitForExitAsync(CancellationToken cancellationToken) => await _exitTaskSource.Task.WaitAsync(cancellationToken);
+
+        public async Task<string?> ReadStandardOutputLineAsync(CancellationToken cancellationToken)
+        {
+            return await _stdOutChannel.Reader.WaitToReadAsync(cancellationToken)
+                ? await _stdOutChannel.Reader.ReadAsync(cancellationToken)
+                : null;
+        }
+
+        public async Task<string?> ReadStandardErrorLineAsync(CancellationToken cancellationToken)
+        {
+            return await _stdErrChannel.Reader.WaitToReadAsync(cancellationToken)
+                ? await _stdErrChannel.Reader.ReadAsync(cancellationToken)
+                : null;
+        }
+
+        public void Kill(bool entireProcessTree)
+        {
+            if (HasExited)
+            {
+                return;
+            }
+
+            KillCalled = true;
+            _lifetimeCancellationTokenSource.Cancel();
+            Complete(exitCode: -1);
+        }
+
+        public void Dispose()
+        {
+            _lifetimeCancellationTokenSource.Cancel();
+            Complete(exitCode: ExitCode);
+            _lifetimeCancellationTokenSource.Dispose();
+        }
+
+        private async Task RunLifecycleAsync()
+        {
+            try
+            {
+                foreach (FakeOutputEvent outputEvent in _outputEvents)
+                {
+                    await Task.Delay(outputEvent.Delay, _lifetimeCancellationTokenSource.Token);
+                    Channel<string> channel = outputEvent.Stream == FakeOutputStream.StdOut
+                        ? _stdOutChannel
+                        : _stdErrChannel;
+                    await channel.Writer.WriteAsync(outputEvent.Line, _lifetimeCancellationTokenSource.Token);
+                }
+
+                await Task.Delay(_naturalExitDelay, _lifetimeCancellationTokenSource.Token);
+                Complete(exitCode: 0);
+            }
+            catch (OperationCanceledException)
+            {
+                Complete(exitCode: -1);
+            }
+        }
+
+        private void Complete(int exitCode)
+        {
+            if (HasExited)
+            {
+                return;
+            }
+
+            ExitCode = exitCode;
+            _ = _stdOutChannel.Writer.TryComplete();
+            _ = _stdErrChannel.Writer.TryComplete();
+            _ = _exitTaskSource.TrySetResult();
+        }
+    }
+
     private static T InvokePrivateStatic<T>(string methodName, params object?[] args)
     {
         MethodInfo method = _godotTestFrameworkType.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new MissingMethodException(_godotTestFrameworkType.FullName, methodName);
 
         object? result = method.Invoke(null, args);
+        return (T)result!;
+    }
+
+    private static async Task<T> InvokePrivateInstanceAsync<T>(object instance, string methodName, params object?[] args)
+    {
+        MethodInfo method = instance.GetType()
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Single(candidate => candidate.Name == methodName && candidate.GetParameters().Length == args.Length);
+
+        object? invocationResult = method.Invoke(instance, args);
+        Assert.NotNull(invocationResult);
+
+        Task task = Assert.IsAssignableFrom<Task>(invocationResult);
+        await task;
+
+        object? result = task.GetType().GetProperty("Result", BindingFlags.Public | BindingFlags.Instance)?.GetValue(task);
         return (T)result!;
     }
 
@@ -187,6 +470,19 @@ public sealed class GodotTestFrameworkTests
 
         return Activator.CreateInstance(structuredResultType, outcome, message, stack)
             ?? throw new InvalidOperationException("Failed to construct structured result instance.");
+    }
+
+    private static object CreateGodotProcessRunResult(
+        int? exitCode,
+        IReadOnlyList<string> stdOut,
+        IReadOnlyList<string> stdErr,
+        Exception? failureException)
+    {
+        Type runResultType = _godotTestFrameworkType.GetNestedType("GodotProcessRunResult", BindingFlags.NonPublic)
+            ?? throw new MissingMemberException(_godotTestFrameworkType.FullName, "GodotProcessRunResult");
+
+        return Activator.CreateInstance(runResultType, exitCode, stdOut, stdErr, failureException)
+            ?? throw new InvalidOperationException("Failed to construct process run result instance.");
     }
 
     private static object? ReadStructuredResultProperty(object structuredResult, string propertyName)

@@ -8,7 +8,7 @@ using Xunit;
 
 namespace AlleyCat.TestFramework;
 
-internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSelector cliSelector) : ITestFramework, IDataProducer
+internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 {
     private const string ProbeCommandArg = "--integration-probe";
     private const string RunFactCommandArg = "--integration-run-fact";
@@ -18,27 +18,54 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
     private const string ProbeTypeName = "AlleyCat.IntegrationTests.Probe.DynamicLoadProbeNode";
     private const string ProbeSuccessMarker = "ALLEYCAT_INTEGRATION_PROBE_SUCCESS";
     private const string RunFactResultMarkerPrefix = "ALLEYCAT_INTEGRATION_TEST_RESULT:";
+    private const string GodotErrorLinePrefix = "ERROR:";
     private const int DefaultPreflightTimeoutMs = 30_000;
     private const int DefaultRunFactTimeoutMs = 120_000;
     private const int DefaultCleanupTimeoutMs = 5_000;
+    private const int StructuredResultExitGraceTimeoutMs = 500;
     private const string GodotBinaryEnvironmentVariable = "GODOT_PATH";
     private const string GodotPreflightTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_PREFLIGHT_TIMEOUT_MS";
     private const string GodotRunFactTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS";
     private const string GodotCleanupTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS";
 
-    private readonly string _godotBinaryPath = ResolveGodotBinaryPath();
-    private readonly string _workspaceRootPath = ResolveWorkspaceRootPath(testAssembly);
-    private readonly int _preflightTimeoutMs = ResolveTimeout(
-        GodotPreflightTimeoutEnvironmentVariable,
-        DefaultPreflightTimeoutMs);
-    private readonly int _runFactTimeoutMs = ResolveTimeout(
-        GodotRunFactTimeoutEnvironmentVariable,
-        DefaultRunFactTimeoutMs);
-    private readonly int _cleanupTimeoutMs = ResolveTimeout(
-        GodotCleanupTimeoutEnvironmentVariable,
-        DefaultCleanupTimeoutMs);
-    private readonly Dictionary<TestNodeUid, MethodInfo> _testsByUid = DiscoverTests(testAssembly)
-        .ToDictionary(testCase => testCase.Uid, testCase => testCase.Method);
+    private readonly Assembly _testAssembly;
+    private readonly GodotCliTestSelector _cliSelector;
+    private readonly IGodotProcessFactory _processFactory;
+    private readonly string _godotBinaryPath;
+    private readonly string _workspaceRootPath;
+    private readonly int _preflightTimeoutMs;
+    private readonly int _runFactTimeoutMs;
+    private readonly int _cleanupTimeoutMs;
+    private readonly Dictionary<TestNodeUid, MethodInfo> _testsByUid;
+
+    internal GodotTestFramework(Assembly testAssembly, GodotCliTestSelector cliSelector)
+        : this(testAssembly, cliSelector, processFactory: null)
+    {
+    }
+
+    internal GodotTestFramework(
+        Assembly testAssembly,
+        GodotCliTestSelector cliSelector,
+        IGodotProcessFactory? processFactory)
+    {
+        _testAssembly = testAssembly;
+        _cliSelector = cliSelector;
+        _godotBinaryPath = ResolveGodotBinaryPath();
+        _workspaceRootPath = ResolveWorkspaceRootPath(testAssembly);
+        _preflightTimeoutMs = ResolveTimeout(
+            GodotPreflightTimeoutEnvironmentVariable,
+            DefaultPreflightTimeoutMs);
+        _runFactTimeoutMs = ResolveTimeout(
+            GodotRunFactTimeoutEnvironmentVariable,
+            DefaultRunFactTimeoutMs);
+        _cleanupTimeoutMs = ResolveTimeout(
+            GodotCleanupTimeoutEnvironmentVariable,
+            DefaultCleanupTimeoutMs);
+        _testsByUid = DiscoverTests(testAssembly)
+            .ToDictionary(testCase => testCase.Uid, testCase => testCase.Method);
+        _processFactory = processFactory
+            ?? new SystemGodotProcessFactory(_godotBinaryPath, _workspaceRootPath);
+    }
 
     public string Uid => "AlleyCat.TestFramework.GodotTestFramework";
 
@@ -178,7 +205,7 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
                     .Where(_testsByUid.ContainsKey)
                     .Select(uid => (uid, _testsByUid[uid]));
 
-        return candidates.Where(candidate => cliSelector.Matches(candidate.Method));
+        return candidates.Where(candidate => _cliSelector.Matches(candidate.Method));
     }
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)
@@ -196,23 +223,37 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
 
     private async Task<RunFactExecutionResult> RunFactAsync(MethodInfo method, CancellationToken cancellationToken)
     {
-        GodotProcessRunResult runResult = await RunGodotProcessAsync(CreateRunFactArguments(method), _runFactTimeoutMs, cancellationToken);
+        GodotProcessRunResult runResult = await RunGodotProcessAsync(
+            CreateRunFactArguments(method),
+            _runFactTimeoutMs,
+            cancellationToken,
+            IsRunFactEarlyExitSignalLine);
+
+        return BuildRunFactExecutionResult(runResult);
+    }
+
+    private static RunFactExecutionResult BuildRunFactExecutionResult(GodotProcessRunResult runResult)
+    {
+        StructuredRunFactResult? structuredResult = TryParseStructuredRunFactResult(runResult.StdOut)
+            ?? TryParseStructuredRunFactResult(runResult.StdErr);
+
+        if (structuredResult is not null)
+        {
+            return BuildStructuredRunFactExecutionResult(structuredResult);
+        }
 
         if (runResult.FailureException is not null)
         {
             return new RunFactExecutionResult(RunFactOutcome.Error, runResult.FailureException);
         }
 
-        StructuredRunFactResult? structuredResult = TryParseStructuredRunFactResult(runResult.StdOut)
-            ?? TryParseStructuredRunFactResult(runResult.StdErr);
+        var exception = new InvalidOperationException(
+            $"Godot run-fact did not emit a structured result line. ExitCode={runResult.ExitCode}. {BuildOutputSummary(runResult)}");
+        return new RunFactExecutionResult(RunFactOutcome.Error, exception);
+    }
 
-        if (structuredResult is null)
-        {
-            var exception = new InvalidOperationException(
-                $"Godot run-fact did not emit a structured result line. ExitCode={runResult.ExitCode}. {BuildOutputSummary(runResult)}");
-            return new RunFactExecutionResult(RunFactOutcome.Error, exception);
-        }
-
+    private static RunFactExecutionResult BuildStructuredRunFactExecutionResult(StructuredRunFactResult structuredResult)
+    {
         if (string.Equals(structuredResult.Outcome, "passed", StringComparison.OrdinalIgnoreCase))
         {
             return new RunFactExecutionResult(RunFactOutcome.Passed, null);
@@ -229,26 +270,27 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
     private async Task<GodotProcessRunResult> RunGodotProcessAsync(
         IReadOnlyList<string> commandLineArguments,
         int timeoutMs,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<string, bool>? earlyExitSignalPredicate = null)
     {
-        using var process = new Process
-        {
-            StartInfo = CreateProcessStartInfo(commandLineArguments),
-            EnableRaisingEvents = true,
-        };
+        using IGodotProcess process = _processFactory.Create(commandLineArguments);
+
+        TaskCompletionSource<bool>? earlyExitSignal = earlyExitSignalPredicate is null
+            ? null
+            : new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         List<string> stdOutLines = [];
         List<string> stdErrLines = [];
         object stdOutLock = new();
         object stdErrLock = new();
 
-        Task ReadStreamAsync(StreamReader reader, IList<string> lines, object syncLock)
+        Task ReadStreamAsync(Func<CancellationToken, Task<string?>> readLineAsync, IList<string> lines, object syncLock)
         {
             return Task.Run(async () =>
         {
             while (true)
             {
-                string? line = await reader.ReadLineAsync(cancellationToken);
+                string? line = await readLineAsync(cancellationToken);
                 if (line is null)
                 {
                     return;
@@ -257,6 +299,11 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
                 lock (syncLock)
                 {
                     lines.Add(line);
+                }
+
+                if (earlyExitSignalPredicate is not null && earlyExitSignalPredicate(line))
+                {
+                    _ = earlyExitSignal?.TrySetResult(true);
                 }
             }
         }, cancellationToken);
@@ -284,8 +331,8 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
                     exception));
         }
 
-        Task stdOutTask = ReadStreamAsync(process.StandardOutput, stdOutLines, stdOutLock);
-        Task stdErrTask = ReadStreamAsync(process.StandardError, stdErrLines, stdErrLock);
+        Task stdOutTask = ReadStreamAsync(process.ReadStandardOutputLineAsync, stdOutLines, stdOutLock);
+        Task stdErrTask = ReadStreamAsync(process.ReadStandardErrorLineAsync, stdErrLines, stdErrLock);
 
         using var timeoutCancellationTokenSource = new CancellationTokenSource(timeoutMs);
         using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
@@ -296,7 +343,24 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
 
         try
         {
-            await process.WaitForExitAsync(linkedCancellationTokenSource.Token);
+            Task waitForExitTask = process.WaitForExitAsync(linkedCancellationTokenSource.Token);
+
+            if (earlyExitSignal is null)
+            {
+                await waitForExitTask;
+            }
+            else
+            {
+                Task completedTask = await Task.WhenAny(waitForExitTask, earlyExitSignal.Task);
+                if (completedTask == earlyExitSignal.Task && !process.HasExited)
+                {
+                    await StopProcessAfterStructuredResultAsync(process);
+                }
+                else
+                {
+                    await waitForExitTask;
+                }
+            }
         }
         catch (OperationCanceledException) when (timeoutCancellationTokenSource.IsCancellationRequested)
         {
@@ -332,24 +396,20 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
             FailureException: failureException);
     }
 
-    private ProcessStartInfo CreateProcessStartInfo(IReadOnlyList<string> commandLineArguments)
+    private async Task StopProcessAfterStructuredResultAsync(IGodotProcess process)
     {
-        ProcessStartInfo processStartInfo = new()
+        using var gracefulExitCancellationTokenSource = new CancellationTokenSource(StructuredResultExitGraceTimeoutMs);
+        try
         {
-            FileName = _godotBinaryPath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = _workspaceRootPath,
-        };
-
-        foreach (string argument in commandLineArguments)
+            await process.WaitForExitAsync(gracefulExitCancellationTokenSource.Token);
+            return;
+        }
+        catch (OperationCanceledException)
         {
-            processStartInfo.ArgumentList.Add(argument);
+            // Fall back to forced cleanup if the process does not exit promptly.
         }
 
-        return processStartInfo;
+        await CleanupTimedOutProcessAsync(process);
     }
 
     private IReadOnlyList<string> CreateProbeArguments() =>
@@ -362,7 +422,7 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
         "--",
         ProbeCommandArg,
         ProbeAssemblyArg,
-        testAssembly.Location,
+        _testAssembly.Location,
         ProbeTypeArg,
         ProbeTypeName,
     ];
@@ -377,14 +437,14 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
         "--",
         RunFactCommandArg,
         ProbeAssemblyArg,
-        testAssembly.Location,
+        _testAssembly.Location,
         ProbeTypeArg,
         method.DeclaringType?.FullName ?? string.Empty,
         ProbeMethodArg,
         method.Name,
     ];
 
-    private async Task CleanupTimedOutProcessAsync(Process process)
+    private async Task CleanupTimedOutProcessAsync(IGodotProcess process)
     {
         if (process.HasExited)
         {
@@ -433,6 +493,13 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
 
         return null;
     }
+
+    private static bool IsStructuredRunFactResultLine(string line)
+        => line.StartsWith(RunFactResultMarkerPrefix, StringComparison.Ordinal);
+
+    private static bool IsRunFactEarlyExitSignalLine(string line)
+        => IsStructuredRunFactResultLine(line)
+           || line.StartsWith(GodotErrorLinePrefix, StringComparison.Ordinal);
 
     private static string BuildStructuredErrorMessage(StructuredRunFactResult structuredResult)
     {
@@ -528,5 +595,84 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
         Passed,
         Failed,
         Error,
+    }
+
+    internal interface IGodotProcessFactory
+    {
+        IGodotProcess Create(IReadOnlyList<string> commandLineArguments);
+    }
+
+    internal interface IGodotProcess : IDisposable
+    {
+        bool Start();
+
+        bool HasExited
+        {
+            get;
+        }
+
+        int ExitCode
+        {
+            get;
+        }
+
+        Task WaitForExitAsync(CancellationToken cancellationToken);
+
+        Task<string?> ReadStandardOutputLineAsync(CancellationToken cancellationToken);
+
+        Task<string?> ReadStandardErrorLineAsync(CancellationToken cancellationToken);
+
+        void Kill(bool entireProcessTree);
+    }
+
+    private sealed class SystemGodotProcessFactory(string godotBinaryPath, string workspaceRootPath) : IGodotProcessFactory
+    {
+        public IGodotProcess Create(IReadOnlyList<string> commandLineArguments)
+        {
+            ProcessStartInfo processStartInfo = new()
+            {
+                FileName = godotBinaryPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = workspaceRootPath,
+            };
+
+            foreach (string argument in commandLineArguments)
+            {
+                processStartInfo.ArgumentList.Add(argument);
+            }
+
+            return new SystemGodotProcess(processStartInfo);
+        }
+    }
+
+    private sealed class SystemGodotProcess(ProcessStartInfo startInfo) : IGodotProcess
+    {
+        private readonly Process _process = new()
+        {
+            StartInfo = startInfo,
+            EnableRaisingEvents = true,
+        };
+
+        public bool Start() => _process.Start();
+
+        public bool HasExited => _process.HasExited;
+
+        public int ExitCode => _process.ExitCode;
+
+        public Task WaitForExitAsync(CancellationToken cancellationToken)
+            => _process.WaitForExitAsync(cancellationToken);
+
+        public Task<string?> ReadStandardOutputLineAsync(CancellationToken cancellationToken)
+            => _process.StandardOutput.ReadLineAsync(cancellationToken).AsTask();
+
+        public Task<string?> ReadStandardErrorLineAsync(CancellationToken cancellationToken)
+            => _process.StandardError.ReadLineAsync(cancellationToken).AsTask();
+
+        public void Kill(bool entireProcessTree) => _process.Kill(entireProcessTree);
+
+        public void Dispose() => _process.Dispose();
     }
 }
