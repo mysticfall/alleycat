@@ -28,14 +28,14 @@ Use this skill when writing or updating C# code in the AlleyCat repository.
 Run the full integration suite:
 
 ```bash
-dotnet test integration-tests/AlleyCat.IntegrationTests.csproj
+dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj
 ```
 
 Run a subset when iterating on a feature:
 
 ```bash
-dotnet test integration-tests/AlleyCat.IntegrationTests.csproj -- --test-class Fully.Qualified.TypeName
-dotnet test integration-tests/AlleyCat.IntegrationTests.csproj -- --test-method Fully.Qualified.TypeName.MethodName
+dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- --test-class Fully.Qualified.TypeName
+dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- --test-method Fully.Qualified.TypeName.MethodName
 ```
 
 - If both filters are provided, `--test-method` takes precedence over `--test-class`.
