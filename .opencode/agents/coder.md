@@ -14,3 +14,15 @@ using C# and engine best practices.
 - Use Godot patterns correctly (node lifecycle, signals, input actions, exported fields/properties, and autoloads).
 - Keep runtime behaviour safe for per-frame and VR-critical paths (no blocking work or avoidable allocations).
 - Run relevant checks/tests and note manual verification for gameplay behaviour.
+
+## C# Conventions
+
+- Use `var` for local variable declarations only when the type is immediately clear.
+- Use expression-bodied members for methods when it improves readability and the method body is a single expression.
+- Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in
+  `AlleyCat.UI` belong in `src/UI`).
+- Use `AlleyCat.Test` as the root namespace for `AlleyCat.Test.csproj` and `AlleyCat.Integration.Test.csproj`.
+- Format changed files before handoff:
+    ```bash
+    dotnet format --verify-no-changes AlleyCat.sln 2>&1
+    ```
