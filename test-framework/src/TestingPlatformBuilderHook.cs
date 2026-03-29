@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Testing.Platform.Builder;
 using Microsoft.Testing.Platform.Capabilities.TestFramework;
+using Microsoft.Testing.Platform.CommandLine;
 
 namespace AlleyCat.TestFramework;
 
@@ -20,8 +21,19 @@ public static class TestingPlatformBuilderHook
     {
         Assembly testAssembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
 
+#pragma warning disable TPEXP // MTP previews AddProvider as experimental.
+        builder.CommandLine.AddProvider(_ => new GodotTestCommandLineOptionsProvider());
+#pragma warning restore TPEXP
+
         _ = builder.RegisterTestFramework(
             _ => new TestFrameworkCapabilities([]),
-            (_, _) => new GodotTestFramework(testAssembly));
+            (_, serviceProvider) => new GodotTestFramework(
+                testAssembly,
+                GetCliSelector(serviceProvider)));
     }
+
+    private static GodotCliTestSelector GetCliSelector(IServiceProvider serviceProvider)
+        => serviceProvider.GetService(typeof(ICommandLineOptions)) is ICommandLineOptions commandLineOptions
+            ? GodotTestCommandLineOptions.Parse(commandLineOptions)
+            : GodotCliTestSelector.None;
 }

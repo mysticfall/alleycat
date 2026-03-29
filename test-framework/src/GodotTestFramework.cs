@@ -8,7 +8,7 @@ using Xunit;
 
 namespace AlleyCat.TestFramework;
 
-internal sealed class GodotTestFramework(Assembly testAssembly) : ITestFramework, IDataProducer
+internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSelector cliSelector) : ITestFramework, IDataProducer
 {
     private const string ProbeCommandArg = "--integration-probe";
     private const string RunFactCommandArg = "--integration-run-fact";
@@ -152,11 +152,9 @@ internal sealed class GodotTestFramework(Assembly testAssembly) : ITestFramework
         method.GetCustomAttribute<FactAttribute>() is not null
         && method.GetParameters().Length == 0;
 
-    private static string GetDisplayName(MethodInfo method) =>
-        $"{method.DeclaringType?.FullName}.{method.Name}";
+    private static string GetDisplayName(MethodInfo method) => TestCaseUidFactory.GetFullyQualifiedMethodName(method);
 
-    private static TestNodeUid CreateTestUid(MethodInfo method) =>
-        $"{method.Module.ModuleVersionId:N}:{method.MetadataToken}";
+    private static TestNodeUid CreateTestUid(MethodInfo method) => TestCaseUidFactory.Create(method);
 
     private async Task<TestNode> ExecuteTestAsync(TestNodeUid uid, MethodInfo method, CancellationToken cancellationToken)
     {
@@ -171,12 +169,17 @@ internal sealed class GodotTestFramework(Assembly testAssembly) : ITestFramework
         };
     }
 
-    private IEnumerable<(TestNodeUid Uid, MethodInfo Method)> FilteredTests(ITestExecutionFilter filter) =>
-        filter is not TestNodeUidListFilter testNodeUidListFilter
-            ? _testsByUid.Select(entry => (entry.Key, entry.Value))
-            : testNodeUidListFilter.TestNodeUids
-                .Where(_testsByUid.ContainsKey)
-                .Select(uid => (uid, _testsByUid[uid]));
+    private IEnumerable<(TestNodeUid Uid, MethodInfo Method)> FilteredTests(ITestExecutionFilter filter)
+    {
+        IEnumerable<(TestNodeUid Uid, MethodInfo Method)> candidates =
+            filter is not TestNodeUidListFilter testNodeUidListFilter
+                ? _testsByUid.Select(entry => (entry.Key, entry.Value))
+                : testNodeUidListFilter.TestNodeUids
+                    .Where(_testsByUid.ContainsKey)
+                    .Select(uid => (uid, _testsByUid[uid]));
+
+        return candidates.Where(candidate => cliSelector.Matches(candidate.Method));
+    }
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)
     {

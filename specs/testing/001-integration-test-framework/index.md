@@ -16,6 +16,7 @@ Provide a dependable integration test framework for behaviours that require Godo
   - integration tests are in `integration-tests/`
 - Microsoft Testing Platform hook is wired and registers a custom Godot-backed test framework.
 - Discovery scans parameterless `[Fact]` methods and publishes deterministic node UIDs.
+- UIDs are deterministic hashes of canonical method identity (declaring type identity, method name, generic arity, and parameter types); persisted UIDs from older identity schemes may not match.
 - Two Godot-backed execution paths exist:
   - **probe mode** (`--integration-probe`) validates dynamic load and runtime readiness
   - **run-fact mode** (`--integration-run-fact`) executes one test method in Godot
@@ -27,6 +28,17 @@ Provide a dependable integration test framework for behaviours that require Godo
   - forced process-tree cleanup on timeout/cancellation
 - Structured result parsing is implemented using `ALLEYCAT_INTEGRATION_TEST_RESULT:` JSON payloads, mapped to passed/failed/error outcomes.
 - Baseline sample integration test exists and validates end-to-end discovery + execution.
+
+## Supported CLI Options
+
+- `--test-class <Fully.Qualified.TypeName>`
+  - Narrows selection to tests declared on the exact type.
+- `--test-method <Fully.Qualified.TypeName.MethodName>`
+  - Narrows selection to one exact test method.
+- Precedence rule:
+  - If both are supplied, `--test-method` takes precedence over `--test-class`.
+- Current limitation:
+  - Advanced trait/category filters are not yet supported.
 
 ## In Scope
 
