@@ -13,15 +13,16 @@ config_version=5
 config/name="AlleyCat"
 run/main_scene="res://assets/ui/splash_screen.tscn"
 config/features=PackedStringArray("4.6", "C#", "Forward Plus")
+boot_splash/show_image=false
 config/icon="uid://pxfkxvp2stfj"
-
-[autoload]
-
-TestRuntimeRunner="*res://src/Testing/TestRuntimeRunner.cs"
 
 [audio]
 
 driver/enable_input=true
+
+[autoload]
+
+TestRuntimeRunner="*res://src/Testing/TestRuntimeRunner.cs"
 
 [display]
 
@@ -57,7 +58,7 @@ jolt_physics_3d/simulation/areas_detect_static_bodies=true
 [rendering]
 
 lights_and_shadows/use_physical_light_units=true
-environment/defaults/default_clear_color=Color(0.3, 0.3, 0.3, 0)
+environment/defaults/default_clear_color=Color(1, 1, 1, 1)
 anti_aliasing/quality/screen_space_aa=1
 
 [shader_globals]
