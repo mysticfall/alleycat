@@ -6,4 +6,4 @@
 
 ## Testing
 
-- [TEST-001: Integration Test Framework](testing/001-integration-test-framework/index.md)
+- [TEST-001: Integration Test Framework](testing/001-test-framework/index.md)
