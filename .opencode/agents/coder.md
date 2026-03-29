@@ -15,15 +15,24 @@ using C# and engine best practices.
 - Keep runtime behaviour safe for per-frame and VR-critical paths (no blocking work or avoidable allocations).
 - Run relevant checks/tests and note manual verification for gameplay behaviour.
 
-## C# Conventions
+## Invoker Communication Protocol
 
-- Use `var` for local variable declarations only when the type is immediately clear.
-- Use expression-bodied members for methods when it improves readability and the method body is a single expression.
-- Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in
-  `AlleyCat.UI` belong in `src/UI`).
-- Use `AlleyCat.Tests` as the root namespace for `AlleyCat.Tests.csproj`.
-- Use `AlleyCat.IntegrationTests` as the root namespace for `AlleyCat.IntegrationTests.csproj`.
-- Format changed files before handoff:
-    ```bash
-    dotnet format --verify-no-changes AlleyCat.sln 2>&1
-    ```
+- Treat the invoking agent as your implementation lead; optimise for clear handoff, not long narration.
+- If the request is ambiguous, state the exact ambiguity and propose a minimal default before proceeding.
+- If proceeding would risk spec drift, stop and ask for confirmation instead of guessing.
+
+### Escalate Immediately When
+
+- Required spec scope is missing or conflicts across files in `specs/`.
+- A requested change would break existing contracts or require migration not included in scope.
+- You are blocked by missing assets, unavailable tools, failing environment checks, or permission limits.
+- Validation fails and the fix is non-trivial or would materially alter behaviour beyond the request.
+
+### Final Report Format
+
+Return one concise update with:
+
+1. **Implementation Summary** — what was changed and why (spec-linked).
+2. **Validation** — commands/checks run and outcomes; list anything not run.
+3. **Risks/Follow-Ups** — residual risks, TODOs, or manual checks for the invoker.
+4. **Escalations** — explicit blockers/decisions needed (or `None`).

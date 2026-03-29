@@ -1,6 +1,6 @@
 ---
 name: godot-asset-ops
-description: Manipulate Godot scenes and resources safely through executable GDScript automation. Use this whenever a request involves creating or editing .tscn/.scn/.tres/.res assets, adding or removing nodes, changing node properties, wiring resources, bulk scene refactors, or any task where direct text edits of Godot assets would be brittle. Prefer this skill even when the user asks for "just update the scene file", because Godot API-driven changes are safer and more reliable.
+description: Use for all tasks related to creating, editing, or managing Godot scenes and resource assets.
 ---
 
 # Godot Scene and Resource Operations
