@@ -9,6 +9,7 @@ android/
 # .NET
 bin/
 obj/
+*.DotSettings.user
 
 # Godot-generated solution in game project
 game/AlleyCat.sln
