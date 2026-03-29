@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "gdscript": {
+      "command": [
+        "godot-lsp-bridge"
+      ],
+      "extensions": [
+        ".gd",
+        ".gdshader"
+      ]
+    }
+  }
+}

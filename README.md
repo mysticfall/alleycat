@@ -12,6 +12,13 @@ the [Godot Engine](https://github.com/godotengine/godot).
 This project is in a very early stage of development. It is currently intended for exploration and inspiration rather
 than practical use in production projects.
 
+## 🛠️ Development Requirements
+
+- [Godot Engine .NET 4.6](https://github.com/godotengine/godot)
+- [OpenCode](https://opencode.ai)
+- [Godot LSP Bridge](https://github.com/MasuRii/opencode-godot-lsp) — set the `GODOT_PATH` environment variable to
+  the path of your Godot executable.
+
 ## 🧹 C# Linting and Formatting
 
 This repository uses Roslyn analysers, Microsoft.CodeAnalysis.NetAnalyzers, and `dotnet format`.

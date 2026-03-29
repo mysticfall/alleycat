@@ -20,7 +20,7 @@ public sealed class GodotTestFrameworkTests
     [Fact]
     public void ResolveGodotBinaryPath_ReturnsDefault_WhenEnvironmentVariableIsUnset()
     {
-        const string environmentVariable = "GODOT_BIN";
+        const string environmentVariable = "GODOT_PATH";
 
         lock (_environmentLock)
         {
@@ -38,7 +38,7 @@ public sealed class GodotTestFrameworkTests
     [Fact]
     public void ResolveGodotBinaryPath_ReturnsConfiguredValue_WhenEnvironmentVariableIsSet()
     {
-        const string environmentVariable = "GODOT_BIN";
+        const string environmentVariable = "GODOT_PATH";
         const string expectedPath = "custom-godot";
 
         lock (_environmentLock)

@@ -21,7 +21,7 @@ internal sealed class GodotTestFramework(Assembly testAssembly, GodotCliTestSele
     private const int DefaultPreflightTimeoutMs = 30_000;
     private const int DefaultRunFactTimeoutMs = 120_000;
     private const int DefaultCleanupTimeoutMs = 5_000;
-    private const string GodotBinaryEnvironmentVariable = "GODOT_BIN";
+    private const string GodotBinaryEnvironmentVariable = "GODOT_PATH";
     private const string GodotPreflightTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_PREFLIGHT_TIMEOUT_MS";
     private const string GodotRunFactTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS";
     private const string GodotCleanupTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS";
