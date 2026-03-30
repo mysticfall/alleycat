@@ -192,30 +192,17 @@ public partial class TestRuntimeRunner : Node
                     return;
                 }
 
-                object? instance = null;
-                if (!method.IsStatic)
+                PerTestLifecycleExecutionResult executionResult = await PerTestLifecycleExecutor.ExecuteAsync(method);
+                if (!executionResult.Passed)
                 {
-                    instance = Activator.CreateInstance(type);
-                    if (instance is null)
-                    {
-                        ErrorTestAndQuit($"Unable to instantiate test class '{type.FullName}'.");
-                        return;
-                    }
-                }
-
-                object? result = method.Invoke(instance, null);
-                if (result is Task task)
-                {
-                    await task;
+                    (string message, string? stackTrace) = PerTestLifecycleExecutor.BuildFailureDiagnostics(executionResult);
+                    FailTestAndQuit(message, stackTrace);
+                    return;
                 }
 
                 GD.Print(TestPassMarker);
                 EmitStructuredRunFactResult("passed", null, null);
                 GetTree().Quit(0);
-            }
-            catch (TargetInvocationException ex) when (ex.InnerException is not null)
-            {
-                FailTestAndQuit(ex.InnerException.Message, ex.InnerException.StackTrace);
             }
             finally
             {

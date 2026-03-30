@@ -29,6 +29,45 @@ Provide a dependable integration test framework for behaviours that require Godo
 - Structured result parsing is implemented using `ALLEYCAT_INTEGRATION_TEST_RESULT:` JSON payloads, mapped to passed/failed/error outcomes.
 - Baseline sample integration test exists and validates end-to-end discovery + execution.
 
+## Per-Test Lifecycle Support
+
+The integration framework supports xUnit-style per-test lifecycle contracts through interfaces and constructors, so tests can use familiar APIs without attribute-based setup/teardown.
+
+### Supported Now
+
+- One test-class constructor invocation per test method execution.
+- `IDisposable.Dispose` for synchronous post-test cleanup.
+- `IAsyncDisposable.DisposeAsync` for asynchronous post-test cleanup.
+- `Xunit.IAsyncLifetime.InitializeAsync` and `Xunit.IAsyncLifetime.DisposeAsync` for asynchronous setup and teardown.
+
+### Not Supported Yet
+
+- `IClassFixture<TFixture>`.
+- `ICollectionFixture<TFixture>`.
+- Collection-level lifecycle orchestration.
+- NUnit-style `[SetUp]` and `[TearDown]` attributes.
+
+## Lifecycle Invocation Policy
+
+High-level execution order for each selected test method is:
+
+1. Construct test class instance.
+2. Run async setup when `Xunit.IAsyncLifetime.InitializeAsync` is implemented.
+3. Execute test method.
+4. Always attempt teardown in finally-style flow:
+   - run `Xunit.IAsyncLifetime.DisposeAsync` when implemented;
+   - then run `IAsyncDisposable.DisposeAsync` and/or `IDisposable.Dispose` when implemented.
+
+### Failure Handling Policy
+
+- Setup failure fails the test method and skips normal test-body execution.
+- Teardown is always attempted after test-body execution, including when assertions fail.
+- If both test execution and teardown fail, the outcome is reported as **failed** with the test-body failure as primary and teardown failure appended as secondary diagnostic detail.
+
+## Rollout Note
+
+Per-test lifecycle support via constructor/`IDisposable`/`IAsyncDisposable`/`IAsyncLifetime` is newly introduced in this spec revision. Fixture-scope orchestration remains future work.
+
 ## Supported CLI Options
 
 - `--test-class <Fully.Qualified.TypeName>`
@@ -61,7 +100,7 @@ Provide a dependable integration test framework for behaviours that require Godo
    - Move beyond one-process-per-test where safe.
    - Reuse runtime sessions to cut startup cost while preserving determinism.
 2. **Isolation fixtures and lifecycle contracts**
-   - Add standard setup/teardown fixtures for scene tree, autoloads, and temporary data.
+   - Add shared fixture scopes for scene tree, autoloads, and temporary data (`IClassFixture`/`ICollectionFixture` equivalents).
    - Define explicit reset guarantees between tests.
 3. **Richer filtering and metadata**
    - Add trait/category filtering and clearer filter-to-selection feedback.
