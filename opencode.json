@@ -11,7 +11,9 @@
   "lsp": {
     "gdscript": {
       "command": [
-        "godot-lsp-bridge"
+        "godot-lsp-bridge",
+        "--project",
+        "game"
       ],
       "extensions": [
         ".gd",
