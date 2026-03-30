@@ -32,16 +32,26 @@ public sealed partial class SplashScreenIntegrationTests
         float logoWidthRatio = logo.GetGlobalRect().Size.X / viewportWidth;
         Assert.InRange(logoWidthRatio, 0.45f, 0.55f);
 
-        Assert.InRange(logo.Modulate.A, 0.0f, 0.01f);
+        double previousTimeScale = Engine.TimeScale;
+        Engine.TimeScale = 10.0;
 
-        await WaitForSecondsAsync(sceneTree, 1.9);
-        Assert.InRange(logo.Modulate.A, 0.0f, 0.05f);
+        try
+        {
+            Assert.InRange(logo.Modulate.A, 0.0f, 0.01f);
 
-        await WaitForSecondsAsync(sceneTree, 0.35);
-        Assert.InRange(logo.Modulate.A, 0.02f, 0.30f);
+            await WaitForSecondsAsync(sceneTree, 1.9);
+            Assert.InRange(logo.Modulate.A, 0.0f, 0.05f);
 
-        await WaitForSecondsAsync(sceneTree, 2.85);
-        Assert.InRange(logo.Modulate.A, 0.95f, 1.0f);
+            await WaitForSecondsAsync(sceneTree, 0.35);
+            Assert.InRange(logo.Modulate.A, 0.02f, 0.30f);
+
+            await WaitForSecondsAsync(sceneTree, 2.85);
+            Assert.InRange(logo.Modulate.A, 0.95f, 1.0f);
+        }
+        finally
+        {
+            Engine.TimeScale = previousTimeScale;
+        }
     }
 
     private static SceneTree GetSceneTree()
@@ -55,5 +65,6 @@ public sealed partial class SplashScreenIntegrationTests
     {
         SceneTreeTimer timer = sceneTree.CreateTimer(seconds);
         _ = await sceneTree.ToSignal(timer, SceneTreeTimer.SignalName.Timeout);
+        await WaitForNextFrameAsync(sceneTree);
     }
 }
