@@ -5,112 +5,143 @@ description: Use for all tasks related to creating, editing, or managing Godot s
 
 # Godot Scene and Resource Operations
 
-Use this skill to perform scene/resource modifications by running Godot API code, not by hand-editing serialised scene
-text.
+Use this skill to modify Godot scenes/resources through engine APIs, not by hand-editing serialised files.
 
-## Why this approach
+## Why This Approach
 
-- Godot serialised files are easy to corrupt with manual edits.
-- API-based edits keep node ownership and resource structure valid.
-- The workflow is repeatable for similar tasks.
+- Manual edits to `.tscn`/`.tres` are fragile.
+- API-driven edits preserve node ownership and resource integrity.
 
-## Workflow
+## Quick Workflow
 
-1. Clarify the exact asset targets and intended outcome.
-2. Use Context7 to confirm any uncertain Godot API details.
-3. Write a temporary GDScript runner under `@.opencode/temp` for the concrete task.
-4. Execute the script with Godot in headless mode.
-5. Verify results (load/save success, expected nodes/resources present).
-6. Remove the temporary script when finished unless the user asks to keep it.
+1. Clarify target assets and expected outcome.
+2. Use Context7 for uncertain Godot API details.
+3. Write a task-specific GDScript under `@game/temp`.
+4. Execute the script with `godot-mono`.
+5. Verify results.
+6. Remove the temporary script unless asked to keep it.
 
-## Temporary script requirement
+## Temporary Script Rule
 
-Always write a task-specific GDScript file to `@.opencode/temp` before making scene/resource changes.
+Always create a dedicated script before making scene/resource changes.
 
-- Path pattern: `@.opencode/temp/asset_ops_<short-task-name>.gd`
-- Do not patch `.tscn`/`.tres` directly when this skill applies.
+- Path pattern: `@game/temp/asset_ops_<short-task-name>.gd` (which resolves to
+  `temp/asset_ops_<short-task-name>.gd`)
 - Keep each script focused on one operation bundle.
+- Do not patch serialised scene/resource text directly.
 
-If `@.opencode/temp` does not exist, create it first.
+## ProbeUtils (Shared Helper)
 
-## Script template
+Use `@game/scripts/probe_utils.gd` (`ProbeUtils`) when it helps reduce boilerplate.
 
-Use a runner script shaped like this and adapt the body to the task:
+Current helper intent:
+
+- Scene load/instantiate helpers
+- Required-node lookup helper
+- Time/frame wait helpers
+- Screenshot capture helper (JPG)
+- Output directory resolution for captures
+
+ProbeUtils is fail-fast for probe flows: on fatal errors it logs and quits with non-zero exit.
+
+Use ProbeUtils where useful, not only for visual probes. The same helpers are valid for general asset scripting
+workflows (for example, scene instantiation, required node lookup, and controlled wait steps).
+
+## Example Scenarios
+
+### Scene/Resource Mutation
+
+Use this when you need a safe and robust way to edit scenes and resources via Godot APIs.
 
 ```gdscript
 extends SceneTree
 
 func _init() -> void:
-    var exit_code := 0
+	var packed: PackedScene = load("res://assets/ui/splash_screen.tscn")
+	if packed == null:
+		push_error("Failed to load scene")
+		quit(1)
+		return
 
-    # 1) Load target scene/resource.
-    # 2) Apply edits (create nodes/resources, set properties, reparent, etc.).
-    # 3) Save with ResourceSaver.save(...).
-    # 4) Print a concise success/failure message.
+	var root := packed.instantiate()
+	# Apply edits here.
 
-    # Example skeleton:
-    # var packed: PackedScene = load("res://assets/ui/splash_screen.tscn")
-    # if packed == null:
-    #     push_error("Failed to load scene")
-    #     quit(1)
-    #     return
-    # var root := packed.instantiate()
-    # ... mutate root/resources ...
-    # var out := PackedScene.new()
-    # var pack_result := out.pack(root)
-    # if pack_result != OK:
-    #     push_error("Pack failed: %s" % pack_result)
-    #     quit(1)
-    #     return
-    # var save_result := ResourceSaver.save(out, "res://assets/ui/splash_screen.tscn")
-    # if save_result != OK:
-    #     push_error("Save failed: %s" % save_result)
-    #     quit(1)
-    #     return
+	var out := PackedScene.new()
+	if out.pack(root) != OK:
+		push_error("Failed to pack scene")
+		quit(1)
+		return
 
-    quit(exit_code)
+	if ResourceSaver.save(out, "res://assets/ui/splash_screen.tscn") != OK:
+		push_error("Failed to save scene")
+		quit(1)
+		return
+
+	quit(0)
 ```
 
-Important implementation notes:
-
-- When packing a scene, ensure nodes that must persist have correct `owner`.
-- Check return codes (`OK`) from `pack()` and `ResourceSaver.save()`.
-- Fail fast with clear error messages if loads/saves fail.
-
-## Execution
-
-Run the temporary script via Godot headless, using the project at `game/`.
-
-Example command:
+Use headless mode to run mutation scripts (for example `@game/temp/asset_ops_<task>.gd`):
 
 ```bash
-godot-mono -d -s --headless --xr-mode off --path game "path/to/temp/asset_ops_<task>.gd"
+godot-mono -d -s --headless --xr-mode off --path game "temp/asset_ops_<task>.gd"
 ```
 
-Use absolute script paths to avoid ambiguity.
+### Visual Verification of 2D Scenes
 
-## Scope of operations
+Use this when you need screenshot artefacts for objective visual verification during development.
 
-Use this skill for operations such as:
+This probe loads the splash scene, captures an initial frame, waits three seconds, then captures the faded-in frame:
 
-- Creating new scenes from node hierarchies and saving them.
-- Loading existing scenes, adding/removing/reparenting nodes.
-- Updating node/resource properties that should persist to disk.
-- Creating or editing `.tres`/`.res` assets (materials, themes, custom resources).
-- Applying structured, repeatable bulk changes across assets.
+```gdscript
+extends SceneTree
 
-## Verification checklist
+const ProbeUtils = preload("res://scripts/probe_utils.gd")
+
+func _init() -> void:
+	await run_probe()
+
+
+func run_probe() -> void:
+	var splash_root: Node = ProbeUtils.instantiate_scene("res://assets/ui/splash_screen.tscn")
+
+	root.add_child(splash_root)
+
+	await ProbeUtils.capture_screenshot(self, "ui_001_splash_init.jpg")
+
+	await ProbeUtils.wait_seconds(self, 3.0)
+
+	await ProbeUtils.capture_screenshot(self, "ui_001_splash_fade_in.jpg")
+
+	quit(0)
+```
+
+Run visual probe scripts without the `--headless` flag:
+
+```bash
+godot-mono -d -s --xr-mode off --path game "scripts/visual_probes/ui_001_splash_visual_probe.gd"
+```
+
+`ProbeUtils.capture_screenshot(...)` writes JPG files under:
+
+- `--output-dir <path>` / `--output-dir=<path>`, when provided
+- otherwise `@game/temp` (resolves to `temp/` under the Godot project root)
+
+Each successful capture prints:
+
+- `Saved a screenshot: <absolute-path>`
+
+## Verification Checklist
 
 - Script exits with code `0`.
-- Expected files are written at intended paths.
-- Modified scenes/resources can be loaded again successfully.
-- Requested nodes/properties/resources are present after save.
+- Expected assets or screenshots are written to intended paths.
+- Updated scenes/resources reload successfully.
+- Requested nodes/properties/resources are present.
 
-## Output expectations
+## Output Expectations
 
-After execution, report:
+Report:
 
-- Which temporary script path was used in `@.opencode/temp`.
-- Which assets were changed.
+- Temporary script path used in `@game/temp` (or equivalent project-relative path).
+- Assets changed (if any).
 - What was validated.
-- Any follow-up action the user should take (for example, opening the scene in editor).
+- Follow-up action needed from the user (if any).

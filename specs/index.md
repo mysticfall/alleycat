@@ -7,3 +7,4 @@
 ## Testing
 
 - [TEST-001: Integration Test Framework](testing/001-test-framework/index.md)
+- [TEST-002: Visual Verification Scope](testing/002-visual-verification-scope/index.md)
