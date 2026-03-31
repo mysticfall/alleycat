@@ -15,7 +15,7 @@ obj/
 game/AlleyCat.sln
 
 # AI agents
-.opencode/temp
+game/temp/*
 
 # Misc.
 *.blend1
