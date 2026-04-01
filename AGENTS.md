@@ -51,6 +51,10 @@ Use British English, except when the instruction specifies otherwise.
 Always use **Context7** for API documentation, code generation, setup, or configuration tasks related to Godot and other
 libraries/frameworks.
 
+When you encounter an image that you need to analyse but your model does not support multi-modal input (e.g. you cannot
+natively view images), delegate the task to a vision-capable MCP tool if available. Pass the image source and a clear
+prompt describing what to extract or interpret.
+
 ## File References
 
 When a file path starts with `@`, resolve it from the project root. For example, `@specs/index.md` maps to
