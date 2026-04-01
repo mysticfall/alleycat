@@ -37,10 +37,13 @@ Use `@game/scripts/probe_utils.gd` (`ProbeUtils`) when it helps reduce boilerpla
 Current helpers:
 
 - **Scene helpers** — `load_scene`, `instantiate_scene`, `require_node`
-- **Photobooth setup** — `setup_photobooth` (loads scene, attaches subject, returns setup object)
-- **Camera helpers** — `position_camera`, `set_camera_perspective`, `set_camera_orthographic`
+- **Photobooth setup** — `setup_photobooth` (returns a `Photobooth` helper; call `load(subject_path)` to attach a
+  subject)
+- **Photobooth camera/capture** — `use_portrait`, `use_landscape`, `position_camera`, `set_perspective`,
+  `set_orthographic`, `capture`
+- **Camera helpers** — `position_camera`, `set_camera_perspective`, `set_camera_orthographic` (for non-photobooth use)
 - **Wait helpers** — `wait_frames`, `wait_seconds`
-- **Capture** — `capture_screenshot` (JPG)
+- **Capture** — `capture_screenshot` (JPG from root viewport, mostly for 2D/UI probes)
 
 ProbeUtils is fail-fast for probe flows: on fatal errors it logs and quits with non-zero exit.
 
@@ -86,122 +89,16 @@ Use headless mode to run mutation scripts (for example `@game/temp/asset_ops_<ta
 godot-mono -d -s --headless --xr-mode off --path game "temp/asset_ops_<task>.gd"
 ```
 
-### Visual Verification of 2D Scenes
+### Visual Probe Guides
 
-Use this when you need screenshot artefacts for objective visual verification during development.
+Use a visual probe when you need objective screenshot evidence of runtime visuals (for example, layout state or
+animation pose) instead of relying on textual assertions alone.
 
-This probe loads the splash scene, captures an initial frame, waits three seconds, then captures the faded-in frame:
+A visual probe is a small `SceneTree` script that loads the target scene, waits for the required state,
+captures one or more JPG artefacts, then exits. Use the guide matching your rendering context:
 
-```gdscript
-extends SceneTree
-
-func _init() -> void:
-	await run_probe()
-
-
-func run_probe() -> void:
-	var splash_root: Node = ProbeUtils.instantiate_scene("res://assets/ui/splash_screen.tscn")
-
-	root.add_child(splash_root)
-
-	await ProbeUtils.capture_screenshot(self, "ui_001_splash_init.jpg")
-
-	await ProbeUtils.wait_seconds(self, 3.0)
-
-	await ProbeUtils.capture_screenshot(self, "ui_001_splash_fade_in.jpg")
-
-	quit(0)
-```
-
-Run visual probe scripts without the `--headless` flag:
-
-```bash
-godot-mono -d -s --xr-mode off --path game "scripts/visual_probes/ui_001_splash_visual_probe.gd"
-```
-
-### Visual Verification of 3D Scenes
-
-Use this when you need screenshot artefacts of 3D content — characters, props, poses, IK setups, etc.
-
-The photobooth (`@game/assets/testing/photobooth/photobooth.tscn`) provides a studio HDRI environment,
-a floor, a camera, and a `SubjectAnchor` for placing the subject.
-
-`setup_photobooth` handles all boilerplate: it loads the photobooth, instantiates the subject, parents it to the
-anchor, and returns a `PhotoboothSetup` with `.camera` and `.subject` references.
-
-Uses the reference female character by default; pass a custom `subject_path` for any scene
-(characters, props, effects, etc.).
-
-#### Multi-angle IK Verification Example
-
-This simulates an IK elbow check with orthographic captures from three angles:
-
-```gdscript
-extends SceneTree
-
-## Approximate right-elbow height on the T-posed reference character.
-const ELBOW_HEIGHT := 1.15
-## Orthographic visible height — tight framing around the arm region.
-const ORTHO_SIZE := 0.8
-
-
-func _init() -> void:
-	await run_probe()
-
-
-func run_probe() -> void:
-	var setup := ProbeUtils.setup_photobooth(self)
-
-	# Apply IK pose changes to setup.subject here.
-
-	ProbeUtils.set_camera_orthographic(setup.camera, ORTHO_SIZE)
-
-	# Front view
-	ProbeUtils.position_camera(setup.camera, Vector3(0, ELBOW_HEIGHT, 2), Vector3(0, ELBOW_HEIGHT, 0))
-	await ProbeUtils.wait_frames(self, 3)
-	await ProbeUtils.capture_screenshot(self, "ik_elbow_front.jpg")
-
-	# Side view
-	ProbeUtils.position_camera(setup.camera, Vector3(2, ELBOW_HEIGHT, 0), Vector3(0, ELBOW_HEIGHT, 0))
-	await ProbeUtils.wait_frames(self, 3)
-	await ProbeUtils.capture_screenshot(self, "ik_elbow_side.jpg")
-
-	# Top-down view
-	ProbeUtils.position_camera(setup.camera, Vector3(0, ELBOW_HEIGHT + 2, 0), Vector3(0, ELBOW_HEIGHT, 0))
-	await ProbeUtils.wait_frames(self, 3)
-	await ProbeUtils.capture_screenshot(self, "ik_elbow_top.jpg")
-
-	quit(0)
-```
-
-#### Using a Custom Subject
-
-Pass a `subject_path` to `setup_photobooth` for any scene — characters, props, effects, etc.:
-
-```gdscript
-# A different character
-var setup := ProbeUtils.setup_photobooth(self, "res://assets/characters/my_character.tscn")
-
-# A prop or any other 3D scene
-var setup := ProbeUtils.setup_photobooth(self, "res://assets/props/table.tscn")
-```
-
-## Running Visual Probes
-
-All visual probe scripts must run **without** `--headless` to enable the renderer:
-
-```bash
-godot-mono -d -s --xr-mode off --path game "temp/<probe_script>.gd"
-```
-
-`ProbeUtils.capture_screenshot(...)` writes JPG files under:
-
-- `--output-dir <path>` / `--output-dir=<path>`, when provided
-- otherwise `@game/temp` (resolves to `temp/` under the Godot project root)
-
-Each successful capture prints:
-
-- `Saved a screenshot: <absolute-path>`
+- 2D scenes and UI capture: `@.opencode/skills/godot-asset-ops/visual-probes-2d.md`
+- 3D photobooth capture: `@.opencode/skills/godot-asset-ops/visual-probes-3d.md`
 
 ## Verification Checklist
 
