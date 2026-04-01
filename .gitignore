@@ -16,6 +16,7 @@ game/AlleyCat.sln
 
 # AI agents
 game/temp/*
+!game/temp/.gdignore
 
 # Misc.
 *.blend1
