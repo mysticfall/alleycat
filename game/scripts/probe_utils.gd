@@ -3,6 +3,49 @@ extends RefCounted
 
 const DEFAULT_OUTPUT_PARENT_RELATIVE_DIR := "temp"
 const JPG_QUALITY := 0.85
+const PHOTOBOOTH_PATH := "res://assets/testing/photobooth/photobooth.tscn"
+const DEFAULT_SUBJECT_PATH := "res://assets/characters/reference/reference_female.tscn"
+
+
+## Holds references to the key nodes produced by `setup_photobooth`.
+class PhotoboothSetup:
+	var photobooth: Node3D
+	var camera: Camera3D
+	var subject: Node
+
+
+## Load the photobooth scene, attach a subject to the anchor point, and
+## return a `PhotoboothSetup` with references to the photobooth root, camera,
+## and subject nodes. The photobooth is added to the scene tree root.
+##
+## Uses the reference female character by default; pass a different
+## `subject_path` to load any scene (characters, props, effects, etc.).
+static func setup_photobooth(tree: SceneTree, subject_path: String = DEFAULT_SUBJECT_PATH) -> PhotoboothSetup:
+	var photobooth: Node = instantiate_scene(PHOTOBOOTH_PATH)
+	if photobooth == null:
+		return null
+
+	tree.root.add_child(photobooth)
+
+	var anchor: Node = require_node(photobooth, ^"SubjectAnchor")
+	if anchor == null:
+		return null
+
+	var subject: Node = instantiate_scene(subject_path)
+	if subject == null:
+		return null
+
+	anchor.add_child(subject)
+
+	var camera: Camera3D = require_node(photobooth, ^"Camera3D")
+	if camera == null:
+		return null
+
+	var setup := PhotoboothSetup.new()
+	setup.photobooth = photobooth
+	setup.camera = camera
+	setup.subject = subject
+	return setup
 
 
 ## Load a scene resource from `scene_path` and fail fast if unavailable.
@@ -61,6 +104,40 @@ static func wait_seconds(tree: SceneTree, seconds: float) -> void:
 		return
 
 	await tree.create_timer(wait_duration_seconds).timeout
+
+
+## Position a camera and orient it toward a target point.
+## Uses `look_at_from_position` so it works even when the node is not in the tree.
+## Automatically selects an up-vector that avoids colinearity with the view direction.
+static func position_camera(camera: Camera3D, position: Vector3, target: Vector3) -> void:
+	if camera == null:
+		_fatal_error_and_quit("ProbeUtils: camera is null in position_camera")
+		return
+
+	var view_direction := (target - position).normalized()
+	var up := Vector3.UP if absf(view_direction.dot(Vector3.UP)) < 0.99 else Vector3.FORWARD
+	camera.look_at_from_position(position, target, up)
+
+
+## Switch a camera to perspective projection.
+static func set_camera_perspective(camera: Camera3D, fov: float = 45.0) -> void:
+	if camera == null:
+		_fatal_error_and_quit("ProbeUtils: camera is null in set_camera_perspective")
+		return
+
+	camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	camera.fov = fov
+
+
+## Switch a camera to orthographic projection.
+## `size` controls the visible height in world units (width follows from the viewport aspect ratio).
+static func set_camera_orthographic(camera: Camera3D, size: float = 2.0) -> void:
+	if camera == null:
+		_fatal_error_and_quit("ProbeUtils: camera is null in set_camera_orthographic")
+		return
+
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = size
 
 
 ## Capture the root viewport to a JPG file and print the generated absolute path.
