@@ -9,7 +9,8 @@ panorama = ExtResource("1_1v84q")
 sky_material = SubResource("PanoramaSkyMaterial_hbact")
 
 [sub_resource type="Environment" id="Environment_1blvp"]
-background_mode = 2
+background_mode = 1
+background_color = Color(0.90051246, 0.90051246, 0.9005124, 1)
 sky = SubResource("Sky_1blvp")
 ambient_light_source = 3
 reflected_light_source = 2
