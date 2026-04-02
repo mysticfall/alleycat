@@ -1,6 +1,6 @@
 extends SceneTree
 
-const SUBJECT_SCENE_PATH := "res://test/characters/characters/ik/neck_spine_ccdik_test.tscn"
+const SUBJECT_SCENE_PATH := "res://test/characters/ik/neck_spine_ccdik_test.tscn"
 const IK_SCENE_PATH := "res://assets/characters/ik/neck_spine_ccdik.tscn"
 
 const BASE_TORSO_FOCUS_OFFSET := Vector3(0.0, 1.38, 0.02)
@@ -139,8 +139,13 @@ func _run_probe() -> void:
 		quit(1)
 		return
 
-	var ik_target: Node3D = _attach_ik_target(female)
+	var ik_target: Node3D = ProbeUtils.require_node(subject, ^"HeadTarget") as Node3D
 	if ik_target == null:
+		push_error("Neck-spine subject scene is missing external IK target node: HeadTarget")
+		quit(1)
+		return
+
+	if not _attach_ik_target(female, ik_target):
 		quit(1)
 		return
 
@@ -786,28 +791,39 @@ func _read_pose_float(config: Dictionary, key: String, fallback: float) -> float
 	return fallback
 
 
-func _attach_ik_target(female: Node3D) -> Node3D:
+func _attach_ik_target(female: Node3D, ik_target: Node3D) -> bool:
+	if ik_target == null:
+		push_error("Neck-spine IK target was null; expected external HeadTarget node")
+		return false
+
 	var skeleton: Skeleton3D = _find_first_skeleton(female)
 	if skeleton == null:
 		push_error("No Skeleton3D found under Female in neck-spine subject scene")
-		return null
+		return false
 
 	var ik_scene: PackedScene = ProbeUtils.load_scene(IK_SCENE_PATH)
 	if ik_scene == null:
-		return null
+		return false
 
 	var ik_instance: CCDIK3D = ik_scene.instantiate() as CCDIK3D
 	if ik_instance == null:
 		push_error("IK scene root is not CCDIK3D: %s" % IK_SCENE_PATH)
-		return null
+		return false
 
 	skeleton.add_child(ik_instance)
-	var ik_target: Node3D = ik_instance.get_node_or_null(^"HeadTarget") as Node3D
-	if ik_target == null:
-		push_error("IK scene is missing required node: HeadTarget")
-		return null
+	var target_path: NodePath = ik_instance.get_path_to(ik_target)
+	if target_path.is_empty():
+		push_error("Failed to resolve path from IK instance to external HeadTarget")
+		return false
 
-	return ik_target
+	ik_instance.set("settings/0/target_node", target_path)
+
+	var bound_target: Node3D = ik_instance.get_node_or_null(target_path) as Node3D
+	if bound_target == null:
+		push_error("Failed to bind neck-spine IK target to external HeadTarget at path: %s" % target_path)
+		return false
+
+	return true
 
 
 func _find_first_skeleton(node: Node) -> Skeleton3D:

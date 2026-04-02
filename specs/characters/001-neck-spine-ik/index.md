@@ -32,10 +32,12 @@ instantiated across character setups.
 
 ## Acceptance Criteria
 
-1. The implementation uses a Godot `CCDIK3D` node to drive neck-spine adjustment towards a target head position.
+1. The implementation uses a Godot `CCDIK3D` node to drive neck-spine adjustment towards a target head position supplied
+   by the consuming scene.
 2. The reusable IK scene includes explicit joint constraints on the neck-spine chain (serialised as joint limitations in
    the saved `CCDIK3D` settings) to keep rotations within plausible ranges.
-3. The IK configuration is saved as a reusable scene at `@game/assets/characters/ik/neck_spine_ccdik.tscn`.
+3. The IK configuration is saved as a reusable scene at `@game/assets/characters/ik/neck_spine_ccdik.tscn`, with the
+   target node left unbound in the reusable scene so consuming scenes provide/bind the head target externally.
 4. A verification scene based on `@game/assets/characters/reference/reference_female.tscn` exists at:
     - scene: `@game/test/characters/ik/neck_spine_ccdik_test.tscn`
     - probe script: `@game/test/characters/ik/neck_spine_ccdik_test.gd`
