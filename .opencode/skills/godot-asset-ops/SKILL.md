@@ -17,7 +17,7 @@ Use this skill to modify Godot scenes/resources through engine APIs, not by hand
 1. Clarify target assets and expected outcome.
 2. Use Context7 for uncertain Godot API details.
 3. Write a task-specific GDScript under `@game/temp`.
-4. Execute the script with `godot-mono`.
+4. Execute the script with `godot-mono` (always pass `--xr-mode off`).
 5. Verify results.
 6. Remove the temporary script unless asked to keep it.
 
