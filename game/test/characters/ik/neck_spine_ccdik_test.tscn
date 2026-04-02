@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/characters/reference/reference_female.tscn" id="1_4bb30"]
+
+[node name="NeckSpineCCDIKTest" type="Node3D" unique_id=1577245811]
+
+[node name="Female" type="CharacterBody3D" parent="." unique_id=1534184585 instance=ExtResource("1_4bb30")]
+
+[node name="TargetPoses" type="Node3D" parent="." unique_id=1580638520]
+
+[node name="TargetForward" type="Marker3D" parent="TargetPoses" unique_id=236589773]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.52, 0.26)
+
+[node name="TargetLeft" type="Marker3D" parent="TargetPoses" unique_id=557736942]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, 1.52, 0.18)
+
+[node name="TargetRight" type="Marker3D" parent="TargetPoses" unique_id=986930298]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, 1.52, 0.18)
+
+[node name="TargetUp" type="Marker3D" parent="TargetPoses" unique_id=521077444]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.76, 0.08)
+
+[node name="TargetDown" type="Marker3D" parent="TargetPoses" unique_id=1022530904]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.28, 0.12)
+
+[node name="TargetStoopForward" type="Marker3D" parent="TargetPoses" unique_id=427687342]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.18, 0.42)
+
+[node name="TargetLeanBack" type="Marker3D" parent="TargetPoses" unique_id=1763406242]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.72, -0.2)

@@ -1,0 +1,45 @@
+[gd_scene format=3]
+
+[sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_igc4r"]
+angle = 0.43633232
+
+[sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_qad87"]
+angle = 0.43633232
+
+[sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_7vxdu"]
+angle = 0.43633232
+
+[sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_kvytk"]
+angle = 0.43633232
+
+[node name="NeckSpineCCDIK3D" type="CCDIK3D"]
+max_iterations = 20
+min_distance = 0.01
+angular_delta_limit = 20.0
+setting_count = 1
+settings/0/target_node = NodePath("HeadTarget")
+settings/0/root_bone_name = "Spine"
+settings/0/root_bone = -1
+settings/0/end_bone_name = "Neck"
+settings/0/end_bone = -1
+settings/0/extend_end_bone = false
+settings/0/joint_count = 4
+settings/0/joints/0/rotation_axis = 3
+settings/0/joints/0/limitation = SubResource("JointLimitationCone3D_igc4r")
+settings/0/joints/0/limitation/right_axis = 0
+settings/0/joints/0/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
+settings/0/joints/1/rotation_axis = 3
+settings/0/joints/1/limitation = SubResource("JointLimitationCone3D_qad87")
+settings/0/joints/1/limitation/right_axis = 0
+settings/0/joints/1/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
+settings/0/joints/2/rotation_axis = 3
+settings/0/joints/2/limitation = SubResource("JointLimitationCone3D_7vxdu")
+settings/0/joints/2/limitation/right_axis = 0
+settings/0/joints/2/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
+settings/0/joints/3/rotation_axis = 3
+settings/0/joints/3/limitation = SubResource("JointLimitationCone3D_kvytk")
+settings/0/joints/3/limitation/right_axis = 0
+settings/0/joints/3/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
+
+[node name="HeadTarget" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0.2)
