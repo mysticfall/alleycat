@@ -61,6 +61,76 @@ Run visual probe scripts **without** `--headless` to enable the renderer:
 godot-mono -d -s --xr-mode off --path game "temp/<probe_script>.gd"
 ```
 
+## Probe Planning For 3D Subjects
+
+Plan captures before writing the loop. Keep the plan generic so it works for characters, props, and environment objects.
+
+Define these items per probe run:
+
+1. **Critical Regions**: parts that must stay visible for review (for example head/neck joints, contact points, hinge
+   area,
+   silhouette edge).
+2. **Capture List**: one entry per required view/state (`capture_id`, intent, pose/state, camera mode, expected file
+   name).
+3. **Framing Band**: explicit target for how much of the frame the subject should occupy.
+4. **Fail Conditions**: what invalidates the run (missing shot, clipped critical region, unusable framing).
+
+Keep this plan in a small manifest/checklist file next to the probe script or in the probe script constants.
+
+## Framing Acceptance Criteria
+
+Objective checks first: base qualitative judgement on measurable framing checks (coverage, centring, edge margins), then
+use visual judgement for final quality calls.
+
+Apply these checks to every capture unless the feature spec defines stricter values:
+
+- **Critical Regions Fully Visible**: no required region touches or crosses image edges.
+- **Subject Remains Centred**: subject centre stays near frame centre (avoid left/right or up/down drift between
+  captures).
+- **Useful Subject Coverage**: subject is large enough for review; avoid captures dominated by background or floor.
+- **Consistent Series Framing**: multi-capture sets keep similar scale and centre unless a specific shot intentionally
+  changes it.
+
+Practical default thresholds (adjust only when the spec requires otherwise):
+
+- Subject centre stays within the middle **40% x 40%** of the frame.
+- Subject occupies roughly **35% to 85%** of frame height.
+- Critical regions keep at least a small safety margin from each edge (for example about **3%** of frame width/height).
+
+## Multi-Capture Verification Workflow
+
+Use this workflow when a probe produces more than one screenshot.
+
+1. **Create A Run-Isolated Output Directory**
+    - Pass `--output-dir` with a unique run path (for example `game/temp/probes/<probe_name>/<run_id>`).
+    - Do not mix runs in the same folder.
+2. **Prepare A Capture Manifest**
+    - List all expected captures with file names and review intent.
+    - Include per-capture framing checks and any feature-specific checks.
+3. **Execute Capture Loop**
+    - For each manifest entry: apply state, wait required frames, capture, then record pass/fail against checks.
+4. **Review Per Capture**
+    - Confirm file exists and is readable.
+    - Confirm framing checks pass (critical regions visible, centred, no excessive blank space).
+    - Confirm feature-specific visual checks pass.
+5. **Fail Fast On Any Broken Capture**
+    - Exit non-zero if any expected file is missing, duplicate names overwrite another capture, or any review check
+      fails.
+6. **Summarise Run Output**
+    - Report output directory, manifest/checklist used, total captures, failed capture IDs, and rerun advice.
+
+## Framing Tuning Iteration Control
+
+Use this when adjusting camera/framing values across runs:
+
+1. **Keep Runs Isolated**
+    - Write each iteration to its own output directory; never overwrite a previous iteration.
+2. **Compare Iterations Explicitly**
+    - Compare current vs previous run using the same objective framing checks and capture manifest.
+    - Record whether framing is meaningfully better, unchanged, or worse.
+3. **Stop After 3 Non-Improving Iterations**
+    - If three consecutive iterations show no meaningful framing progress, stop tuning and escalate with run evidence.
+
 ## Screenshot Output
 
 `ProbeUtils.capture_screenshot(...)` and `Photobooth.capture(...)` write JPG files under:
