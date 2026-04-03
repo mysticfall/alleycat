@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://djbxkxkuhx3i1"]
+
+[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/reference_female.tscn" id="1_4bb30"]
+[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_3bxhf"]
+
+[node name="NeckSpineCCDIKTest" type="Node3D" unique_id=1577245811]
+
+[node name="Female" parent="." unique_id=1534184585 instance=ExtResource("1_4bb30")]
+
+[node name="TargetPoses" type="Node3D" parent="." unique_id=1580638520]
+
+[node name="TargetForward" parent="TargetPoses" unique_id=1666065283 instance=ExtResource("2_3bxhf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.54, 0.32)
+visible = false
+LabelText = "Forward Target"
+
+[node name="TargetLeft" parent="TargetPoses" unique_id=46383982 instance=ExtResource("2_3bxhf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 1.52, 0.23)
+visible = false
+LabelText = "Left Target"
+
+[node name="TargetRight" parent="TargetPoses" unique_id=1899004195 instance=ExtResource("2_3bxhf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 1.52, 0.23)
+visible = false
+LabelText = "Right Target"
+
+[node name="TargetUp" parent="TargetPoses" unique_id=355656553 instance=ExtResource("2_3bxhf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.67, 0.18)
+visible = false
+LabelText = "Up Target"
+
+[node name="TargetDown" parent="TargetPoses" unique_id=1953532672 instance=ExtResource("2_3bxhf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.34, 0.24)
+visible = false
+LabelText = "Down Target"
+
+[node name="TargetStoopForward" parent="TargetPoses" unique_id=642054597 instance=ExtResource("2_3bxhf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0.36)
+visible = false
+LabelText = "Stoop-Forward Target"
+
+[node name="TargetLeanBack" parent="TargetPoses" unique_id=1281826684 instance=ExtResource("2_3bxhf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.62, 0.02)
+visible = false
+LabelText = "Lean-Back Target"
+
+[node name="HeadTarget" type="Marker3D" parent="." unique_id=1332501885]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0.2)

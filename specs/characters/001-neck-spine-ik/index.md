@@ -39,8 +39,8 @@ instantiated across character setups.
 3. The IK configuration is saved as a reusable scene at `@game/assets/characters/ik/neck_spine_ccdik.tscn`, with the
    target node left unbound in the reusable scene so consuming scenes provide/bind the head target externally.
 4. A verification scene based on `@game/assets/characters/reference/reference_female.tscn` exists at:
-    - scene: `@game/test/characters/ik/neck_spine_ccdik_test.tscn`
-    - probe script: `@game/test/characters/ik/neck_spine_ccdik_test.gd`
+    - scene: `@game/tests/characters/ik/neck_spine_ccdik_test.tscn`
+    - probe script: `@game/tests/characters/ik/neck_spine_ccdik_test.gd`
 5. Visual checks cover both moderate and extreme target poses at minimum:
     - forward, left, right, up, down,
     - stoop-forward (head target down + forward),
@@ -57,5 +57,5 @@ instantiated across character setups.
 ## References
 
 - @game/assets/characters/ik/neck_spine_ccdik.tscn
-- @game/test/characters/ik/neck_spine_ccdik_test.tscn
-- @game/test/characters/ik/neck_spine_ccdik_test.gd
+- @game/tests/characters/ik/neck_spine_ccdik_test.tscn
+- @game/tests/characters/ik/neck_spine_ccdik_test.gd
