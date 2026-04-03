@@ -46,6 +46,10 @@ README.md                         # Repository overview and developer onboarding
 
 Use British English, except when the instruction specifies otherwise.
 
+## Markdown Formatting
+
+All Markdown headings must be written in Title Case, capitalising every word, except for articles, and conjunctions.
+
 ## Tools
 
 Always use **Context7** for API documentation, code generation, setup, or configuration tasks related to Godot and other

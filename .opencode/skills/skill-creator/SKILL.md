@@ -29,7 +29,7 @@ Then after the skill is done (but again, the order is flexible), you can also ru
 
 Cool? Cool.
 
-## Communicating with the user
+## Communicating with the User
 
 The skill creator is liable to be used by people across a wide range of familiarity with coding jargon. If you haven't heard (and how could you, it's only very recently that it started), there's a trend now where the power of Claude is inspiring plumbers to open up their terminals, parents and grandparents to google "how to install npm". On the other hand, the bulk of users are probably fairly computer-literate.
 
@@ -42,7 +42,7 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 ---
 
-## Creating a skill
+## Creating a Skill
 
 ### Capture Intent
 
@@ -160,13 +160,13 @@ Save test cases to `evals/evals.json`. Don't write assertions yet — just the p
 
 See `references/schemas.md` for the full schema (including the `assertions` field, which you'll add later).
 
-## Running and evaluating test cases
+## Running and Evaluating Test Cases
 
 This section is one continuous sequence — don't stop partway through. Do NOT use `/skill-test` or any other testing skill.
 
 Put results in `<skill-name>-workspace/` as a sibling to the skill directory. Within the workspace, organize results by iteration (`iteration-1/`, `iteration-2/`, etc.) and within that, each test case gets a directory (`eval-0/`, `eval-1/`, etc.). Don't create all of this upfront — just create directories as you go.
 
-### Step 1: Spawn all runs (with-skill AND baseline) in the same turn
+### Step 1: Spawn All Runs (With-Skill AND Baseline) in the Same Turn
 
 For each test case, spawn two subagents in the same turn — one with the skill, one without. This is important: don't spawn the with-skill runs first and then come back for baselines later. Launch everything at once so it all finishes around the same time.
 
@@ -196,7 +196,7 @@ Write an `eval_metadata.json` for each test case (assertions can be empty for no
 }
 ```
 
-### Step 2: While runs are in progress, draft assertions
+### Step 2: While Runs Are in Progress, Draft Assertions
 
 Don't just wait for the runs to finish — you can use this time productively. Draft quantitative assertions for each test case and explain them to the user. If assertions already exist in `evals/evals.json`, review them and explain what they check.
 
@@ -204,7 +204,7 @@ Good assertions are objectively verifiable and have descriptive names — they s
 
 Update the `eval_metadata.json` files and `evals/evals.json` with the assertions once drafted. Also explain to the user what they'll see in the viewer — both the qualitative outputs and the quantitative benchmark.
 
-### Step 3: As runs complete, capture timing data
+### Step 3: As Runs Complete, Capture Timing Data
 
 When each subagent task completes, you receive a notification containing `total_tokens` and `duration_ms`. Save this data immediately to `timing.json` in the run directory:
 
@@ -218,7 +218,7 @@ When each subagent task completes, you receive a notification containing `total_
 
 This is the only opportunity to capture this data — it comes through the task notification and isn't persisted elsewhere. Process each notification as it arrives rather than trying to batch them.
 
-### Step 4: Grade, aggregate, and launch the viewer
+### Step 4: Grade, Aggregate, and Launch the Viewer
 
 Once all runs are done:
 
@@ -250,7 +250,7 @@ Note: please use generate_review.py to create the viewer; there's no need to wri
 
 5. **Tell the user** something like: "I've opened the results in your browser. There are two tabs — 'Outputs' lets you click through each test case and leave feedback, 'Benchmark' shows the quantitative comparison. When you're done, come back here and let me know."
 
-### What the user sees in the viewer
+### What the User Sees in the Viewer
 
 The "Outputs" tab shows one test case at a time:
 - **Prompt**: the task that was given
@@ -264,7 +264,7 @@ The "Benchmark" tab shows the stats summary: pass rates, timing, and token usage
 
 Navigation is via prev/next buttons or arrow keys. When done, they click "Submit All Reviews" which saves all feedback to `feedback.json`.
 
-### Step 5: Read the feedback
+### Step 5: Read the Feedback
 
 When the user tells you they're done, read `feedback.json`:
 
@@ -289,11 +289,11 @@ kill $VIEWER_PID 2>/dev/null
 
 ---
 
-## Improving the skill
+## Improving the Skill
 
 This is the heart of the loop. You've run the test cases, the user has reviewed the results, and now you need to make the skill better based on their feedback.
 
-### How to think about improvements
+### How to Think About Improvements
 
 1. **Generalize from the feedback.** The big picture thing that's happening here is that we're trying to create skills that can be used a million times (maybe literally, maybe even more who knows) across many different prompts. Here you and the user are iterating on only a few examples over and over again because it helps move faster. The user knows these examples in and out and it's quick for them to assess new outputs. But if the skill you and the user are codeveloping works only for those examples, it's useless. Rather than put in fiddly overfitty changes, or oppressively constrictive MUSTs, if there's some stubborn issue, you might try branching out and using different metaphors, or recommending different patterns of working. It's relatively cheap to try and maybe you'll land on something great.
 
@@ -305,7 +305,7 @@ This is the heart of the loop. You've run the test cases, the user has reviewed 
 
 This task is pretty important (we are trying to create billions a year in economic value here!) and your thinking time is not the blocker; take your time and really mull things over. I'd suggest writing a draft revision and then looking at it anew and making improvements. Really do your best to get into the head of the user and understand what they want and need.
 
-### The iteration loop
+### The Iteration Loop
 
 After improving the skill:
 
@@ -322,7 +322,7 @@ Keep going until:
 
 ---
 
-## Advanced: Blind comparison
+## Advanced: Blind Comparison
 
 For situations where you want a more rigorous comparison between two versions of a skill (e.g., the user asks "is the new version actually better?"), there's a blind comparison system. Read `agents/comparator.md` and `agents/analyzer.md` for the details. The basic idea is: give two outputs to an independent agent without telling it which is which, and let it judge quality. Then analyze why the winner won.
 
@@ -334,7 +334,7 @@ This is optional, requires subagents, and most users won't need it. The human re
 
 The description field in SKILL.md frontmatter is the primary mechanism that determines whether Claude invokes a skill. After creating or improving a skill, offer to optimize the description for better triggering accuracy.
 
-### Step 1: Generate trigger eval queries
+### Step 1: Generate Trigger Eval Queries
 
 Create 20 eval queries — a mix of should-trigger and should-not-trigger. Save as JSON:
 
@@ -357,7 +357,7 @@ For the **should-not-trigger** queries (8-10), the most valuable ones are the ne
 
 The key thing to avoid: don't make should-not-trigger queries obviously irrelevant. "Write a fibonacci function" as a negative test for a PDF skill is too easy — it doesn't test anything. The negative cases should be genuinely tricky.
 
-### Step 2: Review with user
+### Step 2: Review with User
 
 Present the eval set to the user for review using the HTML template:
 
@@ -372,7 +372,7 @@ Present the eval set to the user for review using the HTML template:
 
 This step matters — bad eval queries lead to bad descriptions.
 
-### Step 3: Run the optimization loop
+### Step 3: Run the Optimization Loop
 
 Tell the user: "This will take some time — I'll run the optimization loop in the background and check on it periodically."
 
@@ -393,19 +393,19 @@ While it runs, periodically tail the output to give the user updates on which it
 
 This handles the full optimization loop automatically. It splits the eval set into 60% train and 40% held-out test, evaluates the current description (running each query 3 times to get a reliable trigger rate), then calls Claude to propose improvements based on what failed. It re-evaluates each new description on both train and test, iterating up to 5 times. When it's done, it opens an HTML report in the browser showing the results per iteration and returns JSON with `best_description` — selected by test score rather than train score to avoid overfitting.
 
-### How skill triggering works
+### How Skill Triggering Works
 
 Understanding the triggering mechanism helps design better eval queries. Skills appear in Claude's `available_skills` list with their name + description, and Claude decides whether to consult a skill based on that description. The important thing to know is that Claude only consults skills for tasks it can't easily handle on its own — simple, one-step queries like "read this PDF" may not trigger a skill even if the description matches perfectly, because Claude can handle them directly with basic tools. Complex, multi-step, or specialized queries reliably trigger skills when the description matches.
 
 This means your eval queries should be substantive enough that Claude would actually benefit from consulting a skill. Simple queries like "read file X" are poor test cases — they won't trigger skills regardless of description quality.
 
-### Step 4: Apply the result
+### Step 4: Apply the Result
 
 Take `best_description` from the JSON output and update the skill's SKILL.md frontmatter. Show the user before/after and report the scores.
 
 ---
 
-### Package and Present (only if `present_files` tool is available)
+### Package and Present (Only If `present_files` Tool Is Available)
 
 Check whether you have access to the `present_files` tool. If you don't, skip this step. If you do, package the skill and present the .skill file to the user:
 
@@ -417,7 +417,7 @@ After packaging, direct the user to the resulting `.skill` file path so they can
 
 ---
 
-## Claude.ai-specific instructions
+## Claude.ai-Specific Instructions
 
 In Claude.ai, the core workflow is the same (draft → test → review → improve → repeat), but because Claude.ai doesn't have subagents, some mechanics change. Here's what to adapt:
 
@@ -456,7 +456,7 @@ If you're in Cowork, the main things to know are:
 
 ---
 
-## Reference files
+## Reference Files
 
 The agents/ directory contains instructions for specialized subagents. Read them when you need to spawn the relevant subagent.
 

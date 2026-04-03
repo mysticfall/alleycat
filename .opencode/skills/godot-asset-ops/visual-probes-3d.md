@@ -61,7 +61,7 @@ Run visual probe scripts **without** `--headless` to enable the renderer:
 godot-mono -d -s --xr-mode off --path game "temp/<probe_script>.gd"
 ```
 
-## Probe Planning For 3D Subjects
+## Probe Planning for 3D Subjects
 
 Plan captures before writing the loop. Keep the plan generic so it works for characters, props, and environment objects.
 
