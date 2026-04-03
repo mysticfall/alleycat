@@ -12,6 +12,19 @@ Use this skill when writing or updating C# code in the AlleyCat repository.
 - Use `var` for local variable declarations only when the type is immediately clear.
 - Use expression-bodied members for methods when it improves readability and the method body is a single expression.
 
+## Node access
+
+- Use `RequireNode<T>` (defined in `AlleyCat.Common.NodeExtensions`) instead of `GetNode<T>` when a component
+  **requires** a child node to function — a missing node indicates a scene-authoring bug.
+- Bring the extension method into scope with `using AlleyCat.Common;`.
+
+```csharp
+using AlleyCat.Common;
+
+// Inside _Ready or similar lifecycle method:
+Label3D label = this.RequireNode<Label3D>("Label3D");
+```
+
 ## Namespaces and project mapping
 
 - Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in
