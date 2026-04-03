@@ -35,7 +35,7 @@ AGENTS.md                         # Agent operating rules and project-specific i
 README.md                         # Repository overview and developer onboarding
 ```
 
-## Running the game and tests
+## Running The Game And Tests
 
 - Run the game from the project root with `godot-mono --path game`.
 - Run C# tests with `dotnet test tests/AlleyCat.Tests.csproj`.
