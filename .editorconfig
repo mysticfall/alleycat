@@ -132,6 +132,12 @@ dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1716.severity = none
 dotnet_diagnostic.CA1822.severity = warning
 
+[game/src/*.cs]
+dotnet_diagnostic.IDE0130.severity = none
+
+[game/src/**/*.cs]
+dotnet_diagnostic.IDE0130.severity = none
+
 [tests/src/*.cs]
 dotnet_diagnostic.IDE0130.severity = none
 
