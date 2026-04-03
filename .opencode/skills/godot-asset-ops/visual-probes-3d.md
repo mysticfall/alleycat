@@ -131,6 +131,19 @@ Use this when adjusting camera/framing values across runs:
 3. **Stop After 3 Non-Improving Iterations**
     - If three consecutive iterations show no meaningful framing progress, stop tuning and escalate with run evidence.
 
+## Visual Reference Points with DebugMarker
+
+When placing reference points, anchors, or markers in a probe scene, prefer `DebugMarker` over Godot's built-in
+`Marker3D`.
+
+- **Scene**: `res://assets/markers/debug_marker.tscn`
+- **Optional label**: set the `LabelText` export property to display identifying text next to the gizmo.
+- **Advantage over `Marker3D`**: renders visible 3D axes and an optional in-game label, making positions and orientations
+  easier to verify visually in captured screenshots.
+
+Use it whenever a probe needs spatial landmarks that should be clearly identifiable in the output images (for example
+subject anchor points, camera target positions, or reference poses).
+
 ## Screenshot Output
 
 `ProbeUtils.capture_screenshot(...)` and `Photobooth.capture(...)` write JPG files under:

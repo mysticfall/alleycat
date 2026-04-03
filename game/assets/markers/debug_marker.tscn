@@ -1,0 +1,62 @@
+[gd_scene format=3 uid="uid://h1r8aegpc4i6"]
+
+[ext_resource type="FontFile" uid="uid://cj8hx85ef6v0t" path="res://assets/fonts/Inter/Inter_18pt-Medium.ttf" id="1_5frfs"]
+[ext_resource type="Script" uid="uid://br85gegtbqbhw" path="res://src/UI/Marker/DebugMarker.cs" id="1_rw0us"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kghxl"]
+no_depth_test = true
+albedo_color = Color(1, 0.089999974, 0.105166435, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_7ha66"]
+material = SubResource("StandardMaterial3D_kghxl")
+top_radius = 0.001
+bottom_radius = 0.01
+height = 0.1
+radial_segments = 8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cd1du"]
+no_depth_test = true
+albedo_color = Color(0.81799996, 1, 0.089999974, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_mifb1"]
+material = SubResource("StandardMaterial3D_cd1du")
+top_radius = 0.001
+bottom_radius = 0.01
+height = 0.1
+radial_segments = 8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_a78cy"]
+no_depth_test = true
+albedo_color = Color(0.089999974, 0.4691667, 1, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_t7lcy"]
+material = SubResource("StandardMaterial3D_a78cy")
+top_radius = 0.001
+bottom_radius = 0.01
+height = 0.1
+radial_segments = 8
+
+[node name="DebugGizmo" type="Node3D" unique_id=1005987499]
+script = ExtResource("1_rw0us")
+metadata/_custom_type_script = "uid://br85gegtbqbhw"
+
+[node name="XAxis" type="MeshInstance3D" parent="." unique_id=500156153]
+transform = Transform3D(-5.9604645e-08, 1, 0, -1, -5.9604645e-08, 5.9604645e-08, -2.9802322e-08, 0, 1, 0.08, 0, 0)
+mesh = SubResource("CylinderMesh_7ha66")
+
+[node name="YAxis" type="MeshInstance3D" parent="." unique_id=813870760]
+transform = Transform3D(1, 0, 0, -2.9802322e-08, 1, 5.9604645e-08, 0, 2.9802322e-08, 1, 0, 0.08, 0)
+mesh = SubResource("CylinderMesh_mifb1")
+
+[node name="ZAxis" type="MeshInstance3D" parent="." unique_id=1369361912]
+transform = Transform3D(1, 0, -3.8213705e-15, -3.821371e-15, 4.3711385e-08, -0.99999994, 0, 0.99999994, 4.3711385e-08, 0, 0, 0.08)
+mesh = SubResource("CylinderMesh_t7lcy")
+
+[node name="Label3D" type="Label3D" parent="." unique_id=41399222]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15280864, 0)
+pixel_size = 0.001
+billboard = 1
+no_depth_test = true
+text = "Marker"
+font = ExtResource("1_5frfs")
+font_size = 24
