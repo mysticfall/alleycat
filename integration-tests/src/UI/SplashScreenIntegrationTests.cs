@@ -1,6 +1,7 @@
 using AlleyCat.UI;
 using Godot;
 using Xunit;
+using static AlleyCat.IntegrationTests.Support.TestUtils;
 
 namespace AlleyCat.IntegrationTests.UI;
 
@@ -64,19 +65,5 @@ public sealed partial class SplashScreenIntegrationTests
 
         await WaitForSecondsAsync(sceneTree, 2.85);
         Assert.InRange(logo.Modulate.A, 0.95f, 1.0f);
-    }
-
-    private static SceneTree GetSceneTree()
-        => Engine.GetMainLoop() as SceneTree
-            ?? throw new InvalidOperationException("Expected Godot SceneTree main loop during integration test execution.");
-
-    private static async Task WaitForNextFrameAsync(SceneTree sceneTree)
-        => _ = await sceneTree.ToSignal(sceneTree, SceneTree.SignalName.ProcessFrame);
-
-    private static async Task WaitForSecondsAsync(SceneTree sceneTree, double seconds)
-    {
-        SceneTreeTimer timer = sceneTree.CreateTimer(seconds);
-        _ = await sceneTree.ToSignal(timer, SceneTreeTimer.SignalName.Timeout);
-        await WaitForNextFrameAsync(sceneTree);
     }
 }
