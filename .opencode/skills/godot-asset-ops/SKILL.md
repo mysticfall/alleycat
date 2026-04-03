@@ -89,17 +89,6 @@ Use headless mode to run mutation scripts (for example `@game/temp/asset_ops_<ta
 godot-mono -d -s --headless --xr-mode off --path game "temp/asset_ops_<task>.gd"
 ```
 
-### Visual Probe Guides
-
-Use a visual probe when you need objective screenshot evidence of runtime visuals (for example, layout state or
-animation pose) instead of relying on textual assertions alone.
-
-A visual probe is a small `SceneTree` script that loads the target scene, waits for the required state,
-captures one or more JPG artefacts, then exits. Use the guide matching your rendering context:
-
-- 2D scenes and UI capture: `@.opencode/skills/godot-asset-ops/visual-probes-2d.md`
-- 3D photobooth capture: `@.opencode/skills/godot-asset-ops/visual-probes-3d.md`
-
 ## Verification Checklist
 
 - Script exits with code `0`.

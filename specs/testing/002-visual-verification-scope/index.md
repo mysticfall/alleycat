@@ -28,10 +28,11 @@ Create an objective visual verification capability that lets agents gather repea
 - Visual style reviews that cannot be reduced to objective, testable expectations.
 - Replacing logic/unit/integration assertions that already validate behaviour reliably.
 
-## Success Criteria
-
-1. For a target feature, an agent can produce visual evidence mapped to explicit spec expectations.
-2. Visual checks focus on objective pass/fail criteria rather than subjective aesthetic assessment.
+- Objective, spec-linked visual checks such as:
+ - expected object presence and visibility
+ - expected placement, orientation, and relative scale
+ - expected readable UI/world-space text at defined viewpoints or distances
+ - Captured visual evidence that can be revieweded by agents and humans.2. Visual checks focus on objective pass/fail criteria rather than subjective aesthetic assessment.
 3. The workflow clearly positions visual verification as a complement to existing tests, not a replacement.
 
 ## References

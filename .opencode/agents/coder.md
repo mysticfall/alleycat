@@ -15,6 +15,13 @@ using C# and engine best practices.
 - Keep runtime behaviour safe for per-frame and VR-critical paths (no blocking work or avoidable allocations).
 - Run relevant checks/tests and note manual verification for gameplay behaviour.
 
+## Visual Verification Tasks
+
+For tasks with visual acceptance criteria, use `godot-visual-verification` skill and follow its workflow and gate.
+
+- Do not add or accept value-locking tests until gate outcome is `PASS`.
+- Include the skill's run record fields and gate outcome in your final report.
+
 ## Invoker Communication Protocol
 
 - Treat the invoking agent as your implementation lead; optimise for clear handoff, not long narration.

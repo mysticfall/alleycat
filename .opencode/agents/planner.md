@@ -90,7 +90,20 @@ After each subagent response, the planner must explicitly triage and decide next
     - `needs-follow-up` → create focused follow-up subtask with narrowed acceptance criteria.
     - `escalated` → stop autonomous delegation on that branch and surface a decision request to the user.
 
+For visual-spec tasks, apply §4.6 before final classification.
+
 Never pass through subagent output verbatim without this triage.
+
+### 4.6) Visual Evidence Acceptance Gate (Mandatory for Visual Specs)
+
+Use skill `godot-visual-verification`.
+
+For visual-spec tasks:
+
+- apply the skill gate before accepting completion,
+- map skill outcomes to planner classes (`PASS`→`accepted`, `FOLLOW-UP REQUIRED`→`needs-follow-up`,
+  `ESCALATE`→`escalated`),
+- record gate outcome explicitly in progress updates.
 
 ### 5) Pre-Handover Code Review Gate
 

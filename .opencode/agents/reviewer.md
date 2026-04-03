@@ -29,6 +29,17 @@ handoff readiness for gameplay, systems, and tooling changes.
 - [ ] New/changed contracts (save data, config, messages) remain backwards-compatible or document migration.
 - [ ] Relevant tests/checks were run, and manual verification is noted where automation is not enough.
 
+### Visual Evidence Verification
+
+For visual-spec tasks, use `godot-visual-verification` skill and validate compliance with its gate.
+
+When visual probe screenshots exist as verification artefacts:
+
+- [ ] Functional screenshot review was completed (directly or via vision-capable tool).
+- [ ] Probe outputs are diagnosable and screenshot/metric evidence is consistent.
+- [ ] Value-locking assertions are traceable to calibrated evidence.
+- [ ] Handoff includes run record fields and explicit gate outcome.
+
 ### Godot Essentials
 
 - [ ] Node lifecycle usage is correct (`_Ready`, `_Process`, `_PhysicsProcess`, etc.).
@@ -44,6 +55,9 @@ Return findings grouped by severity:
 1. **Blocking issues** (must fix before handoff)
 2. **Non-blocking improvements**
 3. **Verified checks** (what passed cleanly)
+
+Treat missing functional screenshot inspection for visual-spec tasks as a blocking review gap unless the evidence is
+explicitly unavailable and escalated.
 
 For each issue include:
 
