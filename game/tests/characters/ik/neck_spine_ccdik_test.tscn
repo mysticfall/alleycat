@@ -1,48 +1,48 @@
-[gd_scene format=3 uid="uid://djbxkxkuhx3i1"]
+[gd_scene format=3]
 
-[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_4bb30"]
-[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_3bxhf"]
+[ext_resource type="PackedScene" path="res://assets/characters/reference/female/photobooth/full_body_5_cams.tscn" id="1_g3f8u"]
+[ext_resource type="PackedScene" path="res://assets/markers/debug_marker.tscn" id="2_teojm"]
 
-[node name="NeckSpineCCDIKTest" type="Node3D" unique_id=1577245811]
+[node name="Photobooth" instance=ExtResource("1_g3f8u")]
 
-[node name="Female" parent="." unique_id=1534184585 instance=ExtResource("1_4bb30")]
-
-[node name="TargetPoses" type="Node3D" parent="." unique_id=1580638520]
-
-[node name="TargetForward" parent="TargetPoses" unique_id=1666065283 instance=ExtResource("2_3bxhf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.54, 0.32)
+[node name="HeadTarget" parent="Markers" index="0" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.52, 0.26)
+label_text = "Head Target"
 visible = false
-LabelText = "Forward Target"
 
-[node name="TargetLeft" parent="TargetPoses" unique_id=46383982 instance=ExtResource("2_3bxhf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 1.52, 0.23)
+[node name="TargetPoses" type="Node3D" parent="Markers" index="1"]
+
+[node name="TargetForward" parent="Markers/TargetPoses" index="0" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.52, 0.26)
+label_text = "forward"
 visible = false
-LabelText = "Left Target"
 
-[node name="TargetRight" parent="TargetPoses" unique_id=1899004195 instance=ExtResource("2_3bxhf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 1.52, 0.23)
+[node name="TargetLeft" parent="Markers/TargetPoses" index="1" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.18, 1.52, 0.2)
+label_text = "left"
 visible = false
-LabelText = "Right Target"
 
-[node name="TargetUp" parent="TargetPoses" unique_id=355656553 instance=ExtResource("2_3bxhf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.67, 0.18)
+[node name="TargetRight" parent="Markers/TargetPoses" index="2" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.18, 1.52, 0.2)
+label_text = "right"
 visible = false
-LabelText = "Up Target"
 
-[node name="TargetDown" parent="TargetPoses" unique_id=1953532672 instance=ExtResource("2_3bxhf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.34, 0.24)
+[node name="TargetUp" parent="Markers/TargetPoses" index="3" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.66, 0.14)
+label_text = "up"
 visible = false
-LabelText = "Down Target"
 
-[node name="TargetStoopForward" parent="TargetPoses" unique_id=642054597 instance=ExtResource("2_3bxhf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0.36)
+[node name="TargetDown" parent="Markers/TargetPoses" index="4" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.36, 0.16)
+label_text = "down"
 visible = false
-LabelText = "Stoop-Forward Target"
 
-[node name="TargetLeanBack" parent="TargetPoses" unique_id=1281826684 instance=ExtResource("2_3bxhf")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.62, 0.02)
+[node name="TargetStoopForward" parent="Markers/TargetPoses" index="5" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0.34)
+label_text = "stoop-forward"
 visible = false
-LabelText = "Lean-Back Target"
 
-[node name="HeadTarget" type="Marker3D" parent="." unique_id=1332501885]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0.2)
+[node name="TargetLeanBack" parent="Markers/TargetPoses" index="6" instance=ExtResource("2_teojm")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.58, -0.12)
+label_text = "lean-back"
+visible = false

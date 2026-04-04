@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://c8fq1s3gwmppl"]
+
+[ext_resource type="PackedScene" uid="uid://6b8las20aee4" path="res://assets/testing/photobooth/photobooth.tscn" id="1_r558c"]
+[ext_resource type="PackedScene" uid="uid://utn2mx2dm0vl" path="res://assets/testing/photobooth/camera_rig.tscn" id="2_lqqwx"]
+[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="3_uphor"]
+
+[node name="Photobooth" unique_id=406188165 instance=ExtResource("1_r558c")]
+
+[node name="Female" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=1534184585 instance=ExtResource("3_uphor")]
+
+[node name="FrontCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=1495966327 instance=ExtResource("2_lqqwx")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.93000275, 1.0445484)
+image_size = Vector2(512, 768)
+
+[node name="RightCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=1341427355 instance=ExtResource("2_lqqwx")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -1.045, 0.93, 0)
+image_size = Vector2(512, 768)
+
+[node name="LeftCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="2" unique_id=417711527 instance=ExtResource("2_lqqwx")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 1.045, 0.93, 0)
+image_size = Vector2(512, 768)
+
+[node name="BackCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="3" unique_id=1935704102 instance=ExtResource("2_lqqwx")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.93, -1.045)
+image_size = Vector2(512, 768)
+
+[node name="TopCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="4" unique_id=1344408557 instance=ExtResource("2_lqqwx")]
+transform = Transform3D(-1, 8.742278e-08, 3.821371e-15, 0, -4.371139e-08, 1, 8.742278e-08, 1, 4.371139e-08, -5.58758e-16, 1.9377809, 0.05999999)
+image_size = Vector2(512, 256)
+orthogonal_scale = 0.7999999999999999
