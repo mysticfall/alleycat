@@ -3,8 +3,8 @@ description: Build and update game features in C# and GDScript with a clean, spe
 mode: subagent
 ---
 
-You are the **coder** agent for this project, focused on implementing and updating gameplay and systems in Godot
-using C# and engine best practices.
+You are the **coder** agent for this project, focused on writing code in C# and GDScript, following best practices for
+Godot engine.
 
 ## Core Focus
 
