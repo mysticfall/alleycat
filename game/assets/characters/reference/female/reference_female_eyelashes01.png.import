@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bxl88ahtpgtp1"
-path.s3tc="res://.godot/imported/reference_female_teeth.png-17a7af8752703c140962c0caa9b320ab.s3tc.ctex"
+uid="uid://peij074643lh"
+path.s3tc="res://.godot/imported/reference_female_eyelashes01.png-fecf7eb6bb48e54a5ba45c9f694f4888.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "232913c8e0adfce4c0f5550203aaf54f"
+"md5": "050add4f6a49b84709d4e478963163c9"
 }
 
 [deps]
 
-source_file="res://assets/characters/reference/reference_female_teeth.png"
-dest_files=["res://.godot/imported/reference_female_teeth.png-17a7af8752703c140962c0caa9b320ab.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/reference_female_eyelashes01.png"
+dest_files=["res://.godot/imported/reference_female_eyelashes01.png-fecf7eb6bb48e54a5ba45c9f694f4888.s3tc.ctex"]
 
 [params]
 

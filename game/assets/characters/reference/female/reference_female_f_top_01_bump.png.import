@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://v0ec8dekvma1"
-path.s3tc="res://.godot/imported/reference_female_tongue01_diffuse.png-33eaed8e415882b908952587d5d8e5f4.s3tc.ctex"
+uid="uid://c6ajdelpwl24k"
+path.s3tc="res://.godot/imported/reference_female_f_top_01_bump.png-aadd8944921499e407568e38bfc0574a.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "03f3c7040385e3ed039d14478b4cedb3"
+"md5": "43488ea54c98b5fb266cacee8db87cbb"
 }
 
 [deps]
 
-source_file="res://assets/characters/reference/reference_female_tongue01_diffuse.png"
-dest_files=["res://.godot/imported/reference_female_tongue01_diffuse.png-33eaed8e415882b908952587d5d8e5f4.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/reference_female_f_top_01_bump.png"
+dest_files=["res://.godot/imported/reference_female_f_top_01_bump.png-aadd8944921499e407568e38bfc0574a.s3tc.ctex"]
 
 [params]
 
@@ -25,12 +25,12 @@ compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
-roughness/mode=0
-roughness/src_normal=""
+roughness/mode=1
+roughness/src_normal="res://assets/characters/reference/reference_female_f_top_01_bump.png"
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2

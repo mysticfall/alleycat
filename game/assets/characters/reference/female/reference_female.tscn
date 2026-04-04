@@ -1,0 +1,5 @@
+[gd_scene format=3 uid="uid://dp3fxu1uko3n7"]
+
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
+
+[node name="Female" unique_id=1534184585 instance=ExtResource("1_5molt")]

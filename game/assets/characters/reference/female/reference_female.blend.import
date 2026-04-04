@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://u5lgtgrohlyk"
-path="res://.godot/imported/reference_female.blend-4fd0ab92ca4ab601c4a860d420110955.scn"
+path="res://.godot/imported/reference_female.blend-13a31033fa54f5c1c948a0c6df3325cc.scn"
 
 [deps]
 
-source_file="res://assets/characters/reference/reference_female.blend"
-dest_files=["res://.godot/imported/reference_female.blend-4fd0ab92ca4ab601c4a860d420110955.scn"]
+source_file="res://assets/characters/reference/female/reference_female.blend"
+dest_files=["res://.godot/imported/reference_female.blend-13a31033fa54f5c1c948a0c6df3325cc.scn"]
 
 [params]
 

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://djbxkxkuhx3i1"]
 
-[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/reference_female.tscn" id="1_4bb30"]
+[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_4bb30"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_3bxhf"]
 
 [node name="NeckSpineCCDIKTest" type="Node3D" unique_id=1577245811]

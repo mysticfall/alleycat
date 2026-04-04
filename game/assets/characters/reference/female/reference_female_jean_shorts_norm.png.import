@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dbkxcj754ajap"
-path.s3tc="res://.godot/imported/reference_female_brown_eye.png-950c8f35758b1e818fac4390b61ab5cc.s3tc.ctex"
+uid="uid://rhn5gvr2k1fi"
+path.s3tc="res://.godot/imported/reference_female_jean_shorts_norm.png-8e36c2d470755a174d430540c1c943a9.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "1b93ce1fc9dfa16177a6d61005cdb4fd"
+"md5": "814806c331d9639bfbb09dd111cb60e7"
 }
 
 [deps]
 
-source_file="res://assets/characters/reference/reference_female_brown_eye.png"
-dest_files=["res://.godot/imported/reference_female_brown_eye.png-950c8f35758b1e818fac4390b61ab5cc.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/reference_female_jean_shorts_norm.png"
+dest_files=["res://.godot/imported/reference_female_jean_shorts_norm.png-8e36c2d470755a174d430540c1c943a9.s3tc.ctex"]
 
 [params]
 
@@ -25,12 +25,12 @@ compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
-roughness/mode=0
-roughness/src_normal=""
+roughness/mode=1
+roughness/src_normal="res://assets/characters/reference/reference_female_jean_shorts_norm.png"
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2

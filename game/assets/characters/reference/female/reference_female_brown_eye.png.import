@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bvrraxpcfo3al"
-path.s3tc="res://.godot/imported/reference_female_jean_shorts_diff.png-f4df8a97feacba61ea17083bc419dd7e.s3tc.ctex"
+uid="uid://dbkxcj754ajap"
+path.s3tc="res://.godot/imported/reference_female_brown_eye.png-a9641293e77d021dc15fb3b10978885c.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "dc75d3848c6e2c65620ab3b074c52e06"
+"md5": "1b93ce1fc9dfa16177a6d61005cdb4fd"
 }
 
 [deps]
 
-source_file="res://assets/characters/reference/reference_female_jean_shorts_diff.png"
-dest_files=["res://.godot/imported/reference_female_jean_shorts_diff.png-f4df8a97feacba61ea17083bc419dd7e.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/reference_female_brown_eye.png"
+dest_files=["res://.godot/imported/reference_female_brown_eye.png-a9641293e77d021dc15fb3b10978885c.s3tc.ctex"]
 
 [params]
 

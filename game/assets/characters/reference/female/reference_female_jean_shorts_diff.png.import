@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://peij074643lh"
-path.s3tc="res://.godot/imported/reference_female_eyelashes01.png-0a1dc771869c5b6e6c46be631c5d116f.s3tc.ctex"
+uid="uid://bvrraxpcfo3al"
+path.s3tc="res://.godot/imported/reference_female_jean_shorts_diff.png-86e8cfbf7b18d2615ce2a6cde06f6869.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "050add4f6a49b84709d4e478963163c9"
+"md5": "dc75d3848c6e2c65620ab3b074c52e06"
 }
 
 [deps]
 
-source_file="res://assets/characters/reference/reference_female_eyelashes01.png"
-dest_files=["res://.godot/imported/reference_female_eyelashes01.png-0a1dc771869c5b6e6c46be631c5d116f.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/reference_female_jean_shorts_diff.png"
+dest_files=["res://.godot/imported/reference_female_jean_shorts_diff.png-86e8cfbf7b18d2615ce2a6cde06f6869.s3tc.ctex"]
 
 [params]
 

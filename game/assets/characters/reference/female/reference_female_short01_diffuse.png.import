@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://br15wgve3j2xk"
-path.s3tc="res://.godot/imported/reference_female_f_top_01_diffuse.png-40d7a7b2f08d8d662382f2e83c383893.s3tc.ctex"
+uid="uid://vm4jchew8uek"
+path.s3tc="res://.godot/imported/reference_female_short01_diffuse.png-e99a3f14485ac0c1274ad3fea557c55e.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "5b8bfd684191734252b6c8a9ce0d13c1"
+"md5": "6d41c36857fc300b6692779db805843c"
 }
 
 [deps]
 
-source_file="res://assets/characters/reference/reference_female_f_top_01_diffuse.png"
-dest_files=["res://.godot/imported/reference_female_f_top_01_diffuse.png-40d7a7b2f08d8d662382f2e83c383893.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/reference_female_short01_diffuse.png"
+dest_files=["res://.godot/imported/reference_female_short01_diffuse.png-e99a3f14485ac0c1274ad3fea557c55e.s3tc.ctex"]
 
 [params]
 
