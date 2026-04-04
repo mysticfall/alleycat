@@ -1,4 +1,5 @@
 ## Represents a 3D marker used by Photobooth for visual verification during scene checks.
+@tool
 class_name DebugMarker
 extends Node3D
 

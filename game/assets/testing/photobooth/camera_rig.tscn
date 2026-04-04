@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://utn2mx2dm0vl"]
+
+[ext_resource type="Script" uid="uid://dxxg2ed4pj3mr" path="res://scripts/photobooth/camera_rig.gd" id="1_fd7eq"]
+
+[node name="CameraRig" type="Node3D" unique_id=417711527]
+script = ExtResource("1_fd7eq")
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="Viewport" type="SubViewport" parent="." unique_id=970152126]
+unique_name_in_owner = true
+render_target_update_mode = 0
+
+[node name="Camera" type="Camera3D" parent="Viewport" unique_id=240776058]
+unique_name_in_owner = true
+projection = 1
+current = true
+size = 2.0
+near = 0.01
+far = 100.0
+
+[node name="RemoteTransform3D" type="RemoteTransform3D" parent="." unique_id=2065988295]
+remote_path = NodePath("../Viewport/Camera")

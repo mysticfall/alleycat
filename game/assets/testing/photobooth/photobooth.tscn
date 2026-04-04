@@ -1,6 +1,15 @@
 [gd_scene format=3 uid="uid://6b8las20aee4"]
 
 [ext_resource type="Texture2D" uid="uid://ckv3oj6mms0ge" path="res://assets/hdri/monochrome_studio_04_1k.exr" id="1_1v84q"]
+[ext_resource type="Script" uid="uid://eh0ilarykwv0" path="res://scripts/photobooth/photobooth.gd" id="2_10wfe"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ux8bu"]
+albedo_color = Color(0.25, 0.25, 0.25, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_v8147"]
+material = SubResource("StandardMaterial3D_ux8bu")
+size = Vector2(10, 10)
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_hbact"]
 panorama = ExtResource("1_1v84q")
@@ -17,26 +26,19 @@ reflected_light_source = 2
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_ux8bu"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ux8bu"]
-albedo_color = Color(0.25, 0.25, 0.25, 1)
-roughness = 0.9
+[node name="Photobooth" type="Node3D" unique_id=406188165]
+script = ExtResource("2_10wfe")
+metadata/_custom_type_script = "uid://eh0ilarykwv0"
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_v8147"]
-material = SubResource("StandardMaterial3D_ux8bu")
-size = Vector2(10, 10)
+[node name="Subject" type="Node3D" parent="." unique_id=1460378833]
 
-[node name="Photobooth" type="Node3D" unique_id=1904113220]
+[node name="Cameras" type="Node3D" parent="." unique_id=1601084]
 
-[node name="Environment" type="WorldEnvironment" parent="." unique_id=1574651519]
-environment = SubResource("Environment_1blvp")
-camera_attributes = SubResource("CameraAttributesPractical_ux8bu")
-
-[node name="Camera3D" type="Camera3D" parent="." unique_id=1066315472]
-transform = Transform3D(1, 0, 0, 0, 0.9993628, 0.03569154, 0, -0.03569154, 0.9993628, 0, 1, 2.8)
-current = true
-fov = 45.0
+[node name="Markers" type="Node3D" parent="." unique_id=1939127363]
 
 [node name="Floor" type="MeshInstance3D" parent="." unique_id=893667457]
 mesh = SubResource("PlaneMesh_v8147")
 
-[node name="SubjectAnchor" type="Marker3D" parent="." unique_id=651376285]
+[node name="Environment" type="WorldEnvironment" parent="." unique_id=1574651519]
+environment = SubResource("Environment_1blvp")
+camera_attributes = SubResource("CameraAttributesPractical_ux8bu")
