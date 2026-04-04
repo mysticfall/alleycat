@@ -53,7 +53,7 @@ All Markdown headings must be written in Title Case, capitalising every word, ex
 ## Tools
 
 Always use **Context7** for API documentation, code generation, setup, or configuration tasks related to Godot and other
-libraries/frameworks.
+libraries/frameworks. For Godot API, use `/godotengine/godot-docs` as `libraryId`.
 
 When you encounter an image that you need to analyse but your model does not support multi-modal input (e.g. you cannot
 natively view images), delegate the task to a vision-capable MCP tool if available. Pass the image source and a clear
