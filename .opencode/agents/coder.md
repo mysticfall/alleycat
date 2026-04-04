@@ -19,7 +19,12 @@ Godot engine.
 
 For tasks with visual acceptance criteria, use `godot-visual-verification` skill and follow its workflow and gate.
 
-- Do not add or accept value-locking tests until gate outcome is `PASS`.
+- Create/maintain a photobooth test scene under `@game/tests/<feature>/` before final visual validation.
+- Verify camera rig and marker framing before scenario-level screenshot captures.
+- **Never use `--headless` when running scripts that capture screenshots.** Headless mode disables the renderer and
+  produces blank/failed captures.
+- After capturing screenshots, **visually inspect** representative images (directly or via a vision-capable tool) to
+  confirm expected behaviour. Do not treat file generation alone as evidence of visual correctness.
 - Include the skill's run record fields and gate outcome in your final report.
 
 ## Invoker Communication Protocol

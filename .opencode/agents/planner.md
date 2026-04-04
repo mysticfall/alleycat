@@ -80,14 +80,14 @@ Avoid oversized subtasks that combine unrelated concerns.
 
 After each subagent response, the planner must explicitly triage and decide next action:
 
-1. **Classify**: `accepted`, `needs-follow-up`, or `escalated`.
+1. **Classify**: `accepted`, `follow-up`, or `escalated`.
 2. **Extract** key fields from the response format:
     - `coder`: Implementation Summary, Validation, Risks/Follow-Ups, Escalations
     - `reviewer`: Blocking issues, Non-blocking improvements, Verified checks, Handoff Decision
     - `writer`: Doc Changes, Consistency Checks, Open Questions, Escalations
 3. **Act** based on class:
     - `accepted` → update TODOs and proceed.
-    - `needs-follow-up` → create focused follow-up subtask with narrowed acceptance criteria.
+    - `follow-up` → create focused follow-up subtask with narrowed acceptance criteria.
     - `escalated` → stop autonomous delegation on that branch and surface a decision request to the user.
 
 For visual-spec tasks, apply §4.6 before final classification.
@@ -101,9 +101,17 @@ Use skill `godot-visual-verification`.
 For visual-spec tasks:
 
 - apply the skill gate before accepting completion,
-- map skill outcomes to planner classes (`PASS`→`accepted`, `FOLLOW-UP REQUIRED`→`needs-follow-up`,
+- map skill outcomes to planner classes (`READY`→`accepted`, `FOLLOW-UP REQUIRED`→`follow-up`,
   `ESCALATE`→`escalated`),
 - record gate outcome explicitly in progress updates.
+
+**Do not mark visual-verification TODOs as complete when:**
+
+- The coder reports that screenshot capture failed (for example due to `--headless` mode or renderer errors).
+  Classify as `follow-up` and redelegate with the correct run command.
+- Screenshots were generated but not visually inspected. File existence is not evidence of visual correctness.
+  Before accepting, confirm that the coder or you have inspected representative images (via vision-capable tool if
+  needed) and verified expected behaviour per scenario.
 
 ### 5) Pre-Handover Code Review Gate
 

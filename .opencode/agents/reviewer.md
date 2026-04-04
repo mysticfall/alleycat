@@ -33,11 +33,14 @@ handoff readiness for gameplay, systems, and tooling changes.
 
 For visual-spec tasks, use `godot-visual-verification` skill and validate compliance with its gate.
 
-When visual probe screenshots exist as verification artefacts:
+When visual verification screenshots exist as verification artefacts:
 
-- [ ] Functional screenshot review was completed (directly or via vision-capable tool).
-- [ ] Probe outputs are diagnosable and screenshot/metric evidence is consistent.
-- [ ] Value-locking assertions are traceable to calibrated evidence.
+- [ ] Runner was executed **without `--headless`** (headless mode produces blank/failed captures).
+- [ ] Functional screenshot review was completed (directly or via vision-capable tool) — file existence alone is
+  not sufficient.
+- [ ] Screenshots for distinct scenarios (for example different poses) produce visually distinct results.
+- [ ] Camera/marker framing was verified before feature-level captures.
+- [ ] C# integration tests validate the same behaviour with non-visual assertions.
 - [ ] Handoff includes run record fields and explicit gate outcome.
 
 ### Godot Essentials

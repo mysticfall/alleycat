@@ -7,35 +7,58 @@ title: Visual Verification Scope
 
 ## Requirement
 
-Provide AI agents with a practical way to visually verify that implemented features conform to specification requirements when behaviour cannot be reliably validated with standard integration assertions alone.
+Provide AI agents with a practical, repeatable workflow for validating visual behaviour when logic assertions alone are
+insufficient.
 
 ## Goal
 
-Create an objective visual verification capability that lets agents gather repeatable evidence for spec conformance during development and testing.
+Standardise a photobooth-first verification process that produces reliable screenshot evidence and pairs it with
+non-visual C# integration checks.
 
 ## In Scope
 
-- Objective, spec-linked visual checks such as:
-  - expected object presence and visibility
-  - expected placement, orientation, and relative scale
-  - expected readable UI/world-space text at defined viewpoints or distances
-  - expected visual state transitions tied to interactions
-- Captured visual evidence that can be reviewed by agents and humans.
+- Feature-level visual checks tied to explicit spec expectations.
+- Photobooth-based verification scenes under `@game/tests/<feature>/...`.
+- Reuse of existing photobooth base scenes where applicable.
+- Marker-based visual references that are visible in screenshots.
+- Screenshot capture scripts that execute scenario states and produce reproducible outputs.
+- Follow-up C# integration tests that validate the same behaviour non-visually.
 
-## Out of Scope
+## Out Of Scope
 
-- Subjective or aesthetic judgement, including atmosphere, mood, and artistic quality.
-- Visual style reviews that cannot be reduced to objective, testable expectations.
-- Replacing logic/unit/integration assertions that already validate behaviour reliably.
+- Subjective art-direction judgement (mood, atmosphere, style preference).
+- Replacing existing logic/unit/integration tests that already validate behaviour sufficiently.
+- One-off screenshot workflows that skip reusable test-scene setup.
 
-- Objective, spec-linked visual checks such as:
- - expected object presence and visibility
- - expected placement, orientation, and relative scale
- - expected readable UI/world-space text at defined viewpoints or distances
- - Captured visual evidence that can be revieweded by agents and humans.2. Visual checks focus on objective pass/fail criteria rather than subjective aesthetic assessment.
-3. The workflow clearly positions visual verification as a complement to existing tests, not a replacement.
+## Workflow Contract
+
+1. **Create A Test Scene (Photobooth)**
+   - Inherit a suitable base under `@game/assets/...` when available.
+   - Default base: `@game/assets/testing/photobooth/photobooth.tscn`.
+   - Save feature verification scene under `@game/tests/<feature>/...`.
+2. **Verify Cameras And Markers First**
+   - Add markers via Photobooth API.
+   - Capture per-camera framing screenshots before feature-level verification.
+   - Confirm required subject regions and markers are visible for the intended checks.
+3. **Run Feature Scenarios**
+   - Use a runner script with the same base name as the test scene (`.tscn` + `.gd`).
+   - Apply scenario states and capture screenshots with `Photobooth.capture_screenshots(...)`.
+4. **Add C# Integration Coverage**
+   - Load the same test scene in C# integration tests.
+   - Assert non-visual equivalents (for example marker distances, transform bounds, node states).
+
+## Acceptance Criteria
+
+1. Visual-verification tasks use the workflow contract above unless a spec explicitly overrides it.
+2. Verification scenes are reusable, stored under `@game/tests/<feature>/...`, and based on an appropriate photobooth
+   inheritance chain.
+3. Camera/marker framing validation is completed before feature-level screenshot review.
+4. Screenshot evidence and C# non-visual assertions validate the same functionality.
+5. Handoffs include test-scene path, runner script path, screenshot output location, and C# integration test location.
 
 ## References
 
 - @specs/index.md
-- @specs/testing/001-test-framework/index.md
+- @game/assets/testing/photobooth/photobooth.tscn
+- @game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn
+- @docs/gdscript-api.md

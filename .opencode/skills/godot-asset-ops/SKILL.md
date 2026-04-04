@@ -30,24 +30,28 @@ Always create a dedicated script before making scene/resource changes.
 - Keep each script focused on one operation bundle.
 - Do not patch serialised scene/resource text directly.
 
-## ProbeUtils (Shared Helper)
+## SceneUtils (Shared Helper)
 
-Use `@game/scripts/probe_utils.gd` (`ProbeUtils`) when it helps reduce boilerplate.
+Use `@game/scripts/scene_utils.gd` (`SceneUtils`) when it helps reduce boilerplate.
 
 Current helpers:
 
-- **Scene helpers** — `load_scene`, `instantiate_scene`, `require_node`
-- **Photobooth setup** — `setup_photobooth` (returns a `Photobooth` helper; call `load(subject_path)` to attach a
-  subject)
-- **Photobooth camera/capture** — `use_portrait`, `use_landscape`, `position_camera`, `set_perspective`,
-  `set_orthographic`, `capture`
-- **Camera helpers** — `position_camera`, `set_camera_perspective`, `set_camera_orthographic` (for non-photobooth use)
+- **Scene helpers** — `load_scene`, `instantiate_scene`, `save_scene`, `require_node`
 - **Wait helpers** — `wait_frames`, `wait_seconds`
-- **Capture** — `capture_screenshot` (JPG from root viewport, mostly for 2D/UI probes)
+- **Capture helpers** — `capture_screenshot`, `capture_viewport_screenshot`
+- **Utility helpers** — `to_safe_file_component`, `fatal_error_and_quit`
 
-ProbeUtils is fail-fast for probe flows: on fatal errors it logs and quits with non-zero exit.
+For photobooth scene operations, use the `Photobooth` API on instantiated scenes:
 
-Use ProbeUtils where useful, not only for visual probes. The same helpers are valid for general asset scripting
+- `add_camera_rig`, `get_camera_rig`, `remove_camera`
+- `add_marker`, `get_marker`, `remove_marker`
+- `capture_screenshots`
+
+For per-camera captures, use `CameraRig.capture_screenshot`.
+
+SceneUtils is fail-fast for setup and capture flows: on fatal errors it logs and quits with non-zero exit.
+
+Use SceneUtils where useful, not only for visual probes. The same helpers are valid for general asset scripting
 workflows (for example, scene instantiation, required node lookup, and controlled wait steps).
 
 ## Example Scenarios

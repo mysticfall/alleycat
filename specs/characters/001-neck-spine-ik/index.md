@@ -38,24 +38,29 @@ instantiated across character setups.
    the saved `CCDIK3D` settings) to keep rotations within plausible ranges.
 3. The IK configuration is saved as a reusable scene at `@game/assets/characters/ik/neck_spine_ccdik.tscn`, with the
    target node left unbound in the reusable scene so consuming scenes provide/bind the head target externally.
-4. A verification scene based on `@game/assets/characters/reference/reference_female.tscn` exists at:
+4. A photobooth verification scene that inherits
+   `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn` exists at:
     - scene: `@game/tests/characters/ik/neck_spine_ccdik_test.tscn`
-    - probe script: `@game/tests/characters/ik/neck_spine_ccdik_test.gd`
-5. Visual checks cover both moderate and extreme target poses at minimum:
+    - runner script (same base name): `@game/tests/characters/ik/neck_spine_ccdik_test.gd`
+5. The verification scene defines target markers for visual and non-visual checks using `DebugMarker` for each required
+   pose.
+6. Visual checks cover both moderate and extreme target poses at minimum:
     - forward, left, right, up, down,
     - stoop-forward (head target down + forward),
     - lean-back (head target up + back).
-6. Visual checks confirm the resulting pose remains natural without obvious over-rotation, inversion, or discontinuous
+7. Before feature-level pose capture, the runner performs a camera/marker framing pass (per-camera captures) to confirm
+   required markers and subject regions are visible from the inherited camera rigs.
+8. The runner executes pose scenarios and captures screenshots for all required poses using
+   `Photobooth.capture_screenshots(...)`.
+9. Visual checks confirm the resulting pose remains natural without obvious over-rotation, inversion, or discontinuous
    neck-spine deformation across all required target poses.
-7. Verification screenshots are framed to focus on the subject’s upper body (head, neck, upper torso) for every required
-   target pose, while keeping useful subject coverage (not dominated by empty background/floor).
-8. For extreme target pose captures (stoop-forward and lean-back), screenshots show the character’s full body, or at
-   minimum include the hips, so reviewers can verify neck-spine behaviour beyond head-to-upper-torso framing.
-9. Extreme target pose captures are invalid if hips/full-body visibility is missing or framing leaves excessive blank space
-   that prevents reliable full-body context review.
+10. A C# integration test loads the same verification scene and validates the neck-spine IK behaviour using non-visual
+    assertions (for example target proximity/transform checks against the defined markers).
 
 ## References
 
 - @game/assets/characters/ik/neck_spine_ccdik.tscn
+- @game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn
 - @game/tests/characters/ik/neck_spine_ccdik_test.tscn
 - @game/tests/characters/ik/neck_spine_ccdik_test.gd
+- @specs/testing/002-visual-verification-scope/index.md
