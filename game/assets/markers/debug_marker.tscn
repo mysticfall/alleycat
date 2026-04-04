@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://h1r8aegpc4i6"]
 
 [ext_resource type="FontFile" uid="uid://cj8hx85ef6v0t" path="res://assets/fonts/Inter/Inter_18pt-Medium.ttf" id="1_5frfs"]
-[ext_resource type="Script" uid="uid://br85gegtbqbhw" path="res://src/UI/Marker/DebugMarker.cs" id="1_rw0us"]
+[ext_resource type="Script" uid="uid://c4bxtowcrevfl" path="res://scripts/photobooth/debug_marker.gd" id="1_rw0us"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kghxl"]
 no_depth_test = true
@@ -36,9 +36,9 @@ bottom_radius = 0.01
 height = 0.1
 radial_segments = 8
 
-[node name="DebugGizmo" type="Node3D" unique_id=1005987499]
+[node name="DebugGizmo" type="Node3D" unique_id=1247060835]
 script = ExtResource("1_rw0us")
-metadata/_custom_type_script = "uid://br85gegtbqbhw"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
 
 [node name="XAxis" type="MeshInstance3D" parent="." unique_id=500156153]
 transform = Transform3D(-5.9604645e-08, 1, 0, -1, -5.9604645e-08, 5.9604645e-08, -2.9802322e-08, 0, 1, 0.08, 0, 0)
