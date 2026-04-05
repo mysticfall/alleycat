@@ -23,7 +23,10 @@ public sealed class TestSelectionOptionsTests
 
         Assert.Contains(options, option => option.Name == GodotTestCommandLineOptions.TestClassOptionName);
         Assert.Contains(options, option => option.Name == GodotTestCommandLineOptions.TestMethodOptionName);
-        Assert.All(options, option => Assert.Equal(ArgumentArity.ExactlyOne, option.Arity));
+        Assert.Contains(options, option => option.Name == GodotTestCommandLineOptions.HeadlessOptionName);
+
+        CommandLineOption headlessOption = options.Single(o => o.Name == GodotTestCommandLineOptions.HeadlessOptionName);
+        Assert.Equal(ArgumentArity.Zero, headlessOption.Arity);
     }
 
     /// <summary>
@@ -192,6 +195,49 @@ public sealed class TestSelectionOptionsTests
         Assert.NotEqual(targetNoArgsUid, targetWithIntUid);
         Assert.NotEqual(targetNoArgsUid, genericTargetUid);
         Assert.NotEqual(targetNoArgsUid, sameNameOtherTypeUid);
+    }
+
+    /// <summary>
+    /// Ensures <see cref="GodotTestCommandLineOptions.IsHeadless"/> returns <c>true</c> when the flag is set.
+    /// </summary>
+    [Fact]
+    public void IsHeadless_ReturnsTrue_WhenFlagIsSet()
+    {
+        var commandLineOptions = new StubCommandLineOptions(
+            new Dictionary<string, string[]> { [GodotTestCommandLineOptions.HeadlessOptionName] = [] });
+
+        bool result = GodotTestCommandLineOptions.IsHeadless(commandLineOptions);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures <see cref="GodotTestCommandLineOptions.IsHeadless"/> returns <c>false</c> when the flag is not set.
+    /// </summary>
+    [Fact]
+    public void IsHeadless_ReturnsFalse_WhenFlagIsNotSet()
+    {
+        var commandLineOptions = new StubCommandLineOptions(new Dictionary<string, string[]>());
+
+        bool result = GodotTestCommandLineOptions.IsHeadless(commandLineOptions);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
+    /// Ensures validation rejects arguments supplied to the <c>--headless</c> flag.
+    /// </summary>
+    [Fact]
+    public async Task ValidateOptionArgumentsAsync_RejectsArgumentsForHeadless()
+    {
+        var provider = new GodotTestCommandLineOptionsProvider();
+        CommandLineOption headlessOption = provider.GetCommandLineOptions()
+            .Single(o => o.Name == GodotTestCommandLineOptions.HeadlessOptionName);
+
+        ValidationResult validation = await provider.ValidateOptionArgumentsAsync(headlessOption, ["unexpected"]);
+
+        Assert.False(validation.IsValid);
+        Assert.Contains("does not accept any arguments", validation.ErrorMessage, StringComparison.Ordinal);
     }
 
     private sealed class StubCommandLineOptions(IReadOnlyDictionary<string, string[]> options) : ICommandLineOptions

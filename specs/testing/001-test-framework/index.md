@@ -28,6 +28,7 @@ Provide a dependable integration test framework for behaviours that require Godo
   - forced process-tree cleanup on timeout/cancellation
 - Structured result parsing is implemented using `ALLEYCAT_INTEGRATION_TEST_RESULT:` JSON payloads, mapped to passed/failed/error outcomes.
 - Baseline sample integration test exists and validates end-to-end discovery + execution.
+- Headless mode is configurable per-test via the `[Headless]` attribute (default: non-headless / windowed; opt-in to headless mode).
 
 ## Per-Test Lifecycle Support
 
@@ -74,15 +75,60 @@ Per-test lifecycle support via constructor/`IDisposable`/`IAsyncDisposable`/`IAs
   - Narrows selection to tests declared on the exact type.
 - `--test-method <Fully.Qualified.TypeName.MethodName>`
   - Narrows selection to one exact test method.
+- `--headless`
+  - Forces all tests to run in headless mode.
+  - Overrides per-test and per-class `HeadlessAttribute` settings.
+  - Useful for CI environments or batch runs where no display is available.
 - Precedence rule:
-  - If both are supplied, `--test-method` takes precedence over `--test-class`.
+  - If both `--test-class` and `--test-method` are supplied, `--test-method` takes precedence over `--test-class`.
 - Current limitation:
   - Advanced trait/category filters are not yet supported.
+
+## Headless Mode Control
+
+Integration tests run in windowed (non-headless) mode by default. Test authors can opt individual tests or entire test classes into headless mode using the `[Headless]` attribute.
+
+- `[Headless]` or `[Headless(true)]` — headless mode (opting into headless from the default windowed mode)
+- `[Headless(false)]` — windowed mode (explicit, matches the default)
+
+**Resolution order (first match wins):**
+
+1. Method-level `[Headless]` attribute
+2. Class-level `[Headless]` attribute
+3. Default: non-headless (windowed)
+
+**CLI override:**
+
+- `--headless` — forces all tests to run in headless mode, overriding all attribute settings
+
+**Example:**
+
+```csharp
+// Single headless test (opting into headless from the default windowed mode)
+[Fact]
+[Headless]
+public void MyCiTest()
+{
+    // Runs headless
+}
+
+// Entire class headless
+[Headless]
+public class CiTests
+{
+    [Fact]
+    public void TestA() { } // Headless (inherited from class)
+
+    [Fact]
+    [Headless(false)]
+    public void TestB() { } // Windowed (method overrides class)
+}
+```
 
 ## In Scope
 
 - Discovery and execution of Godot-dependent integration tests.
-- Headless local execution.
+- Headless and windowed local execution.
 - Selective execution using filters/UID selection.
 - Clear separation of framework/runtime errors versus assertion failures.
 - Minimal, practical guidance for authoring and running tests.
@@ -115,7 +161,7 @@ Per-test lifecycle support via constructor/`IDisposable`/`IAsyncDisposable`/`IAs
 ## Acceptance Criteria
 
 1. A new contributor can add and run a Godot-backed integration test locally using documented steps.
-2. The integration suite runs headlessly with deterministic pass/fail/error mapping.
+2. The integration suite supports both headless and windowed execution with deterministic pass/fail/error mapping.
 3. Selective execution runs only the requested subset in normal feature workflows.
 4. Framework/runtime failures are clearly distinguishable from assertion failures.
 5. Isolation fixtures and guidance prevent cross-test contamination across repeated runs.

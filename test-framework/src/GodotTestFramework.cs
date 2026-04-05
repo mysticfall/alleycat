@@ -36,6 +36,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private readonly int _preflightTimeoutMs;
     private readonly int _runFactTimeoutMs;
     private readonly int _cleanupTimeoutMs;
+    private readonly bool _headlessOverride;
     private readonly Dictionary<TestNodeUid, MethodInfo> _testsByUid;
 
     internal GodotTestFramework(Assembly testAssembly, GodotCliTestSelector cliSelector)
@@ -47,9 +48,19 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         Assembly testAssembly,
         GodotCliTestSelector cliSelector,
         IGodotProcessFactory? processFactory)
+        : this(testAssembly, cliSelector, processFactory, headlessOverride: false)
+    {
+    }
+
+    internal GodotTestFramework(
+        Assembly testAssembly,
+        GodotCliTestSelector cliSelector,
+        IGodotProcessFactory? processFactory,
+        bool headlessOverride)
     {
         _testAssembly = testAssembly;
         _cliSelector = cliSelector;
+        _headlessOverride = headlessOverride;
         _godotBinaryPath = ResolveGodotBinaryPath();
         _workspaceRootPath = ResolveWorkspaceRootPath(testAssembly);
         _preflightTimeoutMs = ResolveTimeout(
@@ -427,22 +438,49 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         ProbeTypeName,
     ];
 
-    private IReadOnlyList<string> CreateRunFactArguments(MethodInfo method) =>
-    [
-        "--headless",
-        "--xr-mode",
-        "off",
-        "--path",
-        "game",
-        "--",
-        RunFactCommandArg,
-        ProbeAssemblyArg,
-        _testAssembly.Location,
-        ProbeTypeArg,
-        method.DeclaringType?.FullName ?? string.Empty,
-        ProbeMethodArg,
-        method.Name,
-    ];
+    private IReadOnlyList<string> CreateRunFactArguments(MethodInfo method)
+    {
+        bool useHeadless = _headlessOverride || ResolveHeadlessMode(method);
+
+        var args = new List<string>();
+
+        if (useHeadless)
+        {
+            args.Add("--headless");
+        }
+
+        args.Add("--xr-mode");
+        args.Add("off");
+        args.Add("--path");
+        args.Add("game");
+        args.Add("--");
+        args.Add(RunFactCommandArg);
+        args.Add(ProbeAssemblyArg);
+        args.Add(_testAssembly.Location);
+        args.Add(ProbeTypeArg);
+        args.Add(method.DeclaringType?.FullName ?? string.Empty);
+        args.Add(ProbeMethodArg);
+        args.Add(method.Name);
+
+        return args;
+    }
+
+    /// <summary>
+    /// Resolves the headless mode for a test method by checking method-level
+    /// then class-level <see cref="HeadlessAttribute"/>. Defaults to <c>false</c> (non-headless).
+    /// </summary>
+    private static bool ResolveHeadlessMode(MethodInfo method)
+    {
+        HeadlessAttribute? methodAttribute = method.GetCustomAttribute<HeadlessAttribute>();
+        if (methodAttribute is not null)
+        {
+            return methodAttribute.Enabled;
+        }
+
+        HeadlessAttribute? classAttribute = method.DeclaringType?.GetCustomAttribute<HeadlessAttribute>();
+
+        return classAttribute?.Enabled ?? false;
+    }
 
     private async Task CleanupTimedOutProcessAsync(IGodotProcess process)
     {

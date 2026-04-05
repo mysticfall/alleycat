@@ -304,6 +304,154 @@ public sealed class GodotTestFrameworkTests
         Assert.Contains("ERROR: simulated runtime fault", (IReadOnlyList<string>)ReadStructuredResultProperty(runResult, "StdErr")!);
     }
 
+    /// <summary>
+    /// Ensures headless mode defaults to <c>false</c> when no attribute is present.
+    /// </summary>
+    [Fact]
+    public void ResolveHeadlessMode_ReturnsFalse_WhenNoAttributeIsPresent()
+    {
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.TestMethod))!;
+
+        bool result = InvokePrivateStatic<bool>("ResolveHeadlessMode", method);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
+    /// Ensures <c>[Headless(false)]</c> on a method disables headless mode.
+    /// </summary>
+    [Fact]
+    public void ResolveHeadlessMode_ReturnsFalse_WhenMethodHasHeadlessFalse()
+    {
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.NonHeadlessMethod))!;
+
+        bool result = InvokePrivateStatic<bool>("ResolveHeadlessMode", method);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
+    /// Ensures <c>[Headless(true)]</c> on a method explicitly enables headless mode.
+    /// </summary>
+    [Fact]
+    public void ResolveHeadlessMode_ReturnsTrue_WhenMethodHasHeadlessTrue()
+    {
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.ExplicitHeadlessMethod))!;
+
+        bool result = InvokePrivateStatic<bool>("ResolveHeadlessMode", method);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures class-level <c>[Headless]</c> is used when the method has no attribute.
+    /// </summary>
+    [Fact]
+    public void ResolveHeadlessMode_FallsBackToClassAttribute_WhenMethodHasNoAttribute()
+    {
+        MethodInfo method = typeof(HeadlessFixtureClassDisabled)
+            .GetMethod(nameof(HeadlessFixtureClassDisabled.TestMethod))!;
+
+        bool result = InvokePrivateStatic<bool>("ResolveHeadlessMode", method);
+
+        Assert.False(result);
+    }
+
+    /// <summary>
+    /// Ensures method-level attribute takes precedence over class-level attribute.
+    /// </summary>
+    [Fact]
+    public void ResolveHeadlessMode_MethodAttributeTakesPrecedenceOverClassAttribute()
+    {
+        MethodInfo method = typeof(HeadlessFixtureClassDisabled)
+            .GetMethod(nameof(HeadlessFixtureClassDisabled.HeadlessMethod))!;
+
+        bool result = InvokePrivateStatic<bool>("ResolveHeadlessMode", method);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures <c>--headless</c> is excluded when no attribute is present and no CLI override is set.
+    /// </summary>
+    [Fact]
+    public void CreateRunFactArguments_ExcludesHeadless_WhenNoAttributeAndNoOverride()
+    {
+        object framework = CreateFrameworkInstance(headlessOverride: false);
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.TestMethod))!;
+
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+
+        Assert.DoesNotContain("--headless", args);
+    }
+
+    /// <summary>
+    /// Ensures <c>--headless</c> is included when the <c>--headless</c> CLI override is set.
+    /// </summary>
+    [Fact]
+    public void CreateRunFactArguments_IncludesHeadless_WhenHeadlessOverrideIsSet()
+    {
+        object framework = CreateFrameworkInstance(headlessOverride: true);
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.TestMethod))!;
+
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+
+        Assert.Contains("--headless", args);
+    }
+
+    /// <summary>
+    /// Ensures <c>--headless</c> is excluded when the method explicitly sets <c>[Headless(false)]</c>.
+    /// </summary>
+    [Fact]
+    public void CreateRunFactArguments_ExcludesHeadless_WhenMethodHasHeadlessFalse()
+    {
+        object framework = CreateFrameworkInstance(headlessOverride: false);
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.NonHeadlessMethod))!;
+
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+
+        Assert.DoesNotContain("--headless", args);
+    }
+
+    /// <summary>
+    /// Ensures the CLI <c>--headless</c> override takes precedence over a method-level
+    /// <c>[Headless(false)]</c> attribute.
+    /// </summary>
+    [Fact]
+    public void CreateRunFactArguments_OverridesMethodAttribute_WhenHeadlessOverrideIsSet()
+    {
+        object framework = CreateFrameworkInstance(headlessOverride: true);
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.NonHeadlessMethod))!;
+
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+
+        Assert.Contains("--headless", args);
+    }
+
+    /// <summary>
+    /// Ensures <c>--xr-mode off</c> is always included regardless of headless settings.
+    /// </summary>
+    [Fact]
+    public void CreateRunFactArguments_IncludesXrModeOff_RegardlessOfHeadlessMode()
+    {
+        object framework = CreateFrameworkInstance(headlessOverride: true);
+        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
+            .GetMethod(nameof(HeadlessFixtureNoAttribute.TestMethod))!;
+
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+
+        int xrModeIndex = args.ToList().IndexOf("--xr-mode");
+        Assert.True(xrModeIndex >= 0, "Expected --xr-mode in arguments.");
+        Assert.Equal("off", args[xrModeIndex + 1]);
+    }
+
     private static object CreateFrameworkInstance(object? processFactory = null)
     {
         Type selectorType = _godotTestFrameworkType.Assembly
@@ -316,6 +464,20 @@ public sealed class GodotTestFrameworkTests
             .Single(candidate => candidate.GetParameters().Length == 3);
 
         return constructor.Invoke([Assembly.GetExecutingAssembly(), selector, processFactory]);
+    }
+
+    private static object CreateFrameworkInstance(bool headlessOverride, object? processFactory = null)
+    {
+        Type selectorType = _godotTestFrameworkType.Assembly
+            .GetType("AlleyCat.TestFramework.GodotCliTestSelector", throwOnError: true)!;
+        object selector = selectorType.GetProperty("None", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+            ?? throw new MissingMemberException(selectorType.FullName, "None");
+
+        ConstructorInfo constructor = _godotTestFrameworkType
+            .GetConstructors(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance)
+            .Single(candidate => candidate.GetParameters().Length == 4);
+
+        return constructor.Invoke([Assembly.GetExecutingAssembly(), selector, processFactory, headlessOverride]);
     }
 
     private sealed class FakeGodotProcessFactory(FakeGodotProcess process) : GodotTestFramework.IGodotProcessFactory
@@ -463,6 +625,15 @@ public sealed class GodotTestFrameworkTests
         return (T)result!;
     }
 
+    private static T InvokePrivateInstance<T>(object instance, string methodName, params object?[] args)
+    {
+        MethodInfo method = instance.GetType()
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Single(candidate => candidate.Name == methodName && candidate.GetParameters().Length == args.Length);
+
+        return (T)method.Invoke(instance, args)!;
+    }
+
     private static object CreateStructuredResult(string outcome, string? message, string? stack)
     {
         Type structuredResultType = _godotTestFrameworkType.GetNestedType("StructuredRunFactResult", BindingFlags.NonPublic)
@@ -509,6 +680,36 @@ public sealed class GodotTestFrameworkTests
         }
 
         public void Dispose() => Environment.SetEnvironmentVariable(_variableName, _previousValue);
+    }
+
+    private sealed class HeadlessFixtureNoAttribute
+    {
+        public static void TestMethod()
+        {
+        }
+
+        [Headless(false)]
+        public static void NonHeadlessMethod()
+        {
+        }
+
+        [Headless(true)]
+        public static void ExplicitHeadlessMethod()
+        {
+        }
+    }
+
+    [Headless(false)]
+    private sealed class HeadlessFixtureClassDisabled
+    {
+        public static void TestMethod()
+        {
+        }
+
+        [Headless(true)]
+        public static void HeadlessMethod()
+        {
+        }
     }
 
 }

@@ -27,13 +27,28 @@ public static class TestingPlatformBuilderHook
 
         _ = builder.RegisterTestFramework(
             _ => new TestFrameworkCapabilities([]),
-            (_, serviceProvider) => new GodotTestFramework(
-                testAssembly,
-                GetCliSelector(serviceProvider)));
+            (_, serviceProvider) =>
+            {
+                (GodotCliTestSelector selector, bool headlessOverride) = GetCliSelector(serviceProvider);
+                return new GodotTestFramework(
+                    testAssembly,
+                    selector,
+                    processFactory: null,
+                    headlessOverride);
+            });
     }
 
-    private static GodotCliTestSelector GetCliSelector(IServiceProvider serviceProvider)
-        => serviceProvider.GetService(typeof(ICommandLineOptions)) is ICommandLineOptions commandLineOptions
-            ? GodotTestCommandLineOptions.Parse(commandLineOptions)
-            : GodotCliTestSelector.None;
+    private static (GodotCliTestSelector Selector, bool HeadlessOverride) GetCliSelector(
+        IServiceProvider serviceProvider)
+    {
+        if (serviceProvider.GetService(typeof(ICommandLineOptions)) is not ICommandLineOptions commandLineOptions)
+        {
+            return (GodotCliTestSelector.None, false);
+        }
+
+        GodotCliTestSelector selector = GodotTestCommandLineOptions.Parse(commandLineOptions);
+        bool headlessOverride = GodotTestCommandLineOptions.IsHeadless(commandLineOptions);
+
+        return (selector, headlessOverride);
+    }
 }

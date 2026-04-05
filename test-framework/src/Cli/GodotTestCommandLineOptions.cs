@@ -9,6 +9,7 @@ internal static class GodotTestCommandLineOptions
 {
     public const string TestClassOptionName = "test-class";
     public const string TestMethodOptionName = "test-method";
+    public const string HeadlessOptionName = "headless";
 
     private static readonly IReadOnlyCollection<CommandLineOption> _options =
     [
@@ -21,6 +22,11 @@ internal static class GodotTestCommandLineOptions
             TestMethodOptionName,
             "Run only the exact fully qualified test method (Type.FullName.MethodName).",
             ArgumentArity.ExactlyOne,
+            isHidden: false),
+        new CommandLineOption(
+            HeadlessOptionName,
+            "Run all integration tests in headless mode. Overrides per-test HeadlessAttribute settings.",
+            ArgumentArity.Zero,
             isHidden: false),
     ];
 
@@ -97,6 +103,12 @@ internal static class GodotTestCommandLineOptions
         return true;
     }
 
+    /// <summary>
+    /// Checks whether the <c>--headless</c> CLI flag is set.
+    /// </summary>
+    public static bool IsHeadless(ICommandLineOptions commandLineOptions)
+        => commandLineOptions.IsOptionSet(HeadlessOptionName);
+
     private static string ToCommandLineName(string optionName) => $"--{optionName}";
 }
 
@@ -114,8 +126,14 @@ internal sealed class GodotTestCommandLineOptionsProvider : ICommandLineOptionsP
 
     public Task<bool> IsEnabledAsync() => Task.FromResult(true);
 
-    public Task<ValidationResult> ValidateOptionArgumentsAsync(CommandLineOption commandOption, string[] arguments) =>
-        ValidationResult.ValidTask;
+    public Task<ValidationResult> ValidateOptionArgumentsAsync(CommandLineOption commandOption, string[] arguments)
+    {
+        return string.Equals(commandOption.Name, GodotTestCommandLineOptions.HeadlessOptionName, StringComparison.Ordinal)
+            && arguments.Length > 0
+            ? Task.FromResult(ValidationResult.Invalid(
+                $"Option '--{GodotTestCommandLineOptions.HeadlessOptionName}' does not accept any arguments."))
+            : ValidationResult.ValidTask;
+    }
 
     public Task<ValidationResult> ValidateCommandLineOptionsAsync(ICommandLineOptions commandLineOptions) =>
         Task.FromResult(GodotTestCommandLineOptions.Validate(commandLineOptions));
