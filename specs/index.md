@@ -2,6 +2,7 @@
 
 ## Characters
 
+- [CHAR-000: Character Skeleton Profile](characters/000-character-skeleton/index.md)
 - [CHAR-001: Reusable Neck-Spine CCDIK Setup](characters/001-neck-spine-ik/index.md)
 
 ## UI

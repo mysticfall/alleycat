@@ -64,3 +64,4 @@ instantiated across character setups.
 - @game/tests/characters/ik/neck_spine_ccdik_test.tscn
 - @game/tests/characters/ik/neck_spine_ccdik_test.gd
 - @specs/testing/002-visual-verification-scope/index.md
+- @specs/characters/000-character-skeleton/index.md
