@@ -1,0 +1,40 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/Characters/ArmIkController.cs" id="1_ctrl"]
+
+[node name="ArmIK" type="Node3D"]
+
+[node name="LeftPoleTarget" type="Marker3D" parent="."]
+
+[node name="RightPoleTarget" type="Marker3D" parent="."]
+
+[node name="LeftTwoBoneIK" type="TwoBoneIK3D" parent="."]
+setting_count = 1
+settings/0/root_bone_name = "LeftUpperArm"
+settings/0/root_bone = -1
+settings/0/middle_bone_name = "LeftLowerArm"
+settings/0/middle_bone = -1
+settings/0/end_bone_name = "LeftHand"
+settings/0/end_bone = -1
+settings/0/target_node = NodePath("")
+settings/0/pole_node = NodePath("")
+
+[node name="RightTwoBoneIK" type="TwoBoneIK3D" parent="."]
+setting_count = 1
+settings/0/root_bone_name = "RightUpperArm"
+settings/0/root_bone = -1
+settings/0/middle_bone_name = "RightLowerArm"
+settings/0/middle_bone = -1
+settings/0/end_bone_name = "RightHand"
+settings/0/end_bone = -1
+settings/0/target_node = NodePath("")
+settings/0/pole_node = NodePath("")
+
+[node name="LeftArmController" type="SkeletonModifier3D" parent="."]
+script = ExtResource("1_ctrl")
+PoleTarget = NodePath("../LeftPoleTarget")
+
+[node name="RightArmController" type="SkeletonModifier3D" parent="."]
+script = ExtResource("1_ctrl")
+Side = 1
+PoleTarget = NodePath("../RightPoleTarget")

@@ -85,10 +85,10 @@ rotation matches the baseline rotation listed below, the baseline pole direction
 the body midline), except where noted:
 
 | Pose                           | Hand Position              | Baseline Hand Rotation   | Baseline Pole Direction          |
-| ------------------------------ | -------------------------- | ------------------------ | -------------------------------- |
+| ------------------------------ | -------------------------- |--------------------------| -------------------------------- |
 | Arms lowered                   | Hands at sides             | Palms facing each other  | Laterally outward                |
 | Arms raised forward            | Hands in front of body     | Palms facing each other  | Laterally outward                |
-| Arms raised straight overhead  | Hands above head           | Palms facing each other  | Laterally outward                |
+| Arms raised straight overhead  | Hands above head           | Palms facing forward     | Laterally outward                |
 | Arms raised to each side       | Hands extended to sides    | Palms facing downward    | **Posterior** (toward the back)  |
 | Hands behind the head          | Hands behind head          | Palms facing forward     | Laterally outward                |
 | Hands covering the chest       | Hands in front of chest    | Palms facing backward    | Laterally outward (optional)     |
@@ -147,6 +147,73 @@ development, but must be deterministic and produce consistent results for the sa
 10. A C# integration test loads the same verification scene and validates arm IK behaviour using non-visual assertions
     (for example target proximity, pole-target position bounds, shoulder rotation limits).
 
+## Implementation Notes
+
+These notes capture technical decisions and constraints discovered during implementation.
+
+### TwoBoneIK3D Configuration
+
+Godot's `TwoBoneIK3D` requires **all three bone names** to be set explicitly:
+
+- `root_bone_name` — the upper arm bone (for example `LeftUpperArm`).
+- `middle_bone_name` — the lower arm / elbow bone (for example `LeftLowerArm`).
+- `end_bone_name` — the hand bone (for example `LeftHand`).
+
+Missing any bone name (particularly `middle_bone_name`) causes the solver to silently produce no effect. There is no
+error message.
+
+`TwoBoneIK3D` and any custom `SkeletonModifier3D` nodes must be **direct children** of the `Skeleton3D` node. The
+`ArmIkController` (which drives the pole-target positions) must appear **before** the `TwoBoneIK3D` nodes in child
+order so that pole targets are positioned before the solver runs.
+
+### ArmIkController
+
+The `ArmIkController` class extends `SkeletonModifier3D` (not `Node3D`) and is decorated with `[GlobalClass]`. It
+overrides `_ProcessModificationWithDelta` to compute pole-target positions within the skeleton modifier pipeline.
+
+### Body Reference Frame
+
+The body-local coordinate frame is derived per-frame from skeleton landmarks:
+
+- **Up** — direction from `Hips` to `Neck`.
+- **Right** — direction from `LeftShoulder` to `RightShoulder`, orthonormalised against up.
+- **Forward** — cross product of right and up.
+
+This frame adapts automatically to any body orientation.
+
+### Baseline Hand Rotation Encoding
+
+The verification scene's pose markers (`Marker3D` nodes) encode both the target hand position and the baseline hand
+rotation for each pose. Each marker is rotated so that when a hand bone's **global rotation** matches the marker's
+global rotation, the hand is in its "natural" position for that pose. This means the baseline rotation varies from
+pose to pose — it is position-dependent.
+
+For testing purposes, the hand IK target's `global_transform` is set to match the corresponding pose marker's
+`global_transform`, which places the hand at both the correct position and the baseline rotation. A
+`CopyTransformModifier3D` node at the end of the IK modifier stack copies rotation from the hand target to the hand
+bone, ensuring the visual hand orientation matches the marker.
+
+### Phased Delivery
+
+The implementation is delivered in phases. The initial phase focuses on the baseline pole-target prediction from hand
+position only. The hand-rotation adjustment layer — which offsets the pole direction based on how the hand is rotated
+away from its baseline — is deferred to a subsequent phase. The shoulder adjustment component is also deferred to a
+subsequent phase.
+
+This allows validating that the core positional pole-target prediction works correctly before adding rotation-based
+refinements.
+
+### Test-First Verification Workflow
+
+C# integration tests are the primary verification mechanism for arm IK correctness. These tests assert pole-target
+direction, elbow bend direction, and hand proximity to targets for each key pose.
+
+The GDScript photobooth runner still produces multi-camera screenshots for all poses, but screenshots serve as a
+**diagnostic aid** — they are reviewed when tests fail but are not the primary acceptance gate.
+
+Integration tests capture screenshots from relevant cameras when assertions fail, using `Object.Call()` to invoke
+GDScript `Photobooth`/`CameraRig` methods from C#.
+
 ## Open Questions
 
 1. **Pole-target interpolation strategy** — How should baseline directions interpolate between key poses? Options
@@ -157,12 +224,9 @@ development, but must be deterministic and produce consistent results for the sa
    positional baseline? Should this be a fixed ratio, pose-dependent, or configurable?
 3. **Shoulder correction mapping** — Should shoulder adjustments use a simple proportional mapping, a set of
    artist-tunable curves, or a procedural bone-space approach? The choice affects configurability and tuning cost.
-4. **Reference character skeleton topology** — Resolved. The reference character uses `SkeletonProfileHumanoid`; see
-   [CHAR-000: Character Skeleton Profile](@specs/characters/000-character-skeleton/index.md) for the full profile
-   details and bone naming convention.
-5. **Optional chest pose** — Should the "hands covering the chest" pose be included in the initial delivery or deferred
+4. **Optional chest pose** — Should the "hands covering the chest" pose be included in the initial delivery or deferred
    to a follow-up iteration?
-6. **Two-arm coordination** — Should the two arms share any state (for example a symmetric-pose bias) or remain fully
+5. **Two-arm coordination** — Should the two arms share any state (for example a symmetric-pose bias) or remain fully
    independent?
 
 ## References

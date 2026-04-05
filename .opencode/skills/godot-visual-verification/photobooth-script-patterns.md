@@ -65,6 +65,8 @@ func _init() -> void:
 extends SceneTree
 
 const TEST_SCENE := "res://tests/characters/example/example_pose_test.tscn"
+# NOTE: The test scene should contain all IK/modifier setup.
+# This runner only handles scenario iteration and screenshot capture.
 
 
 func _init() -> void:

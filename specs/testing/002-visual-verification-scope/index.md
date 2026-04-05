@@ -12,8 +12,8 @@ insufficient.
 
 ## Goal
 
-Standardise a photobooth-first verification process that produces reliable screenshot evidence and pairs it with
-non-visual C# integration checks.
+Standardise a photobooth-based verification process where C# integration tests are the primary acceptance mechanism and
+screenshots serve as a diagnostic aid.
 
 ## In Scope
 
@@ -22,7 +22,8 @@ non-visual C# integration checks.
 - Reuse of existing photobooth base scenes where applicable.
 - Marker-based visual references that are visible in screenshots.
 - Screenshot capture scripts that execute scenario states and produce reproducible outputs.
-- Follow-up C# integration tests that validate the same behaviour non-visually.
+- Screenshot capture on test failure as a diagnostic aid for investigating assertion failures.
+- C# integration tests that validate the same behaviour non-visually as the primary verification mechanism.
 
 ## Out Of Scope
 
@@ -40,12 +41,17 @@ non-visual C# integration checks.
    - Add markers via Photobooth API.
    - Capture per-camera framing screenshots before feature-level verification.
    - Confirm required subject regions and markers are visible for the intended checks.
-3. **Run Feature Scenarios**
+3. **Add C# Integration Coverage**
+   - C# integration tests are the **primary** verification mechanism.
+   - Load the same test scene in C# integration tests.
+   - Assert non-visual equivalents (pole-target direction, bone positions, transform bounds).
+   - When assertions fail, capture screenshots from relevant cameras using `Object.Call()` to invoke GDScript
+     `Photobooth`/`CameraRig` methods.
+4. **Run Feature Scenarios For Diagnostic Screenshots**
    - Use a runner script with the same base name as the test scene (`.tscn` + `.gd`).
    - Apply scenario states and capture screenshots with `Photobooth.capture_screenshots(...)`.
-4. **Add C# Integration Coverage**
-   - Load the same test scene in C# integration tests.
-   - Assert non-visual equivalents (for example marker distances, transform bounds, node states).
+   - The GDScript runner produces multi-camera screenshots for all scenarios, but these serve as a **diagnostic aid**
+     reviewed when C# tests fail — they are not the primary acceptance gate.
 
 ## Acceptance Criteria
 
@@ -53,7 +59,8 @@ non-visual C# integration checks.
 2. Verification scenes are reusable, stored under `@game/tests/<feature>/...`, and based on an appropriate photobooth
    inheritance chain.
 3. Camera/marker framing validation is completed before feature-level screenshot review.
-4. Screenshot evidence and C# non-visual assertions validate the same functionality.
+4. C# non-visual assertions are the primary verification mechanism; screenshot evidence serves as a diagnostic aid when
+   assertions fail.
 5. Handoffs include test-scene path, runner script path, screenshot output location, and C# integration test location.
 
 ## References

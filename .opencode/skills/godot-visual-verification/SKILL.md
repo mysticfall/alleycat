@@ -1,6 +1,7 @@
 ---
 name: godot-visual-verification
-description: Use whenever implementation depends on visual correctness in Godot. Follow the photobooth-first workflow: create a test scene under @game/tests, verify camera and marker framing, run screenshot scenarios, then add C# integration tests.
+description:
+  Use whenever implementation depends on visual correctness in Godot. Follow the photobooth-first workflow: create a test scene under @game/tests, verify camera and marker framing, run screenshot scenarios, then add C# integration tests.
 ---
 
 # Godot Visual Verification

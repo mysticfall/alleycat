@@ -93,6 +93,26 @@ Use headless mode to run mutation scripts (for example `@game/temp/asset_ops_<ta
 godot-mono -d -s --headless --xr-mode off --path game "temp/asset_ops_<task>.gd"
 ```
 
+## Inherited Scene Limitations
+
+### Editing Children Of Inherited Sub-Scenes
+
+When a scene inherits from a base scene (via `instance=ExtResource(...)`), adding nodes under an inherited sub-scene's
+**internal** nodes (for example adding a child to a skeleton inside an imported `.blend` character) requires
+Godot-specific serialisation features:
+
+- `[editable path="Subject/Character"]` to mark the sub-scene as expanded for editing.
+- `parent_id_path=PackedInt32Array(...)` to reference the correct parent by instance ID.
+
+These features are difficult to produce correctly by hand-editing `.tscn` text. **Do not attempt manual `.tscn`
+text editing for inherited scene modifications.** Instead:
+
+1. Prefer the GDScript API approach (load, instantiate, modify, pack, save).
+2. If the GDScript approach fails (for example because C# scripts cannot load in headless mode), **escalate to the
+   user** and ask them to make the scene edit in the Godot editor.
+3. Only hand-edit `.tscn` text for simple, non-inherited node additions where the parent is the scene root or a
+   node owned by the scene root.
+
 ## Verification Checklist
 
 - Script exits with code `0`.

@@ -25,6 +25,21 @@ using AlleyCat.Common;
 Label3D label = this.RequireNode<Label3D>("Label3D");
 ```
 
+## Godot Node Classes
+
+- Decorate any C# class that will be used as a **node type in Godot scenes** with the `[GlobalClass]` attribute.
+  This registers the type in Godot's class database, making it selectable in the editor's "Create Node" dialogue and
+  allowing it to appear correctly as a node type in `.tscn` files.
+
+```csharp
+[GlobalClass]
+public partial class MyCustomNode : Node3D { }
+```
+
+- This applies to classes extending any Godot node type (`Node3D`, `SkeletonModifier3D`, `Control`, etc.) that will
+  be instantiated in scenes. It is **not** needed for classes that are only used from C# code and never placed in
+  scenes.
+
 ## Namespaces and Project Mapping
 
 - Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in

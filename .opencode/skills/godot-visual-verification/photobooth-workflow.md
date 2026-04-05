@@ -41,6 +41,32 @@ Do not proceed to feature-level visual checks until this framing pass is valid.
 
 Use `SceneUtils.save_scene(scene_root, output_path)` and keep the test scene in `@game/tests/<feature>/`.
 
+## Test Scene Self-Containment Rule
+
+Test scenes must be self-contained with all common setup configured directly in the scene. Test scripts should focus
+only on the verification workflow: manipulating scene state between scenarios and capturing screenshots.
+
+### What Belongs In The Scene
+
+- IK nodes, modifiers, and their bone/target/pole configurations.
+- Target markers (hand targets, head targets, pole targets) with initial transforms.
+- All node-path bindings between IK solvers and their targets.
+- Any node that must be a direct child of a specific parent (for example `SkeletonModifier3D` nodes under a
+  `Skeleton3D`).
+
+### What Belongs In The Script
+
+- Iterating over pose scenarios and moving targets to pose marker positions.
+- Controlling marker visibility per scenario.
+- Capturing screenshots.
+- Validate-only mode and command-line argument handling.
+
+### Why
+
+A self-contained test scene can be opened directly in the Godot editor for inspection and debugging. If all setup is
+done in the script, the editor shows only the base scene with no IK nodes, making it impossible to debug configuration
+issues (such as missing bone names or incorrect node paths) without running the script.
+
 ## Step 2: Use The Test Scene To Implement The Feature
 
 Write a runner script with the same base name as the test scene and store it alongside the scene:
