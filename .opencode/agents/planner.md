@@ -110,8 +110,8 @@ For visual-spec tasks:
 - The coder reports that screenshot capture failed (for example due to `--headless` mode or renderer errors).
   Classify as `follow-up` and redelegate with the correct run command.
 - Screenshots were generated but not visually inspected. File existence is not evidence of visual correctness.
-  Before accepting, confirm that the coder or you have inspected representative images (via vision-capable tool if
-  needed) and verified expected behaviour per scenario.
+  Before accepting, confirm that the coder or you have inspected representative images (using the `read` tool to
+  load them) and verified expected behaviour per scenario.
 
 ### 5) Pre-Handover Code Review Gate
 

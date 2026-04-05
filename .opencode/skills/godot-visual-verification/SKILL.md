@@ -51,8 +51,9 @@ animation readability, or camera framing validation).
 1. The photobooth test scene exists and is based on an appropriate inherited base.
 2. Camera rigs and markers were verified before feature-level screenshot checks.
 3. The runner was executed **without `--headless`** and produced expected screenshot sets.
-4. Representative screenshots were visually inspected (directly or via vision-capable tool) and confirmed to show the
-   expected behaviour for each scenario — file existence alone is not sufficient.
+4. Representative screenshots were inspected via the `read` tool and confirmed to show
+   the expected behaviour for each scenario. File existence alone is not sufficient. If screenshots cannot be
+   loaded with the `read` tool, they must be shared with the user for manual verification before the gate can pass.
 5. Distinct scenarios produce visually distinct results (for example different poses should look different in
    screenshots).
 6. C# integration tests verify the same functionality non-visually.
@@ -68,6 +69,36 @@ animation readability, or camera framing validation).
 - `READY` → classify the delegated result as `accepted`.
 - `FOLLOW-UP REQUIRED` → classify as `follow-up` and redelegate with narrowed criteria.
 - `ESCALATE` → classify as `escalated` and request user decision.
+
+## Image Analysis Rules
+
+### Never Fabricate Visual Observations
+
+Always analyse screenshots using the `read` tool to load the image and then inspect the visual output. Never infer or describe image content yourself; report only
+what is visible in the image. If the image cannot be loaded, or the visual result is unclear, escalate to the user and explain
+that the visual result cannot be verified.
+
+### Vision Tool Prompt Guidelines
+
+When using the `read` tool to analyse screenshots:
+
+1. **Ask simple, objective questions about what is visible.** For example: "Is the left elbow pointing upward or
+   downward?" or "Are the hands above or below the shoulders?" Avoid prompts that rely on external context such as
+   "natural" poses or animation terminology the tool is unlikely to know.
+2. **Break complex checks into multiple yes/no or either/or questions.** Collect the answers and decide yourself whether
+   the pose meets expectations.
+3. **Use multiple camera angles whenever available.** Ask the same question for front, side, and top views to confirm
+   the result.
+4. **If responses conflict or remain non-committal, escalate to the user** instead of guessing which answer is right.
+
+### Escalation Protocol
+
+If vision tools produce unreliable or contradictory results:
+
+1. Report honestly: "The vision tool's analysis may be inaccurate — results were contradictory across camera angles."
+2. Share the raw screenshots with the user (by reading the image files so they appear in the conversation).
+3. Ask the user to make the visual judgement.
+4. Do not proceed with follow-up work that depends on the visual assessment being correct.
 
 ## Workflow Guides
 

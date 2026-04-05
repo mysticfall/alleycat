@@ -23,7 +23,7 @@ For tasks with visual acceptance criteria, use `godot-visual-verification` skill
 - Verify camera rig and marker framing before scenario-level screenshot captures.
 - **Never use `--headless` when running scripts that capture screenshots.** Headless mode disables the renderer and
   produces blank/failed captures.
-- After capturing screenshots, **visually inspect** representative images (directly or via a vision-capable tool) to
+- After capturing screenshots, **visually inspect** representative images (using the `read` tool to load them) to
   confirm expected behaviour. Do not treat file generation alone as evidence of visual correctness.
 - Include the skill's run record fields and gate outcome in your final report.
 

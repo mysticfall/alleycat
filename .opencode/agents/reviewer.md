@@ -36,7 +36,7 @@ For visual-spec tasks, use `godot-visual-verification` skill and validate compli
 When visual verification screenshots exist as verification artefacts:
 
 - [ ] Runner was executed **without `--headless`** (headless mode produces blank/failed captures).
-- [ ] Functional screenshot review was completed (directly or via vision-capable tool) — file existence alone is
+- [ ] Functional screenshot review was completed (using the `read` tool to inspect screenshots) — file existence alone is
   not sufficient.
 - [ ] Screenshots for distinct scenarios (for example different poses) produce visually distinct results.
 - [ ] Camera/marker framing was verified before feature-level captures.

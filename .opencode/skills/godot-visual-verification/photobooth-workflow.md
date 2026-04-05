@@ -32,7 +32,7 @@ Before feature verification:
 
 1. Enable only markers relevant to the current check.
 2. Capture from each required camera rig using `CameraRig.capture_screenshot`.
-3. Review screenshots one-by-one (directly or with a vision-capable tool).
+3. Review screenshots one-by-one using the `read` tool.
 4. Confirm framing is suitable for the intended verification task.
 
 Do not proceed to feature-level visual checks until this framing pass is valid.
@@ -100,13 +100,16 @@ file-generation alone as evidence of success.
 
 When checking screenshots:
 
-1. Use a vision-capable tool to load and inspect each image.
-2. Frame prompts carefully: describe what correct output looks like and ask the tool to check for specific deviations
-   (for example "is the character's head tilted backward, or still neutral?").
+1. Use the `read` tool to load and inspect each image.
+2. Inspect the loaded image for specific deviations (for example "is the character's head tilted backward, or still neutral?").
 3. Compare scenario screenshots against each other (for example "up" vs "lean-back") to confirm each scenario produces
    a visually distinct result.
 4. If a scenario screenshot looks identical to the neutral/default pose, treat it as a verification failure even if the
    file was generated successfully.
+
+If the `read` tool output is unclear or ambiguous, share the
+screenshots with the user (they will appear inline in the conversation) and ask the user to
+make the visual judgement. Do not fabricate visual observations.
 
 ## Screenshot Output
 

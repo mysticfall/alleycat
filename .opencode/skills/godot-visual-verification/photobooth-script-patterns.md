@@ -111,7 +111,7 @@ Store both in the same `@game/tests/<feature>/...` directory.
 For each runner execution:
 
 1. Confirm the runner was executed **without `--headless`** and expected files are generated.
-2. Visually inspect representative screenshots (directly or via vision-capable tool) to confirm expected behaviour.
+2. Visually inspect representative screenshots using the `read` tool to confirm expected behaviour.
    File existence alone is not sufficient evidence.
 3. Compare screenshots across scenarios: distinct scenarios must produce visually distinct results.
 4. Iterate scene setup/feature implementation until visual output is correct.
