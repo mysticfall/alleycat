@@ -26,6 +26,7 @@ public enum ArmSide
 public partial class ArmIkController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-4f;
+    private const float SegmentEpsilon = 1e-4f;
 
     /// <summary>
     /// The VR hand target for this arm.
@@ -54,21 +55,55 @@ public partial class ArmIkController : SkeletonModifier3D
         get; set;
     }
 
+    /// <summary>
+    /// Overall shoulder correction dampening weight.
+    /// 0 = no correction; 1 = full delta applied. Values below 1 dampen the correction.
+    /// </summary>
+    [Export]
+    public float ShoulderWeight
+    {
+        get; set;
+    } = 0.55f;
+
+    /// <summary>
+    /// Shoulder raise strength for arm elevation.
+    /// Kept for integration test compatibility — controls adaptive weight contribution.
+    /// </summary>
+    [Export]
+    public float ElevationWeight
+    {
+        get; set;
+    } = 0.55f;
+
     private Skeleton3D _skeleton = null!;
 
     private int _hipsIdx;
     private int _neckIdx;
     private int _leftShoulderIdx;
     private int _rightShoulderIdx;
+    private int _shoulderIdx;
     private int _upperArmIdx;
+    private int _lowerArmIdx;
+    private int _handIdx;
+
+    private Basis _shoulderRestBasisInBody = Basis.Identity;
+    private Basis _restLookBasis = Basis.Identity;
+    private float _upperSegmentLength;
+    private float _lowerSegmentLength;
+
     private bool _bonesResolved;
 
     /// <inheritdoc />
     public override void _ProcessModificationWithDelta(double delta)
     {
-        if (!_bonesResolved && !ResolveBones())
+        if (!_bonesResolved)
         {
-            return;
+            if (!ResolveBones())
+            {
+                return;
+            }
+
+            _bonesResolved = true;
         }
 
         if (HandTarget is null || PoleTarget is null)
@@ -82,18 +117,18 @@ public partial class ArmIkController : SkeletonModifier3D
         Vector3 lShoulderPos = BoneGlobalPosition(_leftShoulderIdx);
         Vector3 rShoulderPos = BoneGlobalPosition(_rightShoulderIdx);
 
-        Vector3 bodyUp = (neckPos - hipsPos).Normalized();
-        Vector3 bodyRight = (rShoulderPos - lShoulderPos).Normalized();
+        if (!TryBuildBodyBasis(
+                hipsPos,
+                neckPos,
+                lShoulderPos,
+                rShoulderPos,
+                out Basis bodyBasis))
+        {
+            return;
+        }
 
-        // Orthonormalise: remove component of bodyRight along bodyUp
-        bodyRight = (bodyRight - (bodyRight.Dot(bodyUp) * bodyUp)).Normalized();
-        Vector3 bodyForward = bodyRight.Cross(bodyUp);
-
-        // Godot convention: -Z is forward
-        Basis bodyBasis = Basis.Identity;
-        bodyBasis.Column0 = bodyRight;
-        bodyBasis.Column1 = bodyUp;
-        bodyBasis.Column2 = -bodyForward;
+        Vector3 bodyUp = bodyBasis.Column1;
+        Vector3 bodyRight = bodyBasis.Column0;
 
         Basis bodyBasisInverse = bodyBasis.Inverse();
 
@@ -127,6 +162,9 @@ public partial class ArmIkController : SkeletonModifier3D
 
         // Phase 4 -- Pole Target Placement
         Vector3 poleDirGlobal = bodyBasis * baselinePole;
+
+        ApplyShoulderCorrectionPreIk(shoulderPos, handPos, poleDirGlobal, bodyUp, bodyRight);
+
         Vector3 midpoint = (shoulderPos + handPos) * 0.5f;
         float armLength = (handPos - shoulderPos).Length();
         float offset = armLength * 0.5f;
@@ -162,10 +200,264 @@ public partial class ArmIkController : SkeletonModifier3D
 
         string sidePrefix = Side == ArmSide.Left ? "Left" : "Right";
 
+        _shoulderIdx = skeleton.FindBone($"{sidePrefix}Shoulder");
         _upperArmIdx = skeleton.FindBone($"{sidePrefix}UpperArm");
+        _lowerArmIdx = skeleton.FindBone($"{sidePrefix}LowerArm");
+        _handIdx = skeleton.FindBone($"{sidePrefix}Hand");
+
+        return _hipsIdx >= 0
+            && _neckIdx >= 0
+            && _leftShoulderIdx >= 0
+            && _rightShoulderIdx >= 0
+            && _shoulderIdx >= 0
+            && _upperArmIdx >= 0
+            && _lowerArmIdx >= 0
+            && _handIdx >= 0
+            && TryCacheRestData();
+    }
+
+    private bool TryCacheRestData()
+    {
+        Transform3D hipsGlobalRestPose = _skeleton.GetBoneGlobalRest(_hipsIdx);
+        Transform3D neckGlobalRestPose = _skeleton.GetBoneGlobalRest(_neckIdx);
+        Transform3D leftShoulderGlobalRestPose = _skeleton.GetBoneGlobalRest(_leftShoulderIdx);
+        Transform3D rightShoulderGlobalRestPose = _skeleton.GetBoneGlobalRest(_rightShoulderIdx);
+        Transform3D shoulderGlobalRestPose = _skeleton.GetBoneGlobalRest(_shoulderIdx);
+        Transform3D upperArmGlobalRestPose = _skeleton.GetBoneGlobalRest(_upperArmIdx);
+        Transform3D lowerArmGlobalRestPose = _skeleton.GetBoneGlobalRest(_lowerArmIdx);
+        Transform3D handGlobalRestPose = _skeleton.GetBoneGlobalRest(_handIdx);
+
+        Vector3 restShoulderToElbow = lowerArmGlobalRestPose.Origin - upperArmGlobalRestPose.Origin;
+
+        if (restShoulderToElbow.LengthSquared() < DegenerateThreshold)
+        {
+            return false;
+        }
+
+        if (!TryBuildBodyBasis(
+                hipsGlobalRestPose.Origin,
+                neckGlobalRestPose.Origin,
+                leftShoulderGlobalRestPose.Origin,
+                rightShoulderGlobalRestPose.Origin,
+                out Basis restBodyBasis))
+        {
+            return false;
+        }
+
+        Basis restBodyBasisInverse = restBodyBasis.Inverse();
+        Vector3 restUpperArmDirectionBody = (restBodyBasisInverse * restShoulderToElbow).Normalized();
+
+        if (restUpperArmDirectionBody.LengthSquared() < DegenerateThreshold)
+        {
+            return false;
+        }
+
+        _upperSegmentLength = (lowerArmGlobalRestPose.Origin - upperArmGlobalRestPose.Origin).Length();
+        _lowerSegmentLength = (handGlobalRestPose.Origin - lowerArmGlobalRestPose.Origin).Length();
+
+        if (_upperSegmentLength <= SegmentEpsilon || _lowerSegmentLength <= SegmentEpsilon)
+        {
+            return false;
+        }
+
+        // Build and cache the rest look-at basis using body-up as reference.
+        Vector3 bodyUp = new(0f, 1f, 0f); // Up in body space is always +Y.
+        _restLookBasis = ShoulderCorrectionComputer.BuildLookAtBasis(restUpperArmDirectionBody, bodyUp);
+
+        _shoulderRestBasisInBody = (restBodyBasisInverse * shoulderGlobalRestPose.Basis).Orthonormalized();
 
         return true;
     }
+
+    private void ApplyShoulderCorrectionPreIk(
+        Vector3 shoulderPosition,
+        Vector3 handTargetPosition,
+        Vector3 poleDirectionGlobal,
+        Vector3 bodyUp,
+        Vector3 bodyRight)
+    {
+        if (!TryEstimateUpperArmDirection(
+                shoulderPosition,
+                handTargetPosition,
+                poleDirectionGlobal,
+                bodyUp,
+                bodyRight,
+                out Vector3 expectedUpperDirectionGlobal))
+        {
+            return;
+        }
+
+        Basis skeletonGlobalBasisInverse = _skeleton.GlobalTransform.Basis.Inverse();
+        Vector3 expectedUpperDirectionSkeleton = skeletonGlobalBasisInverse * expectedUpperDirectionGlobal;
+
+        if (expectedUpperDirectionSkeleton.LengthSquared() < DegenerateThreshold)
+        {
+            return;
+        }
+
+        if (!TryBuildBodyBasis(
+                _skeleton.GetBoneGlobalPose(_hipsIdx).Origin,
+                _skeleton.GetBoneGlobalPose(_neckIdx).Origin,
+                _skeleton.GetBoneGlobalPose(_leftShoulderIdx).Origin,
+                _skeleton.GetBoneGlobalPose(_rightShoulderIdx).Origin,
+                out Basis bodyBasisSkeleton))
+        {
+            return;
+        }
+
+        Vector3 currentUpperDirectionBody = (bodyBasisSkeleton.Inverse() * expectedUpperDirectionSkeleton).Normalized();
+
+        if (currentUpperDirectionBody.LengthSquared() < DegenerateThreshold)
+        {
+            return;
+        }
+
+        // Build current look-at basis using body-up as reference.
+        Vector3 bodyUpLocal = new(0f, 1f, 0f);
+        Basis currentLookBasis = ShoulderCorrectionComputer.BuildLookAtBasis(currentUpperDirectionBody, bodyUpLocal);
+
+        // Compute pose-adaptive weight: use ElevationWeight as the base dampening factor.
+        float adaptiveWeight = ShoulderCorrectionComputer.ComputeAdaptiveWeight(
+            currentUpperDirectionBody,
+            ElevationWeight);
+
+        // Apply overall ShoulderWeight as a master dampener on top.
+        float effectiveWeight = adaptiveWeight * Mathf.Clamp(ShoulderWeight / Mathf.Max(ElevationWeight, 0.01f), 0f, 2f);
+        effectiveWeight = Mathf.Clamp(effectiveWeight, 0f, 1f);
+
+        Quaternion correction = ShoulderCorrectionComputer.ComputeCorrection(
+            _restLookBasis,
+            currentLookBasis,
+            effectiveWeight);
+
+        Basis correctionBasis = new(correction);
+        Basis targetShoulderGlobalBasis = (bodyBasisSkeleton * (correctionBasis * _shoulderRestBasisInBody)).Orthonormalized();
+        int shoulderParentBoneIndex = _skeleton.GetBoneParent(_shoulderIdx);
+        Basis parentGlobalBasis = shoulderParentBoneIndex >= 0
+            ? _skeleton.GetBoneGlobalPose(shoulderParentBoneIndex).Basis
+            : Basis.Identity;
+        Basis targetShoulderLocalBasis = (parentGlobalBasis.Inverse() * targetShoulderGlobalBasis).Orthonormalized();
+
+        _skeleton.SetBonePoseRotation(
+            _shoulderIdx,
+            targetShoulderLocalBasis.GetRotationQuaternion().Normalized());
+    }
+
+    private static bool TryBuildBodyBasis(
+        Vector3 hipsPosition,
+        Vector3 neckPosition,
+        Vector3 leftShoulderPosition,
+        Vector3 rightShoulderPosition,
+        out Basis bodyBasis)
+    {
+        bodyBasis = Basis.Identity;
+
+        Vector3 bodyUp = neckPosition - hipsPosition;
+
+        if (bodyUp.LengthSquared() < DegenerateThreshold)
+        {
+            return false;
+        }
+
+        bodyUp = bodyUp.Normalized();
+
+        Vector3 shoulderSpan = rightShoulderPosition - leftShoulderPosition;
+        Vector3 bodyRight = shoulderSpan - (shoulderSpan.Dot(bodyUp) * bodyUp);
+
+        if (bodyRight.LengthSquared() < DegenerateThreshold)
+        {
+            return false;
+        }
+
+        bodyRight = bodyRight.Normalized();
+        Vector3 bodyForward = bodyRight.Cross(bodyUp);
+
+        if (bodyForward.LengthSquared() < DegenerateThreshold)
+        {
+            return false;
+        }
+
+        bodyForward = bodyForward.Normalized();
+
+        bodyBasis.Column0 = bodyRight;
+        bodyBasis.Column1 = bodyUp;
+        bodyBasis.Column2 = -bodyForward;
+
+        bodyBasis = bodyBasis.Orthonormalized();
+
+        return true;
+    }
+
+    private bool TryEstimateUpperArmDirection(
+        Vector3 shoulderPosition,
+        Vector3 handTargetPosition,
+        Vector3 poleDirectionGlobal,
+        Vector3 bodyUp,
+        Vector3 bodyRight,
+        out Vector3 expectedUpperDirectionGlobal)
+    {
+        expectedUpperDirectionGlobal = Vector3.Zero;
+
+        Vector3 shoulderToHand = handTargetPosition - shoulderPosition;
+        float distance = shoulderToHand.Length();
+
+        if (distance <= SegmentEpsilon)
+        {
+            return false;
+        }
+
+        Vector3 directionToHand = shoulderToHand / distance;
+
+        float minReach = Mathf.Abs(_upperSegmentLength - _lowerSegmentLength) + SegmentEpsilon;
+        float maxReach = _upperSegmentLength + _lowerSegmentLength - SegmentEpsilon;
+
+        if (maxReach <= minReach)
+        {
+            return false;
+        }
+
+        float clampedDistance = Mathf.Clamp(distance, minReach, maxReach);
+        float a = ((_upperSegmentLength * _upperSegmentLength)
+                   - (_lowerSegmentLength * _lowerSegmentLength)
+                   + (clampedDistance * clampedDistance))
+                  / (2f * clampedDistance);
+        float hSquared = Mathf.Max((_upperSegmentLength * _upperSegmentLength) - (a * a), 0f);
+        float h = Mathf.Sqrt(hSquared);
+
+        Vector3 basePoint = shoulderPosition + (directionToHand * a);
+        Vector3 polePerpendicular = ProjectPerpendicular(poleDirectionGlobal, directionToHand);
+
+        if (polePerpendicular.LengthSquared() < DegenerateThreshold)
+        {
+            polePerpendicular = ProjectPerpendicular(bodyUp, directionToHand);
+        }
+
+        if (polePerpendicular.LengthSquared() < DegenerateThreshold)
+        {
+            Vector3 lateral = Side == ArmSide.Left ? -bodyRight : bodyRight;
+            polePerpendicular = ProjectPerpendicular(lateral, directionToHand);
+        }
+
+        if (polePerpendicular.LengthSquared() < DegenerateThreshold)
+        {
+            return false;
+        }
+
+        polePerpendicular = polePerpendicular.Normalized();
+        Vector3 estimatedElbowPosition = basePoint + (polePerpendicular * h);
+        Vector3 upperDirection = estimatedElbowPosition - shoulderPosition;
+
+        if (upperDirection.LengthSquared() < DegenerateThreshold)
+        {
+            return false;
+        }
+
+        expectedUpperDirectionGlobal = upperDirection.Normalized();
+        return true;
+    }
+
+    private static Vector3 ProjectPerpendicular(Vector3 vector, Vector3 normal) =>
+        vector - (vector.Dot(normal) * normal);
 
     private Vector3 BoneGlobalPosition(int boneIdx) =>
         _skeleton.GlobalTransform * _skeleton.GetBoneGlobalPose(boneIdx).Origin;

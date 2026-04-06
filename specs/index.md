@@ -6,6 +6,8 @@
 - [CHAR-IK: IK Implementation Notes](characters/ik/index.md)
 - [CHAR-001: Reusable Neck-Spine CCDIK Setup](characters/001-neck-spine-ik/index.md)
 - [CHAR-002: Arm And Shoulder IK System](characters/002-arm-shoulder-ik/index.md)
+    - [Arm IK Contract](characters/002-arm-shoulder-ik/arm-ik-contract.md)
+    - [Shoulder Correction Contract](characters/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
 
 ## UI
 
