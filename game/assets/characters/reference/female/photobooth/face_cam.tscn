@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://dsoyrofkocge2"]
+
+[ext_resource type="PackedScene" uid="uid://6b8las20aee4" path="res://assets/testing/photobooth/photobooth.tscn" id="1_36d22"]
+[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="2_bws1m"]
+[ext_resource type="PackedScene" uid="uid://utn2mx2dm0vl" path="res://assets/testing/photobooth/camera_rig.tscn" id="3_auud0"]
+
+[node name="Photobooth" unique_id=406188165 instance=ExtResource("1_36d22")]
+
+[node name="Female" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=1792987446 instance=ExtResource("2_bws1m")]
+
+[node name="CameraRig" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("3_auud0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4983276, 0.46121848)
+projection = 0

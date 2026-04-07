@@ -1,0 +1,62 @@
+{
+  "model_name": "wav2arkit_cpu",
+  "description": "End-to-end audio to ARKit blendshape model",
+  "format": "onnx",
+  
+  "source_models": {
+    "audio_encoder": "facebook/wav2vec2-base-960h",
+    "expression_decoder": "3DAIGC/LAM_audio2exp"
+  },
+
+  "audio_encoder": {
+    "source": "facebook/wav2vec2-base-960h",
+    "hidden_size": 768
+  },
+
+  "preprocessing": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "normalize": false
+  },
+
+  "input_spec": {
+    "name": "audio_waveform",
+    "dtype": "float32",
+    "shape": ["batch_size", "num_samples"]
+  },
+
+  "output_spec": {
+    "name": "blendshapes",
+    "dtype": "float32",
+    "shape": ["batch_size", "num_frames", 52],
+    "fps": 30,
+    "value_range": [0.0, 1.0]
+  },
+
+  "num_blendshapes": 52,
+  "output_fps": 30,
+  "frame_formula": "ceil(30 * num_samples / 16000)",
+
+  "blendshape_names": [
+    "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight",
+    "cheekPuff", "cheekSquintLeft", "cheekSquintRight",
+    "eyeBlinkLeft", "eyeBlinkRight", "eyeLookDownLeft", "eyeLookDownRight",
+    "eyeLookInLeft", "eyeLookInRight", "eyeLookOutLeft", "eyeLookOutRight",
+    "eyeLookUpLeft", "eyeLookUpRight", "eyeSquintLeft", "eyeSquintRight",
+    "eyeWideLeft", "eyeWideRight",
+    "jawForward", "jawLeft", "jawOpen", "jawRight",
+    "mouthClose", "mouthDimpleLeft", "mouthDimpleRight", "mouthFrownLeft", "mouthFrownRight",
+    "mouthFunnel", "mouthLeft", "mouthLowerDownLeft", "mouthLowerDownRight",
+    "mouthPressLeft", "mouthPressRight", "mouthPucker", "mouthRight",
+    "mouthRollLower", "mouthRollUpper", "mouthShrugLower", "mouthShrugUpper",
+    "mouthSmileLeft", "mouthSmileRight", "mouthStretchLeft", "mouthStretchRight",
+    "mouthUpperUpLeft", "mouthUpperUpRight",
+    "noseSneerLeft", "noseSneerRight", "tongueOut"
+  ],
+
+  "onnx": {
+    "opset_version": 18,
+    "producer": "pytorch",
+    "model_file": "wav2arkit_cpu.onnx"
+  }
+}

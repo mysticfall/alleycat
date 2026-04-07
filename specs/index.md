@@ -14,6 +14,10 @@
 
 - [UI-001: Splash Screen](ui/001-splash-screen/index.md)
 
+## Speech
+
+- [SPEECH-001: Wav2Arkit Blendshape Feasibility Prototype](speech/001-wav2arkit-blendshape-feasibility/index.md)
+
 ## Testing
 
 - [TEST-001: Integration Test Framework](testing/001-test-framework/index.md)

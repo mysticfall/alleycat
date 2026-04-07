@@ -12,6 +12,7 @@
 
     <ItemGroup>
         <PackageReference Update="GodotSharp" Version="4.6.2" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.1" />
     </ItemGroup>
 
     <ItemGroup>
