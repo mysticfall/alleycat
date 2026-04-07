@@ -8,6 +8,7 @@
 - [CHAR-002: Arm And Shoulder IK System](characters/002-arm-shoulder-ik/index.md)
     - [Arm IK Contract](characters/002-arm-shoulder-ik/arm-ik-contract.md)
     - [Shoulder Correction Contract](characters/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
+    - [Hand-Rotation Elbow Correction Contract](characters/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
 
 ## UI
 

@@ -15,7 +15,7 @@ independence constraints.
 - Pole-target prediction from head and hand targets.
 - Shoulder correction execution in `ArmIkController` before IK solve using the look-at-delta method (algorithm details
   in shoulder contract).
-- Baseline pose mapping plus hand-rotation adjustment.
+- Baseline pose mapping plus hand-rotation adjustment (detailed in the [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md)).
 - Behaviour consistent across upright and non-upright body orientations.
 
 ## Mechanism
@@ -51,7 +51,10 @@ The "Hands Covering The Chest" pose remains optional and may be deferred.
 
 Actual pole direction is derived by blending or offsetting the baseline with a hand-rotation contribution.
 
-Adjustment must remain smooth and continuous across the full range of hand rotations, with no discontinuities or flips.
+The hand-rotation adjustment uses the player's hand controller rotation around the shoulder-to-hand axis, compared
+against an interpolated reference rotation from key pose markers, to rotate the elbow pole target and shift the
+bend-plane direction. Full algorithmic details, parameterisation, and acceptance criteria are defined in the
+[Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md).
 
 ## Implementation Notes
 
@@ -91,8 +94,9 @@ marker orientation.
 
 ### Phased Delivery
 
-Initial phase may deliver positional baseline prediction first. Hand-rotation adjustment may be implemented in a
-subsequent phase.
+Initial phase may deliver positional baseline prediction first. Hand-rotation adjustment, now fully specified in the
+[Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md), may be implemented in a subsequent
+phase.
 
 ## Acceptance Criteria Coverage
 
@@ -103,6 +107,9 @@ This contract defines details for:
 - AC-03
 - AC-04
 - AC-05
+- AC-17
+- AC-18
+- AC-19
 
 Source-of-truth criteria wording is maintained in [CHAR-002 Overview](index.md#acceptance-criteria).
 
@@ -110,3 +117,4 @@ Source-of-truth criteria wording is maintained in [CHAR-002 Overview](index.md#a
 
 - [CHAR-002 Overview](index.md)
 - [Shoulder Correction Contract](shoulder-adjustment-contract.md)
+- [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md)
