@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://5fk2h1g7a6m8"]
 
 [ext_resource type="PackedScene" uid="uid://dsoyrofkocge2" path="res://assets/characters/reference/female/photobooth/face_cam.tscn" id="1_base"]
-[ext_resource type="Script" uid="uid://wvlmyc4ncjy0" path="res://src/Speech/BlendShapePlayer.cs" id="2_player"]
+[ext_resource type="Script" uid="uid://d1owchc86h8g8" path="res://src/Speech/Wav2ArkitBlendShapePlayer.cs" id="2_player"]
 [ext_resource type="AudioStream" uid="uid://cay7uef2gukl" path="res://assets/audio/samples/speech-sample.wav" id="3_audio"]
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_dvpdu"]
@@ -28,12 +28,12 @@ size = 2.0
 near = 0.01
 far = 100.0
 
-[node name="BlendShapePlayer" type="Node" parent="." index="5" unique_id=18046912 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
+[node name="BlendShapePlayer" type="Node" parent="." index="5" unique_id=691031254 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
 script = ExtResource("2_player")
 Skeleton = NodePath("../Subject/Female/Female_export/GeneralSkeleton")
 AudioStream = ExtResource("3_audio")
 AudioPlayer = NodePath("../Subject/Female/Female_export/GeneralSkeleton/HeadBone/AudioStreamPlayer3D")
 LoopPlayback = true
-metadata/_custom_type_script = "uid://wvlmyc4ncjy0"
+metadata/_custom_type_script = "uid://d1owchc86h8g8"
 
 [editable path="Subject/Female"]
