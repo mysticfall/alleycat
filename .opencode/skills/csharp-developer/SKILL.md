@@ -40,6 +40,17 @@ public partial class MyCustomNode : Node3D { }
   be instantiated in scenes. It is **not** needed for classes that are only used from C# code and never placed in
   scenes.
 
+## Godot Runtime Architecture Conventions
+
+- Prefer plain C# arrays (for example `PoseNodeResource[]`) for exported collections in resources and nodes unless a
+  Godot-specific collection API is explicitly required.
+- Prefer exporting direct node references (for example `AnimationTree? AnimationTree`) over `NodePath` when the target
+  node is a required, stable scene dependency.
+- Use `NodePath` only when deferred/dynamic resolution is necessary. If you resolve a `NodePath`, cache the result in
+  `_Ready()` and avoid repeated lookups in per-frame methods.
+- In per-frame hot paths (such as `_ProcessModificationWithDelta`), avoid per-frame allocations and repeated node-path
+  resolution. Reuse buffers and cached references.
+
 ## Namespaces and Project Mapping
 
 - Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in
