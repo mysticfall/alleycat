@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://5fk2h1g7a6m8"]
+
+[ext_resource type="PackedScene" uid="uid://dsoyrofkocge2" path="res://assets/characters/reference/female/photobooth/face_cam.tscn" id="1_base"]
+[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/A2FBlendShapePlayer.cs" id="2_hm21w"]
+[ext_resource type="AudioStream" uid="uid://bx5m8h03bjsdl" path="res://assets/audio/samples/sample-voice.wav" id="3_hm21w"]
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_dvpdu"]
+
+[node name="Photobooth" unique_id=406188165 instance=ExtResource("1_base")]
+
+[node name="HeadBone" type="BoneAttachment3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="9" unique_id=772110435]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4594107, 0.04187462)
+bone_name = "Head"
+bone_idx = 46
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Subject/Female/Female_export/GeneralSkeleton/HeadBone" index="0" unique_id=1740537098]
+
+[node name="CameraRig" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527]
+visible = false
+
+[node name="PlayCamera" type="Camera3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=1428506455]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4750656, 0.4216671)
+attributes = SubResource("CameraAttributesPractical_dvpdu")
+current = true
+fov = 45.0
+size = 2.0
+near = 0.01
+far = 100.0
+
+[node name="BlendShapePlayer" type="Node" parent="." index="5" unique_id=2145656943 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+script = ExtResource("2_hm21w")
+InputStrength = 0.6
+ConstantNoise = true
+EyeRotationToBlendshapeScale = 0.15
+EyeRotationSmoothingFactor = 0.15000000000000002
+Meshes = [NodePath("../Subject/Female/Female_export/GeneralSkeleton/Female_body_export"), NodePath("../Subject/Female/Female_export/GeneralSkeleton/Female_eyebrow006_export"), NodePath("../Subject/Female/Female_export/GeneralSkeleton/Female_eyelashes01_export"), NodePath("../Subject/Female/Female_export/GeneralSkeleton/Female_high-poly_export"), NodePath("../Subject/Female/Female_export/GeneralSkeleton/Female_tongue01_export")]
+AudioStream = ExtResource("3_hm21w")
+AudioPlayer = NodePath("../Subject/Female/Female_export/GeneralSkeleton/HeadBone/AudioStreamPlayer3D")
+LoopPlayback = true
+metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
+
+[editable path="Subject/Female"]
