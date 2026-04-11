@@ -1,18 +1,20 @@
 ---
 id: SPEECH-001
-title: Wav2Arkit Blendshape Feasibility Prototype
+title: Wav2Arkit Blendshape Player
 ---
 
-# Wav2Arkit Blendshape Feasibility Prototype
+# Wav2Arkit Blendshape Player
 
 ## Requirement
 
-Keep implementation and specification aligned for the current wav2arkit-to-ARKit blendshape playback prototype.
+Generate lipsync animation from speech audio using the Wav2Arkit model running local ONNX
+inference. This implementation runs on any GPU and provides basic ARKit blendshape output, but
+does not include emotion inference or dedicated eye movement data.
 
 ## Goal
 
-Document a feasibility slice that proves end-to-end local playback (WAV input → ONNX inference → mapped mesh blendshape
-updates) in Godot.
+Prove end-to-end local playback (WAV input → ONNX inference → mapped mesh blendshape updates) in
+Godot as a feasibility prototype.
 
 ## Prototype Status
 

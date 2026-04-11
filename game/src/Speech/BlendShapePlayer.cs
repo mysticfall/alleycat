@@ -8,24 +8,14 @@ namespace AlleyCat.Speech;
 public abstract partial class BlendShapePlayer : Node
 {
     /// <summary>
-    /// Skeleton that owns immediate child meshes to drive.
+    /// List of meshes to drive.
     /// </summary>
     [Export]
-    public Skeleton3D Skeleton
+    public MeshInstance3D[] Meshes
     {
         get;
         set;
-    } = null!;
-
-    /// <summary>
-    /// Fallback node path used when the direct skeleton reference is unresolved.
-    /// </summary>
-    [Export]
-    public NodePath SkeletonPath
-    {
-        get;
-        set;
-    } = new("../Subject/Female/Female_export/GeneralSkeleton");
+    } = [];
 
     /// <summary>
     /// Audio stream used for both inference input and runtime playback.
@@ -185,15 +175,6 @@ public abstract partial class BlendShapePlayer : Node
     private const float DefaultOutputFps = 30f;
     private const float BlendshapeChangeEpsilon = 1e-4f;
 
-    private static readonly StringName[] _canonicalArkitBlendshapes =
-    [
-        "jawOpen",
-        "mouthSmileLeft",
-        "mouthSmileRight",
-        "eyeBlinkLeft",
-        "eyeBlinkRight"
-    ];
-
     private float[][] _frames = [];
     private readonly List<MeshBinding> _meshBindings = [];
     private float _outputFps = DefaultOutputFps;
@@ -333,10 +314,6 @@ public abstract partial class BlendShapePlayer : Node
         _audioStartGraceSeconds = 0d;
         _lastAppliedChannelValues = [];
 
-        Skeleton3D resolvedSkeleton = Skeleton
-            ?? GetNodeOrNull<Skeleton3D>(SkeletonPath)
-            ?? throw new InvalidOperationException("BlendShapePlayer: Skeleton is not assigned.");
-
         if (AudioStream is null)
         {
             throw new InvalidOperationException("BlendShapePlayer: AudioStream is not assigned.");
@@ -346,7 +323,6 @@ public abstract partial class BlendShapePlayer : Node
             ?? GetNodeOrNull<AudioStreamPlayer3D>(AudioPlayerPath)
             ?? throw new InvalidOperationException("BlendShapePlayer: AudioPlayer is not assigned.");
 
-        Skeleton = resolvedSkeleton;
         AudioPlayer = resolvedAudioPlayer;
 
         AudioStreamWav audioStream = AudioStream;
@@ -358,7 +334,7 @@ public abstract partial class BlendShapePlayer : Node
             ? _frames[0].Length
             : inferenceResult.BlendshapeNames.Count;
 
-        BuildMeshBindings(resolvedSkeleton, inferenceResult.BlendshapeNames);
+        BuildMeshBindings(inferenceResult.BlendshapeNames);
 
         GD.Print(
             $"BlendShapePlayer: loaded {_frames.Length} frames at {_outputFps:0.###} fps, mapped {_meshBindings.Count} mesh(es).");
@@ -381,7 +357,7 @@ public abstract partial class BlendShapePlayer : Node
         SetProcess(true);
     }
 
-    private void BuildMeshBindings(Skeleton3D skeleton, IReadOnlyList<string> blendshapeNames)
+    private void BuildMeshBindings(IReadOnlyList<string> blendshapeNames)
     {
         _meshBindings.Clear();
         MappedMeshCount = 0;
@@ -393,23 +369,16 @@ public abstract partial class BlendShapePlayer : Node
             return;
         }
 
-        List<MeshInstance3D> meshNodes = FindEligibleImmediateMeshChildren(skeleton);
-
-        if (meshNodes.Count == 0)
-        {
-            GD.PushWarning($"BlendShapePlayer: no eligible immediate MeshInstance3D nodes found under '{skeleton.GetPath()}'.");
-            return;
-        }
-
         bool[] hasGlobalMapping = new bool[blendshapeNames.Count];
 
-        foreach (MeshInstance3D mesh in meshNodes)
+        foreach (MeshInstance3D mesh in Meshes)
         {
             if (mesh.Mesh is null)
             {
                 continue;
             }
 
+            Dictionary<string, int>? meshShapeMap = null;
             var channels = new List<ShapeChannelBinding>(blendshapeNames.Count);
             for (int shapeIndex = 0; shapeIndex < blendshapeNames.Count; shapeIndex++)
             {
@@ -417,7 +386,12 @@ public abstract partial class BlendShapePlayer : Node
                 int meshShapeIndex = mesh.FindBlendShapeByName(shapeName);
                 if (meshShapeIndex < 0)
                 {
-                    continue;
+                    meshShapeMap ??= BuildNormalizedMeshShapeMap(mesh);
+                    string normalized = NormalizeBlendshapeName(blendshapeNames[shapeIndex]);
+                    if (!meshShapeMap.TryGetValue(normalized, out meshShapeIndex))
+                    {
+                        continue;
+                    }
                 }
 
                 channels.Add(new ShapeChannelBinding(shapeIndex, meshShapeIndex));
@@ -448,38 +422,6 @@ public abstract partial class BlendShapePlayer : Node
         {
             GD.PushWarning($"BlendShapePlayer: unmapped blendshapes ({missingNames.Count}): {string.Join(", ", missingNames)}");
         }
-    }
-
-    private static List<MeshInstance3D> FindEligibleImmediateMeshChildren(Skeleton3D skeleton)
-    {
-        var output = new List<MeshInstance3D>();
-        foreach (Node child in skeleton.GetChildren())
-        {
-            if (child is MeshInstance3D meshInstance && HasCanonicalArkitBlendshape(meshInstance))
-            {
-                output.Add(meshInstance);
-            }
-        }
-
-        return output;
-    }
-
-    private static bool HasCanonicalArkitBlendshape(MeshInstance3D mesh)
-    {
-        if (mesh.Mesh is null)
-        {
-            return false;
-        }
-
-        foreach (StringName blendshapeName in _canonicalArkitBlendshapes)
-        {
-            if (mesh.FindBlendShapeByName(blendshapeName) >= 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private void ApplyFrame(int frameIndex)
@@ -539,6 +481,53 @@ public abstract partial class BlendShapePlayer : Node
         InitialisationError = message;
         GD.PushError(message);
         SetProcess(false);
+    }
+
+    /// <summary>
+    /// Normalizes a blendshape name by converting camelCase to lowercase without
+    /// separators, so that "eyeLookDownLeft" and "Eye Look Down Left" both become
+    /// "eyelookdownleft".
+    /// </summary>
+    protected static string NormalizeBlendshapeName(string name)
+    {
+        var output = new System.Text.StringBuilder(name.Length);
+        foreach (char c in name)
+        {
+            if (c is ' ' or '_' or '-')
+            {
+                continue;
+            }
+
+            _ = output.Append(char.ToLowerInvariant(c));
+        }
+
+        return output.ToString();
+    }
+
+    /// <summary>
+    /// Builds a dictionary mapping normalized blendshape names to mesh shape indices.
+    /// </summary>
+    private static Dictionary<string, int> BuildNormalizedMeshShapeMap(MeshInstance3D mesh)
+    {
+        Dictionary<string, int> map = new(StringComparer.Ordinal);
+        if (mesh.Mesh is null)
+        {
+            return map;
+        }
+
+        Mesh? meshResource = mesh.Mesh;
+        if (meshResource is ArrayMesh arrayMesh)
+        {
+            int count = arrayMesh.GetBlendShapeCount();
+            for (int i = 0; i < count; i++)
+            {
+                string meshName = arrayMesh.GetBlendShapeName(i).ToString();
+                string normalized = NormalizeBlendshapeName(meshName);
+                _ = map.TryAdd(normalized, i);
+            }
+        }
+
+        return map;
     }
 
     private readonly record struct ShapeChannelBinding(int SourceFrameIndex, int MeshBlendShapeIndex);

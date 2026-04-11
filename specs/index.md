@@ -16,7 +16,7 @@
 
 ## Speech
 
-- [SPEECH-001: Wav2Arkit Blendshape Feasibility Prototype](speech/001-wav2arkit-blendshape-feasibility/index.md)
+- [SPEECH-001: Wav2Arkit Blendshape Feasibility Prototype](speech/001-wav2arkit-blendshape-player/index.md)
 
 ## Testing
 
