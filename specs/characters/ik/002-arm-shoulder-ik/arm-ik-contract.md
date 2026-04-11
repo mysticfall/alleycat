@@ -6,7 +6,7 @@ title: Arm IK Contract
 
 ## Purpose
 
-Define the arm-only contract for CHAR-002: `TwoBoneIK3D` arm solving, elbow pole-target prediction, and pose
+Define the arm-only contract for IK-002: `TwoBoneIK3D` arm solving, elbow pole-target prediction, and pose
 independence constraints.
 
 ## Contract Scope
@@ -111,10 +111,10 @@ This contract defines details for:
 - AC-18
 - AC-19
 
-Source-of-truth criteria wording is maintained in [CHAR-002 Overview](index.md#acceptance-criteria).
+Source-of-truth criteria wording is maintained in [IK-002 Overview](index.md#acceptance-criteria).
 
 ## References
 
-- [CHAR-002 Overview](index.md)
+- [IK-002 Overview](index.md)
 - [Shoulder Correction Contract](shoulder-adjustment-contract.md)
 - [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md)

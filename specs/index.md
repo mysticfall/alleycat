@@ -3,12 +3,13 @@
 ## Characters
 
 - [CHAR-000: Character Skeleton Profile](characters/000-character-skeleton/index.md)
-- [CHAR-IK: IK Implementation Notes](characters/ik/index.md)
-- [CHAR-001: Reusable Neck-Spine CCDIK Setup](characters/001-neck-spine-ik/index.md)
-- [CHAR-002: Arm And Shoulder IK System](characters/002-arm-shoulder-ik/index.md)
-    - [Arm IK Contract](characters/002-arm-shoulder-ik/arm-ik-contract.md)
-    - [Shoulder Correction Contract](characters/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
-    - [Hand-Rotation Elbow Correction Contract](characters/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
+- [IK: Player VRIK System](characters/ik/index.md)
+  - [IK Implementation Notes](characters/ik/implementation-notes.md)
+  - [IK-001: Reusable Neck-Spine CCDIK Setup](characters/ik/001-neck-spine-ik/index.md)
+  - [IK-002: Arm And Shoulder IK System](characters/ik/002-arm-shoulder-ik/index.md)
+    - [Arm IK Contract](characters/ik/002-arm-shoulder-ik/arm-ik-contract.md)
+    - [Shoulder Correction Contract](characters/ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
+    - [Hand-Rotation Elbow Correction Contract](characters/ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
 
 ## UI
 

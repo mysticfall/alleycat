@@ -1,5 +1,5 @@
 ---
-id: CHAR-001
+id: IK-001
 title: Reusable Neck-Spine CCDIK Setup
 ---
 

@@ -6,7 +6,7 @@ title: Hand-Rotation Elbow Correction Contract
 
 ## Purpose
 
-Define the hand-rotation-based elbow-correction contract for CHAR-002: a mechanism that uses the player's hand
+Define the hand-rotation-based elbow-correction contract for IK-002: a mechanism that uses the player's hand
 controller rotation to apply small additional corrections to the elbow pole-target position, layered on top of the
 baseline pole-target prediction.
 
@@ -74,7 +74,7 @@ The reference hand rotations are sourced from the `Marker3D` nodes under the `Ha
 each key pose.
 
 The reference data must be defined in the body basis to ensure pose-independence (the interpolation works correctly
-regardless of overall body orientation, matching the Pose-Independence Requirement in the CHAR-002 overview).
+regardless of overall body orientation, matching the Pose-Independence Requirement in the IK-002 overview).
 
 The implementation may hardcode the reference marker transforms at authoring time;
 the contract only requires that the interpolated neutral rotation be derived from these markers in body-basis space.
@@ -94,7 +94,7 @@ And adds the following new criteria (to be registered in index.md):
   space, producing smooth and continuous neutral rotations across all hand positions.
 - AC-19: `HandRotationWeight` is exported on `ArmIkController` and is configurable per instance in the Godot editor.
 
-Source-of-truth criteria wording is maintained in [CHAR-002 Overview](index.md#acceptance-criteria).
+Source-of-truth criteria wording is maintained in [IK-002 Overview](index.md#acceptance-criteria).
 
 ## Implementation Notes
 
@@ -107,7 +107,7 @@ Source-of-truth criteria wording is maintained in [CHAR-002 Overview](index.md#a
 
 ## References
 
-- [CHAR-002 Overview](index.md)
+- [IK-002 Overview](index.md)
 - [Arm IK Contract](arm-ik-contract.md)
 - [Shoulder Correction Contract](shoulder-adjustment-contract.md)
 - @game/tests/characters/ik/arm_shoulder_ik_test.gd

@@ -7,7 +7,7 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.Characters;
 
 /// <summary>
-/// Integration tests for CHAR-002 arm and shoulder IK pole-target placement.
+/// Integration tests for IK-002 arm and shoulder IK pole-target placement.
 /// Each pose verifies that the pole target points in the expected anatomical
 /// direction and that the IK solver brings the hand close to the target.
 /// </summary>
@@ -46,7 +46,7 @@ public sealed class ArmShoulderIkIntegrationTests
     ];
 
     /// <summary>
-    /// Loads the CHAR-002 verification scene, iterates all required arm poses, and
+    /// Loads the IK-002 verification scene, iterates all required arm poses, and
     /// asserts that each pole target aligns with its expected anatomical direction
     /// while the IK solver keeps the hand within tolerance of the target.
     /// </summary>

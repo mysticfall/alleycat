@@ -31,7 +31,7 @@ func _init() -> void:
 func _run() -> void:
 	var photobooth: Photobooth = SceneUtils.instantiate_scene(TEST_SCENE_PATH) as Photobooth
 	if photobooth == null:
-		SceneUtils.fatal_error_and_quit("CHAR-001 runner: failed to load test scene: %s" % TEST_SCENE_PATH)
+		SceneUtils.fatal_error_and_quit("IK-001 runner: failed to load test scene: %s" % TEST_SCENE_PATH)
 		return
 
 	root.add_child(photobooth)
@@ -40,24 +40,24 @@ func _run() -> void:
 	var head_target: Node3D = SceneUtils.require_node(photobooth, ^"Markers/HeadTarget") as Node3D
 	var target_poses: Node3D = SceneUtils.require_node(photobooth, ^"Markers/TargetPoses") as Node3D
 	if head_target == null or target_poses == null:
-		SceneUtils.fatal_error_and_quit("CHAR-001 runner: required marker nodes are missing in the test scene")
+		SceneUtils.fatal_error_and_quit("IK-001 runner: required marker nodes are missing in the test scene")
 		return
 
 	var pose_markers: Dictionary = _resolve_pose_markers(target_poses)
 	if pose_markers.is_empty():
-		SceneUtils.fatal_error_and_quit("CHAR-001 runner: failed to resolve required pose markers")
+		SceneUtils.fatal_error_and_quit("IK-001 runner: failed to resolve required pose markers")
 		return
 
 	var skeleton: Skeleton3D = _find_first_skeleton(photobooth)
 	if skeleton == null:
-		SceneUtils.fatal_error_and_quit("CHAR-001 runner: failed to find Skeleton3D in the subject scene")
+		SceneUtils.fatal_error_and_quit("IK-001 runner: failed to find Skeleton3D in the subject scene")
 		return
 
 	if not _bind_ik_target(skeleton, head_target):
 		return
 
 	if _has_user_arg("--validate-only"):
-		print("CHAR-001 runner: validate-only mode completed successfully")
+		print("IK-001 runner: validate-only mode completed successfully")
 		quit(0)
 		return
 
@@ -96,7 +96,7 @@ func _capture_pose_scenarios(photobooth: Photobooth, pose_markers: Dictionary, h
 
 		var marker: DebugMarker = pose_markers.get(marker_name) as DebugMarker
 		if marker == null:
-			SceneUtils.fatal_error_and_quit("CHAR-001 runner: required pose marker '%s' is missing" % marker_name)
+			SceneUtils.fatal_error_and_quit("IK-001 runner: required pose marker '%s' is missing" % marker_name)
 			return
 
 		_set_pose_marker_visibility(pose_markers, marker_name)
@@ -117,7 +117,7 @@ func _resolve_pose_markers(target_poses: Node3D) -> Dictionary:
 		var marker_name: String = pose["marker"] as String
 		var marker: DebugMarker = target_poses.get_node_or_null(NodePath(marker_name)) as DebugMarker
 		if marker == null:
-			SceneUtils.fatal_error_and_quit("CHAR-001 runner: required marker '%s' not found under TargetPoses" % marker_name)
+			SceneUtils.fatal_error_and_quit("IK-001 runner: required marker '%s' not found under TargetPoses" % marker_name)
 			return {}
 
 		markers[marker_name] = marker
@@ -130,19 +130,19 @@ func _bind_ik_target(skeleton: Skeleton3D, head_target: Node3D) -> bool:
 	if ik_node == null:
 		var ik_scene: PackedScene = SceneUtils.load_scene(IK_SCENE_PATH)
 		if ik_scene == null:
-			SceneUtils.fatal_error_and_quit("CHAR-001 runner: failed to load IK scene: %s" % IK_SCENE_PATH)
+			SceneUtils.fatal_error_and_quit("IK-001 runner: failed to load IK scene: %s" % IK_SCENE_PATH)
 			return false
 
 		ik_node = ik_scene.instantiate() as CCDIK3D
 		if ik_node == null:
-			SceneUtils.fatal_error_and_quit("CHAR-001 runner: IK root must be CCDIK3D in scene: %s" % IK_SCENE_PATH)
+			SceneUtils.fatal_error_and_quit("IK-001 runner: IK root must be CCDIK3D in scene: %s" % IK_SCENE_PATH)
 			return false
 
 		skeleton.add_child(ik_node)
 
 	var target_path: NodePath = ik_node.get_path_to(head_target)
 	if target_path.is_empty():
-		SceneUtils.fatal_error_and_quit("CHAR-001 runner: failed to resolve external target path for neck-spine IK")
+		SceneUtils.fatal_error_and_quit("IK-001 runner: failed to resolve external target path for neck-spine IK")
 		return false
 
 	ik_node.set("settings/0/target_node", target_path)

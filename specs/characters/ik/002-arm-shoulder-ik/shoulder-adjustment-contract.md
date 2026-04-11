@@ -6,7 +6,7 @@ title: Shoulder Correction Contract
 
 ## Purpose
 
-Define the shoulder-correction contract for CHAR-002: pre-IK correction behaviour integrated into `ArmIkController`,
+Define the shoulder-correction contract for IK-002: pre-IK correction behaviour integrated into `ArmIkController`,
 parameterisation, ordering, and testability requirements.
 
 ## Contract Scope
@@ -90,9 +90,9 @@ This contract defines details for:
 - AC-15
 - AC-16
 
-Source-of-truth criteria wording is maintained in [CHAR-002 Overview](index.md#acceptance-criteria).
+Source-of-truth criteria wording is maintained in [IK-002 Overview](index.md#acceptance-criteria).
 
 ## References
 
-- [CHAR-002 Overview](index.md)
+- [IK-002 Overview](index.md)
 - [Arm IK Contract](arm-ik-contract.md)

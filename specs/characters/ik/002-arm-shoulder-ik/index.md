@@ -1,5 +1,5 @@
 ---
-id: CHAR-002
+id: IK-002
 title: Arm And Shoulder IK System
 ---
 
@@ -19,7 +19,7 @@ character setups.
 
 ## Specification Structure
 
-This page is the source-of-truth overview for CHAR-002. Detailed component contracts are split into focused pages:
+This page is the source-of-truth overview for IK-002. Detailed component contracts are split into focused pages:
 
 - [Arm IK Contract](arm-ik-contract.md)
 - [Shoulder Correction Contract](shoulder-adjustment-contract.md)
@@ -146,9 +146,9 @@ diagnostic aid reviewed when assertions fail.
 ## References
 
 - @game/assets/characters/reference/female/reference_female.tscn
-- @specs/characters/001-neck-spine-ik/index.md
+- @specs/characters/ik/001-neck-spine-ik/index.md
 - @specs/testing/002-visual-verification-scope/index.md
 - @specs/characters/000-character-skeleton/index.md
-- @specs/characters/002-arm-shoulder-ik/arm-ik-contract.md
-- @specs/characters/002-arm-shoulder-ik/shoulder-adjustment-contract.md
-- @specs/characters/002-arm-shoulder-ik/hand-rotation-correction-contract.md
+- @specs/characters/ik/002-arm-shoulder-ik/arm-ik-contract.md
+- @specs/characters/ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md
+- @specs/characters/ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md

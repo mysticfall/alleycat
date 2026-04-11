@@ -29,7 +29,7 @@ func _init() -> void:
 func _run() -> void:
 	var photobooth: Photobooth = SceneUtils.instantiate_scene(TEST_SCENE_PATH) as Photobooth
 	if photobooth == null:
-		SceneUtils.fatal_error_and_quit("CHAR-002 runner: failed to load test scene: %s" % TEST_SCENE_PATH)
+		SceneUtils.fatal_error_and_quit("IK-002 runner: failed to load test scene: %s" % TEST_SCENE_PATH)
 		return
 
 	root.add_child(photobooth)
@@ -37,22 +37,22 @@ func _run() -> void:
 
 	var hand_target_poses: Node3D = SceneUtils.require_node(photobooth, ^"Markers/HandTargetPoses") as Node3D
 	if hand_target_poses == null:
-		SceneUtils.fatal_error_and_quit("CHAR-002 runner: required HandTargetPoses node is missing")
+		SceneUtils.fatal_error_and_quit("IK-002 runner: required HandTargetPoses node is missing")
 		return
 
 	var left_hand_target: Marker3D = SceneUtils.require_node(photobooth, ^"Markers/LeftHandTarget") as Marker3D
 	var right_hand_target: Marker3D = SceneUtils.require_node(photobooth, ^"Markers/RightHandTarget") as Marker3D
 	if left_hand_target == null or right_hand_target == null:
-		SceneUtils.fatal_error_and_quit("CHAR-002 runner: hand target markers are missing from the test scene")
+		SceneUtils.fatal_error_and_quit("IK-002 runner: hand target markers are missing from the test scene")
 		return
 
 	var pose_markers: Dictionary = _resolve_pose_markers(hand_target_poses)
 	if pose_markers.is_empty():
-		SceneUtils.fatal_error_and_quit("CHAR-002 runner: failed to resolve required pose markers")
+		SceneUtils.fatal_error_and_quit("IK-002 runner: failed to resolve required pose markers")
 		return
 
 	if _has_user_arg("--validate-only"):
-		print("CHAR-002 runner: validate-only mode completed successfully")
+		print("IK-002 runner: validate-only mode completed successfully")
 		quit(0)
 		return
 
@@ -108,7 +108,7 @@ func _capture_pose_scenarios(
 
 		if left_marker == null or right_marker == null:
 			SceneUtils.fatal_error_and_quit(
-				"CHAR-002 runner: required pose markers '%s' / '%s' are missing" % [left_marker_name, right_marker_name])
+				"IK-002 runner: required pose markers '%s' / '%s' are missing" % [left_marker_name, right_marker_name])
 			return
 
 		_set_pose_marker_visibility(pose_markers, left_marker_name, right_marker_name)
@@ -134,13 +134,13 @@ func _resolve_pose_markers(hand_target_poses: Node3D) -> Dictionary:
 		var left_marker: DebugMarker = hand_target_poses.get_node_or_null(NodePath(left_name)) as DebugMarker
 		if left_marker == null:
 			SceneUtils.fatal_error_and_quit(
-				"CHAR-002 runner: required marker '%s' not found under HandTargetPoses" % left_name)
+				"IK-002 runner: required marker '%s' not found under HandTargetPoses" % left_name)
 			return {}
 
 		var right_marker: DebugMarker = hand_target_poses.get_node_or_null(NodePath(right_name)) as DebugMarker
 		if right_marker == null:
 			SceneUtils.fatal_error_and_quit(
-				"CHAR-002 runner: required marker '%s' not found under HandTargetPoses" % right_name)
+				"IK-002 runner: required marker '%s' not found under HandTargetPoses" % right_name)
 			return {}
 
 		markers[left_name] = left_marker

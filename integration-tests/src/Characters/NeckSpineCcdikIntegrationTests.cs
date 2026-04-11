@@ -5,7 +5,7 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.Characters;
 
 /// <summary>
-/// Non-visual integration coverage for CHAR-001 neck-spine CCDIK behaviour.
+/// Non-visual integration coverage for IK-001 neck-spine CCDIK behaviour.
 /// </summary>
 public sealed class NeckSpineCcdikIntegrationTests
 {
@@ -36,7 +36,7 @@ public sealed class NeckSpineCcdikIntegrationTests
     ];
 
     /// <summary>
-    /// Loads the CHAR-001 verification scene and validates required marker, CCDIK binding, and deterministic neck motion.
+    /// Loads the IK-001 verification scene and validates required marker, CCDIK binding, and deterministic neck motion.
     /// </summary>
     [Fact]
     public async Task NeckSpineCcdik_VerificationScene_BindsTargetAndTracksRequiredPoses()
