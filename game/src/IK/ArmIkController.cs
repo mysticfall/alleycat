@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Characters;
+namespace AlleyCat.IK;
 
 /// <summary>
 /// Which arm this controller drives.

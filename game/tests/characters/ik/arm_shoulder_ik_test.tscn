@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://iydxa1tdrcn" path="res://assets/characters/reference/female/photobooth/upper_body_5_cams.tscn" id="1_y7vjr"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_ev7qn"]
-[ext_resource type="Script" uid="uid://c3tfr8jxcytvh" path="res://src/Characters/ArmIkController.cs" id="3_ctrl"]
+[ext_resource type="Script" uid="uid://c3tfr8jxcytvh" path="res://src/IK/ArmIkController.cs" id="3_ctrl"]
 
 [node name="Photobooth" unique_id=406188165 instance=ExtResource("1_y7vjr")]
 

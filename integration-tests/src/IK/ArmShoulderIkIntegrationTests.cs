@@ -4,7 +4,7 @@ using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
-namespace AlleyCat.IntegrationTests.Characters;
+namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
 /// Integration tests for IK-002 arm and shoulder IK pole-target placement.

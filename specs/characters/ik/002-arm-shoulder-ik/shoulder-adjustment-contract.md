@@ -76,7 +76,7 @@ It provides pure math helpers for:
 - Damped delta computation (rest-to-current delta slerped towards identity).
 - Adaptive correction-weight computation.
 
-Dedicated C# unit tests in `@tests/src/Characters/` must validate known input/output pairs.
+Dedicated C# unit tests in `@tests/src/IK/` must validate known input/output pairs.
 
 ## Acceptance Criteria Coverage
 

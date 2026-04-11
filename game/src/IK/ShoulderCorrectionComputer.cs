@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Characters;
+namespace AlleyCat.IK;
 
 /// <summary>
 /// Computes deterministic shoulder correction using a look-at delta approach.

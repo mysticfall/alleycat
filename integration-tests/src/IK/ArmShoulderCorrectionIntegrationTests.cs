@@ -2,7 +2,7 @@ using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
-namespace AlleyCat.IntegrationTests.Characters;
+namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
 /// Integration coverage for shoulder look-at correction behaviour.

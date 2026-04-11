@@ -2,7 +2,7 @@ using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
-namespace AlleyCat.IntegrationTests.Characters;
+namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
 /// Non-visual integration coverage for IK-001 neck-spine CCDIK behaviour.

@@ -1,8 +1,8 @@
-using AlleyCat.Characters;
+using AlleyCat.IK;
 using Godot;
 using Xunit;
 
-namespace AlleyCat.Tests.Characters;
+namespace AlleyCat.Tests.IK;
 
 /// <summary>
 /// Unit coverage for the look-at delta shoulder correction approach.
