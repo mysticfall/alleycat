@@ -4,7 +4,7 @@ using Godot;
 namespace AlleyCat.UI;
 
 /// <summary>
-/// Displays the opening splash screen and fades the logo in.
+/// Displays the opening splash screen, fades the logo in, then fades it out.
 /// </summary>
 [GlobalClass]
 public partial class SplashScreen : Control
@@ -15,13 +15,25 @@ public partial class SplashScreen : Control
     /// Delay in seconds before the logo fade begins.
     /// </summary>
     [Export(PropertyHint.Range, "0.0,10.0,0.1,or_greater")]
-    public float FadeDelaySeconds { get; set; } = 2.0f;
+    public float FadeInDelaySeconds { get; set; } = 2.0f;
 
     /// <summary>
     /// Duration in seconds for the logo fade animation.
     /// </summary>
     [Export(PropertyHint.Range, "0.1,10.0,0.1,or_greater")]
-    public float FadeDurationSeconds { get; set; } = 3.0f;
+    public float FadeDurationSeconds { get; set; } = 2.0f;
+
+    /// <summary>
+    /// Delay in seconds after fade-in before fade-out starts.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.0,10.0,0.1,or_greater")]
+    public float FadeOutDelaySeconds { get; set; } = 3.0f;
+
+    /// <summary>
+    /// Emitted once the splash fade-out has completed.
+    /// </summary>
+    [Signal]
+    private delegate void SplashFinishedEventHandler();
 
     private Sprite2D? _logo;
 
@@ -40,8 +52,15 @@ public partial class SplashScreen : Control
         Tween tween = CreateTween();
         _ = tween
             .TweenProperty(_logo, "modulate:a", 1.0, FadeDurationSeconds)
-            .SetDelay(FadeDelaySeconds);
+            .SetDelay(FadeInDelaySeconds);
+
+        _ = tween.TweenInterval(FadeOutDelaySeconds);
+        _ = tween.TweenProperty(_logo, "modulate:a", 0.0, FadeDurationSeconds);
+        _ = tween.TweenCallback(Callable.From(EmitSplashFinished));
     }
+
+    private void EmitSplashFinished()
+        => EmitSignal(SignalName.SplashFinished);
 
     private void ScaleLogoToViewportWidth()
     {

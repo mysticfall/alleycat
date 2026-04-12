@@ -21,8 +21,8 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
 
     private static readonly FadeTimingFixture[] _timingFixtures =
     [
-        new FadeTimingFixture("Default timings", 2.0f, 3.0f),
-        new FadeTimingFixture("Short timings", 0.6f, 1.2f),
+        new FadeTimingFixture("Default timings", 2.0f, 3.0f, 1.0f),
+        new FadeTimingFixture("Short timings", 0.6f, 1.2f, 0.4f),
     ];
 
     private double _previousTimeScale;
@@ -30,7 +30,8 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
     private readonly record struct FadeTimingFixture(
         string Name,
         float DelaySeconds,
-        float DurationSeconds);
+        float DurationSeconds,
+        float FadeOutDelaySeconds);
 
     // Engine.TimeScale is global engine state; this test scopes changes to lifecycle and restores it in DisposeAsync.
     /// <inheritdoc />
@@ -59,31 +60,38 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
     public async Task SplashScreen_Layout_MatchesViewportContracts()
     {
         SceneTree sceneTree = GetSceneTree();
-        await WaitForNextFrameAsync(sceneTree);
+        Node splashScreen = await InstantiateSplashScreenAsync(
+            sceneTree,
+            new FadeTimingFixture("Layout fixture", 2.0f, 3.0f, 1.0f));
 
-        Node splashScreen = Assert.IsAssignableFrom<Node>(sceneTree.CurrentScene);
-        Assert.Equal(typeof(SplashScreen).FullName, splashScreen.GetType().FullName);
+        try
+        {
+            Control splashControl = Assert.IsAssignableFrom<Control>(splashScreen);
+            Sprite2D logo = splashScreen.GetNode<Sprite2D>("Logo/Image");
 
-        Control splashControl = Assert.IsAssignableFrom<Control>(splashScreen);
-        Sprite2D logo = splashScreen.GetNode<Sprite2D>("Logo/Image");
+            float viewportWidth = splashControl.GetViewport().GetVisibleRect().Size.X;
+            Assert.True(viewportWidth > 0.0f, "Viewport width must be positive before logo ratio checks.");
 
-        float viewportWidth = splashControl.GetViewport().GetVisibleRect().Size.X;
-        Assert.True(viewportWidth > 0.0f, "Viewport width must be positive before logo ratio checks.");
-
-        float logoRenderedWidth = logo.GetRect().Size.X * Mathf.Abs(logo.GlobalScale.X);
-        float logoWidthRatio = logoRenderedWidth / viewportWidth;
-        // Keep a modest tolerance for viewport/render import variance while enforcing the ~50% spec intent.
-        Assert.InRange(
-            logoWidthRatio,
-            ExpectedLogoWidthRatio - LogoWidthRatioTolerance,
-            ExpectedLogoWidthRatio + LogoWidthRatioTolerance);
+            float logoRenderedWidth = logo.GetRect().Size.X * Mathf.Abs(logo.GlobalScale.X);
+            float logoWidthRatio = logoRenderedWidth / viewportWidth;
+            // Keep a modest tolerance for viewport/render import variance while enforcing the ~50% spec intent.
+            Assert.InRange(
+                logoWidthRatio,
+                ExpectedLogoWidthRatio - LogoWidthRatioTolerance,
+                ExpectedLogoWidthRatio + LogoWidthRatioTolerance);
+        }
+        finally
+        {
+            splashScreen.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
     }
 
     /// <summary>
     /// Verifies fade timing behaviour across representative exported-property fixtures.
     /// </summary>
     [Fact]
-    public async Task SplashScreen_FadeTimingFixtures_MatchConfiguredDelayAndDuration()
+    public async Task SplashScreen_FadeLifecycleFixtures_MatchConfiguredTimingAndCompletionSignal()
     {
         SceneTree sceneTree = GetSceneTree();
         AssertExportedTimingProperties();
@@ -92,6 +100,12 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
         {
             Node splashScreen = await InstantiateSplashScreenAsync(sceneTree, fixture);
             Sprite2D logo = splashScreen.GetNode<Sprite2D>("Logo/Image");
+            SignalAwaiter completionSignal = sceneTree.ToSignal(splashScreen, SplashScreen.SignalName.SplashFinished);
+
+            int completionSignalCount = 0;
+            _ = splashScreen.Connect(
+                SplashScreen.SignalName.SplashFinished,
+                Callable.From(() => completionSignalCount++));
 
             try
             {
@@ -117,6 +131,33 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
                     logo.Modulate.A,
                     0.95f,
                     1.0f);
+
+                double preFadeOutWaitSeconds = Math.Max(0.05, fixture.FadeOutDelaySeconds * 0.70);
+                await WaitForSecondsAsync(sceneTree, preFadeOutWaitSeconds);
+                Assert.InRange(
+                    logo.Modulate.A,
+                    0.75f,
+                    1.0f);
+
+                double midFadeOutWaitSeconds = Math.Max(0.05, fixture.FadeOutDelaySeconds + (fixture.DurationSeconds * 0.40) - preFadeOutWaitSeconds);
+                await WaitForSecondsAsync(sceneTree, midFadeOutWaitSeconds);
+                Assert.InRange(
+                    logo.Modulate.A,
+                    0.20f,
+                    0.85f);
+
+                double fadeOutCompletionWaitSeconds = Math.Max(0.05, fixture.DurationSeconds * 0.70);
+                await WaitForSecondsAsync(sceneTree, fadeOutCompletionWaitSeconds);
+                Assert.InRange(
+                    logo.Modulate.A,
+                    0.0f,
+                    0.05f);
+
+                _ = await completionSignal;
+                Assert.Equal(1, completionSignalCount);
+
+                await WaitForSecondsAsync(sceneTree, Math.Max(0.05, fixture.DurationSeconds * 0.50));
+                Assert.Equal(1, completionSignalCount);
             }
             catch (Xunit.Sdk.XunitException assertionError)
             {
@@ -136,8 +177,9 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
     {
         PackedScene splashScene = LoadPackedScene(SplashScreenScenePath);
         Node splashScreen = splashScene.Instantiate();
-        splashScreen.Set(nameof(SplashScreen.FadeDelaySeconds), fixture.DelaySeconds);
+        splashScreen.Set(nameof(SplashScreen.FadeInDelaySeconds), fixture.DelaySeconds);
         splashScreen.Set(nameof(SplashScreen.FadeDurationSeconds), fixture.DurationSeconds);
+        splashScreen.Set(nameof(SplashScreen.FadeOutDelaySeconds), fixture.FadeOutDelaySeconds);
 
         sceneTree.Root.AddChild(splashScreen);
         await WaitForFramesAsync(sceneTree, 2);
@@ -147,26 +189,33 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
 
     private static void AssertExportedTimingProperties()
     {
-        PropertyInfo? fadeDelayProperty = typeof(SplashScreen).GetProperty(nameof(SplashScreen.FadeDelaySeconds));
+        PropertyInfo? fadeInDelayProperty = typeof(SplashScreen).GetProperty(nameof(SplashScreen.FadeInDelaySeconds));
         PropertyInfo? fadeDurationProperty = typeof(SplashScreen).GetProperty(nameof(SplashScreen.FadeDurationSeconds));
+        PropertyInfo? fadeOutDelayProperty = typeof(SplashScreen).GetProperty(nameof(SplashScreen.FadeOutDelaySeconds));
 
-        Assert.NotNull(fadeDelayProperty);
+        Assert.NotNull(fadeInDelayProperty);
         Assert.NotNull(fadeDurationProperty);
+        Assert.NotNull(fadeOutDelayProperty);
 
-        ExportAttribute? fadeDelayExport = fadeDelayProperty.GetCustomAttribute<ExportAttribute>();
+        ExportAttribute? fadeInDelayExport = fadeInDelayProperty.GetCustomAttribute<ExportAttribute>();
         ExportAttribute? fadeDurationExport = fadeDurationProperty.GetCustomAttribute<ExportAttribute>();
+        ExportAttribute? fadeOutDelayExport = fadeOutDelayProperty.GetCustomAttribute<ExportAttribute>();
 
-        Assert.NotNull(fadeDelayExport);
+        Assert.NotNull(fadeInDelayExport);
         Assert.NotNull(fadeDurationExport);
+        Assert.NotNull(fadeOutDelayExport);
 
-        Assert.Equal(PropertyHint.Range, fadeDelayExport.Hint);
+        Assert.Equal(PropertyHint.Range, fadeInDelayExport.Hint);
         Assert.Equal(PropertyHint.Range, fadeDurationExport.Hint);
+        Assert.Equal(PropertyHint.Range, fadeOutDelayExport.Hint);
 
-        Assert.Equal(DelayRangeHint, fadeDelayExport.HintString);
+        Assert.Equal(DelayRangeHint, fadeInDelayExport.HintString);
         Assert.Equal(DurationRangeHint, fadeDurationExport.HintString);
+        Assert.Equal(DelayRangeHint, fadeOutDelayExport.HintString);
 
         AssertHintContainsDefaultValue(DelayRangeHint, 2.0f);
         AssertHintContainsDefaultValue(DurationRangeHint, 3.0f);
+        AssertHintContainsDefaultValue(DelayRangeHint, 1.0f);
     }
 
     private static void AssertHintContainsDefaultValue(string hintString, float defaultValue)
