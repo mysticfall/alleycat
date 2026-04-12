@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://dchnvffx15knj" path="res://assets/ui/splash_screen.tscn" id="1_axcyo"]
 [ext_resource type="Script" uid="uid://ocb6a7tcvpuj" path="res://src/XR/XRDevices.cs" id="1_drti4"]
+[ext_resource type="Script" uid="uid://dnhgmtldhk7uu" path="res://src/Common/UprightRemoteTransform3D.cs" id="2_rwee4"]
 
 [node name="Game" type="Node" unique_id=122195563]
 
@@ -15,6 +16,11 @@ metadata/_custom_type_script = "uid://ocb6a7tcvpuj"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
 current = true
 fov = 37.849285
+
+[node name="UprightRemoteTransform3D" type="Node3D" parent="XR/Origin/MainCamera" unique_id=1786637149 node_paths=PackedStringArray("TargetNode")]
+script = ExtResource("2_rwee4")
+TargetNode = NodePath("../../XRCompositionLayer")
+metadata/_custom_type_script = "uid://dnhgmtldhk7uu"
 
 [node name="RightController" type="XRController3D" parent="XR/Origin" unique_id=913598918]
 tracker = &"right_hand"
