@@ -6,31 +6,21 @@ id: CORE-001
 
 ## Overview
 
-The Global Scene (`@game/assets/scenes/global.tscn`) is an automatically loaded Godot autoload that provides core XR infrastructure and global services to all loaded scenes in the game. It serves as the foundational layer for VR support and UI rendering.
+The Global Scene (`@game/assets/scenes/global.tscn`) is an automatically loaded Godot autoload that provides global services and shared rendering infrastructure to all loaded scenes in the game. It serves as the foundational layer for VR support and UI rendering.
 
 ## Requirement
 
 The Global Scene must provide:
 
-1. XR interface initialisation with complete headset and controller tracking
-2. A dedicated SubViewport for rendering full-screen UI and overlays
-3. Equirectangular projection layer for immersive visual content
+1. Global autoload availability for session-wide systems
+2. XR runtime wiring via XRManager (see [XR-001: XRManager](../xr/001-xr-manager/index.md))
+3. A dedicated SubViewport for rendering full-screen UI and overlays
 
 ## Features
 
-### XRDevices
+### XR Runtime Integration
 
-The XRDevices component (`@game/src/XR/XRDevices.cs`) manages all XR-related functionality:
-
-| Node | Type | Description |
-|------|------|-------------|
-| Origin | XROrigin3D | Root node for all XR tracking |
-| MainCamera | XRCamera3D | Primary camera at y=1.7m with 37.85° FOV |
-| RightController | XRController3D | Right hand tracker |
-| LeftController | XRController3D | Left hand tracker |
-| RightController/HandPosition | Node3D | Right hand transform reference |
-| LeftController/HandPosition | Node3D | Left hand transform reference |
-| XRCompositionLayer | OpenXRCompositionLayerEquirect | Immersive equirectangular projection |
+Global Scene integrates XRManager and hosts XR runtime composition. The XRManager contract is specified in [XR-001: XRManager](../xr/001-xr-manager/index.md).
 
 ### SubViewport
 
@@ -55,5 +45,8 @@ The Global Scene implements the autoload pattern, meaning it is automatically in
 
 ### Implementation
 
-- @game/src/XR/XRDevices.cs
 - @game/assets/scenes/global.tscn
+
+### Related Specs
+
+- [XR-001: XRManager](../xr/001-xr-manager/index.md)

@@ -108,7 +108,7 @@ META_ENVIRONMENT_DEPTH_TO_CAMERA_PROJECTION_RIGHT={
 [xr]
 
 openxr/enabled=true
-openxr/default_action_map="res://assets/openxr_action_map.tres"
+openxr/default_action_map="res://assets/xr/openxr_action_map.tres"
 openxr/reference_space=2
 openxr/foveation_level=1
 openxr/foveation_dynamic=true

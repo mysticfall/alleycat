@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://bt5ksnc6kjekx"]
+
+[ext_resource type="Script" uid="uid://dnhgmtldhk7uu" path="res://src/Common/UprightRemoteTransform3D.cs" id="1_3d4ce"]
+[ext_resource type="Script" uid="uid://cu4kqed31nlny" path="res://src/XR/OpenXR/OpenXRCameraNode.cs" id="1_4dboc"]
+[ext_resource type="Script" uid="uid://dv076impllmml" path="res://src/XR/OpenXR/OpenXRRuntimeNode.cs" id="1_4of4h"]
+[ext_resource type="Script" uid="uid://bkdutbkqpelq8" path="res://src/XR/OpenXR/OpenXRHandControllerNode.cs" id="1_22d6f"]
+
+[node name="Origin" type="XROrigin3D" unique_id=2070622317]
+script = ExtResource("1_4of4h")
+metadata/_custom_type_script = "uid://dv076impllmml"
+
+[node name="MainCamera" type="XRCamera3D" parent="." unique_id=1152033593]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+current = true
+fov = 37.849285
+script = ExtResource("1_4dboc")
+metadata/_custom_type_script = "uid://cu4kqed31nlny"
+
+[node name="UprightRemoteTransform3D" type="Node3D" parent="MainCamera" unique_id=426209688 node_paths=PackedStringArray("TargetNode")]
+script = ExtResource("1_3d4ce")
+TargetNode = NodePath("../../XRCompositionLayer")
+metadata/_custom_type_script = "uid://dnhgmtldhk7uu"
+
+[node name="RightController" type="XRController3D" parent="." unique_id=136374280]
+tracker = &"right_hand"
+script = ExtResource("1_22d6f")
+metadata/_custom_type_script = "uid://bkdutbkqpelq8"
+
+[node name="HandPosition" type="Node3D" parent="RightController" unique_id=947934709]
+transform = Transform3D(0.14504121, 0.8552172, -0.49756095, 0.6981453, -0.44480193, -0.56102145, -0.70111144, -0.26599848, -0.66157997, 0, 0, 0.08)
+
+[node name="LeftController" type="XRController3D" parent="." unique_id=1833109034]
+tracker = &"left_hand"
+script = ExtResource("1_22d6f")
+metadata/_custom_type_script = "uid://bkdutbkqpelq8"
+
+[node name="HandPosition" type="Node3D" parent="LeftController" unique_id=1550645025]
+transform = Transform3D(-0.05551585, -0.7472793, 0.6621871, -0.69837934, -0.44491664, -0.5606389, 0.7135722, -0.49358213, -0.4971841, 0, 0, 0.080010474)
+
+[node name="XRCompositionLayer" type="OpenXRCompositionLayerEquirect" parent="." unique_id=1923844384]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+alpha_blend = true
+radius = 5.0
+upper_vertical_angle = 0.5235988
+lower_vertical_angle = 0.5235988

@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://djamb77looxqd"]
+
+[ext_resource type="Script" uid="uid://yv0ybhel16nx" path="res://src/XR/Mock/MockXRHandControllerNode.cs" id="1_67sf0"]
+[ext_resource type="Script" uid="uid://cpw4pbjcrwex4" path="res://src/XR/Mock/MockXRCameraNode.cs" id="1_qivnm"]
+[ext_resource type="Script" uid="uid://n6yev308glgw" path="res://src/XR/Mock/MockXRRuntimeNode.cs" id="1_xjl7o"]
+
+[node name="Origin" type="Node3D" unique_id=402881029]
+script = ExtResource("1_xjl7o")
+metadata/_custom_type_script = "uid://n6yev308glgw"
+
+[node name="MainCamera" type="Camera3D" parent="." unique_id=991863339]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+current = true
+fov = 37.849285
+script = ExtResource("1_qivnm")
+metadata/_custom_type_script = "uid://cpw4pbjcrwex4"
+
+[node name="RightController" type="Node3D" parent="." unique_id=1695659664]
+script = ExtResource("1_67sf0")
+metadata/_custom_type_script = "uid://yv0ybhel16nx"
+
+[node name="HandPosition" type="Node3D" parent="RightController" unique_id=1476760050]
+transform = Transform3D(0.14504121, 0.8552172, -0.49756095, 0.6981453, -0.44480193, -0.56102145, -0.70111144, -0.26599848, -0.66157997, 0, 0, 0.08)
+
+[node name="LeftController" type="Node3D" parent="." unique_id=1781556025]
+script = ExtResource("1_67sf0")
+metadata/_custom_type_script = "uid://yv0ybhel16nx"
+
+[node name="HandPosition" type="Node3D" parent="LeftController" unique_id=67106830]
+transform = Transform3D(-0.05551585, -0.7472793, 0.6621871, -0.69837934, -0.44491664, -0.5606389, 0.7135722, -0.49358213, -0.4971841, 0, 0, 0.080010474)

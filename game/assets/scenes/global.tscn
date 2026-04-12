@@ -1,46 +1,17 @@
 [gd_scene format=3 uid="uid://bkrvnimi5hm7a"]
 
 [ext_resource type="PackedScene" uid="uid://dchnvffx15knj" path="res://assets/ui/splash_screen.tscn" id="1_axcyo"]
-[ext_resource type="Script" uid="uid://ocb6a7tcvpuj" path="res://src/XR/XRDevices.cs" id="1_drti4"]
-[ext_resource type="Script" uid="uid://dnhgmtldhk7uu" path="res://src/Common/UprightRemoteTransform3D.cs" id="2_rwee4"]
+[ext_resource type="PackedScene" path="res://assets/xr/openxr_runtime.tscn" id="1_bt0ui"]
+[ext_resource type="PackedScene" path="res://assets/xr/mock_runtime.tscn" id="1_5jb1w"]
+[ext_resource type="Script" uid="uid://bmvh0kef7f276" path="res://src/XR/XRManager.cs" id="1_drti4"]
 
 [node name="Game" type="Node" unique_id=122195563]
 
 [node name="XR" type="Node" parent="." unique_id=1281566339]
 script = ExtResource("1_drti4")
-metadata/_custom_type_script = "uid://ocb6a7tcvpuj"
-
-[node name="Origin" type="XROrigin3D" parent="XR" unique_id=1082983190]
-
-[node name="MainCamera" type="XRCamera3D" parent="XR/Origin" unique_id=1449309973]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
-current = true
-fov = 37.849285
-
-[node name="UprightRemoteTransform3D" type="Node3D" parent="XR/Origin/MainCamera" unique_id=1786637149 node_paths=PackedStringArray("TargetNode")]
-script = ExtResource("2_rwee4")
-TargetNode = NodePath("../../XRCompositionLayer")
-metadata/_custom_type_script = "uid://dnhgmtldhk7uu"
-
-[node name="RightController" type="XRController3D" parent="XR/Origin" unique_id=913598918]
-tracker = &"right_hand"
-
-[node name="HandPosition" type="Node3D" parent="XR/Origin/RightController" unique_id=306444527]
-transform = Transform3D(0.14504121, 0.8552172, -0.49756095, 0.6981453, -0.44480193, -0.56102145, -0.70111144, -0.26599848, -0.66157997, 0, 0, 0.08)
-
-[node name="LeftController" type="XRController3D" parent="XR/Origin" unique_id=1164930213]
-tracker = &"left_hand"
-
-[node name="HandPosition" type="Node3D" parent="XR/Origin/LeftController" unique_id=860606255]
-transform = Transform3D(-0.05551585, -0.7472793, 0.6621871, -0.69837934, -0.44491664, -0.5606389, 0.7135722, -0.49358213, -0.4971841, 0, 0, 0.080010474)
-
-[node name="XRCompositionLayer" type="OpenXRCompositionLayerEquirect" parent="XR/Origin" unique_id=225922134 node_paths=PackedStringArray("layer_viewport")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
-layer_viewport = NodePath("../../SubViewport")
-alpha_blend = true
-radius = 5.0
-upper_vertical_angle = 0.5235988
-lower_vertical_angle = 0.5235988
+metadata/_custom_type_script = "uid://bmvh0kef7f276"
+OpenXrRuntimeScene = ExtResource("1_bt0ui")
+MockRuntimeScene = ExtResource("1_5jb1w")
 
 [node name="SubViewport" type="SubViewport" parent="XR" unique_id=1170900058]
 disable_3d = true
