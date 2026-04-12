@@ -11,6 +11,31 @@ Use this skill when writing or updating C# code in the AlleyCat repository.
 
 - Use `var` for local variable declarations only when the type is immediately clear.
 - Use expression-bodied members for methods when it improves readability and the method body is a single expression.
+- When using **primary constructors**, avoid creating unnecessary backing fields that merely duplicate the
+  constructor parameter. Instead of storing the parameter in a field and then returning that field from a
+  property, return the parameter directly:
+
+```csharp
+// Avoid this pattern (redundant field):
+internal sealed partial class MockXrManagerCamera(Camera3D cameraNode) : XRManagerCamera
+{
+    private readonly Camera3D _cameraNode = cameraNode;
+
+    public override Camera3D Camera3D => _cameraNode;
+}
+
+// Prefer this pattern (direct use of parameter):
+internal sealed partial class MockXrManagerCamera(Camera3D cameraNode) : XRManagerCamera
+{
+    public override Camera3D Camera3D => cameraNode;
+}
+```
+
+## Naming Conventions
+- Write abbreviations in uppercase when they appear as standalone words in identifiers. For example, `UIButton`,
+  `XRInterface`, or `HTTPClient` — not `UiButton`, `XrInterface`, or `HttpClient`.
+- Apply this rule consistently to acronyms (two or more letters) such as UI, XR, HTTP, API, ID, and URL.
+
 
 ## Node Access
 
