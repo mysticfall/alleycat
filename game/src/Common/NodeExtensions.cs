@@ -22,7 +22,7 @@ public static class NodeExtensions
 
             return result ?? throw new InvalidOperationException(
                 $"Required node '{path}' of type {typeof(T).Name} not found on {node.Name} " +
-                $"({node.GetType().FullName}).");
+                $"({node.GetPath()}).");
         }
     }
 }

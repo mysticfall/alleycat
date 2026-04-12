@@ -14,9 +14,24 @@ Use this skill when writing or updating C# code in the AlleyCat repository.
 
 ## Node Access
 
-- Use `RequireNode<T>` (defined in `AlleyCat.Common.NodeExtensions`) instead of `GetNode<T>` when a component
+- Use `RequireNode<T>` (defined in `AlleyCat.Common.NodeExtensions`) instead of `GetNode<T>` or `GetNodeOrNull<T>` when a component
   **requires** a child node to function — a missing node indicates a scene-authoring bug.
 - Bring the extension method into scope with `using AlleyCat.Common;`.
+- After resolving a required node in `_Ready()`, use the **null-forgiving operator (`!`)** when accessing members that are guaranteed to be non-null:
+
+```csharp
+using AlleyCat.Common;
+
+// In _Ready():
+Sprite2D logo = this.RequireNode<Sprite2D>("Logo/Image");
+
+// Later in the class, no null-check needed:
+Texture2D texture = logo!.Texture;
+```
+
+- This approach removes defensive null-checks for nodes resolved via `RequireNode`. The assertion is appropriate because:
+  - `RequireNode` throws if the node is missing → a scene-authoring bug is caught at runtime.
+  - After `_Ready()`, the node is guaranteed to exist for the lifetime of the component.
 
 ```csharp
 using AlleyCat.Common;

@@ -1,3 +1,4 @@
+using System.Text;
 using Godot;
 
 namespace AlleyCat.Speech;
@@ -36,16 +37,6 @@ public abstract partial class BlendShapePlayer : Node
         get;
         set;
     } = null!;
-
-    /// <summary>
-    /// Fallback node path used when the direct audio player reference is unresolved.
-    /// </summary>
-    [Export]
-    public NodePath AudioPlayerPath
-    {
-        get;
-        set;
-    } = new("../Subject/Female/Female_export/GeneralSkeleton/HeadBone/AudioStreamPlayer3D");
 
     /// <summary>
     /// Whether playback should begin automatically when initialisation succeeds.
@@ -319,12 +310,6 @@ public abstract partial class BlendShapePlayer : Node
             throw new InvalidOperationException("BlendShapePlayer: AudioStream is not assigned.");
         }
 
-        AudioStreamPlayer3D resolvedAudioPlayer = AudioPlayer
-            ?? GetNodeOrNull<AudioStreamPlayer3D>(AudioPlayerPath)
-            ?? throw new InvalidOperationException("BlendShapePlayer: AudioPlayer is not assigned.");
-
-        AudioPlayer = resolvedAudioPlayer;
-
         AudioStreamWav audioStream = AudioStream;
         InitialiseBackend(audioStream);
         BlendShapeInferenceResult inferenceResult = RunBackendInference();
@@ -490,7 +475,7 @@ public abstract partial class BlendShapePlayer : Node
     /// </summary>
     protected static string NormalizeBlendshapeName(string name)
     {
-        var output = new System.Text.StringBuilder(name.Length);
+        var output = new StringBuilder(name.Length);
         foreach (char c in name)
         {
             if (c is ' ' or '_' or '-')

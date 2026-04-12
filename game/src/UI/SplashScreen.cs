@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.UI;
@@ -22,12 +23,13 @@ public partial class SplashScreen : Control
     [Export(PropertyHint.Range, "0.1,10.0,0.1,or_greater")]
     public float FadeDurationSeconds { get; set; } = 3.0f;
 
-    private Sprite2D _logo = null!;
+    private Sprite2D? _logo;
 
     /// <inheritdoc />
     public override void _Ready()
     {
-        _logo = GetNode<Sprite2D>("Logo/Image");
+        _logo = this.RequireNode<Sprite2D>("Logo/Image");
+
         ScaleLogoToViewportWidth();
 
         Color modulate = _logo.Modulate;
@@ -43,7 +45,8 @@ public partial class SplashScreen : Control
 
     private void ScaleLogoToViewportWidth()
     {
-        Texture2D? texture = _logo.Texture;
+        Texture2D? texture = _logo!.Texture;
+
         float viewportWidth = GetViewportRect().Size.X;
 
         if (texture is null || viewportWidth <= 0.0f)
