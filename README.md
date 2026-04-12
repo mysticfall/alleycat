@@ -19,6 +19,12 @@ than practical use in production projects.
 - [Godot LSP Bridge](https://github.com/MasuRii/opencode-godot-lsp) — set the `GODOT_PATH` environment variable to
   the path of your Godot executable.
 
+## 🧩 Godot Addons
+
+This project requires the following Godot addons:
+
+- [Mirror3D](https://godotengine.org/asset-library/asset/3983) — a customisable 3D mirror addon using a SubViewport.
+
 ## 🧹 C# Linting and Formatting
 
 This repository uses Roslyn analysers, Microsoft.CodeAnalysis.NetAnalyzers, and `dotnet format`.

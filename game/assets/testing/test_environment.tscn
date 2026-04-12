@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://bx2i1qev0800s"]
+
+[ext_resource type="Texture2D" uid="uid://ckv3oj6mms0ge" path="res://assets/hdri/monochrome_studio_04_1k.exr" id="1_fkne6"]
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_hbact"]
+panorama = ExtResource("1_fkne6")
+
+[sub_resource type="Sky" id="Sky_1blvp"]
+sky_material = SubResource("PanoramaSkyMaterial_hbact")
+
+[sub_resource type="Environment" id="Environment_1blvp"]
+background_mode = 1
+background_color = Color(0.90051246, 0.90051246, 0.9005124, 1)
+sky = SubResource("Sky_1blvp")
+ambient_light_source = 3
+reflected_light_source = 2
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_ux8bu"]
+
+[node name="TestEnvironment" type="WorldEnvironment" unique_id=1701682303]
+environment = SubResource("Environment_1blvp")
+camera_attributes = SubResource("CameraAttributesPractical_ux8bu")

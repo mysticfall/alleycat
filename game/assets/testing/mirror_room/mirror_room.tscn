@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://baut876fuyk5c"]
+
+[ext_resource type="PackedScene" uid="uid://dei4vqs1pclk8" path="res://assets/testing/test_mirror.tscn" id="1_70tdi"]
+[ext_resource type="PackedScene" uid="uid://ddvo8gcyxsws7" path="res://assets/characters/reference/player.tscn" id="2_o5j6c"]
+[ext_resource type="PackedScene" uid="uid://bx2i1qev0800s" path="res://assets/testing/test_environment.tscn" id="3_shmn4"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
+size = Vector2(10, 10)
+
+[node name="MirrorRoom" type="Node3D" unique_id=973335562]
+
+[node name="Mirrors" type="Node3D" parent="." unique_id=770923602]
+
+[node name="FrontMirror" parent="Mirrors" unique_id=916837440 instance=ExtResource("1_70tdi")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -1)
+
+[node name="BackMirror" parent="Mirrors" unique_id=1697368584 instance=ExtResource("1_70tdi")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1)
+
+[node name="RightMirror" parent="Mirrors" unique_id=1095035094 instance=ExtResource("1_70tdi")]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -1, 1, 0)
+
+[node name="LeftMirror" parent="Mirrors" unique_id=740348980 instance=ExtResource("1_70tdi")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 1, 1, 0)
+
+[node name="Floor" type="MeshInstance3D" parent="." unique_id=732614940]
+mesh = SubResource("PlaneMesh_0r23o")
+
+[node name="Female" parent="." unique_id=1792987446 instance=ExtResource("2_o5j6c")]
+
+[node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_shmn4")]
