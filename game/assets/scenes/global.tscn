@@ -33,9 +33,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
 layer_viewport = NodePath("../../SubViewport")
 alpha_blend = true
 radius = 5.0
-central_horizontal_angle = 3.1415927
-upper_vertical_angle = 1.0471976
-lower_vertical_angle = 1.0471976
+upper_vertical_angle = 0.5235988
+lower_vertical_angle = 0.5235988
 
 [node name="SubViewport" type="SubViewport" parent="XR" unique_id=1170900058]
 disable_3d = true
