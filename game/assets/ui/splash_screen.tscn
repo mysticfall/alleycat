@@ -4,7 +4,7 @@
 [ext_resource type="Theme" uid="uid://do64jkako8k5e" path="res://assets/ui/themes/default.tres" id="1_uy1rx"]
 [ext_resource type="Texture2D" uid="uid://ykrv4shir1gj" path="res://assets/images/logo.svg" id="2_uy1rx"]
 
-[node name="SplashScreen" type="Control" unique_id=1557464398]
+[node name="SplashScreen" type="Control" unique_id=1430060227]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,6 +13,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("1_uy1rx")
 script = ExtResource("1_6i472")
+metadata/_custom_type_script = "uid://t0v75t8brrcr"
 
 [node name="Logo" type="Control" parent="." unique_id=958896114]
 layout_mode = 1
