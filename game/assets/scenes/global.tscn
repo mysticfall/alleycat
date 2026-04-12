@@ -1,11 +1,16 @@
 [gd_scene format=3 uid="uid://bkrvnimi5hm7a"]
 
+[ext_resource type="Script" uid="uid://dnifm5vgeh8bn" path="res://src/Game.cs" id="1_4obgp"]
 [ext_resource type="PackedScene" uid="uid://djamb77looxqd" path="res://assets/xr/mock_runtime.tscn" id="1_5jb1w"]
 [ext_resource type="PackedScene" uid="uid://dchnvffx15knj" path="res://assets/ui/splash_screen.tscn" id="1_axcyo"]
 [ext_resource type="PackedScene" uid="uid://bt5ksnc6kjekx" path="res://assets/xr/openxr_runtime.tscn" id="1_bt0ui"]
 [ext_resource type="Script" uid="uid://bmvh0kef7f276" path="res://src/XR/XRManager.cs" id="1_drti4"]
+[ext_resource type="PackedScene" uid="uid://kxw5dgct6125" path="res://assets/ui/loading_screen.tscn" id="6_v86yw"]
 
-[node name="Game" type="Node" unique_id=122195563]
+[node name="Game" type="Node" unique_id=1021390965]
+script = ExtResource("1_4obgp")
+StartScene = "uid://baut876fuyk5c"
+metadata/_custom_type_script = "uid://dnifm5vgeh8bn"
 
 [node name="XR" type="Node" parent="." unique_id=1281566339]
 script = ExtResource("1_drti4")
@@ -21,3 +26,6 @@ size = Vector2i(1800, 1200)
 render_target_update_mode = 4
 
 [node name="SplashScreen" parent="XR/SubViewport" unique_id=1557464398 instance=ExtResource("1_axcyo")]
+
+[node name="LoadingScreen" parent="XR/SubViewport" unique_id=1488371994 instance=ExtResource("6_v86yw")]
+visible = false

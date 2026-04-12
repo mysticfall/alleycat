@@ -55,7 +55,7 @@ public partial class LoadingScreen : Control
     /// </summary>
     /// <param name="scenePath">Resource path of the target packed scene.</param>
     /// <returns>Godot error code indicating whether loading was started.</returns>
-    public Error LoadSceneAsync(string scenePath)
+    public virtual Error LoadSceneAsync(string scenePath)
     {
         EnsureUiNodesBound();
 
