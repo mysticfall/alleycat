@@ -50,6 +50,11 @@ When visual verification screenshots exist as verification artefacts:
 - [ ] Scene/node ownership is clear, with minimal justified autoload/global state.
 - [ ] Exported properties/resources/scene refs are serialisation-safe and editor-friendly.
 - [ ] Per-frame and VR-critical paths avoid blocking work and avoidable allocations.
+- [ ] Scene and resource changes use the GDScript API approach (not hand-editing `.tscn`/`.tres` files).
+- [ ] For inherited scenes, proper handling of `editable path` and `parent_id_path` when accessing internal nodes.
+- [ ] Custom type script metadata is set correctly when assigning C# scripts to nodes in scenes.
+- [ ] Full-screen UI uses 1152x648 resolution with transparent background (when applicable).
+- [ ] Control nodes use the default theme resource (when applicable).
 
 ## Review Outcome Format
 

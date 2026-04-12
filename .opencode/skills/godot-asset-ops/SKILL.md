@@ -113,6 +113,31 @@ text editing for inherited scene modifications.** Instead:
 3. Only hand-edit `.tscn` text for simple, non-inherited node additions where the parent is the scene root or a
    node owned by the scene root.
 
+## Custom Type Script Metadata
+
+When assigning a C# script to a node in a scene, if that script defines a custom node type, you must also set the
+`_custom_type_script` metadata on the node to preserve custom type tracking in the serialised scene file.
+
+Desired `.tscn` output format:
+
+```
+script = ExtResource("1_4of4h")
+metadata/_custom_type_script = "uid://dv076impllmml"
+```
+
+### GDScript Pattern
+
+After assigning the script to a node:
+
+```gdscript
+var script: Script = load("res://path/to/script.cs")
+node.set_script(script)
+
+# Get the UID and set the metadata
+var script_uid: String = script.get_uid()
+node.set_meta("_custom_type_script", script_uid)
+```
+
 ## Verification Checklist
 
 - Script exits with code `0`.
