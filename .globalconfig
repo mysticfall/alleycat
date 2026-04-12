@@ -1,0 +1,5 @@
+is_global = true
+
+# Source-generated files do not reliably honour path-scoped .editorconfig settings for CS1591.
+# Default to none globally, then re-enable CS1591 for regular sources in .editorconfig.
+dotnet_diagnostic.CS1591.severity = none
