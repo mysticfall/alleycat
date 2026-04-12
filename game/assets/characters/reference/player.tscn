@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://ddvo8gcyxsws7"]
+
+[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_edvvb"]
+
+[node name="Player" unique_id=1792987446 groups=["Actors", "Player"] instance=ExtResource("1_edvvb")]
+
+[node name="Head" type="BoneAttachment3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1349299640) index="9" unique_id=1648213825]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4594107, 0.04187462)
+bone_name = "Head"
+bone_idx = 46
+
+[node name="Viewpoint" type="Marker3D" parent="Female_export/GeneralSkeleton/Head" index="0" unique_id=1303355160]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.032278657, 0.0937431)
