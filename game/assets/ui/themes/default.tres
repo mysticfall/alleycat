@@ -1,0 +1,6 @@
+[gd_resource type="Theme" format=3 uid="uid://do64jkako8k5e"]
+
+[ext_resource type="FontFile" uid="uid://cj8hx85ef6v0t" path="res://assets/fonts/Inter/Inter_18pt-Medium.ttf" id="1_b0f20"]
+
+[resource]
+default_font = ExtResource("1_b0f20")
