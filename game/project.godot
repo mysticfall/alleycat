@@ -35,8 +35,9 @@ project/assembly_name="AlleyCat"
 
 [global_group]
 
-Actors=""
-Markers=""
+Actors="Actors in the scene."
+Markers="Markers in the scene."
+Player="The player actor."
 
 [gui]
 
