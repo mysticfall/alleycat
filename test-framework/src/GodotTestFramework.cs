@@ -18,7 +18,8 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private const string ProbeTypeName = "AlleyCat.IntegrationTests.Probe.DynamicLoadProbeNode";
     private const string ProbeSuccessMarker = "ALLEYCAT_INTEGRATION_PROBE_SUCCESS";
     private const string RunFactResultMarkerPrefix = "ALLEYCAT_INTEGRATION_TEST_RESULT:";
-    private const string GodotErrorLinePrefix = "ERROR:";
+    private const string RuntimeContextEnvironmentVariable = "ALLEYCAT_RUNTIME_CONTEXT";
+    private const string RuntimeContextIntegrationTestValue = "integration-test";
     private const int DefaultPreflightTimeoutMs = 30_000;
     private const int DefaultRunFactTimeoutMs = 120_000;
     private const int DefaultCleanupTimeoutMs = 5_000;
@@ -521,11 +522,17 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
             string payload = line[RunFactResultMarkerPrefix.Length..];
             try
             {
-                return JsonSerializer.Deserialize<StructuredRunFactResult>(payload);
+                StructuredRunFactResult? parsedResult = JsonSerializer.Deserialize<StructuredRunFactResult>(payload);
+                if (parsedResult is null)
+                {
+                    continue;
+                }
+
+                return parsedResult;
             }
             catch (JsonException)
             {
-                return null;
+                continue;
             }
         }
 
@@ -536,8 +543,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         => line.StartsWith(RunFactResultMarkerPrefix, StringComparison.Ordinal);
 
     private static bool IsRunFactEarlyExitSignalLine(string line)
-        => IsStructuredRunFactResultLine(line)
-           || line.StartsWith(GodotErrorLinePrefix, StringComparison.Ordinal);
+        => IsStructuredRunFactResultLine(line);
 
     private static string BuildStructuredErrorMessage(StructuredRunFactResult structuredResult)
     {
@@ -676,6 +682,8 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
                 CreateNoWindow = true,
                 WorkingDirectory = workspaceRootPath,
             };
+
+            processStartInfo.EnvironmentVariables[RuntimeContextEnvironmentVariable] = RuntimeContextIntegrationTestValue;
 
             foreach (string argument in commandLineArguments)
             {

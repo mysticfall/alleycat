@@ -148,6 +148,62 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
+    /// Ensures malformed newer payloads do not prevent parsing an older valid structured result.
+    /// </summary>
+    [Fact]
+    public void TryParseStructuredRunFactResult_FallsBackToOlderValidPayload_WhenNewestPayloadIsInvalidJson()
+    {
+        string failedPayload = JsonSerializer.Serialize(new
+        {
+            Outcome = "failed",
+            Message = "first-valid",
+            Stack = "trace-1"
+        });
+
+        string[] outputLines =
+        [
+            ResultMarkerPrefix + failedPayload,
+            "non-structured noise",
+            $"{ResultMarkerPrefix}{{invalid-json}}",
+        ];
+
+        object? parsedResult = InvokePrivateStatic<object?>("TryParseStructuredRunFactResult", (object)outputLines);
+
+        Assert.NotNull(parsedResult);
+        Assert.Equal("failed", ReadStructuredResultProperty(parsedResult!, "Outcome"));
+        Assert.Equal("first-valid", ReadStructuredResultProperty(parsedResult!, "Message"));
+        Assert.Equal("trace-1", ReadStructuredResultProperty(parsedResult!, "Stack"));
+    }
+
+    /// <summary>
+    /// Ensures a newer <c>null</c> payload does not hide an older valid structured result.
+    /// </summary>
+    [Fact]
+    public void TryParseStructuredRunFactResult_FallsBackToOlderValidPayload_WhenNewestPayloadDeserialisesToNull()
+    {
+        string passedPayload = JsonSerializer.Serialize(new
+        {
+            Outcome = "passed",
+            Message = (string?)null,
+            Stack = (string?)null,
+        });
+
+        string[] outputLines =
+        [
+            ResultMarkerPrefix + passedPayload,
+            "noise",
+            ResultMarkerPrefix + "null",
+        ];
+
+        object? parsedResult = InvokePrivateStatic<object?>("TryParseStructuredRunFactResult", (object)outputLines);
+
+        Assert.NotNull(parsedResult);
+        Assert.Equal("passed", ReadStructuredResultProperty(parsedResult!, "Outcome"));
+        Assert.Null(ReadStructuredResultProperty(parsedResult!, "Message"));
+        Assert.Null(ReadStructuredResultProperty(parsedResult!, "Stack"));
+    }
+
+    /// <summary>
     /// Ensures message and stack values are combined into one failure string.
     /// </summary>
     [Fact]
@@ -201,10 +257,10 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
-    /// Ensures run-fact early-exit detection includes both structured result and Godot error lines.
+    /// Ensures run-fact early-exit detection only uses structured result lines.
     /// </summary>
     [Fact]
-    public void IsRunFactEarlyExitSignalLine_RecognisesStructuredResultAndGodotErrors()
+    public void IsRunFactEarlyExitSignalLine_RecognisesOnlyStructuredResultLines()
     {
         bool structuredResultMatch = InvokePrivateStatic<bool>(
             "IsRunFactEarlyExitSignalLine",
@@ -217,7 +273,7 @@ public sealed class GodotTestFrameworkTests
             "INFO: unrelated line");
 
         Assert.True(structuredResultMatch);
-        Assert.True(godotErrorMatch);
+        Assert.False(godotErrorMatch);
         Assert.False(nonSignalMatch);
     }
 
@@ -266,10 +322,10 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
-    /// Ensures process execution short-circuits when a Godot ERROR line is emitted on stderr.
+    /// Ensures generic Godot ERROR lines do not trigger run-fact early exit.
     /// </summary>
     [Fact]
-    public void RunGodotProcessAsync_CompletesEarly_WhenGodotErrorLineIsObservedOnStandardError()
+    public void RunGodotProcessAsync_DoesNotCompleteEarly_WhenOnlyGodotErrorLineIsObserved()
     {
         const int timeoutMs = 4_000;
 
@@ -278,7 +334,7 @@ public sealed class GodotTestFrameworkTests
             [
                 new FakeOutputEvent(TimeSpan.FromMilliseconds(30), Stream: FakeOutputStream.StdErr, Line: "ERROR: simulated runtime fault"),
             ],
-            naturalExitDelay: TimeSpan.FromSeconds(5));
+            naturalExitDelay: TimeSpan.FromMilliseconds(250));
 
         object framework = CreateFrameworkInstance(new FakeGodotProcessFactory(fakeProcess));
 
@@ -290,17 +346,17 @@ public sealed class GodotTestFrameworkTests
                 (IReadOnlyList<string>)["--ignored"],
                 timeoutMs,
                 CancellationToken.None,
-                new Func<string, bool>(line => line.StartsWith("ERROR:", StringComparison.Ordinal)))
+                new Func<string, bool>(line => InvokePrivateStatic<bool>("IsRunFactEarlyExitSignalLine", line)))
             .GetAwaiter()
             .GetResult();
 #pragma warning restore xUnit1031
         stopwatch.Stop();
 
         Assert.True(
-            stopwatch.Elapsed < TimeSpan.FromMilliseconds(timeoutMs),
-            $"Expected early completion before timeout, elapsed {stopwatch.Elapsed.TotalMilliseconds}ms.");
+            stopwatch.Elapsed >= TimeSpan.FromMilliseconds(250),
+            $"Expected execution to wait for natural process exit, elapsed {stopwatch.Elapsed.TotalMilliseconds}ms.");
         Assert.Null(ReadStructuredResultProperty(runResult, "FailureException") as Exception);
-        Assert.True(fakeProcess.KillCalled);
+        Assert.False(fakeProcess.KillCalled);
         Assert.Contains("ERROR: simulated runtime fault", (IReadOnlyList<string>)ReadStructuredResultProperty(runResult, "StdErr")!);
     }
 
