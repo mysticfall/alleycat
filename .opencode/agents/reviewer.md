@@ -54,7 +54,6 @@ When visual verification screenshots exist as verification artefacts:
 - [ ] For inherited scenes, proper handling of `editable path` and `parent_id_path` when accessing internal nodes.
 - [ ] Custom type script metadata is set correctly when assigning C# scripts to nodes in scenes.
 - [ ] Full-screen UI uses 1152x648 resolution with transparent background (when applicable).
-- [ ] Control nodes use the default theme resource (when applicable).
 
 ## Review Outcome Format
 

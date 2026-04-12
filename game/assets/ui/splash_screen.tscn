@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://dchnvffx15knj"]
 
 [ext_resource type="Script" uid="uid://t0v75t8brrcr" path="res://src/UI/SplashScreen.cs" id="1_6i472"]
-[ext_resource type="Theme" uid="uid://do64jkako8k5e" path="res://assets/ui/themes/default.tres" id="1_uy1rx"]
 [ext_resource type="Texture2D" uid="uid://ykrv4shir1gj" path="res://assets/images/logo.svg" id="2_uy1rx"]
 
 [node name="SplashScreen" type="Control" unique_id=1430060227]
@@ -11,7 +10,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme = ExtResource("1_uy1rx")
 script = ExtResource("1_6i472")
 metadata/_custom_type_script = "uid://t0v75t8brrcr"
 
@@ -24,7 +22,6 @@ anchor_right = 0.5
 anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
-theme = ExtResource("1_uy1rx")
 
 [node name="Image" type="Sprite2D" parent="Logo" unique_id=1999073907]
 modulate = Color(1, 1, 1, 0)

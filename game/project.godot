@@ -38,6 +38,10 @@ project/assembly_name="AlleyCat"
 Actors=""
 Markers=""
 
+[gui]
+
+theme/custom="uid://do64jkako8k5e"
+
 [layer_names]
 
 3d_render/layer_20="Markers"
