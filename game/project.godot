@@ -22,6 +22,7 @@ driver/enable_input=true
 
 [autoload]
 
+Global="*uid://bkrvnimi5hm7a"
 TestRuntimeRunner="*res://src/Testing/TestRuntimeRunner.cs"
 
 [display]

@@ -1,5 +1,9 @@
 # Project Specifications
 
+## Core Systems
+
+- [CORE-001: Global Scene](001-global-scene/index.md)
+
 ## Characters
 
 - [CHAR-000: Character Skeleton Profile](characters/000-character-skeleton/index.md)
