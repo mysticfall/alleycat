@@ -12,13 +12,16 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_6i472")
 
-[node name="Logo" type="TextureRect" parent="." unique_id=977040873]
+[node name="Logo" type="Control" parent="." unique_id=958896114]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Image" type="Sprite2D" parent="Logo" unique_id=1999073907]
 modulate = Color(1, 1, 1, 0)
-layout_mode = 0
-anchor_left = 0.25
-anchor_top = 0.25
-anchor_right = 0.75
-anchor_bottom = 0.75
 texture = ExtResource("2_uy1rx")
-expand_mode = 1
-stretch_mode = 5

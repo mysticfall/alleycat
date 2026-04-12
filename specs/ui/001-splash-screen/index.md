@@ -7,8 +7,8 @@ id: UI-001
 ## Requirement
 
 The splash screen must show the project logo at approximately 50% of the viewport width.
-After the scene starts, the screen must remain black for 2 seconds.
-The fade-in from black to the full logo must then complete in 3 seconds.
+After the scene starts, the screen must remain white for 2 seconds.
+The logo must then fade in from transparent to fully visible over 3 seconds.
 
 ## References
 
