@@ -9,5 +9,5 @@
 [node name="Female" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=1792987446 instance=ExtResource("2_bws1m")]
 
 [node name="CameraRig" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("3_auud0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4983276, 0.46121848)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.498, -0.461)
 projection = 0

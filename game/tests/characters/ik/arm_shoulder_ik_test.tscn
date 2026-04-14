@@ -6,7 +6,7 @@
 
 [node name="Photobooth" unique_id=406188165 instance=ExtResource("1_y7vjr")]
 
-[node name="LeftArmController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1096878630) index="9" unique_id=835877340 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="LeftArmController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1349299640) index="9" unique_id=835877340 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -28,7 +28,7 @@ HandTarget = NodePath("../../../../../Markers/LeftHandTarget")
 PoleTarget = NodePath("../../../../../Markers/LeftPoleTarget")
 metadata/_custom_type_script = "uid://c3tfr8jxcytvh"
 
-[node name="RightArmController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1096878630) index="10" unique_id=1540181691 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="RightArmController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1349299640) index="10" unique_id=1540181691 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -51,7 +51,7 @@ PoleTarget = NodePath("../../../../../Markers/RightPoleTarget")
 Side = 1
 metadata/_custom_type_script = "uid://c3tfr8jxcytvh"
 
-[node name="LeftTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1096878630) index="11" unique_id=703654510]
+[node name="LeftTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1349299640) index="11" unique_id=703654510]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../../Markers/LeftHandTarget")
 settings/0/pole_node = NodePath("../../../../../Markers/LeftPoleTarget")
@@ -65,7 +65,7 @@ settings/0/end_bone = 10
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="RightTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1096878630) index="12" unique_id=1564941826]
+[node name="RightTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1349299640) index="12" unique_id=1564941826]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../../Markers/RightHandTarget")
 settings/0/pole_node = NodePath("../../../../../Markers/RightPoleTarget")
@@ -81,7 +81,7 @@ settings/0/extend_end_bone = true
 settings/0/end_bone/direction = 6
 settings/0/end_bone/length = 0.0
 
-[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1096878630) index="13" unique_id=155564608]
+[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1349299640) index="13" unique_id=155564608]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "RightHand"
@@ -93,7 +93,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1096878630) index="14" unique_id=1508063507]
+[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 1349299640) index="14" unique_id=1508063507]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "LeftHand"
@@ -106,78 +106,79 @@ settings/0/invert = 0
 settings/0/additive = false
 
 [node name="HandTargetPoses" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=73856052]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
 [node name="LeftLowered" parent="Markers/HandTargetPoses" index="0" unique_id=1247060835 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(4.371139e-08, 3.821371e-15, -1, 8.742278e-08, -1, 0, -1, -8.742278e-08, -4.371139e-08, 0.25, 0.9, 0.04)
+transform = Transform3D(-1.3113417e-07, -1.1464112e-14, -1, 8.742278e-08, -1, 0, -1, -8.742278e-08, 1.3113417e-07, 0.24999996, 0.9, 0.021701775)
 visible = false
 
 [node name="LeftForward" parent="Markers/HandTargetPoses" index="1" unique_id=687317052 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(1.9106855e-15, -4.371139e-08, -1, -1, -4.371139e-08, 0, -4.371139e-08, 1, -4.371139e-08, 0.1, 1.279, 0.428)
+transform = Transform3D(-5.732056e-15, 1.3113417e-07, -1, -1, -4.371139e-08, 0, -4.371139e-08, 1, 1.3113417e-07, 0.10000002, 1.279, 0.40970182)
 visible = false
 label_text = "l-forward"
 
 [node name="LeftOverhead" parent="Markers/HandTargetPoses" index="2" unique_id=461587095 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.138, 1.648, 0.024)
+transform = Transform3D(1, 0, 1.7484554e-07, 0, 1, 0, -1.7484554e-07, 0, 1, 0.13799994, 1.648, 0.0057017924)
 visible = false
 label_text = "l-overhead"
 
 [node name="LeftSide" parent="Markers/HandTargetPoses" index="3" unique_id=899254249 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(-4.371139e-08, 1, 3.821371e-15, -4.371139e-08, 1.9106855e-15, -1, -1, -4.371139e-08, 4.371139e-08, 0.49, 1.29, 0.02)
+transform = Transform3D(-2.1855693e-07, 1, 1.1464113e-14, -4.371139e-08, 1.9106855e-15, -1, -1, -2.1855693e-07, 4.371139e-08, 0.48999995, 1.29, 0.0017017256)
 visible = false
 label_text = "l-side"
 
 [node name="LeftBehindHead" parent="Markers/HandTargetPoses" index="4" unique_id=596403021 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 0.12584747, 1.5199913, -0.059069)
+transform = Transform3D(-4.371139e-08, -1, 1.7484554e-07, 1, -4.371139e-08, 0, 7.642743e-15, 1.7484554e-07, 1, 0.12584741, 1.5199913, -0.07736724)
 visible = false
 label_text = "l-behind-head"
 
 [node name="LeftChest" parent="Markers/HandTargetPoses" index="5" unique_id=354379326 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(4.371139e-08, -1, -8.742278e-08, -1, -4.371139e-08, 0, -3.821371e-15, 8.742278e-08, -1, 0.027, 1.156, 0.206)
+transform = Transform3D(4.371139e-08, -1, -2.6226832e-07, -1, -4.371139e-08, 0, -1.14641115e-14, 2.6226832e-07, -1, 0.027, 1.156, 0.187)
 visible = false
 label_text = "l-chest"
 
 [node name="RightLowered" parent="Markers/HandTargetPoses" index="6" unique_id=2074725952 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(4.3711385e-08, 3.8213705e-15, 0.9999999, 8.742277e-08, -0.99999994, 0, 0.99999994, 8.742277e-08, -4.3711385e-08, -0.25, 0.9, 0.04)
+transform = Transform3D(2.1855695e-07, 1.9106853e-14, 0.9999999, 8.742275e-08, -0.9999999, 1.5529402e-21, 0.9999999, 8.742275e-08, -2.1855695e-07, -0.25000003, 0.9, 0.021701865)
 visible = false
 label_text = "r-lowered"
 
 [node name="RightForward" parent="Markers/HandTargetPoses" index="7" unique_id=68093898 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(1.9106853e-15, 4.371139e-08, 1, 0.99999994, -4.371139e-08, 0, 4.3711385e-08, 1, -4.371139e-08, -0.1, 1.2788823, 0.42768738)
+transform = Transform3D(9.553425e-15, 2.1855693e-07, 1, 0.99999994, -4.371139e-08, 4.2351647e-22, 4.3711385e-08, 1, -2.1855693e-07, -0.09999999, 1.2788823, 0.4093892)
 visible = false
 label_text = "r-forward"
 
 [node name="RightOverhead" parent="Markers/HandTargetPoses" index="8" unique_id=1297880101 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.13825071, 1.6478416, 0.023605753)
+transform = Transform3D(1, 0, 1.7484554e-07, 0, 1, 0, -1.7484554e-07, 0, 1, -0.13825077, 1.6478416, 0.0053076027)
 visible = false
 label_text = "r-overhead"
 
 [node name="RightSide" parent="Markers/HandTargetPoses" index="9" unique_id=1871127500 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(1.3113416e-07, -1, 3.821371e-15, 4.371139e-08, 1.9106855e-15, -1, 1, 1.3113416e-07, 4.371139e-08, -0.49032262, 1.29, 0.02)
+transform = Transform3D(3.059797e-07, -1, 1.14641115e-14, 4.371139e-08, 1.9106855e-15, -1, 1, 3.059797e-07, 4.371139e-08, -0.49032268, 1.29, 0.0017019082)
 visible = false
 label_text = "r-side"
 
 [node name="RightBehindHead" parent="Markers/HandTargetPoses" index="10" unique_id=1597239241 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(-4.3711385e-08, 0.99999994, 0, -0.99999994, -4.3711385e-08, 0, 0, 0, 1, -0.126, 1.52, -0.059)
+transform = Transform3D(-4.3711378e-08, 0.9999999, 1.7484554e-07, -0.9999999, -4.3711378e-08, 3.1058807e-22, 7.642741e-15, -1.7484555e-07, 1, -0.12600006, 1.52, -0.07729814)
 visible = false
 label_text = "r-behind-head"
 
 [node name="RightChest" parent="Markers/HandTargetPoses" index="11" unique_id=1872626384 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(4.3711385e-08, 1, -8.742277e-08, 0.99999994, -4.371139e-08, 0, -3.8213705e-15, -8.742278e-08, -0.99999994, -0.026687525, 1.1556767, 0.20579137)
+transform = Transform3D(4.371139e-08, 1, -2.6226832e-07, 0.9999999, -4.3711385e-08, -8.4703275e-22, -1.14641115e-14, -2.6226832e-07, -0.9999999, -0.026687544, 1.1556767, 0.18749319)
 visible = false
 label_text = "r-chest"
 
 [node name="LeftHandTarget" type="Marker3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=1092496791]
-transform = Transform3D(4.3711385e-08, 3.8213705e-15, -0.9999999, 8.742277e-08, -0.99999994, 0, -0.99999994, -8.742277e-08, -4.3711385e-08, 0.25, 0.9, 0.04)
+transform = Transform3D(4.3711385e-08, 3.82137e-15, 0.9999999, 8.7422755e-08, -0.9999999, -3.1058807e-22, 0.9999999, 8.7422755e-08, -4.371138e-08, -0.25, 0.9, -0.019794762)
 
 [node name="RightHandTarget" type="Marker3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="2" unique_id=1373048408]
-transform = Transform3D(4.371139e-08, 3.8213705e-15, 0.9999999, 8.742278e-08, -0.99999994, 0, 1, 8.742277e-08, -4.3711385e-08, -0.25, 0.9, 0.04)
+transform = Transform3D(-1.3113416e-07, -1.1464112e-14, -0.9999999, 8.742277e-08, -0.99999994, 7.341045e-22, -1, -8.742276e-08, 1.3113416e-07, 0.25, 0.9, -0.019794807)
 
 [node name="RightPoleTarget" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="3" unique_id=366944315 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.246, 1.099, -0.234)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.24579912, 1.099, 0.07054971)
 label_text = "r-pole"
 
 [node name="LeftPoleTarget" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="4" unique_id=1939873173 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24579912, 1.0992504, -0.23373511)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.24599999, 1.0992504, 0.07028486)
 label_text = "l-pole"
 
 [editable path="Subject/Female"]

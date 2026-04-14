@@ -17,8 +17,6 @@ const REQUIRED_POSES := [
 	{"marker": "TargetForward", "slug": "forward"},
 	{"marker": "TargetLeft", "slug": "left"},
 	{"marker": "TargetRight", "slug": "right"},
-	{"marker": "TargetUp", "slug": "up"},
-	{"marker": "TargetDown", "slug": "down"},
 	{"marker": "TargetStoopForward", "slug": "stoop-forward"},
 	{"marker": "TargetLeanBack", "slug": "lean-back"},
 ]

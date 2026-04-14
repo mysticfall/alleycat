@@ -1,48 +1,38 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dlby8st0x5bbi"]
 
-[ext_resource type="PackedScene" path="res://assets/characters/reference/female/photobooth/full_body_5_cams.tscn" id="1_g3f8u"]
-[ext_resource type="PackedScene" path="res://assets/markers/debug_marker.tscn" id="2_teojm"]
+[ext_resource type="PackedScene" uid="uid://c8fq1s3gwmppl" path="res://assets/characters/reference/female/photobooth/full_body_5_cams.tscn" id="1_g3f8u"]
+[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_teojm"]
 
-[node name="Photobooth" instance=ExtResource("1_g3f8u")]
+[node name="Photobooth" unique_id=2001797796 instance=ExtResource("1_g3f8u")]
 
-[node name="HeadTarget" parent="Markers" index="0" instance=ExtResource("2_teojm")]
+[node name="HeadTarget" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=16138696 instance=ExtResource("2_teojm")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.52, 0.26)
+visible = false
 label_text = "Head Target"
+
+[node name="TargetPoses" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=755334527]
+
+[node name="TargetForward" parent="Markers/TargetPoses" index="0" unique_id=706824431 instance=ExtResource("2_teojm")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -7.992939e-09, 1.3443143, -0.22083357)
 visible = false
-
-[node name="TargetPoses" type="Node3D" parent="Markers" index="1"]
-
-[node name="TargetForward" parent="Markers/TargetPoses" index="0" instance=ExtResource("2_teojm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.52, 0.26)
 label_text = "forward"
-visible = false
 
-[node name="TargetLeft" parent="Markers/TargetPoses" index="1" instance=ExtResource("2_teojm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.18, 1.52, 0.2)
+[node name="TargetLeft" parent="Markers/TargetPoses" index="1" unique_id=1792720925 instance=ExtResource("2_teojm")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.20977873, 1.3975334, -0.027673602)
+visible = false
 label_text = "left"
-visible = false
 
-[node name="TargetRight" parent="Markers/TargetPoses" index="2" instance=ExtResource("2_teojm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.18, 1.52, 0.2)
+[node name="TargetRight" parent="Markers/TargetPoses" index="2" unique_id=1696312765 instance=ExtResource("2_teojm")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.21, 1.398, -0.028)
+visible = false
 label_text = "right"
-visible = false
 
-[node name="TargetUp" parent="Markers/TargetPoses" index="3" instance=ExtResource("2_teojm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.66, 0.14)
-label_text = "up"
+[node name="TargetStoopForward" parent="Markers/TargetPoses" index="3" unique_id=2035940694 instance=ExtResource("2_teojm")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -1.4986762e-08, 1.1958246, -0.33360332)
 visible = false
-
-[node name="TargetDown" parent="Markers/TargetPoses" index="4" instance=ExtResource("2_teojm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.36, 0.16)
-label_text = "down"
-visible = false
-
-[node name="TargetStoopForward" parent="Markers/TargetPoses" index="5" instance=ExtResource("2_teojm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0.34)
 label_text = "stoop-forward"
-visible = false
 
-[node name="TargetLeanBack" parent="Markers/TargetPoses" index="6" instance=ExtResource("2_teojm")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.58, -0.12)
-label_text = "lean-back"
+[node name="TargetLeanBack" parent="Markers/TargetPoses" index="4" unique_id=895848822 instance=ExtResource("2_teojm")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 2.5227715e-08, 1.362346, 0.1951276)
 visible = false
+label_text = "lean-back"

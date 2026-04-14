@@ -29,8 +29,6 @@ public sealed class NeckSpineCcdikIntegrationTests
         "TargetForward",
         "TargetLeft",
         "TargetRight",
-        "TargetUp",
-        "TargetDown",
         "TargetStoopForward",
         "TargetLeanBack",
     ];

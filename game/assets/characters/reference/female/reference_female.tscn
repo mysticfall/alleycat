@@ -3,3 +3,6 @@
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
 
 [node name="Female" unique_id=1792987446 instance=ExtResource("1_5molt")]
+
+[node name="Female_export" parent="." index="0" unique_id=1556676416]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
