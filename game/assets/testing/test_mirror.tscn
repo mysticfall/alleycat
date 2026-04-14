@@ -31,10 +31,10 @@ size = Vector2(1.5, 2)
 [node name="TestMirror" unique_id=916837440 instance=ExtResource("1_u62v1")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 size = Vector2(1.5, 2)
-pixels_per_unit = 400
+pixels_per_unit = 800
 
 [node name="Viewport" parent="." index="0" unique_id=492097338]
-size = Vector2i(600, 800)
+size = Vector2i(1200, 1600)
 
 [node name="Camera" parent="Viewport" index="0" unique_id=1129476143]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.682942, 1.9177022, -3.0806046)
