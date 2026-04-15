@@ -51,9 +51,9 @@ The "Hands Covering The Chest" pose remains optional and may be deferred.
 
 Actual pole direction is derived by blending or offsetting the baseline with a hand-rotation contribution.
 
-The hand-rotation adjustment uses the player's hand controller rotation around the shoulder-to-hand axis, compared
-against an interpolated reference rotation from key pose markers, to rotate the elbow pole target and shift the
-bend-plane direction. Full algorithmic details, parameterisation, and acceptance criteria are defined in the
+The hand-rotation adjustment uses the runtime-authored hand pose rotation (from XR hand target driving) around the
+shoulder-to-hand axis, compared against an interpolated reference rotation from key pose markers, to rotate the elbow
+pole target and shift the bend-plane direction. Full algorithmic details, parameterisation, and acceptance criteria are defined in the
 [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md).
 
 ## Implementation Notes

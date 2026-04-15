@@ -6,3 +6,15 @@
 
 [node name="Female_export" parent="." index="0" unique_id=1556676416]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+
+[node name="Head" type="BoneAttachment3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1349299640) index="9" unique_id=694402195]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4594107, 0.04187462)
+bone_name = "Head"
+bone_idx = 46
+
+[node name="Viewpoint" type="Marker3D" parent="Female_export/GeneralSkeleton/Head" index="0" unique_id=488293773]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.032278657, 0.0937431)
+
+[node name="Female_export" parent="." index="0" unique_id=1556676416]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)

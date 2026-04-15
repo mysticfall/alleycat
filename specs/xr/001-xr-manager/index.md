@@ -14,9 +14,10 @@ XRManager must provide:
 
 1. XR startup with a reported initialisation result
 2. A runtime-agnostic interface surface for origin, camera, and hand controllers
-3. Runtime scene selection through exported packed scenes (`OpenXrRuntimeScene`, `MockRuntimeScene`)
-4. Runtime-specific behaviour delegated to `IXRRuntime` implementations for real XR and mock XR
-5. Mock-only manual-fire hooks for deterministic integration tests
+3. Late-subscriber readable XR initialisation state flags
+4. Runtime scene selection through exported packed scenes (`OpenXrRuntimeScene`, `MockRuntimeScene`)
+5. Runtime-specific behaviour delegated to `IXRRuntime` implementations for real XR and mock XR
+6. Mock runtime entry points suitable for deterministic integration tests
 
 ## Contract
 
@@ -42,11 +43,23 @@ XRManager selects and instantiates one runtime root scene via exported packed-sc
 
 Shared interfaces are defined in `@game/src/XR/XRManagerAbstractions.cs`:
 
-- `IXrOrigin`
-- `IXrCamera`
-- `IXrHandController`
+- `IXROrigin`
+- `IXRCamera`
+- `IXRHandController`
 
-`IXrHandController` exposes a runtime-agnostic callback/event API for button and input changes.
+`IXRHandController` exposes:
+
+- A runtime-agnostic callback/event API for button and input changes.
+- `HandPositionNode` as the runtime-authored marker for authoritative hand pose.
+
+### Initialisation State Contract
+
+XRManager must expose post-startup state for components that subscribe after `_Ready`:
+
+| Property | Description |
+|------|------|
+| `InitialisationAttempted` | `true` once XR startup was attempted |
+| `InitialisationSucceeded` | Result of the latest XR startup attempt |
 
 ### Signals
 
@@ -57,18 +70,12 @@ Shared interfaces are defined in `@game/src/XR/XRManagerAbstractions.cs`:
 
 ### Runtime Split
 
-- OpenXR runtime (`AlleyCat.XR.OpenXR`) instantiates `@game/assets/xr/openxr_runtime.tscn`, uses scene-attached component scripts (`OpenXrRuntimeNode`, `OpenXrCameraNode`, `OpenXrHandControllerNode`) on XR node types (`XROrigin3D`, `XRCamera3D`, `XRController3D`), and includes `XRCompositionLayer` (`OpenXRCompositionLayerEquirect`).
-- Mock runtime (`AlleyCat.XR.Mock`) instantiates `@game/assets/xr/mock_runtime.tscn`, uses scene-attached component scripts (`MockXrRuntimeNode`, `MockXrCameraNode`, `MockXRManagerHandController`) on `Node3D`/`Camera3D`, and omits `XRCompositionLayer`.
+- OpenXR runtime (`AlleyCat.XR.OpenXR`) instantiates `@game/assets/xr/openxr_runtime.tscn`, uses scene-attached component scripts (`OpenXRRuntimeNode`, `OpenXRCameraNode`, `OpenXRHandControllerNode`) on XR node types (`XROrigin3D`, `XRCamera3D`, `XRController3D`), and includes `XRCompositionLayer` (`OpenXRCompositionLayerEquirect`).
+- Mock runtime (`AlleyCat.XR.Mock`) instantiates `@game/assets/xr/mock_runtime.tscn`, uses scene-attached component scripts (`MockXRRuntimeNode`, `MockXRCameraNode`, `MockXRHandControllerNode`) on `Node3D`/`Camera3D`, and omits `XRCompositionLayer`.
 
 ### Mock Test Hooks
 
-In mock runtime, tests can manually fire XR signals through:
-
-- `XRManager.FirePoseRecenteredForMock()`
-- `MockXRManagerHandController.FireButtonPressed(string signalName)`
-- `MockXRManagerHandController.FireButtonReleased(string signalName)`
-- `MockXRManagerHandController.FireInputFloatChanged(string signalName, float value)`
-- `MockXRManagerHandController.FireInputVector2Changed(string signalName, Vector2 value)`
+In mock runtime, deterministic tests may interact with runtime nodes directly after runtime instantiation. The mock runtime exposes `MockXRRuntimeNode.TriggerPoseRecentered()` for pose recenter simulation.
 
 ## References
 
@@ -77,12 +84,12 @@ In mock runtime, tests can manually fire XR signals through:
 - @game/src/XR/XRManager.cs
 - @game/src/XR/IXRRuntime.cs
 - @game/src/XR/XRManagerAbstractions.cs
-- @game/src/XR/OpenXR/OpenXrRuntimeNode.cs
-- @game/src/XR/OpenXR/OpenXrCameraNode.cs
-- @game/src/XR/OpenXR/OpenXrHandControllerNode.cs
-- @game/src/XR/Mock/MockXrRuntimeNode.cs
-- @game/src/XR/Mock/MockXrCameraNode.cs
-- @game/src/XR/Mock/MockXrManagerHandController.cs
+- @game/src/XR/OpenXR/OpenXRRuntimeNode.cs
+- @game/src/XR/OpenXR/OpenXRCameraNode.cs
+- @game/src/XR/OpenXR/OpenXRHandControllerNode.cs
+- @game/src/XR/Mock/MockXRRuntimeNode.cs
+- @game/src/XR/Mock/MockXRCameraNode.cs
+- @game/src/XR/Mock/MockXRHandControllerNode.cs
 - @game/assets/xr/openxr_runtime.tscn
 - @game/assets/xr/mock_runtime.tscn
 

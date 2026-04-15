@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://bt5ksnc6kjekx" path="res://assets/xr/openxr_runtime.tscn" id="1_bt0ui"]
 [ext_resource type="Script" uid="uid://bmvh0kef7f276" path="res://src/XR/XRManager.cs" id="1_drti4"]
 [ext_resource type="PackedScene" uid="uid://kxw5dgct6125" path="res://assets/ui/loading_screen.tscn" id="6_v86yw"]
+[ext_resource type="Script" uid="uid://5eb2vgmywko" path="res://src/IK/PlayerVRIKStartupBinder.cs" id="7_4dmod"]
 
 [node name="Game" type="Node" unique_id=1021390965]
 script = ExtResource("1_4obgp")
@@ -17,6 +18,11 @@ script = ExtResource("1_drti4")
 OpenXrRuntimeScene = ExtResource("1_bt0ui")
 MockRuntimeScene = ExtResource("1_5jb1w")
 metadata/_custom_type_script = "uid://bmvh0kef7f276"
+
+[node name="PlayerVRIKStartupBinder" type="Node" parent="XR" unique_id=1254103404]
+script = ExtResource("7_4dmod")
+XRManagerPath = NodePath("..")
+metadata/_custom_type_script = "uid://5eb2vgmywko"
 
 [node name="SubViewport" type="SubViewport" parent="XR" unique_id=1170900058]
 disable_3d = true

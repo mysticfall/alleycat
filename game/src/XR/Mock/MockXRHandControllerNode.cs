@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.XR.Mock;
@@ -8,6 +9,12 @@ namespace AlleyCat.XR.Mock;
 [GlobalClass]
 public partial class MockXRHandControllerNode : Node3D, IXRHandController
 {
+    private Node3D? HandPositionNodeResolved
+    {
+        get;
+        set;
+    }
+
 #pragma warning disable CS0067 // Event is never used
     /// <inheritdoc />
     public event Action<string>? ActionButtonPressed;
@@ -24,5 +31,13 @@ public partial class MockXRHandControllerNode : Node3D, IXRHandController
 
     /// <inheritdoc />
     public Node3D ControllerNode => this;
-}
 
+    /// <inheritdoc />
+    public Node3D HandPositionNode
+        => HandPositionNodeResolved
+            ?? throw new InvalidOperationException("Mock hand position node is not available before _Ready.");
+
+    /// <inheritdoc />
+    public override void _Ready()
+        => HandPositionNodeResolved = this.RequireNode<Node3D>("HandPosition");
+}

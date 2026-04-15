@@ -10,6 +10,8 @@ namespace AlleyCat.XR;
 [GlobalClass]
 public partial class XRManager : Node
 {
+    private static readonly Dictionary<ulong, (bool Attempted, bool Succeeded)> _initialisationStates = [];
+
     /// <summary>
     /// Emitted after the manager attempts initialisation.
     /// </summary>
@@ -41,26 +43,41 @@ public partial class XRManager : Node
     public int MaximumRefreshRate { get; set; } = 90;
 
     /// <summary>
-    /// Abstraction for the active XR origin.
+    /// Active XR runtime instance.
     /// </summary>
-    public IXROrigin Origin { get; private set; } = null!;
+    public IXRRuntime Runtime { get; private set; } = null!;
 
     /// <summary>
-    /// Abstraction for the active XR camera.
+    /// Whether XR initialisation has been attempted.
     /// </summary>
-    public IXRCamera Camera { get; private set; } = null!;
+    public bool InitialisationAttempted
+    {
+        get => _initialisationStates.TryGetValue(GetInstanceId(), out (bool Attempted, bool Succeeded) state)
+            && state.Attempted;
+        protected set
+        {
+            ulong instanceId = GetInstanceId();
+            bool succeeded = _initialisationStates.TryGetValue(instanceId, out (bool Attempted, bool Succeeded) state)
+                && state.Succeeded;
+            _initialisationStates[instanceId] = (value, succeeded);
+        }
+    }
 
     /// <summary>
-    /// Abstraction for the active right-hand controller.
+    /// Whether the latest XR initialisation attempt succeeded.
     /// </summary>
-    public IXRHandController RightHandController { get; private set; } = null!;
-
-    /// <summary>
-    /// Abstraction for the active left-hand controller.
-    /// </summary>
-    public IXRHandController LeftHandController { get; private set; } = null!;
-
-    private IXRRuntime? _runtime;
+    public bool InitialisationSucceeded
+    {
+        get => _initialisationStates.TryGetValue(GetInstanceId(), out (bool Attempted, bool Succeeded) state)
+            && state.Succeeded;
+        protected set
+        {
+            ulong instanceId = GetInstanceId();
+            bool attempted = _initialisationStates.TryGetValue(instanceId, out (bool Attempted, bool Succeeded) state)
+                && state.Attempted;
+            _initialisationStates[instanceId] = (attempted, value);
+        }
+    }
 
     /// <inheritdoc />
     public override void _Ready()
@@ -72,30 +89,23 @@ public partial class XRManager : Node
 
         AddChild(runtimeNode);
 
-        _runtime = runtimeNode as IXRRuntime
-            ?? throw new InvalidOperationException($"XR runtime root '{runtimeNode.GetType().FullName}' must implement IXRRuntime.");
+        Runtime = runtimeNode as IXRRuntime
+                  ?? throw new InvalidOperationException($"XR runtime root '{runtimeNode.GetType().FullName}' must implement IXRRuntime.");
 
-        _runtime.PoseRecentered += EmitPoseRecenteredSignal;
+        Runtime.PoseRecentered += EmitPoseRecenteredSignal;
 
-        Origin = _runtime.Origin;
-        Camera = _runtime.Camera;
-        RightHandController = _runtime.RightHandController;
-        LeftHandController = _runtime.LeftHandController;
-
-        bool initialised = _runtime.Initialise(this.RequireNode<SubViewport>("SubViewport"), MaximumRefreshRate);
+        bool initialised = Runtime.Initialise(this.RequireNode<SubViewport>("SubViewport"), MaximumRefreshRate);
+        InitialisationAttempted = true;
+        InitialisationSucceeded = initialised;
         _ = EmitSignal(SignalName.Initialised, initialised);
     }
 
     /// <inheritdoc />
     public override void _ExitTree()
     {
-        if (_runtime == null)
-        {
-            return;
-        }
+        _ = _initialisationStates.Remove(GetInstanceId());
 
-        _runtime.PoseRecentered -= EmitPoseRecenteredSignal;
-        _runtime = null;
+        Runtime.PoseRecentered -= EmitPoseRecenteredSignal;
     }
 
     private void EmitPoseRecenteredSignal() => _ = EmitSignal(SignalName.PoseRecentered);

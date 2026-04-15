@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.XR.OpenXR;
@@ -8,13 +9,15 @@ namespace AlleyCat.XR.OpenXR;
 [GlobalClass]
 public partial class OpenXRHandControllerNode : XRController3D, IXRHandController
 {
-    private ButtonPressedEventHandler _buttonPressedHandler = null!;
-
-    private ButtonReleasedEventHandler _buttonReleasedHandler = null!;
-
-    private InputFloatChangedEventHandler _inputFloatChangedHandler = null!;
-
-    private InputVector2ChangedEventHandler _inputVector2ChangedHandler = null!;
+    private ButtonPressedEventHandler _buttonPressedHandler = _ => { };
+    private ButtonReleasedEventHandler _buttonReleasedHandler = _ => { };
+    private InputFloatChangedEventHandler _inputFloatChangedHandler = (_, _) => { };
+    private InputVector2ChangedEventHandler _inputVector2ChangedHandler = (_, _) => { };
+    private Node3D? HandPositionNodeResolved
+    {
+        get;
+        set;
+    }
 
     /// <inheritdoc />
     public event Action<string>? ActionButtonPressed;
@@ -32,8 +35,15 @@ public partial class OpenXRHandControllerNode : XRController3D, IXRHandControlle
     public Node3D ControllerNode => this;
 
     /// <inheritdoc />
+    public Node3D HandPositionNode
+        => HandPositionNodeResolved
+            ?? throw new InvalidOperationException("OpenXR hand position node is not available before _Ready.");
+
+    /// <inheritdoc />
     public override void _Ready()
     {
+        HandPositionNodeResolved = this.RequireNode<Node3D>("HandPosition");
+
         _buttonPressedHandler = actionName => ActionButtonPressed?.Invoke(actionName);
         _buttonReleasedHandler = actionName => ActionButtonReleased?.Invoke(actionName);
         _inputFloatChangedHandler = (actionName, value) => ActionFloatInputChanged?.Invoke(actionName, (float)value);

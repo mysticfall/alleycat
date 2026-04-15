@@ -37,6 +37,7 @@ implementation detail.
 ## In Scope
 
 - A humanoid IK system for the player character in VR.
+- Runtime XR-to-IK bridging for player head and hand target driving.
 - Movement-driven interaction intent based on headset and controller motion.
 - Baseline support using headset and two controllers.
 - Optional refinement paths for additional tracking input when available.
@@ -47,9 +48,16 @@ implementation detail.
 
 - Solver-node configuration and rig-level implementation detail.
 - Full contract-level detail for IK-001 and IK-002.
+- XR runtime implementation details beyond the XRManager contract.
 - Animation state-machine and blend-tree design.
 - Network replication and backend concerns.
 - Platform certification and optimisation planning.
+
+## Runtime Integration Boundary
+
+- XR runtime contracts and startup state are defined in [XR-001: XRManager](../../xr/001-xr-manager/index.md).
+- Player XR-to-IK runtime bridge behaviour is defined in [IK Implementation Notes](implementation-notes.md).
+- IK component behaviour remains defined by child IK specifications.
 
 ## Input And Capability Levels
 
@@ -88,5 +96,6 @@ implementation detail.
 
 - [Project Specifications Index](../../index.md)
 - [IK Implementation Notes](implementation-notes.md)
+- [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [IK-001: Reusable Neck-Spine CCDIK Setup](001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](002-arm-shoulder-ik/index.md)

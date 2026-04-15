@@ -70,4 +70,12 @@ public interface IXRHandController
     {
         get;
     }
+
+    /// <summary>
+    /// Runtime-authored hand marker used for authoritative hand pose.
+    /// </summary>
+    Node3D HandPositionNode
+    {
+        get;
+    }
 }

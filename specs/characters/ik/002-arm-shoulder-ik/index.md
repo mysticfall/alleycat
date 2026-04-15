@@ -52,15 +52,17 @@ Use this page for overall scope and acceptance traceability, then use the compon
 
 ### VR Input Assumptions
 
-The system operates in a VR context where the following IK target nodes are assumed to exist as `Marker3D` nodes
-provided by the consuming scene:
+The system operates in a VR context where the following IK target nodes are provided by the consuming scene:
 
 | Target      | Description                                        |
 |-------------|----------------------------------------------------|
 | Head target | Position and rotation derived from the VR headset  |
-| Hand target | Position and rotation derived from a VR controller |
+| Hand target | Position and rotation derived from XR hand pose markers |
 
 There is one hand target per arm (left and right).
+
+Runtime player integration is expected to drive these targets through the player XR-to-IK bridge (`PlayerVRIK`) using
+`XRManager` abstractions.
 
 ### Reference Character
 
