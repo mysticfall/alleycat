@@ -111,7 +111,18 @@ For visual-spec tasks:
   Classify as `follow-up` and redelegate with the correct run command.
 - Screenshots were generated but not visually inspected. File existence is not evidence of visual correctness.
   Before accepting, confirm that the coder or you have inspected representative images (using the `read` tool to
-  load them) and verified expected behaviour per scenario.
+   load them) and verified expected behaviour per scenario.
+
+### 4.7) Blocking Issue Closure Protocol (Mandatory)
+
+When `reviewer` returns blocking issues:
+
+1. Create one follow-up TODO item per blocking issue.
+2. Redelegate with an explicit blocker-closure list (issue → required fix → required evidence).
+3. Require returned evidence for each blocker (code/tests/validation), not a generic “fixed” claim.
+4. Re-run `reviewer` and confirm each prior blocker is either resolved or explicitly re-raised.
+
+Do not move to user handoff while any previous blocker remains unverified.
 
 ### 5) Pre-Handover Code Review Gate
 
@@ -144,6 +155,17 @@ The planner must keep implementation and specification in sync whenever either s
 - In progress/completion updates, explicitly report sync status (`in sync`, `updated`, `deferred-with-risk`).
 
 ## Failure Handling & Recovery
+
+### Delegation Abort/Timeout Recovery
+
+If a delegated run aborts, times out, or returns no usable result:
+
+1. Record it as a handoff failure (`follow-up` on first occurrence).
+2. Immediately post a brief recovery update to the user (what failed, what you will retry/change).
+3. Retry once with tighter scope or resumed task context.
+4. If it fails again, classify as `escalated` and request user direction.
+
+Do not wait for the user to notice stalled delegation before reporting recovery action.
 
 When a subagent response is weak, incomplete, or incorrect:
 

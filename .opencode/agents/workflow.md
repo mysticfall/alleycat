@@ -21,6 +21,7 @@ When assessing or changing workflows, explicitly evaluate how primary agents con
 - Check whether primaries classify responses into `accepted`, `follow-up`, or `escalated`.
 - Check whether escalations are surfaced quickly to the invoking agent/user with a clear decision request.
 - Check whether reviewer `Not Ready` outcomes reliably trigger fix-and-re-review loops.
+- Check whether aborted/stalled delegations trigger proactive recovery updates instead of waiting for user intervention.
 
 If any of the above is weak or inconsistent, prioritise that as a top workflow issue before suggesting broader
 process changes.

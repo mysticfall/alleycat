@@ -58,12 +58,33 @@ Texture2D texture = logo!.Texture;
   - `RequireNode` throws if the node is missing → a scene-authoring bug is caught at runtime.
   - After `_Ready()`, the node is guaranteed to exist for the lifetime of the component.
 
+- Apply this null-forgiving pattern only to dependencies resolved in the same lifecycle phase and guaranteed by scene
+  authoring. For dependencies bound later (for example in `TryBind`), use nullable fields plus explicit guard methods
+  instead of `= null!` initialisers.
+
 ```csharp
 using AlleyCat.Common;
 
 // Inside _Ready or similar lifecycle method:
 Label3D label = this.RequireNode<Label3D>("Label3D");
 ```
+
+## Late-Bound Dependency Convention
+
+- For dependencies that are resolved after `_Ready()` (for example runtime services or XR abstractions), prefer:
+  - private nullable fields (for example `IXRCamera? _camera`),
+  - explicit guard/resolve helpers (for example `EnsureResolvedNodes`, `GetResolvedSkeleton`),
+  - fail-fast exceptions only at true misuse boundaries.
+- Avoid `= null!` for late-bound dependencies when nullable + guard flow is practical.
+- Prefer simple private fields for cached nodes/services over private getter/setter cache properties used only for
+  indirection.
+
+## Helper Scope and Locality
+
+- Keep feature-specific helpers local when they have a single consumer:
+  - use private static methods in the owning type, or
+  - use a nested private type if lifecycle/state coupling is tight.
+- Extract a top-level helper type only when it is reused by multiple consumers or needs independent test boundaries.
 
 ## Godot Node Classes
 
