@@ -87,8 +87,6 @@ func _capture_framing_pass(
 		await camera_rig.capture_screenshot("%s/framing/%s_markers.jpg" % [OUTPUT_ROOT, _to_slug(camera_name)])
 
 	_set_pose_marker_visibility(pose_markers, "", "")
-	left_hand_target.visible = false
-	right_hand_target.visible = false
 
 
 func _capture_pose_scenarios(
@@ -117,7 +115,6 @@ func _capture_pose_scenarios(
 		right_hand_target.global_transform = right_marker.global_transform
 
 		await SceneUtils.wait_frames(self, 4)
-		await SceneUtils.wait_seconds(self, 0.05)
 
 		var file_name: String = "%s/poses/%02d_%s.jpg" % [OUTPUT_ROOT, pose_index + 1, pose_slug]
 		await photobooth.capture_screenshots(file_name)
