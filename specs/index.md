@@ -22,6 +22,9 @@
     - [Arm IK Contract](characters/ik/002-arm-shoulder-ik/arm-ik-contract.md)
     - [Shoulder Correction Contract](characters/ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
     - [Hand-Rotation Elbow Correction Contract](characters/ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
+  - [IK-003: Leg And Feet IK System](characters/ik/003-leg-feet-ik/index.md)
+    - [Leg-Feet IK Contract](characters/ik/003-leg-feet-ik/leg-feet-ik-contract.md)
+    - [Leg-Feet IK Test Setup Contract](characters/ik/003-leg-feet-ik/test-setup-contract.md)
 
 ## UI
 

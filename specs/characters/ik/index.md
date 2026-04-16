@@ -47,6 +47,7 @@ child-level implementation detail.
 - [IK Implementation Notes](implementation-notes.md)
 - [IK-001: Reusable Neck-Spine CCDIK Setup](001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](002-arm-shoulder-ik/index.md)
+- [IK-003: Leg And Feet IK System](003-leg-feet-ik/index.md)
 
 ## In Scope
 
@@ -62,7 +63,7 @@ child-level implementation detail.
 
 - Feature-level solver-node configuration and rig-level implementation details that are normatively defined by child IK
   specifications and implementation notes.
-- Full contract-level detail for IK-001 and IK-002.
+- Full contract-level detail for IK-001, IK-002, and IK-003.
 - XR runtime implementation details beyond the XRManager contract.
 - Animation state-machine and blend-tree design.
 - Rig-level animation state-machine implementation detail and blend-tree node authoring.
@@ -122,3 +123,4 @@ child-level implementation detail.
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [IK-001: Reusable Neck-Spine CCDIK Setup](001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](002-arm-shoulder-ik/index.md)
+- [IK-003: Leg And Feet IK System](003-leg-feet-ik/index.md)

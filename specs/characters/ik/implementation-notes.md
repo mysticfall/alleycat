@@ -60,6 +60,15 @@ implementation notes across child IK specs.
 - Godot executes skeleton modifiers in child order. Place custom controllers (for example the pole-target driver)
   **before** the IK solver nodes so that inputs are updated before the solver runs.
 
+## Lower-Limb Convention Alignment
+
+- IK-003 must follow IK-002 naming and role conventions: per-side `SkeletonModifier3D` controller instances before
+  per-side solver instances.
+- For lower-limb photobooth verification, use
+  `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn` as the test-scene basis.
+- When validating pelvis/hips offset behaviour for lower-limb IK, use a `BoneAttachment3D` harness that applies hips
+  override position directly without animation driving the same transform.
+
 ## Player XR To IK Runtime Bridge
 
 ### Startup Binding Contract
@@ -88,6 +97,7 @@ implementation notes across child IK specs.
 - @specs/characters/000-character-skeleton/index.md
 - @specs/characters/ik/001-neck-spine-ik/index.md
 - @specs/characters/ik/002-arm-shoulder-ik/index.md
+- @specs/characters/ik/003-leg-feet-ik/index.md
 - @specs/xr/001-xr-manager/index.md
 - @game/src/IK/PlayerVRIK.cs
 - @game/src/IK/PlayerVRIKStartupBinder.cs

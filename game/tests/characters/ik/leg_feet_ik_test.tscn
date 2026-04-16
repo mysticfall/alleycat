@@ -1,0 +1,195 @@
+[gd_scene format=3 uid="uid://bbm8p2ha3ihw4"]
+
+[ext_resource type="PackedScene" uid="uid://coluun6oeiyi2" path="res://assets/characters/reference/female/photobooth/lower_body_5_cams.tscn" id="1_legpb"]
+[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_marker"]
+[ext_resource type="Script" uid="uid://b260iglp548x1" path="res://src/IK/LegIkController.cs" id="3_legctrl"]
+
+[node name="Photobooth" unique_id=406188165 instance=ExtResource("1_legpb")]
+
+[node name="HipsOverrideHarness" type="BoneAttachment3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="10" unique_id=767600486]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.83715713, 0.022851847)
+bone_name = "Hips"
+bone_idx = 1
+override_pose = true
+
+[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="11" unique_id=1536903710 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+unique_name_in_owner = false
+process_mode = 0
+process_priority = 0
+process_physics_priority = 0
+process_thread_group = 0
+physics_interpolation_mode = 0
+auto_translate_mode = 0
+editor_description = ""
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+rotation_edit_mode = 0
+rotation_order = 2
+top_level = false
+visible = true
+visibility_parent = NodePath("")
+active = true
+influence = 1.0
+script = ExtResource("3_legctrl")
+FootTarget = NodePath("../../../../../Markers/LeftFootTarget")
+PoleTarget = NodePath("../../../../../Markers/LeftKneePoleTarget")
+metadata/_custom_type_script = "uid://b260iglp548x1"
+
+[node name="RightLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="12" unique_id=1443606337 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+unique_name_in_owner = false
+process_mode = 0
+process_priority = 0
+process_physics_priority = 0
+process_thread_group = 0
+physics_interpolation_mode = 0
+auto_translate_mode = 0
+editor_description = ""
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+rotation_edit_mode = 0
+rotation_order = 2
+top_level = false
+visible = true
+visibility_parent = NodePath("")
+active = true
+influence = 1.0
+script = ExtResource("3_legctrl")
+FootTarget = NodePath("../../../../../Markers/RightFootTarget")
+PoleTarget = NodePath("../../../../../Markers/RightKneePoleTarget")
+Side = 1
+metadata/_custom_type_script = "uid://b260iglp548x1"
+
+[node name="LeftLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="13" unique_id=132184924]
+setting_count = 1
+settings/0/target_node = NodePath("../../../../../Markers/LeftFootTarget")
+settings/0/pole_node = NodePath("../../../../../Markers/LeftKneePoleTarget")
+settings/0/root_bone_name = "LeftUpperLeg"
+settings/0/root_bone = 47
+settings/0/middle_bone_name = "LeftLowerLeg"
+settings/0/middle_bone = 48
+settings/0/pole_direction = 0
+settings/0/end_bone_name = "LeftFoot"
+settings/0/end_bone = 49
+settings/0/use_virtual_end = false
+settings/0/extend_end_bone = false
+
+[node name="RightLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="14" unique_id=943604861]
+setting_count = 1
+settings/0/target_node = NodePath("../../../../../Markers/RightFootTarget")
+settings/0/pole_node = NodePath("../../../../../Markers/RightKneePoleTarget")
+settings/0/root_bone_name = "RightUpperLeg"
+settings/0/root_bone = 51
+settings/0/middle_bone_name = "RightLowerLeg"
+settings/0/middle_bone = 52
+settings/0/pole_direction = 0
+settings/0/end_bone_name = "RightFoot"
+settings/0/end_bone = 53
+settings/0/use_virtual_end = false
+settings/0/extend_end_bone = false
+
+[node name="CopyRightFootRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="15" unique_id=301541395]
+setting_count = 1
+settings/0/amount = 1.0
+settings/0/apply_bone_name = "RightFoot"
+settings/0/apply_bone = 53
+settings/0/reference_type = 1
+settings/0/reference_node = NodePath("../../../../../Markers/RightFootTarget")
+settings/0/copy = 2
+settings/0/axes = 7
+settings/0/invert = 0
+settings/0/additive = false
+
+[node name="CopyLeftFootRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="16" unique_id=348982385]
+setting_count = 1
+settings/0/amount = 1.0
+settings/0/apply_bone_name = "LeftFoot"
+settings/0/apply_bone = 49
+settings/0/reference_type = 1
+settings/0/reference_node = NodePath("../../../../../Markers/LeftFootTarget")
+settings/0/copy = 2
+settings/0/axes = 7
+settings/0/invert = 0
+settings/0/additive = false
+
+[node name="LeftFootTarget" type="Marker3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=915370679]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -0.16, 0.336, -0.027)
+
+[node name="RightFootTarget" type="Marker3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=676860405]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.16, 0.336, -0.027)
+
+[node name="LeftKneePoleTarget" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="2" unique_id=279799307 instance=ExtResource("2_marker")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.141, 0.758, -0.2687178)
+label_text = "l-knee-pole"
+
+[node name="RightKneePoleTarget" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="3" unique_id=655442158 instance=ExtResource("2_marker")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.141, 0.758, -0.2687178)
+label_text = "r-knee-pole"
+
+[node name="FootTargetPoses" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="4" unique_id=1270369156]
+
+[node name="LeftNeutral" parent="Markers/FootTargetPoses" index="0" unique_id=1439566768 instance=ExtResource("2_marker")]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, -0.16, 0.336, -0.027)
+visible = false
+label_text = "l-neutral"
+
+[node name="RightNeutral" parent="Markers/FootTargetPoses" index="1" unique_id=2075609541 instance=ExtResource("2_marker")]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0.16, 0.336, -0.027)
+visible = false
+label_text = "r-neutral"
+
+[node name="LeftForward" parent="Markers/FootTargetPoses" index="2" unique_id=5551652 instance=ExtResource("2_marker")]
+transform = Transform3D(1, 0, 0, 0, 0.49999997, 0.8660254, 0, -0.8660254, 0.49999997, -0.16, 0.40799996, -0.1630979)
+visible = false
+label_text = "l-forward"
+
+[node name="RightForward" parent="Markers/FootTargetPoses" index="3" unique_id=693053474 instance=ExtResource("2_marker")]
+transform = Transform3D(1, 0, 0, 0, 0.49999997, 0.8660254, 0, -0.8660254, 0.49999997, 0.16, 0.40899998, -0.1630979)
+visible = false
+label_text = "r-forward"
+
+[node name="LeftOutward" parent="Markers/FootTargetPoses" index="4" unique_id=1582038317 instance=ExtResource("2_marker")]
+transform = Transform3D(0.8660254, -0.5, 0, -2.1855694e-08, -3.7855173e-08, 1, -0.5, -0.8660254, -4.371139e-08, -0.26355046, 0.492, -0.027)
+visible = false
+label_text = "l-outward"
+
+[node name="RightOutward" parent="Markers/FootTargetPoses" index="5" unique_id=200757604 instance=ExtResource("2_marker")]
+transform = Transform3D(0.8660254, 0.5, 0, 2.1855694e-08, -3.7855173e-08, 1, 0.5, -0.8660254, -4.371139e-08, 0.264, 0.492, -0.027)
+visible = false
+label_text = "r-outward"
+
+[node name="LeftInward" parent="Markers/FootTargetPoses" index="6" unique_id=1684526903 instance=ExtResource("2_marker")]
+transform = Transform3D(0.75, -0.43301266, -0.5, 0.43301266, -0.25000003, 0.8660254, -0.5, -0.8660254, -4.371139e-08, 0.034458198, 0.455, -0.09050544)
+visible = false
+label_text = "l-inward"
+
+[node name="RightInward" parent="Markers/FootTargetPoses" index="7" unique_id=1082661986 instance=ExtResource("2_marker")]
+transform = Transform3D(0.75, 0.43301266, 0.5, -0.43301266, -0.25000003, 0.8660254, 0.5, -0.8660254, -4.371139e-08, -0.058503486, 0.455, 0.12210212)
+visible = false
+label_text = "r-inward"
+
+[node name="LeftRaised" parent="Markers/FootTargetPoses" index="8" unique_id=346290304 instance=ExtResource("2_marker")]
+transform = Transform3D(1, 0, 0, 0, -1, -8.742278e-08, 0, 8.742278e-08, -1, -0.16, 0.6049957, -0.10735786)
+visible = false
+label_text = "l-raised"
+
+[node name="HipsOverridePoses" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="5" unique_id=1601743509]
+
+[node name="HipsNeutral" parent="Markers/HipsOverridePoses" index="0" unique_id=771970388 instance=ExtResource("2_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 5.4960383e-09, 1.1270449, 0.015816577)
+visible = false
+label_text = "hips-neutral"
+
+[node name="HipsCrouch" parent="Markers/HipsOverridePoses" index="1" unique_id=1982739476 instance=ExtResource("2_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -1.3477088e-08, 0.70414567, -0.06415992)
+visible = false
+label_text = "hips-crouch"
+
+[node name="HipsLegUpLeft" parent="Markers/HipsOverridePoses" index="2" unique_id=1324196787 instance=ExtResource("2_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.059999995, 0.71704006, 0.027148154)
+visible = false
+label_text = "hips-leg-up-left"
+
+[node name="HipsAsym" parent="Markers/HipsOverridePoses" index="3" unique_id=1889337626 instance=ExtResource("2_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.14659345, 0.91754997, 0.017148152)
+visible = false
+label_text = "hips-asym"
+
+[editable path="Subject/Female"]
