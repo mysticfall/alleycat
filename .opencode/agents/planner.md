@@ -94,6 +94,10 @@ For visual-spec tasks, apply §4.6 before final classification.
 
 Never pass through subagent output verbatim without this triage.
 
+4. **Empty/No-Result Handling:** If a delegated task returns an empty payload, placeholder text, or no actionable
+   evidence, classify as `follow-up` handoff failure immediately. Post a short recovery update, retry once with
+   tightened scope, then `escalated` if still empty.
+
 ### 4.6) Visual Evidence Acceptance Gate (Mandatory for Visual Specs)
 
 Use skill `godot-visual-verification`.
@@ -111,7 +115,10 @@ For visual-spec tasks:
   Classify as `follow-up` and redelegate with the correct run command.
 - Screenshots were generated but not visually inspected. File existence is not evidence of visual correctness.
   Before accepting, confirm that the coder or you have inspected representative images (using the `read` tool to
-   load them) and verified expected behaviour per scenario.
+  load them) and verified expected behaviour per scenario.
+- If user feedback contradicts an earlier visual `accepted` decision (for example “pose is anatomically impossible”),
+  immediately re-open the gate as `follow-up`, invalidate the prior acceptance, and require new objective assertions
+  plus fresh visual evidence before proceeding.
 
 ### 4.7) Blocking Issue Closure Protocol (Mandatory)
 
@@ -131,10 +138,10 @@ For delegated work that creates or updates files under `specs/`:
 1. Load skill `spec-authoring` before delegating to `writer`.
 2. Require explicit separation of `User Requirements` and `Technical Requirements` in delegation acceptance criteria.
 3. Classify writer output as `accepted` only when all are true:
-   - Both requirement layers are present and distinct.
-   - Core implementation contracts needed for delivery are present (or normatively linked).
-   - `Out Of Scope` does not exclude mandatory implementation requirements.
-   - Acceptance criteria verify both requirement layers.
+    - Both requirement layers are present and distinct.
+    - Core implementation contracts needed for delivery are present (or normatively linked).
+    - `Out Of Scope` does not exclude mandatory implementation requirements.
+    - Acceptance criteria verify both requirement layers.
 4. If any check fails, classify as `follow-up` and redelegate with the missing checklist items.
 5. If writer escalates source-of-truth conflict on technical scope, classify as `escalated` and request user decision.
 

@@ -14,6 +14,8 @@ Godot engine.
 - Use Godot patterns correctly (node lifecycle, signals, input actions, exported fields/properties, and autoloads).
 - Keep runtime behaviour safe for per-frame and VR-critical paths (no blocking work or avoidable allocations).
 - Run relevant checks/tests and note manual verification for gameplay behaviour.
+- For automated integration test runs, default to headless execution flags to prevent OpenXR/UI-dialog interruptions
+  unless non-headless mode is explicitly required.
 
 ## Visual Verification Tasks
 
@@ -26,6 +28,10 @@ For tasks with visual acceptance criteria, use `godot-visual-verification` skill
 - After capturing screenshots, **visually inspect** representative images (using the `read` tool to load them) to
   confirm expected behaviour. Do not treat file generation alone as evidence of visual correctness.
 - Include the skill's run record fields and gate outcome in your final report.
+- For IK/pose tasks, include at least one objective anatomical sanity assertion (for example pole in front of leg, knee
+  flexion/lateral offset bounds) that would fail the exact anomaly reported in screenshots.
+- Keep non-visual test oracles independent from runtime implementation internals where practical. Do not re-derive
+  expected values by duplicating the same algorithm under test.
 
 ## Invoker Communication Protocol
 

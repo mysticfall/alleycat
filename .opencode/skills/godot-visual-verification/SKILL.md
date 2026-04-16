@@ -17,15 +17,16 @@ animation readability, or camera framing validation).
 
 The project provides several reusable photobooth base scenes:
 
-| Scene | Purpose |
-|-------|---------|
-| `@game/assets/testing/photobooth/photobooth.tscn` | Generic base scene — inherit this when creating new reusable photobooth setups. |
-| `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn` | Full-body character verification with 5 cameras (front, back, left, right, top). Use as default for character IK/pose features. |
-| `@game/assets/characters/reference/female/photobooth/upper_body_5_cams.tscn` | Upper-body character verification with 5 cameras. Use for features focused on arm/hand poses or torso positioning. |
-| `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn` | Lower-body character verification with 5 cameras. Use for leg/foot pose or walking gait validation. |
-| `@game/assets/characters/reference/female/photobooth/face_cam.tscn` | Single close-up camera for facial expression or eye-tracking verification. |
+| Scene                                                                        | Purpose                                                                                                                         |
+|------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| `@game/assets/testing/photobooth/photobooth.tscn`                            | Generic base scene — inherit this when creating new reusable photobooth setups.                                                 |
+| `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn`  | Full-body character verification with 5 cameras (front, back, left, right, top). Use as default for character IK/pose features. |
+| `@game/assets/characters/reference/female/photobooth/upper_body_5_cams.tscn` | Upper-body character verification with 5 cameras. Use for features focused on arm/hand poses or torso positioning.              |
+| `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn` | Lower-body character verification with 5 cameras. Use for leg/foot pose or walking gait validation.                             |
+| `@game/assets/characters/reference/female/photobooth/face_cam.tscn`          | Single close-up camera for facial expression or eye-tracking verification.                                                      |
 
-Use the most specific scene that matches your verification needs. If none fits, inherit the generic base and create a new reusable setup under `@game/assets/`.
+Use the most specific scene that matches your verification needs. If none fits, inherit the generic base and create a
+new reusable setup under `@game/assets/`.
 
 ## Development Workflow
 
@@ -48,6 +49,8 @@ Use the most specific scene that matches your verification needs. If none fits, 
     - Add a C# integration test that loads the same test scene.
     - Verify behaviour using non-visual assertions (for example marker proximity, transform ranges, state flags,
       or node presence).
+    - Include at least one assertion designed to fail a plausible visual anomaly from the same scenario set (for example
+      “pole behind leg” for leg IK).
 
 ## Visual Evidence Gate
 
@@ -72,6 +75,10 @@ Use the most specific scene that matches your verification needs. If none fits, 
 5. Distinct scenarios produce visually distinct results (for example different poses should look different in
    screenshots).
 6. C# integration tests verify the same functionality non-visually.
+7. For IK/pose features, non-visual tests include explicit anomaly guards tied to the visual risk (for example
+   pole-front/back sign checks, knee flexion/lateral-offset bounds).
+8. If the user reports a visual contradiction after a prior pass, gate outcome must be re-opened as `FOLLOW-UP REQUIRED`
+   until new evidence resolves the contradiction.
 
 ### Outcome States
 
@@ -89,9 +96,9 @@ Use the most specific scene that matches your verification needs. If none fits, 
 
 ### Never Fabricate Visual Observations
 
-Always analyse screenshots using the `read` tool to load the image and then inspect the visual output. Never infer or describe image content yourself; report only
-what is visible in the image. If the image cannot be loaded, or the visual result is unclear, escalate to the user and explain
-that the visual result cannot be verified.
+Always analyse screenshots using the `read` tool to load the image and then inspect the visual output. Never infer or
+describe image content yourself; report only what is visible in the image. If the image cannot be loaded, or the visual
+result is unclear, escalate to the user and explain that the visual result cannot be verified.
 
 ### Vision Tool Prompt Guidelines
 

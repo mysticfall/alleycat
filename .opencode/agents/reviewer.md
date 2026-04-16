@@ -36,11 +36,16 @@ For visual-spec tasks, use `godot-visual-verification` skill and validate compli
 When visual verification screenshots exist as verification artefacts:
 
 - [ ] Runner was executed **without `--headless`** (headless mode produces blank/failed captures).
-- [ ] Functional screenshot review was completed (using the `read` tool to inspect screenshots) — file existence alone is
+- [ ] Functional screenshot review was completed (using the `read` tool to inspect screenshots) — file existence alone
+  is
   not sufficient.
 - [ ] Screenshots for distinct scenarios (for example different poses) produce visually distinct results.
 - [ ] Camera/marker framing was verified before feature-level captures.
 - [ ] C# integration tests validate the same behaviour with non-visual assertions.
+- [ ] Non-visual assertions include at least one objective anomaly guard for known failure modes (for example IK poles
+  behind legs, anatomically impossible bend).
+- [ ] Test oracle is independent enough to catch mirrored implementation mistakes (not a restatement of the same
+  algorithm under test).
 - [ ] Handoff includes run record fields and explicit gate outcome.
 
 ### Godot Essentials
@@ -50,6 +55,8 @@ When visual verification screenshots exist as verification artefacts:
 - [ ] Scene/node ownership is clear, with minimal justified autoload/global state.
 - [ ] Exported properties/resources/scene refs are serialisation-safe and editor-friendly.
 - [ ] Per-frame and VR-critical paths avoid blocking work and avoidable allocations.
+- [ ] Automated integration test evidence uses headless execution (or equivalent enforced mechanism such as
+  `[Headless]`) to avoid manual UI/OpenXR intervention.
 - [ ] Scene and resource changes use the GDScript API approach (not hand-editing `.tscn`/`.tres` files).
 - [ ] For inherited scenes, proper handling of `editable path` and `parent_id_path` when accessing internal nodes.
 - [ ] Custom type script metadata is set correctly when assigning C# scripts to nodes in scenes.
@@ -64,7 +71,8 @@ Return findings grouped by severity:
 3. **Verified checks** (what passed cleanly)
 
 Treat missing functional screenshot inspection for visual-spec tasks as a blocking review gap unless the evidence is
-explicitly unavailable and escalated.
+explicitly unavailable and escalated. Treat user-reported visual contradictions after a prior pass as a mandatory
+re-open of the gate.
 
 For each issue include:
 
