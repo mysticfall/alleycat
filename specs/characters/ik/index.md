@@ -20,7 +20,21 @@ expanded with dedicated child specifications.
 ## Goal
 
 Provide a clear parent/child structure so IK component contracts align under one source of truth without duplicating
-implementation detail.
+child-level implementation detail.
+
+## User Requirements
+
+1. Players must experience stable full-body VR character posing from baseline headset/controller input.
+2. Baseline posture behaviour must support standing and crouching semantics, with room for extended poses over time.
+3. Optional tracking hardware should refine fidelity without breaking baseline support.
+
+## Technical Requirements
+
+1. This parent spec must define system-level capability boundaries and normative links to child IK contracts.
+2. Runtime XR-to-IK integration boundaries must remain explicit via [XR-001: XRManager](../../xr/001-xr-manager/index.md)
+   and [IK Implementation Notes](implementation-notes.md).
+3. Child specifications must carry feature-level implementation contracts and validation criteria.
+4. Incremental delivery phases must preserve backwards-compatible baseline semantics.
 
 ## Specification Structure
 
@@ -46,10 +60,12 @@ implementation detail.
 
 ## Out Of Scope
 
-- Solver-node configuration and rig-level implementation detail.
+- Feature-level solver-node configuration and rig-level implementation details that are normatively defined by child IK
+  specifications and implementation notes.
 - Full contract-level detail for IK-001 and IK-002.
 - XR runtime implementation details beyond the XRManager contract.
 - Animation state-machine and blend-tree design.
+- Rig-level animation state-machine implementation detail and blend-tree node authoring.
 - Network replication and backend concerns.
 - Platform certification and optimisation planning.
 
@@ -91,6 +107,13 @@ implementation detail.
    - Add focused specifications for constrained-motion scenarios.
 5. **Phase 5: Optional Tracking Refinement Layers**
    - Add opt-in specifications for additional tracking modalities.
+
+## Acceptance Criteria
+
+1. The specification defines both user-visible IK outcomes and technical implementation-governance contracts.
+2. System-level runtime boundaries explicitly reference XR and IK runtime-bridge contracts.
+3. Baseline capability levels and phased delivery plan are defined for implementation planning.
+4. Child IK specifications are identified as normative sources for feature-level implementation contracts.
 
 ## References
 

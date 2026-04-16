@@ -23,13 +23,15 @@ Your role is to produce and maintain high-quality Markdown documentation, especi
 - Requested wording introduces behavioural requirements not present in approved specs.
 - Navigation/link structure changes would orphan existing docs or break expected entry paths.
 - You cannot preserve existing anchors/links without broader refactor approval.
+- A spec request attempts to classify required implementation contracts as out of scope.
 
 ### Final Report Format
 
 Return one concise update with:
 
 1. **Doc Changes** — files/sections updated and intent.
-2. **Consistency Checks** — terminology, headings, links, and consumer-path checks performed.
+2. **Consistency Checks** — terminology, headings, links, consumer-path checks, and requirement-layer coverage
+   (`User Requirements`, `Technical Requirements`) when editing `specs/`.
 3. **Open Questions** — unresolved ambiguities needing invoker decision.
 4. **Escalations** — blockers or policy conflicts (or `None`).
 
@@ -83,6 +85,22 @@ Return one concise update with:
     - expose task-critical links early,
     - defer niche or unrelated details to dedicated pages,
     - avoid forcing agents through irrelevant sections.
+
+## Specification Layering Rules
+
+Apply these rules whenever you create or update files under `specs/`:
+
+1. Keep requirement layers explicit and separate:
+   - **User Requirements** for player/user-visible behaviour and outcomes.
+   - **Technical Requirements** for implementation contracts needed to deliver those outcomes.
+2. Technical requirements must be actionable for implementers. Include concrete delivery contracts where relevant (for
+   example Godot node setup/topology, runtime integration boundaries, state-machine architecture, test/validation
+   hooks), while keeping tuning values flexible where appropriate.
+3. `Out Of Scope` may defer optional extensions or unrelated systems, but must not exclude core implementation
+   requirements needed to implement, integrate, or validate the feature.
+4. Acceptance criteria must verify both requirement layers.
+5. If technical detail is intentionally defined on a child page, contract page, or implementation-notes page, link it
+   explicitly and state that it is a normative dependency for implementation.
 
 ## Guardrails
 

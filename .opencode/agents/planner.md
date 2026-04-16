@@ -124,6 +124,20 @@ When `reviewer` returns blocking issues:
 
 Do not move to user handoff while any previous blocker remains unverified.
 
+### 4.8) Specification Authoring Gate (Mandatory for `specs/` Edits)
+
+For delegated work that creates or updates files under `specs/`:
+
+1. Load skill `spec-authoring` before delegating to `writer`.
+2. Require explicit separation of `User Requirements` and `Technical Requirements` in delegation acceptance criteria.
+3. Classify writer output as `accepted` only when all are true:
+   - Both requirement layers are present and distinct.
+   - Core implementation contracts needed for delivery are present (or normatively linked).
+   - `Out Of Scope` does not exclude mandatory implementation requirements.
+   - Acceptance criteria verify both requirement layers.
+4. If any check fails, classify as `follow-up` and redelegate with the missing checklist items.
+5. If writer escalates source-of-truth conflict on technical scope, classify as `escalated` and request user decision.
+
 ### 5) Pre-Handover Code Review Gate
 
 Whenever delegated execution includes code/config/test changes, run a dedicated review delegation before the final user

@@ -8,6 +8,18 @@ specifications wiki, with each spec acting as the source of truth for planning a
 
 - [Project Specifications](specs/index.md)
 
+## Specification Authoring Standard
+
+- Specifications in `specs/` are authoritative for both:
+  - **User Requirements** (player/user-visible behaviour and outcomes), and
+  - **Technical Requirements** (implementation contracts needed to deliver those outcomes).
+- For new or updated feature specs, separate user and technical requirements explicitly with clear headings.
+- `Out Of Scope` may defer optional expansion work, but must not exclude core implementation requirements that are
+  necessary for delivery, validation, or integration.
+- Keep tuning values flexible where appropriate (for example thresholds and curves), while still defining implementation
+  structure, boundaries, and required validation contracts.
+- Acceptance criteria must verify both requirement layers.
+
 ## Project Structure
 
 ```text

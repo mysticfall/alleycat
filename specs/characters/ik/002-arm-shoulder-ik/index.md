@@ -17,6 +17,21 @@ Define a spec-first, testable contract for implementing and verifying a TwoBoneI
 predictive elbow-pole-target calculation and an integrated pre-IK shoulder-correction path, reusable across humanoid
 character setups.
 
+## User Requirements
+
+1. Players must see natural arm reach behaviour that follows head/hand intent across common and extreme poses.
+2. Shoulder behaviour must remain visually stable without deformation while arms move through key interaction poses.
+3. Arm behaviour must remain consistent when the character body orientation changes (for example standing, stooping,
+   lying).
+
+## Technical Requirements
+
+1. Implementation must provide per-arm `TwoBoneIK3D` solving and deterministic elbow pole-target prediction from
+   head/hand references.
+2. Pre-IK shoulder correction must be integrated into `ArmIkController` and execute before arm IK modifiers.
+3. Hand-rotation-based elbow correction must be defined as a first-class contract with configurable weighting.
+4. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions.
+
 ## Specification Structure
 
 This page is the source-of-truth overview for IK-002. Detailed component contracts are split into focused pages:
@@ -92,6 +107,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 
 | ID    | Requirement                                                                                                                                                                                                                                                                                           | Primary Contract                                                |
 |-------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| AC-00 | The specification defines both user-visible arm/shoulder behaviour outcomes and technical implementation contracts required for delivery and validation.                                                                                                                                               | This Page                                                       |
 | AC-01 | Each arm uses a `TwoBoneIK3D` node to solve the upper-arm → lower-arm chain towards the hand target position.                                                                                                                                                                                         | [Arm IK Contract](arm-ik-contract.md)                           |
 | AC-02 | Elbow pole-target prediction is derived from head and hand target positions and rotations, without relying on external state or animation data.                                                                                                                                                       | [Arm IK Contract](arm-ik-contract.md)                           |
 | AC-03 | Pole-target prediction produces correct, natural elbow positions for all six key hand poses when the character is upright.                                                                                                                                                                            | [Arm IK Contract](arm-ik-contract.md)                           |

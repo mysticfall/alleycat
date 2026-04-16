@@ -16,6 +16,18 @@ does not include emotion inference or dedicated eye movement data.
 Prove end-to-end local playback (WAV input → ONNX inference → mapped mesh blendshape updates) in
 Godot as a feasibility prototype.
 
+## User Requirements
+
+1. Prototype playback must produce observable lip-sync-style facial motion from supported speech audio input.
+2. Prototype validation should provide contributors with a quick confidence check for mapping and frame progression.
+
+## Technical Requirements
+
+1. The prototype must run local Wav2Arkit ONNX inference and map output channels to ARKit-compatible blendshape names.
+2. Input contract must enforce PCM 16-bit, 16 kHz, mono WAV via `AudioStreamWav`.
+3. Playback must remain audio-synchronised through `AudioStreamPlayer3D` and apply frame updates over time.
+4. Validation runner contracts must verify initialisation, mapping presence, and progression metrics.
+
 ## Prototype Status
 
 This spec documents a **feasibility prototype** only. It does not define a production-ready speech animation feature.
@@ -42,6 +54,13 @@ This spec documents a **feasibility prototype** only. It does not define a produ
 - Network/streaming, live microphone capture, and dialogue-system integration.
 - Retargeting quality tuning, animation polish, and expressive-quality acceptance criteria.
 - Full automated regression coverage beyond the prototype scene/runner checks.
+
+## Acceptance Criteria
+
+1. The specification defines both user-visible prototype outcomes and technical implementation contracts.
+2. Prototype scope is explicitly bounded as feasibility work rather than production runtime guarantees.
+3. Audio format and playback synchronisation contracts required for deterministic prototype behaviour are defined.
+4. Validation workflow and criteria define reproducible checks for initialisation, mapping, and playback progression.
 
 ## Implementation References
 

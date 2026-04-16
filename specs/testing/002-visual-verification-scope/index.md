@@ -15,6 +15,20 @@ insufficient.
 Standardise a photobooth-based verification process where C# integration tests are the primary acceptance mechanism and
 screenshots serve as a diagnostic aid.
 
+## User Requirements
+
+1. Contributors and agents must be able to verify visual feature intent using a repeatable workflow rather than ad-hoc
+   screenshot runs.
+2. Verification handoffs must include enough artefacts for reviewers to understand what was checked.
+3. Visual evidence should support debugging when assertions fail, without replacing objective test assertions.
+
+## Technical Requirements
+
+1. Visual verification must use reusable photobooth test scenes and scripted scenario capture.
+2. Camera/marker framing validation must happen before feature-level capture.
+3. C# integration assertions must remain the primary acceptance gate for the same behaviour under test.
+4. Handoff artefacts must include scene/runner/output/test paths needed for reproducibility.
+
 ## In Scope
 
 - Feature-level visual checks tied to explicit spec expectations.
@@ -55,13 +69,14 @@ screenshots serve as a diagnostic aid.
 
 ## Acceptance Criteria
 
-1. Visual-verification tasks use the workflow contract above unless a spec explicitly overrides it.
-2. Verification scenes are reusable, stored under `@game/tests/<feature>/...`, and based on an appropriate photobooth
+1. The specification defines both user-facing verification workflow outcomes and technical implementation contracts.
+2. Visual-verification tasks use the workflow contract above unless a spec explicitly overrides it.
+3. Verification scenes are reusable, stored under `@game/tests/<feature>/...`, and based on an appropriate photobooth
    inheritance chain.
-3. Camera/marker framing validation is completed before feature-level screenshot review.
-4. C# non-visual assertions are the primary verification mechanism; screenshot evidence serves as a diagnostic aid when
+4. Camera/marker framing validation is completed before feature-level screenshot review.
+5. C# non-visual assertions are the primary verification mechanism; screenshot evidence serves as a diagnostic aid when
    assertions fail.
-5. Handoffs include test-scene path, runner script path, screenshot output location, and C# integration test location.
+6. Handoffs include test-scene path, runner script path, screenshot output location, and C# integration test location.
 
 ## References
 

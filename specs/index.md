@@ -1,5 +1,9 @@
 # Project Specifications
 
+## Specification Authoring
+
+- [Feature Specification Template](templates/feature-spec-template.md)
+
 ## Core Systems
 
 - [CORE-001: Global Scene](001-global-scene/index.md)

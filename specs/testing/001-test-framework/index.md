@@ -9,6 +9,23 @@ title: Integration Test Framework
 
 Provide a dependable integration test framework for behaviours that require Godot runtime APIs. It must support local and headless execution, selective runs, stable test identity, and actionable diagnostics.
 
+## Goal
+
+Enable contributors and agents to validate Godot-runtime behaviour with repeatable, debuggable integration-test runs.
+
+## User Requirements
+
+1. Developers must be able to run targeted integration tests locally with clear pass/fail outcomes.
+2. Failure diagnostics must clearly indicate whether failures originate from framework/runtime issues or test assertions.
+3. Test authoring should follow familiar xUnit lifecycle patterns for predictable maintenance.
+
+## Technical Requirements
+
+1. The framework must support deterministic discovery/execution of Godot-backed parameterless `[Fact]` tests.
+2. Headless/windowed execution controls must be explicit and overrideable via attribute and CLI policy.
+3. Runner process management must handle startup, timeout, output capture, and cleanup robustly.
+4. Result transport must use structured payload parsing with stable identity semantics for selection/reporting.
+
 ## Current State
 
 - Project split is complete:
@@ -160,12 +177,13 @@ public class CiTests
 
 ## Acceptance Criteria
 
-1. A new contributor can add and run a Godot-backed integration test locally using documented steps.
-2. The integration suite supports both headless and windowed execution with deterministic pass/fail/error mapping.
-3. Selective execution runs only the requested subset in normal feature workflows.
-4. Framework/runtime failures are clearly distinguishable from assertion failures.
-5. Isolation fixtures and guidance prevent cross-test contamination across repeated runs.
-6. Docs cover quick start, filtering, diagnostics, and common recovery steps.
+1. The specification defines both user-facing test-workflow outcomes and technical framework contracts.
+2. A new contributor can add and run a Godot-backed integration test locally using documented steps.
+3. The integration suite supports both headless and windowed execution with deterministic pass/fail/error mapping.
+4. Selective execution runs only the requested subset in normal feature workflows.
+5. Framework/runtime failures are clearly distinguishable from assertion failures.
+6. Isolation fixtures and guidance prevent cross-test contamination across repeated runs.
+7. Docs cover quick start, filtering, diagnostics, and common recovery steps.
 
 ## References
 

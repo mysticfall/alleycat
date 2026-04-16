@@ -14,6 +14,33 @@ This page is a child guidance page under [IK: Player VRIK System](index.md).
 Document cross-feature constraints and configuration patterns for Godot inverse kinematics modifiers used by AlleyCat
 characters.
 
+## Requirement
+
+Define shared IK implementation contracts that multiple IK feature specs depend on for consistent runtime behaviour and
+integration.
+
+## Goal
+
+Provide a single normative guidance page for cross-feature technical constraints without duplicating the same
+implementation notes across child IK specs.
+
+## User Requirements
+
+1. Players should experience consistent IK behaviour across features that depend on shared solver/runtime assumptions.
+
+## Technical Requirements
+
+1. Shared solver configuration and modifier-order constraints must be explicitly documented for reuse by child specs.
+2. XR-to-IK runtime bridge and startup binding contracts must be defined as cross-feature integration boundaries.
+3. Child IK feature specs that rely on these constraints must reference this page as a normative dependency.
+
+## Acceptance Criteria
+
+1. The page defines both user-impact intent (cross-feature consistency) and technical implementation contracts.
+2. Shared constraints for solver configuration, modifier ordering, and XR-to-IK runtime bridge contracts are explicitly
+   documented.
+3. References to dependent specs and implementation paths are maintained.
+
 ## TwoBoneIK3D Configuration
 
 - **Set all bone names explicitly.** The solver requires `root_bone_name`, `middle_bone_name`, and `end_bone_name`.

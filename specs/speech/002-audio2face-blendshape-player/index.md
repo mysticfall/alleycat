@@ -18,6 +18,21 @@ Drive character facial animation from speech audio using NVIDIA Audio2Face blend
 served over HTTP, with post-processing that translates dedicated eye-rotation output into accurate
 ARKit eye-look blendshape channels.
 
+## User Requirements
+
+1. Prototype playback must produce observable facial animation from supported speech audio using remote Audio2Face
+   inference.
+2. Eye movement output should be more accurate when dedicated eye-rotation translation is enabled.
+3. Contributors must be able to validate server connectivity and playback behaviour with a repeatable workflow.
+
+## Technical Requirements
+
+1. The player must convert supported `AudioStreamWav` PCM input to the API payload format expected by Audio2Face.
+2. Inference integration must use HTTP endpoint contracts (`/health`, `/blendshapes`) with configurable server URI.
+3. Returned frames must be mapped into the base `BlendShapePlayer` playback pipeline with audio synchronisation.
+4. Optional eye-rotation translation must define baseline subtraction, smoothing, directional mapping, and clamp rules.
+5. Model/mode compatibility handling and health probing behaviour must be explicitly defined.
+
 ## Prototype Status
 
 This spec documents a **feasibility prototype**. It does not define production-ready runtime
@@ -167,6 +182,15 @@ Violations produce explicit initialisation errors.
 - Docker container lifecycle management or orchestration.
 - Automated regression coverage beyond the prototype test scene.
 
+## Acceptance Criteria
+
+1. The specification defines both user-visible prototype outcomes and technical implementation contracts.
+2. Prototype scope is explicitly bounded as feasibility work rather than production runtime guarantees.
+3. HTTP integration, audio-format contracts, and playback synchronisation obligations are explicitly defined.
+4. Eye-rotation translation behaviour and fallback handling are explicitly defined.
+5. Validation workflow defines reproducible checks for server readiness, frame generation, mapping, and playback
+   progression.
+
 ## Implementation References
 
 - `@game/src/Speech/A2fBlendShapePlayer.cs`
@@ -215,4 +239,4 @@ Violations produce explicit initialisation errors.
 ## References
 
 - @specs/index.md
-- @specs/speech/001-wav2arkit-blendshape-feasibility/index.md
+- @specs/speech/001-wav2arkit-blendshape-player/index.md
