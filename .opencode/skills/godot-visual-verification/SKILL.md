@@ -13,6 +13,20 @@ Use this skill whenever acceptance depends on how something looks or behaves on-
 Load this skill for any task that needs screenshot evidence (for example character pose/IK checks, item placement,
 animation readability, or camera framing validation).
 
+## Available Photobooth Scenes
+
+The project provides several reusable photobooth base scenes:
+
+| Scene | Purpose |
+|-------|---------|
+| `@game/assets/testing/photobooth/photobooth.tscn` | Generic base scene — inherit this when creating new reusable photobooth setups. |
+| `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn` | Full-body character verification with 5 cameras (front, back, left, right, top). Use as default for character IK/pose features. |
+| `@game/assets/characters/reference/female/photobooth/upper_body_5_cams.tscn` | Upper-body character verification with 5 cameras. Use for features focused on arm/hand poses or torso positioning. |
+| `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn` | Lower-body character verification with 5 cameras. Use for leg/foot pose or walking gait validation. |
+| `@game/assets/characters/reference/female/photobooth/face_cam.tscn` | Single close-up camera for facial expression or eye-tracking verification. |
+
+Use the most specific scene that matches your verification needs. If none fits, inherit the generic base and create a new reusable setup under `@game/assets/`.
+
 ## Development Workflow
 
 1. **Create A Test Scene (Photobooth)**
