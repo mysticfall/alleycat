@@ -25,6 +25,9 @@
   - [IK-003: Leg And Feet IK System](characters/ik/003-leg-feet-ik/index.md)
     - [Leg-Feet IK Contract](characters/ik/003-leg-feet-ik/leg-feet-ik-contract.md)
     - [Leg-Feet IK Test Setup Contract](characters/ik/003-leg-feet-ik/test-setup-contract.md)
+  - [IK-004: VRIK Pose State Machine And Hip Reconciliation](characters/ik/004-vrik-pose-state-machine/index.md)
+    - [Pose State Machine Contract](characters/ik/004-vrik-pose-state-machine/pose-state-machine-contract.md)
+    - [Hip Reconciliation Contract](characters/ik/004-vrik-pose-state-machine/hip-reconciliation-contract.md)
 
 ## UI
 

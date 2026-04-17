@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CrouchingPoseState" format=3 uid="uid://cwp2tklor5usj"]
+
+[ext_resource type="Resource" uid="uid://l2vuyyhitue6" path="res://data/ik/pose/crouching_animation_binding.tres" id="1_iyvuw"]
+[ext_resource type="Resource" uid="uid://c7f40jgif80ac" path="res://data/ik/pose/head_tracking_hip_profile.tres" id="2_b00ej"]
+[ext_resource type="Script" uid="uid://dldoade60yjtq" path="res://src/IK/Pose/CrouchingPoseState.cs" id="3_uc7du"]
+
+[resource]
+resource_name = "CrouchingPoseState"
+script = ExtResource("3_uc7du")
+Id = &"Crouching"
+HipReconciliation = ExtResource("2_b00ej")
+AnimationBinding = ExtResource("1_iyvuw")

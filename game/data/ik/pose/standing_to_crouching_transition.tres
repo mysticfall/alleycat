@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="HeadVerticalOffsetPoseTransition" format=3 uid="uid://dtbp67huupmeo"]
+
+[ext_resource type="Script" uid="uid://b6ofdfj66dtv1" path="res://src/IK/Pose/HeadVerticalOffsetPoseTransition.cs" id="1_7ox1w"]
+
+[resource]
+resource_name = "StandingToCrouchingTransition"
+script = ExtResource("1_7ox1w")
+TriggerOffsetMetres = 0.02
+ReleaseOffsetMetres = 0.01
+From = &"Standing"
+To = &"Crouching"

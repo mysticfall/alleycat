@@ -1,4 +1,5 @@
 using AlleyCat.Common;
+using AlleyCat.IK.Pose;
 using AlleyCat.XR;
 using Godot;
 
@@ -93,9 +94,41 @@ public partial class PlayerVRIK : Node3D
     } = 28.0f;
 
     /// <summary>
+    /// Pose state machine driven from the XR bridge. When set, <c>_Process</c> builds a
+    /// <see cref="PoseStateContext"/> per tick and invokes <see cref="PoseStateMachine.Tick"/>
+    /// so hip reconciliation and animation bindings observe the same snapshot as the modifier
+    /// pipeline. Leave unset to disable the pose-state layer entirely.
+    /// </summary>
+    [Export]
+    public PoseStateMachine? PoseStateMachine
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Bone name used to resolve the hip-bone index supplied to the <see cref="PoseStateContext"/>.
+    /// </summary>
+    [Export]
+    public StringName HipBoneName
+    {
+        get;
+        set;
+    } = new("Hips");
+
+    /// <summary>
     /// Resolved head-bone index for compensation calculations.
     /// </summary>
     public int HeadBoneIndex
+    {
+        get;
+        private set;
+    } = -1;
+
+    /// <summary>
+    /// Resolved hip-bone index supplied to the pose-state context. <c>-1</c> when unresolved.
+    /// </summary>
+    public int HipBoneIndex
     {
         get;
         private set;
@@ -110,6 +143,8 @@ public partial class PlayerVRIK : Node3D
     private Transform3D _viewpointLocalTransform = Transform3D.Identity;
     private Transform3D _viewpointLocalInverseTransform = Transform3D.Identity;
     private float _worldScale = 1.0f;
+
+    private readonly PoseStateContextBuilder _poseContextBuilder = new();
 
     /// <inheritdoc />
     public override void _Ready()
@@ -222,7 +257,10 @@ public partial class PlayerVRIK : Node3D
         }
 
         IXROrigin? origin = _origin;
-        if (origin is null || _headFollower is null || _rightHandFollower is null || _leftHandFollower is null)
+        PoseStateMachine? stateMachine = PoseStateMachine;
+
+        if (origin is null || _headFollower is null || _rightHandFollower is null || _leftHandFollower is null ||
+            stateMachine is null || !_isBound)
         {
             return;
         }
@@ -232,19 +270,15 @@ public partial class PlayerVRIK : Node3D
         _headFollower.Follow(delta);
         _rightHandFollower.Follow(delta);
         _leftHandFollower.Follow(delta);
+
+        Skeleton3D skeleton = GetResolvedSkeleton();
+        PoseStateContext context = BuildPoseStateContext(skeleton, delta);
+        stateMachine.Tick(context);
     }
 
     private void OnEndStage(double delta)
     {
-        _ = delta;
-
-        if (!_isBound)
-        {
-            return;
-        }
-
-        IXROrigin? origin = _origin;
-        if (origin is null)
+        if (!_isBound || _origin is null || _camera is null)
         {
             return;
         }
@@ -285,13 +319,13 @@ public partial class PlayerVRIK : Node3D
 
     private Transform3D BuildRightHandTargetTransform()
         => _rightHandController?.HandPositionNode.GlobalTransform
-            ?? _rightHandIKTarget?.GlobalTransform
-            ?? Transform3D.Identity;
+           ?? _rightHandIKTarget?.GlobalTransform
+           ?? Transform3D.Identity;
 
     private Transform3D BuildLeftHandTargetTransform()
         => _leftHandController?.HandPositionNode.GlobalTransform
-            ?? _leftHandIKTarget?.GlobalTransform
-            ?? Transform3D.Identity;
+           ?? _leftHandIKTarget?.GlobalTransform
+           ?? Transform3D.Identity;
 
     private static bool TryCalibrateWorldScale(
         float avatarRestViewpointHeight,
@@ -351,8 +385,42 @@ public partial class PlayerVRIK : Node3D
             throw new InvalidOperationException($"Unable to resolve Head bone on skeleton '{_skeleton.Name}'.");
         }
 
+        HipBoneIndex = _skeleton.FindBone(HipBoneName);
+        // HipBoneIndex may remain -1 when the skeleton does not expose a hips bone; consumers
+        // (for example HipReconciliationModifier) already guard for the unresolved case.
+
         _viewpointLocalTransform = _viewpoint.Transform;
         _viewpointLocalInverseTransform = _viewpointLocalTransform.Inverse();
+    }
+
+    private PoseStateContext BuildPoseStateContext(Skeleton3D skeleton, double delta)
+    {
+        // Rest viewpoint in world space: head-bone global rest multiplied by the viewpoint
+        // marker's local transform inside the head bone. Matches the calibration reference used
+        // by CalibrateWorldScaleOnce.
+        Transform3D headBoneRest = skeleton.GetBoneGlobalRest(HeadBoneIndex);
+        Transform3D restViewpoint = skeleton.GlobalTransform * headBoneRest * _viewpointLocalTransform;
+
+        // Current viewpoint in world space: the XR camera position projected back through the
+        // viewpoint-local offset, matching the physical head target used for compensation.
+        Transform3D currentViewpoint = _camera?.CameraNode.GlobalTransform ?? Transform3D.Identity;
+        Transform3D rightController = _rightHandController?.HandPositionNode.GlobalTransform
+                                      ?? Transform3D.Identity;
+        Transform3D leftController = _leftHandController?.HandPositionNode.GlobalTransform
+                                     ?? Transform3D.Identity;
+
+        _poseContextBuilder.RightControllerTransform = rightController;
+        _poseContextBuilder.LeftControllerTransform = leftController;
+        _poseContextBuilder.ViewpointGlobalRest = restViewpoint;
+        _poseContextBuilder.CameraTransform = currentViewpoint;
+        _poseContextBuilder.WorldScale = _worldScale;
+        _poseContextBuilder.Skeleton = skeleton;
+        _poseContextBuilder.HipBoneIndex = HipBoneIndex;
+        _poseContextBuilder.HeadBoneIndex = HeadBoneIndex;
+        _poseContextBuilder.Delta = delta;
+        _poseContextBuilder.ClearAuxiliarySignals();
+
+        return _poseContextBuilder.Build();
     }
 
     private void EnsureFollowers()
@@ -363,11 +431,14 @@ public partial class PlayerVRIK : Node3D
         }
 
         CharacterBody3D headTarget = _headIKTarget
-            ?? throw new InvalidOperationException("PlayerVRIK head target not resolved before follower setup.");
+                                     ?? throw new InvalidOperationException(
+                                         "PlayerVRIK head target not resolved before follower setup.");
         CharacterBody3D rightHandTarget = _rightHandIKTarget
-            ?? throw new InvalidOperationException("PlayerVRIK right-hand target not resolved before follower setup.");
+                                          ?? throw new InvalidOperationException(
+                                              "PlayerVRIK right-hand target not resolved before follower setup.");
         CharacterBody3D leftHandTarget = _leftHandIKTarget
-            ?? throw new InvalidOperationException("PlayerVRIK left-hand target not resolved before follower setup.");
+                                         ?? throw new InvalidOperationException(
+                                             "PlayerVRIK left-hand target not resolved before follower setup.");
 
         _headFollower = new IKTargetBodyFollower(headTarget, BuildHeadTargetTransform)
         {

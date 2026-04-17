@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="HeadTrackingHipProfile" format=3 uid="uid://c7f40jgif80ac"]
+
+[ext_resource type="Script" uid="uid://o7msh1gjb5fh" path="res://src/IK/Pose/HeadTrackingHipProfile.cs" id="1_klvcb"]
+
+[resource]
+resource_name = "HeadTrackingHipProfile"
+script = ExtResource("1_klvcb")

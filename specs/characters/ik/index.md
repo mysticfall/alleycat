@@ -25,8 +25,11 @@ child-level implementation detail.
 ## User Requirements
 
 1. Players must experience stable full-body VR character posing from baseline headset/controller input.
-2. Baseline posture behaviour must support standing and crouching semantics, with room for extended poses over time.
+2. Baseline posture behaviour must support standing and crouching semantics, with room for extended pose coverage over
+   time.
 3. Optional tracking hardware should refine fidelity without breaking baseline support.
+4. Players must experience diverse full-body poses (including non-upright poses such as crawling and lying) from
+   baseline headset + two-controller input, not hands-only VR.
 
 ## Technical Requirements
 
@@ -35,6 +38,8 @@ child-level implementation detail.
    and [IK Implementation Notes](implementation-notes.md).
 3. Child specifications must carry feature-level implementation contracts and validation criteria.
 4. Incremental delivery phases must preserve backwards-compatible baseline semantics.
+5. IK-001, IK-002, and IK-003 remain prerequisite contracts for upper-body, spine, and lower-limb solving; pose-state
+   and hip-reconciliation orchestration must build on those contracts rather than redefining them.
 
 ## Specification Structure
 
@@ -48,6 +53,7 @@ child-level implementation detail.
 - [IK-001: Reusable Neck-Spine CCDIK Setup](001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](002-arm-shoulder-ik/index.md)
 - [IK-003: Leg And Feet IK System](003-leg-feet-ik/index.md)
+- [IK-004: VRIK Pose State Machine And Hip Reconciliation](004-vrik-pose-state-machine/index.md)
 
 ## In Scope
 
@@ -56,7 +62,7 @@ child-level implementation detail.
 - Movement-driven interaction intent based on headset and controller motion.
 - Baseline support using headset and two controllers.
 - Optional refinement paths for additional tracking input when available.
-- Wider pose coverage than basic upright-only interaction (for example kneeling, lying down, crawling).
+- Wider pose coverage than basic upright-only interaction (for example kneeling, stooping, sitting, and crawling).
 - High-level behaviour intent for constrained movement scenarios.
 
 ## Out Of Scope
@@ -65,8 +71,8 @@ child-level implementation detail.
   specifications and implementation notes.
 - Full contract-level detail for IK-001, IK-002, and IK-003.
 - XR runtime implementation details beyond the XRManager contract.
-- Animation state-machine and blend-tree design.
-- Rig-level animation state-machine implementation detail and blend-tree node authoring.
+- Full contract-level detail for pose-state and hip-reconciliation architecture, which is normatively defined in
+  [IK-004: VRIK Pose State Machine And Hip Reconciliation](004-vrik-pose-state-machine/index.md).
 - Network replication and backend concerns.
 - Platform certification and optimisation planning.
 
@@ -103,7 +109,8 @@ child-level implementation detail.
 2. **Phase 2: Baseline Full-Body Capability Definition**
    - Define baseline component boundaries and acceptance outcomes.
 3. **Phase 3: Extended Pose Range Coverage**
-   - Expand coverage for kneeling, lying, crawling, and transitions.
+   - Expand coverage for standing, crouching, kneeling, stooping, sitting, crawling, and transitions.
+   - Deliver framework-first pose-state and hip-reconciliation contracts under IK-004.
 4. **Phase 4: Constraint Behaviour Definition**
    - Add focused specifications for constrained-motion scenarios.
 5. **Phase 5: Optional Tracking Refinement Layers**
@@ -115,6 +122,12 @@ child-level implementation detail.
 2. System-level runtime boundaries explicitly reference XR and IK runtime-bridge contracts.
 3. Baseline capability levels and phased delivery plan are defined for implementation planning.
 4. Child IK specifications are identified as normative sources for feature-level implementation contracts.
+5. Pose-state and hip-reconciliation behaviour is delegated to IK-004 while preserving IK-001/002/003 as
+   prerequisites.
+
+## Code-Spec Sync Note
+
+This revision is specification-only and introduces no implementation, scene, or runtime code changes.
 
 ## References
 
@@ -124,3 +137,4 @@ child-level implementation detail.
 - [IK-001: Reusable Neck-Spine CCDIK Setup](001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](002-arm-shoulder-ik/index.md)
 - [IK-003: Leg And Feet IK System](003-leg-feet-ik/index.md)
+- [IK-004: VRIK Pose State Machine And Hip Reconciliation](004-vrik-pose-state-machine/index.md)

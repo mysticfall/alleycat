@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TimeSeekAnimationBinding" format=3 uid="uid://l2vuyyhitue6"]
+
+[ext_resource type="Script" uid="uid://cxxloai5pv0c1" path="res://src/IK/Pose/TimeSeekAnimationBinding.cs" id="1_wtuae"]
+
+[resource]
+resource_name = "CrouchingAnimationBinding"
+script = ExtResource("1_wtuae")
+SeekRequestParameter = &"parameters/StandingCrouching/TimeSeek/seek_request"
+TargetStateName = &"StandingCrouching"
+ClipDurationSeconds = 1.6666666
