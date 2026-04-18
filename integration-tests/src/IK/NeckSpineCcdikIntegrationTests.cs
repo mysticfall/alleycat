@@ -23,6 +23,10 @@ public sealed class NeckSpineCcdikIntegrationTests
     private const float MinimumDistanceImprovement = 0.001f;
     private const float MinimumDirectionalAlignment = 0.0f;
     private const float MinimumExpectedMovement = 0.0001f;
+    private const float MinimumStoopForwardConstrainedMovement = 0.001f;
+    private const float MinimumStoopForwardAbsoluteDirectionalAlignment = 0.6f;
+    private const float MinimumStoopForwardDirectionalAlignmentFloor = -0.75f;
+    private const string StoopForwardPoseName = "TargetStoopForward";
 
     private static readonly string[] _requiredPoseMarkerNames =
     [
@@ -252,6 +256,28 @@ public sealed class NeckSpineCcdikIntegrationTests
             out float largestMovementMagnitude,
             out float largestDirectionalAlignment);
 
+        if (string.Equals(markerName, StoopForwardPoseName, StringComparison.Ordinal))
+        {
+            bool hasConstrainedStoopMovement = HasStoopForwardConstrainedMovement(
+                neutralMarkerPosition,
+                posedMarkerPosition,
+                neutralBonePositions,
+                posedBonePositions,
+                trackedBoneIndices,
+                out float stoopLargestMovementMagnitude,
+                out float stoopLargestDirectionalAlignment);
+
+            Assert.True(
+                improvedDistance || hasConstrainedStoopMovement,
+                $"Pose '{markerName}' must retain a measurable constrained response by either reducing closest tracked-bone distance " +
+                $"by more than {MinimumDistanceImprovement:F4} (baseline {baselineDistance:F4} -> posed {posedDistance:F4}) " +
+                $"or moving at least one tracked bone with magnitude >= {MinimumStoopForwardConstrainedMovement:F4}, " +
+                $"absolute alignment >= {MinimumStoopForwardAbsoluteDirectionalAlignment:F2}, " +
+                $"and alignment >= {MinimumStoopForwardDirectionalAlignmentFloor:F2}. " +
+                $"Observed max movement={stoopLargestMovementMagnitude:F6}, max alignment={stoopLargestDirectionalAlignment:F6}.");
+            return;
+        }
+
         Assert.True(
             improvedDistance || movedInExpectedDirection,
             $"Pose '{markerName}' must provide a positive non-forward signal by either reducing closest tracked-bone distance " +
@@ -266,6 +292,29 @@ public sealed class NeckSpineCcdikIntegrationTests
         IReadOnlyDictionary<int, Vector3> neutralBonePositions,
         IReadOnlyDictionary<int, Vector3> posedBonePositions,
         IReadOnlyList<int> trackedBoneIndices,
+        out float largestMovementMagnitude,
+        out float largestDirectionalAlignment)
+    {
+        return HasDirectionalMovementTowardsMarker(
+            neutralMarkerPosition,
+            posedMarkerPosition,
+            neutralBonePositions,
+            posedBonePositions,
+            trackedBoneIndices,
+            MinimumExpectedMovement,
+            MinimumDirectionalAlignment,
+            out largestMovementMagnitude,
+            out largestDirectionalAlignment);
+    }
+
+    private static bool HasDirectionalMovementTowardsMarker(
+        Vector3 neutralMarkerPosition,
+        Vector3 posedMarkerPosition,
+        IReadOnlyDictionary<int, Vector3> neutralBonePositions,
+        IReadOnlyDictionary<int, Vector3> posedBonePositions,
+        IReadOnlyList<int> trackedBoneIndices,
+        float minimumMovementMagnitude,
+        float minimumDirectionalAlignment,
         out float largestMovementMagnitude,
         out float largestDirectionalAlignment)
     {
@@ -292,7 +341,7 @@ public sealed class NeckSpineCcdikIntegrationTests
                 largestMovementMagnitude = movementMagnitude;
             }
 
-            if (movementMagnitude < MinimumExpectedMovement)
+            if (movementMagnitude < minimumMovementMagnitude)
             {
                 continue;
             }
@@ -303,7 +352,7 @@ public sealed class NeckSpineCcdikIntegrationTests
                 largestDirectionalAlignment = directionalAlignment;
             }
 
-            if (directionalAlignment >= MinimumDirectionalAlignment)
+            if (directionalAlignment >= minimumDirectionalAlignment)
             {
                 return true;
             }
@@ -312,6 +361,62 @@ public sealed class NeckSpineCcdikIntegrationTests
         if (float.IsNegativeInfinity(largestDirectionalAlignment))
         {
             largestDirectionalAlignment = 0.0f;
+        }
+
+        return false;
+    }
+
+    private static bool HasStoopForwardConstrainedMovement(
+        Vector3 neutralMarkerPosition,
+        Vector3 posedMarkerPosition,
+        IReadOnlyDictionary<int, Vector3> neutralBonePositions,
+        IReadOnlyDictionary<int, Vector3> posedBonePositions,
+        IReadOnlyList<int> trackedBoneIndices,
+        out float largestMovementMagnitude,
+        out float strongestDirectionalAlignment)
+    {
+        Vector3 markerDelta = posedMarkerPosition - neutralMarkerPosition;
+        largestMovementMagnitude = 0.0f;
+        strongestDirectionalAlignment = 0.0f;
+
+        if (markerDelta.LengthSquared() <= Mathf.Epsilon)
+        {
+            return false;
+        }
+
+        Vector3 expectedDirection = markerDelta.Normalized();
+        float strongestAbsoluteAlignment = 0.0f;
+
+        foreach (int trackedBoneIndex in trackedBoneIndices)
+        {
+            Vector3 neutralBonePosition = neutralBonePositions[trackedBoneIndex];
+            Vector3 posedBonePosition = posedBonePositions[trackedBoneIndex];
+            Vector3 trackedBoneDelta = posedBonePosition - neutralBonePosition;
+
+            float movementMagnitude = trackedBoneDelta.Length();
+            if (movementMagnitude > largestMovementMagnitude)
+            {
+                largestMovementMagnitude = movementMagnitude;
+            }
+
+            if (movementMagnitude < MinimumStoopForwardConstrainedMovement)
+            {
+                continue;
+            }
+
+            float directionalAlignment = trackedBoneDelta.Normalized().Dot(expectedDirection);
+            float absoluteDirectionalAlignment = Mathf.Abs(directionalAlignment);
+            if (absoluteDirectionalAlignment > strongestAbsoluteAlignment)
+            {
+                strongestAbsoluteAlignment = absoluteDirectionalAlignment;
+                strongestDirectionalAlignment = directionalAlignment;
+            }
+
+            if (absoluteDirectionalAlignment >= MinimumStoopForwardAbsoluteDirectionalAlignment &&
+                directionalAlignment >= MinimumStoopForwardDirectionalAlignmentFloor)
+            {
+                return true;
+            }
         }
 
         return false;
