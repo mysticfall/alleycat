@@ -11,7 +11,6 @@ namespace AlleyCat.IK;
 public partial class PlayerVRIK : Node3D
 {
     private const float HeightEpsilon = 1e-4f;
-    private const float PositionEpsilon = 1e-4f;
 
     private Marker3D? _viewpoint;
     private CharacterBody3D? _headIKTarget;
@@ -109,6 +108,7 @@ public partial class PlayerVRIK : Node3D
 
     private bool _isBound;
     private Transform3D _viewpointLocalTransform = Transform3D.Identity;
+    private Transform3D _viewpointLocalInverseTransform = Transform3D.Identity;
     private float _worldScale = 1.0f;
 
     /// <inheritdoc />
@@ -251,34 +251,36 @@ public partial class PlayerVRIK : Node3D
 
         Skeleton3D skeleton = GetResolvedSkeleton();
 
-        Transform3D headBonePoseGlobal = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(HeadBoneIndex);
-        Vector3 solvedHeadBonePosition = headBonePoseGlobal.Origin;
-        Vector3 physicalHeadPosition = BuildHeadTargetTransform().Origin;
+        _origin.OriginNode.GlobalTransform = ComputeCompensatedOriginTransform(
+            skeleton,
+            _camera.CameraNode,
+            _origin.OriginNode);
+    }
 
-        Vector3 compensation = ComputeHeadCompensation(
-            physicalHeadPosition,
-            solvedHeadBonePosition,
-            PositionEpsilon);
+    /// <summary>
+    /// Solves the compensated XR origin transform that aligns the current physical head target
+    /// to the virtual head pose while preserving the physical-head local offset under the prior
+    /// origin transform.
+    /// </summary>
+    public Transform3D ComputeCompensatedOriginTransform(
+        Skeleton3D skeleton,
+        Camera3D camera,
+        Node3D origin)
+    {
+        Transform3D physicalHeadPose = camera.GlobalTransform * _viewpointLocalInverseTransform;
+        Transform3D virtualHeadPose = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(HeadBoneIndex);
+        Transform3D localPose = origin.GlobalTransform.Inverse() * physicalHeadPose;
 
-        if (compensation == Vector3.Zero)
-        {
-            return;
-        }
-
-        origin.OriginNode.GlobalPosition += compensation;
+        return virtualHeadPose * localPose.Inverse();
     }
 
     private Transform3D BuildHeadTargetTransform()
     {
         IXRCamera? camera = _camera;
-        if (camera is null)
-        {
-            return _headIKTarget?.GlobalTransform ?? Transform3D.Identity;
-        }
 
-        Transform3D scaledViewpointLocal = _viewpointLocalTransform;
-        scaledViewpointLocal.Origin *= _worldScale;
-        return camera.CameraNode.GlobalTransform * scaledViewpointLocal.AffineInverse();
+        return camera is null
+            ? _headIKTarget?.GlobalTransform ?? Transform3D.Identity
+            : camera.CameraNode.GlobalTransform * _viewpointLocalInverseTransform;
     }
 
     private Transform3D BuildRightHandTargetTransform()
@@ -313,18 +315,6 @@ public partial class PlayerVRIK : Node3D
 
         calibratedScale = candidateScale;
         return true;
-    }
-
-    private static Vector3 ComputeHeadCompensation(
-        Vector3 physicalHeadPosition,
-        Vector3 solvedHeadBonePosition,
-        float positionEpsilon)
-    {
-        Vector3 compensation = physicalHeadPosition - solvedHeadBonePosition;
-        float epsilonSquared = positionEpsilon * positionEpsilon;
-        return compensation.LengthSquared() <= epsilonSquared
-            ? Vector3.Zero
-            : compensation;
     }
 
     private sealed partial class StageModifier : SkeletonModifier3D
@@ -362,6 +352,7 @@ public partial class PlayerVRIK : Node3D
         }
 
         _viewpointLocalTransform = _viewpoint.Transform;
+        _viewpointLocalInverseTransform = _viewpointLocalTransform.Inverse();
     }
 
     private void EnsureFollowers()
