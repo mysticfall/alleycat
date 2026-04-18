@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://dpyyj37512ml0"]
+
+[node name="DebugOverlay" type="MarginContainer" unique_id=1473696770]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 50
+
+[node name="Label" type="Label" parent="." unique_id=594847779]
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Debug Text"

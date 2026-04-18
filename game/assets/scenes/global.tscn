@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://bmvh0kef7f276" path="res://src/XR/XRManager.cs" id="1_drti4"]
 [ext_resource type="PackedScene" uid="uid://kxw5dgct6125" path="res://assets/ui/loading_screen.tscn" id="6_v86yw"]
 [ext_resource type="Script" uid="uid://5eb2vgmywko" path="res://src/IK/PlayerVRIKStartupBinder.cs" id="7_4dmod"]
+[ext_resource type="PackedScene" uid="uid://dpyyj37512ml0" path="res://assets/ui/debug_overlay.tscn" id="8_wl407"]
 
 [node name="Game" type="Node" unique_id=1021390965]
 script = ExtResource("1_4obgp")
@@ -34,4 +35,7 @@ render_target_update_mode = 4
 [node name="SplashScreen" parent="XR/SubViewport" unique_id=1557464398 instance=ExtResource("1_axcyo")]
 
 [node name="LoadingScreen" parent="XR/SubViewport" unique_id=1488371994 instance=ExtResource("6_v86yw")]
+visible = false
+
+[node name="DebugOverlay" parent="XR/SubViewport" unique_id=1473696770 instance=ExtResource("8_wl407")]
 visible = false
