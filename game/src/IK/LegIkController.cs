@@ -80,6 +80,26 @@ public partial class LegIkController : SkeletonModifier3D
     } = 0.12f;
 
     /// <summary>
+    /// Extra distance added to the rest-leg-based minimum pole offset floor.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.0,0.2,0.001")]
+    public float RestLegHalfPoleOffsetMargin
+    {
+        get;
+        set;
+    } = 0.1f;
+
+    /// <summary>
+    /// Leg compression ratio threshold for applying the rest-leg pole offset floor.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.1,1.0,0.01")]
+    public float CompressionRatioForRestPoleFloor
+    {
+        get;
+        set;
+    } = 0.6f;
+
+    /// <summary>
     /// Small side-outward bias to keep neutral knee planes from crossing inward.
     /// </summary>
     [Export(PropertyHint.Range, "0,1.0,0.01")]
@@ -95,7 +115,9 @@ public partial class LegIkController : SkeletonModifier3D
 
     private int _hipsIdx = -1;
     private int _upperLegIdx = -1;
+    private int _lowerLegIdx = -1;
     private int _footIdx = -1;
+    private float _restLegLength;
 
     private Vector3 _footForwardLocalAxis = Vector3.Forward;
     private Vector3 _footUpLocalAxis = Vector3.Up;
@@ -151,7 +173,20 @@ public partial class LegIkController : SkeletonModifier3D
         }
 
         Vector3 midpoint = (upperLegPosition + desiredFootPosition) * 0.5f;
-        float offset = Mathf.Max(MinimumPoleOffset, (desiredFootPosition - upperLegPosition).Length() * PoleOffsetRatio);
+        float currentLegLength = (desiredFootPosition - upperLegPosition).Length();
+        float ratioBasedOffset = currentLegLength * PoleOffsetRatio;
+        float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
+
+        float compressionRatioThreshold = Mathf.Clamp(CompressionRatioForRestPoleFloor, 0.1f, 1.0f);
+
+        bool isLegCompressed = currentLegLength <= (_restLegLength * compressionRatioThreshold);
+        bool isCrouchLikeCompression = desiredFootPosition.Y <= upperLegPosition.Y;
+        if (isLegCompressed && isCrouchLikeCompression)
+        {
+            float restLegMinimumOffset = (_restLegLength * 0.5f) + RestLegHalfPoleOffsetMargin;
+            float compressedFloor = Mathf.Max(MinimumPoleOffset, restLegMinimumOffset);
+            offset = Mathf.Max(offset, compressedFloor);
+        }
 
         PoleTarget.GlobalPosition = midpoint + (poleDirection * offset);
     }
@@ -170,13 +205,26 @@ public partial class LegIkController : SkeletonModifier3D
 
         _hipsIdx = skeleton.FindBone("Hips");
         _upperLegIdx = skeleton.FindBone($"{sidePrefix}UpperLeg");
-        int lowerLegIdx = skeleton.FindBone($"{sidePrefix}LowerLeg");
+        _lowerLegIdx = skeleton.FindBone($"{sidePrefix}LowerLeg");
         _footIdx = skeleton.FindBone($"{sidePrefix}Foot");
 
-        return _hipsIdx >= 0
-            && _upperLegIdx >= 0
-            && lowerLegIdx >= 0
-            && _footIdx >= 0;
+        if (_hipsIdx < 0
+            || _upperLegIdx < 0
+            || _lowerLegIdx < 0
+            || _footIdx < 0)
+        {
+            return false;
+        }
+
+        Vector3 upperLegRestPosition = skeleton.GetBoneGlobalRest(_upperLegIdx).Origin;
+        Vector3 lowerLegRestPosition = skeleton.GetBoneGlobalRest(_lowerLegIdx).Origin;
+        Vector3 footRestPosition = skeleton.GetBoneGlobalRest(_footIdx).Origin;
+
+        float upperToLowerRestLength = lowerLegRestPosition.DistanceTo(upperLegRestPosition);
+        float lowerToFootRestLength = footRestPosition.DistanceTo(lowerLegRestPosition);
+        _restLegLength = upperToLowerRestLength + lowerToFootRestLength;
+
+        return _restLegLength > DegenerateThreshold;
     }
 
     private Vector3 ComputeSideOutwardAxis(Vector3 upperLegPosition, Vector3 legDirection)

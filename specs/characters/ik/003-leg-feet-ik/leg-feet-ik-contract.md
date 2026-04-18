@@ -14,6 +14,7 @@ derived from foot orientation.
 - One `TwoBoneIK3D` chain per leg (left and right), solving upper leg to foot.
 - A per-leg controller (`LegIkController`) that updates pole-target position before IK solve.
 - Knee pole-direction prediction from the associated foot axes.
+- Compressed-state knee pole minimum-offset safeguarding derived from rest leg length.
 - Read-only foot target contract: runtime logic consumes target transforms as goals and never mutates them.
 
 ## Mechanism
@@ -66,6 +67,26 @@ neutral standing poses.
 
 Given identical skeleton pose and foot target transforms, knee pole output must be deterministic.
 
+### Compressed Knee-Pole Minimum Offset Safeguard
+
+In compressed crouch-like leg states, the controller must enforce a minimum pole offset floor before writing the
+pole-target position.
+
+The floor contract is:
+
+`max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)`
+
+Implementation obligations:
+
+1. `RestLegLength` must be sourced from the leg's rest/bind configuration and treated as the reference length input for
+   this safeguard.
+2. `MinimumPoleOffset` must remain a tunable lower-bound parameter.
+3. `RestLegHalfPoleOffsetMargin` must remain a tunable additive margin parameter.
+4. Compression gating that determines when this floor is enforced must remain tunable.
+5. This safeguard must not mutate foot target transforms and must operate within the existing read-only target contract.
+
+Exact compression thresholds and final tuning constants are implementation-defined unless constrained by another spec.
+
 ## Solve-To-Target Behaviour
 
 IK-003 requires solve-to-target behaviour where each `TwoBoneIK3D` leg solve consumes the provided foot target
@@ -106,6 +127,7 @@ This contract defines details for:
 - AC-05
 - AC-06
 - AC-12
+- AC-13
 
 Source-of-truth criteria wording is maintained in [IK-003 Overview](index.md#acceptance-criteria).
 

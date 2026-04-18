@@ -16,6 +16,8 @@ public sealed class LegFeetIkIntegrationTests
     private const string RightFootTargetPath = "Markers/RightFootTarget";
     private const string LeftPoleTargetPath = "Markers/LeftKneePoleTarget";
     private const string RightPoleTargetPath = "Markers/RightKneePoleTarget";
+    private const string LeftLegIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftLegIKController";
+    private const string RightLegIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightLegIKController";
 
     private const string FootPoseMarkersPath = "Markers/FootTargetPoses";
     private const string HipsPoseMarkersPath = "Markers/HipsOverridePoses";
@@ -36,6 +38,7 @@ public sealed class LegFeetIkIntegrationTests
     private const float MinimumLeftLegUpKneeFlexionRadians = 0.20f;
     private const float TargetTransformPositionToleranceMetres = 0.001f;
     private const float TargetTransformRotationToleranceRadians = 0.01f;
+    private const float PoleOffsetFloorToleranceMetres = 0.001f;
 
     /// <summary>
     /// Verifies pole continuity, side consistency, corner-case interpolation response, and hips-pose stability.
@@ -311,6 +314,78 @@ public sealed class LegFeetIkIntegrationTests
             "RightFootTarget rotation should remain unchanged by leg IK updates.");
     }
 
+    /// <summary>
+    /// Verifies compressed crouch poses enforce the rest-leg-derived pole-offset floor.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task LegFeetIk_CrouchPose_EnforcesRestLegPoleOffsetFloor()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node3D leftFootTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath));
+        Node3D rightFootTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath));
+        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
+        Node3D rightPoleTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(RightPoleTargetPath));
+        SkeletonModifier3D leftLegIKController = Assert.IsAssignableFrom<SkeletonModifier3D>(sceneRoot.GetNodeOrNull(LeftLegIKControllerPath));
+        SkeletonModifier3D rightLegIKController = Assert.IsAssignableFrom<SkeletonModifier3D>(sceneRoot.GetNodeOrNull(RightLegIKControllerPath));
+
+        Node3D footTargetPoses = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(FootPoseMarkersPath));
+        Node3D hipsPoseMarkers = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(HipsPoseMarkersPath));
+        Node3D leftNeutral = RequireNode3D(footTargetPoses, "LeftNeutral");
+        Node3D rightNeutral = RequireNode3D(footTargetPoses, "RightNeutral");
+        Node3D hipsCrouch = RequireNode3D(hipsPoseMarkers, "HipsCrouch");
+
+        BoneAttachment3D hipsHarness = Assert.IsAssignableFrom<BoneAttachment3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath));
+        Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
+            ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in verification scene.");
+
+        int leftUpperLegIdx = RequireBone(skeleton, "LeftUpperLeg");
+        int rightUpperLegIdx = RequireBone(skeleton, "RightUpperLeg");
+        int leftLowerLegIdx = RequireBone(skeleton, "LeftLowerLeg");
+        int rightLowerLegIdx = RequireBone(skeleton, "RightLowerLeg");
+        int leftFootIdx = RequireBone(skeleton, "LeftFoot");
+        int rightFootIdx = RequireBone(skeleton, "RightFoot");
+
+        await ApplyPoseAndSettleAsync(
+            sceneTree,
+            skeleton,
+            leftFootTarget,
+            rightFootTarget,
+            leftNeutral,
+            rightNeutral,
+            hipsHarness,
+            hipsCrouch);
+
+        AssertPoleOffsetFloorEnforced(
+            skeleton,
+            leftLegIKController,
+            leftPoleTarget,
+            leftFootTarget,
+            leftUpperLegIdx,
+            leftLowerLegIdx,
+            leftFootIdx,
+            "Left crouch pole should respect the rest-leg-derived minimum offset floor.");
+        AssertPoleOffsetFloorEnforced(
+            skeleton,
+            rightLegIKController,
+            rightPoleTarget,
+            rightFootTarget,
+            rightUpperLegIdx,
+            rightLowerLegIdx,
+            rightFootIdx,
+            "Right crouch pole should respect the rest-leg-derived minimum offset floor.");
+    }
+
     private static async Task ApplyPoseAndSettleAsync(
         SceneTree sceneTree,
         Skeleton3D skeleton,
@@ -583,6 +658,79 @@ public sealed class LegFeetIkIntegrationTests
         float t = (point - lineStart).Dot(line) / line.LengthSquared();
         Vector3 nearest = lineStart + (line * t);
         return point.DistanceTo(nearest);
+    }
+
+    private static void AssertPoleOffsetFloorEnforced(
+        Skeleton3D skeleton,
+        SkeletonModifier3D controller,
+        Node3D poleTarget,
+        Node3D footTarget,
+        int upperLegBoneIndex,
+        int lowerLegBoneIndex,
+        int footBoneIndex,
+        string message)
+    {
+        float poleOffset = ComputePoleOffsetDistance(skeleton, poleTarget, footTarget, upperLegBoneIndex);
+        float restLegLength = ComputeRestLegLength(skeleton, upperLegBoneIndex, lowerLegBoneIndex, footBoneIndex);
+        float currentLegLength = ComputeCurrentLegLength(skeleton, footTarget, upperLegBoneIndex);
+        float compressionRatioForPoleFloor = Mathf.Clamp(
+            ReadFloatProperty(controller, "CompressionRatioForRestPoleFloor"),
+            0.1f,
+            1.0f);
+
+        Assert.True(
+            currentLegLength <= restLegLength * compressionRatioForPoleFloor,
+            "Crouch floor assertion requires a compressed leg configuration, but pose was not compressed enough. " +
+            $"Current length: {currentLegLength:F4}m, rest length: {restLegLength:F4}m, compression threshold: {restLegLength * compressionRatioForPoleFloor:F4}m.");
+
+        float minimumPoleOffset = ReadFloatProperty(controller, "MinimumPoleOffset");
+        float restLegHalfPoleOffsetMargin = ReadFloatProperty(controller, "RestLegHalfPoleOffsetMargin");
+        float expectedFloor = Mathf.Max(minimumPoleOffset, (restLegLength * 0.5f) + restLegHalfPoleOffsetMargin);
+
+        Assert.True(
+            poleOffset + PoleOffsetFloorToleranceMetres >= expectedFloor,
+            message +
+            $" Observed offset: {poleOffset:F4}m, expected floor: {expectedFloor:F4}m, tolerance: {PoleOffsetFloorToleranceMetres:F4}m.");
+    }
+
+    private static float ReadFloatProperty(Node node, string propertyName)
+    {
+        Variant propertyValue = node.Get(propertyName);
+        return propertyValue.VariantType == Variant.Type.Float
+            ? (float)propertyValue.AsDouble()
+            : throw new Xunit.Sdk.XunitException(
+                $"Expected '{node.Name}' property '{propertyName}' to be a float, but got {propertyValue.VariantType}.");
+    }
+
+    private static float ComputePoleOffsetDistance(
+        Skeleton3D skeleton,
+        Node3D poleTarget,
+        Node3D footTarget,
+        int upperLegBoneIndex)
+    {
+        Vector3 upperLegPosition = BoneWorldPosition(skeleton, upperLegBoneIndex);
+        Vector3 midpoint = (upperLegPosition + footTarget.GlobalPosition) * 0.5f;
+        return poleTarget.GlobalPosition.DistanceTo(midpoint);
+    }
+
+    private static float ComputeCurrentLegLength(Skeleton3D skeleton, Node3D footTarget, int upperLegBoneIndex)
+    {
+        Vector3 upperLegPosition = BoneWorldPosition(skeleton, upperLegBoneIndex);
+        return upperLegPosition.DistanceTo(footTarget.GlobalPosition);
+    }
+
+    private static float ComputeRestLegLength(
+        Skeleton3D skeleton,
+        int upperLegBoneIndex,
+        int lowerLegBoneIndex,
+        int footBoneIndex)
+    {
+        Vector3 upperLegRestPosition = skeleton.GetBoneGlobalRest(upperLegBoneIndex).Origin;
+        Vector3 lowerLegRestPosition = skeleton.GetBoneGlobalRest(lowerLegBoneIndex).Origin;
+        Vector3 footRestPosition = skeleton.GetBoneGlobalRest(footBoneIndex).Origin;
+
+        return upperLegRestPosition.DistanceTo(lowerLegRestPosition)
+            + lowerLegRestPosition.DistanceTo(footRestPosition);
     }
 
     private static Node3D RequireNode3D(Node parent, string childName) =>

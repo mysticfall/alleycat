@@ -33,6 +33,9 @@ conventions.
    `TwoBoneIK3D`, or other IK-003 runtime controller logic.
 5. Verification must use the lower-body photobooth basis scene and include a hips-override harness implemented via
    `BoneAttachment3D` override bone position without animation.
+6. In compressed crouch-like leg states, knee pole offset must enforce a minimum floor using rest leg length:
+   `max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)`, with compression gating and margin
+   exposed as tunable parameters.
 
 ## Specification Structure
 
@@ -50,6 +53,7 @@ Use this page for scope and acceptance traceability, then use contract pages for
 - Foot-direction-driven knee pole logic using forward/up axis interpolation driven by the foot-forward-to-leg-direction
   dot product.
 - Read-only foot target solving where runtime IK logic consumes targets as goals without mutating target transforms.
+- Compressed-state knee pole minimum-offset safeguarding using a rest-leg-length-derived floor.
 - A reusable leg-feet IK scene and a lower-body photobooth verification workflow aligned to IK-002 structure.
 
 ## Out Of Scope
@@ -59,6 +63,7 @@ Use this page for scope and acceptance traceability, then use contract pages for
 - Footstep planning, terrain probing, and physics-based ground adaptation.
 - Retargeting across unrelated skeleton topologies.
 - Subjective animation polish beyond objective checks defined by this spec.
+- Resolution of the separate leg-up regression outside the crouch/compressed knee-pole safeguard contract.
 
 ## Context
 
@@ -104,6 +109,7 @@ All criteria remain normative. IDs are provided for traceability to contract pag
 | AC-10 | Visual checks confirm natural knee and foot behaviour without obvious inversion, discontinuous knee-plane changes, or over-correction in required poses. | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |
 | AC-11 | A C# integration test loads the same verification scene and validates non-visual assertions (for example pole-direction continuity, read-only foot-target input behaviour, and stable hips-override response). | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |
 | AC-12 | During IK-003 runtime updates, provided foot target transforms remain unmodified by solver/controller logic and are consumed as read-only goals for solving. | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
+| AC-13 | In compressed crouch-like leg states, knee pole offset enforces `max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)` as a minimum floor, with compression gating and margin remaining tunable. | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
 
 ## References
 
