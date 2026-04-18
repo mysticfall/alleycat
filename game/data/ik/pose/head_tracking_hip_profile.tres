@@ -5,3 +5,4 @@
 [resource]
 resource_name = "HeadTrackingHipProfile"
 script = ExtResource("1_klvcb")
+RotationCompensationWeight = 1.25

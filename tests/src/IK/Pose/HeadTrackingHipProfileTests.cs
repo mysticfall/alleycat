@@ -163,6 +163,134 @@ public sealed class HeadTrackingHipProfileTests
         Assert.Equal(hipRest, result);
     }
 
+    /// <summary>
+    /// Rotation displacement is applied as opposite-direction compensation:
+    /// <c>headOffset - weightedRotationDisplacement</c>.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_RotationCompensation_UsesOppositeDirection()
+    {
+        Vector3 hipRest = new(0f, 0.95f, 0f);
+        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 currentHead = restHead + new Vector3(0.2f, -0.1f, 0.05f);
+        Vector3 rotationDisplacement = new(0.03f, 0.02f, -0.04f);
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            restHead,
+            currentHead,
+            rotationDisplacement,
+            rotationCompensationWeight: 1.0f);
+
+        Vector3 headOffset = currentHead - restHead;
+        Vector3 expected = hipRest + (headOffset - rotationDisplacement);
+        AssertClose(expected, result);
+    }
+
+    /// <summary>
+    /// Rotation compensation weight must scale displacement, including zero suppression and
+    /// over-unity amplification.
+    /// </summary>
+    [Theory]
+    [InlineData(0.0f)]
+    [InlineData(0.5f)]
+    [InlineData(1.5f)]
+    public void ComputeHipLocalPosition_RotationCompensationWeight_ScalesDisplacement(float weight)
+    {
+        Vector3 hipRest = new(0f, 0.95f, 0f);
+        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 headOffset = new(0.12f, -0.22f, 0.07f);
+        Vector3 currentHead = restHead + headOffset;
+        Vector3 rotationDisplacement = new(0.03f, -0.01f, 0.05f);
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            restHead,
+            currentHead,
+            rotationDisplacement,
+            weight);
+
+        Vector3 expected = hipRest + (headOffset - (rotationDisplacement * weight));
+        AssertClose(expected, result);
+    }
+
+    /// <summary>
+    /// Negative weights are clamped to zero so rotational compensation cannot invert direction.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_NegativeWeight_ClampsToZero()
+    {
+        Vector3 hipRest = new(0f, 0.95f, 0f);
+        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 headOffset = new(0.12f, -0.18f, 0.03f);
+        Vector3 currentHead = restHead + headOffset;
+        Vector3 rotationDisplacement = new(0.04f, 0.01f, -0.02f);
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            restHead,
+            currentHead,
+            rotationDisplacement,
+            rotationCompensationWeight: -2.0f);
+
+        AssertClose(hipRest + headOffset, result);
+    }
+
+    /// <summary>
+    /// Epsilon snap must consider the combined offset (head minus weighted rotation), not just
+    /// raw head translation.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_CombinedSubEpsilonOffset_SnapsToHipRest()
+    {
+        const float SubEpsilon = 5e-5f;
+
+        Vector3 hipRest = new(0f, 0.95f, 0f);
+        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 headOffset = new(1e-3f, 0f, 0f);
+        Vector3 currentHead = restHead + headOffset;
+
+        // Leaves a sub-epsilon residual after opposite-direction compensation.
+        Vector3 rotationDisplacement = headOffset - new Vector3(SubEpsilon, 0f, 0f);
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            restHead,
+            currentHead,
+            rotationDisplacement,
+            rotationCompensationWeight: 1.0f);
+
+        Assert.Equal(hipRest, result);
+    }
+
+    /// <summary>
+    /// The 4-argument overload must remain behaviourally equivalent to the 5-argument overload
+    /// with unit rotation-compensation weight.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_FourArgOverload_EqualsFiveArgUnitWeight()
+    {
+        Vector3 hipRest = new(0f, 0.95f, 0f);
+        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 currentHead = restHead + new Vector3(0.18f, -0.27f, 0.06f);
+        Vector3 rotationDisplacement = new(0.07f, -0.02f, 0.01f);
+
+        Vector3 fourArg = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            restHead,
+            currentHead,
+            rotationDisplacement);
+
+        Vector3 fiveArg = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            restHead,
+            currentHead,
+            rotationDisplacement,
+            rotationCompensationWeight: 1.0f);
+
+        Assert.Equal(fiveArg, fourArg);
+    }
+
     private static void AssertClose(Vector3 expected, Vector3 actual)
     {
         float delta = (expected - actual).Length();

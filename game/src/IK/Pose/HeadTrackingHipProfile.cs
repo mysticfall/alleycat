@@ -4,7 +4,8 @@ namespace AlleyCat.IK.Pose;
 
 /// <summary>
 /// Hip reconciliation profile that maps the full head viewpoint offset onto the hip bone,
-/// producing an absolute skeleton-local hip position that tracks the player's head 1:1.
+/// producing an absolute skeleton-local hip position that tracks the player's head while
+/// compensating neck bend induced by headset rotation.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,13 +22,20 @@ namespace AlleyCat.IK.Pose;
 ///   <item><description>
 ///     <c>headOffsetLocal = currentHeadLocal - restHeadLocal</c>.
 ///   </description></item>
-///   <item><description><c>targetHipLocal = hipLocalRest + headOffsetLocal</c>.</description></item>
+///   <item><description>
+///     A rotational displacement by rotating the rest neck→head vector with the head rotation
+///     offset from rest to current, then subtracting the original rest vector.
+///   </description></item>
+///   <item><description>
+///     <c>targetHipLocal = hipLocalRest + headOffsetLocal - rotationDisplacementLocal</c>.
+///   </description></item>
 /// </list>
 /// <para>
-/// This expresses the "1:1 head-tracking hip" heuristic for the Standing/Crouching pose family:
-/// the hip translates exactly as the head translates, preserving the rest-pose upper-body
-/// posture. No Y stripping is applied — vertical ownership now lives with this profile and the
-/// <c>TimeSeek</c>-driven crouch clip handles feet animation independently.
+/// This expresses the standing/crouching head-tracking heuristic: the hip translates with the
+/// head viewpoint offset and additionally applies the opposite of the rotation-implied neck
+/// displacement so side tilt and chin up/down do not over-bend the neck. No Y stripping is
+/// applied — vertical ownership now lives with this profile and the <c>TimeSeek</c>-driven crouch
+/// clip handles feet animation independently.
 /// </para>
 /// <para>
 /// The profile <em>must not</em> read the currently animated hip bone pose: the animation
@@ -37,16 +45,25 @@ namespace AlleyCat.IK.Pose;
 /// <em>rest</em> hip pose plus the head-derived offset.
 /// </para>
 /// <para>
-/// An epsilon-based jitter suppression snaps <c>headOffsetLocal</c> to zero when its squared
-/// length falls inside the threshold, so the hip returns cleanly to <c>hipLocalRest</c> and
-/// does not wobble on residual calibration noise.
+/// An epsilon-based jitter suppression snaps the combined positional + rotational correction to
+/// zero when its squared length falls inside the threshold, so the hip returns cleanly to
+/// <c>hipLocalRest</c> and does not wobble on residual calibration noise.
 /// </para>
 /// </remarks>
 [GlobalClass]
 public partial class HeadTrackingHipProfile : HipReconciliationProfile
 {
+    private const float DefaultRotationCompensationWeight = 1.25f;
     private const float PositionEpsilon = 1e-4f;
     private const float PositionEpsilonSquared = PositionEpsilon * PositionEpsilon;
+    private const float VectorEpsilonSquared = 1e-8f;
+
+    /// <summary>
+    /// Scales the rotation-derived neck compensation before applying it in the opposite direction
+    /// to the hip target.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,3,0.01")]
+    public float RotationCompensationWeight { get; set; } = DefaultRotationCompensationWeight;
 
     /// <inheritdoc />
     public override Vector3? ComputeHipLocalPosition(PoseStateContext context)
@@ -62,10 +79,25 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
         Vector3 hipLocalRest = skeleton.GetBoneRest(context.HipBoneIndex).Origin;
         Transform3D skeletonInverse = skeleton.GlobalTransform.AffineInverse();
 
-        Vector3 restHeadLocal = skeletonInverse * context.ViewpointGlobalRest.Origin;
-        Vector3 currentHeadLocal = skeletonInverse * context.CameraTransform.Origin;
+        Transform3D restHeadLocalTransform = skeletonInverse * context.ViewpointGlobalRest;
+        Transform3D currentHeadLocalTransform = skeletonInverse * context.CameraTransform;
 
-        return ComputeHipLocalPosition(hipLocalRest, restHeadLocal, currentHeadLocal);
+        Vector3 headRotationDisplacementLocal =
+            TryComputeHeadRotationDisplacementLocal(
+                context,
+                skeleton,
+                restHeadLocalTransform,
+                currentHeadLocalTransform,
+                out Vector3 displacement)
+                ? displacement
+                : Vector3.Zero;
+
+        return ComputeHipLocalPosition(
+            hipLocalRest,
+            restHeadLocalTransform.Origin,
+            currentHeadLocalTransform.Origin,
+            headRotationDisplacementLocal,
+            RotationCompensationWeight);
     }
 
     /// <summary>
@@ -88,11 +120,101 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
     public static Vector3 ComputeHipLocalPosition(
         Vector3 hipLocalRest,
         Vector3 restHeadLocal,
-        Vector3 currentHeadLocal)
+        Vector3 currentHeadLocal) =>
+        ComputeHipLocalPosition(
+            hipLocalRest,
+            restHeadLocal,
+            currentHeadLocal,
+            headRotationDisplacementLocal: Vector3.Zero);
+
+    /// <summary>
+    /// Pure helper that computes the absolute hip-local target position from the rest hip
+    /// position, the rest/current head viewpoints, and an optional rotation-derived neck
+    /// displacement (all in skeleton-local space).
+    /// </summary>
+    /// <param name="hipLocalRest">Rest hip bone position in skeleton-local space.</param>
+    /// <param name="restHeadLocal">Rest head viewpoint position in skeleton-local space.</param>
+    /// <param name="currentHeadLocal">Current head viewpoint position in skeleton-local space.</param>
+    /// <param name="headRotationDisplacementLocal">
+    /// Displacement implied by rotating the rest neck→head vector from rest to current head
+    /// orientation. The helper applies this in the opposite direction as hip correction.
+    /// </param>
+    /// <param name="rotationCompensationWeight">
+    /// Scalar applied only to <paramref name="headRotationDisplacementLocal"/> before opposite-
+    /// direction hip compensation.
+    /// </param>
+    /// <returns>
+    /// <paramref name="hipLocalRest"/> when the combined positional and rotationally-derived
+    /// offset is within the epsilon band; otherwise
+    /// <c>hipLocalRest + (currentHeadLocal - restHeadLocal - (headRotationDisplacementLocal * rotationCompensationWeight))</c>.
+    /// </returns>
+    public static Vector3 ComputeHipLocalPosition(
+        Vector3 hipLocalRest,
+        Vector3 restHeadLocal,
+        Vector3 currentHeadLocal,
+        Vector3 headRotationDisplacementLocal,
+        float rotationCompensationWeight)
     {
         Vector3 headOffsetLocal = currentHeadLocal - restHeadLocal;
-        return headOffsetLocal.LengthSquared() <= PositionEpsilonSquared
+        Vector3 weightedRotationDisplacementLocal =
+            headRotationDisplacementLocal * Mathf.Max(rotationCompensationWeight, 0.0f);
+        Vector3 combinedOffsetLocal = headOffsetLocal - weightedRotationDisplacementLocal;
+
+        return combinedOffsetLocal.LengthSquared() <= PositionEpsilonSquared
             ? hipLocalRest
-            : hipLocalRest + headOffsetLocal;
+            : hipLocalRest + combinedOffsetLocal;
+    }
+
+    /// <summary>
+    /// Compatibility overload that applies unit weight to rotational compensation.
+    /// </summary>
+    public static Vector3 ComputeHipLocalPosition(
+        Vector3 hipLocalRest,
+        Vector3 restHeadLocal,
+        Vector3 currentHeadLocal,
+        Vector3 headRotationDisplacementLocal) =>
+        ComputeHipLocalPosition(
+            hipLocalRest,
+            restHeadLocal,
+            currentHeadLocal,
+            headRotationDisplacementLocal,
+            rotationCompensationWeight: 1.0f);
+
+    private static bool TryComputeHeadRotationDisplacementLocal(
+        PoseStateContext context,
+        Skeleton3D skeleton,
+        Transform3D restHeadLocalTransform,
+        Transform3D currentHeadLocalTransform,
+        out Vector3 displacementLocal)
+    {
+        displacementLocal = Vector3.Zero;
+
+        if (context.HeadBoneIndex < 0)
+        {
+            return false;
+        }
+
+        int neckBoneIndex = skeleton.GetBoneParent(context.HeadBoneIndex);
+        if (neckBoneIndex < 0)
+        {
+            return false;
+        }
+
+        Vector3 restNeckToHeadLocal =
+            skeleton.GetBoneGlobalRest(context.HeadBoneIndex).Origin
+            - skeleton.GetBoneGlobalRest(neckBoneIndex).Origin;
+
+        if (restNeckToHeadLocal.LengthSquared() <= VectorEpsilonSquared)
+        {
+            return false;
+        }
+
+        Basis restHeadBasisLocal = restHeadLocalTransform.Basis.Orthonormalized();
+        Basis currentHeadBasisLocal = currentHeadLocalTransform.Basis.Orthonormalized();
+        Basis rotationOffsetBasisLocal = currentHeadBasisLocal * restHeadBasisLocal.Inverse();
+
+        Vector3 rotatedNeckToHeadLocal = rotationOffsetBasisLocal * restNeckToHeadLocal;
+        displacementLocal = rotatedNeckToHeadLocal - restNeckToHeadLocal;
+        return true;
     }
 }

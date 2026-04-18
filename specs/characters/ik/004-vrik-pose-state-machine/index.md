@@ -95,10 +95,17 @@ responsibility.
     exposed through `PoseStateContext`, and must not read or depend on the currently animated hip bone pose, so that
     `TimeSeek` scrubbing and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
     the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
-20. For the Standing/Crouching pose family, the default profile is `HeadTrackingHipProfile`: the hip target tracks the
-    head 1:1 (both vertical and lateral), preserving the rig's rest-pose hip-to-head geometry. Vertical hip movement
-    for this family is owned by the hip profile, not by the animation clip. Other pose families may diverge.
-21. The Standing/Crouching pose family is backed by a single `AnimationTree` state, `StandingCrouching`, whose
+20. For the Standing/Crouching pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
+    (a) positional head-offset contribution and (b) rotational-offset contribution derived from rest→current head
+    orientation delta and rest neck→head geometry, then apply opposite-direction hip compensation to mitigate
+    unnatural neck bending. Rotational contribution magnitude must be configurable per profile/resource via
+    `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`) and no mandatory fixed default
+    value in this spec revision. Vertical hip movement for this family is owned by the hip profile, not by the
+    animation clip. Other pose families may diverge.
+21. Unit-level regression tests must cover the weighted rotational-compensation contract for
+    `HeadTrackingHipProfile`, including sign correctness, proportional scaling by weight, non-negative clamp behaviour,
+    epsilon-combined snap behaviour, and overload equivalence for profile evaluation entry points.
+22. The Standing/Crouching pose family is backed by a single `AnimationTree` state, `StandingCrouching`, whose
     sub-graph continuously runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")` driven by a normalised scalar.
     Multiple framework-level `PoseState` resources may map to the same `AnimationTree` state when they share animation
     behaviour. The `Idle` clip remains in the animation library as a deferred-but-supported extension point (for
@@ -166,9 +173,10 @@ Both linked pages are normative dependencies for implementation.
 | AC-17 | State and transition identifiers are authored as `StringName`; internal selection may use `StringName` or `string` provided identity semantics are preserved. | Technical |
 | AC-18 | Hip reconciliation profiles return an absolute hip target position in skeleton-local space as a nullable value (`Vector3?`); returning `null` leaves the animated hip pose untouched. | Technical |
 | AC-19 | Hip reconciliation profiles compute the hip target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry, and must not read or depend on the currently animated hip bone pose. | Technical |
-| AC-20 | The Standing/Crouching pose family's default profile is `HeadTrackingHipProfile`, tracking the head 1:1 (vertical and lateral) to preserve rest-pose hip-to-head geometry; other pose families may diverge. | Technical |
-| AC-21 | The Standing/Crouching pose family is backed by a single `AnimationTree` state (`StandingCrouching`) running `TimeSeek → AnimationNodeAnimation("Crouch-seek")`, with multiple framework-level `PoseState` resources permitted to share one `AnimationTree` state. | Technical |
-| AC-22 | The `Idle` clip remains in the animation library as a deferred-but-supported extension point for future layering (for example additive breathing) and is not wired into the `AnimationTree` for MVP. | Technical |
+| AC-20 | The Standing/Crouching pose family's default profile is `HeadTrackingHipProfile`, combining positional head offset and rotational offset (from rest→current head orientation delta plus rest neck→head geometry) with opposite-direction hip compensation to mitigate unnatural neck bending; rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, and not fixed to a mandatory numeric default by this spec. | Technical |
+| AC-21 | Unit-level regression tests cover the weighted `HeadTrackingHipProfile` rotational-compensation contract, including sign correctness, proportional weight scaling, non-negative weight clamp behaviour, epsilon-combined snap behaviour, and overload equivalence. | Technical |
+| AC-22 | The Standing/Crouching pose family is backed by a single `AnimationTree` state (`StandingCrouching`) running `TimeSeek → AnimationNodeAnimation("Crouch-seek")`, with multiple framework-level `PoseState` resources permitted to share one `AnimationTree` state. | Technical |
+| AC-23 | The `Idle` clip remains in the animation library as a deferred-but-supported extension point for future layering (for example additive breathing) and is not wired into the `AnimationTree` for MVP. | Technical |
 
 ## Code-Spec Sync Note
 
@@ -176,20 +184,23 @@ Increment 2.1 is delivered alongside this specification state. The shipped imple
 `PoseStateMachine` wiring on the player, the `TimeSeekAnimationBinding` animation binding targeting the single
 `StandingCrouching` `AnimationTree` state (sub-graph `TimeSeek → AnimationNodeAnimation("Crouch-seek")`), the
 `HeadVerticalOffsetPoseTransition` transition resource, the `HeadTrackingHipProfile` hip reconciliation profile
-(replacing the deprecated `LateralHeadOffsetHipReconciliationProfile`), the concrete `CrouchingPoseState`, and the
+(replacing the deprecated `LateralHeadOffsetHipReconciliationProfile`) with rotational hip correction added for the
+Standing/Crouching path alongside positional head offset and configurable `RotationCompensationWeight`
+(non-negative clamp), the concrete `CrouchingPoseState`, and the
 `HipReconciliationModifier` ordering in `player.tscn` placed between `VRIKBeginStage` and the existing IK modifier
 chain so AC-HR-07 ordering is preserved. In this wiring, `PoseStateMachine.Tick` executes in begin-stage flow after
 IK follower adjustments have produced current tracked transforms. `PoseStateContext` also consolidates camera and
 viewpoint current-transform duplication into `CameraTransform` while preserving `ViewpointGlobalRest`. Hip
 reconciliation profiles now return an absolute hip target position in skeleton-local space (`Vector3?`), with `null`
-meaning "do not override the animated hip bone".
+meaning "do not override the animated hip bone". Unit regression coverage now includes weighted rotational
+compensation maths (sign, scaling, non-negative clamp, epsilon-combined snap, and overload equivalence).
 
 Known deferrals tracked against this revision:
 
 - `HeadHeightPoseClassifier` is not yet shipped (permitted by AC-PS-14, which treats classifier plug-ins as an
   extensibility surface rather than a required Increment 2 artefact).
 - The `Idle` clip is retained in the animation library for future additive layering (for example breathing) on top of
-  the `StandingCrouching` sub-graph, but is not wired into the `AnimationTree` for MVP (AC-22).
+  the `StandingCrouching` sub-graph, but is not wired into the `AnimationTree` for MVP (AC-23).
 - Godot-runtime integration tests for the pose state machine are deferred.
 - VR-runtime visual verification of the Standing ↔ Crouching transition is deferred pending headset access.
 
