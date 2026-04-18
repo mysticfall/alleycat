@@ -63,8 +63,8 @@ settings/0/additive = false
 
 [node name="NeckTwistDisperser" type="BoneTwistDisperser3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="12" unique_id=1811965255]
 setting_count = 1
-settings/0/root_bone_name = "Spine"
-settings/0/root_bone = 2
+settings/0/root_bone_name = "Hips"
+settings/0/root_bone = 1
 settings/0/end_bone_name = "Head"
 settings/0/end_bone = 46
 settings/0/extend_end_bone = true
@@ -72,7 +72,7 @@ settings/0/end_bone_direction = 6
 settings/0/twist_from_rest = true
 settings/0/disperse_mode = 1
 settings/0/weight_position = 0.8
-settings/0/joint_count = 5
+settings/0/joint_count = 6
 
 [node name="RightArmIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="13" unique_id=2058826142 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
@@ -269,7 +269,7 @@ settings/0/invert = 0
 settings/0/additive = false
 
 [node name="Head" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="25" unique_id=694402195]
-transform = Transform3D(1, -1.4551915e-11, -1.1641532e-10, 2.910383e-11, 1, 8.940697e-08, 5.820766e-11, -5.9604645e-08, 1, -1.8189894e-12, 1.4670644, 0.03671476)
+transform = Transform3D(0.99999994, 5.820766e-11, -1.1641532e-10, 0, 1, 1.1920929e-07, 5.820766e-11, -8.940697e-08, 1, 4.092726e-12, 1.4670644, 0.036714755)
 
 [node name="Viewpoint" parent="Female_export/GeneralSkeleton/Head" index="0" unique_id=488293773]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
