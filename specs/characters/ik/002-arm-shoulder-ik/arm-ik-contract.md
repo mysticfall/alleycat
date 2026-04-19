@@ -13,6 +13,7 @@ independence constraints.
 
 - One `TwoBoneIK3D` chain per arm (left and right), solving shoulder-to-hand.
 - Pole-target prediction from head and hand targets.
+- Guarded elbow pole-offset compression safeguard with tunable gates and floors.
 - Shoulder correction execution in `ArmIKController` before IK solve using the look-at-delta method (algorithm details
   in shoulder contract).
 - Baseline pose mapping plus hand-rotation adjustment (detailed in the [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md)).
@@ -30,6 +31,42 @@ Prediction is composed of two layers:
 
 1. **Baseline Pole Direction** from hand position relative to head.
 2. **Hand-Rotation Adjustment** applied on top of the baseline.
+
+### Compression Safeguard For Pole Offset
+
+Pole-target placement must include a guarded distance floor for compressed folded-arm poses.
+
+#### Required Tunables
+
+- **Pole Offset Ratio**: scales current arm length into a base pole offset.
+- **Pole Offset Minimum**: hard minimum floor for baseline pole offset.
+- **Compression Threshold**: maximum clamped compression ratio that enables compressed-floor enforcement.
+- **Compression Margin**: additive margin applied on top of half rest-arm length for compressed floor enforcement.
+
+Exact numeric values are intentionally tunable.
+
+#### Required Computation And Gates
+
+Per arm, each frame:
+
+1. Compute `baseOffset = max(currentArmLength * poleOffsetRatio, poleOffsetMinimum)`.
+2. Compute `compressionRatio = clamp(currentArmLength / restArmLength, 0.0, 1.0)`.
+3. Determine folded gate from body-local vertical relation: folded gate is true when `hand Y <= shoulder Y` in body basis (equivalently `(hand - shoulder) · bodyUp <= 0`).
+4. Activate compressed-floor enforcement only when:
+   - `compressionRatio <= compressionThreshold`, and
+   - folded gate is true.
+5. When active, compute `compressedFloor = max(poleOffsetMinimum, restArmLength * 0.5 + compressionMargin)` and
+   enforce `finalOffset >= compressedFloor`.
+6. When inactive, `finalOffset = baseOffset`.
+
+#### Non-Invasive Boundary
+
+The safeguard only constrains pole-target placement distance. It must not alter:
+
+- hand-target position inputs,
+- shoulder-correction computation path,
+- hand-rotation correction logic, or
+- `TwoBoneIK3D` chain membership and solve targets.
 
 ### Key Hand Poses
 
@@ -110,6 +147,10 @@ This contract defines details for:
 - AC-17
 - AC-18
 - AC-19
+- AC-20
+- AC-21
+- AC-22
+- AC-23
 
 Source-of-truth criteria wording is maintained in [IK-002 Overview](index.md#acceptance-criteria).
 

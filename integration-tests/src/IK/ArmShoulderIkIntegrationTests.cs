@@ -22,6 +22,7 @@ public sealed class ArmShoulderIkIntegrationTests
 
     private const float MinimumPoleDirectionAlignment = 0.3f;
     private const float MaximumHandResidualDistance = 0.15f;
+    private const float PoleOffsetFloorToleranceMetres = 0.005f;
 
     private enum ExpectedPoleDirection
     {
@@ -175,6 +176,183 @@ public sealed class ArmShoulderIkIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies folded/compressed arm reaches enforce the rest-arm-derived elbow pole floor.
+    /// </summary>
+    [Fact]
+    public async Task ArmIk_CompressedFoldedReach_EnforcesRestArmPoleOffsetFloor()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException(
+                "Expected verification scene to become current scene.");
+
+        Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
+            ?? throw new Xunit.Sdk.XunitException(
+                "Expected at least one Skeleton3D in the verification scene.");
+
+        Node3D leftHandTarget = Assert.IsAssignableFrom<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftHandTargetPath));
+        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
+        SkeletonModifier3D leftArmController = Assert.IsAssignableFrom<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull("Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController"));
+
+        int leftUpperArmIndex = RequireBone(skeleton, "LeftUpperArm");
+        int leftLowerArmIndex = RequireBone(skeleton, "LeftLowerArm");
+        int leftHandIndex = RequireBone(skeleton, "LeftHand");
+
+        Vector3 shoulderPosition = BoneWorldPosition(skeleton, leftUpperArmIndex);
+        leftHandTarget.GlobalPosition = shoulderPosition + new Vector3(-0.06f, -0.16f, 0.04f);
+
+        for (int settle = 0; settle < 4; settle++)
+        {
+            _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+        }
+
+        float restArmLength = ComputeRestArmLength(skeleton, leftUpperArmIndex, leftLowerArmIndex, leftHandIndex);
+        float currentArmLength = ComputeCurrentArmLength(skeleton, leftHandTarget, leftUpperArmIndex);
+        float compressionRatioForPoleFloor = Mathf.Clamp(
+            ReadFloatProperty(leftArmController, "CompressionRatioForRestPoleFloor"),
+            0.1f,
+            1.0f);
+
+        Assert.True(
+            currentArmLength <= restArmLength * compressionRatioForPoleFloor,
+            "Arm floor assertion requires a compressed arm configuration, but pose was not compressed enough. " +
+            $"Current length: {currentArmLength:F4}m, rest length: {restArmLength:F4}m, compression threshold: {restArmLength * compressionRatioForPoleFloor:F4}m.");
+
+        Vector3 solvedShoulderPosition = BoneWorldPosition(skeleton, leftUpperArmIndex);
+        Assert.True(
+            leftHandTarget.GlobalPosition.Y <= solvedShoulderPosition.Y,
+            "Arm floor assertion requires a folded-reach pose (hand at or below shoulder height). " +
+            $"Hand Y: {leftHandTarget.GlobalPosition.Y:F4}, shoulder Y: {solvedShoulderPosition.Y:F4}.");
+
+        float minimumPoleOffset = ReadFloatProperty(leftArmController, "MinimumPoleOffset");
+        float restArmHalfPoleOffsetMargin = ReadFloatProperty(leftArmController, "RestArmHalfPoleOffsetMargin");
+        float expectedFloor = Mathf.Max(minimumPoleOffset, (restArmLength * 0.5f) + restArmHalfPoleOffsetMargin);
+        float observedPoleOffset = ComputePoleOffsetDistance(skeleton, leftPoleTarget, leftHandTarget, leftUpperArmIndex);
+
+        Assert.True(
+            observedPoleOffset + PoleOffsetFloorToleranceMetres >= expectedFloor,
+            "Compressed folded arm pose should enforce the rest-arm-derived elbow pole floor. " +
+            $"Observed offset: {observedPoleOffset:F4}m, expected floor: {expectedFloor:F4}m, tolerance: {PoleOffsetFloorToleranceMetres:F4}m.");
+    }
+
+    /// <summary>
+    /// Verifies folded/compressed safeguarding uses body-local vertical relation when the body is non-upright.
+    /// </summary>
+    [Fact]
+    public async Task ArmIk_CompressedFoldedReachWithInvertedBody_UsesBodyLocalFoldedGateAndEnforcesPoleFloor()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException(
+                "Expected verification scene to become current scene.");
+
+        Node3D subject = Assert.IsAssignableFrom<Node3D>(
+            sceneRoot.GetNodeOrNull("Subject"));
+        subject.Rotation = new Vector3(Mathf.Pi, 0f, 0f);
+
+        Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
+            ?? throw new Xunit.Sdk.XunitException(
+                "Expected at least one Skeleton3D in the verification scene.");
+
+        Node3D leftHandTarget = Assert.IsAssignableFrom<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftHandTargetPath));
+        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
+        SkeletonModifier3D leftArmController = Assert.IsAssignableFrom<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull("Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController"));
+
+        int hipsIndex = RequireBone(skeleton, "Hips");
+        int neckIndex = RequireBone(skeleton, "Neck");
+        int leftShoulderIndex = RequireBone(skeleton, "LeftShoulder");
+        int rightShoulderIndex = RequireBone(skeleton, "RightShoulder");
+        int leftUpperArmIndex = RequireBone(skeleton, "LeftUpperArm");
+        int leftLowerArmIndex = RequireBone(skeleton, "LeftLowerArm");
+        int leftHandIndex = RequireBone(skeleton, "LeftHand");
+
+        for (int settle = 0; settle < 4; settle++)
+        {
+            _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+        }
+
+        Basis bodyBasis = ComputeBodyBasis(
+            skeleton,
+            hipsIndex,
+            neckIndex,
+            leftShoulderIndex,
+            rightShoulderIndex);
+
+        Vector3 shoulderPosition = BoneWorldPosition(skeleton, leftUpperArmIndex);
+        Vector3 foldedCompressedOffsetBody = new(-0.06f, -0.14f, 0.03f);
+        Vector3 foldedCompressedOffsetGlobal = bodyBasis * foldedCompressedOffsetBody;
+        leftHandTarget.GlobalPosition = shoulderPosition + foldedCompressedOffsetGlobal;
+
+        for (int settle = 0; settle < 4; settle++)
+        {
+            _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+        }
+
+        Vector3 solvedShoulderPosition = BoneWorldPosition(skeleton, leftUpperArmIndex);
+        Vector3 bodyUp = ComputeBodyBasis(
+            skeleton,
+            hipsIndex,
+            neckIndex,
+            leftShoulderIndex,
+            rightShoulderIndex).Column1;
+
+        float bodyVerticalDelta = (leftHandTarget.GlobalPosition - solvedShoulderPosition).Dot(bodyUp);
+        float worldVerticalDelta = leftHandTarget.GlobalPosition.Y - solvedShoulderPosition.Y;
+
+        Assert.True(
+            bodyVerticalDelta <= -0.01f,
+            "Regression setup requires folded reach in body-local space (hand below shoulder in body-up projection). " +
+            $"Body vertical delta: {bodyVerticalDelta:F4}.");
+
+        Assert.True(
+            worldVerticalDelta >= 0.01f,
+            "Regression setup must diverge from world-Y gating semantics (hand globally above shoulder). " +
+            $"World vertical delta: {worldVerticalDelta:F4}.");
+
+        float restArmLength = ComputeRestArmLength(skeleton, leftUpperArmIndex, leftLowerArmIndex, leftHandIndex);
+        float currentArmLength = ComputeCurrentArmLength(skeleton, leftHandTarget, leftUpperArmIndex);
+        float compressionRatioForPoleFloor = Mathf.Clamp(
+            ReadFloatProperty(leftArmController, "CompressionRatioForRestPoleFloor"),
+            0.1f,
+            1.0f);
+
+        Assert.True(
+            currentArmLength <= restArmLength * compressionRatioForPoleFloor,
+            "Regression setup requires compressed arm length so safeguard should be eligible once folded gate passes. " +
+            $"Current length: {currentArmLength:F4}m, rest length: {restArmLength:F4}m, compression threshold: {restArmLength * compressionRatioForPoleFloor:F4}m.");
+
+        float minimumPoleOffset = ReadFloatProperty(leftArmController, "MinimumPoleOffset");
+        float restArmHalfPoleOffsetMargin = ReadFloatProperty(leftArmController, "RestArmHalfPoleOffsetMargin");
+        float expectedFloor = Mathf.Max(minimumPoleOffset, (restArmLength * 0.5f) + restArmHalfPoleOffsetMargin);
+        float observedPoleOffset = ComputePoleOffsetDistance(skeleton, leftPoleTarget, leftHandTarget, leftUpperArmIndex);
+
+        Assert.True(
+            observedPoleOffset + PoleOffsetFloorToleranceMetres >= expectedFloor,
+            "When body-local folded + compressed gates are both true, pole offset floor must be enforced even in non-upright poses. " +
+            $"Observed offset: {observedPoleOffset:F4}m, expected floor: {expectedFloor:F4}m, tolerance: {PoleOffsetFloorToleranceMetres:F4}m.");
+    }
+
     private static void AssertArmPole(
         StringBuilder failures,
         Skeleton3D skeleton,
@@ -241,6 +419,14 @@ public sealed class ArmShoulderIkIntegrationTests
         int hipsIdx,
         int neckIdx,
         int lShoulderIdx,
+        int rShoulderIdx) =>
+        ComputeBodyBasis(skeleton, hipsIdx, neckIdx, lShoulderIdx, rShoulderIdx).Inverse();
+
+    private static Basis ComputeBodyBasis(
+        Skeleton3D skeleton,
+        int hipsIdx,
+        int neckIdx,
+        int lShoulderIdx,
         int rShoulderIdx)
     {
         Vector3 hipsPos = BoneWorldPosition(skeleton, hipsIdx);
@@ -260,7 +446,7 @@ public sealed class ArmShoulderIkIntegrationTests
             Column2 = -bodyForward,
         };
 
-        return bodyBasis.Inverse();
+        return bodyBasis;
     }
 
     private static Dictionary<string, Node3D> ResolvePoseMarkers(Node3D handTargetPoses)
@@ -309,5 +495,45 @@ public sealed class ArmShoulderIkIntegrationTests
             ? index
             : throw new Xunit.Sdk.XunitException(
                 $"Expected bone '{boneName}' to exist in skeleton.");
+    }
+
+    private static float ReadFloatProperty(Node node, string propertyName)
+    {
+        Variant propertyValue = node.Get(propertyName);
+        return propertyValue.VariantType == Variant.Type.Float
+            ? (float)propertyValue.AsDouble()
+            : throw new Xunit.Sdk.XunitException(
+                $"Expected '{node.Name}' property '{propertyName}' to be a float, but got {propertyValue.VariantType}.");
+    }
+
+    private static float ComputePoleOffsetDistance(
+        Skeleton3D skeleton,
+        Node3D poleTarget,
+        Node3D handTarget,
+        int upperArmBoneIndex)
+    {
+        Vector3 shoulderPosition = BoneWorldPosition(skeleton, upperArmBoneIndex);
+        Vector3 midpoint = (shoulderPosition + handTarget.GlobalPosition) * 0.5f;
+        return poleTarget.GlobalPosition.DistanceTo(midpoint);
+    }
+
+    private static float ComputeCurrentArmLength(Skeleton3D skeleton, Node3D handTarget, int upperArmBoneIndex)
+    {
+        Vector3 shoulderPosition = BoneWorldPosition(skeleton, upperArmBoneIndex);
+        return shoulderPosition.DistanceTo(handTarget.GlobalPosition);
+    }
+
+    private static float ComputeRestArmLength(
+        Skeleton3D skeleton,
+        int upperArmBoneIndex,
+        int lowerArmBoneIndex,
+        int handBoneIndex)
+    {
+        Vector3 upperArmRestPosition = skeleton.GetBoneGlobalRest(upperArmBoneIndex).Origin;
+        Vector3 lowerArmRestPosition = skeleton.GetBoneGlobalRest(lowerArmBoneIndex).Origin;
+        Vector3 handRestPosition = skeleton.GetBoneGlobalRest(handBoneIndex).Origin;
+
+        return upperArmRestPosition.DistanceTo(lowerArmRestPosition)
+            + lowerArmRestPosition.DistanceTo(handRestPosition);
     }
 }

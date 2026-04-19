@@ -30,7 +30,10 @@ character setups.
    head/hand references.
 2. Pre-IK shoulder correction must be integrated into `ArmIKController` and execute before arm IK modifiers.
 3. Hand-rotation-based elbow correction must be defined as a first-class contract with configurable weighting.
-4. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions.
+4. Elbow pole-target placement must include a guarded compression safeguard with tunable ratio/floor inputs and explicit
+   compression/folded gating, while remaining non-invasive to hand-target solving and shoulder correction.
+5. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions, including a
+   compressed folded-arm case that verifies enforced pole-offset floor behaviour.
 
 ## Specification Structure
 
@@ -127,6 +130,10 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-17 | Hand-rotation correction rotates the elbow pole target around the shoulder-to-hand axis, pivoting at the closest point on that axis to the current pole target, with the rotation magnitude determined by the signed angular difference between actual and reference hand rotations scaled by `HandRotationWeight`. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
 | AC-18 | Reference hand rotations are interpolated from key pose markers using inverse-distance weighting in body-basis space, producing smooth and continuous neutral rotations across all hand positions. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
 | AC-19 | `HandRotationWeight` is exported on `ArmIKController` and is configurable per instance in the Godot editor. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
+| AC-20 | Per arm, base elbow pole-offset distance is computed from current arm length with a ratio tunable and a minimum offset floor tunable before any compression override is applied. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-21 | Compression safeguard activation uses both a clamped current/rest arm-length ratio gate and a folded-pose gate from body-local vertical relation (`hand Y <= shoulder Y` in body basis, equivalently `(hand - shoulder) · bodyUp <= 0`); when active, enforced floor is `max(minimum floor, restArmLength * 0.5 + margin)`. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-22 | Compression safeguard is non-invasive: it only constrains pole-target placement distance and does not alter hand target positions, shoulder correction logic, or hand-rotation correction logic. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-23 | Integration coverage includes a compressed folded-arm pose asserting that pole-target distance honours the compressed enforced floor contract. | [Arm IK Contract](arm-ik-contract.md) |
 
 ## Implementation Notes
 

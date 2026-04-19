@@ -75,6 +75,42 @@ public partial class ArmIKController : SkeletonModifier3D
         get; set;
     } = 0.55f;
 
+    /// <summary>
+    /// Pole offset as a fraction of shoulder-to-target distance.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.1,1.0,0.01")]
+    public float PoleOffsetRatio
+    {
+        get; set;
+    } = 0.5f;
+
+    /// <summary>
+    /// Lower bound for elbow pole offset distance.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.01,0.5,0.001")]
+    public float MinimumPoleOffset
+    {
+        get; set;
+    } = 0.12f;
+
+    /// <summary>
+    /// Extra distance added to the rest-arm-based minimum pole offset floor.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.0,0.2,0.001")]
+    public float RestArmHalfPoleOffsetMargin
+    {
+        get; set;
+    } = 0.1f;
+
+    /// <summary>
+    /// Arm compression ratio threshold for applying the rest-arm pole offset floor.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.1,1.0,0.01")]
+    public float CompressionRatioForRestPoleFloor
+    {
+        get; set;
+    } = 0.6f;
+
     private Skeleton3D _skeleton = null!;
 
     private int _hipsIdx;
@@ -90,6 +126,7 @@ public partial class ArmIKController : SkeletonModifier3D
     private Basis _restLookBasis = Basis.Identity;
     private float _upperSegmentLength;
     private float _lowerSegmentLength;
+    private float _restArmLength;
 
     private bool _bonesResolved;
 
@@ -166,8 +203,20 @@ public partial class ArmIKController : SkeletonModifier3D
         ApplyShoulderCorrectionPreIK(shoulderPos, handPos, poleDirGlobal, bodyUp, bodyRight);
 
         Vector3 midpoint = (shoulderPos + handPos) * 0.5f;
-        float armLength = (handPos - shoulderPos).Length();
-        float offset = armLength * 0.5f;
+        float currentArmLength = shoulderPos.DistanceTo(handPos);
+        float ratioBasedOffset = currentArmLength * PoleOffsetRatio;
+        float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
+
+        float compressionRatioThreshold = Mathf.Clamp(CompressionRatioForRestPoleFloor, 0.1f, 1.0f);
+        bool isArmCompressed = currentArmLength <= (_restArmLength * compressionRatioThreshold);
+        float handToShoulderVerticalInBody = (handPos - shoulderPos).Dot(bodyUp);
+        bool isFoldedReachLikeCompression = handToShoulderVerticalInBody <= 0f;
+        if (isArmCompressed && isFoldedReachLikeCompression)
+        {
+            float restArmMinimumOffset = (_restArmLength * 0.5f) + RestArmHalfPoleOffsetMargin;
+            float compressedFloor = Mathf.Max(MinimumPoleOffset, restArmMinimumOffset);
+            offset = Mathf.Max(offset, compressedFloor);
+        }
 
         PoleTarget.GlobalPosition = midpoint + (poleDirGlobal * offset);
     }
@@ -259,6 +308,8 @@ public partial class ArmIKController : SkeletonModifier3D
         {
             return false;
         }
+
+        _restArmLength = _upperSegmentLength + _lowerSegmentLength;
 
         // Build and cache the rest look-at basis using body-up as reference.
         Vector3 bodyUp = new(0f, 1f, 0f); // Up in body space is always +Y.
