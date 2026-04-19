@@ -1,7 +1,6 @@
 ---
 name: godot-visual-verification
-description:
-  Use whenever implementation depends on visual correctness in Godot. Follow the photobooth-first workflow: create a test scene under @game/tests, verify camera and marker framing, run screenshot scenarios, then add C# integration tests.
+description: Use for visual correctness verification in Godot with photobooth test scenes and screenshot-based acceptance.
 ---
 
 # Godot Visual Verification
@@ -50,7 +49,7 @@ new reusable setup under `@game/assets/`.
     - Verify behaviour using non-visual assertions (for example marker proximity, transform ranges, state flags,
       or node presence).
     - Include at least one assertion designed to fail a plausible visual anomaly from the same scenario set (for example
-      “pole behind leg” for leg IK).
+      "pole behind leg" for leg IK).
 
 ## Visual Evidence Gate
 
