@@ -14,8 +14,8 @@ independence constraints.
 - One `TwoBoneIK3D` chain per arm (left and right), solving shoulder-to-hand.
 - Pole-target prediction from head and hand targets.
 - Guarded elbow pole-offset compression safeguard with tunable gates and floors.
-- Shoulder correction execution in `ArmIKController` before IK solve using the look-at-delta method (algorithm details
-  in shoulder contract).
+- Shoulder correction execution in `ArmIKController` before IK solve using anatomical decomposition into elevation and
+  protraction components in body-basis space (algorithm details in shoulder contract).
 - Baseline pose mapping plus hand-rotation adjustment (detailed in the [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md)).
 - Behaviour consistent across upright and non-upright body orientations.
 
@@ -49,15 +49,17 @@ Exact numeric values are intentionally tunable.
 
 Per arm, each frame:
 
-1. Compute `baseOffset = max(currentArmLength * poleOffsetRatio, poleOffsetMinimum)`.
-2. Compute `compressionRatio = clamp(currentArmLength / restArmLength, 0.0, 1.0)`.
-3. Determine folded gate from body-local vertical relation: folded gate is true when `hand Y <= shoulder Y` in body basis (equivalently `(hand - shoulder) · bodyUp <= 0`).
-4. Activate compressed-floor enforcement only when:
+1. **Apply shoulder correction** (via `ApplyShoulderCorrectionPreIK`) to obtain the post-correction shoulder position.
+2. Compute `currentArmLength = distance(hand, postCorrectionShoulder)`.
+3. Compute `baseOffset = max(currentArmLength * poleOffsetRatio, poleOffsetMinimum)`.
+4. Compute `compressionRatio = clamp(currentArmLength / restArmLength, 0.0, 1.0)`.
+5. Determine folded gate from body-local vertical relation using the **post-correction shoulder position**: folded gate is true when `hand Y <= shoulder Y` in body basis (equivalently `(hand - shoulder) · bodyUp <= 0`).
+6. Activate compressed-floor enforcement only when:
    - `compressionRatio <= compressionThreshold`, and
    - folded gate is true.
-5. When active, compute `compressedFloor = max(poleOffsetMinimum, restArmLength * 0.5 + compressionMargin)` and
+7. When active, compute `compressedFloor = max(poleOffsetMinimum, restArmLength * 0.5 + compressionMargin)` and
    enforce `finalOffset >= compressedFloor`.
-6. When inactive, `finalOffset = baseOffset`.
+8. When inactive, `finalOffset = baseOffset`.
 
 #### Non-Invasive Boundary
 

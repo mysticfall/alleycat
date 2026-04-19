@@ -56,24 +56,70 @@ public partial class ArmIKController : SkeletonModifier3D
     }
 
     /// <summary>
-    /// Overall shoulder correction dampening weight.
-    /// 0 = no correction; 1 = full delta applied. Values below 1 dampen the correction.
+    /// Overall dampening weight for shoulder correction. 0 = no correction; 1 = full anatomical correction.
     /// </summary>
-    [Export]
+    [Export(PropertyHint.Range, "0.0,1.0,0.01")]
     public float ShoulderWeight
     {
         get; set;
-    } = 0.55f;
+    } = 0.2f;
 
     /// <summary>
-    /// Shoulder raise strength for arm elevation.
-    /// Kept for integration test compatibility — controls adaptive weight contribution.
+    /// Maximum shoulder elevation angle, in degrees, when the arm points straight up (arm-Y = 1).
+    /// Tunes how strongly the shoulder lifts at overhead poses. Actual applied angle is scaled by
+    /// elevation factor and <see cref="ShoulderWeight"/>.
     /// </summary>
-    [Export]
-    public float ElevationWeight
+    [Export(PropertyHint.Range, "0.0,180.0,0.5")]
+    public float MaxElevationAngleDegrees
     {
         get; set;
-    } = 0.55f;
+    } = 160f;
+
+    /// <summary>
+    /// Additional shoulder elevation angle, in degrees, added when the arm points straight up (arm-Y = 1).
+    /// Ramps smoothly from 0 at horizontal and below to the full value at fully overhead. Tune this upward
+    /// if the shoulder does not visibly lift more at arms-up than at T-pose. Applied on top of
+    /// <see cref="MaxElevationAngleDegrees"/> and subject to <see cref="ShoulderWeight"/> dampening.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.0,300.0,0.5")]
+    public float MaxOverheadElevationBoostDegrees
+    {
+        get; set;
+    } = 120f;
+
+    /// <summary>
+    /// Maximum shoulder protraction angle, in degrees, when the arm points straight forward (arm-Z = 1).
+    /// Tunes how strongly the shoulder moves forward at arms-forward poses. Actual applied angle is scaled by
+    /// protraction factor and <see cref="ShoulderWeight"/>.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.0,60.0,0.5")]
+    public float MaxProtractionAngleDegrees
+    {
+        get; set;
+    } = 20f;
+
+    /// <summary>
+    /// Lateral bias of the anatomical neutral arm direction in body space (0 = straight down, 0.95 ≈ horizontal).
+    /// Lower values produce more shoulder lift at T-pose rest and overhead poses. Higher values reduce it.
+    /// Tune this to compensate for baseline rest-pose shoulder height.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.0,0.95,0.01")]
+    public float AnatomicalNeutralLateralBias
+    {
+        get; set;
+    } = 0.15f;
+
+    /// <summary>
+    /// Fraction of elevation that is suppressed when the arm points straight forward (arm-Z = 1).
+    /// 0 = elevation unaffected by arm-forward component (current behaviour).
+    /// 1 = elevation fully suppressed at arms-forward.
+    /// Typical values are 0.2–0.4. Damping scales linearly with the positive forward component of the arm.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.0,1.0,0.01")]
+    public float ForwardElevationDamping
+    {
+        get; set;
+    } = 0.3f;
 
     /// <summary>
     /// Pole offset as a fraction of shoulder-to-target distance.
@@ -123,7 +169,6 @@ public partial class ArmIKController : SkeletonModifier3D
     private int _handIdx;
 
     private Basis _shoulderRestBasisInBody = Basis.Identity;
-    private Basis _restLookBasis = Basis.Identity;
     private float _upperSegmentLength;
     private float _lowerSegmentLength;
     private float _restArmLength;
@@ -202,14 +247,15 @@ public partial class ArmIKController : SkeletonModifier3D
 
         ApplyShoulderCorrectionPreIK(shoulderPos, handPos, poleDirGlobal, bodyUp, bodyRight);
 
-        Vector3 midpoint = (shoulderPos + handPos) * 0.5f;
-        float currentArmLength = shoulderPos.DistanceTo(handPos);
+        Vector3 solvedShoulderPos = BoneGlobalPosition(_upperArmIdx);
+        Vector3 midpoint = (solvedShoulderPos + handPos) * 0.5f;
+        float currentArmLength = solvedShoulderPos.DistanceTo(handPos);
         float ratioBasedOffset = currentArmLength * PoleOffsetRatio;
         float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
 
         float compressionRatioThreshold = Mathf.Clamp(CompressionRatioForRestPoleFloor, 0.1f, 1.0f);
         bool isArmCompressed = currentArmLength <= (_restArmLength * compressionRatioThreshold);
-        float handToShoulderVerticalInBody = (handPos - shoulderPos).Dot(bodyUp);
+        float handToShoulderVerticalInBody = (handPos - solvedShoulderPos).Dot(bodyUp);
         bool isFoldedReachLikeCompression = handToShoulderVerticalInBody <= 0f;
         if (isArmCompressed && isFoldedReachLikeCompression)
         {
@@ -276,13 +322,6 @@ public partial class ArmIKController : SkeletonModifier3D
         Transform3D lowerArmGlobalRestPose = _skeleton.GetBoneGlobalRest(_lowerArmIdx);
         Transform3D handGlobalRestPose = _skeleton.GetBoneGlobalRest(_handIdx);
 
-        Vector3 restShoulderToElbow = lowerArmGlobalRestPose.Origin - upperArmGlobalRestPose.Origin;
-
-        if (restShoulderToElbow.LengthSquared() < DegenerateThreshold)
-        {
-            return false;
-        }
-
         if (!TryBuildBodyBasis(
                 hipsGlobalRestPose.Origin,
                 neckGlobalRestPose.Origin,
@@ -294,12 +333,6 @@ public partial class ArmIKController : SkeletonModifier3D
         }
 
         Basis restBodyBasisInverse = restBodyBasis.Inverse();
-        Vector3 restUpperArmDirectionBody = (restBodyBasisInverse * restShoulderToElbow).Normalized();
-
-        if (restUpperArmDirectionBody.LengthSquared() < DegenerateThreshold)
-        {
-            return false;
-        }
 
         _upperSegmentLength = (lowerArmGlobalRestPose.Origin - upperArmGlobalRestPose.Origin).Length();
         _lowerSegmentLength = (handGlobalRestPose.Origin - lowerArmGlobalRestPose.Origin).Length();
@@ -310,10 +343,6 @@ public partial class ArmIKController : SkeletonModifier3D
         }
 
         _restArmLength = _upperSegmentLength + _lowerSegmentLength;
-
-        // Build and cache the rest look-at basis using body-up as reference.
-        Vector3 bodyUp = new(0f, 1f, 0f); // Up in body space is always +Y.
-        _restLookBasis = ShoulderCorrectionComputer.BuildLookAtBasis(restUpperArmDirectionBody, bodyUp);
 
         _shoulderRestBasisInBody = (restBodyBasisInverse * shoulderGlobalRestPose.Basis).Orthonormalized();
 
@@ -363,23 +392,19 @@ public partial class ArmIKController : SkeletonModifier3D
             return;
         }
 
-        // Build current look-at basis using body-up as reference.
-        Vector3 bodyUpLocal = new(0f, 1f, 0f);
-        Basis currentLookBasis = ShoulderCorrectionComputer.BuildLookAtBasis(currentUpperDirectionBody, bodyUpLocal);
-
-        // Compute pose-adaptive weight: use ElevationWeight as the base dampening factor.
-        float adaptiveWeight = ShoulderCorrectionComputer.ComputeAdaptiveWeight(
-            currentUpperDirectionBody,
-            ElevationWeight);
-
-        // Apply overall ShoulderWeight as a master dampener on top.
-        float effectiveWeight = adaptiveWeight * Mathf.Clamp(ShoulderWeight / Mathf.Max(ElevationWeight, 0.01f), 0f, 2f);
-        effectiveWeight = Mathf.Clamp(effectiveWeight, 0f, 1f);
+        Vector3 neutralDir = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(
+            Side,
+            AnatomicalNeutralLateralBias);
 
         Quaternion correction = ShoulderCorrectionComputer.ComputeCorrection(
-            _restLookBasis,
-            currentLookBasis,
-            effectiveWeight);
+            currentUpperDirectionBody,
+            Side,
+            neutralDir.Y,
+            Mathf.DegToRad(MaxElevationAngleDegrees),
+            Mathf.DegToRad(MaxOverheadElevationBoostDegrees),
+            Mathf.DegToRad(MaxProtractionAngleDegrees),
+            ForwardElevationDamping,
+            Mathf.Clamp(ShoulderWeight, 0f, 1f));
 
         Basis correctionBasis = new(correction);
         Basis targetShoulderGlobalBasis = (bodyBasisSkeleton * (correctionBasis * _shoulderRestBasisInBody)).Orthonormalized();

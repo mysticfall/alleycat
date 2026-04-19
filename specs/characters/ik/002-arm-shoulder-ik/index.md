@@ -29,10 +29,13 @@ character setups.
 1. Implementation must provide per-arm `TwoBoneIK3D` solving and deterministic elbow pole-target prediction from
    head/hand references.
 2. Pre-IK shoulder correction must be integrated into `ArmIKController` and execute before arm IK modifiers.
-3. Hand-rotation-based elbow correction must be defined as a first-class contract with configurable weighting.
-4. Elbow pole-target placement must include a guarded compression safeguard with tunable ratio/floor inputs and explicit
+3. Shoulder correction must use pose/body-basis anatomical decomposition into elevation and protraction components,
+   with side-aware sign conventions.
+4. Shoulder correction must support forward-elevation damping and overhead elevation boost for raised-overhead poses.
+5. Hand-rotation-based elbow correction must be defined as a first-class contract with configurable weighting.
+6. Elbow pole-target placement must include a guarded compression safeguard with tunable ratio/floor inputs and explicit
    compression/folded gating, while remaining non-invasive to hand-target solving and shoulder correction.
-5. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions, including a
+7. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions, including a
    compressed folded-arm case that verifies enforced pole-offset floor behaviour.
 
 ## Specification Structure
@@ -52,8 +55,10 @@ Use this page for overall scope and acceptance traceability, then use the compon
 - Elbow pole-target position prediction derived from head (headset) and hand (controller) locations and rotations.
 - Baseline elbow pole-directions for a defined set of key hand poses, with hand-rotation-based adjustments layered
   on top.
-- Shoulder correction integrated into `ArmIKController`, computed before `TwoBoneIK3D` solves, using a look-at delta
-  from rest to current shoulder→elbow direction in body space to prevent deformation and maintain natural appearance.
+- Shoulder correction integrated into `ArmIKController`, computed before `TwoBoneIK3D` solves, using anatomical
+  decomposition (elevation + protraction) in body-basis space to prevent deformation and maintain natural appearance.
+- Forward-elevation damping to reduce correction weight during forward-reach poses.
+- Overhead elevation boost enabling raised-overhead poses to exceed T-pose shoulder lift while preserving T-pose baseline.
 - Consistent behaviour regardless of character body pose (standing, lying down, stooping, etc.).
 - A standalone reusable IK scene for reuse in character scenes.
 
@@ -65,6 +70,8 @@ Use this page for overall scope and acceptance traceability, then use the compon
 - Physics-based secondary motion (for example spring bones or ragdoll behaviour).
 - Retargeting rigs across different skeleton topologies.
 - Subjective animation polish beyond objective natural-pose checks defined in this spec.
+- Adaptive ElevationWeight path (removed from scope; replaced with explicit anatomical decomposition).
+- Arm pole twist experiments (pole_direction intended to remain disabled; phase-2 pole blend is lateralness-driven only).
 
 ## Context
 
@@ -94,12 +101,23 @@ The elbow pole-target prediction must produce correct results regardless of the 
 same algorithm must handle upright standing, lying down, stooping forward, and any other orientation without requiring
 pose-specific tuning.
 
+### Body Basis Derivation
+
+All pose-independent calculations derive body-local basis each frame from skeleton landmarks:
+
+- **Up**: `Hips` → `Neck`
+- **Right**: `LeftShoulder` → `RightShoulder`, orthonormalised against up
+- **Forward**: cross product of right and up
+
+This frame keeps behaviour pose-independent.
+
 ## Component Contracts
 
 - **Arm IK Contract:** Baseline poses, pole-target prediction, and arm-specific constraints are defined in
   [Arm IK Contract](arm-ik-contract.md).
-- **Shoulder Correction Contract:** Shoulder correction algorithm, exported parameters, and pre-IK pipeline behaviour
-  are defined in [Shoulder Correction Contract](shoulder-adjustment-contract.md).
+- **Shoulder Correction Contract:** Shoulder correction algorithm using anatomical decomposition (elevation +
+  protraction), exported parameters, and pre-IK pipeline behaviour are defined in
+  [Shoulder Correction Contract](shoulder-adjustment-contract.md).
 - **Hand-Rotation Elbow Correction Contract:** Hand-rotation-based elbow pole-target correction, reference rotation
   interpolation, and `HandRotationWeight` parameterisation are defined in
   [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md).
@@ -121,11 +139,11 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-08 | A photobooth verification scene exists under `@game/tests/` and validates arm IK plus integrated shoulder correction across required key poses and body orientations, following `@specs/testing/002-visual-verification-scope/index.md`.                                                              | This Page                                                       |
 | AC-09 | Visual checks confirm natural arm and shoulder poses without obvious over-rotation, inversion, discontinuous elbow movement, or shoulder deformation across required poses.                                                                                                                           | This Page                                                       |
 | AC-10 | A C# integration test loads the same verification scene and validates behaviour using non-visual assertions (for example target proximity, pole-target bounds, shoulder rotation limits).                                                                                                             | This Page                                                       |
-| AC-11 | Each arm controller applies shoulder correction to its corresponding shoulder bone proportional to upper-arm angular deviation from rest pose.                                                                                                                                                        | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
+| AC-11 | Each arm controller applies shoulder correction to its corresponding shoulder bone using anatomical decomposition (elevation + protraction) in body-basis space.                                                                                                                                          | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-12 | Shoulder corrections are deterministic: the same arm pose always produces the same shoulder rotation.                                                                                                                                                                                                 | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-13 | Shoulder corrections are smooth across key poses, with no discontinuities or sudden jumps during pose transitions.                                                                                                                                                                                    | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
-| AC-14 | Exported parameters (`Side`, `ShoulderWeight`, `ElevationWeight`) on `ArmIKController` are configurable in the Godot editor and overridable per instance.                                                                                                                                             | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
-| AC-15 | A static `ShoulderCorrectionComputer` helper exists with no Godot scene-tree dependencies and provides pure math helpers for look-at basis construction, damped delta computation, and adaptive weighting, with dedicated C# unit tests in `@tests/src/IK/` against known input/output pairs. | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
+| AC-14 | Exported parameters (`Side`, `ShoulderWeight`, `AnatomicalNeutralLateralBias`, `MaxElevationAngleDegrees`, `MaxProtractionAngleDegrees`, `ForwardElevationDamping`, `MaxOverheadElevationBoostDegrees`) on `ArmIKController` are configurable in the Godot editor and overridable per instance.                                     | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
+| AC-15 | A static `ShoulderCorrectionComputer` helper exists with no Godot scene-tree dependencies and provides pure math helpers for body-basis derivation, anatomical decomposition, signed component application, damping and boost computation, and clamped angle application, with dedicated C# unit tests in `@tests/src/IK/` against known input/output pairs. | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-16 | The photobooth verification scene inherits from the arm-shoulder IK test scene and uses the required modifier order with shoulder correction inside `ArmIKController`; integration tests verify expected shoulder rotation ranges per key pose.                                                       | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-17 | Hand-rotation correction rotates the elbow pole target around the shoulder-to-hand axis, pivoting at the closest point on that axis to the current pole target, with the rotation magnitude determined by the signed angular difference between actual and reference hand rotations scaled by `HandRotationWeight`. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
 | AC-18 | Reference hand rotations are interpolated from key pose markers using inverse-distance weighting in body-basis space, producing smooth and continuous neutral rotations across all hand positions. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
@@ -160,13 +178,17 @@ C# integration tests are the primary acceptance gate for IK correctness.
 The GDScript photobooth runner still generates multi-camera screenshots for all poses, but screenshots are a
 diagnostic aid reviewed when assertions fail.
 
+### Arm Pole Direction
+
+Arm pole_direction is intended to remain disabled (0) in the implementation. Phase-2 pole blend
+is lateralness-driven only to avoid behind-head regressions from pole twist experiments.
+
 ## Open Questions
 
 1. **Pole-Target Interpolation Strategy** — How should baseline directions interpolate between key poses?
 2. **Hand-Rotation Influence Weight** — How strongly should hand rotation influence pole direction relative to the
    positional baseline?
 3. **Optional Chest Pose** — Should the "hands covering the chest" pose be included in initial delivery or deferred?
-4. **Two-Arm Coordination** — Should both arms share state (for example symmetric bias) or remain independent?
 
 ## References
 

@@ -64,8 +64,8 @@ spread wider or tuck closer together.
 |----------------------|---------|---------|----------------------------------------------------------------------------------------------------------------------------------------|
 | `HandRotationWeight` | `float` | 1.0     | Weight applied to the hand-rotation angular difference before rotating the pole target. A value of 0 disables the correction entirely. |
 
-This parameter is exported on `ArmIKController` alongside the existing `Side`, `ShoulderWeight`, and `ElevationWeight`
-parameters. It must be configurable per instance.
+This parameter is exported on `ArmIKController` alongside the existing `Side`, `ShoulderWeight`, and other shoulder-correction
+tunables. It must be configurable per instance.
 
 ## Reference Rotation Source
 

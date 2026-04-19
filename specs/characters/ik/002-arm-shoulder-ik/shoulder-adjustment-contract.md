@@ -12,7 +12,8 @@ parameterisation, ordering, and testability requirements.
 ## Contract Scope
 
 - Shoulder correction inside `ArmIKController` before arm IK solve.
-- Corrective rotation from rest-to-current shoulder→elbow look-at delta in body space.
+- Anatomical decomposition into elevation and protraction components using pose/body-basis reference.
+- Side-aware signed contribution with configurable sign conventions.
 - Exported parameter behaviour for per-instance tuning.
 - Shoulder-specific testability and deterministic behaviour requirements.
 
@@ -25,30 +26,53 @@ The correction exists to:
 
 - Prevent visible deformation at the shoulder joint.
 - Preserve natural silhouette in high-elevation and behind-body poses.
+- Enable raised-overhead poses to exceed T-pose shoulder lift while preserving T-pose baseline.
 
 ## Correction Mechanism
 
-Correction compares current shoulder→elbow direction against rest shoulder→elbow direction in body space. The
-computation is performed by `ShoulderCorrectionComputer` and consumed by `ArmIKController`.
+Correction uses anatomical decomposition in body-basis space rather than rest-relative delta. The computation is performed by
+`ShoulderCorrectionComputer` and consumed by `ArmIKController`.
 
-1. **Rest Look-At Caching**: cache a rest look-at basis from rest shoulder→elbow direction in body space.
-2. **Current Look-At Build**: build a current look-at basis from estimated current shoulder→elbow direction in body
-   space.
-3. **Delta Rotation Computation**: compute rest-to-current delta rotation from the two look-at bases.
-4. **Damped Delta Computation**: damp the delta by slerping towards identity using adaptive weighting.
-5. **Shoulder Basis Application**: apply the damped delta to the shoulder rest basis.
+### Anatomical Decomposition
 
-Correction must be deterministic: identical input pose yields identical shoulder rotation.
+1. **Body Basis Derivation**: Derive body-local basis each frame from skeleton landmarks:
+   - **Up**: `Hips` → `Neck` direction in world space.
+   - **Right**: `LeftShoulder` → `RightShoulder` direction, orthonormalised against up.
+   - **Forward**: cross product of right and up.
+
+2. **Shoulder Plane Decomposition**: Decompose shoulder orientation into two anatomical components in body basis:
+   - **Elevation**: upward rotation from anatomical neutral (arms-at-sides), measured in the shoulder plane.
+   - **Protraction**: forward reach rotation from anatomical neutral, measured orthogonal to elevation.
+
+3. **Side-Aware Sign Application**: Apply signed contributions based on arm side:
+   - Left arm: elevation and protraction use standard sign orientation.
+   - Right arm: elevation and protraction signs are mirrored to maintain symmetric anatomical behaviour.
+
+### Forward Elevation Damping
+
+Elevated arm poses in front of the body (forward reach) receive reduced correction weight to preserve
+natural player experience. This damping prevents over-correction during active reaching poses.
+
+### Overhead Elevation Boost
+
+Raised-overhead poses can exceed the T-pose shoulder lift baseline through an additive boost. This enables
+full overhead reach while preserving the T-pose baseline as the neutral reference point.
 
 ## Exported Parameters
 
 | Parameter | Type | Default | Description |
 | --------- | ---- | ------- | ----------- |
 | `Side` | `ArmSide` | — | Arm instance to process (same enum used by `ArmIKController`). |
-| `ShoulderWeight` | `float` | 0.55 | Overall dampening strength applied to shoulder correction delta. |
-| `ElevationWeight` | `float` | 0.55 | Base adaptive contribution used when deriving correction weight from arm elevation context. |
+| `ShoulderWeight` | `float` | 0.2 | Overall strength applied to shoulder correction component blend. |
+| `AnatomicalNeutralLateralBias` | `float` | 0.15 | Lateral offset added to anatomical neutral pose in body basis. |
+| `MaxElevationAngleDegrees` | `float` | 160 | Maximum elevation angle from neutral in degrees. |
+| `MaxProtractionAngleDegrees` | `float` | 20 | Maximum protraction angle from neutral in degrees. |
+| `ForwardElevationDamping` | `float` | 0.3 | Multiplier applied to elevation when arm is forward-reached. |
+| `MaxOverheadElevationBoostDegrees` | `float` | 120 | Additional elevation boost for overhead poses in degrees. |
 
-These parameters are exported on `ArmIKController` and must be configurable per instance.
+> **Note:** Default values reflect initial implementation tuning. Values may require character-specific adjustment and should be
+> treated as illustrative rather than normative. All parameters are exported on `ArmIKController` and must be configurable per
+> instance in the Godot editor.
 
 `Side` must be set before the node enters the scene tree. Runtime arm-side switching is not required.
 
@@ -72,9 +96,12 @@ Each `ArmIKController` instance processes one side only, based on `Side`.
 
 It provides pure math helpers for:
 
-- Look-at basis construction from shoulder→elbow direction in body space.
-- Damped delta computation (rest-to-current delta slerped towards identity).
-- Adaptive correction-weight computation.
+- Body-basis derivation from skeleton landmarks.
+- Shoulder plane decomposition into elevation and protraction components.
+- Signed component application based on arm side.
+- Forward elevation damping computation.
+- Overhead elevation boost computation.
+- Clamped component angle application using MaxElevationAngleDegrees and MaxProtractionAngleDegrees.
 
 Dedicated C# unit tests in `@tests/src/IK/` must validate known input/output pairs.
 
