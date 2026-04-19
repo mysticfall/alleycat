@@ -80,7 +80,7 @@ public sealed class LegFeetIkIntegrationTests
         Node3D hipsLegUpLeft = RequireNode3D(hipsPoseMarkers, "HipsLegUpLeft");
         Node3D hipsAsym = RequireNode3D(hipsPoseMarkers, "HipsAsym");
 
-        BoneAttachment3D hipsHarness = Assert.IsAssignableFrom<BoneAttachment3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath));
+        CopyTransformModifier3D hipsModifier = Assert.IsAssignableFrom<CopyTransformModifier3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath));
 
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in verification scene.");
@@ -99,7 +99,7 @@ public sealed class LegFeetIkIntegrationTests
             rightFootTarget,
             leftNeutral,
             rightNeutral,
-            hipsHarness,
+            hipsModifier,
             hipsNeutral);
 
         AssertKneeOutwardConsistency(
@@ -197,7 +197,7 @@ public sealed class LegFeetIkIntegrationTests
             rightFootTarget,
             leftRaised,
             rightNeutral,
-            hipsHarness,
+            hipsModifier,
             hipsLegUpLeft);
 
         Vector3 leftLegDirection = ComputeLegDirection(skeleton, leftFootTarget, leftUpperLegIdx);
@@ -249,7 +249,7 @@ public sealed class LegFeetIkIntegrationTests
             rightFootTarget,
             leftNeutral,
             rightNeutral,
-            hipsHarness,
+            hipsModifier,
             hipsCrouch);
         await AssertHeldPoseStabilityAsync(
             sceneTree,
@@ -270,7 +270,7 @@ public sealed class LegFeetIkIntegrationTests
             rightFootTarget,
             leftForward,
             rightInward,
-            hipsHarness,
+            hipsModifier,
             hipsAsym);
         await AssertHeldPoseStabilityAsync(
             sceneTree,
@@ -345,7 +345,7 @@ public sealed class LegFeetIkIntegrationTests
         Node3D rightNeutral = RequireNode3D(footTargetPoses, "RightNeutral");
         Node3D hipsCrouch = RequireNode3D(hipsPoseMarkers, "HipsCrouch");
 
-        BoneAttachment3D hipsHarness = Assert.IsAssignableFrom<BoneAttachment3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath));
+        CopyTransformModifier3D hipsModifier = Assert.IsAssignableFrom<CopyTransformModifier3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath));
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in verification scene.");
 
@@ -363,7 +363,7 @@ public sealed class LegFeetIkIntegrationTests
             rightFootTarget,
             leftNeutral,
             rightNeutral,
-            hipsHarness,
+            hipsModifier,
             hipsCrouch);
 
         AssertPoleOffsetFloorEnforced(
@@ -393,12 +393,12 @@ public sealed class LegFeetIkIntegrationTests
         Node3D rightFootTarget,
         Node3D leftPoseMarker,
         Node3D rightPoseMarker,
-        BoneAttachment3D hipsHarness,
+        CopyTransformModifier3D hipsModifier,
         Node3D hipsPoseMarker)
     {
         leftFootTarget.GlobalTransform = leftPoseMarker.GlobalTransform;
         rightFootTarget.GlobalTransform = rightPoseMarker.GlobalTransform;
-        hipsHarness.GlobalTransform = hipsPoseMarker.GlobalTransform;
+        hipsModifier.Set("settings/0/reference_node", hipsPoseMarker.GetPath());
 
         await WaitForSkeletonUpdatesAsync(sceneTree, skeleton, SettleSkeletonUpdates);
     }

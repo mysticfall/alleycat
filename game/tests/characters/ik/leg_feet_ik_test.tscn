@@ -6,13 +6,22 @@
 
 [node name="Photobooth" unique_id=406188165 instance=ExtResource("1_legpb")]
 
-[node name="HipsOverrideHarness" type="BoneAttachment3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="10" unique_id=767600486]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.83715713, 0.022851847)
-bone_name = "Hips"
-bone_idx = 1
-override_pose = true
+[node name="Head" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="9" unique_id=694402195]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.1133092e-09, 1.4233681, 0.0032061972)
 
-[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="11" unique_id=1536903710 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="HipsOverrideHarness" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="10" unique_id=767600486]
+setting_count = 1
+settings/0/amount = 1.0
+settings/0/apply_bone_name = "Hips"
+settings/0/apply_bone = 1
+settings/0/reference_type = 1
+settings/0/reference_node = NodePath("../../../../../Markers/HipsOverridePoses/HipsNeutral")
+settings/0/copy = 3
+settings/0/axes = 7
+settings/0/invert = 0
+settings/0/additive = false
+
+[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="11" unique_id=1536903710 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -34,7 +43,7 @@ FootTarget = NodePath("../../../../../Markers/LeftFootTarget")
 PoleTarget = NodePath("../../../../../Markers/LeftKneePoleTarget")
 metadata/_custom_type_script = "uid://b260iglp548x1"
 
-[node name="RightLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="12" unique_id=1443606337 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="RightLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="12" unique_id=1443606337 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -57,7 +66,7 @@ PoleTarget = NodePath("../../../../../Markers/RightKneePoleTarget")
 Side = 1
 metadata/_custom_type_script = "uid://b260iglp548x1"
 
-[node name="LeftLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="13" unique_id=132184924]
+[node name="LeftLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="13" unique_id=132184924]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../../Markers/LeftFootTarget")
 settings/0/pole_node = NodePath("../../../../../Markers/LeftKneePoleTarget")
@@ -71,7 +80,7 @@ settings/0/end_bone = 49
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="RightLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="14" unique_id=943604861]
+[node name="RightLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="14" unique_id=943604861]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../../Markers/RightFootTarget")
 settings/0/pole_node = NodePath("../../../../../Markers/RightKneePoleTarget")
@@ -85,7 +94,7 @@ settings/0/end_bone = 53
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="CopyRightFootRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="15" unique_id=301541395]
+[node name="CopyRightFootRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="15" unique_id=301541395]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "RightFoot"
@@ -97,7 +106,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="CopyLeftFootRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 1349299640) index="16" unique_id=348982385]
+[node name="CopyLeftFootRotation" type="CopyTransformModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="16" unique_id=348982385]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "LeftFoot"

@@ -46,11 +46,11 @@ func _run() -> void:
 	var right_foot_target: Marker3D = SceneUtils.require_node(photobooth, ^"Markers/RightFootTarget") as Marker3D
 	var left_pole_target: DebugMarker = SceneUtils.require_node(photobooth, ^"Markers/LeftKneePoleTarget") as DebugMarker
 	var right_pole_target: DebugMarker = SceneUtils.require_node(photobooth, ^"Markers/RightKneePoleTarget") as DebugMarker
-	var hips_harness: BoneAttachment3D = SceneUtils.require_node(
+	var hips_modifier: CopyTransformModifier3D = SceneUtils.require_node(
 		photobooth,
-		^"Subject/Female/Female_export/GeneralSkeleton/HipsOverrideHarness") as BoneAttachment3D
+		^"Subject/Female/Female_export/GeneralSkeleton/HipsOverrideHarness") as CopyTransformModifier3D
 
-	if left_foot_target == null or right_foot_target == null or hips_harness == null:
+	if left_foot_target == null or right_foot_target == null or hips_modifier == null:
 		SceneUtils.fatal_error_and_quit("IK-003 runner: required target/harness nodes are missing")
 		return
 
@@ -70,7 +70,7 @@ func _run() -> void:
 			hips_pose_markers,
 			left_foot_target,
 			right_foot_target,
-			hips_harness)
+			hips_modifier)
 		print("IK-003 runner: validate-only mode completed successfully")
 		quit(0)
 		return
@@ -92,7 +92,7 @@ func _run() -> void:
 		hips_pose_markers,
 		left_foot_target,
 		right_foot_target,
-		hips_harness)
+		hips_modifier)
 
 	quit(0)
 
@@ -132,7 +132,7 @@ func _capture_pose_scenarios(
 	hips_pose_markers: Dictionary,
 	left_foot_target: Marker3D,
 	right_foot_target: Marker3D,
-	hips_harness: BoneAttachment3D,
+	hips_modifier: CopyTransformModifier3D,
 ) -> void:
 	for pose_index: int in REQUIRED_POSES.size():
 		var pose: Dictionary = REQUIRED_POSES[pose_index] as Dictionary
@@ -156,7 +156,7 @@ func _capture_pose_scenarios(
 
 		left_foot_target.global_transform = left_marker.global_transform
 		right_foot_target.global_transform = right_marker.global_transform
-		hips_harness.global_transform = hips_marker.global_transform
+		hips_modifier.set("settings/0/reference_node", hips_marker.get_path())
 
 		await SceneUtils.wait_frames(self, 4)
 
@@ -172,7 +172,7 @@ func _validate_pose_scenarios(
 	hips_pose_markers: Dictionary,
 	left_foot_target: Marker3D,
 	right_foot_target: Marker3D,
-	hips_harness: BoneAttachment3D,
+	hips_modifier: CopyTransformModifier3D,
 ) -> void:
 	for pose: Dictionary in REQUIRED_POSES:
 		var left_marker_name: String = pose["left"] as String
@@ -191,7 +191,7 @@ func _validate_pose_scenarios(
 
 		left_foot_target.global_transform = left_marker.global_transform
 		right_foot_target.global_transform = right_marker.global_transform
-		hips_harness.global_transform = hips_marker.global_transform
+		hips_modifier.set("settings/0/reference_node", hips_marker.get_path())
 
 
 func _resolve_foot_pose_markers(foot_target_poses: Node3D) -> Dictionary:
