@@ -8,7 +8,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// <summary>
 /// Integration coverage for IK-003 knee pole and knee positioning behaviour.
 /// </summary>
-public sealed class LegFeetIkIntegrationTests
+public sealed class LegFeetIKIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/leg_feet_ik_test.tscn";
 

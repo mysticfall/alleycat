@@ -11,7 +11,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// Each pose verifies that the pole target points in the expected anatomical
 /// direction and that the IK solver brings the hand close to the target.
 /// </summary>
-public sealed class ArmShoulderIkIntegrationTests
+public sealed class ArmShoulderIKIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/arm_shoulder_ik_test.tscn";
     private const string HandTargetPosesPath = "Markers/HandTargetPoses";

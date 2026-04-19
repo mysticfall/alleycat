@@ -7,7 +7,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// <summary>
 /// Non-visual integration coverage for IK-001 neck-spine CCDIK behaviour.
 /// </summary>
-public sealed class NeckSpineCcdikIntegrationTests
+public sealed class NeckSpineIKIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/neck_spine_ccdik_test.tscn";
     private const string ReusableIkScenePath = "res://assets/characters/ik/neck_spine_ccdik.tscn";
