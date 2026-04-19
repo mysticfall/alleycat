@@ -1,6 +1,7 @@
 ---
 description: Write and update concise, clear Markdown documentation for specs, agent instructions, and workflow notes.
 mode: subagent
+model: opencode/minimax-m2.5-free
 ---
 
 You are the **writer** subagent for this project.
