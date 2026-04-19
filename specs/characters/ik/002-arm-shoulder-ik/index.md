@@ -28,7 +28,7 @@ character setups.
 
 1. Implementation must provide per-arm `TwoBoneIK3D` solving and deterministic elbow pole-target prediction from
    head/hand references.
-2. Pre-IK shoulder correction must be integrated into `ArmIkController` and execute before arm IK modifiers.
+2. Pre-IK shoulder correction must be integrated into `ArmIKController` and execute before arm IK modifiers.
 3. Hand-rotation-based elbow correction must be defined as a first-class contract with configurable weighting.
 4. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions.
 
@@ -49,7 +49,7 @@ Use this page for overall scope and acceptance traceability, then use the compon
 - Elbow pole-target position prediction derived from head (headset) and hand (controller) locations and rotations.
 - Baseline elbow pole-directions for a defined set of key hand poses, with hand-rotation-based adjustments layered
   on top.
-- Shoulder correction integrated into `ArmIkController`, computed before `TwoBoneIK3D` solves, using a look-at delta
+- Shoulder correction integrated into `ArmIKController`, computed before `TwoBoneIK3D` solves, using a look-at delta
   from rest to current shoulder→elbow direction in body space to prevent deformation and maintain natural appearance.
 - Consistent behaviour regardless of character body pose (standing, lying down, stooping, etc.).
 - A standalone reusable IK scene for reuse in character scenes.
@@ -113,7 +113,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-03 | Pole-target prediction produces correct, natural elbow positions for all six key hand poses when the character is upright.                                                                                                                                                                            | [Arm IK Contract](arm-ik-contract.md)                           |
 | AC-04 | Pole-target prediction produces correct results in non-upright poses (lying down, stooping, etc.) without pose-specific branches.                                                                                                                                                                     | [Arm IK Contract](arm-ik-contract.md)                           |
 | AC-05 | Hand-rotation adjustment modifies the baseline pole direction smoothly and continuously across the full range of hand rotations.                                                                                                                                                                      | [Arm IK Contract](arm-ik-contract.md)                           |
-| AC-06 | `ArmIkController` applies per-arm pre-IK shoulder correction, preventing visible deformation in all key poses.                                                                                                                                                                                        | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
+| AC-06 | `ArmIKController` applies per-arm pre-IK shoulder correction, preventing visible deformation in all key poses.                                                                                                                                                                                        | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-07 | IK configuration is saved as a reusable scene with a clear file path (to be determined during implementation), with head/hand targets left unbound for consuming scenes.                                                                                                                              | This Page                                                       |
 | AC-08 | A photobooth verification scene exists under `@game/tests/` and validates arm IK plus integrated shoulder correction across required key poses and body orientations, following `@specs/testing/002-visual-verification-scope/index.md`.                                                              | This Page                                                       |
 | AC-09 | Visual checks confirm natural arm and shoulder poses without obvious over-rotation, inversion, discontinuous elbow movement, or shoulder deformation across required poses.                                                                                                                           | This Page                                                       |
@@ -121,12 +121,12 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-11 | Each arm controller applies shoulder correction to its corresponding shoulder bone proportional to upper-arm angular deviation from rest pose.                                                                                                                                                        | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-12 | Shoulder corrections are deterministic: the same arm pose always produces the same shoulder rotation.                                                                                                                                                                                                 | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-13 | Shoulder corrections are smooth across key poses, with no discontinuities or sudden jumps during pose transitions.                                                                                                                                                                                    | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
-| AC-14 | Exported parameters (`Side`, `ShoulderWeight`, `ElevationWeight`) on `ArmIkController` are configurable in the Godot editor and overridable per instance.                                                                                                                                             | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
+| AC-14 | Exported parameters (`Side`, `ShoulderWeight`, `ElevationWeight`) on `ArmIKController` are configurable in the Godot editor and overridable per instance.                                                                                                                                             | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-15 | A static `ShoulderCorrectionComputer` helper exists with no Godot scene-tree dependencies and provides pure math helpers for look-at basis construction, damped delta computation, and adaptive weighting, with dedicated C# unit tests in `@tests/src/IK/` against known input/output pairs. | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
-| AC-16 | The photobooth verification scene inherits from the arm-shoulder IK test scene and uses the required modifier order with shoulder correction inside `ArmIkController`; integration tests verify expected shoulder rotation ranges per key pose.                                                       | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
+| AC-16 | The photobooth verification scene inherits from the arm-shoulder IK test scene and uses the required modifier order with shoulder correction inside `ArmIKController`; integration tests verify expected shoulder rotation ranges per key pose.                                                       | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
 | AC-17 | Hand-rotation correction rotates the elbow pole target around the shoulder-to-hand axis, pivoting at the closest point on that axis to the current pole target, with the rotation magnitude determined by the signed angular difference between actual and reference hand rotations scaled by `HandRotationWeight`. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
 | AC-18 | Reference hand rotations are interpolated from key pose markers using inverse-distance weighting in body-basis space, producing smooth and continuous neutral rotations across all hand positions. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
-| AC-19 | `HandRotationWeight` is exported on `ArmIkController` and is configurable per instance in the Godot editor. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
+| AC-19 | `HandRotationWeight` is exported on `ArmIKController` and is configurable per instance in the Godot editor. | [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md) |
 
 ## Implementation Notes
 
@@ -136,15 +136,15 @@ These notes retain cross-component constraints. Component-specific notes are in 
 
 The required child order under `Skeleton3D` is:
 
-1. `ArmIkController` (left)
-2. `ArmIkController` (right)
+1. `ArmIKController` (left)
+2. `ArmIKController` (right)
 3. `TwoBoneIK3D` (left)
 4. `TwoBoneIK3D` (right)
 5. `CopyTransformModifier3D` (hand rotation copies)
 
 Ordering is mandatory because `SkeletonModifier3D` children execute in tree order.
 
-Shoulder correction executes inside each `ArmIkController` before IK solve.
+Shoulder correction executes inside each `ArmIKController` before IK solve.
 
 ### Test-First Verification Workflow
 

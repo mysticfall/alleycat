@@ -107,7 +107,7 @@ public sealed class ArmShoulderIkIntegrationTests
             rightHandTarget.GlobalTransform = rightMarker.GlobalTransform;
 
             // Wait for the skeleton modifier pipeline to fully settle.
-            // The pipeline runs ArmIkController → TwoBoneIK3D → CopyTransformModifier3D
+            // The pipeline runs ArmIKController → TwoBoneIK3D → CopyTransformModifier3D
             // each frame. Wait for multiple skeleton updates to ensure convergence.
             for (int settle = 0; settle < 4; settle++)
             {

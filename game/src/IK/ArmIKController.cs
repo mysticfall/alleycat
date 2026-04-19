@@ -23,7 +23,7 @@ public enum ArmSide
 /// Attach as a direct child of a <see cref="Skeleton3D"/> node.
 /// </summary>
 [GlobalClass]
-public partial class ArmIkController : SkeletonModifier3D
+public partial class ArmIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-4f;
     private const float SegmentEpsilon = 1e-4f;
@@ -163,7 +163,7 @@ public partial class ArmIkController : SkeletonModifier3D
         // Phase 4 -- Pole Target Placement
         Vector3 poleDirGlobal = bodyBasis * baselinePole;
 
-        ApplyShoulderCorrectionPreIk(shoulderPos, handPos, poleDirGlobal, bodyUp, bodyRight);
+        ApplyShoulderCorrectionPreIK(shoulderPos, handPos, poleDirGlobal, bodyUp, bodyRight);
 
         Vector3 midpoint = (shoulderPos + handPos) * 0.5f;
         float armLength = (handPos - shoulderPos).Length();
@@ -269,7 +269,7 @@ public partial class ArmIkController : SkeletonModifier3D
         return true;
     }
 
-    private void ApplyShoulderCorrectionPreIk(
+    private void ApplyShoulderCorrectionPreIK(
         Vector3 shoulderPosition,
         Vector3 handTargetPosition,
         Vector3 poleDirectionGlobal,

@@ -12,7 +12,7 @@ derived from foot orientation.
 ## Contract Scope
 
 - One `TwoBoneIK3D` chain per leg (left and right), solving upper leg to foot.
-- A per-leg controller (`LegIkController`) that updates pole-target position before IK solve.
+- A per-leg controller (`LegIKController`) that updates pole-target position before IK solve.
 - Knee pole-direction prediction from the associated foot axes.
 - Compressed-state knee pole minimum-offset safeguarding derived from rest leg length.
 - Read-only foot target contract: runtime logic consumes target transforms as goals and never mutates them.
@@ -21,16 +21,16 @@ derived from foot orientation.
 
 Each leg uses a Godot `TwoBoneIK3D` node configured for upper-leg → lower-leg → foot.
 
-`LegIkController` computes a pole-target direction from foot orientation each frame, then writes the resulting pole-target
+`LegIKController` computes a pole-target direction from foot orientation each frame, then writes the resulting pole-target
 transform for downstream IK solve.
 
 The solver/controller pipeline must solve towards provided foot targets as inputs. Foot target transforms are read-only
-for IK-003 runtime logic and must not be modified by `LegIkController` or companion solver wiring.
+for IK-003 runtime logic and must not be modified by `LegIKController` or companion solver wiring.
 
 ## Foot Target Immutability Contract
 
 1. Foot target transforms are input goals for `TwoBoneIK3D` solve behaviour.
-2. `LegIkController` must not write position, rotation, or scale to foot target nodes.
+2. `LegIKController` must not write position, rotation, or scale to foot target nodes.
 3. IK-003 runtime logic must not clamp, offset, or otherwise rewrite foot target transforms before solve.
 
 ## Knee Pole Prediction
@@ -99,12 +99,12 @@ and must not violate the read-only foot target contract.
 
 ## Placement And Ordering
 
-`LegIkController` extends `SkeletonModifier3D` and must be a direct child of `Skeleton3D`.
+`LegIKController` extends `SkeletonModifier3D` and must be a direct child of `Skeleton3D`.
 
 Per-frame ordering must follow IK-002-style controller-first execution:
 
-1. `LegIkController` (left)
-2. `LegIkController` (right)
+1. `LegIKController` (left)
+2. `LegIKController` (right)
 3. `TwoBoneIK3D` (left leg)
 4. `TwoBoneIK3D` (right leg)
 

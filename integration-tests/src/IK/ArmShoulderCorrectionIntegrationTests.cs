@@ -13,8 +13,8 @@ public sealed class ArmShoulderCorrectionIntegrationTests
     private const string HandTargetPosesPath = "Markers/HandTargetPoses";
     private const string LeftHandTargetPath = "Markers/LeftHandTarget";
     private const string RightHandTargetPath = "Markers/RightHandTarget";
-    private const string LeftArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftArmController";
-    private const string RightArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightArmController";
+    private const string LeftArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController";
+    private const string RightArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightArmIKController";
 
     private const int SettleSkeletonUpdates = 4;
     private const int DeterminismSamples = 5;

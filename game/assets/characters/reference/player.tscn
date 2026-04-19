@@ -2,10 +2,10 @@
 
 [ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_edvvb"]
 [ext_resource type="PackedScene" path="res://assets/characters/ik/neck_spine_ccdik.tscn" id="2_u7ew7"]
-[ext_resource type="Script" uid="uid://c3tfr8jxcytvh" path="res://src/IK/ArmIkController.cs" id="3_76kcw"]
+[ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="3_76kcw"]
 [ext_resource type="Script" uid="uid://dvtvdxo5ew24i" path="res://src/IK/PlayerVRIK.cs" id="4_78xd7"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
-[ext_resource type="Script" uid="uid://b260iglp548x1" path="res://src/IK/LegIkController.cs" id="5_nn3w6"]
+[ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="5_nn3w6"]
 [ext_resource type="Script" uid="uid://66gi6n1gstbb" path="res://src/IK/Pose/PoseStateMachine.cs" id="6_posesm"]
 [ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://data/ik/pose/standing_pose_state.tres" id="7_sstate"]
 [ext_resource type="Resource" uid="uid://cwp2tklor5usj" path="res://data/ik/pose/crouching_pose_state.tres" id="8_cstate"]
@@ -74,7 +74,7 @@ settings/0/disperse_mode = 1
 settings/0/weight_position = 0.8
 settings/0/joint_count = 6
 
-[node name="RightArmIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="13" unique_id=2058826142 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="RightArmIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="13" unique_id=1938498185 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -95,9 +95,9 @@ script = ExtResource("3_76kcw")
 HandTarget = NodePath("../../../IKTargets/RightHand")
 PoleTarget = NodePath("../../../IKTargets/RightElbow")
 Side = 1
-metadata/_custom_type_script = "uid://c3tfr8jxcytvh"
+metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="LeftArmIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="14" unique_id=146550808 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="LeftArmIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="14" unique_id=266961635 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -117,9 +117,9 @@ influence = 1.0
 script = ExtResource("3_76kcw")
 HandTarget = NodePath("../../../IKTargets/LeftHand")
 PoleTarget = NodePath("../../../IKTargets/LeftElbow")
-metadata/_custom_type_script = "uid://c3tfr8jxcytvh"
+metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="RightArmTwoBoneIK" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="15" unique_id=1138822134]
+[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="15" unique_id=1138822134]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/RightHand")
 settings/0/pole_node = NodePath("../../../IKTargets/RightElbow")
@@ -133,7 +133,7 @@ settings/0/end_bone = 29
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="LeftArmTwoBoneIK" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="16" unique_id=1880374972]
+[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="16" unique_id=1880374972]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/LeftHand")
 settings/0/pole_node = NodePath("../../../IKTargets/LeftElbow")
@@ -171,7 +171,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="RightLegIkController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="19" unique_id=373496162 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="RightLegIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="19" unique_id=2092603835 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -192,9 +192,9 @@ script = ExtResource("5_nn3w6")
 FootTarget = NodePath("../../../IKTargets/RightFoot")
 PoleTarget = NodePath("../../../IKTargets/RightKnee")
 Side = 1
-metadata/_custom_type_script = "uid://b260iglp548x1"
+metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="LeftLegIkController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="20" unique_id=2123002292 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="20" unique_id=1960079574 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -214,9 +214,9 @@ influence = 1.0
 script = ExtResource("5_nn3w6")
 FootTarget = NodePath("../../../IKTargets/LeftFoot")
 PoleTarget = NodePath("../../../IKTargets/LeftKnee")
-metadata/_custom_type_script = "uid://b260iglp548x1"
+metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="RightLegTwoBoneIK" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="21" unique_id=377304021]
+[node name="RightLegTwoBoneIKController" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="21" unique_id=377304021]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/RightFoot")
 settings/0/pole_node = NodePath("../../../IKTargets/RightKnee")
@@ -230,7 +230,7 @@ settings/0/end_bone = 53
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="LeftLegTwoBoneIK" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="22" unique_id=1466883674]
+[node name="LeftLegTwoBoneIKController" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="22" unique_id=1466883674]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/LeftFoot")
 settings/0/pole_node = NodePath("../../../IKTargets/LeftKnee")

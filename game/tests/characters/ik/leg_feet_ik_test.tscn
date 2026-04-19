@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://coluun6oeiyi2" path="res://assets/characters/reference/female/photobooth/lower_body_5_cams.tscn" id="1_legpb"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_marker"]
-[ext_resource type="Script" uid="uid://b260iglp548x1" path="res://src/IK/LegIkController.cs" id="3_legctrl"]
+[ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="3_legctrl"]
 
 [node name="Photobooth" unique_id=406188165 instance=ExtResource("1_legpb")]
 
@@ -21,7 +21,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="11" unique_id=1536903710 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="11" unique_id=705810471 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -41,9 +41,9 @@ influence = 1.0
 script = ExtResource("3_legctrl")
 FootTarget = NodePath("../../../../../Markers/LeftFootTarget")
 PoleTarget = NodePath("../../../../../Markers/LeftKneePoleTarget")
-metadata/_custom_type_script = "uid://b260iglp548x1"
+metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="RightLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="12" unique_id=1443606337 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="RightLegIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="12" unique_id=493759267 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -64,9 +64,9 @@ script = ExtResource("3_legctrl")
 FootTarget = NodePath("../../../../../Markers/RightFootTarget")
 PoleTarget = NodePath("../../../../../Markers/RightKneePoleTarget")
 Side = 1
-metadata/_custom_type_script = "uid://b260iglp548x1"
+metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="LeftLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="13" unique_id=132184924]
+[node name="LeftLegTwoBoneIKController" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="13" unique_id=132184924]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../../Markers/LeftFootTarget")
 settings/0/pole_node = NodePath("../../../../../Markers/LeftKneePoleTarget")
@@ -80,7 +80,7 @@ settings/0/end_bone = 49
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="RightLegTwoBoneIK" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="14" unique_id=943604861]
+[node name="RightLegTwoBoneIKController" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="14" unique_id=943604861]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../../Markers/RightFootTarget")
 settings/0/pole_node = NodePath("../../../../../Markers/RightKneePoleTarget")

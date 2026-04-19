@@ -23,7 +23,7 @@ public enum LegSide
 /// <see cref="TwoBoneIK3D"/> solving, treating foot targets as read-only goals.
 /// </summary>
 [GlobalClass]
-public partial class LegIkController : SkeletonModifier3D
+public partial class LegIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-6f;
     private static readonly Vector3 _skeletonSpaceForwardAxis = new(0.0f, 0.0f, 1.0f);

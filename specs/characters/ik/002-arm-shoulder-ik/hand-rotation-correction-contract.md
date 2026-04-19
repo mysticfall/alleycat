@@ -64,7 +64,7 @@ spread wider or tuck closer together.
 |----------------------|---------|---------|----------------------------------------------------------------------------------------------------------------------------------------|
 | `HandRotationWeight` | `float` | 1.0     | Weight applied to the hand-rotation angular difference before rotating the pole target. A value of 0 disables the correction entirely. |
 
-This parameter is exported on `ArmIkController` alongside the existing `Side`, `ShoulderWeight`, and `ElevationWeight`
+This parameter is exported on `ArmIKController` alongside the existing `Side`, `ShoulderWeight`, and `ElevationWeight`
 parameters. It must be configurable per instance.
 
 ## Reference Rotation Source
@@ -92,7 +92,7 @@ And adds the following new criteria (to be registered in index.md):
   difference between actual and reference hand rotations scaled by `HandRotationWeight`.
 - AC-18: Reference hand rotations are interpolated from key pose markers using inverse-distance weighting in body-basis
   space, producing smooth and continuous neutral rotations across all hand positions.
-- AC-19: `HandRotationWeight` is exported on `ArmIkController` and is configurable per instance in the Godot editor.
+- AC-19: `HandRotationWeight` is exported on `ArmIKController` and is configurable per instance in the Godot editor.
 
 Source-of-truth criteria wording is maintained in [IK-002 Overview](index.md#acceptance-criteria).
 

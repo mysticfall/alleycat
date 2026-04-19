@@ -29,7 +29,7 @@ conventions.
    dot product between foot forward and the current leg direction vector.
 3. Runtime structure, naming, and validation flow must remain consistent with IK-002 conventions (controller-first,
    contract-first, photobooth + integration-test validation).
-4. Foot target transforms must be treated as runtime inputs only and must not be mutated by `LegIkController`,
+4. Foot target transforms must be treated as runtime inputs only and must not be mutated by `LegIKController`,
    `TwoBoneIK3D`, or other IK-003 runtime controller logic.
 5. Verification must use the lower-body photobooth basis scene and include a hips-override harness implemented via
    `BoneAttachment3D` override bone position without animation.

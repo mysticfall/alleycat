@@ -13,7 +13,7 @@ independence constraints.
 
 - One `TwoBoneIK3D` chain per arm (left and right), solving shoulder-to-hand.
 - Pole-target prediction from head and hand targets.
-- Shoulder correction execution in `ArmIkController` before IK solve using the look-at-delta method (algorithm details
+- Shoulder correction execution in `ArmIKController` before IK solve using the look-at-delta method (algorithm details
   in shoulder contract).
 - Baseline pose mapping plus hand-rotation adjustment (detailed in the [Hand-Rotation Elbow Correction Contract](hand-rotation-correction-contract.md)).
 - Behaviour consistent across upright and non-upright body orientations.
@@ -68,9 +68,9 @@ Set all three bone names explicitly:
 
 Missing any required bone name (especially `middle_bone_name`) can produce no visible solver effect without error.
 
-### ArmIkController
+### ArmIKController
 
-`ArmIkController` extends `SkeletonModifier3D` and is decorated with `[GlobalClass]`.
+`ArmIKController` extends `SkeletonModifier3D` and is decorated with `[GlobalClass]`.
 
 It computes shoulder correction and pole-target positions in `_ProcessModificationWithDelta`, and must run before
 `TwoBoneIK3D` nodes.
