@@ -1,0 +1,250 @@
+[gd_scene format=3 uid="uid://dy3235gj0fh6c"]
+
+[ext_resource type="Script" uid="uid://bb0cyh8r56fpv" path="res://src/IK/Anchors/Authoring/ArmPoleAnchorSetAuthoringRoot.cs" id="1_po3ms"]
+[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="2_7b0yo"]
+[ext_resource type="Script" uid="uid://b8d0aiim2027d" path="res://src/IK/Anchors/Authoring/ArmPoleAnchorAuthoringPose.cs" id="3_sq244"]
+[ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="3_v1m1f"]
+[ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="4_v1m1f"]
+
+[node name="ArmPoleAnchorSetAuthoring" type="Node3D" unique_id=688560345]
+script = ExtResource("1_po3ms")
+SkeletonPath = NodePath("ReferenceFemale/Female_export/GeneralSkeleton")
+PoseContainerPath = NodePath("ArmPoleAnchorPoses")
+OutputResourcePath = "res://assets/characters/ik/arm_ik_target_set.tres"
+metadata/_custom_type_script = "uid://bb0cyh8r56fpv"
+
+[node name="ReferenceFemale" parent="." unique_id=1792987446 instance=ExtResource("2_7b0yo")]
+
+[node name="LeftArmIKController" type="SkeletonModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="10" unique_id=1713652168 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+unique_name_in_owner = false
+process_mode = 0
+process_priority = 0
+process_physics_priority = 0
+process_thread_group = 0
+physics_interpolation_mode = 0
+auto_translate_mode = 0
+editor_description = ""
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+rotation_edit_mode = 0
+rotation_order = 2
+top_level = false
+visible = true
+visibility_parent = NodePath("")
+active = true
+influence = 1.0
+script = ExtResource("3_v1m1f")
+HandTarget = NodePath("../../../../IK Targets/LeftHand")
+PoleTarget = NodePath("../../../../IK Targets/LeftPole")
+PoleAnchorSet = ExtResource("4_v1m1f")
+metadata/_custom_type_script = "uid://dwr11ki66nkby"
+
+[node name="RightArmIKController" type="SkeletonModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="11" unique_id=286462511 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+unique_name_in_owner = false
+process_mode = 0
+process_priority = 0
+process_physics_priority = 0
+process_thread_group = 0
+physics_interpolation_mode = 0
+auto_translate_mode = 0
+editor_description = ""
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+rotation_edit_mode = 0
+rotation_order = 2
+top_level = false
+visible = true
+visibility_parent = NodePath("")
+active = true
+influence = 1.0
+script = ExtResource("3_v1m1f")
+HandTarget = NodePath("../../../../IK Targets/RightHand")
+PoleTarget = NodePath("../../../../IK Targets/RightPole")
+Side = 1
+PoleAnchorSet = ExtResource("4_v1m1f")
+metadata/_custom_type_script = "uid://dwr11ki66nkby"
+
+[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="12" unique_id=1365175166]
+setting_count = 1
+settings/0/target_node = NodePath("../../../../IK Targets/LeftHand")
+settings/0/pole_node = NodePath("../../../../IK Targets/LeftPole")
+settings/0/root_bone_name = "LeftUpperArm"
+settings/0/root_bone = 8
+settings/0/middle_bone_name = "LeftLowerArm"
+settings/0/middle_bone = 9
+settings/0/pole_direction = 0
+settings/0/end_bone_name = "LeftHand"
+settings/0/end_bone = 10
+settings/0/use_virtual_end = false
+settings/0/extend_end_bone = false
+
+[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="13" unique_id=574401663]
+setting_count = 1
+settings/0/target_node = NodePath("../../../../IK Targets/RightHand")
+settings/0/pole_node = NodePath("../../../../IK Targets/RightPole")
+settings/0/root_bone_name = "RightUpperArm"
+settings/0/root_bone = 27
+settings/0/middle_bone_name = "RightLowerArm"
+settings/0/middle_bone = 28
+settings/0/pole_direction = 0
+settings/0/end_bone_name = "RightHand"
+settings/0/end_bone = 29
+settings/0/use_virtual_end = false
+settings/0/extend_end_bone = false
+
+[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="14" unique_id=1630330781]
+setting_count = 1
+settings/0/amount = 1.0
+settings/0/apply_bone_name = "RightHand"
+settings/0/apply_bone = 29
+settings/0/reference_type = 1
+settings/0/reference_node = NodePath("../../../../IK Targets/RightHand")
+settings/0/copy = 2
+settings/0/axes = 7
+settings/0/invert = 0
+settings/0/additive = false
+
+[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="15" unique_id=1649695050]
+setting_count = 1
+settings/0/amount = 1.0
+settings/0/apply_bone_name = "LeftHand"
+settings/0/apply_bone = 10
+settings/0/reference_type = 1
+settings/0/reference_node = NodePath("../../../../IK Targets/LeftHand")
+settings/0/copy = 2
+settings/0/axes = 7
+settings/0/invert = 0
+settings/0/additive = false
+
+[node name="ArmPoleAnchorPoses" type="Node3D" parent="." unique_id=1672288170]
+
+[node name="Lowered" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=1861348317]
+script = ExtResource("3_sq244")
+AnchorName = &"Lowered"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Lowered" unique_id=741212939]
+transform = Transform3D(-7.54979e-08, -1.13998675e-14, -1, 1.509958e-07, -1, 1.1294239e-21, -1, -1.509958e-07, 7.54979e-08, 0.24619761, 0.8732141, 0)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Lowered" unique_id=366168654]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.271557, 1.061998, 0.20772514)
+
+[node name="Forward" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=605341670]
+script = ExtResource("3_sq244")
+AnchorName = &"Forward"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Forward" unique_id=994110399]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 0.19616479, 1.2605911, -0.38901496)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Forward" unique_id=1462817726]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3886644, 1.1469501, -0.18189332)
+
+[node name="Overhead" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=363150673]
+script = ExtResource("3_sq244")
+AnchorName = &"Overhead"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Overhead" unique_id=1770842360]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.19345766, 1.7180735, -0.042565793)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Overhead" unique_id=2141215141]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.23961398, 1.4986594, -0.2911138)
+
+[node name="Side" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=749539154]
+script = ExtResource("3_sq244")
+AnchorName = &"Side"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Side" unique_id=1694204633]
+transform = Transform3D(-4.371139e-08, 1, 0, 4.371139e-08, 1.9106855e-15, -1, -1, -4.371139e-08, -4.371139e-08, 0.5837775, 1.306235, -0.042565793)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Side" unique_id=447316517]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3742003, 1.2944701, 0.16073635)
+
+[node name="BehindHead" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=527399914]
+script = ExtResource("3_sq244")
+AnchorName = &"BehindHead"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/BehindHead" unique_id=761101296]
+transform = Transform3D(4.371139e-08, -1, 1.509958e-07, -1, -4.371139e-08, 0, 6.600236e-15, -1.509958e-07, -1, 0.090119414, 1.5031496, 0.062015265)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/BehindHead" unique_id=315060399]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.49887225, 1.4701369, 0.0104340315)
+
+[node name="Chest" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=1729823071]
+script = ExtResource("3_sq244")
+AnchorName = &"Chest"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Chest" unique_id=215120973]
+transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 0.08612497, 1.1507485, -0.19863501)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/Chest" unique_id=451650490]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.49887225, 1.1547072, 0.0104340315)
+
+[node name="BehindLateral" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=1173406284]
+script = ExtResource("3_sq244")
+AnchorName = &"BehindLateral"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/BehindLateral" unique_id=1763049822]
+transform = Transform3D(3.09086e-08, -0.70710677, -0.70710677, 3.09086e-08, 0.70710677, -0.70710677, 1, 0, 4.371139e-08, 0.548, 1.305, 0.312)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/BehindLateral" unique_id=897461245]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.355, 1.195, 0.188)
+
+[node name="ShoulderLowLateralPosterior" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=1703061245]
+script = ExtResource("3_sq244")
+AnchorName = &"ShoulderLowLateralPosterior"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/ShoulderLowLateralPosterior" unique_id=214976225]
+transform = Transform3D(0.119996, -0.609, -0.784, 0.0899982, 0.793, -0.602, 0.989188, 0.00114256, 0.146655, 0.502, 1.034, 0.269)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/ShoulderLowLateralPosterior" unique_id=1278447700]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.332, 1.014, 0.168)
+
+[node name="ArmBentChestLevel" type="Node3D" parent="ArmPoleAnchorPoses" unique_id=1438641605]
+script = ExtResource("3_sq244")
+AnchorName = &"ArmBentChestLevel"
+HandMarkerPath = NodePath("HandMarker")
+PoleMarkerPath = NodePath("PoleMarker")
+metadata/_custom_type_script = "uid://b8d0aiim2027d"
+
+[node name="HandMarker" type="Marker3D" parent="ArmPoleAnchorPoses/ArmBentChestLevel" unique_id=1943209517]
+transform = Transform3D(-0.4472136, -0.6661382, -0.5962848, 0.8944272, -0.3330691, -0.2981424, 0, -0.6661382, 0.74535596, 0.193, 1.176, -0.328)
+
+[node name="PoleMarker" type="Marker3D" parent="ArmPoleAnchorPoses/ArmBentChestLevel" unique_id=1511694388]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.421, 1.149, -0.182)
+
+[node name="IK Targets" type="Node3D" parent="." unique_id=1911739583]
+
+[node name="RightHand" type="Marker3D" parent="IK Targets" unique_id=188732011]
+transform = Transform3D(-7.549789e-08, -1.1399866e-14, -0.99999994, 1.5099577e-07, -0.9999999, 1.1294238e-21, -0.9999998, -1.5099579e-07, 7.5497894e-08, 0.24619761, 0.8732141, 0)
+
+[node name="LeftHand" type="Marker3D" parent="IK Targets" unique_id=1901313395]
+transform = Transform3D(4.371139e-08, 6.6002366e-15, 1, 1.509958e-07, -1, 2.2585689e-22, 1, 1.509958e-07, -4.371139e-08, -0.246, 0.873, 0)
+
+[node name="RightPole" type="Marker3D" parent="IK Targets" unique_id=226862622]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.29527694, 1.1082743, 0.17209382)
+
+[node name="LeftPole" type="Marker3D" parent="IK Targets" unique_id=1646002154]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.29526812, 1.1081136, 0.1721327)
+
+[editable path="ReferenceFemale"]

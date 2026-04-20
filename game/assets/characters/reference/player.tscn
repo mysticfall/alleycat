@@ -5,13 +5,13 @@
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="3_76kcw"]
 [ext_resource type="Script" uid="uid://dvtvdxo5ew24i" path="res://src/IK/PlayerVRIK.cs" id="4_78xd7"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
+[ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="5_jkoqe"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="5_nn3w6"]
 [ext_resource type="Script" uid="uid://66gi6n1gstbb" path="res://src/IK/Pose/PoseStateMachine.cs" id="6_posesm"]
 [ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://data/ik/pose/standing_pose_state.tres" id="7_sstate"]
 [ext_resource type="Resource" uid="uid://cwp2tklor5usj" path="res://data/ik/pose/crouching_pose_state.tres" id="8_cstate"]
 [ext_resource type="Resource" uid="uid://dtbp67huupmeo" path="res://data/ik/pose/standing_to_crouching_transition.tres" id="9_s2c"]
 [ext_resource type="Resource" uid="uid://qhx1x2iaovwc" path="res://data/ik/pose/crouching_to_standing_transition.tres" id="10_c2s"]
-[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="12_hfqhd"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_u7ew7"]
 radius = 0.12
@@ -96,6 +96,7 @@ script = ExtResource("3_76kcw")
 HandTarget = NodePath("../../../IKTargets/RightHand")
 PoleTarget = NodePath("../../../IKTargets/RightElbow")
 Side = 1
+PoleAnchorSet = ExtResource("5_jkoqe")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
 [node name="LeftArmIKController" type="SkeletonModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="14" unique_id=266961635 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
@@ -118,6 +119,7 @@ influence = 1.0
 script = ExtResource("3_76kcw")
 HandTarget = NodePath("../../../IKTargets/LeftHand")
 PoleTarget = NodePath("../../../IKTargets/LeftElbow")
+PoleAnchorSet = ExtResource("5_jkoqe")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
 [node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="15" unique_id=1138822134]
@@ -305,14 +307,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02673018, 0.028144896)
 shape = SubResource("CapsuleShape3D_u7ew7")
 
 [node name="RightElbow" type="Marker3D" parent="IKTargets" index="1" unique_id=1389246902]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.404, 1.26, 0.14702003)
-
-[node name="DebugGizmo" parent="IKTargets/RightElbow" index="0" unique_id=1247060835 instance=ExtResource("12_hfqhd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.34334025, 1.2379239, 0.1926991)
 
 [node name="LeftElbow" type="Marker3D" parent="IKTargets" index="2" unique_id=1323926424]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.404, 1.26, 0.14702003)
-
-[node name="DebugGizmo" parent="IKTargets/LeftElbow" index="0" unique_id=465521512 instance=ExtResource("12_hfqhd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3432512, 1.2373346, 0.19254468)
 
 [node name="RightHand" type="CharacterBody3D" parent="IKTargets" index="3" unique_id=1777382594]
 transform = Transform3D(-4.3711385e-08, 0.99999994, -4.371139e-08, 0, -4.3711385e-08, -1, -0.99999994, -4.3711385e-08, 1.9106855e-15, 0.581, 1.244, 0)

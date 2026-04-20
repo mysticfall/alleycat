@@ -22,6 +22,7 @@ public enum LegSide
 /// Computes and applies per-leg knee pole-target placement before
 /// <see cref="TwoBoneIK3D"/> solving, treating foot targets as read-only goals.
 /// </summary>
+[Tool]
 [GlobalClass]
 public partial class LegIKController : SkeletonModifier3D
 {

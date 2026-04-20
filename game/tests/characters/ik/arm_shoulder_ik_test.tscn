@@ -3,6 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://iydxa1tdrcn" path="res://assets/characters/reference/female/photobooth/upper_body_5_cams.tscn" id="1_y7vjr"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_ev7qn"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="3_ctrl"]
+[ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="3_v03ed"]
 
 [node name="Photobooth" unique_id=406188165 instance=ExtResource("1_y7vjr")]
 
@@ -26,6 +27,7 @@ influence = 1.0
 script = ExtResource("3_ctrl")
 HandTarget = NodePath("../../../../../Markers/LeftHandTarget")
 PoleTarget = NodePath("../../../../../Markers/LeftPoleTarget")
+PoleAnchorSet = ExtResource("3_v03ed")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
 [node name="RightArmIKController" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 469333434) index="10" unique_id=883113733 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
@@ -49,6 +51,7 @@ script = ExtResource("3_ctrl")
 HandTarget = NodePath("../../../../../Markers/RightHandTarget")
 PoleTarget = NodePath("../../../../../Markers/RightPoleTarget")
 Side = 1
+PoleAnchorSet = ExtResource("3_v03ed")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
 [node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="Subject/Female/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1534184585, 469333434) index="11" unique_id=703654510]
@@ -171,11 +174,11 @@ transform = Transform3D(4.3711385e-08, 3.82137e-15, 0.9999999, 8.7422755e-08, -0
 transform = Transform3D(-1.3113416e-07, -1.1464112e-14, -0.9999999, 8.742277e-08, -0.99999994, 7.341045e-22, -1, -8.742276e-08, 1.3113416e-07, 0.25, 0.9, -0.019794807)
 
 [node name="RightPoleTarget" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="3" unique_id=366944315 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.24579912, 1.099, 0.07054971)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.29300308, 1.1151773, 0.15218724)
 label_text = "r-pole"
 
 [node name="LeftPoleTarget" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="4" unique_id=1939873173 instance=ExtResource("2_ev7qn")]
-transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.24599999, 1.0992504, 0.07028486)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.29300308, 1.1151773, 0.1521873)
 label_text = "l-pole"
 
 [editable path="Subject/Female"]

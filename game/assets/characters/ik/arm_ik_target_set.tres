@@ -1,0 +1,71 @@
+[gd_resource type="Resource" script_class="ArmPoleAnchorSetResource" format=3 uid="uid://dawof1far13c8"]
+
+[ext_resource type="Script" uid="uid://dsvl7r8o2x8sm" path="res://src/IK/Anchors/ArmPoleAnchorResource.cs" id="1_pufib"]
+[ext_resource type="Script" uid="uid://kkdl68im2cj" path="res://src/IK/Anchors/ArmPoleAnchorSetResource.cs" id="2_c76e1"]
+
+[sub_resource type="Resource" id="Resource_pufib"]
+script = ExtResource("1_pufib")
+Name = &"Lowered"
+ArmDirBody = Vector3(0.47438008, -0.8764989, -0.08193434)
+ReachRatio = 1.0506445
+PoleIntentBody = Vector3(0.39066842, 0.293013, -0.87265205)
+
+[sub_resource type="Resource" id="Resource_c76e1"]
+script = ExtResource("1_pufib")
+Name = &"Forward"
+ArmDirBody = Vector3(0.42520824, -0.11009689, 0.89837444)
+ReachRatio = 0.91045576
+PoleIntentBody = Vector3(0.8097988, -0.3970522, -0.43194386)
+
+[sub_resource type="Resource" id="Resource_0tjd3"]
+script = ExtResource("1_pufib")
+Name = &"Overhead"
+ArmDirBody = Vector3(0.3701673, 0.9243483, 0.09250062)
+ReachRatio = 1.0295687
+PoleIntentBody = Vector3(0.38684133, -0.24390931, 0.8893043)
+
+[sub_resource type="Resource" id="Resource_17lwr"]
+script = ExtResource("1_pufib")
+Name = &"Side"
+ArmDirBody = Vector3(0.998672, 0.02937201, 0.042328168)
+ReachRatio = 1.2508342
+PoleIntentBody = Vector3(0.04172783, 0.020745546, -0.9989136)
+
+[sub_resource type="Resource" id="Resource_xasji"]
+script = ExtResource("1_pufib")
+Name = &"BehindHead"
+ArmDirBody = Vector3(0.28419557, 0.91095173, -0.29899797)
+ReachRatio = 0.532349
+PoleIntentBody = Vector3(0.9549168, -0.24102035, 0.17332944)
+
+[sub_resource type="Resource" id="Resource_0cr78"]
+script = ExtResource("1_pufib")
+Name = &"Chest"
+ArmDirBody = Vector3(0.27257988, -0.62153137, 0.7344378)
+ReachRatio = 0.5224441
+PoleIntentBody = Vector3(0.92628914, -0.036890898, -0.37500328)
+
+[sub_resource type="Resource" id="Resource_jftiq"]
+script = ExtResource("1_pufib")
+Name = &"BehindLateral"
+ArmDirBody = Vector3(0.8456351, 0.05090335, -0.53132844)
+ReachRatio = 1.3831081
+PoleIntentBody = Vector3(0.032359645, -0.9985003, -0.044159874)
+
+[sub_resource type="Resource" id="Resource_wko4l"]
+script = ExtResource("1_pufib")
+Name = &"ShoulderLowLateralPosterior"
+ArmDirBody = Vector3(0.7801481, -0.39183787, -0.4876803)
+ReachRatio = 1.3680763
+PoleIntentBody = Vector3(-0.36008757, -0.9187221, 0.16213167)
+
+[sub_resource type="Resource" id="Resource_hryi2"]
+script = ExtResource("1_pufib")
+Name = &"ArmBentChestLevel"
+ArmDirBody = Vector3(0.4616794, -0.34240854, 0.8182961)
+ReachRatio = 0.8232875
+PoleIntentBody = Vector3(0.8522353, -0.084677465, -0.51626027)
+
+[resource]
+script = ExtResource("2_c76e1")
+Anchors = [SubResource("Resource_pufib"), SubResource("Resource_c76e1"), SubResource("Resource_0tjd3"), SubResource("Resource_17lwr"), SubResource("Resource_xasji"), SubResource("Resource_0cr78"), SubResource("Resource_jftiq"), SubResource("Resource_wko4l"), SubResource("Resource_hryi2")]

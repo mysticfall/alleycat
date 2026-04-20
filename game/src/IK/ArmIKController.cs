@@ -1,3 +1,4 @@
+using AlleyCat.IK.Anchors;
 using Godot;
 
 namespace AlleyCat.IK;
@@ -22,11 +23,13 @@ public enum ArmSide
 /// Computes elbow pole-target positions each frame for VR arm IK.
 /// Attach as a direct child of a <see cref="Skeleton3D"/> node.
 /// </summary>
+[Tool]
 [GlobalClass]
 public partial class ArmIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-4f;
     private const float SegmentEpsilon = 1e-4f;
+    private const float NormalisationEpsilon = 1e-3f;
 
     /// <summary>
     /// The VR hand target for this arm.
@@ -51,6 +54,15 @@ public partial class ArmIKController : SkeletonModifier3D
     /// </summary>
     [Export]
     public ArmSide Side
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Configurable arm pole-anchor set used to predict the baseline elbow pole direction.
+    /// </summary>
+    [Export]
+    public ArmPoleAnchorSetResource? PoleAnchorSet
     {
         get; set;
     }
@@ -157,6 +169,27 @@ public partial class ArmIKController : SkeletonModifier3D
         get; set;
     } = 0.6f;
 
+    /// <summary>
+    /// When true, logs diagnostic information when a frame-to-frame angular jump in
+    /// the computed pole direction exceeds a threshold. Intended for temporary
+    /// development diagnosis; should be disabled in normal play.
+    /// </summary>
+    [Export]
+    public bool DebugLogPoleJumps
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Angular jump threshold (in degrees) above which a diagnostic log entry is
+    /// emitted when <see cref="DebugLogPoleJumps"/> is true.
+    /// </summary>
+    [Export(PropertyHint.Range, "1.0,90.0,0.5")]
+    public float DebugPoleJumpThresholdDegrees
+    {
+        get; set;
+    } = 15.0f;
+
     private Skeleton3D _skeleton = null!;
 
     private int _hipsIdx;
@@ -174,6 +207,9 @@ public partial class ArmIKController : SkeletonModifier3D
     private float _restArmLength;
 
     private bool _bonesResolved;
+    private bool _hasWarnedMissingPoleAnchorSet;
+
+    private Vector3? _previousPoleDirBody;
 
     /// <inheritdoc />
     public override void _ProcessModificationWithDelta(double delta)
@@ -221,24 +257,12 @@ public partial class ArmIKController : SkeletonModifier3D
         Vector3 armDirBody = bodyBasisInverse * armDirGlobal;
 
         // Phase 2 -- Baseline Pole Direction
-        Vector3 lateral = Side == ArmSide.Left
-            ? new Vector3(-1f, 0f, 0f)
-            : new Vector3(1f, 0f, 0f);
-        Vector3 posterior = new(0f, 0f, -1f); // -Z is posterior (Skeleton3D uses +Z as forward)
-
-        float lateralness = Mathf.Abs(armDirBody.Dot(lateral));
-        float blend = Smoothstep(0.5f, 0.85f, lateralness);
-
-        Vector3 desired = lateral.Lerp(posterior, blend).Normalized();
-        Vector3 baselinePole = desired - (desired.Dot(armDirBody) * armDirBody);
-
-        if (baselinePole.LengthSquared() < DegenerateThreshold)
+        if (!TryComputeBaselinePoleDirectionBody(armDirBody, bodyBasis, shoulderPos, handPos, out Vector3 baselinePole))
         {
-            // Fall back to bodyUp projected perpendicular to armDir
-            baselinePole = Vector3.Up - (Vector3.Up.Dot(armDirBody) * armDirBody);
+            // Resource-driven no-op: without a valid anchor set and no prior valid baseline,
+            // leave pole target unchanged rather than introducing hardcoded direction defaults.
+            return;
         }
-
-        baselinePole = baselinePole.Normalized();
 
         // Phase 3 (hand-rotation adjustment) is deferred to a subsequent delivery phase.
 
@@ -268,13 +292,229 @@ public partial class ArmIKController : SkeletonModifier3D
     }
 
     /// <summary>
-    /// Performs smooth Hermite interpolation between 0 and 1.
+    /// Computes the baseline elbow pole direction in body basis as a continuous function of
+    /// the arm direction (unit vector in body basis).
     /// </summary>
-    private static float Smoothstep(float edge0, float edge1, float x)
+    /// <remarks>
+    /// The function is a C-infinity smooth inverse-distance-weighted (IDW) blend over configurable
+    /// key-pose anchors expressed in the body basis. Each anchor defines a reference arm
+    /// direction and an associated pole intent (not required to be unit length or perpendicular
+    /// to the arm direction). Per-anchor raw weights are computed as
+    /// <c>1 / (angularDistance² + ε²)</c> with <c>ε = 0.01 rad</c>, so the nearest anchor
+    /// dominates by a factor of ~10 000 when the arm direction coincides with that anchor's
+    /// reference. Weights are normalised, and each anchor's pole intent is first projected onto
+    /// the plane perpendicular to the arm direction before being accumulated into the weighted
+    /// sum. Because every term in the accumulation is already perpendicular to the arm
+    /// direction, the resulting combined vector is automatically perpendicular and cannot
+    /// collapse to near-zero due to an accidental alignment between the pre-projection weighted
+    /// sum and the arm direction — eliminating the projection-collapse failure mode that a
+    /// post-projection structure exhibits near such alignments. The combined vector is then
+    /// smoothly normalised via the standard <c>sqrt(|v|² + ε²)</c> divisor using
+    /// <see cref="NormalisationEpsilon"/>.
+    /// </remarks>
+    /// <param name="armDirBody">Unit vector from shoulder to hand expressed in the body basis.</param>
+    /// <param name="bodyBasis">Body reference frame (only used for diagnostic logging).</param>
+    /// <param name="shoulderPos">Global shoulder position (only used for diagnostic logging).</param>
+    /// <param name="handPos">Global hand-target position (only used for diagnostic logging).</param>
+    /// <param name="baselinePole">Resolved baseline pole direction when available.</param>
+    /// <returns>
+    /// True when a baseline pole direction is available. False when pole-anchor resources are
+    /// invalid and no previous valid baseline exists.
+    /// </returns>
+    private bool TryComputeBaselinePoleDirectionBody(
+        Vector3 armDirBody,
+        Basis bodyBasis,
+        Vector3 shoulderPos,
+        Vector3 handPos,
+        out Vector3 baselinePole)
     {
-        float t = Mathf.Clamp((x - edge0) / (edge1 - edge0), 0f, 1f);
+        baselinePole = Vector3.Zero;
 
-        return t * t * (3f - (2f * t));
+        ArmPoleAnchorResource[]? anchors = PoleAnchorSet?.Anchors;
+
+        int anchorCount = anchors?.Length ?? 0;
+
+        if (anchorCount <= 0)
+        {
+            return TryUsePreviousPoleDirection(
+                "PoleAnchorSet is missing or has no anchors. Assign a non-empty ArmPoleAnchorSetResource.",
+                out baselinePole);
+        }
+
+        float epsilon = Mathf.Max(1e-4f, PoleAnchorSet!.WeightEpsilonRadians);
+        float reachWeight = PoleAnchorSet.ReachWeight;
+        float currentArmLength = shoulderPos.DistanceTo(handPos);
+        float currentReachRatio = currentArmLength / Mathf.Max(_restArmLength, 1e-4f);
+
+        // First pass: compute raw IDW weights and their sum.
+        Span<float> rawWeights = stackalloc float[anchorCount];
+        float weightSum = 0f;
+
+        for (int i = 0; i < anchorCount; i++)
+        {
+            ArmPoleAnchorResource anchor = anchors![i];
+
+            Vector3 mirroredAnchorArmDir = PoleAnchorSet.MirrorXForSide(anchor.ArmDirBody.Normalized(), Side);
+            float cosAngle = Mathf.Clamp(armDirBody.Dot(mirroredAnchorArmDir), -1f, 1f);
+            float angularDistance = Mathf.Acos(cosAngle);
+            float reachDelta = currentReachRatio - anchor.ReachRatio;
+            float weightedReachDelta = reachWeight * reachDelta;
+            float denom = (angularDistance * angularDistance)
+                + (weightedReachDelta * weightedReachDelta)
+                + (epsilon * epsilon);
+            float w = 1f / denom;
+
+            rawWeights[i] = w;
+            weightSum += w;
+        }
+
+        if (weightSum <= DegenerateThreshold)
+        {
+            return TryUsePreviousPoleDirection(
+                "PoleAnchorSet produced a degenerate zero-weight blend.",
+                out baselinePole);
+        }
+
+        // Second pass: normalise weights and accumulate per-anchor perpendicular pole intents.
+        // Projecting each anchor's pole intent onto the plane perpendicular to armDirBody before
+        // the weighted sum guarantees that the combined vector is itself perpendicular, which
+        // avoids the projection-collapse failure mode that can occur when the un-projected
+        // weighted sum happens to align with armDirBody.
+        float invWeightSum = 1f / weightSum;
+        Vector3 combined = Vector3.Zero;
+        Vector3 rawPole = Vector3.Zero;
+
+        for (int i = 0; i < anchorCount; i++)
+        {
+            ArmPoleAnchorResource? anchor = anchors![i];
+            if (anchor is null)
+            {
+                continue;
+            }
+
+            float normalisedWeight = rawWeights[i] * invWeightSum;
+            Vector3 poleIntent = PoleAnchorSet.MirrorXForSide(anchor.PoleIntentBody, Side);
+            Vector3 poleIntentPerp = poleIntent - (poleIntent.Dot(armDirBody) * armDirBody);
+
+            combined += poleIntentPerp * normalisedWeight;
+
+            // rawPole is retained purely as a diagnostic reference (the un-projected weighted
+            // sum). It is not fed into the final baseline pole direction.
+            rawPole += poleIntent * normalisedWeight;
+        }
+
+        float combinedLength = combined.Length();
+
+        // Smooth normalisation: sqrt(|v|² + ε²) asymptotes to |v| away from zero and shrinks
+        // smoothly toward zero as |v| → 0. Prevents a hard degenerate-case branch.
+        float normScale = 1f / Mathf.Sqrt((combinedLength * combinedLength)
+            + (NormalisationEpsilon * NormalisationEpsilon));
+        baselinePole = combined * normScale;
+
+        if (DebugLogPoleJumps && _previousPoleDirBody is { } previousPoleDirBody)
+        {
+            float dot = Mathf.Clamp(previousPoleDirBody.Dot(baselinePole), -1f, 1f);
+            float jumpDegrees = Mathf.RadToDeg(Mathf.Acos(dot));
+
+            if (jumpDegrees > DebugPoleJumpThresholdDegrees)
+            {
+                Vector3 bodyRight = bodyBasis.Column0;
+                Vector3 bodyUp = bodyBasis.Column1;
+                Vector3 bodyForward = -bodyBasis.Column2;
+
+                string prefix = $"[ArmIKController:{Side} POLE_JUMP]";
+
+                // Identify the top 3 anchors by normalised weight for diagnostic reporting.
+                Span<int> topIndices = [-1, -1, -1];
+                Span<float> topWeights = [-1f, -1f, -1f];
+                for (int i = 0; i < anchorCount; i++)
+                {
+                    float normalisedWeight = rawWeights[i] * invWeightSum;
+                    for (int slot = 0; slot < 3; slot++)
+                    {
+                        if (normalisedWeight > topWeights[slot])
+                        {
+                            for (int shift = 2; shift > slot; shift--)
+                            {
+                                topWeights[shift] = topWeights[shift - 1];
+                                topIndices[shift] = topIndices[shift - 1];
+                            }
+                            topWeights[slot] = normalisedWeight;
+                            topIndices[slot] = i;
+                            break;
+                        }
+                    }
+                }
+
+                System.Text.StringBuilder topAnchorsLog = new();
+                for (int slot = 0; slot < 3; slot++)
+                {
+                    int idx = topIndices[slot];
+                    if (idx < 0)
+                    {
+                        continue;
+                    }
+                    ArmPoleAnchorResource? anchor = anchors![idx];
+                    if (anchor is null)
+                    {
+                        continue;
+                    }
+
+                    Vector3 mirroredAnchorArmDir = PoleAnchorSet.MirrorXForSide(anchor.ArmDirBody.Normalized(), Side);
+                    Vector3 mirroredPoleIntent = PoleAnchorSet.MirrorXForSide(anchor.PoleIntentBody, Side);
+                    float cosAngle = Mathf.Clamp(armDirBody.Dot(mirroredAnchorArmDir), -1f, 1f);
+                    float angularDistanceDeg = Mathf.RadToDeg(Mathf.Acos(cosAngle));
+                    float reachDelta = currentReachRatio - anchor.ReachRatio;
+                    _ = topAnchorsLog.AppendLine(
+                        $"{prefix} top[{slot}] name={anchor.Name} "
+                        + $"armDirRefMirrored=({mirroredAnchorArmDir.X:F4},{mirroredAnchorArmDir.Y:F4},{mirroredAnchorArmDir.Z:F4}) "
+                        + $"poleRefMirrored=({mirroredPoleIntent.X:F4},{mirroredPoleIntent.Y:F4},{mirroredPoleIntent.Z:F4}) "
+                        + $"anchorReachRatio={anchor.ReachRatio:F4} "
+                        + $"reachDelta={reachDelta:F4} "
+                        + $"angularDistanceDeg={angularDistanceDeg:F4} "
+                        + $"normalisedWeight={topWeights[slot]:F6}");
+                }
+
+                GD.Print(
+                    $"{prefix} armDirBody=({armDirBody.X:F4},{armDirBody.Y:F4},{armDirBody.Z:F4})\n"
+                    + $"{prefix} currentReachRatio={currentReachRatio:F4}\n"
+                    + $"{prefix} handPos(global)=({handPos.X:F4},{handPos.Y:F4},{handPos.Z:F4}) "
+                    + $"shoulderPos(global)=({shoulderPos.X:F4},{shoulderPos.Y:F4},{shoulderPos.Z:F4})\n"
+                    + $"{prefix} bodyRight=({bodyRight.X:F4},{bodyRight.Y:F4},{bodyRight.Z:F4}) "
+                    + $"bodyUp=({bodyUp.X:F4},{bodyUp.Y:F4},{bodyUp.Z:F4}) "
+                    + $"bodyForward=({bodyForward.X:F4},{bodyForward.Y:F4},{bodyForward.Z:F4})\n"
+                    + topAnchorsLog
+                    + $"{prefix} rawPole_DIAGNOSTIC_ONLY=({rawPole.X:F4},{rawPole.Y:F4},{rawPole.Z:F4})\n"
+                    + $"{prefix} combined=({combined.X:F4},{combined.Y:F4},{combined.Z:F4}) "
+                    + $"combinedLength={combinedLength:F4}\n"
+                    + $"{prefix} previousBaselinePole=({previousPoleDirBody.X:F4},{previousPoleDirBody.Y:F4},{previousPoleDirBody.Z:F4}) "
+                    + $"currentBaselinePole=({baselinePole.X:F4},{baselinePole.Y:F4},{baselinePole.Z:F4})\n"
+                    + $"{prefix} angularJumpDegrees={jumpDegrees:F4}");
+            }
+        }
+
+        _previousPoleDirBody = baselinePole;
+
+        return true;
+    }
+
+    private bool TryUsePreviousPoleDirection(string warningMessage, out Vector3 baselinePole)
+    {
+        baselinePole = Vector3.Zero;
+
+        if (!_hasWarnedMissingPoleAnchorSet)
+        {
+            GD.PushWarning($"[ArmIKController:{Side}] {warningMessage}");
+            _hasWarnedMissingPoleAnchorSet = true;
+        }
+
+        if (_previousPoleDirBody is not { } previousPoleDirBody)
+        {
+            return false;
+        }
+
+        baselinePole = previousPoleDirBody;
+        return true;
     }
 
     private bool ResolveBones()

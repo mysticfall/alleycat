@@ -19,10 +19,29 @@ public sealed class ArmShoulderIKIntegrationTests
     private const string RightHandTargetPath = "Markers/RightHandTarget";
     private const string LeftPoleTargetPath = "Markers/LeftPoleTarget";
     private const string RightPoleTargetPath = "Markers/RightPoleTarget";
+    private const string LeftArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController";
+    private const string RightArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightArmIKController";
+    private const string CanonicalPoleAnchorSetPath = "res://assets/characters/ik/arm_ik_target_set.tres";
+    private const string ArmIKControllerScriptPath = "res://src/IK/ArmIKController.cs";
+    private const string PoleAnchorSetScriptPath = "res://src/IK/Anchors/ArmPoleAnchorSetResource.cs";
+    private const string PoleAnchorScriptPath = "res://src/IK/Anchors/ArmPoleAnchorResource.cs";
 
     private const float MinimumPoleDirectionAlignment = 0.3f;
     private const float MaximumHandResidualDistance = 0.15f;
     private const float PoleOffsetFloorToleranceMetres = 0.005f;
+
+    private static readonly string[] _expectedCanonicalAnchorNames =
+    [
+        "Lowered",
+        "Forward",
+        "Overhead",
+        "Side",
+        "BehindHead",
+        "Chest",
+        "BehindLateral",
+        "ShoulderLowLateralPosterior",
+        "ArmBentChestLevel",
+    ];
 
     private enum ExpectedPoleDirection
     {
@@ -177,6 +196,108 @@ public sealed class ArmShoulderIKIntegrationTests
     }
 
     /// <summary>
+    /// Verifies both arm controllers expose a typed, non-null pole-anchor resource.
+    /// </summary>
+    [Fact]
+    public async Task ArmIk_VerificationScene_ArmControllersHaveTypedPoleAnchorSetResource()
+    {
+        (Node _, SkeletonModifier3D leftArmController, SkeletonModifier3D rightArmController)
+            = await LoadVerificationSceneArmControllersAsync();
+
+        AssertTypedPoleAnchorSetConfigured(leftArmController, "left");
+        AssertTypedPoleAnchorSetConfigured(rightArmController, "right");
+    }
+
+    /// <summary>
+    /// Verifies the canonical arm pole-anchor resource contains all required authored anchors.
+    /// </summary>
+    [Fact]
+    public void ArmIk_CanonicalPoleAnchorSetResource_ContainsAllRequiredAnchors()
+    {
+        Resource? canonicalAnchorSet = GD.Load<Resource>(CanonicalPoleAnchorSetPath);
+
+        Assert.True(
+            canonicalAnchorSet is not null,
+            $"Expected canonical pole-anchor resource at '{CanonicalPoleAnchorSetPath}'.");
+
+        AssertScriptPath(
+            canonicalAnchorSet,
+            PoleAnchorSetScriptPath,
+            "canonical pole-anchor set resource");
+
+        Godot.Collections.Array anchors = ReadGodotArrayProperty(
+            canonicalAnchorSet,
+            "Anchors");
+
+        Assert.True(
+            anchors.Count >= _expectedCanonicalAnchorNames.Length,
+            "Canonical pole-anchor resource must include all required anchors. " +
+            $"Expected at least {_expectedCanonicalAnchorNames.Length}, got {anchors.Count}.");
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        for (int index = 0; index < anchors.Count; index++)
+        {
+            Variant anchorVariant = anchors[index];
+
+            Assert.Equal(
+                Variant.Type.Object,
+                anchorVariant.VariantType);
+
+            Resource anchor = Assert.IsAssignableFrom<Resource>(anchorVariant.AsGodotObject());
+            AssertScriptPath(
+                anchor,
+                PoleAnchorScriptPath,
+                $"anchor at index {index}");
+
+            string name = anchor.Get("Name").ToString();
+
+            Assert.False(
+                string.IsNullOrWhiteSpace(name),
+                $"Anchor at index {index} in '{CanonicalPoleAnchorSetPath}' has an empty name.");
+
+            _ = names.Add(name);
+        }
+
+        string[] missingNames =
+        [
+            .._expectedCanonicalAnchorNames.Where(expectedName => !names.Contains(expectedName)),
+        ];
+
+        Assert.True(
+            missingNames.Length == 0,
+            "Canonical pole-anchor resource is missing required anchors: " +
+            string.Join(", ", missingNames));
+    }
+
+    /// <summary>
+    /// Verifies left/right arm controllers share one pole-anchor resource and opposite side configuration.
+    /// </summary>
+    [Fact]
+    public async Task ArmIk_VerificationScene_SharedPoleAnchorSetUsesOppositeArmSidesForSymmetry()
+    {
+        (Node _, SkeletonModifier3D leftArmController, SkeletonModifier3D rightArmController)
+            = await LoadVerificationSceneArmControllersAsync();
+
+        Resource leftAnchorSet = RequirePoleAnchorSetResource(leftArmController, "left");
+        Resource rightAnchorSet = RequirePoleAnchorSetResource(rightArmController, "right");
+
+        Assert.Equal(0L, ReadIntProperty(leftArmController, "Side"));
+        Assert.Equal(1L, ReadIntProperty(rightArmController, "Side"));
+
+        Assert.Same(
+            leftAnchorSet,
+            rightAnchorSet);
+
+        Assert.Equal(
+            CanonicalPoleAnchorSetPath,
+            leftAnchorSet.ResourcePath);
+        Assert.Equal(
+            CanonicalPoleAnchorSetPath,
+            rightAnchorSet.ResourcePath);
+    }
+
+    /// <summary>
     /// Verifies folded/compressed arm reaches enforce the rest-arm-derived elbow pole floor.
     /// </summary>
     [Fact]
@@ -203,7 +324,7 @@ public sealed class ArmShoulderIKIntegrationTests
         Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(
             sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
         SkeletonModifier3D leftArmController = Assert.IsAssignableFrom<SkeletonModifier3D>(
-            sceneRoot.GetNodeOrNull("Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController"));
+            sceneRoot.GetNodeOrNull(LeftArmControllerPath));
 
         int leftUpperArmIndex = RequireBone(skeleton, "LeftUpperArm");
         int leftLowerArmIndex = RequireBone(skeleton, "LeftLowerArm");
@@ -277,7 +398,7 @@ public sealed class ArmShoulderIKIntegrationTests
         Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(
             sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
         SkeletonModifier3D leftArmController = Assert.IsAssignableFrom<SkeletonModifier3D>(
-            sceneRoot.GetNodeOrNull("Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController"));
+            sceneRoot.GetNodeOrNull(LeftArmControllerPath));
 
         int hipsIndex = RequireBone(skeleton, "Hips");
         int neckIndex = RequireBone(skeleton, "Neck");
@@ -535,5 +656,99 @@ public sealed class ArmShoulderIKIntegrationTests
 
         return upperArmRestPosition.DistanceTo(lowerArmRestPosition)
             + lowerArmRestPosition.DistanceTo(handRestPosition);
+    }
+
+    private static async Task<(Node SceneRoot, SkeletonModifier3D LeftArmController, SkeletonModifier3D RightArmController)>
+        LoadVerificationSceneArmControllersAsync()
+    {
+        Node sceneRoot = await LoadVerificationSceneAsync();
+        SkeletonModifier3D leftArmController = RequireArmController(sceneRoot, LeftArmControllerPath, "left");
+        SkeletonModifier3D rightArmController = RequireArmController(sceneRoot, RightArmControllerPath, "right");
+        return (sceneRoot, leftArmController, rightArmController);
+    }
+
+    private static async Task<Node> LoadVerificationSceneAsync()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        return sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException(
+                "Expected verification scene to become current scene.");
+    }
+
+    private static SkeletonModifier3D RequireArmController(Node sceneRoot, string controllerPath, string sideLabel)
+    {
+        SkeletonModifier3D node = Assert.IsAssignableFrom<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(controllerPath));
+
+        AssertScriptPath(
+            node,
+            ArmIKControllerScriptPath,
+            $"{sideLabel} arm controller");
+
+        return node;
+    }
+
+    private static void AssertTypedPoleAnchorSetConfigured(SkeletonModifier3D controller, string sideLabel) =>
+        _ = RequirePoleAnchorSetResource(controller, sideLabel);
+
+    private static Resource RequirePoleAnchorSetResource(SkeletonModifier3D controller, string sideLabel)
+    {
+        Variant rawPoleAnchorSet = controller.Get("PoleAnchorSet");
+
+        Assert.Equal(
+            Variant.Type.Object,
+            rawPoleAnchorSet.VariantType);
+
+        GodotObject? rawObject = rawPoleAnchorSet.AsGodotObject();
+        Resource anchorSet = Assert.IsAssignableFrom<Resource>(rawObject);
+
+        AssertScriptPath(
+            anchorSet,
+            PoleAnchorSetScriptPath,
+            $"{sideLabel} PoleAnchorSet resource");
+
+        Assert.False(
+            string.IsNullOrWhiteSpace(anchorSet.ResourcePath),
+            $"Expected {sideLabel} PoleAnchorSet resource to have a non-empty resource path.");
+
+        return anchorSet;
+    }
+
+    private static void AssertScriptPath(GodotObject objectWithScript, string expectedScriptPath, string context)
+    {
+        Variant scriptProperty = objectWithScript.Get("script");
+        Assert.Equal(Variant.Type.Object, scriptProperty.VariantType);
+
+        Script script = Assert.IsAssignableFrom<Script>(scriptProperty.AsGodotObject());
+        Assert.True(
+            script.ResourcePath == expectedScriptPath,
+            $"Expected {context} script path '{expectedScriptPath}', got '{script.ResourcePath}'.");
+    }
+
+    private static long ReadIntProperty(Node node, string propertyName)
+    {
+        Variant propertyValue = node.Get(propertyName);
+
+        return propertyValue.VariantType == Variant.Type.Int
+            ? propertyValue.AsInt64()
+            : throw new Xunit.Sdk.XunitException(
+                $"Expected '{node.Name}' property '{propertyName}' to be an int, but got {propertyValue.VariantType}.");
+    }
+
+    private static Godot.Collections.Array ReadGodotArrayProperty(GodotObject owner, string propertyName)
+    {
+        Variant propertyValue = owner.Get(propertyName);
+
+        return propertyValue.VariantType == Variant.Type.Array
+            ? propertyValue.AsGodotArray()
+            : throw new Xunit.Sdk.XunitException(
+                $"Expected '{propertyName}' to be an Array, but got {propertyValue.VariantType}.");
     }
 }

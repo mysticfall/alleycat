@@ -35,8 +35,16 @@ character setups.
 5. Hand-rotation-based elbow correction must be defined as a first-class contract with configurable weighting.
 6. Elbow pole-target placement must include a guarded compression safeguard with tunable ratio/floor inputs and explicit
    compression/folded gating, while remaining non-invasive to hand-target solving and shoulder correction.
-7. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions, including a
+7. Baseline pole-direction prediction must be continuous across all positional pose boundaries, in addition to the
+   hand-rotation layer's continuity under AC-05.
+8. Validation must include both reusable photobooth scenarios and C# non-visual integration assertions, including a
    compressed folded-arm case that verifies enforced pole-offset floor behaviour.
+9. **Anchor configuration must be resource-driven**, with runtime consuming data from configurable `ArmPoleAnchorSetResource`
+   assets authored through an editor bake workflow rather than hardcoded anchor tables.
+10. **Authoring workflow must bake from editor node markers** into resource assets, with one authoring root determining both
+    the input pose container and the output resource file path.
+11. **Runtime symmetry behaviour must be fixed**: the same resource used on both arms produces symmetric results; no runtime
+    mirror toggle is provided.
 
 ## Specification Structure
 
@@ -67,11 +75,13 @@ Use this page for overall scope and acceptance traceability, then use the compon
 - Full-body IK beyond the shoulder-to-hand chain.
 - Finger IK or hand-gesture solving.
 - Locomotion blending, animation state machine design, or animation-layer mixing.
-- Physics-based secondary motion (for example spring bones or ragdoll behaviour).
+- Physics-based secondary motion (for example spring bones or ragdoll behavior).
 - Retargeting rigs across different skeleton topologies.
 - Subjective animation polish beyond objective natural-pose checks defined in this spec.
 - Adaptive ElevationWeight path (removed from scope; replaced with explicit anatomical decomposition).
 - Arm pole twist experiments (pole_direction intended to remain disabled; phase-2 pole blend is lateralness-driven only).
+- Runtime mirror toggle for anchor data; symmetry is governed by authoring (same resource or mirrored resource).
+- Arbitrary runtime anchor editing; anchors are defined at authoring time via bake workflow.
 
 ## Context
 
@@ -152,6 +162,14 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-21 | Compression safeguard activation uses both a clamped current/rest arm-length ratio gate and a folded-pose gate from body-local vertical relation (`hand Y <= shoulder Y` in body basis, equivalently `(hand - shoulder) · bodyUp <= 0`); when active, enforced floor is `max(minimum floor, restArmLength * 0.5 + margin)`. | [Arm IK Contract](arm-ik-contract.md) |
 | AC-22 | Compression safeguard is non-invasive: it only constrains pole-target placement distance and does not alter hand target positions, shoulder correction logic, or hand-rotation correction logic. | [Arm IK Contract](arm-ik-contract.md) |
 | AC-23 | Integration coverage includes a compressed folded-arm pose asserting that pole-target distance honours the compressed enforced floor contract. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-24 | Baseline pole-direction prediction is C0-continuous across the unit sphere of arm directions in body basis: small changes in arm direction produce correspondingly small changes in the predicted pole direction, with no hard-branch switches, no `abs()`-style midline reflections, and smooth handling of degenerate (near-parallel) cases. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-25 | Runtime consumes pole-anchor data from a configurable `ArmPoleAnchorSetResource` asset rather than hardcoded tables, with the resource path settable per `ArmIKController`. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-26 | `ArmPoleAnchorSetResource` contains pole-anchor entries, each storing arm direction (`ArmDirBody`), pole intent (`PoleIntentBody`), and normalised reach ratio (`ReachRatio`) relative to rest-arm length. Values may exceed 1.0 for authored overreach poses. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-27 | Authoring workflow uses `ArmPoleAnchorAuthoringPose` nodes placed on a character in T-pose, with a bake trigger (`BakeNow` property) generating the corresponding `ArmPoleAnchorSetResource` asset at a deterministic path. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-28 | The authoring root node (`ArmPoleAnchorSetAuthoringRoot`) defines the input pose container (`PoseContainerPath`) and the output resource path (`OutputResourcePath`) for the baked asset. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-29 | When the same `ArmPoleAnchorSetResource` is applied to both left and right arms, the result is visually symmetric; no runtime mirror toggle exists. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-30 | A photobooth verification scene validates behaviour with resource-driven anchors, confirming natural arm poses match the authored marker intent. | [Arm IK Contract](arm-ik-contract.md) |
+| AC-31 | C# integration tests validate resource loading, anchor data completeness, and symmetry correctness when the same resource is used for both arms. | [Arm IK Contract](arm-ik-contract.md) |
 
 ## Implementation Notes
 
@@ -182,6 +200,13 @@ diagnostic aid reviewed when assertions fail.
 
 Arm pole_direction is intended to remain disabled (0) in the implementation. Phase-2 pole blend
 is lateralness-driven only to avoid behind-head regressions from pole twist experiments.
+
+### Resource And Authoring Paths
+
+| Path | Purpose |
+|------|---------|
+| `res://assets/characters/ik/arm_ik_target_set.tres` | Canonical authored resource used by player and test scenes |
+| `res://assets/characters/ik/arm_pole_anchor_set_authoring.tscn` | Dedicated authoring scene for authoring pole-anchor data |
 
 ## Open Questions
 
