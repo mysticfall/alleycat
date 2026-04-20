@@ -101,6 +101,25 @@ public partial class MyCustomNode : Node3D { }
   be instantiated in scenes. It is **not** needed for classes that are only used from C# code and never placed in
   scenes.
 
+## Workaround For Godot Issue #85459
+
+- Apply the `[Tool]` attribute to any **resource class** that is referenced by a node or resource class
+  decorated with `[Tool]`.
+- This works around Godot issue #85459, where referencing an undecorated resource type from a `[Tool]` class causes
+  the editor to fail to load the scene or resource.
+
+```csharp
+[Tool]
+public partial class MyToolNode : Node3D
+{
+    [Export]
+    public MyResource? LinkedResource { get; set; } // MyResource must also have [Tool]
+}
+
+[Tool]
+public partial class MyResource : Resource { }
+```
+
 ## Godot Runtime Architecture Conventions
 
 - Prefer plain C# arrays (for example `PoseNodeResource[]`) for exported collections in resources and nodes unless a
