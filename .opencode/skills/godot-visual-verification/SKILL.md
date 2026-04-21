@@ -51,6 +51,23 @@ new reusable setup under `@game/assets/`.
     - Include at least one assertion designed to fail a plausible visual anomaly from the same scenario set (for example
       "pole behind leg" for leg IK).
 
+## Screenshot Output
+
+All visual verification artefacts must be generated under `@game/temp/`. This is the required location for all screenshots.
+
+- **Preferred:** Run without `--output-dir`. Screenshots default to `@game/temp`.
+- **If using `--output-dir`:** The path must still resolve to `@game/temp/<subdirectory>`. Use a relative path from the game directory.
+
+```bash
+# Preferred: No --output-dir, uses @game/temp by default
+godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd"
+
+# If needed: relative path from game directory (resolves to @game/temp/<run_name>)
+godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- --output-dir "temp/<run_name>"
+```
+
+> **Important:** Do NOT use absolute paths outside the game directory (for example `/home/mysticfall/workspace/alleycat/temp/` or `/tmp/`). All artefacts must be under `@game/temp/`.
+
 ## Visual Evidence Gate
 
 ### Minimum Evidence
@@ -59,7 +76,7 @@ new reusable setup under `@game/assets/`.
 - Base scene used (or new reusable base path created under `@game/assets/`).
 - Camera and marker verification summary per required camera rig.
 - Test runner script path (`.gd`) with matching base name.
-- Final screenshot artefact directory.
+- Final screenshot artefact directory (must be under `@game/temp/`).
 - Visual inspection summary confirming screenshots show expected behaviour (not just that files were generated).
 - C# integration test path and non-visual assertion summary.
 
@@ -68,15 +85,16 @@ new reusable setup under `@game/assets/`.
 1. The photobooth test scene exists and is based on an appropriate inherited base.
 2. Camera rigs and markers were verified before feature-level screenshot checks.
 3. The runner was executed **without `--headless`** and produced expected screenshot sets.
-4. Representative screenshots were inspected via the `read` tool and confirmed to show
+4. Screenshots were written to a directory under `@game/temp/` (not to absolute paths outside the game directory).
+5. Representative screenshots were inspected via the `read` tool and confirmed to show
    the expected behaviour for each scenario. File existence alone is not sufficient. If screenshots cannot be
    loaded with the `read` tool, they must be shared with the user for manual verification before the gate can pass.
-5. Distinct scenarios produce visually distinct results (for example different poses should look different in
+6. Distinct scenarios produce visually distinct results (for example different poses should look different in
    screenshots).
-6. C# integration tests verify the same functionality non-visually.
-7. For IK/pose features, non-visual tests include explicit anomaly guards tied to the visual risk (for example
+7. C# integration tests verify the same functionality non-visually.
+8. For IK/pose features, non-visual tests include explicit anomaly guards tied to the visual risk (for example
    pole-front/back sign checks, knee flexion/lateral-offset bounds).
-8. If the user reports a visual contradiction after a prior pass, gate outcome must be re-opened as `FOLLOW-UP REQUIRED`
+9. If the user reports a visual contradiction after a prior pass, gate outcome must be re-opened as `FOLLOW-UP REQUIRED`
    until new evidence resolves the contradiction.
 
 ### Outcome States
@@ -132,6 +150,6 @@ If vision tools produce unreliable or contradictory results:
 - Test scene path.
 - Test runner script path.
 - Camera and marker verification notes.
-- Final verification artefact directory.
+- Final verification artefact directory (must be under `@game/temp/`).
 - C# integration test path and assertion summary.
 - Gate outcome.

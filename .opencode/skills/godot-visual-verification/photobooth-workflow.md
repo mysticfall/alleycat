@@ -94,7 +94,8 @@ Examples:
 - Transform/rotation constraints.
 - Node states and flags after scenario transitions.
 
-This test should verify functional correctness that corresponds to what was visually validated in the photobooth captures.
+This test should verify functional correctness that corresponds to what was visually validated in the photobooth
+captures.
 
 ## Run Commands
 
@@ -109,13 +110,17 @@ godot-mono -d -s --headless --xr-mode off --path game "temp/<asset_or_setup_scri
 **Never use `--headless` for scripts that capture screenshots.** Headless mode disables the renderer, causing all
 viewport captures to fail with blank images or errors. This is the most common mistake in visual verification runs.
 
+All visual verification artefacts must be generated under `@game/temp/`. This is a mandatory requirement.
+
+- **Preferred:** Run without `--output-dir`. Screenshots default to `@game/temp`.
+- **If using `--output-dir`:** The path must still resolve to `@game/temp/<subdirectory>`. Use a relative path from the
+  game directory.
+
 ```bash
+# Preferred: No --output-dir, uses @game/temp by default
 godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd"
-```
 
-To write output to a specific directory, pass `--output-dir` after `--`:
-
-```bash
+# If needed: relative path from game directory (resolves to @game/temp/<run_name>)
 godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- --output-dir "temp/<run_name>"
 ```
 
@@ -127,7 +132,8 @@ file-generation alone as evidence of success.
 When checking screenshots:
 
 1. Use the `read` tool to load and inspect each image.
-2. Inspect the loaded image for specific deviations (for example "is the character's head tilted backward, or still neutral?").
+2. Inspect the loaded image for specific deviations (for example "is the character's head tilted backward, or still
+   neutral?").
 3. Compare scenario screenshots against each other (for example "up" vs "lean-back") to confirm each scenario produces
    a visually distinct result.
 4. If a scenario screenshot looks identical to the neutral/default pose, treat it as a verification failure even if the
@@ -139,10 +145,11 @@ make the visual judgement. Do not fabricate visual observations.
 
 ## Screenshot Output
 
-`SceneUtils.capture_screenshot(...)`, `SceneUtils.capture_viewport_screenshot(...)`, `CameraRig.capture_screenshot(...)`,
+`SceneUtils.capture_screenshot(...)`, `SceneUtils.capture_viewport_screenshot(...)`,
+`CameraRig.capture_screenshot(...)`,
 and `Photobooth.capture_screenshots(...)` write JPG files under:
 
-- `--output-dir <path>` / `--output-dir=<path>`, when provided.
+- `--output-dir <path>`, when provided as a **relative path** that resolves to `@game/temp/<subdirectory>`.
 - otherwise `@game/temp`.
 
 Each successful capture prints:
@@ -157,3 +164,5 @@ Each successful capture prints:
   Always inspect representative images.
 - **Not comparing similar scenarios** — if two scenarios (for example "up" and "lean-back") produce nearly identical
   screenshots, the marker placement or scenario logic likely has an error.
+- **Writing artefacts outside `@game/temp/`** — all screenshots must be under `@game/temp/`. Using absolute paths or
+  omitting `--output-dir` and expecting files elsewhere will cause verification failures.
