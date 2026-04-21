@@ -9,7 +9,7 @@ Create a photobooth scene under `@game/tests/<feature>/`.
 ### Choose The Best Base Scene
 
 1. Prefer an existing inherited photobooth that already matches the subject type.
-    - Example: `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn`.
+    - Example: `@game/assets/testing/photobooth/templates/full_body_5_cams.tscn`.
     - For character pose/IK verification, treat this as the default base unless the spec explicitly requires a different
       setup.
 2. If no suitable base exists, inherit the empty base:
