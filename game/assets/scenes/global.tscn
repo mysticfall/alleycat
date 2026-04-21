@@ -11,7 +11,8 @@
 
 [node name="Game" type="Node" unique_id=1021390965]
 script = ExtResource("1_4obgp")
-StartScene = "uid://baut876fuyk5c"
+StartScenePath = "uid://baut876fuyk5c"
+SplashScreenScene = ExtResource("1_axcyo")
 metadata/_custom_type_script = "uid://dnifm5vgeh8bn"
 
 [node name="XR" type="Node" parent="." unique_id=1281566339]
@@ -31,8 +32,6 @@ transparent_bg = true
 oversampling = false
 size = Vector2i(1800, 1200)
 render_target_update_mode = 4
-
-[node name="SplashScreen" parent="XR/SubViewport" unique_id=1557464398 instance=ExtResource("1_axcyo")]
 
 [node name="LoadingScreen" parent="XR/SubViewport" unique_id=1488371994 instance=ExtResource("6_v86yw")]
 visible = false

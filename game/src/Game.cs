@@ -16,12 +16,19 @@ public partial class Game : Node
     /// Scene path loaded after splash and XR startup complete.
     /// </summary>
     [Export(PropertyHint.File, "*.tscn")]
-    public string StartScene { get; set; } = string.Empty;
+    public string StartScenePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Splash scene instantiated during startup when splash is enabled.
+    /// </summary>
+    [Export]
+    public PackedScene SplashScreenScene { get; set; } = null!;
 
     private readonly TaskCompletionSource<bool> _xrInitialisationCompletionSource =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private XRManager? _xrManager;
+    private SubViewport? _uiRoot;
     private SplashScreen? _splashScreen;
     private LoadingScreen? _loadingScreen;
     private Callable? _loadCompletedCallable;
@@ -38,6 +45,13 @@ public partial class Game : Node
         _xrManager.Initialised += OnXRInitialised;
     }
 
+    /// <summary>
+    /// Checks if the "--skip-splash" command-line argument was provided.
+    /// </summary>
+    /// <returns>True if the splash screen should be skipped.</returns>
+    private static bool ShouldSkipSplashScreen() =>
+        OS.GetCmdlineArgs().Contains("--skip-splash");
+
     /// <inheritdoc />
     public override void _Ready()
     {
@@ -46,8 +60,19 @@ public partial class Game : Node
             return;
         }
 
-        _splashScreen = this.RequireNode<SplashScreen>("XR/SubViewport/SplashScreen");
+        _uiRoot = this.RequireNode<SubViewport>("XR/SubViewport");
         _loadingScreen = this.RequireNode<LoadingScreen>("XR/SubViewport/LoadingScreen");
+
+        if (!ShouldSkipSplashScreen())
+        {
+            Node splashNode = SplashScreenScene.Instantiate()
+                ?? throw new InvalidOperationException("Splash scene is not configured on Game.");
+
+            _splashScreen = splashNode as SplashScreen
+                ?? throw new InvalidOperationException($"Splash scene root '{splashNode.GetType().FullName}' must be a SplashScreen.");
+
+            _uiRoot.AddChild(_splashScreen);
+        }
 
         _ = RunStartupFlowAsync();
     }
@@ -64,7 +89,10 @@ public partial class Game : Node
 
     private async Task RunStartupFlowAsync()
     {
-        _ = await ToSignal(_splashScreen!, "SplashFinished");
+        if (_splashScreen is not null)
+        {
+            _ = await ToSignal(_splashScreen, SplashScreen.SignalName.SplashFinished);
+        }
 
         bool xrInitialised = await _xrInitialisationCompletionSource.Task;
         if (!xrInitialised)
@@ -76,9 +104,13 @@ public partial class Game : Node
 
         _loadingScreen!.Show();
 
-        Node? splashParent = _splashScreen!.GetParent();
-        splashParent?.RemoveChild(_splashScreen);
-        _splashScreen.QueueFree();
+        if (_splashScreen is not null)
+        {
+            Node? splashParent = _splashScreen.GetParent();
+            splashParent?.RemoveChild(_splashScreen);
+            _splashScreen.QueueFree();
+            _splashScreen = null;
+        }
 
         Callable loadCompletedCallable = _loadCompletedCallable ??= Callable.From(OnLoadCompleted);
         if (!_loadingScreen.IsConnected("LoadCompleted", loadCompletedCallable))
@@ -86,10 +118,10 @@ public partial class Game : Node
             _ = _loadingScreen.Connect("LoadCompleted", loadCompletedCallable);
         }
 
-        Error loadStartError = _loadingScreen.LoadSceneAsync(StartScene);
+        Error loadStartError = _loadingScreen.LoadSceneAsync(StartScenePath);
         if (loadStartError != Error.Ok)
         {
-            GD.PushError($"Failed to start loading start scene '{StartScene}' with error '{loadStartError}'. Quitting the game.");
+            GD.PushError($"Failed to start loading start scene '{StartScenePath}' with error '{loadStartError}'. Quitting the game.");
             QuitGame(1);
         }
     }

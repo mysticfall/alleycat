@@ -127,6 +127,35 @@ public sealed partial class GameStartupIntegrationTests
     }
 
     /// <summary>
+    /// Verifies startup continues without waiting on splash when splash is absent (skip-splash path).
+    /// </summary>
+    [Fact]
+    public async Task StartupFlow_WhenSplashIsAbsent_LoadsStartSceneAfterSuccessfulXRInitialisation()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        StartupFixture fixture = await CreateStartupFixtureAsync(sceneTree);
+
+        try
+        {
+            fixture.LoadingScreen.NextLoadSceneResult = Error.Ok;
+            AssignStartupFields(fixture.Game, splashScreen: null, loadingScreen: fixture.LoadingScreen);
+            SignalXrInitialisationResult(fixture.Game, succeeded: true);
+
+            Task startupTask = InvokeRunStartupFlowAsync(fixture.Game);
+            await startupTask;
+
+            Assert.Empty(fixture.Game.QuitRequests);
+            Assert.Equal(1, fixture.LoadingScreen.LoadSceneAsyncCallCount);
+            Assert.Equal(StartScenePath, fixture.LoadingScreen.LastRequestedScenePath);
+            Assert.True(fixture.LoadingScreen.Visible);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, fixture);
+        }
+    }
+
+    /// <summary>
     /// Verifies integration-runtime bypass keeps startup orchestration disabled in <see cref="Game._Ready"/>.
     /// </summary>
     [Fact]
@@ -156,7 +185,7 @@ public sealed partial class GameStartupIntegrationTests
         TestGame game = new()
         {
             Name = "Game",
-            StartScene = StartScenePath,
+            StartScenePath = StartScenePath,
         };
 
         Node xr = new()
@@ -202,7 +231,7 @@ public sealed partial class GameStartupIntegrationTests
         await WaitForNextFrameAsync(sceneTree);
     }
 
-    private static void AssignStartupFields(Game game, SplashScreen splashScreen, LoadingScreen loadingScreen)
+    private static void AssignStartupFields(Game game, SplashScreen? splashScreen, LoadingScreen loadingScreen)
     {
         _splashScreenField.SetValue(game, splashScreen);
         _loadingScreenField.SetValue(game, loadingScreen);

@@ -23,6 +23,7 @@ Provide a predictable branded startup transition that cleanly hands control to t
 
 1. Players must see a centred project logo that fades in and out smoothly during startup.
 2. The splash sequence must complete automatically and hand off to the next flow without manual input.
+3. When `--skip-splash` is provided, the splash screen must be bypassed entirely while preserving startup flow continuity.
 
 ## Technical Requirements
 
@@ -30,18 +31,26 @@ Provide a predictable branded startup transition that cleanly hands control to t
    `FadeDurationSeconds`, `FadeOutDelaySeconds`).
 2. Fade animation must transition alpha from transparent to visible (fade in) and back to transparent (fade out).
 3. Completion must emit `SplashFinished` as the integration contract for downstream flow control.
+4. Splash must be dynamically instantiated by `Game` from the exported `SplashScreenScene` property
+   (`PackedScene`).
+5. Instantiated splash must be added as a child of the UI SubViewport (`_uiRoot`).
+6. Splash instantiation and display must be skipped when `--skip-splash` command-line argument is present,
+   without breaking the startup flow.
 
 ## In Scope
 
 - Splash logo sizing and centring behaviour.
 - Fade-in/fade-out timing contract with configurable delay/duration parameters.
 - Completion signalling contract (`SplashFinished`).
+- Dynamic instantiation contract via `Game.SplashScreenScene` property.
+- Skip flag contract (`--skip-splash`).
 
 ## Out Of Scope
 
 - Loading-progress display and asynchronous scene loading behaviour.
 - Broader menu/navigation flow design.
 - Branding asset creation and art-direction iterations.
+- Splash scene asset creation or modification (handled in asset pipeline).
 
 ## Acceptance Criteria
 
@@ -49,13 +58,15 @@ Provide a predictable branded startup transition that cleanly hands control to t
 2. Fade-in starts after `FadeInDelaySeconds`, uses `FadeDurationSeconds`, and reaches full visibility.
 3. Fade-out starts after `FadeOutDelaySeconds`, uses `FadeDurationSeconds`, and reaches full transparency.
 4. `SplashFinished` is emitted when fade-out completes.
-5. The specification defines both user-visible behaviour outcomes and technical implementation contracts.
+5. When `--skip-splash` is passed, splash instantiation is skipped but startup continues to loading screen.
+6. The specification defines both user-visible behaviour outcomes and technical implementation contracts.
 
 ## References
 
 ### Implementation
 
 - @game/src/UI/SplashScreen.cs
+- @game/src/Game.cs
 
 ### Tests
 
