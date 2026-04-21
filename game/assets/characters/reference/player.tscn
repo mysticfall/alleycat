@@ -8,10 +8,10 @@
 [ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="5_jkoqe"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="5_nn3w6"]
 [ext_resource type="Script" uid="uid://66gi6n1gstbb" path="res://src/IK/Pose/PoseStateMachine.cs" id="6_posesm"]
-[ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://data/ik/pose/standing_pose_state.tres" id="7_sstate"]
-[ext_resource type="Resource" uid="uid://cwp2tklor5usj" path="res://data/ik/pose/crouching_pose_state.tres" id="8_cstate"]
-[ext_resource type="Resource" uid="uid://dtbp67huupmeo" path="res://data/ik/pose/standing_to_crouching_transition.tres" id="9_s2c"]
-[ext_resource type="Resource" uid="uid://qhx1x2iaovwc" path="res://data/ik/pose/crouching_to_standing_transition.tres" id="10_c2s"]
+[ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://assets/characters/ik/pose/standing_pose_state.tres" id="7_sstate"]
+[ext_resource type="Resource" uid="uid://cwp2tklor5usj" path="res://assets/characters/ik/pose/crouching_pose_state.tres" id="8_cstate"]
+[ext_resource type="Resource" uid="uid://dtbp67huupmeo" path="res://assets/characters/ik/pose/standing_to_crouching_transition.tres" id="9_s2c"]
+[ext_resource type="Resource" uid="uid://qhx1x2iaovwc" path="res://assets/characters/ik/pose/crouching_to_standing_transition.tres" id="10_c2s"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_u7ew7"]
 radius = 0.12
@@ -331,10 +331,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6567192e-14, 0.085626364, -
 shape = SubResource("BoxShape3D_u7ew7")
 
 [node name="RightKnee" type="Marker3D" parent="IKTargets" index="5" unique_id=1677817895]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.116301745, 0.45985067, -0.25360578)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1951749, 0.4163762, -0.4074489)
 
 [node name="LeftKnee" type="Marker3D" parent="IKTargets" index="6" unique_id=1717634996]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.116, 0.46, -0.254)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.19534539, 0.41666278, -0.40722874)
 
 [node name="RightFoot" type="CharacterBody3D" parent="IKTargets" index="7" unique_id=1245707026]
 transform = Transform3D(0.99999994, 0, 0, 0, -4.3711385e-08, 0.99999994, 0, -0.9999999, -4.3711385e-08, 0.13557188, 0.013507544, 0)

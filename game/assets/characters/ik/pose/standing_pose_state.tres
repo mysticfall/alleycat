@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="StandingPoseState" format=3 uid="uid://byk1qyey80254"]
 
-[ext_resource type="Resource" uid="uid://bdr4h8dhwds37" path="res://data/ik/pose/standing_animation_binding.tres" id="1_ccvtb"]
-[ext_resource type="Resource" uid="uid://c7f40jgif80ac" path="res://data/ik/pose/head_tracking_hip_profile.tres" id="2_6oie5"]
+[ext_resource type="Resource" uid="uid://bdr4h8dhwds37" path="res://assets/characters/ik/pose/standing_animation_binding.tres" id="1_ccvtb"]
+[ext_resource type="Resource" uid="uid://c7f40jgif80ac" path="res://assets/characters/ik/pose/head_tracking_hip_profile.tres" id="2_6oie5"]
 [ext_resource type="Script" uid="uid://cjovqcnp8ie1q" path="res://src/IK/Pose/StandingPoseState.cs" id="3_wysak"]
 
 [resource]

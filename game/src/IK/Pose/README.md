@@ -25,7 +25,7 @@ Increment 2 ships:
   feedback loop and manifests as spine flicker during crouch descent.
 - `PlayerVRIK` integration: the XR bridge builds a `PoseStateContext` each `_Process` tick
   (before the AnimationTree samples) and forwards it to `PoseStateMachine.Tick`.
-- Authored scene resources under `game/data/ik/pose/` plus an `AnimationTree` whose root holds
+- Authored scene resources under `assets/characters/ik/pose/` plus an `AnimationTree` whose root holds
   a single `StandingCrouching` state. The state wraps a blend tree of
   `TimeSeek -> AnimationNodeAnimation("female/Crouch-seek")` so `TimeSeek` runs continuously
   regardless of which pose state is active — the state-machine framework is retained for
@@ -39,7 +39,7 @@ The modifier applies the pending hip target via `Skeleton3D.SetBonePosePosition`
 
 ## Resource Layout
 
-Authored `.tres` files under `game/data/ik/pose/`:
+Authored `.tres` files under `assets/characters/ik/pose/`:
 
 - `head_tracking_hip_profile.tres`
 - `standing_animation_binding.tres` / `crouching_animation_binding.tres`
