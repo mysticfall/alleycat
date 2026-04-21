@@ -86,16 +86,16 @@ public sealed class ArmShoulderIKIntegrationTests
                 "Expected verification scene to become current scene.");
 
         // Resolve scene nodes.
-        Node3D handTargetPoses = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(HandTargetPosesPath));
-        Node3D leftHandTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(LeftHandTargetPath));
-        Node3D rightHandTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(RightHandTargetPath));
-        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
-        Node3D rightPoleTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(RightPoleTargetPath));
+        Node3D handTargetPoses = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(HandTargetPosesPath), exactMatch: false);
+        Node3D leftHandTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftHandTargetPath), exactMatch: false);
+        Node3D rightHandTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(RightHandTargetPath), exactMatch: false);
+        Node3D leftPoleTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftPoleTargetPath), exactMatch: false);
+        Node3D rightPoleTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(RightPoleTargetPath), exactMatch: false);
 
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException(
@@ -244,7 +244,7 @@ public sealed class ArmShoulderIKIntegrationTests
                 Variant.Type.Object,
                 anchorVariant.VariantType);
 
-            Resource anchor = Assert.IsAssignableFrom<Resource>(anchorVariant.AsGodotObject());
+            Resource anchor = Assert.IsType<Resource>(anchorVariant.AsGodotObject(), exactMatch: false);
             AssertScriptPath(
                 anchor,
                 PoleAnchorScriptPath,
@@ -319,12 +319,12 @@ public sealed class ArmShoulderIKIntegrationTests
             ?? throw new Xunit.Sdk.XunitException(
                 "Expected at least one Skeleton3D in the verification scene.");
 
-        Node3D leftHandTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(LeftHandTargetPath));
-        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
-        SkeletonModifier3D leftArmController = Assert.IsAssignableFrom<SkeletonModifier3D>(
-            sceneRoot.GetNodeOrNull(LeftArmControllerPath));
+        Node3D leftHandTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftHandTargetPath), exactMatch: false);
+        Node3D leftPoleTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftPoleTargetPath), exactMatch: false);
+        SkeletonModifier3D leftArmController = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(LeftArmControllerPath), exactMatch: false);
 
         int leftUpperArmIndex = RequireBone(skeleton, "LeftUpperArm");
         int leftLowerArmIndex = RequireBone(skeleton, "LeftLowerArm");
@@ -385,20 +385,20 @@ public sealed class ArmShoulderIKIntegrationTests
             ?? throw new Xunit.Sdk.XunitException(
                 "Expected verification scene to become current scene.");
 
-        Node3D subject = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull("Subject"));
+        Node3D subject = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull("Subject"), exactMatch: false);
         subject.Rotation = new Vector3(Mathf.Pi, 0f, 0f);
 
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException(
                 "Expected at least one Skeleton3D in the verification scene.");
 
-        Node3D leftHandTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(LeftHandTargetPath));
-        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(
-            sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
-        SkeletonModifier3D leftArmController = Assert.IsAssignableFrom<SkeletonModifier3D>(
-            sceneRoot.GetNodeOrNull(LeftArmControllerPath));
+        Node3D leftHandTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftHandTargetPath), exactMatch: false);
+        Node3D leftPoleTarget = Assert.IsType<Node3D>(
+            sceneRoot.GetNodeOrNull(LeftPoleTargetPath), exactMatch: false);
+        SkeletonModifier3D leftArmController = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(LeftArmControllerPath), exactMatch: false);
 
         int hipsIndex = RequireBone(skeleton, "Hips");
         int neckIndex = RequireBone(skeleton, "Neck");
@@ -576,10 +576,10 @@ public sealed class ArmShoulderIKIntegrationTests
 
         foreach (PoseDefinition pose in _poses)
         {
-            markers[pose.LeftMarkerName] = Assert.IsAssignableFrom<Node3D>(
-                handTargetPoses.GetNodeOrNull(pose.LeftMarkerName));
-            markers[pose.RightMarkerName] = Assert.IsAssignableFrom<Node3D>(
-                handTargetPoses.GetNodeOrNull(pose.RightMarkerName));
+            markers[pose.LeftMarkerName] = Assert.IsType<Node3D>(
+                handTargetPoses.GetNodeOrNull(pose.LeftMarkerName), exactMatch: false);
+            markers[pose.RightMarkerName] = Assert.IsType<Node3D>(
+                handTargetPoses.GetNodeOrNull(pose.RightMarkerName), exactMatch: false);
         }
 
         return markers;
@@ -684,8 +684,8 @@ public sealed class ArmShoulderIKIntegrationTests
 
     private static SkeletonModifier3D RequireArmController(Node sceneRoot, string controllerPath, string sideLabel)
     {
-        SkeletonModifier3D node = Assert.IsAssignableFrom<SkeletonModifier3D>(
-            sceneRoot.GetNodeOrNull(controllerPath));
+        SkeletonModifier3D node = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(controllerPath), exactMatch: false);
 
         AssertScriptPath(
             node,
@@ -707,7 +707,7 @@ public sealed class ArmShoulderIKIntegrationTests
             rawPoleAnchorSet.VariantType);
 
         GodotObject? rawObject = rawPoleAnchorSet.AsGodotObject();
-        Resource anchorSet = Assert.IsAssignableFrom<Resource>(rawObject);
+        Resource anchorSet = Assert.IsType<Resource>(rawObject, exactMatch: false);
 
         AssertScriptPath(
             anchorSet,
@@ -726,7 +726,7 @@ public sealed class ArmShoulderIKIntegrationTests
         Variant scriptProperty = objectWithScript.Get("script");
         Assert.Equal(Variant.Type.Object, scriptProperty.VariantType);
 
-        Script script = Assert.IsAssignableFrom<Script>(scriptProperty.AsGodotObject());
+        Script script = Assert.IsType<Script>(scriptProperty.AsGodotObject(), exactMatch: false);
         Assert.True(
             script.ResourcePath == expectedScriptPath,
             $"Expected {context} script path '{expectedScriptPath}', got '{script.ResourcePath}'.");

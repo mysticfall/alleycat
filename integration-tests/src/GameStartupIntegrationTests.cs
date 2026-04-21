@@ -240,7 +240,7 @@ public sealed partial class GameStartupIntegrationTests
     private static Task InvokeRunStartupFlowAsync(Game game)
     {
         object? result = _runStartupFlowAsyncMethod.Invoke(game, null);
-        return Assert.IsAssignableFrom<Task>(result);
+        return Assert.IsType<Task>(result, exactMatch: false);
     }
 
     private static void SignalXrInitialisationResult(Game game, bool succeeded)

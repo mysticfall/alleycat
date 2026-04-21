@@ -26,7 +26,7 @@ public sealed class LoadingScreenIntegrationTests
 
         try
         {
-            Control loadingScreenControl = Assert.IsAssignableFrom<Control>(loadingScreen);
+            Control loadingScreenControl = Assert.IsType<Control>(loadingScreen, exactMatch: false);
             Label loadingMessage = loadingScreen.GetNode<Label>("CenterContent/LoadingMessage");
             ProgressBar loadingProgressBar = loadingScreen.GetNode<ProgressBar>("CenterContent/LoadingProgressBar");
             Control centreContent = loadingScreen.GetNode<Control>("CenterContent");

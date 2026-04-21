@@ -66,7 +66,7 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
 
         try
         {
-            Control splashControl = Assert.IsAssignableFrom<Control>(splashScreen);
+            Control splashControl = Assert.IsType<Control>(splashScreen, exactMatch: false);
             Sprite2D logo = splashScreen.GetNode<Sprite2D>("Logo/Image");
 
             float viewportWidth = splashControl.GetViewport().GetVisibleRect().Size.X;

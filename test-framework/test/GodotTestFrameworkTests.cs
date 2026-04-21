@@ -674,7 +674,7 @@ public sealed class GodotTestFrameworkTests
         object? invocationResult = method.Invoke(instance, args);
         Assert.NotNull(invocationResult);
 
-        Task task = Assert.IsAssignableFrom<Task>(invocationResult);
+        Task task = Assert.IsType<Task>(invocationResult, exactMatch: false);
         await task;
 
         object? result = task.GetType().GetProperty("Result", BindingFlags.Public | BindingFlags.Instance)?.GetValue(task);

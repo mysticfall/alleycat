@@ -47,11 +47,11 @@ public sealed class ArmShoulderCorrectionIntegrationTests
         Node sceneRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
 
-        Node3D handTargetPoses = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(HandTargetPosesPath));
-        Node3D leftHandTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(LeftHandTargetPath));
-        Node3D rightHandTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(RightHandTargetPath));
-        Node leftController = Assert.IsAssignableFrom<Node>(sceneRoot.GetNodeOrNull(LeftArmControllerPath));
-        Node rightController = Assert.IsAssignableFrom<Node>(sceneRoot.GetNodeOrNull(RightArmControllerPath));
+        Node3D handTargetPoses = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HandTargetPosesPath), exactMatch: false);
+        Node3D leftHandTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftHandTargetPath), exactMatch: false);
+        Node3D rightHandTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandTargetPath), exactMatch: false);
+        Node leftController = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(LeftArmControllerPath), exactMatch: false);
+        Node rightController = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(RightArmControllerPath), exactMatch: false);
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in the verification scene.");
 
@@ -266,7 +266,7 @@ public sealed class ArmShoulderCorrectionIntegrationTests
     }
 
     private static Node3D RequirePoseMarker(Node3D handTargetPoses, string markerName) =>
-        Assert.IsAssignableFrom<Node3D>(handTargetPoses.GetNodeOrNull(markerName));
+        Assert.IsType<Node3D>(handTargetPoses.GetNodeOrNull(markerName), exactMatch: false);
 
     private static Skeleton3D? FindFirstSkeleton(Node root)
     {

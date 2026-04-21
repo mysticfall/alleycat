@@ -58,13 +58,13 @@ public sealed class LegFeetIKIntegrationTests
         Node sceneRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
 
-        Node3D leftFootTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath));
-        Node3D rightFootTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath));
-        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
-        Node3D rightPoleTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(RightPoleTargetPath));
+        Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
+        Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
+        Node3D leftPoleTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftPoleTargetPath), exactMatch: false);
+        Node3D rightPoleTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightPoleTargetPath), exactMatch: false);
 
-        Node3D footTargetPoses = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(FootPoseMarkersPath));
-        Node3D hipsPoseMarkers = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(HipsPoseMarkersPath));
+        Node3D footTargetPoses = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(FootPoseMarkersPath), exactMatch: false);
+        Node3D hipsPoseMarkers = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HipsPoseMarkersPath), exactMatch: false);
 
         Node3D leftNeutral = RequireNode3D(footTargetPoses, "LeftNeutral");
         Node3D rightNeutral = RequireNode3D(footTargetPoses, "RightNeutral");
@@ -80,7 +80,7 @@ public sealed class LegFeetIKIntegrationTests
         Node3D hipsLegUpLeft = RequireNode3D(hipsPoseMarkers, "HipsLegUpLeft");
         Node3D hipsAsym = RequireNode3D(hipsPoseMarkers, "HipsAsym");
 
-        CopyTransformModifier3D hipsModifier = Assert.IsAssignableFrom<CopyTransformModifier3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath));
+        CopyTransformModifier3D hipsModifier = Assert.IsType<CopyTransformModifier3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath), exactMatch: false);
 
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in verification scene.");
@@ -332,20 +332,20 @@ public sealed class LegFeetIKIntegrationTests
         Node sceneRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
 
-        Node3D leftFootTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath));
-        Node3D rightFootTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath));
-        Node3D leftPoleTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(LeftPoleTargetPath));
-        Node3D rightPoleTarget = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(RightPoleTargetPath));
-        SkeletonModifier3D leftLegIKController = Assert.IsAssignableFrom<SkeletonModifier3D>(sceneRoot.GetNodeOrNull(LeftLegIKControllerPath));
-        SkeletonModifier3D rightLegIKController = Assert.IsAssignableFrom<SkeletonModifier3D>(sceneRoot.GetNodeOrNull(RightLegIKControllerPath));
+        Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
+        Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
+        Node3D leftPoleTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftPoleTargetPath), exactMatch: false);
+        Node3D rightPoleTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightPoleTargetPath), exactMatch: false);
+        SkeletonModifier3D leftLegIKController = Assert.IsType<SkeletonModifier3D>(sceneRoot.GetNodeOrNull(LeftLegIKControllerPath), exactMatch: false);
+        SkeletonModifier3D rightLegIKController = Assert.IsType<SkeletonModifier3D>(sceneRoot.GetNodeOrNull(RightLegIKControllerPath), exactMatch: false);
 
-        Node3D footTargetPoses = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(FootPoseMarkersPath));
-        Node3D hipsPoseMarkers = Assert.IsAssignableFrom<Node3D>(sceneRoot.GetNodeOrNull(HipsPoseMarkersPath));
+        Node3D footTargetPoses = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(FootPoseMarkersPath), exactMatch: false);
+        Node3D hipsPoseMarkers = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HipsPoseMarkersPath), exactMatch: false);
         Node3D leftNeutral = RequireNode3D(footTargetPoses, "LeftNeutral");
         Node3D rightNeutral = RequireNode3D(footTargetPoses, "RightNeutral");
         Node3D hipsCrouch = RequireNode3D(hipsPoseMarkers, "HipsCrouch");
 
-        CopyTransformModifier3D hipsModifier = Assert.IsAssignableFrom<CopyTransformModifier3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath));
+        CopyTransformModifier3D hipsModifier = Assert.IsType<CopyTransformModifier3D>(sceneRoot.GetNodeOrNull(HipsHarnessPath), exactMatch: false);
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in verification scene.");
 
@@ -734,7 +734,7 @@ public sealed class LegFeetIKIntegrationTests
     }
 
     private static Node3D RequireNode3D(Node parent, string childName) =>
-        Assert.IsAssignableFrom<Node3D>(parent.GetNodeOrNull(childName));
+        Assert.IsType<Node3D>(parent.GetNodeOrNull(childName), exactMatch: false);
 
     private static Skeleton3D? FindFirstSkeleton(Node root)
     {
