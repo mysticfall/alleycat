@@ -23,7 +23,7 @@ public sealed class ArmShoulderCorrectionIntegrationTests
     private const float MinimumOverheadGainOverLoweredRadians = 0.05f;
     private const float MinimumForwardGainOverLoweredRadians = 0.01f;
     private const float MinimumOverheadGainOverForwardRadians = 0.01f;
-    private const float MinimumElevationWeightResponsivenessRadians = 0.03f;
+    private const float MinimumShoulderWeightResponsivenessRadians = 0.03f;
 
     private readonly record struct ArmRigData(
         string SideLabel,
@@ -122,11 +122,11 @@ public sealed class ArmShoulderCorrectionIntegrationTests
             rightForwardChange,
             rightOverheadChange);
 
-        float leftDefaultElevationWeight = leftController.Get("ElevationWeight").AsSingle();
-        float rightDefaultElevationWeight = rightController.Get("ElevationWeight").AsSingle();
+        float leftDefaultShoulderWeight = leftController.Get("ShoulderWeight").AsSingle();
+        float rightDefaultShoulderWeight = rightController.Get("ShoulderWeight").AsSingle();
 
-        leftController.Set("ElevationWeight", 0f);
-        rightController.Set("ElevationWeight", 0f);
+        leftController.Set("ShoulderWeight", 0f);
+        rightController.Set("ShoulderWeight", 0f);
 
         await ApplyPoseAndSettleAsync(
             sceneTree,
@@ -138,11 +138,11 @@ public sealed class ArmShoulderCorrectionIntegrationTests
         float leftOverheadZeroElevation = ExtractShoulderChangeMagnitude(skeleton, leftArm);
         float rightOverheadZeroElevation = ExtractShoulderChangeMagnitude(skeleton, rightArm);
 
-        leftController.Set("ElevationWeight", leftDefaultElevationWeight);
-        rightController.Set("ElevationWeight", rightDefaultElevationWeight);
+        leftController.Set("ShoulderWeight", leftDefaultShoulderWeight);
+        rightController.Set("ShoulderWeight", rightDefaultShoulderWeight);
 
-        AssertElevationWeightResponsiveness("left", leftOverheadChange, leftOverheadZeroElevation);
-        AssertElevationWeightResponsiveness("right", rightOverheadChange, rightOverheadZeroElevation);
+        AssertShoulderWeightResponsiveness("left", leftOverheadChange, leftOverheadZeroElevation);
+        AssertShoulderWeightResponsiveness("right", rightOverheadChange, rightOverheadZeroElevation);
     }
 
     private static async Task ApplyPoseAndSettleAsync(
@@ -187,17 +187,17 @@ public sealed class ArmShoulderCorrectionIntegrationTests
         );
     }
 
-    private static void AssertElevationWeightResponsiveness(
+    private static void AssertShoulderWeightResponsiveness(
         string sideLabel,
         float overheadDefault,
-        float overheadZeroElevationWeight)
+        float overheadZeroShoulderWeight)
     {
         Assert.True(
-            overheadDefault >= overheadZeroElevationWeight + MinimumElevationWeightResponsivenessRadians,
-            $"Overhead pose ({sideLabel}) should respond to elevation weight. " +
+            overheadDefault >= overheadZeroShoulderWeight + MinimumShoulderWeightResponsivenessRadians,
+            $"Overhead pose ({sideLabel}) should respond to shoulder weight. " +
             $"Default overhead change: {overheadDefault:F6} rad, " +
-            $"zero-elevation overhead change: {overheadZeroElevationWeight:F6} rad, " +
-            $"minimum expected reduction: {MinimumElevationWeightResponsivenessRadians:F6} rad."
+            $"zero-weight overhead change: {overheadZeroShoulderWeight:F6} rad, " +
+            $"minimum expected reduction: {MinimumShoulderWeightResponsivenessRadians:F6} rad."
         );
     }
 

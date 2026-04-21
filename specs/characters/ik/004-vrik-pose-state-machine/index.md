@@ -140,6 +140,7 @@ Both linked pages are normative dependencies for implementation.
   open for later iteration.
 - State-dependent hip translation reconciliation behaviour.
 - Integration boundaries to IK-001/002/003 prerequisite contracts.
+- **Reusable scene composition**: `player.tscn` instances `reference_female_ik.tscn` (which contains arm/leg IK), `vrik.tscn` (PoseStateMachine + PlayerVRIK), and `animation_tree_player.tscn` (AnimationTree) as separate reusable components rather than carrying inline IK/AnimationTree.
 
 ## Out Of Scope
 
@@ -212,3 +213,7 @@ Known deferrals tracked against this revision:
 - [IK-003: Leg And Feet IK System](../003-leg-feet-ik/index.md)
 - [Pose State Machine Contract](pose-state-machine-contract.md)
 - [Hip Reconciliation Contract](hip-reconciliation-contract.md)
+- @game/assets/characters/ik/vrik.tscn
+- @game/assets/characters/reference/female/animations/animation_tree_player.tscn
+- @game/assets/characters/reference/female/reference_female_ik.tscn
+- @game/assets/characters/reference/player.tscn

@@ -68,7 +68,7 @@ Use this page for overall scope and acceptance traceability, then use the compon
 - Forward-elevation damping to reduce correction weight during forward-reach poses.
 - Overhead elevation boost enabling raised-overhead poses to exceed T-pose shoulder lift while preserving T-pose baseline.
 - Consistent behaviour regardless of character body pose (standing, lying down, stooping, etc.).
-- A standalone reusable IK scene for reuse in character scenes.
+- A standalone reusable IK scene (`reference_female_ik.tscn`) for reuse in character scenes.
 
 ## Out Of Scope
 
@@ -104,6 +104,8 @@ Runtime player integration is expected to drive these targets through the player
 The implementation must work correctly with the reference character at:
 
 - `@game/assets/characters/reference/female/reference_female.tscn`
+
+The reusable IK scene (`reference_female_ik.tscn`) contains the arm IK setup and provides the target attachment points for head/hand targets. The consuming scene (`player.tscn`) wires these targets to VRIK runtime transforms.
 
 ### Pose-Independence Requirement
 
@@ -145,7 +147,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-04 | Pole-target prediction produces correct results in non-upright poses (lying down, stooping, etc.) without pose-specific branches.                                                                                                                                                                     | [Arm IK Contract](arm-ik-contract.md)                           |
 | AC-05 | Hand-rotation adjustment modifies the baseline pole direction smoothly and continuously across the full range of hand rotations.                                                                                                                                                                      | [Arm IK Contract](arm-ik-contract.md)                           |
 | AC-06 | `ArmIKController` applies per-arm pre-IK shoulder correction, preventing visible deformation in all key poses.                                                                                                                                                                                        | [Shoulder Correction Contract](shoulder-adjustment-contract.md) |
-| AC-07 | IK configuration is saved as a reusable scene with a clear file path (to be determined during implementation), with head/hand targets left unbound for consuming scenes.                                                                                                                              | This Page                                                       |
+| AC-07 | Reusable IK scene saved at `@game/assets/characters/reference/female/reference_female_ik.tscn` containing `ArmIKController` (left/right), `TwoBoneIK3D` (left/right), and IK target nodes (`IKTargets/Head`, `IKTargets/LeftHand`, `IKTargets/RightHand`). Consuming scene `@game/assets/characters/reference/player.tscn` inherits this scene and wires head/hand targets to VRIK runtime transforms.                                                                                                                              | This Page                                                       |
 | AC-08 | A photobooth verification scene exists under `@game/tests/` and validates arm IK plus integrated shoulder correction across required key poses and body orientations, following `@specs/testing/002-visual-verification-scope/index.md`.                                                              | This Page                                                       |
 | AC-09 | Visual checks confirm natural arm and shoulder poses without obvious over-rotation, inversion, discontinuous elbow movement, or shoulder deformation across required poses.                                                                                                                           | This Page                                                       |
 | AC-10 | A C# integration test loads the same verification scene and validates behaviour using non-visual assertions (for example target proximity, pole-target bounds, shoulder rotation limits).                                                                                                             | This Page                                                       |
@@ -218,6 +220,8 @@ is lateralness-driven only to avoid behind-head regressions from pole twist expe
 ## References
 
 - @game/assets/characters/reference/female/reference_female.tscn
+- @game/assets/characters/reference/female/reference_female_ik.tscn
+- @game/assets/characters/reference/player.tscn
 - @specs/characters/ik/001-neck-spine-ik/index.md
 - @specs/testing/002-visual-verification-scope/index.md
 - @specs/characters/000-character-skeleton/index.md
