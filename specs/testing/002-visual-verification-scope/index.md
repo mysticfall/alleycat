@@ -82,5 +82,5 @@ screenshots serve as a diagnostic aid.
 
 - @specs/index.md
 - @game/assets/testing/photobooth/photobooth.tscn
-- @game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn
+- @game/assets/testing/photobooth/templates/full_body_5_cams.tscn
 - @docs/gdscript-api.md

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://csbdvi1edoyb2"]
 
-[ext_resource type="PackedScene" uid="uid://iydxa1tdrcn" path="res://assets/characters/reference/female/photobooth/upper_body_5_cams.tscn" id="1_y7vjr"]
+[ext_resource type="PackedScene" uid="uid://iydxa1tdrcn" path="res://assets/testing/photobooth/templates/upper_body_5_cams.tscn" id="1_y7vjr"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_ev7qn"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="3_ctrl"]
 [ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="3_v03ed"]

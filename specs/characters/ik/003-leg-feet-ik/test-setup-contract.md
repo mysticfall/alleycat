@@ -20,7 +20,7 @@ Define the IK-003 verification-scene and test-harness contract, including lower-
 
 The IK-003 verification scene must inherit from:
 
-- `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn`
+- `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`
 
 Required test artefacts:
 
@@ -82,5 +82,5 @@ Source-of-truth criteria wording is maintained in [IK-003 Overview](index.md#acc
 
 - [IK-003 Overview](index.md)
 - [Leg-Feet IK Contract](leg-feet-ik-contract.md)
-- @game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn
+- @game/assets/testing/photobooth/templates/lower_body_5_cams.tscn
 - @specs/testing/002-visual-verification-scope/index.md

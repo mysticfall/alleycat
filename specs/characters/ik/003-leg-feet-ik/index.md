@@ -81,7 +81,7 @@ The implementation and validation workflow must use:
 
 - Reference character scene: `@game/assets/characters/reference/female/reference_female.tscn`
 - Lower-body photobooth basis scene:
-  `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn`
+  `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`
 
 ## Component Contracts
 
@@ -104,7 +104,7 @@ All criteria remain normative. IDs are provided for traceability to contract pag
 | AC-05 | Per-leg IK solve consumes provided foot target transforms as goal inputs each runtime update, without requiring an additional runtime target-clamp contract. | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
 | AC-06 | Naming, node-role conventions, and modifier-order design are consistent with IK-002 patterns (controller-first, contract split, per-side instances). | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
 | AC-07 | IK configuration is saved as a reusable scene with a clear path (to be determined during implementation), with consuming scenes responsible for binding runtime targets. | This Page |
-| AC-08 | A photobooth verification scene exists under `@game/tests/` and inherits `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn`, following `@specs/testing/002-visual-verification-scope/index.md`. | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |
+| AC-08 | A photobooth verification scene exists under `@game/tests/` and inherits `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`, following `@specs/testing/002-visual-verification-scope/index.md`. | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |
 | AC-09 | The verification setup provides a `BoneAttachment3D`-based hips harness that can override hips bone position without animation playback. | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |
 | AC-10 | Visual checks confirm natural knee and foot behaviour without obvious inversion, discontinuous knee-plane changes, or over-correction in required poses. | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |
 | AC-11 | A C# integration test loads the same verification scene and validates non-visual assertions (for example pole-direction continuity, read-only foot-target input behaviour, and stable hips-override response). | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |
@@ -114,7 +114,7 @@ All criteria remain normative. IDs are provided for traceability to contract pag
 ## References
 
 - @game/assets/characters/reference/female/reference_female.tscn
-- @game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn
+- @game/assets/testing/photobooth/templates/lower_body_5_cams.tscn
 - @specs/characters/ik/002-arm-shoulder-ik/index.md
 - @specs/characters/ik/003-leg-feet-ik/leg-feet-ik-contract.md
 - @specs/characters/ik/003-leg-feet-ik/test-setup-contract.md

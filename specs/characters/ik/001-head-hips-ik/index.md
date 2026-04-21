@@ -51,7 +51,7 @@ instantiated across character setups.
 4. The IK configuration is saved as a reusable scene at `@game/assets/characters/ik/head_hips_ik.tscn`, with the
    target node left unbound in the reusable scene so consuming scenes provide/bind the head target externally.
 5. A photobooth verification scene that inherits
-   `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn` exists at:
+   `@game/assets/testing/photobooth/templates/full_body_5_cams.tscn` exists at:
     - scene: `@game/tests/characters/ik/head_hips_ik_test.tscn`
     - runner script (same base name): `@game/tests/characters/ik/head_hips_ik_test.gd`
 6. The verification scene defines target markers for visual and non-visual checks using `DebugMarker` for each required
@@ -72,7 +72,7 @@ instantiated across character setups.
 ## References
 
 - @game/assets/characters/ik/head_hips_ik.tscn
-- @game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn
+- @game/assets/testing/photobooth/templates/full_body_5_cams.tscn
 - @game/tests/characters/ik/head_hips_ik_test.tscn
 - @game/tests/characters/ik/head_hips_ik_test.gd
 - @specs/testing/002-visual-verification-scope/index.md

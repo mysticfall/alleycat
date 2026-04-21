@@ -65,7 +65,7 @@ implementation notes across child IK specs.
 - IK-003 must follow IK-002 naming and role conventions: per-side `SkeletonModifier3D` controller instances before
   per-side solver instances.
 - For lower-limb photobooth verification, use
-  `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn` as the test-scene basis.
+  `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn` as the test-scene basis.
 - When validating pelvis/hips offset behaviour for lower-limb IK, use a `BoneAttachment3D` harness that applies hips
   override position directly without animation driving the same transform.
 

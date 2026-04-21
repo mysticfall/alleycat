@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://df7chghdxxs5v"]
 
-[ext_resource type="PackedScene" uid="uid://dsoyrofkocge2" path="res://assets/characters/reference/female/photobooth/face_cam.tscn" id="1_iggym"]
+[ext_resource type="PackedScene" uid="uid://dsoyrofkocge2" path="res://assets/testing/photobooth/templates/face_cam.tscn" id="1_iggym"]
 [ext_resource type="Script" uid="uid://d1owchc86h8g8" path="res://src/Speech/Wav2ArkitBlendShapePlayer.cs" id="2_iggym"]
 [ext_resource type="AudioStream" uid="uid://bx5m8h03bjsdl" path="res://assets/audio/samples/sample-voice.wav" id="3_1ggr3"]
 

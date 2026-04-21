@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bbm8p2ha3ihw4"]
 
-[ext_resource type="PackedScene" uid="uid://coluun6oeiyi2" path="res://assets/characters/reference/female/photobooth/lower_body_5_cams.tscn" id="1_legpb"]
+[ext_resource type="PackedScene" uid="uid://coluun6oeiyi2" path="res://assets/testing/photobooth/templates/lower_body_5_cams.tscn" id="1_legpb"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_marker"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="3_legctrl"]
 
