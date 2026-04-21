@@ -1,15 +1,14 @@
 [gd_scene format=3 uid="uid://dp3fxu1uko3n7"]
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
-[ext_resource type="AnimationLibrary" path="res://assets/characters/reference/female/animation_library.tres" id="2_anim_lib"]
-[ext_resource type="AnimationNodeStateMachine" path="res://assets/characters/reference/female/pose_state_machine_tree.tres" id="3_tree_root"]
+[ext_resource type="AnimationLibrary" uid="uid://copi4hihdl3ul" path="res://assets/characters/reference/female/animation_library.tres" id="2_anim_lib"]
 
 [node name="Female" unique_id=1792987446 instance=ExtResource("1_5molt")]
 
-[node name="Female_export" parent="." index="0" unique_id=1556676416]
+[node name="Female_export" parent="." index="0" unique_id=57851072]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="Head" type="BoneAttachment3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1349299640) index="9" unique_id=694402195]
+[node name="Head" type="BoneAttachment3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(469333434) index="9" unique_id=694402195]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4594107, 0.04187462)
 bone_name = "Head"
 bone_idx = 46
@@ -20,8 +19,3 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.032278657, 0.0937431)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." index="1" unique_id=629304126]
 libraries/female = ExtResource("2_anim_lib")
-
-[node name="AnimationTree" type="AnimationTree" parent="." index="2" unique_id=381859462]
-tree_root = ExtResource("3_tree_root")
-anim_player = NodePath("../AnimationPlayer")
-parameters/StandingCrouching/TimeSeek/seek_request = -1.0
