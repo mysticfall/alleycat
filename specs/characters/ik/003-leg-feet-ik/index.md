@@ -31,9 +31,16 @@ conventions.
    contract-first, photobooth + integration-test validation).
 4. Foot target transforms must be treated as runtime inputs only and must not be mutated by `LegIKController`,
    `TwoBoneIK3D`, or other IK-003 runtime controller logic.
-5. Verification must use the lower-body photobooth basis scene and include a hips-override harness implemented via
+5. **Foot target synchronisation stage**: Before each leg IK solve cycle, IK targets must be re-synchronised from animated foot transforms
+   to ensure the solver operates on current animation state. This sync stage runs once per tick, after the animation player produces its
+   sampled pose but before the leg IK controller computes pole targets. The sync reads the current animated foot bone
+   transforms (position + rotation) and copies them to the corresponding foot target nodes for downstream pole prediction and solve.
+   This guarantees deterministic solve behaviour when animation timing or `TimeSeek` position changes.
+6. **Ordering contract**: `FootTargetSyncController` must run before `HipReconciliationModifier` and any other foot-mutating modifiers.
+   This ordering is a scene/pipeline authoring contract enforced through scene authoring. Runtime auto-reordering is intentionally not used.
+7. Verification must use the lower-body photobooth basis scene and include a hips-override harness implemented via
    `BoneAttachment3D` override bone position without animation.
-6. In compressed crouch-like leg states, knee pole offset must enforce a minimum floor using rest leg length:
+8. In compressed crouch-like leg states, knee pole offset must enforce a minimum floor using rest leg length:
    `max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)`, with compression gating and margin
    exposed as tunable parameters.
 
@@ -53,6 +60,8 @@ Use this page for scope and acceptance traceability, then use contract pages for
 - Foot-direction-driven knee pole logic using forward/up axis interpolation driven by the foot-forward-to-leg-direction
   dot product.
 - Read-only foot target solving where runtime IK logic consumes targets as goals without mutating target transforms.
+- **Foot target synchronisation stage**: Dedicated sync that re-synchronises foot IK targets from animated foot transforms at the start of each IK
+  solve cycle, before pole-target computation. This guarantees the solver operates on current animation state.
 - Compressed-state knee pole minimum-offset safeguarding using a rest-leg-length-derived floor.
 - A reusable leg-feet IK scene (`reference_female_ik.tscn`) and a lower-body photobooth verification workflow aligned to IK-002 structure.
 
@@ -105,6 +114,7 @@ All criteria remain normative. IDs are provided for traceability to contract pag
 | AC-03 | Knee pole direction selection uses foot forward and foot up axes, with interpolation driven by the dot product between foot forward and the current leg direction vector. | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
 | AC-04 | The interpolation is smooth and deterministic across continuous foot rotation changes, with no discontinuous knee flips in required test poses. | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
 | AC-05 | Per-leg IK solve consumes provided foot target transforms as goal inputs each runtime update, without requiring an additional runtime target-clamp contract. | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
+| AC-05a | A dedicated foot-target sync controller (`FootTargetSyncController`) re-synchronises foot IK targets from animated foot transforms (position + rotation) at the beginning of each IK solve cycle, before pole-target computation and solve. This sync runs once per tick after animation sampling and guarantees the solver operates on current animation state. `FootTargetSyncController` must run before `HipReconciliationModifier` and any other foot-mutating modifiers — ordering is a scene/pipeline authoring contract. | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
 | AC-06 | Naming, node-role conventions, and modifier-order design are consistent with IK-002 patterns (controller-first, contract split, per-side instances). | [Leg-Feet IK Contract](leg-feet-ik-contract.md) |
 | AC-07 | Reusable IK scene saved at `@game/assets/characters/reference/female/reference_female_ik.tscn` containing `LegIKController` (left/right), `TwoBoneIK3D` (left/right), and leg target nodes (`IKTargets/LeftFoot`, `IKTargets/RightFoot`). Consuming scene `@game/assets/characters/reference/player.tscn` inherits this scene and wires foot targets for runtime solving. | This Page |
 | AC-08 | A photobooth verification scene exists under `@game/tests/` and inherits `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`, following `@specs/testing/002-visual-verification-scope/index.md`. | [Leg-Feet IK Test Setup Contract](test-setup-contract.md) |

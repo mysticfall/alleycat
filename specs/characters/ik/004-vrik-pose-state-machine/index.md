@@ -31,7 +31,9 @@ responsibility.
    stooping, sitting, and crawling (all fours).
 2. Players must experience continuous pose transitions during player-driven movement, without requiring authored
    transitions for every intermediate body position.
-3. Players must retain stable feet placement behaviour aligned with existing lower-limb constraints for this phase.
+3. Players must retain stable feet placement behaviour aligned with existing lower-limb constraints for this phase. See IK-003
+   foot-target synchronisation contract for the deterministic sync stage that re-synchronises foot IK targets from animated
+   foot transforms at the beginning of each IK solve cycle.
 4. Players must receive predictable calibration behaviour across non-standing poses, without relying on standing-only
    head-rest assumptions.
 

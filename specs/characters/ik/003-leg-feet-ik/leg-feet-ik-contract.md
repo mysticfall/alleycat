@@ -21,6 +21,30 @@ derived from foot orientation.
 
 Each leg uses a Godot `TwoBoneIK3D` node configured for upper-leg → lower-leg → foot.
 
+### Foot Target Synchronisation Stage
+
+Before each leg IK solve cycle, a dedicated foot-target sync controller (`FootTargetSyncController`) reads the current animated foot bone transforms
+(position + rotation) from the skeleton and copies them to the corresponding foot target nodes. This ensures the downstream pole-target
+computation and solve operate on the current animation state, not stale targets from earlier frames.
+
+#### Ordering Contract
+
+`FootTargetSyncController` must sample animated foot transforms **before any modifier mutates them**. It must run
+before `HipReconciliationModifier` and any other foot-mutating modifiers in the skeleton modifier pipeline.
+
+This ordering is a **scene/pipeline authoring contract** enforced through scene authoring (node order under `Skeleton3D`).
+Runtime auto-reordering is intentionally not used — ordering is managed manually at scene authorship time.
+
+Sync ordering (per tick):
+
+1. Animation player samples pose.
+2. **`FootTargetSyncController`** reads animated left/right foot bone transforms and writes to foot target nodes. Runs before any foot-mutating modifier.
+3. `HipReconciliationModifier` runs (adjusts hip bone before leg IK solve).
+4. `LegIKController` (left/right) computes pole-target positions from the synced foot targets.
+5. `TwoBoneIK3D` (left/right) solves towards the synced foot targets.
+
+This ordering guarantees deterministic solve behaviour when animation timing or `TimeSeek` position changes.
+
 `LegIKController` computes a pole-target direction from foot orientation each frame, then writes the resulting pole-target
 transform for downstream IK solve.
 
@@ -101,14 +125,20 @@ and must not violate the read-only foot target contract.
 
 `LegIKController` extends `SkeletonModifier3D` and must be a direct child of `Skeleton3D`.
 
-Per-frame ordering must follow IK-002-style controller-first execution:
+Per-frame full pipeline ordering (including IK-004 hip reconciliation):
 
-1. `LegIKController` (left)
-2. `LegIKController` (right)
-3. `TwoBoneIK3D` (left leg)
-4. `TwoBoneIK3D` (right leg)
+1. Animation player samples pose.
+2. **`FootTargetSyncController`** reads animated foot transforms before any modifier mutates them. Runs before `HipReconciliationModifier` and any foot-mutating modifiers.
+3. `HipReconciliationModifier` runs (adjusts hip bone before leg IK solve).
+4. `LegIKController` (left)
+5. `LegIKController` (right)
+6. `TwoBoneIK3D` (left leg)
+7. `TwoBoneIK3D` (right leg)
 
-Additional modifiers are allowed only if they do not break controller-before-solver ordering.
+This ordering is a **scene/pipeline authoring contract** enforced through scene authoring (node order under `Skeleton3D`).
+Runtime auto-reordering is intentionally not used — ordering is managed manually at scene authorship time.
+
+Additional modifiers are allowed only if they do not break controller-before-solver ordering and preserve the FootTargetSyncController-before-HipReconciliationModifier ordering.
 
 ## Naming And Design Consistency With IK-002
 
@@ -125,6 +155,7 @@ This contract defines details for:
 - AC-03
 - AC-04
 - AC-05
+- AC-05a (foot target sync stage)
 - AC-06
 - AC-12
 - AC-13
