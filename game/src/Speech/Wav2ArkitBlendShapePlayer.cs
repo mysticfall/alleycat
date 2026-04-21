@@ -121,7 +121,7 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
             outputName,
             StringComparison.Ordinal));
 
-        outputValue ??= results.First();
+        outputValue ??= results[0];
 
         Tensor<float> outputTensor = outputValue.AsTensor<float>();
         int[] dimensions = outputTensor.Dimensions.ToArray();
