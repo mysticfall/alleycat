@@ -13,6 +13,8 @@ namespace AlleyCat.IK.Pose;
 /// </remarks>
 public sealed class PoseStateContextBuilder
 {
+    private const float HeightEpsilon = 1e-4f;
+
     private Dictionary<StringName, float>? _auxiliarySignals;
 
     /// <summary>
@@ -119,6 +121,12 @@ public sealed class PoseStateContextBuilder
     /// <returns>The constructed context.</returns>
     public PoseStateContext Build() => new()
     {
+        NormalizedHeadLocalOffset = Skeleton is null
+            ? Vector3.Zero
+            : ComputeNormalizedHeadLocalOffset(
+                Skeleton.GlobalTransform,
+                ViewpointGlobalRest,
+                CameraTransform),
         CameraTransform = CameraTransform,
         LeftControllerTransform = LeftControllerTransform,
         RightControllerTransform = RightControllerTransform,
@@ -132,4 +140,44 @@ public sealed class PoseStateContextBuilder
             ? []
             : new Dictionary<StringName, float>(_auxiliarySignals),
     };
+
+    /// <summary>
+    /// Computes the normalised head offset from rest-local to current-local in skeleton space.
+    /// </summary>
+    /// <remarks>
+    /// This helper applies the IK-004 normalisation baseline where rest local head height equals
+    /// <c>1.0</c>, i.e. the local offset vector is divided by <c>abs(restHeadLocal.Y)</c>.
+    /// </remarks>
+    /// <param name="skeletonGlobalTransform">Global transform of the solved skeleton.</param>
+    /// <param name="viewpointGlobalRest">Global rest transform of the viewpoint.</param>
+    /// <param name="cameraTransform">Global current transform of the viewpoint.</param>
+    /// <returns>
+    /// The full 3D normalised local head offset, or <see cref="Vector3.Zero"/> when the
+    /// normalisation baseline is invalid.
+    /// </returns>
+    public static Vector3 ComputeNormalizedHeadLocalOffset(
+        Transform3D skeletonGlobalTransform,
+        Transform3D viewpointGlobalRest,
+        Transform3D cameraTransform)
+    {
+        Transform3D skeletonInverse = skeletonGlobalTransform.AffineInverse();
+        Vector3 restHeadLocal = (skeletonInverse * viewpointGlobalRest).Origin;
+        Vector3 currentHeadLocal = (skeletonInverse * cameraTransform).Origin;
+
+        float restHeight = Mathf.Abs(restHeadLocal.Y);
+        if (!float.IsFinite(restHeight) || restHeight <= HeightEpsilon)
+        {
+            return Vector3.Zero;
+        }
+
+        Vector3 normalizedOffset = (currentHeadLocal - restHeadLocal) / restHeight;
+        return IsFinite(normalizedOffset)
+            ? normalizedOffset
+            : Vector3.Zero;
+    }
+
+    private static bool IsFinite(Vector3 value) =>
+        float.IsFinite(value.X)
+        && float.IsFinite(value.Y)
+        && float.IsFinite(value.Z);
 }

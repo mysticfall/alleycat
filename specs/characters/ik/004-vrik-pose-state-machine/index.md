@@ -183,7 +183,7 @@ Both linked pages are normative dependencies for implementation.
 Increment 2.1 is delivered alongside this specification state. The shipped implementation includes the
 `PoseStateMachine` wiring on the player, the `TimeSeekAnimationBinding` animation binding targeting the single
 `StandingCrouching` `AnimationTree` state (sub-graph `TimeSeek → AnimationNodeAnimation("Crouch-seek")`), the
-`HeadVerticalOffsetPoseTransition` transition resource, the `HeadTrackingHipProfile` hip reconciliation profile
+`HeadOffsetPoseTransition` transition resource, the `HeadTrackingHipProfile` hip reconciliation profile
 (replacing the deprecated `LateralHeadOffsetHipReconciliationProfile`) with rotational hip correction added for the
 Standing/Crouching path alongside positional head offset and configurable `RotationCompensationWeight`
 (non-negative clamp), the concrete `CrouchingPoseState`, and the

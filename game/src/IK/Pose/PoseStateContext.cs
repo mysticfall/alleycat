@@ -23,6 +23,21 @@ namespace AlleyCat.IK.Pose;
 public sealed record PoseStateContext
 {
     /// <summary>
+    /// Gets the precomputed head offset from rest-local to current-local, expressed in
+    /// skeleton-local space and normalised by rest local head height.
+    /// </summary>
+    /// <remarks>
+    /// The baseline is <c>restHeadLocal.Y == 1.0</c>, so each component represents offset as a
+    /// fraction of rest height rather than metres. Positive Y means the head moved upward;
+    /// negative Y means descent.
+    /// </remarks>
+    public Vector3 NormalizedHeadLocalOffset
+    {
+        get;
+        init;
+    } = Vector3.Zero;
+
+    /// <summary>
     /// Gets the current global transform of the XR camera for this tick.
     /// </summary>
     /// <remarks>

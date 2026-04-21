@@ -13,8 +13,8 @@ referenced by any scene.
 
 Increment 2 ships:
 
-- `CrouchingPoseState` and `HeadVerticalOffsetPoseTransition` for the Standing <-> Crouching
-  edge with explicit hysteresis thresholds.
+- `CrouchingPoseState` and `HeadOffsetPoseTransition` for the Standing <-> Crouching
+  edge using normalised local head offset with configurable Threshold and Direction.
 - `TimeSeekAnimationBinding` driving an `AnimationNodeTimeSeek` parameter on the scene's
   `AnimationTree`. All tree parameter paths and state names are exported so authoring changes
   do not require a code recompile.

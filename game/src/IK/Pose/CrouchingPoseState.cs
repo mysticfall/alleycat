@@ -16,7 +16,7 @@ namespace AlleyCat.IK.Pose;
 /// </para>
 /// <para>
 /// Ticking of this state is driven by <see cref="PoseStateMachine.Tick"/> and transitions are
-/// normally authored as <see cref="HeadVerticalOffsetPoseTransition"/> edges keyed on head drop.
+/// normally authored as <see cref="HeadOffsetPoseTransition"/> edges keyed on head movement.
 /// </para>
 /// </remarks>
 [GlobalClass]
