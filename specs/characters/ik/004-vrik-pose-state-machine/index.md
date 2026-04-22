@@ -228,7 +228,7 @@ Increment 2.1 plus the Crouching↔Kneeling bidirectional transition with the fo
 - The `CrouchingKneelingTransition` transition resource implements the forward contracts, and the `KneelingCrouchingTransition`
   implements the reverse (return) contracts.
 
-The implementation also includes the `PoseStateMachine` wiring on the player, the `TimeSeekAnimationBinding` animation
+The implementation also includes the `PoseStateMachine` wiring on the player, the `StandingCrouchingSeekAnimationBinding` animation
 binding targeting the single `StandingCrouching` `AnimationTree` state (sub-graph `TimeSeek → AnimationNodeAnimation
 ("Crouch-seek")`), the `HeadOffsetPoseTransition` transition resource, the `HeadTrackingHipProfile` hip reconciliation
 profile (replacing the deprecated `LateralHeadOffsetHipReconciliationProfile`) with rotational hip correction added for the
@@ -238,6 +238,7 @@ clamp), the concrete `CrouchingPoseState`, and the `HipReconciliationModifier` o
 `PoseStateMachine.Tick` executes in begin-stage flow after IK follower adjustments have produced current tracked transforms.
 `PoseStateContext` now standardises head IK-target transforms as `HeadTargetTransform` and `HeadTargetRestTransform`.
 `PoseStateContext` additionally exposes rest-pose body measures (for example `RestHeadHeight`) for ratio-based threshold computation.
+- The standing/crouching seek blend now uses `FullCrouchDepthRatio` normalised by `RestHeadHeight` as the body-proportion-safe reference, replacing any absolute-metre-based crouch depth parameter. This ensures the seek curve scales correctly across different avatar proportions.
 Hip reconciliation profiles now return an absolute hip target position in skeleton-local
 space (`Vector3?`), with `null` meaning "do not override the animated hip bone". Unit regression coverage now includes
 weighted rotational compensation maths (sign, scaling, non-negative clamp, epsilon-combined snap, and overload equivalence).

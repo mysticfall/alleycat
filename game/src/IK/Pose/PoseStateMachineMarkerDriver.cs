@@ -224,10 +224,10 @@ public partial class PoseStateMachineMarkerDriver : Node3D
     public bool CurrentStateHasAnimationBinding() => _stateMachine.CurrentState?.AnimationBinding is not null;
 
     /// <summary>
-    /// Returns the current TimeSeek binding seek parameter path, or empty when unavailable.
+    /// Returns the current standing-crouching seek binding parameter path, or empty when unavailable.
     /// </summary>
     public StringName GetCurrentBindingSeekParameter()
-        => (_stateMachine.CurrentState?.AnimationBinding as TimeSeekAnimationBinding)?.SeekRequestParameter
+        => (_stateMachine.CurrentState?.AnimationBinding as StandingCrouchingSeekAnimationBinding)?.SeekRequestParameter
            ?? new StringName();
 
     private PoseStateContext BuildContext(
