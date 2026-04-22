@@ -14,32 +14,28 @@
 [node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="2" instance=ExtResource("8_qmk8b")]
 active = true
 
-[node name="PoseStateMachineDriver" type="Node3D" parent="." node_paths=PackedStringArray("AnimationTree", "Skeleton", "RestViewpointMarker", "ScenarioMarkersRoot", "LeftControllerRestMarker", "RightControllerRestMarker")]
+[node name="PoseStateMachineDriver" type="Node3D" parent="." node_paths=PackedStringArray("AnimationTree", "Skeleton")]
 script = ExtResource("9_5v7n4")
 States = [ExtResource("4_6h6qw"), ExtResource("5_tjnc4")]
 Transitions = [ExtResource("6_3g0js"), ExtResource("7_l8ne0")]
 InitialStateId = &"Standing"
 AnimationTree = NodePath("../Subject/Female/AnimationTree")
 Skeleton = NodePath("../Subject/Female/Female_export/GeneralSkeleton")
-RestViewpointMarker = NodePath("../Markers/PoseStateMachine/RestViewpoint")
-ScenarioMarkersRoot = NodePath("../Markers/PoseStateMachine/Scenarios")
-LeftControllerRestMarker = NodePath("../Markers/PoseStateMachine/ControllerRestLeft")
-RightControllerRestMarker = NodePath("../Markers/PoseStateMachine/ControllerRestRight")
 metadata/_custom_type_script = "uid://dq8mx4eet2kcv"
 
 [node name="PoseStateMachine" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0"]
 
-[node name="RestViewpoint" parent="Markers/PoseStateMachine" index="0" instance=ExtResource("2_ynml4")]
+[node name="RestHeadTarget" parent="Markers/PoseStateMachine" index="0" instance=ExtResource("2_ynml4")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.49, 0)
 visible = false
 label_text = "rest-viewpoint"
 
-[node name="ControllerRestLeft" parent="Markers/PoseStateMachine" index="1" instance=ExtResource("2_ynml4")]
+[node name="HandTargetRestLeft" parent="Markers/PoseStateMachine" index="1" instance=ExtResource("2_ynml4")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.22, 1.16, 0.12)
 visible = false
 label_text = "rest-left-controller"
 
-[node name="ControllerRestRight" parent="Markers/PoseStateMachine" index="2" instance=ExtResource("2_ynml4")]
+[node name="HandTargetRestRight" parent="Markers/PoseStateMachine" index="2" instance=ExtResource("2_ynml4")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.22, 1.16, 0.12)
 visible = false
 label_text = "rest-right-controller"
@@ -51,10 +47,10 @@ transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1
 visible = false
 label_text = "standing"
 
-[node name="LeftController" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/Standing" index="0"]
+[node name="LeftHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/Standing" index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, -0.33, 0.12)
 
-[node name="RightController" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/Standing" index="1"]
+[node name="RightHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/Standing" index="1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.22, -0.33, 0.12)
 
 [node name="CrouchMidway" parent="Markers/PoseStateMachine/Scenarios" index="1" instance=ExtResource("2_ynml4")]
@@ -62,10 +58,10 @@ transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1
 visible = false
 label_text = "crouch-midway"
 
-[node name="LeftController" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchMidway" index="0"]
+[node name="LeftHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchMidway" index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.31, 0.13)
 
-[node name="RightController" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchMidway" index="1"]
+[node name="RightHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchMidway" index="1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, -0.31, 0.13)
 
 [node name="CrouchFull" parent="Markers/PoseStateMachine/Scenarios" index="2" instance=ExtResource("2_ynml4")]
@@ -73,10 +69,21 @@ transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0
 visible = false
 label_text = "crouch-full"
 
-[node name="LeftController" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchFull" index="0"]
+[node name="LeftHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchFull" index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.25, -0.29, 0.14)
 
-[node name="RightController" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchFull" index="1"]
+[node name="RightHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchFull" index="1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.25, -0.29, 0.14)
+
+[node name="CrouchMidwayForward" parent="Markers/PoseStateMachine/Scenarios" index="3" instance=ExtResource("2_ynml4")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.22, 0.16)
+visible = false
+label_text = "crouch-midway-forward"
+
+[node name="LeftHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchMidwayForward" index="0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.24, -0.31, 0.15)
+
+[node name="RightHand" type="Marker3D" parent="Markers/PoseStateMachine/Scenarios/CrouchMidwayForward" index="1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.24, -0.31, 0.15)
 
 [editable path="Subject/Female"]

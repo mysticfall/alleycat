@@ -17,6 +17,8 @@ public partial class PlayerVRIK : Node3D
     private CharacterBody3D? _headIKTarget;
     private CharacterBody3D? _rightHandIKTarget;
     private CharacterBody3D? _leftHandIKTarget;
+    private Node3D? _rightFootIKTarget;
+    private Node3D? _leftFootIKTarget;
     private Skeleton3D? _skeleton;
 
     private IKTargetBodyFollower? _headFollower;
@@ -58,6 +60,26 @@ public partial class PlayerVRIK : Node3D
     /// </summary>
     [Export]
     public CharacterBody3D? LeftHandIKTarget
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Right-foot IK target node.
+    /// </summary>
+    [Export]
+    public Node3D? RightFootIKTarget
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Left-foot IK target node.
+    /// </summary>
+    [Export]
+    public Node3D? LeftFootIKTarget
     {
         get;
         set;
@@ -377,6 +399,8 @@ public partial class PlayerVRIK : Node3D
         _headIKTarget = HeadIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/Head");
         _rightHandIKTarget = RightHandIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/RightHand");
         _leftHandIKTarget = LeftHandIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/LeftHand");
+        _rightFootIKTarget = RightFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/RightFoot");
+        _leftFootIKTarget = LeftFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/LeftFoot");
         _skeleton = Skeleton ?? this.RequireNode<Skeleton3D>("Female_export/GeneralSkeleton");
 
         HeadBoneIndex = _skeleton.FindBone("Head");
@@ -395,24 +419,25 @@ public partial class PlayerVRIK : Node3D
 
     private PoseStateContext BuildPoseStateContext(Skeleton3D skeleton, double delta)
     {
-        // Rest viewpoint in world space: head-bone global rest multiplied by the viewpoint
+        // Head target rest in world space: head-bone global rest multiplied by the viewpoint
         // marker's local transform inside the head bone. Matches the calibration reference used
         // by CalibrateWorldScaleOnce.
         Transform3D headBoneRest = skeleton.GetBoneGlobalRest(HeadBoneIndex);
-        Transform3D restViewpoint = skeleton.GlobalTransform * headBoneRest * _viewpointLocalTransform;
+        Transform3D headTargetRestTransform = skeleton.GlobalTransform * headBoneRest * _viewpointLocalTransform;
 
-        // Current viewpoint in world space: the XR camera position projected back through the
-        // viewpoint-local offset, matching the physical head target used for compensation.
-        Transform3D currentViewpoint = _camera?.CameraNode.GlobalTransform ?? Transform3D.Identity;
-        Transform3D rightController = _rightHandController?.HandPositionNode.GlobalTransform
-                                      ?? Transform3D.Identity;
-        Transform3D leftController = _leftHandController?.HandPositionNode.GlobalTransform
-                                     ?? Transform3D.Identity;
+        // Current IK target transforms in world space.
+        Transform3D headTargetTransform = _headIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D rightHandTargetTransform = _rightHandIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D leftHandTargetTransform = _leftHandIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D rightFootTargetTransform = _rightFootIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D leftFootTargetTransform = _leftFootIKTarget?.GlobalTransform ?? Transform3D.Identity;
 
-        _poseContextBuilder.RightControllerTransform = rightController;
-        _poseContextBuilder.LeftControllerTransform = leftController;
-        _poseContextBuilder.ViewpointGlobalRest = restViewpoint;
-        _poseContextBuilder.CameraTransform = currentViewpoint;
+        _poseContextBuilder.HeadTargetTransform = headTargetTransform;
+        _poseContextBuilder.HeadTargetRestTransform = headTargetRestTransform;
+        _poseContextBuilder.RightHandTargetTransform = rightHandTargetTransform;
+        _poseContextBuilder.LeftHandTargetTransform = leftHandTargetTransform;
+        _poseContextBuilder.RightFootTargetTransform = rightFootTargetTransform;
+        _poseContextBuilder.LeftFootTargetTransform = leftFootTargetTransform;
         _poseContextBuilder.WorldScale = _worldScale;
         _poseContextBuilder.Skeleton = skeleton;
         _poseContextBuilder.HipBoneIndex = HipBoneIndex;

@@ -135,8 +135,8 @@ public partial class TimeSeekAnimationBinding : AnimationBinding
         }
 
         float poseBlend = ComputePoseBlend(
-            context.ViewpointGlobalRest.Origin.Y,
-            context.CameraTransform.Origin.Y,
+            context.HeadTargetRestTransform.Origin.Y,
+            context.HeadTargetTransform.Origin.Y,
             MaximumCrouchDepthMetres);
 
         WriteSeekRequest(tree, poseBlend);
@@ -152,8 +152,8 @@ public partial class TimeSeekAnimationBinding : AnimationBinding
     /// an AnimationTree. The helper does not mutate engine state and is safe to call on any
     /// thread.
     /// </remarks>
-    /// <param name="restHeadY">Calibrated rest viewpoint Y in world space.</param>
-    /// <param name="currentHeadY">Current viewpoint Y in world space.</param>
+    /// <param name="restHeadY">Calibrated rest head-target Y in world space.</param>
+    /// <param name="currentHeadY">Current head-target Y in world space.</param>
     /// <param name="maximumCrouchDepthMetres">Descent metres that map to a fully crouched blend.</param>
     /// <returns>Clamped pose blend in <c>[0, 1]</c>.</returns>
     public static float ComputePoseBlend(

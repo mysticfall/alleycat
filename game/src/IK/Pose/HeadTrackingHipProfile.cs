@@ -3,9 +3,9 @@ using Godot;
 namespace AlleyCat.IK.Pose;
 
 /// <summary>
-/// Hip reconciliation profile that maps the full head viewpoint offset onto the hip bone,
+/// Hip reconciliation profile that maps the full head-target offset onto the hip bone,
 /// producing an absolute skeleton-local hip position that tracks the player's head while
-/// compensating neck bend induced by headset rotation.
+/// compensating neck bend induced by head-target rotation.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -14,9 +14,9 @@ namespace AlleyCat.IK.Pose;
 /// <list type="number">
 ///   <item><description><c>hipLocalRest = skeleton.GetBoneRest(hipBoneIndex).Origin</c>.</description></item>
 ///   <item><description>
-///     The current and rest head viewpoints in skeleton-local space from
-///     <see cref="PoseStateContext.CameraTransform"/> and
-///     <see cref="PoseStateContext.ViewpointGlobalRest"/> respectively, by multiplying with
+///     The current and rest head target transforms in skeleton-local space from
+///     <see cref="PoseStateContext.HeadTargetTransform"/> and
+///     <see cref="PoseStateContext.HeadTargetRestTransform"/> respectively, by multiplying with
 ///     <c>skeleton.GlobalTransform.AffineInverse()</c>.
 ///   </description></item>
 ///   <item><description>
@@ -32,7 +32,7 @@ namespace AlleyCat.IK.Pose;
 /// </list>
 /// <para>
 /// This expresses the standing/crouching head-tracking heuristic: the hip translates with the
-/// head viewpoint offset and additionally applies the opposite of the rotation-implied neck
+/// head-target offset and additionally applies the opposite of the rotation-implied neck
 /// displacement so side tilt and chin up/down do not over-bend the neck. No Y stripping is
 /// applied — vertical ownership now lives with this profile and the <c>TimeSeek</c>-driven crouch
 /// clip handles feet animation independently.
@@ -79,8 +79,8 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
         Vector3 hipLocalRest = skeleton.GetBoneRest(context.HipBoneIndex).Origin;
         Transform3D skeletonInverse = skeleton.GlobalTransform.AffineInverse();
 
-        Transform3D restHeadLocalTransform = skeletonInverse * context.ViewpointGlobalRest;
-        Transform3D currentHeadLocalTransform = skeletonInverse * context.CameraTransform;
+        Transform3D restHeadLocalTransform = skeletonInverse * context.HeadTargetRestTransform;
+        Transform3D currentHeadLocalTransform = skeletonInverse * context.HeadTargetTransform;
 
         Vector3 headRotationDisplacementLocal =
             TryComputeHeadRotationDisplacementLocal(
@@ -102,7 +102,7 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
 
     /// <summary>
     /// Pure helper that computes the absolute hip-local target position from the rest hip
-    /// position and the rest and current head viewpoints, all expressed in skeleton-local
+    /// position and the rest and current head-target positions, all expressed in skeleton-local
     /// space.
     /// </summary>
     /// <remarks>
@@ -129,7 +129,7 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
 
     /// <summary>
     /// Pure helper that computes the absolute hip-local target position from the rest hip
-    /// position, the rest/current head viewpoints, and an optional rotation-derived neck
+    /// position, the rest/current head-target positions, and an optional rotation-derived neck
     /// displacement (all in skeleton-local space).
     /// </summary>
     /// <param name="hipLocalRest">Rest hip bone position in skeleton-local space.</param>

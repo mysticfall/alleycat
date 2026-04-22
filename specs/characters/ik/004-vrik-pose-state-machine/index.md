@@ -46,7 +46,8 @@ responsibility.
 2. Pose states must be implemented as Godot `Resource` definitions with customisable properties.
 3. Transition definitions must support `Resource`-based configuration so state-specific transition logic can expand
    without redesigning the state-machine core.
-4. Runtime state selection must use headset, left/right controller, and internal or animation-derived values only for
+4. Runtime state selection must use head and hand IK-target transforms (`HeadTargetTransform`,
+   `LeftHandTargetTransform`, `RightHandTargetTransform`) plus internal or animation-derived values only for
    this phase.
 5. Collision-derived or locomotion-system-derived inputs must not be required for IK-004 delivery.
 6. Calibration and reference-space interpretation must use viewpoint-node semantics and body-proportion signals; the
@@ -67,17 +68,18 @@ responsibility.
     or performance metrics.
 12. Each pose state must drive BOTH (a) animation selection or `AnimationTree` parameter control and (b) the hip
     reconciliation profile for that state. Animation and hip behaviour are a coupled per-state responsibility.
-13. State selection must be inferred from XR device transforms and animation/runtime signals (for example headset pitch
-    and controller height). Explicit controller-button input for pose switching must be avoided unless no automatic
-    signal is viable for a specific transition.
+13. State selection must be inferred from IK-target transforms and animation/runtime signals (for example head pitch
+     and hand height from `PoseStateContext`). Explicit button input for pose switching must be avoided unless no automatic
+     signal is viable for a specific transition.
 14. State and transition `Resource` types must expose a documented public extension surface (subclassable base resources
     and pluggable classifier/evaluator interfaces) so new states, transitions, and classifiers can be added from
     consumer code without modifying core state-machine source.
 15. The state machine must evaluate per tick from an immutable read-only context snapshot (suggested name
-    `PoseStateContext`) that bundles XR inputs and skeleton/runtime signals. The context is the canonical input surface
-    for classifiers, transitions, animation bindings, and hip reconciliation profiles, including
-    `CameraTransform` (current XR camera global transform) and `ViewpointGlobalRest` (viewpoint-node global rest
-    transform). Detailed composition is defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
+     `PoseStateContext`) that bundles IK-target inputs and skeleton/runtime signals. The context is the canonical
+     input surface for classifiers, transitions, animation bindings, and hip reconciliation profiles, including
+     `HeadTargetTransform` (current head IK-target global transform), `HeadTargetRestTransform` (head IK-target
+     global rest transform), `LeftHandTargetTransform`, and `RightHandTargetTransform`. Detailed composition is
+     defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
 16. Runtime responsibilities may be split across two cooperating nodes — a `PoseStateMachine` node that runs `Tick`
     per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
     the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
@@ -138,8 +140,8 @@ Both linked pages are normative dependencies for implementation.
 - MVP state coverage contracts for standing, crouching, kneeling, stooping, sitting, and crawling (all fours).
 - Framework-first state detection and transition architecture using extensible Godot `Resource` definitions.
 - State-specific disambiguation between overlapping poses (for example stoop vs crouch) as a permanent classifier
-  responsibility resolved via auxiliary XR signals such as headset pitch and controller height; tuning values remain
-  open for later iteration.
+  responsibility resolved via auxiliary IK-target signals such as head pitch and hand height from the pose-state
+  context; tuning values remain open for later iteration.
 - State-dependent hip translation reconciliation behaviour.
 - Integration boundaries to IK-001/002/003 prerequisite contracts.
 - **Reusable scene composition**: `player.tscn` instances `reference_female_ik.tscn` (which contains arm/leg IK), `vrik.tscn` (PoseStateMachine + PlayerVRIK), and `animation_tree_player.tscn` (AnimationTree) as separate reusable components rather than carrying inline IK/AnimationTree.
@@ -160,7 +162,7 @@ Both linked pages are normative dependencies for implementation.
 | AC-01 | IK-004 identifies standing, crouching, kneeling, stooping, sitting, and crawling as required MVP pose states. | User |
 | AC-02 | IK-004 references IK-001/002/003 as prerequisites without duplicating their solver contracts. | Technical |
 | AC-03 | Pose states and transitions are specified as extensible `Resource`-driven contracts, including framework-first state-specific transition conditions. | Technical |
-| AC-04 | Input contracts for this phase are restricted to headset, controllers, and internal or animation-derived values, with collision/locomotion inputs explicitly deferred. | Technical |
+| AC-04 | Input contracts for this phase are restricted to head and hand IK-target transforms (`HeadTargetTransform`, `LeftHandTargetTransform`, `RightHandTargetTransform`) and internal or animation-derived values, with collision/locomotion inputs explicitly deferred. | Technical |
 | AC-05 | Calibration contracts require viewpoint-node semantics and body-proportion references, and forbid standing-rest-pose assumptions for non-standing states. | Technical |
 | AC-06 | Feet positions from animation are explicitly defined as source of truth for this phase. | User + Technical |
 | AC-07 | Hip reconciliation is specified as translation-centric, state-dependent behaviour, with clamping deferred. | Technical |
@@ -168,9 +170,9 @@ Both linked pages are normative dependencies for implementation.
 | AC-09 | The spec does not require a mandatory catch-all ambiguity state for this phase. | Technical |
 | AC-10 | Across supported MVP movement scenarios, players see coherent visible full-body pose continuity while moving between required pose states. | User |
 | AC-11 | Each pose state binds both animation selection (or AnimationTree parameter control) and hip reconciliation behaviour as a coupled responsibility. | Technical |
-| AC-12 | State switching relies on inferred signals from XR devices and runtime state; explicit button-based pose switching is avoided by default. | User + Technical |
+| AC-12 | State switching relies on inferred signals from IK-target transforms and runtime state; explicit button-based pose switching is avoided by default. | User + Technical |
 | AC-13 | State and transition Resources expose a public extension surface permitting developer-supplied states and classifiers without editing core source. | Technical |
-| AC-14 | The state machine evaluates per tick from an immutable read-only context snapshot that is the canonical input surface for classifiers, transitions, animation bindings, and hip reconciliation profiles, including `CameraTransform` and `ViewpointGlobalRest` as required context fields. | Technical |
+| AC-14 | The state machine evaluates per tick from an immutable read-only context snapshot that is the canonical input surface for classifiers, transitions, animation bindings, and hip reconciliation profiles, including `HeadTargetTransform`, `HeadTargetRestTransform`, `LeftHandTargetTransform`, and `RightHandTargetTransform` as required context fields. | Technical |
 | AC-15 | Runtime responsibilities may be split into a `PoseStateMachine` node and a `HipReconciliationModifier` (`SkeletonModifier3D`) as the canonical pattern, without mandating that specific split, provided AC-HR-07 ordering is preserved and `Tick` runs after follower updates, before downstream consumers read pending hip translation, and may use begin-stage modifier-callback flow (for example `PlayerVRIK` via `StageModifier`) or equivalent topology preserving this ordering. | Technical |
 | AC-16 | Transition Resources support optional lifecycle hooks (`OnTransitionEnter` → `OnExit` → `OnEnter` → `OnTransitionExit`) and the state machine emits a state-changed observation. | Technical |
 | AC-17 | State and transition identifiers are authored as `StringName`; internal selection may use `StringName` or `string` provided identity semantics are preserved. | Technical |

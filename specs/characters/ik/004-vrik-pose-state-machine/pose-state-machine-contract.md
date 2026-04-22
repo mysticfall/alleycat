@@ -31,12 +31,12 @@ Ensure implementers can deliver stable pose classification and transition flow w
 3. Transition definitions must be resource-compatible so they can be authored or replaced per state pair without
    rewriting the runtime state-machine core.
 4. State-specific disambiguation between overlapping poses (for example stoop vs crouch) is a permanent classifier
-   responsibility, resolved using auxiliary XR signals such as headset pitch and controller height. Only the initial
-   tuning values are rudimentary; the disambiguation responsibility itself is not a temporary placeholder, and the
-   architecture must preserve upgrade paths for more advanced classifiers and tuning.
+   responsibility, resolved using auxiliary IK-target signals such as head pitch and hand height from the pose-state
+   context. Only the initial tuning values are rudimentary; the disambiguation responsibility itself is not a temporary
+   placeholder, and the architecture must preserve upgrade paths for more advanced classifiers and tuning.
 5. Input signals for state classification in this phase are limited to:
-   - XR camera transform data,
-   - left/right controller transform data,
+   - head IK-target transform data (`HeadTargetTransform`, `HeadTargetRestTransform`),
+   - hand IK-target transform data (`LeftHandTargetTransform`, `RightHandTargetTransform`),
    - internal runtime values,
    - animation-derived values.
 6. Collision probes, locomotion-system outputs, and external tracking systems are optional future extensions and must
@@ -52,8 +52,8 @@ Ensure implementers can deliver stable pose classification and transition flow w
    state-selection logic.
 10. Each state Resource must declare the animation clip or `AnimationTree` parameter configuration it activates.
     Animation selection and hip reconciliation configuration travel together on the same state Resource.
-11. State classification must not rely on explicit controller-button input; it must be derived from XR device transforms
-    (including auxiliary signals such as headset pitch and controller height) and animation/runtime state. Explicit
+11. State classification must not rely on explicit button input; it must be derived from IK-target transforms
+    (including auxiliary signals such as head pitch and hand height from `PoseStateContext`) and animation/runtime state. Explicit
     button input is permitted only as a last-resort fallback for a specific transition with no viable automatic signal.
 12. The state-machine core must expose a public extension surface — subclassable `PoseState` and `PoseTransition`
     resources plus pluggable classifier/evaluator interfaces — so consumers may add or replace pose behaviour without
@@ -61,14 +61,15 @@ Ensure implementers can deliver stable pose classification and transition flow w
 13. The state machine must evaluate each tick from a per-tick read-only context snapshot (suggested name
     `PoseStateContext`). The context is the canonical input surface for classifiers, transitions, animation bindings,
     and hip reconciliation profiles, and must include at minimum:
-    - `CameraTransform` (current XR camera global transform),
-    - left and right controller transforms,
-    - `ViewpointGlobalRest` (viewpoint-node global rest transform),
-    - world scale,
-    - skeleton reference and the bone indices required for IK-004 (hip, head),
-    - tick delta,
-    - an auxiliary-signals lookup (for example keyed by `StringName`) for extensible computed values such as headset
-      pitch.
+   - `HeadTargetTransform` (current head IK-target global transform),
+     - `LeftHandTargetTransform` (left hand IK-target global transform),
+     - `RightHandTargetTransform` (right hand IK-target global transform),
+     - `HeadTargetRestTransform` (head IK-target global rest transform),
+     - world scale,
+     - skeleton reference and the bone indices required for IK-004 (hip, head),
+     - tick delta,
+     - an auxiliary-signals lookup (for example keyed by `StringName`) for extensible computed values such as head
+       pitch.
 
     The context must be immutable for the duration of a tick so classifiers, transitions, and profiles cannot observe
     inconsistent state. Producing the context without per-frame heap pressure is a quality goal, not a hard threshold.
@@ -127,14 +128,14 @@ Ensure implementers can deliver stable pose classification and transition flow w
 | --- | --- | --- |
 | AC-PS-01 | The contract defines all six MVP states as explicit state-machine entries. | Technical |
 | AC-PS-02 | State and transition definitions are specified as resource-driven contracts, not fixed hard-coded enums alone. | Technical |
-| AC-PS-03 | Input boundaries are explicitly restricted to headset, controllers, and internal or animation-derived values for this phase. | Technical |
+| AC-PS-03 | Input boundaries are explicitly restricted to head and hand IK-target transforms and internal or animation-derived values for this phase. | Technical |
 | AC-PS-04 | The default transition method for long continuous transitions is linear clip + `TimeSeek`, with documented allowance for state-specific non-linear exceptions. | Technical |
-| AC-PS-05 | State-specific disambiguation between similar poses (for example stoop vs crouch) is a permanent responsibility of the state classifier, resolved using auxiliary XR signals such as headset pitch and controller height, not a temporary placeholder. | User + Technical |
+| AC-PS-05 | State-specific disambiguation between similar poses (for example stoop vs crouch) is a permanent responsibility of the state classifier, resolved using auxiliary IK-target signals such as head pitch and hand height from the pose-state context, not a temporary placeholder. | User + Technical |
 | AC-PS-06 | The contract does not require a mandatory catch-all ambiguity state. | Technical |
 | AC-PS-07 | Each state Resource declares both its animation/AnimationTree binding and its hip reconciliation profile. | Technical |
-| AC-PS-08 | Pose switching is inferred from device/runtime signals; explicit button input is not the default mechanism. | User + Technical |
+| AC-PS-08 | Pose switching is inferred from IK-target transforms and runtime signals; explicit button input is not the default mechanism. | User + Technical |
 | AC-PS-09 | The contract defines a public extension surface allowing new states, transitions, and classifiers to be added without modifying core state-machine source. | Technical |
-| AC-PS-10 | The state machine evaluates each tick from an immutable per-tick context snapshot that bundles XR inputs, including `CameraTransform` (current XR camera global transform) and `ViewpointGlobalRest` (viewpoint-node global rest transform), controller transforms, world scale, skeleton reference and bone indices, tick delta, and an auxiliary-signals lookup. | Technical |
+| AC-PS-10 | The state machine evaluates each tick from an immutable per-tick context snapshot that bundles IK-target inputs, including `HeadTargetTransform` (current head IK-target global transform), `HeadTargetRestTransform` (head IK-target global rest transform), `LeftHandTargetTransform`, `RightHandTargetTransform`, world scale, skeleton reference and bone indices, tick delta, and an auxiliary-signals lookup. | Technical |
 | AC-PS-11 | Runtime responsibilities may be split into a `PoseStateMachine` node running `Tick` per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) applying the pending hip translation, with `Tick` running after follower updates and before downstream consumers of pending hip translation, including begin-stage modifier-callback topology (for example `PlayerVRIK` begin-stage flow via `StageModifier`) or equivalent topology that preserves this ordering. | Technical |
 | AC-PS-12 | Transition Resources support optional lifecycle hooks (`OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`) and the state machine emits a state-changed observation. | Technical |
 | AC-PS-13 | Animation binding `Apply` is invoked per tick by default and is responsible for being idempotent or change-aware; change-aware bindings must document and implement that behaviour themselves. | Technical |

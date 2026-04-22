@@ -18,36 +18,54 @@ public sealed class PoseStateContextBuilder
     private Dictionary<StringName, float>? _auxiliarySignals;
 
     /// <summary>
-    /// Gets or sets the global left-hand controller transform for the tick.
+    /// Gets or sets the global left-hand IK target transform for the tick.
     /// </summary>
-    public Transform3D LeftControllerTransform
+    public Transform3D LeftHandTargetTransform
     {
         get;
         set;
     } = Transform3D.Identity;
 
     /// <summary>
-    /// Gets or sets the global right-hand controller transform for the tick.
+    /// Gets or sets the global right-hand IK target transform for the tick.
     /// </summary>
-    public Transform3D RightControllerTransform
+    public Transform3D RightHandTargetTransform
     {
         get;
         set;
     } = Transform3D.Identity;
 
     /// <summary>
-    /// Gets or sets the viewpoint rest transform for calibration.
+    /// Gets or sets the global left-foot IK target transform for the tick.
     /// </summary>
-    public Transform3D ViewpointGlobalRest
+    public Transform3D LeftFootTargetTransform
     {
         get;
         set;
     } = Transform3D.Identity;
 
     /// <summary>
-    /// Gets or sets the camera transform for the tick.
+    /// Gets or sets the global right-foot IK target transform for the tick.
     /// </summary>
-    public Transform3D CameraTransform
+    public Transform3D RightFootTargetTransform
+    {
+        get;
+        set;
+    } = Transform3D.Identity;
+
+    /// <summary>
+    /// Gets or sets the head rest/reference transform for calibration.
+    /// </summary>
+    public Transform3D HeadTargetRestTransform
+    {
+        get;
+        set;
+    } = Transform3D.Identity;
+
+    /// <summary>
+    /// Gets or sets the current head IK target transform for the tick.
+    /// </summary>
+    public Transform3D HeadTargetTransform
     {
         get;
         set;
@@ -125,12 +143,14 @@ public sealed class PoseStateContextBuilder
             ? Vector3.Zero
             : ComputeNormalizedHeadLocalOffset(
                 Skeleton.GlobalTransform,
-                ViewpointGlobalRest,
-                CameraTransform),
-        CameraTransform = CameraTransform,
-        LeftControllerTransform = LeftControllerTransform,
-        RightControllerTransform = RightControllerTransform,
-        ViewpointGlobalRest = ViewpointGlobalRest,
+                HeadTargetRestTransform,
+                HeadTargetTransform),
+        HeadTargetTransform = HeadTargetTransform,
+        LeftHandTargetTransform = LeftHandTargetTransform,
+        RightHandTargetTransform = RightHandTargetTransform,
+        LeftFootTargetTransform = LeftFootTargetTransform,
+        RightFootTargetTransform = RightFootTargetTransform,
+        HeadTargetRestTransform = HeadTargetRestTransform,
         WorldScale = WorldScale,
         Skeleton = Skeleton,
         HipBoneIndex = HipBoneIndex,
@@ -149,20 +169,20 @@ public sealed class PoseStateContextBuilder
     /// <c>1.0</c>, i.e. the local offset vector is divided by <c>abs(restHeadLocal.Y)</c>.
     /// </remarks>
     /// <param name="skeletonGlobalTransform">Global transform of the solved skeleton.</param>
-    /// <param name="viewpointGlobalRest">Global rest transform of the viewpoint.</param>
-    /// <param name="cameraTransform">Global current transform of the viewpoint.</param>
+    /// <param name="headTargetRestTransform">Global rest/reference transform of the head target.</param>
+    /// <param name="headTargetTransform">Global current transform of the head target.</param>
     /// <returns>
     /// The full 3D normalised local head offset, or <see cref="Vector3.Zero"/> when the
     /// normalisation baseline is invalid.
     /// </returns>
     public static Vector3 ComputeNormalizedHeadLocalOffset(
         Transform3D skeletonGlobalTransform,
-        Transform3D viewpointGlobalRest,
-        Transform3D cameraTransform)
+        Transform3D headTargetRestTransform,
+        Transform3D headTargetTransform)
     {
         Transform3D skeletonInverse = skeletonGlobalTransform.AffineInverse();
-        Vector3 restHeadLocal = (skeletonInverse * viewpointGlobalRest).Origin;
-        Vector3 currentHeadLocal = (skeletonInverse * cameraTransform).Origin;
+        Vector3 restHeadLocal = (skeletonInverse * headTargetRestTransform).Origin;
+        Vector3 currentHeadLocal = (skeletonInverse * headTargetTransform).Origin;
 
         float restHeight = Mathf.Abs(restHeadLocal.Y);
         if (!float.IsFinite(restHeight) || restHeight <= HeightEpsilon)

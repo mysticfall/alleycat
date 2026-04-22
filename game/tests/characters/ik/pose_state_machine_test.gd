@@ -2,6 +2,18 @@ extends SceneTree
 
 const TEST_SCENE_PATH := "res://tests/characters/ik/pose_state_machine_test.tscn"
 const OUTPUT_ROOT := "char001/pose_state_machine"
+const SCENARIOS_ROOT_PATH := ^"Markers/PoseStateMachine/Scenarios"
+const HEAD_REST_MARKER_PATH := ^"Markers/PoseStateMachine/RestHeadTarget"
+const LEFT_HAND_REST_MARKER_PATH := ^"Markers/PoseStateMachine/HandTargetRestLeft"
+const RIGHT_HAND_REST_MARKER_PATH := ^"Markers/PoseStateMachine/HandTargetRestRight"
+const LEFT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/LeftFoot"
+const RIGHT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/RightFoot"
+
+const HEAD_MARKER_NAME := "Head"
+const LEFT_HAND_MARKER_NAME := "LeftHand"
+const RIGHT_HAND_MARKER_NAME := "RightHand"
+const LEFT_FOOT_MARKER_NAME := "LeftFoot"
+const RIGHT_FOOT_MARKER_NAME := "RightFoot"
 
 const REQUIRED_CAMERAS := [
 	"FrontCamera",
@@ -26,15 +38,27 @@ func _run() -> void:
 	await SceneUtils.wait_frames(self, 2)
 
 	var driver: Node = SceneUtils.require_node(photobooth, ^"PoseStateMachineDriver")
-	var scenarios_root: Node3D = SceneUtils.require_node(photobooth, ^"Markers/PoseStateMachine/Scenarios") as Node3D
-	var rest_marker: Node3D = SceneUtils.require_node(photobooth, ^"Markers/PoseStateMachine/RestViewpoint") as Node3D
+	var scenarios_root: Node3D = SceneUtils.require_node(photobooth, SCENARIOS_ROOT_PATH) as Node3D
+	var rest_marker: Node3D = SceneUtils.require_node(photobooth, HEAD_REST_MARKER_PATH) as Node3D
+	var left_hand_rest_marker: Node3D = SceneUtils.require_node(photobooth, LEFT_HAND_REST_MARKER_PATH) as Node3D
+	var right_hand_rest_marker: Node3D = SceneUtils.require_node(photobooth, RIGHT_HAND_REST_MARKER_PATH) as Node3D
+	var left_foot_target: Node3D = SceneUtils.require_node(photobooth, LEFT_FOOT_TARGET_PATH) as Node3D
+	var right_foot_target: Node3D = SceneUtils.require_node(photobooth, RIGHT_FOOT_TARGET_PATH) as Node3D
 
-	if driver == null or scenarios_root == null or rest_marker == null:
+	if (
+		driver == null
+		or scenarios_root == null
+		or rest_marker == null
+		or left_hand_rest_marker == null
+		or right_hand_rest_marker == null
+		or left_foot_target == null
+		or right_foot_target == null
+	):
 		SceneUtils.fatal_error_and_quit("IK-004 runner: required driver/marker nodes are missing")
 		return
 
 	if _has_user_arg("--validate-only"):
-		if not _validate_required_scenarios(driver):
+		if not _validate_required_scenarios(scenarios_root):
 			SceneUtils.fatal_error_and_quit("IK-004 runner: validation failed for required scenarios")
 			return
 
@@ -43,7 +67,15 @@ func _run() -> void:
 		return
 
 	await _capture_framing_pass(photobooth, scenarios_root, rest_marker)
-	await _capture_scenarios(photobooth, driver, scenarios_root)
+	await _capture_scenarios(
+		photobooth,
+		driver,
+		scenarios_root,
+		rest_marker,
+		left_hand_rest_marker,
+		right_hand_rest_marker,
+		left_foot_target,
+		right_foot_target)
 
 	quit(0)
 
@@ -68,8 +100,17 @@ func _capture_framing_pass(photobooth: Photobooth, scenarios_root: Node3D, rest_
 			marker.visible = false
 
 
-func _capture_scenarios(photobooth: Photobooth, driver: Node, scenarios_root: Node3D) -> void:
-	var selected_scenarios: PackedStringArray = _resolve_selected_scenarios(driver)
+func _capture_scenarios(
+	photobooth: Photobooth,
+	driver: Node,
+	scenarios_root: Node3D,
+	head_rest_marker: Node3D,
+	left_hand_rest_marker: Node3D,
+	right_hand_rest_marker: Node3D,
+	left_foot_target: Node3D,
+	right_foot_target: Node3D
+) -> void:
+	var selected_scenarios: PackedStringArray = _resolve_selected_scenarios(scenarios_root)
 	if selected_scenarios.is_empty():
 		SceneUtils.fatal_error_and_quit("IK-004 runner: no scenarios selected")
 		return
@@ -83,10 +124,23 @@ func _capture_scenarios(photobooth: Photobooth, driver: Node, scenarios_root: No
 
 		scenario_node.visible = true
 
-		var applied: bool = bool(driver.call("ApplyScenario", StringName(scenario_name)))
-		if not applied:
-			SceneUtils.fatal_error_and_quit("IK-004 runner: failed to apply scenario '%s'" % scenario_name)
-			return
+		var pose_targets: Dictionary = _resolve_scenario_pose_targets(
+			scenario_node,
+			head_rest_marker,
+			left_hand_rest_marker,
+			right_hand_rest_marker,
+			left_foot_target,
+			right_foot_target)
+		driver.call(
+			"TickPoseTargets",
+			pose_targets["head"],
+			pose_targets["left_hand"],
+			pose_targets["right_hand"],
+			pose_targets["left_foot"],
+			pose_targets["right_foot"],
+			pose_targets["head_rest"],
+			-1,
+			-1.0)
 
 		await SceneUtils.wait_frames(self, 6)
 		await SceneUtils.wait_seconds(self, 0.05)
@@ -103,8 +157,8 @@ func _capture_scenarios(photobooth: Photobooth, driver: Node, scenarios_root: No
 		scenario_node.visible = false
 
 
-func _resolve_selected_scenarios(driver: Node) -> PackedStringArray:
-	var all_scenarios: PackedStringArray = _extract_scenario_names(driver)
+func _resolve_selected_scenarios(scenarios_root: Node3D) -> PackedStringArray:
+	var all_scenarios: PackedStringArray = _extract_scenario_names(scenarios_root)
 
 	if all_scenarios.is_empty():
 		return PackedStringArray()
@@ -129,25 +183,42 @@ func _resolve_selected_scenarios(driver: Node) -> PackedStringArray:
 	return selected
 
 
-func _validate_required_scenarios(driver: Node) -> bool:
-	var scenario_names: PackedStringArray = _extract_scenario_names(driver)
+func _validate_required_scenarios(scenarios_root: Node3D) -> bool:
+	var scenario_names: PackedStringArray = _extract_scenario_names(scenarios_root)
 	return scenario_names.has("Standing") and scenario_names.has("CrouchMidway") and scenario_names.has("CrouchFull")
 
 
-func _extract_scenario_names(driver: Node) -> PackedStringArray:
+func _extract_scenario_names(scenarios_root: Node3D) -> PackedStringArray:
 	var names := PackedStringArray()
-	var raw_names: Variant = driver.call("GetScenarioNames")
-
-	if raw_names is PackedStringArray:
-		for scenario_name: String in raw_names:
-			names.append(scenario_name)
-		return names
-
-	if raw_names is Array:
-		for scenario_value: Variant in raw_names:
-			names.append(str(scenario_value))
+	for child: Node in scenarios_root.get_children():
+		if child is Node3D:
+			names.append(str(child.name))
 
 	return names
+
+
+func _resolve_scenario_pose_targets(
+	scenario_node: Node3D,
+	head_rest_marker: Node3D,
+	left_hand_rest_marker: Node3D,
+	right_hand_rest_marker: Node3D,
+	left_foot_target: Node3D,
+	right_foot_target: Node3D
+) -> Dictionary:
+	var head_marker: Node3D = scenario_node.get_node_or_null(NodePath(HEAD_MARKER_NAME)) as Node3D
+	var left_hand_marker: Node3D = scenario_node.get_node_or_null(NodePath(LEFT_HAND_MARKER_NAME)) as Node3D
+	var right_hand_marker: Node3D = scenario_node.get_node_or_null(NodePath(RIGHT_HAND_MARKER_NAME)) as Node3D
+	var left_foot_marker: Node3D = scenario_node.get_node_or_null(NodePath(LEFT_FOOT_MARKER_NAME)) as Node3D
+	var right_foot_marker: Node3D = scenario_node.get_node_or_null(NodePath(RIGHT_FOOT_MARKER_NAME)) as Node3D
+
+	return {
+		"head": head_marker.global_transform if head_marker != null else scenario_node.global_transform,
+		"left_hand": left_hand_marker.global_transform if left_hand_marker != null else left_hand_rest_marker.global_transform,
+		"right_hand": right_hand_marker.global_transform if right_hand_marker != null else right_hand_rest_marker.global_transform,
+		"left_foot": left_foot_marker.global_transform if left_foot_marker != null else left_foot_target.global_transform,
+		"right_foot": right_foot_marker.global_transform if right_foot_marker != null else right_foot_target.global_transform,
+		"head_rest": head_rest_marker.global_transform,
+	}
 
 
 func _to_slug(value: Variant) -> String:

@@ -3,7 +3,7 @@ using Godot;
 namespace AlleyCat.IK.Pose;
 
 /// <summary>
-/// Read-only snapshot of XR, skeleton, and runtime inputs required for pose-state classification,
+/// Read-only snapshot of IK target, skeleton, and runtime inputs required for pose-state classification,
 /// transitions, animation binding, and hip reconciliation during a single tick.
 /// </summary>
 /// <remarks>
@@ -14,10 +14,8 @@ namespace AlleyCat.IK.Pose;
 /// an instance once per tick to reduce churn on the managed heap.
 /// </para>
 /// <para>
-/// In Increment 1 of IK-004, consumer code is permitted to leave fields at their default values
-/// when the corresponding runtime signal is not yet wired in (for example
-/// <see cref="ViewpointGlobalRest"/> and <see cref="CameraTransform"/> will only be
-/// meaningful once the <c>PlayerVRIK</c> driver supplies them in Increment 2).
+/// Consumer code may leave fields at their default values when the corresponding runtime signal
+/// is not wired in yet.
 /// </para>
 /// </remarks>
 public sealed record PoseStateContext
@@ -38,51 +36,69 @@ public sealed record PoseStateContext
     } = Vector3.Zero;
 
     /// <summary>
-    /// Gets the current global transform of the XR camera for this tick.
+    /// Gets the current global head IK target transform for this tick.
     /// </summary>
     /// <remarks>
-    /// May remain <see cref="Transform3D.Identity"/> until the runtime driver supplies it
-    /// (wired in Increment 2). Consumers that rely on this value must guard against that case.
+    /// May remain <see cref="Transform3D.Identity"/> until the runtime driver supplies it.
+    /// Consumers that rely on this value must guard against that case.
     /// </remarks>
-    public Transform3D CameraTransform
+    public Transform3D HeadTargetTransform
     {
         get;
         init;
     } = Transform3D.Identity;
 
     /// <summary>
-    /// Gets the global right-hand controller transform for this tick.
+    /// Gets the global right-hand IK target transform for this tick.
     /// </summary>
-    public Transform3D RightControllerTransform
+    public Transform3D RightHandTargetTransform
     {
         get;
         init;
     } = Transform3D.Identity;
 
     /// <summary>
-    /// Gets the global left-hand controller transform for this tick.
+    /// Gets the global left-hand IK target transform for this tick.
     /// </summary>
-    public Transform3D LeftControllerTransform
+    public Transform3D LeftHandTargetTransform
     {
         get;
         init;
     } = Transform3D.Identity;
 
     /// <summary>
-    /// Gets the global transform of the avatar viewpoint at rest (calibration reference).
+    /// Gets the global left-foot IK target transform for this tick.
+    /// </summary>
+    public Transform3D LeftFootTargetTransform
+    {
+        get;
+        init;
+    } = Transform3D.Identity;
+
+    /// <summary>
+    /// Gets the global right-foot IK target transform for this tick.
+    /// </summary>
+    public Transform3D RightFootTargetTransform
+    {
+        get;
+        init;
+    } = Transform3D.Identity;
+
+    /// <summary>
+    /// Gets the global rest/reference transform for the head target.
     /// </summary>
     /// <remarks>
-    /// May remain <see cref="Transform3D.Identity"/> until the runtime driver supplies it
-    /// (wired in Increment 2). Consumers that rely on this value must guard against that case.
+    /// May remain <see cref="Transform3D.Identity"/> until the runtime driver supplies it.
+    /// Consumers that rely on this value must guard against that case.
     /// </remarks>
-    public Transform3D ViewpointGlobalRest
+    public Transform3D HeadTargetRestTransform
     {
         get;
         init;
     } = Transform3D.Identity;
 
     /// <summary>
-    /// Gets the XR world-scale factor applied by the runtime bridge.
+    /// Gets the world-scale factor applied by the runtime bridge.
     /// </summary>
     public float WorldScale
     {
@@ -128,7 +144,7 @@ public sealed record PoseStateContext
 
     /// <summary>
     /// Gets the auxiliary signals dictionary keyed by <see cref="StringName"/>
-    /// (for example headset pitch, controller height, or animation-derived scalars).
+    /// (for example head pitch, hand height, or animation-derived scalars).
     /// </summary>
     /// <remarks>
     /// Treat the dictionary as read-only from a consumer perspective. The producer populates

@@ -12,8 +12,24 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/pose_state_machine_test.tscn";
     private const string DriverPath = "PoseStateMachineDriver";
+    private const string ScenarioMarkersRootPath = "Markers/PoseStateMachine/Scenarios";
+    private const string HeadRestMarkerPath = "Markers/PoseStateMachine/RestHeadTarget";
+    private const string LeftHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestLeft";
+    private const string RightHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestRight";
     private const string SkeletonPath = "Subject/Female/Female_export/GeneralSkeleton";
     private const string AnimationTreePath = "Subject/Female/AnimationTree";
+    private const string SubjectRootPath = "Subject/Female";
+    private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
+    private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
+    private const string FootTargetSyncControllerPath = "Subject/Female/Female_export/GeneralSkeleton/FootTargetSyncController";
+    private const string LeftLegIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftLegIKController";
+    private const string RightLegIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightLegIKController";
+    private const string LeftLegTwoBoneIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftLegTwoBoneIKController";
+    private const string RightLegTwoBoneIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightLegTwoBoneIKController";
+    private const string CopyLeftFootRotationPath = "Subject/Female/Female_export/GeneralSkeleton/CopyLeftFootRotation";
+    private const string CopyRightFootRotationPath = "Subject/Female/Female_export/GeneralSkeleton/CopyRightFootRotation";
+    private static readonly StringName _standingCrouchingSeekParameter =
+        new("parameters/StandingCrouching/TimeSeek/seek_request");
 
     private const float MinimumMidwaySeek = 0.2f;
     private const float MinimumFullSeek = 0.6f;
@@ -21,6 +37,8 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
     private const float MinimumFullCrouchHipDropMetres = 0.08f;
     private const float MinimumFullCrouchKneeFlexionIncreaseRadians = 0.08f;
     private const float MinimumFullCrouchKneeFlexionAbsoluteRadians = 0.15f;
+    private const float FootTargetPositionToleranceMetres = 0.03f;
+    private const float FootTargetRotationToleranceRadians = 0.06f;
 
     /// <summary>
     /// Verifies marker scenarios drive standing/crouching transitions, AnimationTree seek values,
@@ -54,8 +72,10 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
 
         PoseSnapshot standing = await ApplyScenarioAndCaptureAsync(
             sceneTree,
+            sceneRoot,
             driver,
             skeleton,
+            _standingCrouchingSeekParameter,
             "Standing",
             "Standing",
             hipsIndex,
@@ -65,8 +85,10 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
 
         PoseSnapshot crouchMidway = await ApplyScenarioAndCaptureAsync(
             sceneTree,
+            sceneRoot,
             driver,
             skeleton,
+            _standingCrouchingSeekParameter,
             "CrouchMidway",
             "Crouching",
             hipsIndex,
@@ -76,8 +98,10 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
 
         PoseSnapshot crouchFull = await ApplyScenarioAndCaptureAsync(
             sceneTree,
+            sceneRoot,
             driver,
             skeleton,
+            _standingCrouchingSeekParameter,
             "CrouchFull",
             "Crouching",
             hipsIndex,
@@ -87,8 +111,10 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
 
         PoseSnapshot standingAgain = await ApplyScenarioAndCaptureAsync(
             sceneTree,
+            sceneRoot,
             driver,
             skeleton,
+            _standingCrouchingSeekParameter,
             "Standing",
             "Standing",
             hipsIndex,
@@ -128,10 +154,94 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
             "Full crouch should maintain a minimally bent left-knee posture.");
     }
 
+    /// <summary>
+    /// Verifies crouch animation sampling synchronises both foot IK targets before leg IK solve.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_CrouchFull_SynchronisesFootTargetsFromAnimatedFeetBeforeLegSolve()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        _ = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(SubjectRootPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
+        Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
+        SkeletonModifier3D syncController = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(FootTargetSyncControllerPath),
+            exactMatch: false);
+        SkeletonModifier3D leftLegController = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(LeftLegIKControllerPath),
+            exactMatch: false);
+        SkeletonModifier3D rightLegController = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(RightLegIKControllerPath),
+            exactMatch: false);
+
+        TickScenario(sceneRoot, driver, "CrouchFull");
+
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.True(
+            syncController.GetIndex() < leftLegController.GetIndex()
+            && syncController.GetIndex() < rightLegController.GetIndex(),
+            "Foot target sync stage must execute before both leg IK controllers.");
+
+        int leftFootIndex = RequireBoneIndex(skeleton, "LeftFoot");
+        int rightFootIndex = RequireBoneIndex(skeleton, "RightFoot");
+
+        SkeletonModifier3D leftLegTwoBone = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(LeftLegTwoBoneIKControllerPath),
+            exactMatch: false);
+        SkeletonModifier3D rightLegTwoBone = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(RightLegTwoBoneIKControllerPath),
+            exactMatch: false);
+        SkeletonModifier3D copyLeftFootRotation = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(CopyLeftFootRotationPath),
+            exactMatch: false);
+        SkeletonModifier3D copyRightFootRotation = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull(CopyRightFootRotationPath),
+            exactMatch: false);
+
+        leftLegController.Active = false;
+        rightLegController.Active = false;
+        leftLegTwoBone.Active = false;
+        rightLegTwoBone.Active = false;
+        copyLeftFootRotation.Active = false;
+        copyRightFootRotation.Active = false;
+
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Transform3D expectedLeftFootPose = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(leftFootIndex);
+        Transform3D expectedRightFootPose = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(rightFootIndex);
+
+        AssertTargetMatchesFootPose(
+            leftFootTarget,
+            expectedLeftFootPose,
+            "LeftFoot target should follow crouch animation foot pose before leg solve.");
+        AssertTargetMatchesFootPose(
+            rightFootTarget,
+            expectedRightFootPose,
+            "RightFoot target should follow crouch animation foot pose before leg solve.");
+    }
+
     private static async Task<PoseSnapshot> ApplyScenarioAndCaptureAsync(
         SceneTree sceneTree,
+        Node sceneRoot,
         Node driver,
         Skeleton3D skeleton,
+        StringName seekRequestParameter,
         string scenarioName,
         string expectedStateId,
         int hipsIndex,
@@ -139,10 +249,10 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
         int leftLowerLegIndex,
         int leftFootIndex)
     {
-        bool applied = (bool)driver.Call("ApplyScenario", scenarioName);
-        Assert.True(applied, $"Expected scenario '{scenarioName}' to apply successfully.");
+        TickScenario(sceneRoot, driver, scenarioName);
 
-        float seekRequest = driver.Call("GetStandingCrouchingSeekRequest").AsSingle();
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+        float seekRequest = ReadSeekRequest(animationTree, seekRequestParameter);
 
         await WaitForFramesAsync(sceneTree, 4);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
@@ -162,6 +272,64 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
             seekRequest,
             hipsWorldY,
             leftKneeFlexionRadians);
+    }
+
+    private static void TickScenario(Node sceneRoot, Node driver, string scenarioName)
+    {
+        Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
+        Node3D scenarioNode = Assert.IsType<Node3D>(
+            scenariosRoot.GetNodeOrNull(new NodePath(scenarioName)),
+            exactMatch: false);
+
+        Node3D headRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadRestMarkerPath), exactMatch: false);
+        Node3D leftHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftHandRestMarkerPath), exactMatch: false);
+        Node3D rightHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandRestMarkerPath), exactMatch: false);
+        Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
+        Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
+
+        Transform3D headTargetTransform = ResolveScenarioMarkerTransform(
+            scenarioNode,
+            markerName: "Head",
+            fallback: scenarioNode.GlobalTransform);
+        Transform3D leftHandTargetTransform = ResolveScenarioMarkerTransform(
+            scenarioNode,
+            markerName: "LeftHand",
+            fallback: leftHandRestMarker.GlobalTransform);
+        Transform3D rightHandTargetTransform = ResolveScenarioMarkerTransform(
+            scenarioNode,
+            markerName: "RightHand",
+            fallback: rightHandRestMarker.GlobalTransform);
+        Transform3D leftFootTargetTransform = ResolveScenarioMarkerTransform(
+            scenarioNode,
+            markerName: "LeftFoot",
+            fallback: leftFootTarget.GlobalTransform);
+        Transform3D rightFootTargetTransform = ResolveScenarioMarkerTransform(
+            scenarioNode,
+            markerName: "RightFoot",
+            fallback: rightFootTarget.GlobalTransform);
+
+        _ = driver.Call(
+            "TickPoseTargets",
+            headTargetTransform,
+            leftHandTargetTransform,
+            rightHandTargetTransform,
+            leftFootTargetTransform,
+            rightFootTargetTransform,
+            headRestMarker.GlobalTransform,
+            -1,
+            -1.0);
+    }
+
+    private static float ReadSeekRequest(AnimationTree animationTree, StringName seekRequestParameter)
+        => animationTree.Get(seekRequestParameter).AsSingle();
+
+    private static Transform3D ResolveScenarioMarkerTransform(
+        Node3D scenarioNode,
+        string markerName,
+        Transform3D fallback)
+    {
+        Node3D? marker = scenarioNode.GetNodeOrNull<Node3D>(new NodePath(markerName));
+        return marker?.GlobalTransform ?? fallback;
     }
 
     private static int RequireBoneIndex(Skeleton3D skeleton, string boneName)
@@ -189,6 +357,26 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
         float clampedDot = Mathf.Clamp(thighDirection.Dot(shinDirection), -1.0f, 1.0f);
 
         return Mathf.Acos(clampedDot);
+    }
+
+    private static void AssertTargetMatchesFootPose(Node3D footTarget, Transform3D expectedFootPose, string message)
+    {
+        float positionDelta = footTarget.GlobalPosition.DistanceTo(expectedFootPose.Origin);
+        Quaternion expectedRotation = expectedFootPose.Basis.Orthonormalized().GetRotationQuaternion();
+        Quaternion actualRotation = footTarget.GlobalTransform.Basis.Orthonormalized().GetRotationQuaternion();
+        float rotationDelta = QuaternionAngleRadians(expectedRotation, actualRotation);
+
+        Assert.True(positionDelta <= FootTargetPositionToleranceMetres, $"{message} Position delta: {positionDelta:F4} m.");
+        Assert.True(
+            rotationDelta <= FootTargetRotationToleranceRadians,
+            $"{message} Rotation delta: {rotationDelta:F4} rad.");
+    }
+
+    private static float QuaternionAngleRadians(Quaternion from, Quaternion to)
+    {
+        float dot = Mathf.Abs(from.Dot(to));
+        dot = Mathf.Clamp(dot, -1.0f, 1.0f);
+        return 2.0f * Mathf.Acos(dot);
     }
 
     private sealed record PoseSnapshot(
