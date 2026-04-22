@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="KneelingSeekAnimationBinding" format=3 uid="uid://bud5d5oxa66eb"]
+
+[ext_resource type="Script" uid="uid://dsfbayb0ly4eg" path="res://src/IK/Pose/KneelingSeekAnimationBinding.cs" id="1_3nsw8"]
+
+[resource]
+resource_name = "KneelingAnimationBinding"
+script = ExtResource("1_3nsw8")
+FullCrouchForwardOffsetRatio = 0.053
+MaximumKneelForwardRangeRatio = 0.093

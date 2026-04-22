@@ -6,3 +6,4 @@
 tree_root = ExtResource("1_pw6e2")
 anim_player = NodePath("../AnimationPlayer")
 parameters/StandingCrouching/TimeSeek/seek_request = -1.0
+parameters/Kneeling/TimeSeek/seek_request = -1.0

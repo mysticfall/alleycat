@@ -14,6 +14,7 @@ namespace AlleyCat.IK.Pose;
 public sealed class PoseStateContextBuilder
 {
     private const float HeightEpsilon = 1e-4f;
+    private const float DefaultRestHeadHeight = 1.0f;
 
     private Dictionary<StringName, float>? _auxiliarySignals;
 
@@ -139,6 +140,11 @@ public sealed class PoseStateContextBuilder
     /// <returns>The constructed context.</returns>
     public PoseStateContext Build() => new()
     {
+        RestHeadHeight = Skeleton is null
+            ? DefaultRestHeadHeight
+            : ComputeRestHeadHeightMeasure(
+                Skeleton.GlobalTransform,
+                HeadTargetRestTransform),
         NormalizedHeadLocalOffset = Skeleton is null
             ? Vector3.Zero
             : ComputeNormalizedHeadLocalOffset(
@@ -194,6 +200,32 @@ public sealed class PoseStateContextBuilder
         return IsFinite(normalizedOffset)
             ? normalizedOffset
             : Vector3.Zero;
+    }
+
+    /// <summary>
+    /// Computes the intrinsic rest-pose head-height body measure in skeleton-local space.
+    /// </summary>
+    /// <remarks>
+    /// The value is <c>abs(restHeadLocal.Y)</c> where <c>restHeadLocal</c> is the calibrated rest
+    /// head target transformed into skeleton-local coordinates. This keeps the measure invariant
+    /// to world-space offsets and elevation.
+    /// </remarks>
+    /// <param name="skeletonGlobalTransform">Global transform of the solved skeleton.</param>
+    /// <param name="headTargetRestTransform">Global rest/reference transform of the head target.</param>
+    /// <returns>
+    /// Positive intrinsic rest head-height measure, or <c>1.0</c> when the baseline is invalid.
+    /// </returns>
+    public static float ComputeRestHeadHeightMeasure(
+        Transform3D skeletonGlobalTransform,
+        Transform3D headTargetRestTransform)
+    {
+        Transform3D skeletonInverse = skeletonGlobalTransform.AffineInverse();
+        Vector3 restHeadLocal = (skeletonInverse * headTargetRestTransform).Origin;
+
+        float restHeight = Mathf.Abs(restHeadLocal.Y);
+        return float.IsFinite(restHeight) && restHeight > HeightEpsilon
+            ? restHeight
+            : DefaultRestHeadHeight;
     }
 
     private static bool IsFinite(Vector3 value) =>

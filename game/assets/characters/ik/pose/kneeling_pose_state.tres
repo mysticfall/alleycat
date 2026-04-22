@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="KneelingPoseState" format=3]
+
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_animation_binding.tres" id="1_q8j3j"]
+[ext_resource type="Resource" uid="uid://c7f40jgif80ac" path="res://assets/characters/ik/pose/head_tracking_hip_profile.tres" id="2_se4rj"]
+[ext_resource type="Script" path="res://src/IK/Pose/KneelingPoseState.cs" id="3_nj0i1"]
+
+[resource]
+resource_name = "KneelingPoseState"
+script = ExtResource("3_nj0i1")
+Id = &"Kneeling"
+HipReconciliation = ExtResource("2_se4rj")
+AnimationBinding = ExtResource("1_q8j3j")

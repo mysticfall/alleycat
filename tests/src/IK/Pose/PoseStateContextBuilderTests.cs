@@ -10,6 +10,27 @@ namespace AlleyCat.Tests.IK.Pose;
 public sealed class PoseStateContextBuilderTests
 {
     /// <summary>
+    /// Rest head-height measure is intrinsic to skeleton space and invariant to world offsets.
+    /// </summary>
+    [Fact]
+    public void ComputeRestHeadHeightMeasure_IsInvariantAcrossWorldElevationAndOffset()
+    {
+        Vector3 restLocal = new(0.25f, 1.6f, -0.4f);
+
+        Transform3D skeletonA = new(Basis.Identity, new Vector3(0.0f, 0.0f, 0.0f));
+        Transform3D skeletonB = new(Basis.Identity, new Vector3(15.0f, 8.0f, -11.0f));
+
+        Transform3D restA = new(Basis.Identity, skeletonA * restLocal);
+        Transform3D restB = new(Basis.Identity, skeletonB * restLocal);
+
+        float measureA = PoseStateContextBuilder.ComputeRestHeadHeightMeasure(skeletonA, restA);
+        float measureB = PoseStateContextBuilder.ComputeRestHeadHeightMeasure(skeletonB, restB);
+
+        Assert.InRange(measureA, 1.5999f, 1.6001f);
+        Assert.InRange(measureB, 1.5999f, 1.6001f);
+    }
+
+    /// <summary>
     /// Rest-local to current-local offset is divided by rest local head height.
     /// </summary>
     [Fact]

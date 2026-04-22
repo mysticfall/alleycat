@@ -1,5 +1,19 @@
 [gd_resource type="AnimationNodeStateMachine" format=3 uid="uid://cc3jg4usnahhh"]
 
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_5dtbs"]
+animation = &"female/Kneel-seek"
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_vivgd"]
+
+[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_5tb7q"]
+graph_offset = Vector2(54.898438, 135.26563)
+nodes/output/position = Vector2(700, 180)
+nodes/Animation/node = SubResource("AnimationNodeAnimation_5dtbs")
+nodes/Animation/position = Vector2(120, 160)
+nodes/TimeSeek/node = SubResource("AnimationNodeTimeSeek_vivgd")
+nodes/TimeSeek/position = Vector2(460, 160)
+node_connections = [&"output", 0, &"TimeSeek", &"TimeSeek", 0, &"Animation"]
+
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_wnsqo"]
 animation = &"female/Crouch-seek"
 
@@ -16,9 +30,15 @@ node_connections = [&"output", 0, &"TimeSeek", &"TimeSeek", 0, &"Animation"]
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_vh5ah"]
 
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_8dm8s"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_6u2h0"]
+
 [resource]
+states/Kneeling/node = SubResource("AnimationNodeBlendTree_5tb7q")
+states/Kneeling/position = Vector2(620, 260)
 states/StandingCrouching/node = SubResource("AnimationNodeBlendTree_c3l26")
 states/StandingCrouching/position = Vector2(360, 100)
 states/Start/position = Vector2(120, 100)
-transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_vh5ah")]
+transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_vh5ah"), "StandingCrouching", "Kneeling", SubResource("AnimationNodeStateMachineTransition_8dm8s"), "Kneeling", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_6u2h0")]
 graph_offset = Vector2(-178.70313, 9.6171875)

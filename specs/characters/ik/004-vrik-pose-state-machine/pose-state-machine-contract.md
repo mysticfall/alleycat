@@ -16,6 +16,13 @@ Ensure implementers can deliver stable pose classification and transition flow w
 
 1. Pose changes must feel continuous across common player-driven movement.
 2. MVP pose states must remain available and selectable across supported input conditions.
+3. Players must be able to transition from crouching to kneeling by leaning forward beyond a configurable depth
+   threshold while in the full-crouch posture, without requiring explicit button input.
+4. The kneeling pose must seek forward from the full-crouch baseline with a short, tunable forward travel range.
+5. Players must be able to transition from kneeling back to crouching by leaning back or upright beyond a configurable reverse
+   threshold, without requiring explicit button input. This return transition is bidirectional with the forward kneeling transition.
+6. Kneeling transition thresholds must use normalised ratios derived from rest-pose body measures, not absolute metres.
+   At minimum, the head-height measure from rest pose must define the reference for the normalised crouch-depth gate.
 
 ## Technical Requirements
 
@@ -108,6 +115,19 @@ Ensure implementers can deliver stable pose classification and transition flow w
 20. The `Idle` clip remains in the animation library for future layering (for example, an additive breathing blend on
     top of the `StandingCrouching` sub-graph) but is not wired into the tree for MVP. This is a deferred-but-supported
     extension point, not a dropped feature.
+21. The Crouching→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the
+     transition can trigger. The gate requires the player to be at or near full crouch depth before kneeling becomes reachable.
+22. The Crouching→Kneeling transition trigger and the kneeling pose seek are both measured from the full-crouch baseline (the
+     head position when fully crouching), not from the standing baseline. Forward lean beyond the full-crouch baseline drives
+     the transition.
+23. The kneeling forward travel range (how far the kneeling pose seeks forward from the full-crouch baseline) is short and
+     tunable via a configuration parameter. The range is measured in head-offset space from the full-crouch position.
+24. The kneeling transition thresholds must use normalised ratios derived from rest-pose body measures, not absolute metres.
+     At minimum, the head-height measure from rest pose (`RestHeadHeight`) must define the reference for the normalised crouch-depth gate.
+     Tunable parameters use flexible ratios (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
+25. The Kneeling→Crouching return transition is gated by a configurable reverse-threshold that is also expressed as a normalised
+     ratio from the full-crouch baseline. The return transition uses the same full-crouch baseline as the forward transition but
+     in the reverse direction (leaning back or upright from kneeling), providing bidirectional crouch↔kneel transitions.
 
 ## In Scope
 
@@ -143,6 +163,11 @@ Ensure implementers can deliver stable pose classification and transition flow w
 | AC-PS-15 | State and transition identifiers are authored as `StringName`; the internal selection layer may use either `StringName` or `string` provided identity semantics are preserved. | Technical |
 | AC-PS-16 | The Standing/Crouching pose family is backed by a single `AnimationTree` state (`StandingCrouching`) whose sub-graph runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")` continuously, driven by a normalised scalar. Multiple framework-level `PoseState` resources MAY map to the same `AnimationTree` state when they share animation behaviour. | Technical |
 | AC-PS-17 | The `Idle` clip remains present in the animation library as a deferred-but-supported extension point (for example, additive breathing layering over the `StandingCrouching` sub-graph), but is not wired into the `AnimationTree` for MVP. | Technical |
+| AC-PS-18 | The Crouching→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the transition can trigger, requiring the player to be at or near full crouch depth (tunable gate). | Technical |
+| AC-PS-19 | The Crouching→Kneeling transition trigger and kneeling pose seek are measured from the full-crouch baseline (head position at full crouch), not from the standing baseline. Forward lean from the full-crouch baseline drives the transition. | Technical |
+| AC-PS-20 | The kneeling forward travel range is short and tunable via a configuration parameter, measured from the full-crouch baseline in head-offset space. | Technical |
+| AC-PS-21 | The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres. At minimum, the head-height measure from rest pose defines the reference for the normalised crouch-depth gate. | Technical |
+| AC-PS-22 | The Kneeling→Crouching return transition is gated by a configurable reverse-threshold expressed as a normalised ratio from the full-crouch baseline, providing bidirectional crouch↔kneel transitions. | Technical |
 
 ## References
 

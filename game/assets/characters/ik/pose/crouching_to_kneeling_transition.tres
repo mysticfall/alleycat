@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CrouchingToKneelingPoseTransition" format=3 uid="uid://cqlywbxf8w02b"]
+
+[ext_resource type="Script" uid="uid://cgk3oemiaaedb" path="res://src/IK/Pose/CrouchingToKneelingPoseTransition.cs" id="1_r22lq"]
+
+[resource]
+resource_name = "CrouchingToKneelingTransition"
+script = ExtResource("1_r22lq")
+FullCrouchDepthRatio = 0.4
+MinimumCrouchDepthBlend = 0.92
+FullCrouchForwardOffsetRatio = 0.053
+MinimumForwardOffsetFromFullCrouchRatio = 0.027
+From = &"Crouching"
+To = &"Kneeling"

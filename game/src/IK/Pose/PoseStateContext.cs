@@ -21,6 +21,20 @@ namespace AlleyCat.IK.Pose;
 public sealed record PoseStateContext
 {
     /// <summary>
+    /// Gets the intrinsic rest-pose head-height body measure in skeleton-local space.
+    /// </summary>
+    /// <remarks>
+    /// This value is derived from the calibrated rest head target after converting to skeleton
+    /// local space (<c>abs(restHeadLocal.Y)</c>). It is invariant to world origin/elevation and
+    /// is used as the normalisation baseline for ratio-based kneeling thresholds.
+    /// </remarks>
+    public float RestHeadHeight
+    {
+        get;
+        init;
+    } = 1.0f;
+
+    /// <summary>
     /// Gets the precomputed head offset from rest-local to current-local, expressed in
     /// skeleton-local space and normalised by rest local head height.
     /// </summary>

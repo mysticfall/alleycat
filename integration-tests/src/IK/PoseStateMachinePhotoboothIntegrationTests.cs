@@ -30,6 +30,8 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
     private const string CopyRightFootRotationPath = "Subject/Female/Female_export/GeneralSkeleton/CopyRightFootRotation";
     private static readonly StringName _standingCrouchingSeekParameter =
         new("parameters/StandingCrouching/TimeSeek/seek_request");
+    private static readonly StringName _kneelingSeekParameter =
+        new("parameters/Kneeling/TimeSeek/seek_request");
 
     private const float MinimumMidwaySeek = 0.2f;
     private const float MinimumFullSeek = 0.6f;
@@ -37,6 +39,8 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
     private const float MinimumFullCrouchHipDropMetres = 0.08f;
     private const float MinimumFullCrouchKneeFlexionIncreaseRadians = 0.08f;
     private const float MinimumFullCrouchKneeFlexionAbsoluteRadians = 0.15f;
+    private const float MinimumKneelingSeek = 0.1f;
+    private const float MinimumKneelingKneeFlexionIncreaseRadians = 0.05f;
     private const float FootTargetPositionToleranceMetres = 0.03f;
     private const float FootTargetRotationToleranceRadians = 0.06f;
 
@@ -152,6 +156,74 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
         Assert.True(
             crouchFull.LeftKneeFlexionRadians >= MinimumFullCrouchKneeFlexionAbsoluteRadians,
             "Full crouch should maintain a minimally bent left-knee posture.");
+    }
+
+    /// <summary>
+    /// Verifies crouching-to-kneeling only triggers near full crouch, uses dedicated kneel seek,
+    /// and can transition back to crouching.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_CrouchingToKneeling_RespectsDepthGateAndForwardBaseline()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+
+        int leftUpperLegIndex = RequireBoneIndex(skeleton, "LeftUpperLeg");
+        int leftLowerLegIndex = RequireBoneIndex(skeleton, "LeftLowerLeg");
+        int leftFootIndex = RequireBoneIndex(skeleton, "LeftFoot");
+
+        TickScenario(sceneRoot, driver, "CrouchMidwayForward");
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+        var crouchMidwayState = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal("Crouching", crouchMidwayState.ToString());
+        float crouchMidwayKneeFlexion = ComputeKneeFlexionRadians(
+            skeleton,
+            leftUpperLegIndex,
+            leftLowerLegIndex,
+            leftFootIndex);
+
+        TickScenario(sceneRoot, driver, "KneelForward");
+
+        float kneelingSeek = ReadSeekRequest(animationTree, _kneelingSeekParameter);
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+        var kneelingState = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal("Kneeling", kneelingState.ToString());
+        float kneelingKneeFlexion = ComputeKneeFlexionRadians(
+            skeleton,
+            leftUpperLegIndex,
+            leftLowerLegIndex,
+            leftFootIndex);
+
+        Assert.True(
+            kneelingSeek >= MinimumKneelingSeek,
+            $"Kneeling seek should be at least {MinimumKneelingSeek:F2} after crouch-gated forward transition.");
+        Assert.True(
+            kneelingKneeFlexion >= crouchMidwayKneeFlexion + MinimumKneelingKneeFlexionIncreaseRadians,
+            "Kneeling should increase left-knee flexion beyond crouch-midway, guarding against implausible shallow kneel poses.");
+
+        TickScenario(sceneRoot, driver, "CrouchFull");
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        var crouchingStateAfterKneel = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal(
+            "Crouching",
+            crouchingStateAfterKneel.ToString());
     }
 
     /// <summary>
