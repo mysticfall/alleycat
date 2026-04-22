@@ -7,14 +7,18 @@ title: Leg-Feet IK Contract
 ## Purpose
 
 Define the solver and controller contract for IK-003: per-leg `TwoBoneIK3D` solving with knee pole-target prediction
-derived from foot orientation.
+derived from current animation geometry (primary method) with foot orientation-based fallback for degenerate cases.
 
 ## Contract Scope
 
 - One `TwoBoneIK3D` chain per leg (left and right), solving upper leg to foot.
 - A per-leg controller (`LegIKController`) that updates pole-target position before IK solve.
-- Knee pole-direction prediction from the associated foot axes.
-- Compressed-state knee pole minimum-offset safeguarding derived from rest leg length.
+- **Primary geometric method**: Knee pole direction derived from current animation geometry:
+  - `o1` = midpoint(upper leg origin, foot IK target position)
+  - `o2` = midpoint(upper leg origin, current foot bone position) (line origin for pole-target placement)
+  - Primary pole direction = normalise(lower leg origin - o2)
+- **Fallback method**: Foot orientation-based pole direction when animation-derived direction is degenerate.
+- Unconditional knee pole minimum-offset safeguarding derived from rest leg length.
 - Read-only foot target contract: runtime logic consumes target transforms as goals and never mutates them.
 
 ## Mechanism
@@ -45,8 +49,8 @@ Sync ordering (per tick):
 
 This ordering guarantees deterministic solve behaviour when animation timing or `TimeSeek` position changes.
 
-`LegIKController` computes a pole-target direction from foot orientation each frame, then writes the resulting pole-target
-transform for downstream IK solve.
+`LegIKController` computes a pole-target direction using the primary geometric method each frame, with fallback to foot orientation
+when the animation-derived direction is degenerate, then writes the resulting pole-target transform for downstream IK solve.
 
 The solver/controller pipeline must solve towards provided foot targets as inputs. Foot target transforms are read-only
 for IK-003 runtime logic and must not be modified by `LegIKController` or companion solver wiring.
@@ -59,42 +63,68 @@ for IK-003 runtime logic and must not be modified by `LegIKController` or compan
 
 ## Knee Pole Prediction
 
-### Inputs
+The knee pole prediction uses a primary geometric method with fallback to foot orientation for degenerate cases.
 
-Per leg, the controller must derive:
+### Primary Geometric Method
 
-- **Leg Direction**: normalised vector from upper-leg joint towards current foot target.
-- **Foot Forward Axis**: associated foot forward vector in the same basis as leg direction.
-- **Foot Up Axis**: associated foot up vector in the same basis as leg direction.
+The controller computes the knee pole direction from current animation geometry:
 
-### Axis Interpolation Requirement
+1. **Compute reference points**:
+   - `o1` = midpoint(upper leg origin position, foot IK target position)
+   - `o2` = midpoint(upper leg origin position, current foot bone position)
 
-Pole-direction selection must blend between foot forward and foot up axes using forward-dot-driven weighting.
+2. **Compute primary pole direction**:
+   - Vector from `o2` to lower leg origin = lower leg origin - `o2`
+   - Primary pole direction = normalise(lower leg origin - `o2`)
 
-The contract requires:
+3. **Line origin for pole-target placement**:
+   - The pole-target line passes through `o2` along the primary pole direction.
+   - Offset distance logic remains unchanged (ratio/minimum/floor as defined in Technical Requirements).
 
-1. Compute a forward alignment dot value between foot forward and leg direction.
-2. Derive interpolation weight(s) from that forward alignment value.
-3. Interpolate between foot forward and foot up using the derived weight(s), then produce a normalised blended axis as
-   the knee pole-direction seed.
+### Fallback Trigger And Method
 
-The contract does not require a separate up-axis alignment dot calculation.
+When the animation-derived direction is degenerate, the system must fall back to foot orientation-based pole direction:
 
-Exact remapping curves and clamp constants are implementation-defined, but behaviour must satisfy AC-03 and AC-04.
+1. **Fallback trigger**: The direction from `o2` to lower leg origin is degenerate when:
+   - Magnitude is too short (below implementation-defined threshold), OR
+   - Direction is near-zero (near-zero magnitude after normalisation attempts)
+
+2. **Fallback method**: Use foot IK target orientation to derive pole direction:
+   - Uses the existing foot forward/up axis interpolation contract.
+   - Foot forward axis and foot up axis are extracted from foot IK target rotation.
+   - The forward/up interpolation weighting uses the dot product between foot forward and leg direction.
+
+3. **Fallback pole direction**: Same interpolation formula as the original contract, applied to foot IK target orientation.
+
+### Primary-to-Fallback Transition
+
+The transition between primary and fallback methods must be:
+
+1. **Deterministic**: Given identical skeleton pose, the same method is always selected.
+2. **Smooth**: No discontinuous jumps when switching from primary to fallback.
+3. **Deterministic threshold**: Fallback trigger threshold is an implementation-defined internal constant (not exposed as a tunable parameter).
+
+### Offset Distance Logic
+
+The offset distance computation remains unchanged from the original contract:
+
+- Uses ratio-based offset (for example 0.5 * leg length)
+- Enforces minimum floor unconditionally: `max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)`
+- Line origin for placement uses `o2` (not `o1`)
 
 ### Side Consistency Requirement
 
 The resulting pole direction must preserve left/right side consistency so knees do not cross inward unexpectedly during
-neutral standing poses.
+neutral standing poses, regardless of whether primary or fallback method is used.
 
 ### Determinism Requirement
 
-Given identical skeleton pose and foot target transforms, knee pole output must be deterministic.
+Given identical skeleton pose and foot target transforms, knee pole output must be deterministic, including the
+determination of whether primary or fallback method is active.
 
-### Compressed Knee-Pole Minimum Offset Safeguard
+### Unconditional Knee-Pole Minimum Offset Safeguard
 
-In compressed crouch-like leg states, the controller must enforce a minimum pole offset floor before writing the
-pole-target position.
+The controller must enforce a minimum pole offset floor unconditionally before writing the pole-target position.
 
 The floor contract is:
 
@@ -102,14 +132,13 @@ The floor contract is:
 
 Implementation obligations:
 
-1. `RestLegLength` must be sourced from the leg's rest/bind configuration and treated as the reference length input for
-   this safeguard.
+1. `RestLegLength` must be sourced from the leg's rest/bind configuration and treated as the reference length input for this safeguard.
 2. `MinimumPoleOffset` must remain a tunable lower-bound parameter.
 3. `RestLegHalfPoleOffsetMargin` must remain a tunable additive margin parameter.
-4. Compression gating that determines when this floor is enforced must remain tunable.
+4. This safeguard applies unconditionally and is not compression-gated.
 5. This safeguard must not mutate foot target transforms and must operate within the existing read-only target contract.
 
-Exact compression thresholds and final tuning constants are implementation-defined unless constrained by another spec.
+Exact tuning constants are implementation-defined unless constrained by another spec.
 
 ## Solve-To-Target Behaviour
 
@@ -152,13 +181,15 @@ This contract defines details for:
 
 - AC-01
 - AC-02
-- AC-03
-- AC-04
-- AC-05
-- AC-05a (foot target sync stage)
-- AC-06
+- AC-03 (primary geometric method)
+- AC-04 (fallback trigger and method)
+- AC-05 (primary-to-fallback transition)
+- AC-06 (solve-to-target)
+- AC-06a (foot target sync stage)
+- AC-07
 - AC-12
 - AC-13
+- AC-14 (unconditional minimum offset)
 
 Source-of-truth criteria wording is maintained in [IK-003 Overview](index.md#acceptance-criteria).
 

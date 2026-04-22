@@ -91,16 +91,6 @@ public partial class LegIKController : SkeletonModifier3D
     } = 0.1f;
 
     /// <summary>
-    /// Leg compression ratio threshold for applying the rest-leg pole offset floor.
-    /// </summary>
-    [Export(PropertyHint.Range, "0.1,1.0,0.01")]
-    public float CompressionRatioForRestPoleFloor
-    {
-        get;
-        set;
-    } = 0.6f;
-
-    /// <summary>
     /// Small side-outward bias to keep neutral knee planes from crossing inward.
     /// </summary>
     [Export(PropertyHint.Range, "0,1.0,0.01")]
@@ -141,55 +131,56 @@ public partial class LegIKController : SkeletonModifier3D
             return;
         }
 
-        if (!_footAxesResolved && !TryCacheFootTargetLocalAxes())
-        {
-            return;
-        }
-
         Vector3 upperLegPosition = BoneGlobalPosition(_upperLegIdx);
         Vector3 desiredFootPosition = FootTarget.GlobalPosition;
-        Vector3 legDirection = desiredFootPosition - upperLegPosition;
-        if (legDirection.LengthSquared() <= DegenerateThreshold)
+        Vector3 currentFootPosition = BoneGlobalPosition(_footIdx);
+        Vector3 lowerLegPosition = BoneGlobalPosition(_lowerLegIdx);
+
+        Vector3 o1 = (upperLegPosition + desiredFootPosition) * 0.5f;
+        Vector3 o2 = (upperLegPosition + currentFootPosition) * 0.5f;
+
+        Vector3 animationPoleDirectionRaw = lowerLegPosition - o2;
+        bool hasAnimationPoleDirection = TryNormalise(animationPoleDirectionRaw, out Vector3 poleDirection);
+        if (!hasAnimationPoleDirection)
         {
-            return;
+            if (!_footAxesResolved && !TryCacheFootTargetLocalAxes())
+            {
+                return;
+            }
+
+            Vector3 legDirection = o1 - upperLegPosition;
+            if (!TryNormalise(legDirection, out legDirection))
+            {
+                return;
+            }
+
+            Basis footBasis = FootTarget.GlobalTransform.Basis.Orthonormalized();
+            Vector3 footForwardAxis = footBasis * _footForwardLocalAxis;
+            Vector3 footUpAxis = footBasis * _footUpLocalAxis;
+
+            Vector3 sideOutwardAxis = ComputeSideOutwardAxis(upperLegPosition, legDirection);
+            poleDirection = ComputePoleDirection(
+                legDirection,
+                footForwardAxis,
+                footUpAxis,
+                sideOutwardAxis,
+                SideBiasWeight);
+
+            if (poleDirection.LengthSquared() <= DegenerateThreshold)
+            {
+                return;
+            }
         }
 
-        legDirection = legDirection.Normalized();
-
-        Basis footBasis = FootTarget.GlobalTransform.Basis.Orthonormalized();
-        Vector3 footForwardAxis = footBasis * _footForwardLocalAxis;
-        Vector3 footUpAxis = footBasis * _footUpLocalAxis;
-
-        Vector3 sideOutwardAxis = ComputeSideOutwardAxis(upperLegPosition, legDirection);
-        Vector3 poleDirection = ComputePoleDirection(
-            legDirection,
-            footForwardAxis,
-            footUpAxis,
-            sideOutwardAxis,
-            SideBiasWeight);
-
-        if (poleDirection.LengthSquared() <= DegenerateThreshold)
-        {
-            return;
-        }
-
-        Vector3 midpoint = (upperLegPosition + desiredFootPosition) * 0.5f;
-        float currentLegLength = (desiredFootPosition - upperLegPosition).Length();
+        float currentLegLength = (o1 - upperLegPosition).Length() * 2.0f;
         float ratioBasedOffset = currentLegLength * PoleOffsetRatio;
         float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
 
-        float compressionRatioThreshold = Mathf.Clamp(CompressionRatioForRestPoleFloor, 0.1f, 1.0f);
+        float restLegMinimumOffset = (_restLegLength * 0.5f) + RestLegHalfPoleOffsetMargin;
+        float floorOffset = Mathf.Max(MinimumPoleOffset, restLegMinimumOffset);
+        offset = Mathf.Max(offset, floorOffset);
 
-        bool isLegCompressed = currentLegLength <= (_restLegLength * compressionRatioThreshold);
-        bool isCrouchLikeCompression = desiredFootPosition.Y <= upperLegPosition.Y;
-        if (isLegCompressed && isCrouchLikeCompression)
-        {
-            float restLegMinimumOffset = (_restLegLength * 0.5f) + RestLegHalfPoleOffsetMargin;
-            float compressedFloor = Mathf.Max(MinimumPoleOffset, restLegMinimumOffset);
-            offset = Mathf.Max(offset, compressedFloor);
-        }
-
-        PoleTarget.GlobalPosition = midpoint + (poleDirection * offset);
+        PoleTarget.GlobalPosition = o2 + (poleDirection * offset);
     }
 
     private bool TryResolveBones()

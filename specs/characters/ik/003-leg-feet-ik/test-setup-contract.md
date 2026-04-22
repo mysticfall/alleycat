@@ -44,10 +44,11 @@ Contract requirements:
 
 At minimum, test scenarios must cover:
 
-- Neutral standing lower-body pose.
+- Neutral standing lower-body pose (to exercise primary geometric method).
 - Forward foot placement variation.
-- Outward/inward foot rotation variation (to exercise forward-dot-driven forward/up axis interpolation).
-- A hips-offset pose via `BoneAttachment3D` override.
+- Outward/inward foot rotation variation (to exercise forward-dot-driven forward/up axis interpolation during fallback).
+- A hips-offset pose via `BoneAttachment3D` override (to exercise primary geometric method under different geometry).
+- **Degenerate pose scenario**: A pose that triggers fallback mode (animation-derived direction too short or near-zero).
 
 Exact marker values are implementation-defined, but each scenario must have stable reproducible setup in scene data.
 
@@ -66,6 +67,7 @@ A C# integration test must load the same scene and assert:
 - Solve-to-target runtime behaviour with provided foot targets consumed as goal inputs.
 - Foot target transform immutability across IK runtime updates (targets remain read-only inputs).
 - Stable behaviour under hips-override scenarios.
+- Corner-case response: the system responds deterministically to degenerate animation geometries without unstable behaviour.
 
 ## Acceptance Criteria Coverage
 
@@ -74,7 +76,8 @@ This contract defines details for:
 - AC-08
 - AC-09
 - AC-10
-- AC-11
+- AC-11 (visual: stable knee/foot behaviour verification)
+- AC-12 (non-visual: continuity, read-only targets, hips override, corner-case response)
 
 Source-of-truth criteria wording is maintained in [IK-003 Overview](index.md#acceptance-criteria).
 

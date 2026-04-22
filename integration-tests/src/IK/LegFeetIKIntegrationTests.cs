@@ -90,6 +90,8 @@ public sealed class LegFeetIKIntegrationTests
         int rightUpperLegIdx = RequireBone(skeleton, "RightUpperLeg");
         int leftLowerLegIdx = RequireBone(skeleton, "LeftLowerLeg");
         int rightLowerLegIdx = RequireBone(skeleton, "RightLowerLeg");
+        int leftFootIdx = RequireBone(skeleton, "LeftFoot");
+        int rightFootIdx = RequireBone(skeleton, "RightFoot");
 
         // 1) Neutral baseline and side consistency.
         await ApplyPoseAndSettleAsync(
@@ -120,15 +122,17 @@ public sealed class LegFeetIKIntegrationTests
             leftPoleTarget,
             leftFootTarget,
             leftUpperLegIdx,
+            leftFootIdx,
             "Left pole target should be in front of the left leg in neutral pose.");
         AssertPoleForwardOfLeg(
             skeleton,
             rightPoleTarget,
             rightFootTarget,
             rightUpperLegIdx,
+            rightFootIdx,
             "Right pole target should be in front of the right leg in neutral pose.");
 
-        Vector3 neutralLeftPole = ComputePoleDirection(skeleton, leftPoleTarget, leftFootTarget, leftUpperLegIdx);
+        Vector3 neutralLeftPole = ComputePoleDirection(skeleton, leftPoleTarget, leftUpperLegIdx, leftFootIdx);
 
         // 2) Pole and knee continuity under outward <-> inward interpolation.
         Vector3 previousLeftPoleDirection = Vector3.Zero;
@@ -145,8 +149,8 @@ public sealed class LegFeetIKIntegrationTests
 
             await WaitForSkeletonUpdatesAsync(sceneTree, skeleton, 2);
 
-            Vector3 leftPoleDirection = ComputePoleDirection(skeleton, leftPoleTarget, leftFootTarget, leftUpperLegIdx);
-            Vector3 rightPoleDirection = ComputePoleDirection(skeleton, rightPoleTarget, rightFootTarget, rightUpperLegIdx);
+            Vector3 leftPoleDirection = ComputePoleDirection(skeleton, leftPoleTarget, leftUpperLegIdx, leftFootIdx);
+            Vector3 rightPoleDirection = ComputePoleDirection(skeleton, rightPoleTarget, rightUpperLegIdx, rightFootIdx);
 
             Vector3 leftKneeDirection = ComputeKneeBendDirection(skeleton, leftFootTarget, leftUpperLegIdx, leftLowerLegIdx);
             Vector3 rightKneeDirection = ComputeKneeBendDirection(skeleton, rightFootTarget, rightUpperLegIdx, rightLowerLegIdx);
@@ -201,7 +205,7 @@ public sealed class LegFeetIKIntegrationTests
             hipsLegUpLeft);
 
         Vector3 leftLegDirection = ComputeLegDirection(skeleton, leftFootTarget, leftUpperLegIdx);
-        Vector3 leftLegUpPole = ComputePoleDirection(skeleton, leftPoleTarget, leftFootTarget, leftUpperLegIdx);
+        Vector3 leftLegUpPole = ComputePoleDirection(skeleton, leftPoleTarget, leftUpperLegIdx, leftFootIdx);
         Vector3 leftLegUpKnee = ComputeKneeBendDirection(skeleton, leftFootTarget, leftUpperLegIdx, leftLowerLegIdx);
 
         ResolveCornerCaseOracleAxes(leftRaised, out Vector3 leftFootForwardAxis, out Vector3 leftFootUpAxis);
@@ -260,6 +264,8 @@ public sealed class LegFeetIKIntegrationTests
             rightFootTarget,
             leftUpperLegIdx,
             rightUpperLegIdx,
+            leftFootIdx,
+            rightFootIdx,
             leftLowerLegIdx,
             rightLowerLegIdx);
 
@@ -281,6 +287,8 @@ public sealed class LegFeetIKIntegrationTests
             rightFootTarget,
             leftUpperLegIdx,
             rightUpperLegIdx,
+            leftFootIdx,
+            rightFootIdx,
             leftLowerLegIdx,
             rightLowerLegIdx);
 
@@ -315,11 +323,11 @@ public sealed class LegFeetIKIntegrationTests
     }
 
     /// <summary>
-    /// Verifies compressed crouch poses enforce the rest-leg-derived pole-offset floor.
+    /// Verifies enforcement of the rest-leg-derived pole-offset floor.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task LegFeetIk_CrouchPose_EnforcesRestLegPoleOffsetFloor()
+    public async Task LegFeetIk_PoleOffset_EnforcesUnconditionalRestLegFloor()
     {
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
@@ -370,20 +378,18 @@ public sealed class LegFeetIKIntegrationTests
             skeleton,
             leftLegIKController,
             leftPoleTarget,
-            leftFootTarget,
             leftUpperLegIdx,
             leftLowerLegIdx,
             leftFootIdx,
-            "Left crouch pole should respect the rest-leg-derived minimum offset floor.");
+            "Left pole should respect the rest-leg-derived minimum offset floor.");
         AssertPoleOffsetFloorEnforced(
             skeleton,
             rightLegIKController,
             rightPoleTarget,
-            rightFootTarget,
             rightUpperLegIdx,
             rightLowerLegIdx,
             rightFootIdx,
-            "Right crouch pole should respect the rest-leg-derived minimum offset floor.");
+            "Right pole should respect the rest-leg-derived minimum offset floor.");
     }
 
     private static async Task ApplyPoseAndSettleAsync(
@@ -420,11 +426,13 @@ public sealed class LegFeetIKIntegrationTests
         Node3D rightFootTarget,
         int leftUpperLegIdx,
         int rightUpperLegIdx,
+        int leftFootBoneIndex,
+        int rightFootBoneIndex,
         int leftLowerLegIdx,
         int rightLowerLegIdx)
     {
-        Vector3 baselineLeftPole = ComputePoleDirection(skeleton, leftPoleTarget, leftFootTarget, leftUpperLegIdx);
-        Vector3 baselineRightPole = ComputePoleDirection(skeleton, rightPoleTarget, rightFootTarget, rightUpperLegIdx);
+        Vector3 baselineLeftPole = ComputePoleDirection(skeleton, leftPoleTarget, leftUpperLegIdx, leftFootBoneIndex);
+        Vector3 baselineRightPole = ComputePoleDirection(skeleton, rightPoleTarget, rightUpperLegIdx, rightFootBoneIndex);
         Vector3 baselineLeftKnee = ComputeKneeBendDirection(skeleton, leftFootTarget, leftUpperLegIdx, leftLowerLegIdx);
         Vector3 baselineRightKnee = ComputeKneeBendDirection(skeleton, rightFootTarget, rightUpperLegIdx, rightLowerLegIdx);
 
@@ -432,8 +440,8 @@ public sealed class LegFeetIKIntegrationTests
         {
             _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
-            Vector3 leftPoleSample = ComputePoleDirection(skeleton, leftPoleTarget, leftFootTarget, leftUpperLegIdx);
-            Vector3 rightPoleSample = ComputePoleDirection(skeleton, rightPoleTarget, rightFootTarget, rightUpperLegIdx);
+            Vector3 leftPoleSample = ComputePoleDirection(skeleton, leftPoleTarget, leftUpperLegIdx, leftFootBoneIndex);
+            Vector3 rightPoleSample = ComputePoleDirection(skeleton, rightPoleTarget, rightUpperLegIdx, rightFootBoneIndex);
             Vector3 leftKneeSample = ComputeKneeBendDirection(skeleton, leftFootTarget, leftUpperLegIdx, leftLowerLegIdx);
             Vector3 rightKneeSample = ComputeKneeBendDirection(skeleton, rightFootTarget, rightUpperLegIdx, rightLowerLegIdx);
 
@@ -482,12 +490,11 @@ public sealed class LegFeetIKIntegrationTests
     private static Vector3 ComputePoleDirection(
         Skeleton3D skeleton,
         Node3D poleTarget,
-        Node3D footTarget,
-        int upperLegBoneIndex)
+        int upperLegBoneIndex,
+        int footBoneIndex)
     {
-        Vector3 upperLegPosition = BoneWorldPosition(skeleton, upperLegBoneIndex);
-        Vector3 midpoint = (upperLegPosition + footTarget.GlobalPosition) * 0.5f;
-        return (poleTarget.GlobalPosition - midpoint).Normalized();
+        Vector3 poleLineOrigin = ComputePoleLineOrigin(skeleton, upperLegBoneIndex, footBoneIndex);
+        return (poleTarget.GlobalPosition - poleLineOrigin).Normalized();
     }
 
     private static Vector3 ComputeKneeBendDirection(
@@ -546,11 +553,11 @@ public sealed class LegFeetIKIntegrationTests
         Node3D poleTarget,
         Node3D footTarget,
         int upperLegBoneIndex,
+        int footBoneIndex,
         string message)
     {
-        Vector3 upperLegPosition = BoneWorldPosition(skeleton, upperLegBoneIndex);
-        Vector3 midpoint = (upperLegPosition + footTarget.GlobalPosition) * 0.5f;
-        Vector3 midpointToPole = poleTarget.GlobalPosition - midpoint;
+        Vector3 poleLineOrigin = ComputePoleLineOrigin(skeleton, upperLegBoneIndex, footBoneIndex);
+        Vector3 midpointToPole = poleTarget.GlobalPosition - poleLineOrigin;
 
         Basis footBasis = footTarget.GlobalTransform.Basis.Orthonormalized();
         Vector3 footForward = footBasis.Column1.Normalized();
@@ -664,24 +671,13 @@ public sealed class LegFeetIKIntegrationTests
         Skeleton3D skeleton,
         SkeletonModifier3D controller,
         Node3D poleTarget,
-        Node3D footTarget,
         int upperLegBoneIndex,
         int lowerLegBoneIndex,
         int footBoneIndex,
         string message)
     {
-        float poleOffset = ComputePoleOffsetDistance(skeleton, poleTarget, footTarget, upperLegBoneIndex);
+        float poleOffset = ComputePoleOffsetDistance(skeleton, poleTarget, upperLegBoneIndex, footBoneIndex);
         float restLegLength = ComputeRestLegLength(skeleton, upperLegBoneIndex, lowerLegBoneIndex, footBoneIndex);
-        float currentLegLength = ComputeCurrentLegLength(skeleton, footTarget, upperLegBoneIndex);
-        float compressionRatioForPoleFloor = Mathf.Clamp(
-            ReadFloatProperty(controller, "CompressionRatioForRestPoleFloor"),
-            0.1f,
-            1.0f);
-
-        Assert.True(
-            currentLegLength <= restLegLength * compressionRatioForPoleFloor,
-            "Crouch floor assertion requires a compressed leg configuration, but pose was not compressed enough. " +
-            $"Current length: {currentLegLength:F4}m, rest length: {restLegLength:F4}m, compression threshold: {restLegLength * compressionRatioForPoleFloor:F4}m.");
 
         float minimumPoleOffset = ReadFloatProperty(controller, "MinimumPoleOffset");
         float restLegHalfPoleOffsetMargin = ReadFloatProperty(controller, "RestLegHalfPoleOffsetMargin");
@@ -705,18 +701,18 @@ public sealed class LegFeetIKIntegrationTests
     private static float ComputePoleOffsetDistance(
         Skeleton3D skeleton,
         Node3D poleTarget,
-        Node3D footTarget,
-        int upperLegBoneIndex)
+        int upperLegBoneIndex,
+        int footBoneIndex)
     {
-        Vector3 upperLegPosition = BoneWorldPosition(skeleton, upperLegBoneIndex);
-        Vector3 midpoint = (upperLegPosition + footTarget.GlobalPosition) * 0.5f;
-        return poleTarget.GlobalPosition.DistanceTo(midpoint);
+        Vector3 poleLineOrigin = ComputePoleLineOrigin(skeleton, upperLegBoneIndex, footBoneIndex);
+        return poleTarget.GlobalPosition.DistanceTo(poleLineOrigin);
     }
 
-    private static float ComputeCurrentLegLength(Skeleton3D skeleton, Node3D footTarget, int upperLegBoneIndex)
+    private static Vector3 ComputePoleLineOrigin(Skeleton3D skeleton, int upperLegBoneIndex, int footBoneIndex)
     {
         Vector3 upperLegPosition = BoneWorldPosition(skeleton, upperLegBoneIndex);
-        return upperLegPosition.DistanceTo(footTarget.GlobalPosition);
+        Vector3 currentFootPosition = BoneWorldPosition(skeleton, footBoneIndex);
+        return (upperLegPosition + currentFootPosition) * 0.5f;
     }
 
     private static float ComputeRestLegLength(
