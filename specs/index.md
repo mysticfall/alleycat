@@ -33,6 +33,7 @@
 
 - [UI-001: Splash Screen](ui/001-splash-screen/index.md)
 - [UI-002: Loading Screen](ui/002-loading-screen/index.md)
+- [UI-003: UI Overlay](ui/003-ui-overlay/index.md)
 
 ## Speech
 

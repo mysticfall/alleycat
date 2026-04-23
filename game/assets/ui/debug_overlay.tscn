@@ -1,5 +1,7 @@
 [gd_scene format=3 uid="uid://dpyyj37512ml0"]
 
+[ext_resource type="Script" uid="uid://b1ffh06yth7j5" path="res://src/UI/DebugWidget.cs" id="1_pvwb7"]
+
 [node name="DebugOverlay" type="MarginContainer" unique_id=1473696770]
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,8 +14,9 @@ theme_override_constants/margin_left = 50
 theme_override_constants/margin_top = 50
 theme_override_constants/margin_right = 50
 theme_override_constants/margin_bottom = 50
+script = ExtResource("1_pvwb7")
+metadata/_custom_type_script = "uid://b1ffh06yth7j5"
 
 [node name="Label" type="Label" parent="." unique_id=594847779]
 layout_mode = 2
 size_flags_horizontal = 4
-text = "Debug Text"
