@@ -2,6 +2,9 @@
 
 [ext_resource type="Script" path="res://src/UI/UIOverlay.cs" id="1_jvum8"]
 [ext_resource type="PackedScene" path="res://assets/ui/debug_overlay.tscn" id="2_yxxw3"]
+[ext_resource type="Script" path="res://src/UI/DebugWidget.cs" id="3_o0qo0"]
+[ext_resource type="PackedScene" path="res://assets/ui/notification_overlay.tscn" id="4_5yfyj"]
+[ext_resource type="Script" path="res://src/UI/NotificationWidget.cs" id="5_sgcbq"]
 
 [node name="UIOverlay" type="Control" unique_id=1158971358]
 layout_mode = 3
@@ -15,3 +18,35 @@ script = ExtResource("1_jvum8")
 metadata/_custom_type_script = "uid://c6n3e74dnkfd6"
 
 [node name="DebugOverlay" type="MarginContainer" parent="." unique_id=1473696770 instance=ExtResource("2_yxxw3")]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = -72.0
+offset_right = 280.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+script = ExtResource("3_o0qo0")
+metadata/_custom_type_script = "uid://b1ffh06yth7j5"
+
+[node name="NotificationOverlay" type="MarginContainer" parent="." unique_id=1221106463 instance=ExtResource("4_5yfyj")]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 460.0
+offset_bottom = 300.0
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+script = ExtResource("5_sgcbq")
+metadata/_custom_type_script = "uid://cy6ch1vfwvt0t"

@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/UI/NotificationWidget.cs" id="1_ob5o2"]
+
+[node name="NotificationOverlay" type="MarginContainer" unique_id=1221106463]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 460.0
+offset_bottom = 300.0
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+script = ExtResource("1_ob5o2")
+metadata/_custom_type_script = "uid://cy6ch1vfwvt0t"
+
+[node name="Messages" type="VBoxContainer" parent="." unique_id=1362461366]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3

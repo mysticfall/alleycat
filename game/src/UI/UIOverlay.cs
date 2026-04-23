@@ -55,6 +55,52 @@ public partial class UIOverlay : Control
         return true;
     }
 
+    /// <summary>
+    /// Posts a temporary notification message using an <see cref="INotificationWidget"/> when available.
+    /// </summary>
+    /// <param name="message">Message to post. Null/empty/whitespace is treated as a no-op.</param>
+    /// <param name="timeoutSeconds">Message lifetime in seconds. Defaults to 3 seconds.</param>
+    /// <returns>
+    /// <see langword="true"/> when a notification widget was resolved; otherwise <see langword="false"/>.
+    /// When <paramref name="message"/> is blank, this method does not post and does not clear notifications.
+    /// </returns>
+    public bool TryPostNotification(string? message, double timeoutSeconds = 3.0)
+    {
+        INotificationWidget? notificationWidget = FindWidget<INotificationWidget>();
+        if (notificationWidget is null)
+        {
+            GD.PushWarning($"UI overlay '{GetPath()}' has no widget implementing {nameof(INotificationWidget)}.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return true;
+        }
+
+        notificationWidget.PostNotification(message, timeoutSeconds);
+        return true;
+    }
+
+    /// <summary>
+    /// Clears queued notifications using an <see cref="INotificationWidget"/> when available.
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when a notification widget was resolved; otherwise <see langword="false"/>.
+    /// </returns>
+    public bool TryClearNotifications()
+    {
+        INotificationWidget? notificationWidget = FindWidget<INotificationWidget>();
+        if (notificationWidget is null)
+        {
+            GD.PushWarning($"UI overlay '{GetPath()}' has no widget implementing {nameof(INotificationWidget)}.");
+            return false;
+        }
+
+        notificationWidget.ClearNotifications();
+        return true;
+    }
+
     private static TWidget? FindWidgetInSubtree<TWidget>(Node node)
         where TWidget : class, IUIWidget
     {

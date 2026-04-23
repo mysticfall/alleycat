@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://28ty4qeoh27h"]
+
+[ext_resource type="PackedScene" uid="uid://6b8las20aee4" path="res://assets/testing/photobooth/photobooth.tscn" id="1_wff10"]
+[ext_resource type="PackedScene" uid="uid://utn2mx2dm0vl" path="res://assets/testing/photobooth/camera_rig.tscn" id="2_6v8u6"]
+[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="3_pnmd1"]
+[ext_resource type="PackedScene" path="res://assets/ui/ui_overlay.tscn" id="4_ksq4f"]
+
+[node name="Photobooth" unique_id=210455724 instance=ExtResource("1_wff10")]
+
+[node name="OverlayCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=993588421 instance=ExtResource("2_6v8u6")]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -9.027614e-08, 0.93000275, -1.020729)
+image_size = Vector2(1280, 720)
+
+[node name="OriginMarker" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=407790799 instance=ExtResource("3_pnmd1")]
+visible = false
+label_text = "UI Origin"
+
+[node name="UIOverlay" parent="." index="4" unique_id=1255136356 instance=ExtResource("4_ksq4f")]
