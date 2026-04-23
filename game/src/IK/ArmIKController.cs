@@ -214,6 +214,11 @@ public partial class ArmIKController : SkeletonModifier3D
     /// <inheritdoc />
     public override void _ProcessModificationWithDelta(double delta)
     {
+        if (!Active)
+        {
+            return;
+        }
+
         if (!_bonesResolved)
         {
             if (!ResolveBones())

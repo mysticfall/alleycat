@@ -20,6 +20,16 @@ public partial class PlayerVRIKStartupBinder : Node
         set;
     } = new();
 
+    /// <summary>
+    /// When true, enables binding processing. When false, skips binding.
+    /// </summary>
+    [Export]
+    public bool Active
+    {
+        get;
+        set;
+    } = true;
+
     private XRManager? _xrManager;
     private bool _xrInitialised;
     private bool _bindCompleted;
@@ -27,6 +37,12 @@ public partial class PlayerVRIKStartupBinder : Node
     /// <inheritdoc />
     public override void _Ready()
     {
+        if (!Active)
+        {
+            base._Ready();
+            return;
+        }
+
         _xrManager = XRManagerPath.IsEmpty
             ? this.RequireNode<XRManager>("../XR")
             : this.RequireNode<XRManager>(XRManagerPath);
@@ -65,6 +81,11 @@ public partial class PlayerVRIKStartupBinder : Node
     /// <inheritdoc />
     public override void _Process(double delta)
     {
+        if (!Active)
+        {
+            return;
+        }
+
         _ = delta;
 
         if (_bindCompleted)

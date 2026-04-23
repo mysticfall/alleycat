@@ -78,6 +78,16 @@ public partial class PoseStateMachine : Node
     }
 
     /// <summary>
+    /// When true, enables state machine processing. When false, skips state machine ticks.
+    /// </summary>
+    [Export]
+    public bool Active
+    {
+        get;
+        set;
+    } = true;
+
+    /// <summary>
     /// Currently active pose state.
     /// </summary>
     public PoseState? CurrentState
@@ -116,6 +126,11 @@ public partial class PoseStateMachine : Node
     public void Tick(PoseStateContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        if (!Active)
+        {
+            return;
+        }
 
         EnsureInitialStateResolved();
 

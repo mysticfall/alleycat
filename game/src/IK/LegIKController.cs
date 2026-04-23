@@ -116,6 +116,11 @@ public partial class LegIKController : SkeletonModifier3D
     /// <inheritdoc />
     public override void _ProcessModificationWithDelta(double delta)
     {
+        if (!Active)
+        {
+            return;
+        }
+
         if (!_bonesResolved)
         {
             if (!TryResolveBones())

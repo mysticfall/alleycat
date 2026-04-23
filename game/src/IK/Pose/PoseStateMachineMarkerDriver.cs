@@ -128,6 +128,16 @@ public partial class PoseStateMachineMarkerDriver : Node3D
         set;
     } = new("Hips");
 
+    /// <summary>
+    /// When true, enables pose target processing. When false, skips pose target ticks.
+    /// </summary>
+    [Export]
+    public bool Active
+    {
+        get;
+        set;
+    } = true;
+
     /// <inheritdoc />
     public override void _Ready()
     {
@@ -189,6 +199,11 @@ public partial class PoseStateMachineMarkerDriver : Node3D
         int tickCount = -1,
         double delta = -1.0)
     {
+        if (!Active)
+        {
+            return;
+        }
+
         EnsureResolvedNodes();
 
         int steps = tickCount > 0 ? tickCount : TickCountPerApply;

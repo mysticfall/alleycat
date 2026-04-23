@@ -56,6 +56,11 @@ public partial class HipReconciliationModifier : SkeletonModifier3D
     /// <inheritdoc />
     public override void _ProcessModificationWithDelta(double delta)
     {
+        if (!Active)
+        {
+            return;
+        }
+
         _ = delta;
 
         PoseStateMachine? stateMachine = StateMachine;

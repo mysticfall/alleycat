@@ -116,6 +116,16 @@ public partial class PlayerVRIK : Node3D
     } = 28.0f;
 
     /// <summary>
+    /// When true, enables IK processing. When false, skips all IK target updates.
+    /// </summary>
+    [Export]
+    public bool Active
+    {
+        get;
+        set;
+    } = true;
+
+    /// <summary>
     /// Pose state machine driven from the XR bridge. When set, <c>_Process</c> builds a
     /// <see cref="PoseStateContext"/> per tick and invokes <see cref="PoseStateMachine.Tick"/>
     /// so hip reconciliation and animation bindings observe the same snapshot as the modifier
@@ -273,7 +283,7 @@ public partial class PlayerVRIK : Node3D
 
     private void OnBeginStage(double delta)
     {
-        if (!_isBound)
+        if (!Active || !_isBound)
         {
             return;
         }
@@ -300,7 +310,7 @@ public partial class PlayerVRIK : Node3D
 
     private void OnEndStage(double delta)
     {
-        if (!_isBound || _origin is null || _camera is null)
+        if (!Active || !_isBound || _origin is null || _camera is null)
         {
             return;
         }
