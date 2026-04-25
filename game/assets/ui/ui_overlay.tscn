@@ -16,7 +16,10 @@ script = ExtResource("1_jvum8")
 metadata/_custom_type_script = "uid://c6n3e74dnkfd6"
 
 [node name="DebugOverlay" parent="." unique_id=1473696770 instance=ExtResource("2_yxxw3")]
-layout_mode = 0
+layout_mode = 1
+anchors_preset = 7
+offset_top = -113.0
+offset_bottom = -61.0
 
 [node name="NotificationOverlay" parent="." unique_id=1221106463 instance=ExtResource("4_5yfyj")]
 layout_mode = 0
