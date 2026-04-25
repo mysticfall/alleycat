@@ -3,7 +3,7 @@ extends SceneTree
 const TEST_SCENE_PATH := "res://tests/characters/ik/neck_spine_ccdik_test.tscn"
 const IK_SCENE_PATH := "res://assets/characters/ik/neck_spine_ccdik.tscn"
 
-const OUTPUT_ROOT := "char001/neck_spine_ccdik"
+const OUTPUT_ROOT := "IK-001/neck_spine_ccdik"
 
 const REQUIRED_CAMERAS := [
 	"FrontCamera",

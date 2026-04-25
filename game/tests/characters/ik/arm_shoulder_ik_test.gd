@@ -2,7 +2,7 @@ extends SceneTree
 
 const TEST_SCENE_PATH := "res://tests/characters/ik/arm_shoulder_ik_test.tscn"
 
-const OUTPUT_ROOT := "char002/arm_shoulder_ik"
+const OUTPUT_ROOT := "IK-002/arm_shoulder_ik"
 
 const REQUIRED_CAMERAS := [
 	"FrontCamera",

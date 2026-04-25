@@ -1,7 +1,7 @@
 extends SceneTree
 
 const TEST_SCENE_PATH := "res://tests/characters/ik/pose_state_machine_test.tscn"
-const OUTPUT_ROOT := "char001/pose_state_machine"
+const OUTPUT_ROOT := "IK-004/pose_state_machine"
 const SCENARIOS_ROOT_PATH := ^"Markers/PoseStateMachine/Scenarios"
 const HEAD_REST_MARKER_PATH := ^"Markers/PoseStateMachine/RestHeadTarget"
 const LEFT_HAND_REST_MARKER_PATH := ^"Markers/PoseStateMachine/HandTargetRestLeft"

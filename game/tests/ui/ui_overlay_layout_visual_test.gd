@@ -1,7 +1,7 @@
 extends SceneTree
 
 const TEST_SCENE_PATH := "res://tests/ui/ui_overlay_layout_visual_test.tscn"
-const OUTPUT_ROOT := "ui_overlay_layout"
+const OUTPUT_ROOT := "UI-003/ui_overlay_layout"
 
 
 func _init() -> void:
