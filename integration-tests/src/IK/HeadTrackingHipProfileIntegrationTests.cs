@@ -8,7 +8,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// <summary>
 /// Non-visual regression coverage for IK-004 direction-weighted hip reconciliation.
 /// </summary>
-public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
+public sealed class HeadTrackingHipProfileIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/head_tracking_hip_profile_test.tscn";
     private const string SubjectPath = "Subject/Female";

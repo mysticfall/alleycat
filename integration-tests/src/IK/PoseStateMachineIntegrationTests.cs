@@ -8,7 +8,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// <summary>
 /// Non-visual integration coverage for IK-004 marker-driven pose-state-machine verification.
 /// </summary>
-public sealed class PoseStateMachinePhotoboothIntegrationTests
+public sealed class PoseStateMachineIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/pose_state_machine_test.tscn";
     private const string DriverPath = "PoseStateMachineDriver";
