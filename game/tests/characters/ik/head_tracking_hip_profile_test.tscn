@@ -147,6 +147,11 @@ transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -1.3
 visible = false
 label_text = "lean-back"
 
+[node name="CrouchThenStoopForward" parent="Markers/PoseStateMachine/Scenarios" index="4" unique_id=1732819471 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -4.2473363e-09, 0.98, -0.268583866)
+visible = false
+label_text = "crouch-then-stoop-forward"
+
 [node name="PoseStateMachineDriver" type="Node3D" parent="." index="5" unique_id=1875327155 node_paths=PackedStringArray("AnimationTree", "Skeleton")]
 script = ExtResource("5_driver")
 States = [ExtResource("4_state")]

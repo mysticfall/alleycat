@@ -20,12 +20,20 @@ public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
     private const string RightHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestRight";
     private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
     private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
+    private const string HeadIKTargetPath = "Subject/Female/IKTargets/Head";
     private const string SkeletonPath = "Subject/Female/Female_export/GeneralSkeleton";
     private const string AnimationTreePath = "Subject/Female/AnimationTree";
     private const float MinimumVerticalHipDropMetres = 0.15f;
     private const float MinimumVerticalVsStoopHipDropDeltaMetres = 0.07f;
     private const float MaximumVerticalForwardHipTravelMetres = 0.08f;
-    private const float MinimumScenarioHeadSeparationMetres = 0.02f;
+    private const float MinimumHeadFollowFraction = 0.6f;
+    private const float MinimumStoopVsLeanForwardOffsetMetres = 0.08f;
+    // Alignment-driven vertical damping with MinimumAlignmentWeight=0.1 leaves a small residual
+    // vertical shortfall (~0.05 m in practice) when a forward lean is added to a deep crouch.
+    // This tolerance accommodates that residual while remaining far tighter than the buggy
+    // spring-up behaviour it regression-guards against (which would exceed 0.15 m).
+    private const float MaximumCrouchDepthLossOnForwardLeanMetres = 0.08f;
+    private const float MinimumCrouchThenStoopForwardHeadOffsetMetres = 0.08f;
 
     /// <summary>
     /// Verifies the standing-family hip profile keeps a visibly stronger downward response for a
@@ -67,10 +75,24 @@ public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
         ScenarioSnapshot verticalCrouch = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "VerticalCrouchStrong", hipsIndex, headIndex);
         ScenarioSnapshot stoopForward = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "StoopForward", hipsIndex, headIndex);
         ScenarioSnapshot leanBack = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "LeanBack", hipsIndex, headIndex);
+        ScenarioSnapshot crouchThenStoop = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "CrouchThenStoopForward", hipsIndex, headIndex);
 
         Assert.Equal("Standing", verticalCrouch.StateId);
         Assert.Equal("Standing", stoopForward.StateId);
         Assert.Equal("Standing", leanBack.StateId);
+        Assert.Equal("Standing", crouchThenStoop.StateId);
+
+        // The head bone must follow the scenario marker that drives the head IK target. The head
+        // bone sits at a fixed rigid offset from the head IK target (the Viewpoint offset inside
+        // the rig), so we assert that the head bone's *delta* from the standing pose matches the
+        // marker's delta from the standing marker. This is the regression guard: if the runner
+        // (or the integration test) forgets to drive IKTargets/Head with the scenario transform,
+        // the head will stay anchored to its rest location and every scenario's head delta will
+        // collapse to zero.
+        AssertHeadFollowsMarkerDelta(standing, verticalCrouch, "VerticalCrouchStrong");
+        AssertHeadFollowsMarkerDelta(standing, stoopForward, "StoopForward");
+        AssertHeadFollowsMarkerDelta(standing, leanBack, "LeanBack");
+        AssertHeadFollowsMarkerDelta(standing, crouchThenStoop, "CrouchThenStoopForward");
 
         float verticalHipDrop = standing.HipsWorldPosition.Y - verticalCrouch.HipsWorldPosition.Y;
         float stoopHipDrop = standing.HipsWorldPosition.Y - stoopForward.HipsWorldPosition.Y;
@@ -88,11 +110,68 @@ public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
             $"Vertical crouch should remain mostly vertical rather than drifting strongly forward. " +
             $"Observed forward hip travel={verticalForwardHipTravel:F4} m.");
 
-        float stoopVsLeanHeadSeparation = stoopForward.HeadWorldPosition.DistanceTo(leanBack.HeadWorldPosition);
+        // Convert world-space head positions into the subject's local frame so that forward/back
+        // sign is independent of the subject's world orientation. The photobooth subject faces
+        // -Z in world, so local -Z corresponds to the character's forward direction.
+        Transform3D subjectInverse = subject.GlobalTransform.AffineInverse();
+        Vector3 standingHeadLocal = subjectInverse * standing.HeadWorldPosition;
+        Vector3 stoopHeadLocal = subjectInverse * stoopForward.HeadWorldPosition;
+        Vector3 leanHeadLocal = subjectInverse * leanBack.HeadWorldPosition;
+        Vector3 crouchThenStoopHeadLocal = subjectInverse * crouchThenStoop.HeadWorldPosition;
+
+        float stoopForwardOffset = standingHeadLocal.Z - stoopHeadLocal.Z;
         Assert.True(
-            stoopVsLeanHeadSeparation >= MinimumScenarioHeadSeparationMetres,
-            $"Stoop-forward and lean-back should remain materially distinct runtime scenarios. " +
-            $"Observed head separation={stoopVsLeanHeadSeparation:F4} m.");
+            stoopForwardOffset >= MinimumStoopVsLeanForwardOffsetMetres,
+            $"Stoop-forward should place the head noticeably in front of standing in the subject's local frame. " +
+            $"standing.z_local={standingHeadLocal.Z:F4}, stoop.z_local={stoopHeadLocal.Z:F4}.");
+
+        float leanBackOffset = leanHeadLocal.Z - standingHeadLocal.Z;
+        Assert.True(
+            leanBackOffset >= MinimumStoopVsLeanForwardOffsetMetres,
+            $"Lean-back should place the head noticeably behind standing in the subject's local frame. " +
+            $"standing.z_local={standingHeadLocal.Z:F4}, lean.z_local={leanHeadLocal.Z:F4}.");
+
+        // IK-004 regression: adding a forward lean to an existing crouch must NOT spring the
+        // hips back up to the standing height. The crouch-then-stoop hip drop must remain at
+        // least as deep as the pure-vertical crouch drop (within a small residual tolerance for
+        // alignment-driven damping), not shrink back towards zero.
+        float crouchThenStoopHipDrop = standing.HipsWorldPosition.Y - crouchThenStoop.HipsWorldPosition.Y;
+        Assert.True(
+            crouchThenStoopHipDrop >= verticalHipDrop - MaximumCrouchDepthLossOnForwardLeanMetres,
+            $"Forward lean while crouched must not restore hip height. " +
+            $"verticalHipDrop={verticalHipDrop:F4} m, crouchThenStoopHipDrop={crouchThenStoopHipDrop:F4} m.");
+
+        float crouchThenStoopForwardOffset = standingHeadLocal.Z - crouchThenStoopHeadLocal.Z;
+        Assert.True(
+            crouchThenStoopForwardOffset >= MinimumCrouchThenStoopForwardHeadOffsetMetres,
+            $"Crouch-then-stoop should place the head noticeably in front of standing in the subject's local frame. " +
+            $"standing.z_local={standingHeadLocal.Z:F4}, crouchThenStoop.z_local={crouchThenStoopHeadLocal.Z:F4}.");
+    }
+
+    private static void AssertHeadFollowsMarkerDelta(
+        ScenarioSnapshot standing,
+        ScenarioSnapshot scenario,
+        string scenarioName)
+    {
+        Vector3 markerDelta = scenario.MarkerWorldPosition - standing.MarkerWorldPosition;
+        Vector3 headDelta = scenario.HeadWorldPosition - standing.HeadWorldPosition;
+        float markerDeltaLength = markerDelta.Length();
+
+        Assert.True(
+            markerDeltaLength > 1e-3f,
+            $"Test setup expected scenario '{scenarioName}' marker to differ from standing marker.");
+
+        // If the head IK target is not being driven by the scenario marker, the head bone stays
+        // near its rest location and the projected follow-through collapses towards zero. A live
+        // IK-driven head follows the marker direction by a large fraction of the marker delta.
+        float projection = headDelta.Dot(markerDelta) / markerDeltaLength;
+        float followFraction = projection / markerDeltaLength;
+
+        Assert.True(
+            followFraction >= MinimumHeadFollowFraction,
+            $"Scenario '{scenarioName}' head bone must follow the marker delta direction by at least " +
+            $"{MinimumHeadFollowFraction:F2}× the marker magnitude. Observed follow fraction={followFraction:F4} " +
+            $"(headDelta={headDelta}, markerDelta={markerDelta}).");
     }
 
     private static async Task<ScenarioSnapshot> ApplyScenarioAndCaptureAsync(
@@ -104,18 +183,19 @@ public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
         int hipsIndex,
         int headIndex)
     {
-        TickScenario(sceneRoot, driver, scenarioName);
+        Vector3 markerWorldPosition = TickScenario(sceneRoot, driver, scenarioName);
 
-        await WaitForFramesAsync(sceneTree, 4);
+        await WaitForFramesAsync(sceneTree, 6);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
         return new ScenarioSnapshot(
             ((StringName)driver.Call("GetCurrentStateId")).ToString(),
             ResolveBoneWorldPosition(skeleton, hipsIndex),
-            ResolveBoneWorldPosition(skeleton, headIndex));
+            ResolveBoneWorldPosition(skeleton, headIndex),
+            markerWorldPosition);
     }
 
-    private static void TickScenario(Node sceneRoot, Node driver, string scenarioName)
+    private static Vector3 TickScenario(Node sceneRoot, Node driver, string scenarioName)
     {
         Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
         Node3D scenarioNode = Assert.IsType<Node3D>(
@@ -126,6 +206,12 @@ public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
         Node3D rightHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandRestMarkerPath), exactMatch: false);
         Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
         Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
+        Node3D headIKTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadIKTargetPath), exactMatch: false);
+
+        // Drive the head IK target with the scenario marker transform so the neck-spine CCDIK
+        // modifier actually moves the head bone; the PoseStateMachineMarkerDriver does not
+        // manipulate IK target nodes on its own.
+        headIKTarget.GlobalTransform = scenarioNode.GlobalTransform;
 
         _ = driver.Call(
             "TickPoseTargets",
@@ -137,6 +223,8 @@ public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
             headRestMarker.GlobalTransform,
             -1,
             -1.0);
+
+        return scenarioNode.GlobalTransform.Origin;
     }
 
     private static int RequireBoneIndex(Skeleton3D skeleton, string boneName)
@@ -170,5 +258,9 @@ public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
             $"LeanBack marker should sit higher than StoopForward. lean.y={leanBack.GlobalPosition.Y:F4}, stoop.y={stoopForward.GlobalPosition.Y:F4}.");
     }
 
-    private sealed record ScenarioSnapshot(string StateId, Vector3 HipsWorldPosition, Vector3 HeadWorldPosition);
+    private sealed record ScenarioSnapshot(
+        string StateId,
+        Vector3 HipsWorldPosition,
+        Vector3 HeadWorldPosition,
+        Vector3 MarkerWorldPosition);
 }

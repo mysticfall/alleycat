@@ -5,4 +5,7 @@
 [resource]
 resource_name = "HeadTrackingHipProfile"
 script = ExtResource("1_klvcb")
+VerticalPositionWeight = 1.0
+LateralPositionWeight = 0.5
 ForwardPositionWeight = 0.1
+MinimumAlignmentWeight = 0.1

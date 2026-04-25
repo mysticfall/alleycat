@@ -14,6 +14,7 @@ public sealed class HeadTrackingHipProfileTests
     private const float VerticalWeight = 1.0f;
     private const float LateralWeight = 0.5f;
     private const float ForwardWeight = 0.1f;
+    private const float MinimumAlignmentWeight = 0.1f;
 
     /// <summary>
     /// Zero head offset returns the rest hip position exactly.
@@ -353,6 +354,309 @@ public sealed class HeadTrackingHipProfileTests
             rotationCompensationWeight: 1.0f);
 
         Assert.Equal(fiveArg, fourArg);
+    }
+
+    /// <summary>
+    /// A pure-vertical head offset directly above the hips is fully aligned with the hip rest up
+    /// axis, so the vertical component keeps the full <see cref="HeadTrackingHipProfile.VerticalPositionWeight"/>
+    /// response.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_VerticalOffsetHighAlignment_AppliesFullVerticalWeight()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+        Vector3 offset = new(0f, -0.24f, 0f);
+        Vector3 currentHead = restHead + offset;
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            currentHead,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        // Hip-to-head direction is (0, restHead.Y - hipRest.Y + offset.Y, 0) which is pure +Y, so
+        // alignment = 1 and the vertical component uses the full vertical weight.
+        Vector3 expected = hipRest + new Vector3(0f, offset.Y * VerticalWeight, 0f);
+        AssertClose(expected, result);
+    }
+
+    /// <summary>
+    /// A head offset from rest whose direction is largely misaligned with the hip rest up axis
+    /// (forward-dominant stoop from rest) damps the vertical component down towards
+    /// <see cref="HeadTrackingHipProfile.VerticalPositionWeight"/> × <see cref="HeadTrackingHipProfile.MinimumAlignmentWeight"/>.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_VerticalOffsetLowAlignment_DampsVerticalComponent()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+        // Place the current head such that the head-offset-from-rest points mostly forward and
+        // only slightly down, so its alignment with +Y is small.
+        Vector3 currentHead = restHead + new Vector3(0f, -0.05f, -0.5f);
+
+        // Decompose the head offset in the hip rest axes to anchor expectations.
+        Vector3 headOffsetLocal = currentHead - restHead;
+        float verticalComponent = headOffsetLocal.Dot(Vector3.Up);
+        float forwardComponent = headOffsetLocal.Dot(Vector3.Forward);
+        float lateralComponent = headOffsetLocal.Dot(Vector3.Right);
+
+        float expectedAlignment = Mathf.Abs(headOffsetLocal.Normalized().Dot(Vector3.Up));
+        Assert.True(
+            expectedAlignment < 0.2f,
+            $"Test setup expected low alignment (<0.2); observed {expectedAlignment:F4}.");
+        float expectedAlignmentWeight = Mathf.Lerp(MinimumAlignmentWeight, 1.0f, expectedAlignment);
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            currentHead,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        Vector3 expectedOffset =
+            (Vector3.Right * (lateralComponent * LateralWeight))
+            + (Vector3.Up * (verticalComponent * VerticalWeight * expectedAlignmentWeight))
+            + (Vector3.Forward * (forwardComponent * ForwardWeight));
+
+        AssertClose(hipRest + expectedOffset, result);
+
+        // The damped vertical response must be close to MinimumAlignmentWeight, not the full weight.
+        Assert.True(
+            expectedAlignmentWeight <= MinimumAlignmentWeight + 0.1f,
+            $"Expected vertical damping close to MinimumAlignmentWeight, observed alignment weight {expectedAlignmentWeight:F4}.");
+    }
+
+    /// <summary>
+    /// Values outside <c>[0, 1]</c> supplied for <c>minimumAlignmentWeight</c> are clamped before
+    /// being applied to the vertical component.
+    /// </summary>
+    [Theory]
+    [InlineData(-0.25f, 0.0f)]
+    [InlineData(1.5f, 1.0f)]
+    public void ComputeHipLocalPosition_MinimumAlignmentWeightClampedToRange(
+        float configuredMinimum,
+        float expectedMinimum)
+    {
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+        // Choose a setup where the head-offset-from-rest is purely lateral, so alignment is 0
+        // and alignmentWeight collapses to the clamped minimum.
+        Vector3 currentHead = restHead + new Vector3(0.5f, 0f, 0f);
+        Vector3 headOffsetLocal = currentHead - restHead;
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            currentHead,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: configuredMinimum);
+
+        float verticalComponent = headOffsetLocal.Dot(Vector3.Up);
+        float forwardComponent = headOffsetLocal.Dot(Vector3.Forward);
+        float lateralComponent = headOffsetLocal.Dot(Vector3.Right);
+
+        float alignment = Mathf.Abs(headOffsetLocal.Normalized().Dot(Vector3.Up));
+        float expectedAlignmentWeight = Mathf.Lerp(expectedMinimum, 1.0f, alignment);
+
+        Vector3 expectedOffset =
+            (Vector3.Right * (lateralComponent * LateralWeight))
+            + (Vector3.Up * (verticalComponent * VerticalWeight * expectedAlignmentWeight))
+            + (Vector3.Forward * (forwardComponent * ForwardWeight));
+
+        AssertClose(hipRest + expectedOffset, result);
+    }
+
+    /// <summary>
+    /// A diagonal head offset with known components along each hip rest axis yields a result
+    /// whose per-axis scaling matches <c>lateral × LateralWeight</c>,
+    /// <c>forward × ForwardWeight</c>, and <c>vertical × VerticalWeight × alignmentWeight</c>.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_VerticalAlignmentDamping_PreservesPerAxisWeighting()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+        Vector3 offset = new(0.20f, -0.30f, -0.40f);
+        Vector3 currentHead = restHead + offset;
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            currentHead,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        float alignment = Mathf.Abs(offset.Normalized().Dot(Vector3.Up));
+        float alignmentWeight = Mathf.Lerp(MinimumAlignmentWeight, 1.0f, alignment);
+
+        float verticalComponent = offset.Dot(Vector3.Up);
+        float forwardComponent = offset.Dot(Vector3.Forward);
+        float lateralComponent = offset.Dot(Vector3.Right);
+
+        Vector3 expectedOffset =
+            (Vector3.Right * (lateralComponent * LateralWeight))
+            + (Vector3.Up * (verticalComponent * VerticalWeight * alignmentWeight))
+            + (Vector3.Forward * (forwardComponent * ForwardWeight));
+
+        AssertClose(hipRest + expectedOffset, result);
+    }
+
+    /// <summary>
+    /// <c>+up</c> and <c>-up</c> offsets with symmetric hip-to-head geometries produce mirrored
+    /// results, confirming the alignment damping uses an absolute value and does not
+    /// discriminate between upward- and downward-pointing hip-to-head vectors.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_AlignmentDamping_PositiveAndNegativeUpAreSymmetric()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+        const float magnitude = 0.24f;
+        Vector3 positiveOffset = new(0f, magnitude, 0f);
+        Vector3 negativeOffset = new(0f, -magnitude, 0f);
+
+        Vector3 positiveResult = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            restHead + positiveOffset,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        Vector3 negativeResult = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            restHead + negativeOffset,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        Vector3 positiveDisplacement = positiveResult - hipRest;
+        Vector3 negativeDisplacement = negativeResult - hipRest;
+
+        AssertClose(positiveDisplacement, -negativeDisplacement);
+    }
+
+    /// <summary>
+    /// IK-004 regression guard: adding a forward lean while already crouched must not scale the
+    /// vertical hip drop back up towards zero. Because the head displacement from rest retains a
+    /// large vertical component, the alignment-driven damping must stay high enough to preserve
+    /// the crouch depth, and the forward lean should be additive rather than rescaling.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_CrouchThenForwardLean_RetainsCrouchDepth()
+    {
+        Vector3 hipRest = new(0f, 0.95f, 0f);
+        Vector3 restHead = new(0f, 1.65f, 0f);
+
+        Vector3 crouchHead = new(0f, 1.15f, 0f);
+        Vector3 crouchAndForwardHead = new(0f, 1.15f, -0.25f);
+        Vector3 crouchAndBackwardHead = new(0f, 1.15f, 0.25f);
+
+        Vector3 crouchResult = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            crouchHead,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        Vector3 crouchAndForwardResult = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            crouchAndForwardHead,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        Vector3 crouchAndBackwardResult = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHead,
+            crouchAndBackwardHead,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight,
+            minimumAlignmentWeight: MinimumAlignmentWeight);
+
+        // The residual alignment-driven damping from minimumAlignmentWeight=0.1 leaves a small
+        // vertical shortfall relative to pure crouch (~0.05 m for this setup); tolerance is
+        // chosen to accommodate that residual while remaining far tighter than the buggy
+        // behaviour (which would rescale the hip back up by > 0.15 m).
+        const float CrouchDepthTolerance = 0.06f;
+
+        Assert.True(
+            Mathf.Abs(crouchAndForwardResult.Y - crouchResult.Y) <= CrouchDepthTolerance,
+            $"Forward lean while crouched must not restore hip height. " +
+            $"crouch.Y={crouchResult.Y:F4}, crouchAndForward.Y={crouchAndForwardResult.Y:F4}.");
+
+        Assert.True(
+            crouchAndForwardResult.Y < 0.75f,
+            $"Crouch depth must be preserved when forward lean is added. " +
+            $"crouchAndForward.Y={crouchAndForwardResult.Y:F4}, hipRest.Y={hipRest.Y:F4}.");
+
+        Assert.True(
+            Mathf.Abs(crouchAndBackwardResult.Y - crouchResult.Y) <= CrouchDepthTolerance,
+            $"Backward lean while crouched must not restore hip height. " +
+            $"crouch.Y={crouchResult.Y:F4}, crouchAndBackward.Y={crouchAndBackwardResult.Y:F4}.");
     }
 
     private static Vector3 ComputeDefaultWeightedHipPosition(Basis hipRestBasisLocal, Vector3 headOffsetLocal)

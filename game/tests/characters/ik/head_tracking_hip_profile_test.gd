@@ -11,11 +11,13 @@ const DRIVER_PATH := ^"PoseStateMachineDriver"
 const HIP_MODIFIER_PATH := ^"Subject/Female/Female_export/GeneralSkeleton/HipReconciliationModifier"
 const LEFT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/LeftFoot"
 const RIGHT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/RightFoot"
+const HEAD_IK_TARGET_PATH := ^"Subject/Female/IKTargets/Head"
 const REQUIRED_SCENARIOS := [
 	"Standing",
 	"VerticalCrouchStrong",
 	"StoopForward",
 	"LeanBack",
+	"CrouchThenStoopForward",
 ]
 const REQUIRED_CAMERAS := [
 	"FrontCamera",
@@ -48,6 +50,7 @@ func _run() -> void:
 	var right_hand_rest_marker: Node3D = SceneUtils.require_node(photobooth, RIGHT_HAND_REST_MARKER_PATH) as Node3D
 	var left_foot_target: Node3D = SceneUtils.require_node(photobooth, LEFT_FOOT_TARGET_PATH) as Node3D
 	var right_foot_target: Node3D = SceneUtils.require_node(photobooth, RIGHT_FOOT_TARGET_PATH) as Node3D
+	var head_ik_target: Node3D = SceneUtils.require_node(photobooth, HEAD_IK_TARGET_PATH) as Node3D
 
 	if (
 		subject == null
@@ -59,6 +62,7 @@ func _run() -> void:
 		or right_hand_rest_marker == null
 		or left_foot_target == null
 		or right_foot_target == null
+		or head_ik_target == null
 	):
 		SceneUtils.fatal_error_and_quit("IK-004 hip runner: required scene nodes are missing")
 		return
@@ -83,7 +87,8 @@ func _run() -> void:
 		left_hand_rest_marker,
 		right_hand_rest_marker,
 		left_foot_target,
-		right_foot_target)
+		right_foot_target,
+		head_ik_target)
 
 	quit(0)
 
@@ -116,7 +121,8 @@ func _capture_scenarios(
 	left_hand_rest_marker: Node3D,
 	right_hand_rest_marker: Node3D,
 	left_foot_target: Node3D,
-	right_foot_target: Node3D
+	right_foot_target: Node3D,
+	head_ik_target: Node3D
 ) -> void:
 	for scenario_index: int in REQUIRED_SCENARIOS.size():
 		var scenario_name: String = REQUIRED_SCENARIOS[scenario_index]
@@ -126,6 +132,7 @@ func _capture_scenarios(
 			return
 
 		scenario_node.visible = true
+		head_ik_target.global_transform = scenario_node.global_transform
 		driver.call(
 			"TickPoseTargets",
 			scenario_node.global_transform,
@@ -137,8 +144,8 @@ func _capture_scenarios(
 			-1,
 			-1.0)
 
-		await SceneUtils.wait_frames(self, 6)
-		await SceneUtils.wait_seconds(self, 0.05)
+		await SceneUtils.wait_frames(self, 8)
+		await SceneUtils.wait_seconds(self, 0.1)
 
 		var state_id: StringName = StringName(driver.call("GetCurrentStateId"))
 		var file_name: String = "%s/poses/%02d_%s__%s.jpg" % [

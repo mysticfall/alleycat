@@ -46,6 +46,9 @@ responsibility.
    perpendicular to the hip rest up axis, while preserving strong vertical crouch response.
 9. Players must experience a smooth transition between reduced perpendicular response and full aligned response,
    without abrupt discontinuities.
+10. Standing-family reconciliation must keep strong vertical hip drop during crouch where head remains roughly above hips.
+11. Standing-family reconciliation must avoid chasing the head down when the head leads forward (stoop) or backward (lean-back);
+    hips should stay upright.
 
 ## Technical Requirements
 
@@ -110,8 +113,8 @@ responsibility.
      `TimeSeek` scrubbing and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
      the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
 20. For the Standing pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
-     three contributions: (a) positional head-offset contribution, (b) per-axis positional modulation, and (c)
-     rotational-offset contribution.
+      four contributions: (a) positional head-offset contribution, (b) per-axis positional modulation, (c) alignment-based vertical damping, and (d)
+      rotational-offset contribution.
 
      **Per-axis positional modulation** decomposes the head-position offset into three components in the hip
      rest local frame: up/down, side-to-side, and forward/back. Each axis applies its own configurable scalar weight:
@@ -126,10 +129,30 @@ responsibility.
      The combined weights produce strong vertical crouch response and reduced lateral/forward-back hip travel,
      enabling natural stooping and leaning while preserving +up/-up symmetry. All three parameters are
      independently configurable and clamped to the `[0, 1]` range; the defaults above represent the authored
-     standing profile and may be overridden in derived resources. The rotational-offset contribution is derived
-     from rest→current head orientation delta and rest neck→head geometry, then applies opposite-direction hip
-     compensation to mitigate unnatural neck bending. Rotational contribution magnitude must be configurable
-     per profile/resource via `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`)
+     standing profile and may be overridden in derived resources.
+
+**Alignment-based vertical damping** applies an additional weight to the vertical component based on how aligned
+      the head direction is with the hip rest up axis. This dampens the vertical hip response when the head is tilted
+      forward (stoop) or backward (lean-back) while preserving full vertical response during pure vertical crouch.
+      The alignment computation uses **head offset from rest** as the basis, not the absolute current hip-to-head position:
+
+      - `headOffsetLocal = currentHeadLocal - restHeadLocal` — current head position offset from rest in skeleton-local space
+      - `headDirection = normalise(headOffsetLocal)` — unit vector of the head offset from rest
+      - `alignment = |dot(headDirection, hipRestUpLocal)|` — absolute alignment with the hip rest up axis
+      - `alignmentWeight = Mathf.Lerp(MinimumAlignmentWeight, 1.0, alignment)` — interpolated weight
+      - `verticalScaled = verticalComponent * VerticalPositionWeight * alignmentWeight`
+
+      The `MinimumAlignmentWeight` is a configurable parameter with an authored default of `0.1`, clamped to the `[0, 1]`
+      range. This provides extra damping on the vertical hip response when the head leads forward (stoop) or backward
+      (lean-back), so the hips do not chase the head down. During pure vertical crouch (alignment ≈ 1), the full
+      vertical response is preserved. The weighting uses `Mathf.Abs` so both +up and -up directions are damped
+      symmetrically. If either `headOffsetLocal` produces a near-zero `headDirection` or `hipRestUpLocal` is near zero
+      (degenerate case), the implementation must fall back to `alignment = 1.0` to avoid division-by-zero or unstable
+      results.
+
+     The rotational-offset contribution is derived from rest→current head orientation delta and rest neck→head geometry,
+     then applies opposite-direction hip compensation to mitigate unnatural neck bending. Rotational contribution magnitude
+     must be configurable per profile/resource via `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`)
      and no mandatory fixed default value in this spec revision. Vertical hip movement for this family is
      owned by the hip profile, not by the animation clip. Other pose families may diverge.
 21. Unit-level regression tests must cover both: (a) the weighted rotational-compensation contract for
@@ -214,6 +237,8 @@ Both linked pages are normative dependencies for implementation.
 | AC-09 | The spec does not require a mandatory catch-all ambiguity state for this phase. | Technical |
 | AC-10 | Across supported MVP movement scenarios, players see coherent visible full-body pose continuity while moving between required pose states. | User |
 | AC-10b | Standing-family hip reconciliation must allow more natural stoop/lean poses by reducing hip travel for motion perpendicular to the hip rest up axis, while preserving strong vertical crouch response; players must experience smooth transition between reduced perpendicular response and full aligned response, without abrupt discontinuities. | User |
+| AC-10c | Standing-family reconciliation must keep strong vertical hip drop during crouch where head remains roughly above hips. | User |
+| AC-10d | Standing-family reconciliation must avoid chasing the head down when the head leads forward (stoop) or backward (lean-back); hips should stay upright. | User |
 | AC-11 | Each pose state binds both animation selection (or AnimationTree parameter control) and hip reconciliation behaviour as a coupled responsibility. | Technical |
 | AC-12 | State switching relies on inferred signals from IK-target transforms and runtime state; explicit button-based pose switching is avoided by default. | User + Technical |
 | AC-13 | State and transition Resources expose a public extension surface permitting developer-supplied states and classifiers without editing core source. | Technical |
@@ -223,8 +248,9 @@ Both linked pages are normative dependencies for implementation.
 | AC-17 | State and transition identifiers are authored as `StringName`; internal selection may use `StringName` or `string` provided identity semantics are preserved. | Technical |
 | AC-18 | Hip reconciliation profiles return an absolute hip target position in skeleton-local space as a nullable value (`Vector3?`); returning `null` leaves the animated hip pose untouched. | Technical |
 | AC-19 | Hip reconciliation profiles compute the hip target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry, and must not read or depend on the currently animated hip bone pose. | Technical |
-| AC-20 | For the Standing pose family's default profile is `HeadTrackingHipProfile`, combining (a) positional head offset, (b) per-axis positional modulation decomposed into up/down, side-to-side, and forward/back components in the hip rest local frame, and (c) rotational offset (from rest→current head orientation delta plus rest neck→head geometry) with opposite-direction hip compensation to mitigate unnatural neck bending. Per-axis weights are independently configurable: `VerticalPositionWeight` (default `1.0`, full offset), `LateralPositionWeight` (default `0.5`, 50 % offset), and `ForwardPositionWeight` (default `0.1`, 10 % offset). The rest up axis is derived from the hip bone's rest-pose or global-rest basis in skeleton-local space. The combined weights produce strong vertical crouch response and reduced lateral/forward-back hip travel, preserving +up/-up symmetry. All three parameters are clamped to the `[0, 1]` range and independently configurable; the defaults above represent the authored standing profile and may be overridden in derived resources. Rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, with no mandatory fixed default in this spec. | Technical |
+| AC-20 | For the Standing pose family's default profile is `HeadTrackingHipProfile`, combining (a) positional head offset, (b) per-axis positional modulation decomposed into up/down, side-to-side, and forward/back components in the hip rest local frame, (c) alignment-based vertical damping applied to the vertical component, and (d) rotational offset (from rest→current head orientation delta plus rest neck→head geometry) with opposite-direction hip compensation to mitigate unnatural neck bending. Per-axis weights are independently configurable: `VerticalPositionWeight` (default `1.0`, full offset), `LateralPositionWeight` (default `0.5`, 50 % offset), and `ForwardPositionWeight` (default `0.1`, 10 % offset). The alignment-based vertical damping applies a configurable `MinimumAlignmentWeight` (default `0.1`, clamped to `[0,1]`) that scales the vertical component when the head is not vertically aligned with the hips: `alignment = |dot(normalise(headDirection), hipRestUpLocal)|` and `verticalScaled = verticalComponent * VerticalPositionWeight * Mathf.Lerp(MinimumAlignmentWeight, 1.0, alignment)`. Pure vertical crouch (alignment ≈ 1) preserves full vertical response; forward lean or backward lean reduces vertical hip travel to avoid chasing the head down. The alignment uses `Mathf.Abs` for +up/-up symmetry. Degenerate case: if headDirection or hipRestUpLocal is near zero, fall back to alignment = 1.0. The rest up axis is derived from the hip bone's rest-pose or global-rest basis in skeleton-local space. The combined weights produce strong vertical crouch response and reduced lateral/forward-back hip travel, preserving +up/-up symmetry. All parameters are clamped to the `[0, 1]` range and independently configurable; the defaults above represent the authored standing profile and may be overridden in derived resources. Rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, with no mandatory fixed default in this spec. | Technical |
 | AC-21 | Unit-level regression tests cover both: (a) the weighted `HeadTrackingHipProfile` rotational-compensation contract (sign correctness, proportional weight scaling, non-negative weight clamp behaviour, epsilon-combined snap behaviour, and overload equivalence); and (b) the per-axis positional-modulation contract (rest-up-axis derivation correctness, per-axis weight application correctness, up/down full-response preservation, side-to-side partial-response verification at the authored default, forward/back minimal-response verification at the authored default, diagonal/interpolated response continuity, and +up/-up symmetry). | Technical |
+| AC-21b | Unit-level regression tests cover the alignment-damping contract: high-alignment (pure vertical crouch) preserves full vertical response, low-alignment (forward stoop or lean-back) applies vertical damping down to `MinimumAlignmentWeight`, `MinimumAlignmentWeight` is clamped to `[0,1]`, diagonal offsets preserve per-axis weighting alongside alignment damping, and +up/-up symmetry under alignment damping is verified. | Technical |
 | AC-22 | The Standing pose family is backed by a single `AnimationTree` state (`StandingCrouching`) running `TimeSeek → AnimationNodeAnimation("Crouch-seek")`, with a single framework-level `StandingPoseState` resource mapping to this `AnimationTree` state. There is no separate framework-level CrouchingPoseState; the standing-to-crouching continuum is covered by one StandingPoseState. | Technical |
 | AC-23 | The `Idle` clip remains in the animation library as a deferred-but-supported extension point for future layering (for example additive breathing) and is not wired into the `AnimationTree` for MVP. | Technical |
 | AC-24 | The Standing→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the transition can trigger, requiring the player to be at or near full crouch depth on the standing-to-crouching continuum (tunable gate). | Technical |
@@ -278,7 +304,14 @@ and weighted rotational compensation maths (sign, scaling, non-negative clamp, e
 **Spec-to-code sync note — hip reconciliation positional weighting:** This specification revision specifies per-axis
 configurable weights (`VerticalPositionWeight`, `LateralPositionWeight`, `ForwardPositionWeight`) applied to the
 head-position offset decomposed in the hip rest local frame. Authored defaults for the standing profile are
-`1.0` / `0.5` / `0.1` respectively. The combined weights produce strong vertical crouch response and reduced
+`1.0` / `0.5` / `0.1` respectively. Additionally, alignment-based vertical damping is applied using a
+configurable `MinimumAlignmentWeight` parameter (default `0.1`, clamped to `[0,1]`). The alignment
+computation is `alignment = |dot(normalise(headDirection), hipRestUpLocal)|` with `alignmentWeight =
+Mathf.Lerp(MinimumAlignmentWeight, 1.0, alignment)` applied to the vertical component: `verticalScaled =
+verticalComponent * VerticalPositionWeight * alignmentWeight`. This dampens the vertical hip response when the head
+leads forward (stoop) or backward (lean-back) while preserving full vertical response during pure crouch.
+The alignment uses `Mathf.Abs` for +up/-up symmetry. Degenerate case: if headDirection or hipRestUpLocal is
+near zero, fall back to `alignment = 1.0`. The combined weights produce strong vertical crouch response and reduced
 lateral/forward-back hip travel, no dependency on the currently animated hip bone, and no mandatory fixed numeric defaults
 beyond the authored standing-profile values listed above.
 

@@ -21,9 +21,12 @@ namespace AlleyCat.IK.Pose;
 ///     <c>skeleton.GlobalTransform.AffineInverse()</c>.
 ///   </description></item>
 ///   <item><description>
-///     <c>headOffsetLocal = currentHeadLocal - restHeadLocal</c>, then project it into the hip
-///     bone's rest-pose basis, apply independent per-axis weights, and transform it back into
-///     skeleton-local space.
+///     <c>headOffsetLocal = currentHeadLocal - restHeadLocal</c>, then decompose it along the hip
+///     bone's rest-pose up/forward/lateral axes. Each scalar component is then scaled by its own
+///     positional weight, and the vertical component is <em>additionally</em> damped by an
+///     alignment factor derived from how closely the <c>headOffsetLocal</c> direction (the head
+///     displacement from rest) tracks the hip rest up axis. Finally the scaled scalar components
+///     are recombined via their hip-rest axes back into skeleton-local space.
 ///   </description></item>
 ///   <item><description>
 ///     A rotational displacement by rotating the rest neck→head vector with the head rotation
@@ -34,13 +37,33 @@ namespace AlleyCat.IK.Pose;
 ///   </description></item>
 /// </list>
 /// <para>
-/// This expresses the standing/crouching head-tracking heuristic: the hip translates with the
-/// head-target offset, but preserves full travel for movement along the hip rest up/down axis
-/// while damping side-to-side and forward/back lean. It additionally applies the opposite of the
-/// rotation-implied neck displacement so side tilt and chin up/down do not over-bend the neck.
-/// No Y stripping is applied — vertical ownership now lives with this profile and the
-/// <c>TimeSeek</c>-driven crouch clip handles feet animation independently.
+/// Behavioural intent of the weighting scheme:
 /// </para>
+/// <list type="bullet">
+///   <item><description>
+///     A pure vertical crouch — head displacement from rest aligned with the hip rest up axis —
+///     keeps a high alignment (close to <c>1</c>), so the vertical component is scaled only by
+///     <see cref="VerticalPositionWeight"/> and the hips follow the head downwards fully.
+///   </description></item>
+///   <item><description>
+///     A stoop-forward from rest — head displacement pointing predominantly forward — produces
+///     low alignment, so the vertical component is additionally damped down towards
+///     <see cref="VerticalPositionWeight"/> × <see cref="MinimumAlignmentWeight"/>. This keeps
+///     the hips from chasing the head downwards when the real intent is to lean forward rather
+///     than crouch. The forward component is still modulated by
+///     <see cref="ForwardPositionWeight"/>.
+///   </description></item>
+///   <item><description>
+///     A crouch followed by a forward lean — head displacement retains a large vertical
+///     component plus a modest forward component — keeps alignment high, so the vertical hip
+///     drop from the crouch is preserved and the forward lean adds on top rather than scaling
+///     the crouch depth back up.
+///   </description></item>
+///   <item><description>
+///     Lateral motion uses <see cref="LateralPositionWeight"/> and is unaffected by the
+///     alignment damping.
+///   </description></item>
+/// </list>
 /// <para>
 /// The profile <em>must not</em> read the currently animated hip bone pose: the animation
 /// sample itself is being scrubbed by <c>TimeSeek</c> each tick, so mixing that value into the
@@ -61,6 +84,7 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
     private const float DefaultVerticalPositionWeight = 1.0f;
     private const float DefaultLateralPositionWeight = 0.5f;
     private const float DefaultForwardPositionWeight = 0.1f;
+    private const float DefaultMinimumAlignmentWeight = 0.1f;
     private const float PositionEpsilon = 1e-4f;
     private const float PositionEpsilonSquared = PositionEpsilon * PositionEpsilon;
     private const float VectorEpsilonSquared = 1e-8f;
@@ -90,6 +114,17 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
     [Export(PropertyHint.Range, "0,1,0.01")]
     public float ForwardPositionWeight { get; set; } = DefaultForwardPositionWeight;
 
+    /// <summary>
+    /// Lower bound of the alignment-driven damping factor applied to the vertical positional
+    /// component. When the head displacement from rest is perfectly misaligned with the hip rest
+    /// up axis, the vertical component is scaled by
+    /// <see cref="VerticalPositionWeight"/> × <see cref="MinimumAlignmentWeight"/>; when the
+    /// head displacement is fully aligned with the hip rest up axis, the vertical component is
+    /// scaled by <see cref="VerticalPositionWeight"/> alone. Clamped into <c>[0, 1]</c> on use.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float MinimumAlignmentWeight { get; set; } = DefaultMinimumAlignmentWeight;
+
     /// <inheritdoc />
     public override Vector3? ComputeHipLocalPosition(PoseStateContext context)
     {
@@ -103,6 +138,9 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
 
         Vector3 hipLocalRest = skeleton.GetBoneRest(context.HipBoneIndex).Origin;
         Basis hipRestBasisLocal = skeleton.GetBoneGlobalRest(context.HipBoneIndex).Basis.Orthonormalized();
+        Vector3 hipRestUpLocal = hipRestBasisLocal * Vector3.Up;
+        Vector3 hipRestForwardLocal = hipRestBasisLocal * Vector3.Forward;
+        Vector3 hipRestLateralLocal = hipRestBasisLocal * Vector3.Right;
         Transform3D skeletonInverse = skeleton.GlobalTransform.AffineInverse();
 
         Transform3D restHeadLocalTransform = skeletonInverse * context.HeadTargetRestTransform;
@@ -120,14 +158,17 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
 
         return ComputeHipLocalPosition(
             hipLocalRest,
-            hipRestBasisLocal,
+            hipRestUpLocal,
+            hipRestForwardLocal,
+            hipRestLateralLocal,
             restHeadLocalTransform.Origin,
             currentHeadLocalTransform.Origin,
             headRotationDisplacementLocal,
             RotationCompensationWeight,
             VerticalPositionWeight,
             LateralPositionWeight,
-            ForwardPositionWeight);
+            ForwardPositionWeight,
+            MinimumAlignmentWeight);
     }
 
     /// <summary>
@@ -204,13 +245,84 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
         float lateralPositionWeight,
         float forwardPositionWeight)
     {
-        Vector3 headOffsetLocal = currentHeadLocal - restHeadLocal;
-        Vector3 weightedHeadOffsetLocal = ComputeAxisWeightedPositionOffset(
-            headOffsetLocal,
-            hipRestBasisLocal,
+        Basis orthonormalBasis = hipRestBasisLocal.Orthonormalized();
+        Vector3 hipRestUpLocal = orthonormalBasis * Vector3.Up;
+        Vector3 hipRestForwardLocal = orthonormalBasis * Vector3.Forward;
+        Vector3 hipRestLateralLocal = orthonormalBasis * Vector3.Right;
+
+        return ComputeHipLocalPosition(
+            hipLocalRest,
+            hipRestUpLocal,
+            hipRestForwardLocal,
+            hipRestLateralLocal,
+            restHeadLocal,
+            currentHeadLocal,
+            headRotationDisplacementLocal,
+            rotationCompensationWeight,
             verticalPositionWeight,
             lateralPositionWeight,
-            forwardPositionWeight);
+            forwardPositionWeight,
+            minimumAlignmentWeight: 1.0f);
+    }
+
+    /// <summary>
+    /// Pure helper that computes the absolute hip-local target position using pre-resolved hip
+    /// rest axes and additionally damps the vertical positional component by how closely the
+    /// head displacement from rest aligns with the hip rest up axis.
+    /// </summary>
+    /// <param name="hipLocalRest">Rest hip bone position in skeleton-local space.</param>
+    /// <param name="hipRestUpLocal">Hip rest up axis expressed in skeleton-local space.</param>
+    /// <param name="hipRestForwardLocal">Hip rest forward axis expressed in skeleton-local space.</param>
+    /// <param name="hipRestLateralLocal">Hip rest lateral (right) axis expressed in skeleton-local space.</param>
+    /// <param name="restHeadLocal">Rest head viewpoint position in skeleton-local space.</param>
+    /// <param name="currentHeadLocal">Current head viewpoint position in skeleton-local space.</param>
+    /// <param name="headRotationDisplacementLocal">Rotation-derived neck displacement in skeleton-local space.</param>
+    /// <param name="rotationCompensationWeight">Weight applied to the rotation-derived displacement.</param>
+    /// <param name="verticalPositionWeight">Per-axis vertical weight.</param>
+    /// <param name="lateralPositionWeight">Per-axis lateral weight.</param>
+    /// <param name="forwardPositionWeight">Per-axis forward/back weight.</param>
+    /// <param name="minimumAlignmentWeight">
+    /// Lower bound of the alignment-driven damping factor on the vertical component. Clamped
+    /// into <c>[0, 1]</c> on use.
+    /// </param>
+    public static Vector3 ComputeHipLocalPosition(
+        Vector3 hipLocalRest,
+        Vector3 hipRestUpLocal,
+        Vector3 hipRestForwardLocal,
+        Vector3 hipRestLateralLocal,
+        Vector3 restHeadLocal,
+        Vector3 currentHeadLocal,
+        Vector3 headRotationDisplacementLocal,
+        float rotationCompensationWeight,
+        float verticalPositionWeight,
+        float lateralPositionWeight,
+        float forwardPositionWeight,
+        float minimumAlignmentWeight)
+    {
+        Vector3 headOffsetLocal = currentHeadLocal - restHeadLocal;
+
+        float alignment =
+            headOffsetLocal.LengthSquared() <= VectorEpsilonSquared
+            || hipRestUpLocal.LengthSquared() <= VectorEpsilonSquared
+                ? 1.0f
+                : Mathf.Abs(headOffsetLocal.Normalized().Dot(hipRestUpLocal.Normalized()));
+
+        float clampedMinimumAlignmentWeight = Mathf.Clamp(minimumAlignmentWeight, 0.0f, 1.0f);
+        float alignmentWeight = Mathf.Lerp(clampedMinimumAlignmentWeight, 1.0f, alignment);
+
+        float verticalComponent = headOffsetLocal.Dot(hipRestUpLocal);
+        float forwardComponent = headOffsetLocal.Dot(hipRestForwardLocal);
+        float lateralComponent = headOffsetLocal.Dot(hipRestLateralLocal);
+
+        float verticalScaled = verticalComponent * Mathf.Clamp(verticalPositionWeight, 0.0f, 1.0f) * alignmentWeight;
+        float lateralScaled = lateralComponent * Mathf.Clamp(lateralPositionWeight, 0.0f, 1.0f);
+        float forwardScaled = forwardComponent * Mathf.Clamp(forwardPositionWeight, 0.0f, 1.0f);
+
+        Vector3 weightedHeadOffsetLocal =
+            (hipRestLateralLocal * lateralScaled)
+            + (hipRestUpLocal * verticalScaled)
+            + (hipRestForwardLocal * forwardScaled);
+
         Vector3 weightedRotationDisplacementLocal =
             headRotationDisplacementLocal * Mathf.Max(rotationCompensationWeight, 0.0f);
         Vector3 combinedOffsetLocal = weightedHeadOffsetLocal - weightedRotationDisplacementLocal;
@@ -258,34 +370,6 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
             verticalPositionWeight: 1.0f,
             lateralPositionWeight: 1.0f,
             forwardPositionWeight: 1.0f);
-
-    private static Vector3 ComputeAxisWeightedPositionOffset(
-        Vector3 headOffsetLocal,
-        Basis hipRestBasisLocal,
-        float verticalPositionWeight,
-        float lateralPositionWeight,
-        float forwardPositionWeight)
-    {
-        if (headOffsetLocal.LengthSquared() <= VectorEpsilonSquared)
-        {
-            return Vector3.Zero;
-        }
-
-        Basis orthonormalHipRestBasisLocal = hipRestBasisLocal.Orthonormalized();
-        float determinant = orthonormalHipRestBasisLocal.Determinant();
-        if (Mathf.Abs(determinant) <= VectorEpsilonSquared)
-        {
-            return headOffsetLocal;
-        }
-
-        Vector3 headOffsetInHipRestLocal = orthonormalHipRestBasisLocal.Inverse() * headOffsetLocal;
-        Vector3 weightedOffsetInHipRestLocal = new(
-            headOffsetInHipRestLocal.X * Mathf.Clamp(lateralPositionWeight, 0.0f, 1.0f),
-            headOffsetInHipRestLocal.Y * Mathf.Clamp(verticalPositionWeight, 0.0f, 1.0f),
-            headOffsetInHipRestLocal.Z * Mathf.Clamp(forwardPositionWeight, 0.0f, 1.0f));
-
-        return orthonormalHipRestBasisLocal * weightedOffsetInHipRestLocal;
-    }
 
     private static bool TryComputeHeadRotationDisplacementLocal(
         PoseStateContext context,
