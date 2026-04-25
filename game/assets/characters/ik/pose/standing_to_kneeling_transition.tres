@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="StandingToKneelingPoseTransition" format=3]
+
+[ext_resource type="Script" path="res://src/IK/Pose/StandingToKneelingPoseTransition.cs" id="1_igjys"]
+
+[resource]
+resource_name = "StandingToKneelingTransition"
+script = ExtResource("1_igjys")
+FullCrouchDepthRatio = 0.4
+MinimumCrouchDepthBlend = 0.92
+FullCrouchForwardOffsetRatio = 0.053
+MinimumForwardOffsetFromFullCrouchRatio = 0.027
+From = &"Standing"
+To = &"Kneeling"

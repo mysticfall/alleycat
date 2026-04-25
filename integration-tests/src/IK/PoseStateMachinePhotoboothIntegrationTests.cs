@@ -45,12 +45,12 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
     private const float FootTargetRotationToleranceRadians = 0.06f;
 
     /// <summary>
-    /// Verifies marker scenarios drive standing/crouching transitions, AnimationTree seek values,
+    /// Verifies marker scenarios drive the standing-continuum seek values,
     /// hip descent, and a crouch-specific knee-flexion sanity check.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PoseStateMachineMarkerDriver_StandingToCrouchingScenarios_DriveStateAndBlendOutputs()
+    public async Task PoseStateMachineMarkerDriver_StandingContinuumScenarios_DriveStateAndBlendOutputs()
     {
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
@@ -94,7 +94,7 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
             skeleton,
             _standingCrouchingSeekParameter,
             "CrouchMidway",
-            "Crouching",
+            "Standing",
             hipsIndex,
             leftUpperLegIndex,
             leftLowerLegIndex,
@@ -107,7 +107,7 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
             skeleton,
             _standingCrouchingSeekParameter,
             "CrouchFull",
-            "Crouching",
+            "Standing",
             hipsIndex,
             leftUpperLegIndex,
             leftLowerLegIndex,
@@ -159,12 +159,12 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
     }
 
     /// <summary>
-    /// Verifies crouching-to-kneeling only triggers near full crouch, uses dedicated kneel seek,
-    /// and can transition back to crouching.
+    /// Verifies standing-continuum-to-kneeling only triggers near full crouch, uses dedicated
+    /// kneel seek, and can transition back to the standing continuum.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PoseStateMachineMarkerDriver_CrouchingToKneeling_RespectsDepthGateAndForwardBaseline()
+    public async Task PoseStateMachineMarkerDriver_StandingToKneeling_RespectsDepthGateAndForwardBaseline()
     {
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
@@ -189,7 +189,7 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
         var crouchMidwayState = (StringName)driver.Call("GetCurrentStateId");
-        Assert.Equal("Crouching", crouchMidwayState.ToString());
+        Assert.Equal("Standing", crouchMidwayState.ToString());
         float crouchMidwayKneeFlexion = ComputeKneeFlexionRadians(
             skeleton,
             leftUpperLegIndex,
@@ -220,10 +220,10 @@ public sealed class PoseStateMachinePhotoboothIntegrationTests
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
-        var crouchingStateAfterKneel = (StringName)driver.Call("GetCurrentStateId");
+        var standingStateAfterKneel = (StringName)driver.Call("GetCurrentStateId");
         Assert.Equal(
-            "Crouching",
-            crouchingStateAfterKneel.ToString());
+            "Standing",
+            standingStateAfterKneel.ToString());
     }
 
     /// <summary>

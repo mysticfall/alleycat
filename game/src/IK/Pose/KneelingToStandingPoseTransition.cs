@@ -3,10 +3,10 @@ using Godot;
 namespace AlleyCat.IK.Pose;
 
 /// <summary>
-/// Transition from kneeling back to crouching when forward kneel offset returns near baseline.
+/// Transition from kneeling back to the standing continuum when forward kneel offset returns near baseline.
 /// </summary>
 [GlobalClass]
-public partial class KneelingToCrouchingPoseTransition : PoseTransition
+public partial class KneelingToStandingPoseTransition : PoseTransition
 {
     /// <summary>
     /// Forward offset baseline ratio at the fully crouched pose.
@@ -19,7 +19,7 @@ public partial class KneelingToCrouchingPoseTransition : PoseTransition
     } = 0.053f;
 
     /// <summary>
-    /// Maximum forward offset ratio from full-crouch baseline that still counts as crouching.
+    /// Maximum forward offset ratio from full-crouch baseline that still counts as standing-family posture.
     /// </summary>
     [Export]
     public float MaximumForwardOffsetFromFullCrouchRatio

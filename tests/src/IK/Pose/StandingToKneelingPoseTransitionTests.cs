@@ -5,9 +5,9 @@ using Xunit;
 namespace AlleyCat.Tests.IK.Pose;
 
 /// <summary>
-/// Unit coverage for crouching-to-kneeling transition gating semantics.
+/// Unit coverage for standing-continuum-to-kneeling transition gating semantics.
 /// </summary>
-public sealed class CrouchingToKneelingPoseTransitionTests
+public sealed class StandingToKneelingPoseTransitionTests
 {
     private const float FullCrouchDepthRatio = 0.4f;
     private const float MinimumCrouchDepthBlend = 0.92f;
@@ -23,7 +23,7 @@ public sealed class CrouchingToKneelingPoseTransitionTests
         Transform3D rest = CreateTransform(0f, 1.50f, 0f);
         Transform3D camera = CreateTransform(0f, 1.22f, 0.16f);
 
-        bool shouldTransition = CrouchingToKneelingPoseTransition.Evaluate(
+        bool shouldTransition = StandingToKneelingPoseTransition.Evaluate(
             rest,
             camera,
             restHeadHeight: 1.5f,
@@ -44,7 +44,7 @@ public sealed class CrouchingToKneelingPoseTransitionTests
         Transform3D rest = CreateTransform(0f, 1.50f, 0f);
         Transform3D camera = CreateTransform(0f, 0.91f, 0.08f);
 
-        bool shouldTransition = CrouchingToKneelingPoseTransition.Evaluate(
+        bool shouldTransition = StandingToKneelingPoseTransition.Evaluate(
             rest,
             camera,
             restHeadHeight: 1.5f,
@@ -65,7 +65,7 @@ public sealed class CrouchingToKneelingPoseTransitionTests
         Transform3D rest = CreateTransform(0f, 1.50f, 0f);
         Transform3D camera = CreateTransform(0f, 0.91f, 0.16f);
 
-        bool shouldTransition = CrouchingToKneelingPoseTransition.Evaluate(
+        bool shouldTransition = StandingToKneelingPoseTransition.Evaluate(
             rest,
             camera,
             restHeadHeight: 1.5f,
@@ -113,7 +113,7 @@ public sealed class CrouchingToKneelingPoseTransitionTests
         Transform3D restTall = CreateTransform(0f, 1.80f, 0f);
         Transform3D cameraTall = CreateTransform(0f, 1.52f, 0.192f);
 
-        bool shortCharacterTransitions = CrouchingToKneelingPoseTransition.Evaluate(
+        bool shortCharacterTransitions = StandingToKneelingPoseTransition.Evaluate(
             restShort,
             cameraShort,
             restHeadHeight: 1.5f,
@@ -122,7 +122,7 @@ public sealed class CrouchingToKneelingPoseTransitionTests
             fullCrouchForwardOffsetRatio: FullCrouchForwardOffsetRatio,
             minimumForwardOffsetFromFullCrouchRatio: MinimumForwardOffsetFromFullCrouchRatio);
 
-        bool tallCharacterTransitions = CrouchingToKneelingPoseTransition.Evaluate(
+        bool tallCharacterTransitions = StandingToKneelingPoseTransition.Evaluate(
             restTall,
             cameraTall,
             restHeadHeight: 1.8f,
@@ -147,7 +147,7 @@ public sealed class CrouchingToKneelingPoseTransitionTests
         Transform3D restTall = CreateTransform(0f, 1.80f, 0f);
         Transform3D cameraTall = CreateTransform(0f, 1.116f, 0.192f);
 
-        bool shortCharacterTransitions = CrouchingToKneelingPoseTransition.Evaluate(
+        bool shortCharacterTransitions = StandingToKneelingPoseTransition.Evaluate(
             restShort,
             cameraShort,
             restHeadHeight: 1.5f,
@@ -156,7 +156,7 @@ public sealed class CrouchingToKneelingPoseTransitionTests
             fullCrouchForwardOffsetRatio: FullCrouchForwardOffsetRatio,
             minimumForwardOffsetFromFullCrouchRatio: MinimumForwardOffsetFromFullCrouchRatio);
 
-        bool tallCharacterTransitions = CrouchingToKneelingPoseTransition.Evaluate(
+        bool tallCharacterTransitions = StandingToKneelingPoseTransition.Evaluate(
             restTall,
             cameraTall,
             restHeadHeight: 1.8f,
@@ -173,12 +173,12 @@ public sealed class CrouchingToKneelingPoseTransitionTests
     /// Kneeling returns to crouching when forward kneel offset falls back near full-crouch baseline.
     /// </summary>
     [Fact]
-    public void KneelingToCrouchingEvaluate_ForwardOffsetNearBaseline_Transitions()
+    public void KneelingToStandingEvaluate_ForwardOffsetNearBaseline_Transitions()
     {
         Transform3D rest = CreateTransform(0f, 1.50f, 0f);
         Transform3D camera = CreateTransform(0f, 0.93f, 0.10f);
 
-        bool shouldTransition = KneelingToCrouchingPoseTransition.Evaluate(
+        bool shouldTransition = KneelingToStandingPoseTransition.Evaluate(
             rest,
             camera,
             restHeadHeight: 1.5f,
@@ -192,12 +192,12 @@ public sealed class CrouchingToKneelingPoseTransitionTests
     /// Kneeling remains active while forward kneel offset is still significantly ahead of crouch baseline.
     /// </summary>
     [Fact]
-    public void KneelingToCrouchingEvaluate_ForwardOffsetStillDeepKneel_DoesNotTransition()
+    public void KneelingToStandingEvaluate_ForwardOffsetStillDeepKneel_DoesNotTransition()
     {
         Transform3D rest = CreateTransform(0f, 1.50f, 0f);
         Transform3D camera = CreateTransform(0f, 0.93f, 0.18f);
 
-        bool shouldTransition = KneelingToCrouchingPoseTransition.Evaluate(
+        bool shouldTransition = KneelingToStandingPoseTransition.Evaluate(
             rest,
             camera,
             restHeadHeight: 1.5f,

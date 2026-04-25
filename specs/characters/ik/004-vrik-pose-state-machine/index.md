@@ -27,8 +27,8 @@ responsibility.
 
 ## User Requirements
 
-1. Players must see coherent full-body pose behaviour across these MVP states: standing, crouching, kneeling,
-   stooping, sitting, and crawling (all fours).
+1. Players must see coherent full-body pose behaviour across these MVP states: standing, kneeling,
+   stooping, sitting, and crawling (all fours), with standing covering a continuous standing-to-crouching range.
 2. Players must experience continuous pose transitions during player-driven movement, without requiring authored
    transitions for every intermediate body position.
 3. Players must retain stable feet placement behaviour aligned with existing lower-limb constraints for this phase. See IK-003
@@ -36,11 +36,11 @@ responsibility.
    foot transforms at the beginning of each IK solve cycle.
 4. Players must receive predictable calibration behaviour across non-standing poses, without relying on standing-only
    head-rest assumptions.
-5. Players must be able to transition from crouching to kneeling by leaning forward beyond a configurable depth threshold
-   while in the full-crouch posture, without requiring explicit button input.
+5. Players must be able to transition from the Standing pose to kneeling by leaning forward beyond a configurable depth threshold
+   from the full-crouch baseline, without requiring explicit button input.
 6. Players must see the kneeling pose seek forward from the full-crouch baseline, with the forward travel distance being short and
    tunable rather than a fixed offset from standing.
-7. Players must be able to transition from kneeling back to crouching by leaning back or upright beyond a configurable reverse
+7. Players must be able to transition from kneeling back to a crouched/upright posture within the Standing continuum by leaning back or upright beyond a configurable reverse
    threshold, without requiring explicit button input. This return transition is bidirectional with the forward kneeling transition.
 
 ## Technical Requirements
@@ -69,17 +69,17 @@ responsibility.
    cannot correct (animated feet remain the source of truth). State-specific non-linear exceptions are permitted when
    justified.
 10. The architecture must permit ambiguous-input handling when needed, but no mandatory catch-all ambiguity state is
-    required in this phase.
+     required in this phase.
 11. This specification revision must focus on requirements and implementation contracts, not fixed numeric thresholds
-    or performance metrics.
+     or performance metrics.
 12. Each pose state must drive BOTH (a) animation selection or `AnimationTree` parameter control and (b) the hip
-    reconciliation profile for that state. Animation and hip behaviour are a coupled per-state responsibility.
+     reconciliation profile for that state. Animation and hip behaviour are a coupled per-state responsibility.
 13. State selection must be inferred from IK-target transforms and animation/runtime signals (for example head pitch
      and hand height from `PoseStateContext`). Explicit button input for pose switching must be avoided unless no automatic
      signal is viable for a specific transition.
 14. State and transition `Resource` types must expose a documented public extension surface (subclassable base resources
-    and pluggable classifier/evaluator interfaces) so new states, transitions, and classifiers can be added from
-    consumer code without modifying core state-machine source.
+     and pluggable classifier/evaluator interfaces) so new states, transitions, and classifiers can be added from
+     consumer code without modifying core state-machine source.
 15. The state machine must evaluate per tick from an immutable read-only context snapshot (suggested name
      `PoseStateContext`) that bundles IK-target inputs and skeleton/runtime signals. The context is the canonical
      input surface for classifiers, transitions, animation bindings, and hip reconciliation profiles, including
@@ -87,50 +87,51 @@ responsibility.
      global rest transform), `LeftHandTargetTransform`, and `RightHandTargetTransform`. Detailed composition is
      defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
 16. Runtime responsibilities may be split across two cooperating nodes — a `PoseStateMachine` node that runs `Tick`
-    per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
-    the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
-    before downstream consumers read pending hip translation. This may be driven by a non-modifier runtime node, or by
-    begin-stage modifier-callback flow (for example `PlayerVRIK` begin-stage callback invoked by `StageModifier`).
-    This split is permitted as the canonical pattern but is not mandated; any equivalent topology that preserves this
-    ordering and AC-HR-07 ordering is acceptable.
+     per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
+     the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
+     before downstream consumers read pending hip translation. This may be driven by a non-modifier runtime node, or by
+     begin-stage modifier-callback flow (for example `PlayerVRIK` begin-stage callback invoked by `StageModifier`).
+     This split is permitted as the canonical pattern but is not mandated; any equivalent topology that preserves this
+     ordering and AC-HR-07 ordering is acceptable.
 17. Transition Resources must support optional lifecycle hooks invoked around each state switch in this order:
-    `OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`. The state machine must emit a
-    state-changed observation (signal or event) so consumers can react.
+     `OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`. The state machine must emit a
+     state-changed observation (signal or event) so consumers can react.
 18. State and transition identifiers are authored as `StringName` in editor contexts for designer ergonomics. The
-    internal selection layer may use either `StringName` or `string` for testability, provided identity semantics are
-    preserved.
+     internal selection layer may use either `StringName` or `string` for testability, provided identity semantics are
+     preserved.
 19. Hip reconciliation profiles must return an **absolute hip target position in skeleton-local space** as a nullable
-    value (`Vector3?`). Returning `null` means "do not override the animated hip bone". Profiles must compute the hip
-    target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry
-    exposed through `PoseStateContext`, and must not read or depend on the currently animated hip bone pose, so that
-    `TimeSeek` scrubbing and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
-    the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
-20. For the Standing/Crouching pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
-    (a) positional head-offset contribution and (b) rotational-offset contribution derived from rest→current head
-    orientation delta and rest neck→head geometry, then apply opposite-direction hip compensation to mitigate
-    unnatural neck bending. Rotational contribution magnitude must be configurable per profile/resource via
-    `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`) and no mandatory fixed default
-    value in this spec revision. Vertical hip movement for this family is owned by the hip profile, not by the
-    animation clip. Other pose families may diverge.
+     value (`Vector3?`). Returning `null` means "do not override the animated hip bone". Profiles must compute the hip
+     target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry
+     exposed through `PoseStateContext`, and must not read or depend on the currently animated hip bone pose, so that
+     `TimeSeek` scrubbing and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
+     the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
+20. For the Standing pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
+     (a) positional head-offset contribution and (b) rotational-offset contribution derived from rest→current head
+     orientation delta and rest neck→head geometry, then apply opposite-direction hip compensation to mitigate
+     unnatural neck bending. Rotational contribution magnitude must be configurable per profile/resource via
+     `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`) and no mandatory fixed default
+     value in this spec revision. Vertical hip movement for this family is owned by the hip profile, not by the
+     animation clip. Other pose families may diverge.
 21. Unit-level regression tests must cover the weighted rotational-compensation contract for
-    `HeadTrackingHipProfile`, including sign correctness, proportional scaling by weight, non-negative clamp behaviour,
-    epsilon-combined snap behaviour, and overload equivalence for profile evaluation entry points.
-22. The Standing/Crouching pose family is backed by a single `AnimationTree` state, `StandingCrouching`, whose
-    sub-graph continuously runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")` driven by a normalised scalar.
-    Multiple framework-level `PoseState` resources may map to the same `AnimationTree` state when they share animation
-    behaviour. The `Idle` clip remains in the animation library as a deferred-but-supported extension point (for
-    example, additive breathing layering) and is not wired into the tree for MVP.
-23. The Crouching→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the
-    transition can trigger. The gate requires the player to be at or near full crouch depth before kneeling becomes reachable.
-24. The Crouching→Kneeling transition trigger and the kneeling pose seek are both measured from the full-crouch baseline (the
-    head position when fully crouching), not from the standing baseline. Forward lean beyond the full-crouch baseline drives
-    the transition.
+     `HeadTrackingHipProfile`, including sign correctness, proportional scaling by weight, non-negative clamp behaviour,
+     epsilon-combined snap behaviour, and overload equivalence for profile evaluation entry points.
+22. The Standing pose family is backed by a single `AnimationTree` state, `StandingCrouching`, whose
+     sub-graph continuously runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")` driven by a normalised scalar
+     representing the full standing-to-crouching continuum. A single framework-level `StandingPoseState` resource
+     maps to this `AnimationTree` state — there is no separate framework-level `CrouchingPoseState`. The `Idle` clip
+     remains in the animation library as a deferred-but-supported extension point (for example, additive breathing
+     layering) and is not wired into the tree for MVP.
+23. The Standing→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the
+     transition can trigger. The gate requires the player to be at or near full crouch depth on the standing-to-crouching continuum before kneeling becomes reachable.
+24. The Standing→Kneeling transition trigger and the kneeling pose seek are both measured from the full-crouch baseline (the
+     head position when fully crouching on the continuum), not from the standing baseline. Forward lean beyond the full-crouch baseline drives
+     the transition.
 25. The kneeling forward travel range (how far the kneeling pose seeks forward from the full-crouch baseline) is short and
      tunable via a configuration parameter. The range is measured in head-offset space from the full-crouch position.
 26. The kneeling transition thresholds must use normalised ratios derived from rest-pose body measures, not absolute metres.
      At minimum, the head-height measure from rest pose must define the reference for the normalised crouch-depth gate.
      Tunable parameters in this spec use flexible ratios (for example 0.85 × rest-head-height) rather than fixed absolute values.
-27. The Kneeling→Crouching return transition is gated by a configurable reverse-threshold that is also expressed as a normalised
+27. The Kneeling→Standing return transition is gated by a configurable reverse-threshold that is also expressed as a normalised
      ratio from the full-crouch baseline. The return transition uses the same full-crouch baseline as the forward transition but
      in the reverse direction (leaning back or upright from kneeling).
 
@@ -156,7 +157,7 @@ Both linked pages are normative dependencies for implementation.
 
 ## In Scope
 
-- MVP state coverage contracts for standing, crouching, kneeling, stooping, sitting, and crawling (all fours).
+- MVP state coverage contracts for standing (covering standing-to-crouching continuum), kneeling, stooping, sitting, and crawling (all fours).
 - Framework-first state detection and transition architecture using extensible Godot `Resource` definitions.
 - State-specific disambiguation between overlapping poses (for example stoop vs crouch) as a permanent classifier
   responsibility resolved via auxiliary IK-target signals such as head pitch and hand height from the pose-state
@@ -178,7 +179,7 @@ Both linked pages are normative dependencies for implementation.
 | ID | Requirement | Layer |
 | --- | --- | --- |
 | AC-00 | The specification separates user-visible behaviour requirements from implementation contracts and keeps both layers normative. | User + Technical |
-| AC-01 | IK-004 identifies standing, crouching, kneeling, stooping, sitting, and crawling as required MVP pose states. | User |
+| AC-01 | IK-004 identifies standing (covering the standing-to-crouching continuum), kneeling, stooping, sitting, and crawling as required MVP pose states. | User |
 | AC-02 | IK-004 references IK-001/002/003 as prerequisites without duplicating their solver contracts. | Technical |
 | AC-03 | Pose states and transitions are specified as extensible `Resource`-driven contracts, including framework-first state-specific transition conditions. | Technical |
 | AC-04 | Input contracts for this phase are restricted to head and hand IK-target transforms (`HeadTargetTransform`, `LeftHandTargetTransform`, `RightHandTargetTransform`) and internal or animation-derived values, with collision/locomotion inputs explicitly deferred. | Technical |
@@ -197,43 +198,45 @@ Both linked pages are normative dependencies for implementation.
 | AC-17 | State and transition identifiers are authored as `StringName`; internal selection may use `StringName` or `string` provided identity semantics are preserved. | Technical |
 | AC-18 | Hip reconciliation profiles return an absolute hip target position in skeleton-local space as a nullable value (`Vector3?`); returning `null` leaves the animated hip pose untouched. | Technical |
 | AC-19 | Hip reconciliation profiles compute the hip target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry, and must not read or depend on the currently animated hip bone pose. | Technical |
-| AC-20 | The Standing/Crouching pose family's default profile is `HeadTrackingHipProfile`, combining positional head offset and rotational offset (from rest→current head orientation delta plus rest neck→head geometry) with opposite-direction hip compensation to mitigate unnatural neck bending; rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, and not fixed to a mandatory numeric default by this spec. | Technical |
+| AC-20 | For the Standing pose family's default profile is `HeadTrackingHipProfile`, combining positional head offset and rotational offset (from rest→current head orientation delta plus rest neck→head geometry) with opposite-direction hip compensation to mitigate unnatural neck bending; rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, and not fixed to a mandatory numeric default by this spec. | Technical |
 | AC-21 | Unit-level regression tests cover the weighted `HeadTrackingHipProfile` rotational-compensation contract, including sign correctness, proportional weight scaling, non-negative weight clamp behaviour, epsilon-combined snap behaviour, and overload equivalence. | Technical |
-| AC-22 | The Standing/Crouching pose family is backed by a single `AnimationTree` state (`StandingCrouching`) running `TimeSeek → AnimationNodeAnimation("Crouch-seek")`, with multiple framework-level `PoseState` resources permitted to share one `AnimationTree` state. | Technical |
+| AC-22 | The Standing pose family is backed by a single `AnimationTree` state (`StandingCrouching`) running `TimeSeek → AnimationNodeAnimation("Crouch-seek")`, with a single framework-level `StandingPoseState` resource mapping to this `AnimationTree` state. There is no separate framework-level CrouchingPoseState; the standing-to-crouching continuum is covered by one StandingPoseState. | Technical |
 | AC-23 | The `Idle` clip remains in the animation library as a deferred-but-supported extension point for future layering (for example additive breathing) and is not wired into the `AnimationTree` for MVP. | Technical |
-| AC-24 | The Crouching→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the transition can trigger, requiring the player to be at or near full crouch depth (tunable gate). | Technical |
-| AC-25 | The Crouching→Kneeling transition trigger and kneeling pose seek are measured from the full-crouch baseline (head position at full crouch), not from the standing baseline. Forward lean from the full-crouch baseline drives the transition. | Technical |
+| AC-24 | The Standing→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the transition can trigger, requiring the player to be at or near full crouch depth on the standing-to-crouching continuum (tunable gate). | Technical |
+| AC-25 | The Standing→Kneeling transition trigger and kneeling pose seek are measured from the full-crouch baseline (head position at full crouch on the continuum), not from the standing baseline. Forward lean from the full-crouch baseline drives the transition. | Technical |
 | AC-26 | The kneeling forward travel range is short and tunable via a configuration parameter, measured from the full-crouch baseline in head-offset space. | Technical |
 | AC-26a | The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres. At minimum, the head-height measure from rest pose defines the reference for the normalised crouch-depth gate. | Technical |
-| AC-26b | The Kneeling→Crouching return transition is gated by a configurable reverse-threshold expressed as a normalised ratio from the full-crouch baseline, providing bidirectional crouch↔kneel transitions. | Technical |
+| AC-26b | The Kneeling→Standing return transition is gated by a configurable reverse-threshold expressed as a normalised ratio from the full-crouch baseline, providing bidirectional standing-continuum↔kneel transitions. | Technical |
 | AC-27 | Foot-target synchronisation stage re-synchronises foot IK targets from animated foot transforms (position + rotation) at the beginning of each leg IK solve cycle, before pole-target computation. `FootTargetSyncController` must run before `HipReconciliationModifier` and any other foot-mutating modifiers. This ensures deterministic solve behaviour when animation timing or `TimeSeek` position changes. Ordering is a scene/pipeline authoring contract — runtime auto-reordering is intentionally not used. See IK-003 AC-05a. | User + Technical |
 
 ## Code-Spec Sync Note
 
 Increment 2.2 is delivered alongside this specification state. The shipped implementation includes all content from
-Increment 2.1 plus the Crouching↔Kneeling bidirectional transition with the following contracts:
+Increment 2.1 plus the Standing→Kneeling bidirectional transition with the following contracts:
 
 - The `KneelingPoseState` concrete state resource is now shipped.
-- The Crouching→Kneeling transition is gated by a configurable crouch-depth threshold (`CrouchDepthGate`) that requires
-  the player to be at or near full crouch depth before kneeling becomes reachable.
-- The Crouching→Kneeling transition trigger and kneeling pose seek are measured from the full-crouch baseline (head position at full crouch),
+- The Standing→Kneeling transition is gated by a configurable crouch-depth threshold (`CrouchDepthGate`) that requires
+  the player to be at or near full crouch depth on the standing-to-crouching continuum before kneeling becomes reachable.
+- The Standing→Kneeling transition trigger and kneeling pose seek are measured from the full-crouch baseline (head position at full crouch on the continuum),
   not from the standing baseline. Forward lean from the full-crouch baseline drives the transition.
 - The kneeling forward travel range (`KneelingForwardRange`) is short and tunable via a configuration parameter, measured
   in head-offset space from the full-crouch baseline.
-- The `KneelingCrouchingTransition` return transition now provides bidirectional crouch↔kneel transitions, gated by a configurable
+- The return transition now provides bidirectional standing-continuum↔kneel transitions, gated by a configurable
   reverse-threshold (expressed as a normalised ratio from the full-crouch baseline).
 - Kneeling transition thresholds now use normalised ratios derived from rest-pose body measures, not absolute metres. At minimum,
   the head-height measure from rest pose (`RestHeadHeight`) defines the reference for the normalised crouch-depth gate. Tunable parameters use flexible ratios
   (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
-- The `CrouchingKneelingTransition` transition resource implements the forward contracts, and the `KneelingCrouchingTransition`
-  implements the reverse (return) contracts.
+- The `StandingToKneelingPoseTransition` transition resource implements the forward contracts, and
+  `KneelingToStandingPoseTransition` implements the reverse contracts.
 
 The implementation also includes the `PoseStateMachine` wiring on the player, the `StandingCrouchingSeekAnimationBinding` animation
 binding targeting the single `StandingCrouching` `AnimationTree` state (sub-graph `TimeSeek → AnimationNodeAnimation
-("Crouch-seek")`), the `HeadOffsetPoseTransition` transition resource, the `HeadTrackingHipProfile` hip reconciliation
-profile (replacing the deprecated `LateralHeadOffsetHipReconciliationProfile`) with rotational hip correction added for the
-Standing/Crouching path alongside positional head offset and configurable `RotationCompensationWeight` (non-negative
-clamp), the concrete `CrouchingPoseState`, and the `HipReconciliationModifier` ordering in `player.tscn` placed between
+("Crouch-seek")`), the `HeadTrackingHipProfile` hip reconciliation profile (replacing the deprecated
+`LateralHeadOffsetHipReconciliationProfile`) with rotational hip correction added for the Standing path alongside positional
+head offset and configurable `RotationCompensationWeight` (non-negative clamp), the concrete `StandingPoseState` resource
+(covering the full standing-to-crouching continuum — there is no separate `CrouchingPoseState`), the
+`StandingToKneelingPoseTransition`/`KneelingToStandingPoseTransition` pair for bidirectional kneel gating from the standing continuum,
+and the `HipReconciliationModifier` ordering in `player.tscn` placed between
 `VRIKBeginStage` and the existing IK modifier chain so AC-HR-07 ordering is preserved. In this wiring,
 `PoseStateMachine.Tick` executes in begin-stage flow after IK follower adjustments have produced current tracked transforms.
 `PoseStateContext` now standardises head IK-target transforms as `HeadTargetTransform` and `HeadTargetRestTransform`.
@@ -249,7 +252,7 @@ Known deferrals tracked against this revision:
   extensibility surface rather than a required Increment 2 artefact).
 - The `Idle` clip is retained in the animation library for future additive layering (for example breathing) on top of
   the `StandingCrouching` sub-graph, but is not wired into the `AnimationTree` for MVP (AC-23).
-- VR-runtime visual verification of the Standing ↔ Crouching ↔ Kneeling transitions is deferred pending headset access.
+- VR-runtime visual verification of the standing-to-crouching continuum and Kneeling transitions is deferred pending headset access.
 
 ## References
 

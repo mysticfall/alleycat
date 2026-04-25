@@ -3,13 +3,14 @@ using Godot;
 namespace AlleyCat.IK.Pose;
 
 /// <summary>
-/// Transition from crouching to kneeling gated by crouch depth and forward lean.
+/// Transition from the standing continuum to kneeling, gated by crouch depth and forward lean.
 /// </summary>
 /// <remarks>
-/// The forward metric is authored relative to the fully crouched forward baseline, not standing.
+/// The forward metric is authored relative to the fully crouched forward baseline rather than the
+/// standing baseline, so kneeling only becomes reachable from a sufficiently lowered standing pose.
 /// </remarks>
 [GlobalClass]
-public partial class CrouchingToKneelingPoseTransition : PoseTransition
+public partial class StandingToKneelingPoseTransition : PoseTransition
 {
     /// <summary>
     /// Crouch depth ratio (normalised by rest head height) considered fully crouched.

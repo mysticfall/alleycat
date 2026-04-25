@@ -22,7 +22,7 @@ final tuning values.
 ## Technical Requirements
 
 1. Hip reconciliation behaviour must be translation-centric for this phase.
-2. Reconciliation logic must support state-dependent behaviour profiles so standing, crouching, kneeling, stooping,
+2. Reconciliation logic must support state-dependent behaviour profiles so standing (covering the standing-to-crouching continuum), kneeling, stooping,
    sitting, and crawling can apply distinct translation responses.
 3. Calibration and reference calculations must use viewpoint-node semantics and body-proportion references.
 4. Non-standing states must not depend on a standing head-rest pose assumption.
@@ -53,7 +53,7 @@ final tuning values.
     NOT read or depend on the currently animated hip bone pose. Rationale: `TimeSeek` scrubbing (or any animation)
     moves the animated hip, so depending on it creates a feedback loop between hip reconciliation and animation
     selection that destabilises classifier and transition behaviour.
-14. For the Standing/Crouching pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
+14. For the Standing pose family (covering the standing-to-crouching continuum), the default profile is `HeadTrackingHipProfile`. The profile must combine
     two contributions: (a) positional head offset and (b) rotational offset derived from rest→current head orientation
     delta using rest neck→head geometry. The resulting rotational contribution must drive opposite-direction hip
     positional compensation to mitigate unnatural neck bending. Rotational contribution magnitude must be configurable
@@ -92,7 +92,7 @@ final tuning values.
 | AC-HR-08 | Hip reconciliation profiles return an absolute hip target position in skeleton-local space as a nullable value (`Vector3?`); returning `null` leaves the animated hip pose untouched. Profiles apply epsilon-based jitter suppression to avoid micro-translations.                                                                                                                                                                                                                               | Technical        |
 | AC-HR-09 | Hip reconciliation consumes the per-tick `PoseStateContext` snapshot; the pending hip target may be produced by a driver node and applied inside a `SkeletonModifier3D`, provided AC-HR-07 ordering is preserved.                                                                                                                                                                                                                                                                                | Technical        |
 | AC-HR-10 | Hip reconciliation profiles compute the hip target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry exposed through `PoseStateContext`, and MUST NOT read or depend on the currently animated hip bone pose, so that `TimeSeek` scrubbing and animation changes cannot feed back into hip reconciliation.                                                                                                                                    | Technical        |
-| AC-HR-11 | The Standing/Crouching pose family's default profile is `HeadTrackingHipProfile`, combining positional head offset and rotational offset (derived from rest→current head orientation delta plus rest neck→head geometry), with opposite-direction hip positional compensation to mitigate unnatural neck bending; rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, and not fixed to a mandatory numeric default by this spec. | Technical        |
+| AC-HR-11 | The Standing pose family's default profile is `HeadTrackingHipProfile`, combining positional head offset and rotational offset (derived from rest→current head orientation delta plus rest neck→head geometry), with opposite-direction hip positional compensation to mitigate unnatural neck bending; rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, and not fixed to a mandatory numeric default by this spec. | Technical |
 | AC-HR-12 | Unit-level regression tests cover the weighted `HeadTrackingHipProfile` rotational-compensation contract, including sign correctness, proportional weight scaling, non-negative weight clamp behaviour, epsilon-combined snap behaviour, and overload equivalence.                                                                                                                                                                                                                               | Technical        |
 
 ## References

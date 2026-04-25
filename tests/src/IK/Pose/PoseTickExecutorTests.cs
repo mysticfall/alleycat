@@ -23,11 +23,11 @@ public sealed class PoseTickExecutorTests
     {
         List<string> events = [];
         RecordingState standing = new("Standing", events);
-        RecordingState crouching = new("Crouching", events);
+        RecordingState kneeling = new("Kneeling", events);
 
         RecordingTransition transition = new(
             standing.Id,
-            crouching.Id,
+            kneeling.Id,
             shouldTransition: true,
             events);
 
@@ -37,24 +37,24 @@ public sealed class PoseTickExecutorTests
             standing,
             [transition],
             new PoseStateContext(),
-            resolveState: id => id == crouching.Id ? crouching : null,
+            resolveState: id => id == kneeling.Id ? kneeling : null,
             onStateChanged: (previous, current) => observed = (previous, current));
 
-        Assert.Same(crouching, active);
+        Assert.Same(kneeling, active);
         Assert.True(observed.HasValue, "StateChanged observer must fire exactly once per switch.");
         Assert.Same(standing, observed!.Value.old);
-        Assert.Same(crouching, observed.Value.next);
+        Assert.Same(kneeling, observed.Value.next);
 
         // Lifecycle order matches the contract: transition-enter, exit old, enter new,
         // transition-exit, then update on the new state.
         Assert.Equal(
             new[]
             {
-                "TransitionEnter:Standing->Crouching",
+                "TransitionEnter:Standing->Kneeling",
                 "Exit:Standing",
-                "Enter:Crouching",
-                "TransitionExit:Standing->Crouching",
-                "Update:Crouching",
+                "Enter:Kneeling",
+                "TransitionExit:Standing->Kneeling",
+                "Update:Kneeling",
             },
             events);
     }
@@ -67,11 +67,11 @@ public sealed class PoseTickExecutorTests
     {
         List<string> events = [];
         RecordingState standing = new("Standing", events);
-        RecordingState crouching = new("Crouching", events);
+        RecordingState kneeling = new("Kneeling", events);
 
         RecordingTransition transition = new(
             standing.Id,
-            crouching.Id,
+            kneeling.Id,
             shouldTransition: false,
             events);
 
@@ -99,11 +99,11 @@ public sealed class PoseTickExecutorTests
     {
         List<string> events = [];
         RecordingState standing = new("Standing", events);
-        RecordingState crouching = new("Crouching", events);
+        RecordingState kneeling = new("Kneeling", events);
 
         RecordingTransition mismatched = new(
             "Unused",
-            crouching.Id,
+            kneeling.Id,
             shouldTransition: true,
             events);
 

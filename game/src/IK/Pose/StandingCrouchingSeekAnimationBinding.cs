@@ -171,7 +171,7 @@ public partial class StandingCrouchingSeekAnimationBinding : AnimationBinding
 
     /// <summary>
     /// Pure travel-decision helper exposed for unit coverage of the unconditional travel
-    /// semantics introduced after the Standing → Crouching → Standing round-trip regression.
+    /// semantics introduced after standing-continuum round-trip regressions.
     /// </summary>
     /// <param name="currentTargetName">
     /// The AnimationTree state-machine state the binding wants to travel to this tick.

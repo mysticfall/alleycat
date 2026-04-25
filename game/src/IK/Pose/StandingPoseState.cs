@@ -3,12 +3,13 @@ using Godot;
 namespace AlleyCat.IK.Pose;
 
 /// <summary>
-/// Minimal concrete pose state representing a standing/upright posture.
+/// Concrete pose state representing the standing-to-crouching continuum.
 /// </summary>
 /// <remarks>
-/// Increment 1 ships this state to exercise the framework end-to-end. No additional lifecycle
-/// behaviour is required over the base class; animation binding and hip reconciliation profile
-/// are supplied via inspector-exported fields on <see cref="PoseState"/>.
+/// The standing pose family owns the full standing-to-crouching range through a single framework-
+/// level state. The accompanying <see cref="StandingCrouchingSeekAnimationBinding"/> scrubs the
+/// shared <c>StandingCrouching</c> AnimationTree state across that continuum, while
+/// <see cref="HeadTrackingHipProfile"/> provides the matching hip reconciliation behaviour.
 /// </remarks>
 [GlobalClass]
 public partial class StandingPoseState : PoseState
