@@ -1,0 +1,174 @@
+using AlleyCat.TestFramework;
+using Godot;
+using Xunit;
+using static AlleyCat.IntegrationTests.Support.TestUtils;
+
+namespace AlleyCat.IntegrationTests.IK;
+
+/// <summary>
+/// Non-visual regression coverage for IK-004 direction-weighted hip reconciliation.
+/// </summary>
+public sealed class HeadTrackingHipProfilePhotoboothIntegrationTests
+{
+    private const string VerificationScenePath = "res://tests/characters/ik/head_tracking_hip_profile_test.tscn";
+    private const string SubjectPath = "Subject/Female";
+    private const string DriverPath = "PoseStateMachineDriver";
+    private const string HipModifierPath = "Subject/Female/Female_export/GeneralSkeleton/HipReconciliationModifier";
+    private const string ScenarioMarkersRootPath = "Markers/PoseStateMachine/Scenarios";
+    private const string HeadRestMarkerPath = "Markers/PoseStateMachine/RestHeadTarget";
+    private const string LeftHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestLeft";
+    private const string RightHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestRight";
+    private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
+    private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
+    private const string SkeletonPath = "Subject/Female/Female_export/GeneralSkeleton";
+    private const string AnimationTreePath = "Subject/Female/AnimationTree";
+    private const float MinimumVerticalHipDropMetres = 0.15f;
+    private const float MinimumVerticalVsStoopHipDropDeltaMetres = 0.07f;
+    private const float MaximumVerticalForwardHipTravelMetres = 0.08f;
+    private const float MinimumScenarioHeadSeparationMetres = 0.02f;
+
+    /// <summary>
+    /// Verifies the standing-family hip profile keeps a visibly stronger downward response for a
+    /// vertical crouch than for a forward stoop, while also guarding against the stoop hips
+    /// travelling so far forward that the torso loses its head-leading lean silhouette.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DirectionWeightedHipProfile_StoopVsVerticalCrouch_PreservesVerticalResponseAndConstrainsForwardTravel()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node3D subject = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(SubjectPath), exactMatch: false);
+        Assert.Equal("Female", subject.Name);
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Node hipModifier = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(HipModifierPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+
+        hipModifier.Set("StateMachine", driver.Call("GetDrivenStateMachine"));
+        Assert.NotNull(animationTree);
+
+        int hipsIndex = RequireBoneIndex(skeleton, "Hips");
+        int headIndex = RequireBoneIndex(skeleton, "Head");
+
+        AssertScenarioMarkerSemantics(sceneRoot);
+
+        ScenarioSnapshot standing = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "Standing", hipsIndex, headIndex);
+        ScenarioSnapshot verticalCrouch = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "VerticalCrouchStrong", hipsIndex, headIndex);
+        ScenarioSnapshot stoopForward = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "StoopForward", hipsIndex, headIndex);
+        ScenarioSnapshot leanBack = await ApplyScenarioAndCaptureAsync(sceneTree, sceneRoot, driver, skeleton, "LeanBack", hipsIndex, headIndex);
+
+        Assert.Equal("Standing", verticalCrouch.StateId);
+        Assert.Equal("Standing", stoopForward.StateId);
+        Assert.Equal("Standing", leanBack.StateId);
+
+        float verticalHipDrop = standing.HipsWorldPosition.Y - verticalCrouch.HipsWorldPosition.Y;
+        float stoopHipDrop = standing.HipsWorldPosition.Y - stoopForward.HipsWorldPosition.Y;
+        Assert.True(
+            verticalHipDrop >= MinimumVerticalHipDropMetres,
+            $"Vertical crouch should preserve strong downward hip response (observed drop {verticalHipDrop:F4} m).");
+        Assert.True(
+            verticalHipDrop >= stoopHipDrop + MinimumVerticalVsStoopHipDropDeltaMetres,
+            $"Vertical crouch should drop hips more than stoop-forward by at least {MinimumVerticalVsStoopHipDropDeltaMetres:F2} m. " +
+            $"Observed vertical={verticalHipDrop:F4} m, stoop={stoopHipDrop:F4} m.");
+
+        float verticalForwardHipTravel = Mathf.Abs(verticalCrouch.HipsWorldPosition.Z - standing.HipsWorldPosition.Z);
+        Assert.True(
+            verticalForwardHipTravel <= MaximumVerticalForwardHipTravelMetres,
+            $"Vertical crouch should remain mostly vertical rather than drifting strongly forward. " +
+            $"Observed forward hip travel={verticalForwardHipTravel:F4} m.");
+
+        float stoopVsLeanHeadSeparation = stoopForward.HeadWorldPosition.DistanceTo(leanBack.HeadWorldPosition);
+        Assert.True(
+            stoopVsLeanHeadSeparation >= MinimumScenarioHeadSeparationMetres,
+            $"Stoop-forward and lean-back should remain materially distinct runtime scenarios. " +
+            $"Observed head separation={stoopVsLeanHeadSeparation:F4} m.");
+    }
+
+    private static async Task<ScenarioSnapshot> ApplyScenarioAndCaptureAsync(
+        SceneTree sceneTree,
+        Node sceneRoot,
+        Node driver,
+        Skeleton3D skeleton,
+        string scenarioName,
+        int hipsIndex,
+        int headIndex)
+    {
+        TickScenario(sceneRoot, driver, scenarioName);
+
+        await WaitForFramesAsync(sceneTree, 4);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        return new ScenarioSnapshot(
+            ((StringName)driver.Call("GetCurrentStateId")).ToString(),
+            ResolveBoneWorldPosition(skeleton, hipsIndex),
+            ResolveBoneWorldPosition(skeleton, headIndex));
+    }
+
+    private static void TickScenario(Node sceneRoot, Node driver, string scenarioName)
+    {
+        Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
+        Node3D scenarioNode = Assert.IsType<Node3D>(
+            scenariosRoot.GetNodeOrNull(new NodePath(scenarioName)),
+            exactMatch: false);
+        Node3D headRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadRestMarkerPath), exactMatch: false);
+        Node3D leftHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftHandRestMarkerPath), exactMatch: false);
+        Node3D rightHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandRestMarkerPath), exactMatch: false);
+        Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
+        Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
+
+        _ = driver.Call(
+            "TickPoseTargets",
+            scenarioNode.GlobalTransform,
+            leftHandRestMarker.GlobalTransform,
+            rightHandRestMarker.GlobalTransform,
+            leftFootTarget.GlobalTransform,
+            rightFootTarget.GlobalTransform,
+            headRestMarker.GlobalTransform,
+            -1,
+            -1.0);
+    }
+
+    private static int RequireBoneIndex(Skeleton3D skeleton, string boneName)
+    {
+        int boneIndex = skeleton.FindBone(boneName);
+        Assert.True(boneIndex >= 0, $"Expected skeleton bone '{boneName}' to exist.");
+        return boneIndex;
+    }
+
+    private static Vector3 ResolveBoneWorldPosition(Skeleton3D skeleton, int boneIndex)
+        => skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(boneIndex).Origin;
+
+    private static void AssertScenarioMarkerSemantics(Node sceneRoot)
+    {
+        Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
+        Node3D standing = Assert.IsType<Node3D>(scenariosRoot.GetNodeOrNull(new NodePath("Standing")), exactMatch: false);
+        Node3D stoopForward = Assert.IsType<Node3D>(scenariosRoot.GetNodeOrNull(new NodePath("StoopForward")), exactMatch: false);
+        Node3D leanBack = Assert.IsType<Node3D>(scenariosRoot.GetNodeOrNull(new NodePath("LeanBack")), exactMatch: false);
+
+        Assert.True(
+            stoopForward.GlobalPosition.Z < standing.GlobalPosition.Z,
+            $"StoopForward marker should sit in front of standing along negative Z. standing.z={standing.GlobalPosition.Z:F4}, stoop.z={stoopForward.GlobalPosition.Z:F4}.");
+        Assert.True(
+            leanBack.GlobalPosition.Z > standing.GlobalPosition.Z,
+            $"LeanBack marker should sit behind standing along positive Z. standing.z={standing.GlobalPosition.Z:F4}, lean.z={leanBack.GlobalPosition.Z:F4}.");
+        Assert.True(
+            stoopForward.GlobalPosition.Y < standing.GlobalPosition.Y,
+            $"StoopForward marker should sit lower than standing. standing.y={standing.GlobalPosition.Y:F4}, stoop.y={stoopForward.GlobalPosition.Y:F4}.");
+        Assert.True(
+            leanBack.GlobalPosition.Y > stoopForward.GlobalPosition.Y,
+            $"LeanBack marker should sit higher than StoopForward. lean.y={leanBack.GlobalPosition.Y:F4}, stoop.y={stoopForward.GlobalPosition.Y:F4}.");
+    }
+
+    private sealed record ScenarioSnapshot(string StateId, Vector3 HipsWorldPosition, Vector3 HeadWorldPosition);
+}

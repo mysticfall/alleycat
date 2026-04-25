@@ -229,6 +229,13 @@ public partial class PoseStateMachineMarkerDriver : Node3D
     public StringName GetCurrentStateId() => _stateMachine.CurrentState?.Id ?? new StringName();
 
     /// <summary>
+    /// Returns the internally driven <see cref="PoseStateMachine"/> so test scenes can wire
+    /// dependent consumers such as <see cref="HipReconciliationModifier"/> to the same pending
+    /// hip target producer.
+    /// </summary>
+    public PoseStateMachine GetDrivenStateMachine() => _stateMachine;
+
+    /// <summary>
     /// Returns whether an AnimationTree is currently bound to the internal state machine.
     /// </summary>
     public bool IsAnimationTreeBound() => _stateMachine.AnimationTree is not null;

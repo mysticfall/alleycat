@@ -6,29 +6,17 @@ namespace AlleyCat.Tests.IK.Pose;
 
 /// <summary>
 /// Unit coverage for <see cref="HeadTrackingHipProfile"/>, exercised through its pure static
-/// helper <see cref="HeadTrackingHipProfile.ComputeHipLocalPosition(Vector3, Vector3, Vector3)"/>.
+/// helpers.
 /// </summary>
-/// <remarks>
-/// The profile itself is a Godot <see cref="Resource"/> subclass and therefore cannot be
-/// instantiated outside the engine. These tests cover the deterministic math that backs the
-/// 1:1 head-tracking hip heuristic used by the Standing↔Crouching pose family:
-/// <list type="bullet">
-///   <item><description>A rest-pose head offset snaps to <c>hipLocalRest</c>.</description></item>
-///   <item><description>A head descent of <c>N</c> metres yields <c>hipLocalRest + (0, -N, 0)</c>.</description></item>
-///   <item><description>Lateral head shifts project through identity basis unchanged.</description></item>
-///   <item><description>A rotated skeleton basis is consistent: the test pre-rotates the
-///     inputs into skeleton-local space before calling the helper, matching how the profile
-///     computes its inputs at runtime.</description></item>
-///   <item><description>A sub-epsilon head offset snaps cleanly to <c>hipLocalRest</c>.</description></item>
-/// </list>
-/// </remarks>
 public sealed class HeadTrackingHipProfileTests
 {
     private const float Tolerance = 1e-4f;
+    private const float VerticalWeight = 1.0f;
+    private const float LateralWeight = 0.5f;
+    private const float ForwardWeight = 0.1f;
 
     /// <summary>
-    /// A zero head offset must return the rest hip position exactly, so the animated hip rest
-    /// pose is preserved when calibration is on target.
+    /// Zero head offset returns the rest hip position exactly.
     /// </summary>
     [Fact]
     public void ComputeHipLocalPosition_ZeroOffset_ReturnsHipRest()
@@ -45,151 +33,207 @@ public sealed class HeadTrackingHipProfileTests
     }
 
     /// <summary>
-    /// A pure vertical head descent by N metres in identity skeleton-local space must produce
-    /// <c>hipLocalRest + (0, -N, 0)</c>. This is the core fix for spine stretching: the hip
-    /// now tracks vertical head motion 1:1 instead of lagging at the standing Y.
+    /// Pure movement along the hip rest up/down axis keeps full positional weight.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_PureVerticalOffset_KeepsFullWeight()
+    {
+        Vector3 offset = new(0f, -0.24f, 0f);
+
+        Vector3 result = ComputeDefaultWeightedHipPosition(Basis.Identity, offset);
+
+        AssertClose(CreateHipRest() + offset, result);
+    }
+
+    /// <summary>
+    /// Equal-magnitude offsets along the hip-rest local up axis remain mirrored after weighting.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_OppositeVerticalOffsets_PreserveSymmetry()
+    {
+        Basis hipRestBasisLocal = Basis.FromEuler(new Vector3(0.29f, -0.41f, 0.17f)).Orthonormalized();
+        const float verticalMagnitude = 0.24f;
+        Vector3 positiveVerticalOffsetLocal = hipRestBasisLocal * new Vector3(0f, verticalMagnitude, 0f);
+        Vector3 negativeVerticalOffsetLocal = hipRestBasisLocal * new Vector3(0f, -verticalMagnitude, 0f);
+        Vector3 hipRest = CreateHipRest();
+
+        Vector3 positiveResult = ComputeDefaultWeightedHipPosition(hipRestBasisLocal, positiveVerticalOffsetLocal);
+        Vector3 negativeResult = ComputeDefaultWeightedHipPosition(hipRestBasisLocal, negativeVerticalOffsetLocal);
+        Vector3 positiveDisplacement = positiveResult - hipRest;
+        Vector3 negativeDisplacement = negativeResult - hipRest;
+
+        AssertClose(positiveDisplacement, -negativeDisplacement);
+        Assert.True(
+            Mathf.Abs(positiveDisplacement.Length() - negativeDisplacement.Length()) <= Tolerance,
+            $"Expected mirrored vertical displacement magnitudes, got {positiveDisplacement.Length()} and {negativeDisplacement.Length()}.");
+    }
+
+    /// <summary>
+    /// Pure movement along the hip rest lateral axis uses the configured lateral weight.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_PureLateralOffset_UsesHalfWeight()
+    {
+        Vector3 offset = new(0.24f, 0f, 0f);
+
+        Vector3 result = ComputeDefaultWeightedHipPosition(Basis.Identity, offset);
+
+        AssertClose(CreateHipRest() + new Vector3(offset.X * LateralWeight, 0f, 0f), result);
+    }
+
+    /// <summary>
+    /// Pure movement along the hip rest forward/back axis uses the configured forward weight.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_PureForwardOffset_UsesForwardWeight()
+    {
+        Vector3 offset = new(0f, 0f, -0.24f);
+
+        Vector3 result = ComputeDefaultWeightedHipPosition(Basis.Identity, offset);
+
+        AssertClose(CreateHipRest() + new Vector3(0f, 0f, offset.Z * ForwardWeight), result);
+    }
+
+    /// <summary>
+    /// Mixed offsets weight each hip-rest-axis component independently.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_MixedOffset_WeightsEachAxisIndependently()
+    {
+        Vector3 offset = new(0.20f, -0.30f, -0.40f);
+
+        Vector3 result = ComputeDefaultWeightedHipPosition(Basis.Identity, offset);
+
+        Vector3 expectedOffset = new(
+            offset.X * LateralWeight,
+            offset.Y * VerticalWeight,
+            offset.Z * ForwardWeight);
+
+        AssertClose(CreateHipRest() + expectedOffset, result);
+    }
+
+    /// <summary>
+    /// Interpolating between vertical and lateral movement changes the weighted output smoothly.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_VerticalToLateralInterpolation_VariesContinuously()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Vector3 verticalOffset = new(0f, -0.24f, 0f);
+        Vector3 lateralOffset = new(0.24f, 0f, 0f);
+        float[] interpolationSamples = [0.0f, 0.25f, 0.5f, 0.75f, 1.0f];
+
+        Vector3? previousWeightedOffset = null;
+        Vector3? previousExpectedWeightedOffset = null;
+
+        foreach (float t in interpolationSamples)
+        {
+            Vector3 inputOffset = verticalOffset.Lerp(lateralOffset, t);
+            Vector3 weightedOffset = ComputeDefaultWeightedHipPosition(Basis.Identity, inputOffset) - hipRest;
+            Vector3 expectedWeightedOffset = new(
+                inputOffset.X * LateralWeight,
+                inputOffset.Y * VerticalWeight,
+                inputOffset.Z * ForwardWeight);
+
+            AssertClose(expectedWeightedOffset, weightedOffset);
+            Assert.True(weightedOffset.X >= -Tolerance, $"Expected non-negative lateral response at t={t}, got {weightedOffset}.");
+            Assert.True(weightedOffset.Y <= Tolerance, $"Expected non-positive vertical response at t={t}, got {weightedOffset}.");
+            Assert.True(Mathf.Abs(weightedOffset.Z) <= Tolerance, $"Expected no forward/back response at t={t}, got {weightedOffset}.");
+
+            if (previousWeightedOffset is Vector3 previousActual
+                && previousExpectedWeightedOffset is Vector3 previousExpected)
+            {
+                Assert.True(
+                    weightedOffset.X + Tolerance >= previousActual.X,
+                    $"Expected lateral response to increase smoothly between samples, got {previousActual} then {weightedOffset}.");
+                Assert.True(
+                    weightedOffset.Y + Tolerance >= previousActual.Y,
+                    $"Expected vertical response to move smoothly towards zero between samples, got {previousActual} then {weightedOffset}.");
+                Assert.True(
+                    Mathf.Abs((weightedOffset - previousActual).Length() - (expectedWeightedOffset - previousExpected).Length()) <= Tolerance,
+                    $"Expected interpolation step size to remain continuous between samples, got {previousActual} then {weightedOffset}.");
+            }
+
+            previousWeightedOffset = weightedOffset;
+            previousExpectedWeightedOffset = expectedWeightedOffset;
+        }
+    }
+
+    /// <summary>
+    /// Axis weighting is evaluated in the rotated hip rest basis, not world axes.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_RotatedRestBasis_UsesRestLocalAxesForWeighting()
+    {
+        Basis hipRestBasisLocal = Basis.FromEuler(new Vector3(0.31f, -0.82f, 0.47f)).Orthonormalized();
+        Vector3 offsetInHipRestLocal = new(0.20f, -0.30f, -0.40f);
+        Vector3 headOffsetLocal = hipRestBasisLocal * offsetInHipRestLocal;
+
+        Vector3 result = ComputeDefaultWeightedHipPosition(hipRestBasisLocal, headOffsetLocal);
+
+        Vector3 expectedOffsetLocal = hipRestBasisLocal * new Vector3(
+            offsetInHipRestLocal.X * LateralWeight,
+            offsetInHipRestLocal.Y * VerticalWeight,
+            offsetInHipRestLocal.Z * ForwardWeight);
+
+        AssertClose(CreateHipRest() + expectedOffsetLocal, result);
+    }
+
+    /// <summary>
+    /// Per-axis positional weights clamp into the supported [0, 1] range.
     /// </summary>
     [Theory]
-    [InlineData(0.1f)]
-    [InlineData(0.3f)]
-    [InlineData(0.6f)]
-    public void ComputeHipLocalPosition_VerticalDescent_TranslatesHipByFullOffset(float descent)
+    [InlineData(-0.25f, 0.0f)]
+    [InlineData(1.5f, 1.0f)]
+    public void ComputeHipLocalPosition_AxisWeightsOutsideRange_ClampPerAxis(
+        float configuredWeight,
+        float expectedWeight)
     {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
-        Vector3 currentHead = restHead + new Vector3(0f, -descent, 0f);
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+        Vector3 offsetInHipRestLocal = new(0.20f, -0.30f, -0.40f);
 
         Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
             hipRest,
+            Basis.Identity,
             restHead,
-            currentHead);
+            restHead + offsetInHipRestLocal,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: configuredWeight,
+            lateralPositionWeight: configuredWeight,
+            forwardPositionWeight: configuredWeight);
 
-        Vector3 expected = hipRest + new Vector3(0f, -descent, 0f);
-        AssertClose(expected, result);
+        AssertClose(hipRest + (offsetInHipRestLocal * expectedWeight), result);
     }
 
     /// <summary>
-    /// Lateral head shifts in the skeleton-local X/Z plane must project onto the hip bone
-    /// unchanged (identity basis), preserving the 1:1 head-tracking heuristic for lateral
-    /// lean as well as for vertical crouch.
-    /// </summary>
-    [Fact]
-    public void ComputeHipLocalPosition_LateralShift_TranslatesHipByFullOffset()
-    {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
-        Vector3 offset = new(0.08f, 0f, -0.04f);
-        Vector3 currentHead = restHead + offset;
-
-        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
-            hipRest,
-            restHead,
-            currentHead);
-
-        AssertClose(hipRest + offset, result);
-    }
-
-    /// <summary>
-    /// A combined vertical-plus-lateral head offset must translate the hip by the full 3D
-    /// offset. No component is stripped.
-    /// </summary>
-    [Fact]
-    public void ComputeHipLocalPosition_CombinedOffset_TranslatesHipByFullOffset()
-    {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
-        Vector3 offset = new(0.05f, -0.30f, 0.02f);
-        Vector3 currentHead = restHead + offset;
-
-        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
-            hipRest,
-            restHead,
-            currentHead);
-
-        AssertClose(hipRest + offset, result);
-    }
-
-    /// <summary>
-    /// When the skeleton's global basis is rotated, the profile pre-projects the world-space
-    /// viewpoints into skeleton-local space before calling the helper. This test simulates
-    /// that projection and verifies the helper operates correctly in the rotated frame.
-    /// </summary>
-    [Fact]
-    public void ComputeHipLocalPosition_RotatedSkeletonBasis_ConsistentInLocalSpace()
-    {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHeadWorld = new(0f, 1.65f, 0f);
-        Vector3 worldOffset = new(0.10f, -0.25f, 0.05f);
-        Vector3 currentHeadWorld = restHeadWorld + worldOffset;
-
-        // Skeleton rotated 90 degrees around world Y; simulate the inverse projection the
-        // profile applies at runtime via skeleton.GlobalTransform.AffineInverse().
-        var skeletonTransform = new Transform3D(
-            new Basis(Vector3.Up, Mathf.Pi * 0.5f),
-            Vector3.Zero);
-        Transform3D inverse = skeletonTransform.AffineInverse();
-
-        Vector3 restHeadLocal = inverse * restHeadWorld;
-        Vector3 currentHeadLocal = inverse * currentHeadWorld;
-
-        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
-            hipRest,
-            restHeadLocal,
-            currentHeadLocal);
-
-        Vector3 expectedLocalOffset = inverse.Basis * worldOffset;
-        AssertClose(hipRest + expectedLocalOffset, result);
-    }
-
-    /// <summary>
-    /// A sub-epsilon head offset must snap to <c>hipLocalRest</c>, not drift a tiny distance
-    /// away from it. This is the jitter-suppression contract and prevents sub-millimetre
-    /// calibration noise from wobbling the hip.
-    /// </summary>
-    [Fact]
-    public void ComputeHipLocalPosition_SubEpsilonOffset_SnapsToHipRest()
-    {
-        const float SubEpsilon = 1e-5f;
-
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
-        Vector3 currentHead = restHead + new Vector3(SubEpsilon, -SubEpsilon, SubEpsilon);
-
-        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
-            hipRest,
-            restHead,
-            currentHead);
-
-        Assert.Equal(hipRest, result);
-    }
-
-    /// <summary>
-    /// Rotation displacement is applied as opposite-direction compensation:
-    /// <c>headOffset - weightedRotationDisplacement</c>.
+    /// Rotation compensation is applied in the opposite direction from the rotation displacement.
     /// </summary>
     [Fact]
     public void ComputeHipLocalPosition_RotationCompensation_UsesOppositeDirection()
     {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
-        Vector3 currentHead = restHead + new Vector3(0.2f, -0.1f, 0.05f);
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+        Vector3 headOffset = new(0.2f, -0.1f, 0.05f);
         Vector3 rotationDisplacement = new(0.03f, 0.02f, -0.04f);
 
         Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
             hipRest,
+            Basis.Identity,
             restHead,
-            currentHead,
+            restHead + headOffset,
             rotationDisplacement,
-            rotationCompensationWeight: 1.0f);
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 1.0f,
+            forwardPositionWeight: 1.0f);
 
-        Vector3 headOffset = currentHead - restHead;
-        Vector3 expected = hipRest + (headOffset - rotationDisplacement);
-        AssertClose(expected, result);
+        AssertClose(hipRest + (headOffset - rotationDisplacement), result);
     }
 
     /// <summary>
-    /// Rotation compensation weight must scale displacement, including zero suppression and
-    /// over-unity amplification.
+    /// Rotation compensation weight scales the rotation-derived displacement.
     /// </summary>
     [Theory]
     [InlineData(0.0f)]
@@ -197,81 +241,101 @@ public sealed class HeadTrackingHipProfileTests
     [InlineData(1.5f)]
     public void ComputeHipLocalPosition_RotationCompensationWeight_ScalesDisplacement(float weight)
     {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
         Vector3 headOffset = new(0.12f, -0.22f, 0.07f);
-        Vector3 currentHead = restHead + headOffset;
         Vector3 rotationDisplacement = new(0.03f, -0.01f, 0.05f);
 
         Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
             hipRest,
+            Basis.Identity,
             restHead,
-            currentHead,
+            restHead + headOffset,
             rotationDisplacement,
-            weight);
+            weight,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 1.0f,
+            forwardPositionWeight: 1.0f);
 
-        Vector3 expected = hipRest + (headOffset - (rotationDisplacement * weight));
-        AssertClose(expected, result);
+        AssertClose(hipRest + (headOffset - (rotationDisplacement * weight)), result);
     }
 
     /// <summary>
-    /// Negative weights are clamped to zero so rotational compensation cannot invert direction.
+    /// Negative rotation compensation weights clamp to zero.
     /// </summary>
     [Fact]
-    public void ComputeHipLocalPosition_NegativeWeight_ClampsToZero()
+    public void ComputeHipLocalPosition_NegativeRotationCompensationWeight_ClampsToZero()
     {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
         Vector3 headOffset = new(0.12f, -0.18f, 0.03f);
-        Vector3 currentHead = restHead + headOffset;
         Vector3 rotationDisplacement = new(0.04f, 0.01f, -0.02f);
 
         Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
             hipRest,
+            Basis.Identity,
             restHead,
-            currentHead,
+            restHead + headOffset,
             rotationDisplacement,
-            rotationCompensationWeight: -2.0f);
+            rotationCompensationWeight: -2.0f,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 1.0f,
+            forwardPositionWeight: 1.0f);
 
         AssertClose(hipRest + headOffset, result);
     }
 
     /// <summary>
-    /// Epsilon snap must consider the combined offset (head minus weighted rotation), not just
-    /// raw head translation.
+    /// Sub-epsilon positional offsets snap back to the rest hip pose.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLocalPosition_SubEpsilonOffset_SnapsToHipRest()
+    {
+        const float subEpsilon = 1e-5f;
+
+        Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
+            CreateHipRest(),
+            CreateRestHead(),
+            CreateRestHead() + new Vector3(subEpsilon, -subEpsilon, subEpsilon));
+
+        Assert.Equal(CreateHipRest(), result);
+    }
+
+    /// <summary>
+    /// Epsilon snap uses the combined positional and rotational correction.
     /// </summary>
     [Fact]
     public void ComputeHipLocalPosition_CombinedSubEpsilonOffset_SnapsToHipRest()
     {
-        const float SubEpsilon = 5e-5f;
+        const float subEpsilon = 5e-5f;
 
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
         Vector3 headOffset = new(1e-3f, 0f, 0f);
-        Vector3 currentHead = restHead + headOffset;
-
-        // Leaves a sub-epsilon residual after opposite-direction compensation.
-        Vector3 rotationDisplacement = headOffset - new Vector3(SubEpsilon, 0f, 0f);
+        Vector3 rotationDisplacement = headOffset - new Vector3(subEpsilon, 0f, 0f);
 
         Vector3 result = HeadTrackingHipProfile.ComputeHipLocalPosition(
             hipRest,
+            Basis.Identity,
             restHead,
-            currentHead,
+            restHead + headOffset,
             rotationDisplacement,
-            rotationCompensationWeight: 1.0f);
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 1.0f,
+            forwardPositionWeight: 1.0f);
 
         Assert.Equal(hipRest, result);
     }
 
     /// <summary>
-    /// The 4-argument overload must remain behaviourally equivalent to the 5-argument overload
-    /// with unit rotation-compensation weight.
+    /// The legacy four-argument overload remains equivalent to the unit-weight five-argument overload.
     /// </summary>
     [Fact]
     public void ComputeHipLocalPosition_FourArgOverload_EqualsFiveArgUnitWeight()
     {
-        Vector3 hipRest = new(0f, 0.95f, 0f);
-        Vector3 restHead = new(0f, 1.65f, 0f);
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
         Vector3 currentHead = restHead + new Vector3(0.18f, -0.27f, 0.06f);
         Vector3 rotationDisplacement = new(0.07f, -0.02f, 0.01f);
 
@@ -290,6 +354,27 @@ public sealed class HeadTrackingHipProfileTests
 
         Assert.Equal(fiveArg, fourArg);
     }
+
+    private static Vector3 ComputeDefaultWeightedHipPosition(Basis hipRestBasisLocal, Vector3 headOffsetLocal)
+    {
+        Vector3 hipRest = CreateHipRest();
+        Vector3 restHead = CreateRestHead();
+
+        return HeadTrackingHipProfile.ComputeHipLocalPosition(
+            hipRest,
+            hipRestBasisLocal,
+            restHead,
+            restHead + headOffsetLocal,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: VerticalWeight,
+            lateralPositionWeight: LateralWeight,
+            forwardPositionWeight: ForwardWeight);
+    }
+
+    private static Vector3 CreateHipRest() => new(0f, 0.95f, 0f);
+
+    private static Vector3 CreateRestHead() => new(0f, 1.65f, 0f);
 
     private static void AssertClose(Vector3 expected, Vector3 actual)
     {

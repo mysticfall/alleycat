@@ -1,0 +1,157 @@
+[gd_scene format=3 uid="uid://yvm5bo58su3h"]
+
+[ext_resource type="PackedScene" uid="uid://iljwxhb7keyb" path="res://assets/testing/photobooth/templates/full_body_ik_5_cams.tscn" id="1_base"]
+[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="3_marker"]
+[ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://assets/characters/ik/pose/standing_pose_state.tres" id="4_state"]
+[ext_resource type="Script" uid="uid://dq8mx4eet2kcv" path="res://src/IK/Pose/PoseStateMachineMarkerDriver.cs" id="5_driver"]
+[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="6_animation_tree"]
+[ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="7_hip_modifier"]
+
+[node name="Photobooth" unique_id=1137450292 instance=ExtResource("1_base")]
+
+[node name="GeneralSkeleton" parent="Subject/Female/Female_export" parent_id_path=PackedInt32Array(1534184585, 716732083) index="0" unique_id=441014641]
+bones/1/position = Vector3(0, 0.8389602, 0.022851786)
+bones/1/rotation = Quaternion(0, 0, 0, 1)
+bones/2/rotation = Quaternion(0, 0, 0, 1)
+bones/3/rotation = Quaternion(0, 0, 0, 1)
+bones/4/rotation = Quaternion(0.32547194, 0.60478616, 0.7191599, -0.10540785)
+bones/6/rotation = Quaternion(0, 0, 0, 1)
+bones/7/rotation = Quaternion(0.5, 0.5, 0.5, -0.5)
+bones/8/rotation = Quaternion(0, 1, 0, 0)
+bones/9/rotation = Quaternion(0, -0.70710677, 0, 0.70710677)
+bones/10/rotation = Quaternion(0, 0.70710677, 0, 0.70710677)
+bones/11/rotation = Quaternion(0, 0, 0, 1)
+bones/12/rotation = Quaternion(0, 0, 0, 1)
+bones/13/rotation = Quaternion(0, 0, 0, 1)
+bones/14/rotation = Quaternion(0, 0, 0, 1)
+bones/15/rotation = Quaternion(0, 0, 0, 1)
+bones/16/rotation = Quaternion(0, 0, 0, 1)
+bones/17/rotation = Quaternion(0, 0, 0, 1)
+bones/18/rotation = Quaternion(0, 0, 0, 1)
+bones/19/rotation = Quaternion(0, 0, 0, 1)
+bones/20/rotation = Quaternion(0, 0, 0, 1)
+bones/21/rotation = Quaternion(0, 0, 0, 1)
+bones/23/rotation = Quaternion(-0.21418673, 0.67388725, 0.21418673, 0.67388725)
+bones/24/rotation = Quaternion(-1.4901163e-08, 0, 0, 1)
+bones/24/scale = Vector3(0.99999994, 0.9999999, 0.9999999)
+bones/25/rotation = Quaternion(0, 0, 0, 1)
+bones/26/rotation = Quaternion(0.5, -0.5, -0.5, -0.5)
+bones/27/rotation = Quaternion(0, 1, 0, 0)
+bones/28/rotation = Quaternion(0, 0.70710677, 0, 0.70710677)
+bones/29/rotation = Quaternion(0, -0.70710677, 0, 0.70710677)
+bones/30/rotation = Quaternion(0, 0, 0, 1)
+bones/31/rotation = Quaternion(0, 0, 0, 1)
+bones/32/rotation = Quaternion(0, 0, 0, 1)
+bones/33/rotation = Quaternion(0, 0, 0, 1)
+bones/34/rotation = Quaternion(0, 0, 0, 1)
+bones/35/rotation = Quaternion(0, 0, 0, 1)
+bones/36/rotation = Quaternion(0, 0, 0, 1)
+bones/37/rotation = Quaternion(0, 0, 0, 1)
+bones/38/rotation = Quaternion(0, 0, 0, 1)
+bones/39/rotation = Quaternion(0, 0, 0, 1)
+bones/40/rotation = Quaternion(0, 0, 0, 1)
+bones/42/rotation = Quaternion(-0.21418673, -0.67388725, -0.21418673, 0.67388725)
+bones/43/rotation = Quaternion(-1.4901163e-08, 0, 0, 1)
+bones/43/scale = Vector3(0.99999994, 0.9999999, 0.9999999)
+bones/44/rotation = Quaternion(0, 0, 0, 1)
+bones/45/rotation = Quaternion(0, 0, 0, 1)
+bones/46/rotation = Quaternion(0, 0, 0, 1)
+bones/47/rotation = Quaternion(0, 0, 1, 0)
+bones/48/rotation = Quaternion(0, 1, 0, 0)
+bones/49/rotation = Quaternion(0, 0.70710677, -0.70710677, 0)
+bones/50/rotation = Quaternion(0, 1, 0, 0)
+bones/51/rotation = Quaternion(0, 0, 1, 0)
+bones/52/rotation = Quaternion(0, 1, 0, 0)
+bones/53/rotation = Quaternion(0, 0.70710677, -0.70710677, 0)
+bones/54/rotation = Quaternion(0, 1, 0, 0)
+
+[node name="HipReconciliationModifier" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" index="25" unique_id=1889005020]
+unique_name_in_owner = false
+process_mode = 0
+process_priority = 0
+process_physics_priority = 0
+process_thread_group = 0
+physics_interpolation_mode = 0
+auto_translate_mode = 0
+editor_description = ""
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+rotation_edit_mode = 0
+rotation_order = 2
+top_level = false
+visible = true
+visibility_parent = NodePath("")
+active = true
+influence = 1.0
+script = ExtResource("7_hip_modifier")
+metadata/_custom_type_script = "uid://bfa76a86uhk1m"
+
+[node name="Head" parent="Subject/Female/Female_export/GeneralSkeleton" index="26" unique_id=694402195]
+transform = Transform3D(1, 0, 0, 0, 1, -5.9604645e-08, 0, 5.9604645e-08, 1, 0, 1.4656217, 0.036765665)
+
+[node name="RightElbow" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="1" unique_id=1389246902]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3417617, 1.2342931, 0.1905715)
+
+[node name="LeftElbow" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="2" unique_id=1323926424]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.34176174, 1.2342932, 0.19057155)
+
+[node name="RightKnee" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="5" unique_id=1677817895]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.21419218, 0.35640025, -0.48657182)
+
+[node name="LeftKnee" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="6" unique_id=1717634996]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21419218, 0.35640025, -0.4865718)
+
+[node name="RightFoot" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="7" unique_id=1245707026]
+transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15998398, 0.0683572, -0.027253313)
+
+[node name="LeftFoot" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="8" unique_id=1292107592]
+transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.15998398, 0.0683572, -0.027253283)
+
+[node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="2" unique_id=1445432941 instance=ExtResource("6_animation_tree")]
+
+[node name="PoseStateMachine" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=294740885]
+
+[node name="RestHeadTarget" parent="Markers/PoseStateMachine" index="0" unique_id=751499579 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.49, 0)
+visible = false
+label_text = "rest-viewpoint"
+
+[node name="HandTargetRestLeft" parent="Markers/PoseStateMachine" index="1" unique_id=949976262 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.22, 1.16, 0.12)
+visible = false
+label_text = "rest-left-controller"
+
+[node name="HandTargetRestRight" parent="Markers/PoseStateMachine" index="2" unique_id=1166459965 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.22, 1.16, 0.12)
+visible = false
+label_text = "rest-right-controller"
+
+[node name="Scenarios" type="Node3D" parent="Markers/PoseStateMachine" index="3" unique_id=8957467]
+
+[node name="Standing" parent="Markers/PoseStateMachine/Scenarios" index="0" unique_id=1247032015 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -8.938232e-09, 1.4656217, -0.06547579)
+visible = false
+label_text = "standing"
+
+[node name="VerticalCrouchStrong" parent="Markers/PoseStateMachine/Scenarios" index="1" unique_id=651067953 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -4.2473363e-09, 0.98, -0.018583866)
+visible = false
+label_text = "vertical-crouch-strong"
+
+[node name="StoopForward" parent="Markers/PoseStateMachine/Scenarios" index="2" unique_id=181814806 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -8.515084e-09, 1.2422432, -0.3374012)
+visible = false
+label_text = "stoop-forward"
+
+[node name="LeanBack" parent="Markers/PoseStateMachine/Scenarios" index="3" unique_id=1105923375 instance=ExtResource("3_marker")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -1.393752e-08, 1.3376704, 0.26057336)
+visible = false
+label_text = "lean-back"
+
+[node name="PoseStateMachineDriver" type="Node3D" parent="." index="5" unique_id=1875327155 node_paths=PackedStringArray("AnimationTree", "Skeleton")]
+script = ExtResource("5_driver")
+States = [ExtResource("4_state")]
+AnimationTree = NodePath("../Subject/Female/AnimationTree")
+Skeleton = NodePath("../Subject/Female/Female_export/GeneralSkeleton")
+metadata/_custom_type_script = "uid://dq8mx4eet2kcv"
+
+[editable path="Subject/Female"]

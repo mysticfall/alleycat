@@ -44,6 +44,14 @@ new reusable setup under `@game/assets/`.
     - Load the test scene, apply scenario states, and capture screenshots (`Photobooth.capture_screenshots`) for each
       visual checkpoint.
     - Iterate implementation until screenshots show expected appearance and behaviour.
+
+    > **Critical: Pre-Capture Directional Sanity Check**
+    > For scenarios with directional intent (forward/back/left/right, front-facing vs back-facing, pole-front/pole-back, etc.):
+    > 1. Verify the marker transform orientation matches the scene's convention BEFORE capturing screenshots.
+    > 2. If your feature spec or reference doc defines forward/back semantics, cross-check marker placement against it.
+    > 3. If the marker name implies direction but the transform does not match (for example a "forward" marker pointing backward),
+    >    treat this as a setup error: escalate before proceeding.
+    > 4. Do not rely on screenshots alone to validate direction — if the scene setup is wrong, screenshots will be misleading.
 3. **Write C# Integration Tests**
     - Add a C# integration test that loads the same test scene.
     - Verify behaviour using non-visual assertions (for example marker proximity, transform ranges, state flags,
@@ -84,6 +92,8 @@ godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- -
 
 1. The photobooth test scene exists and is based on an appropriate inherited base.
 2. Camera rigs and markers were verified before feature-level screenshot checks.
+   - For directional markers (forward/back/left/right, pole-front/pole-back, etc.), verify transform orientation matches the scene convention BEFORE trusting screenshots.
+   - If an authoritative reference (spec, doc, or convention) defines forward/back semantics, cross-check marker placement against it.
 3. The runner was executed **without `--headless`** and produced expected screenshot sets.
 4. Screenshots were written to a directory under `@game/temp/` (not to absolute paths outside the game directory).
 5. Representative screenshots were inspected via the `read` tool and confirmed to show
@@ -91,11 +101,13 @@ godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- -
    loaded with the `read` tool, they must be shared with the user for manual verification before the gate can pass.
 6. Distinct scenarios produce visually distinct results (for example different poses should look different in
    screenshots).
+   > **Critical:** Verify the scenario NAME matches what is VISIBLE. If "forward" scenario screenshots show a back-facing pose (or vice versa), the setup is wrong — stop and escalate before accepting the visual evidence.
 7. C# integration tests verify the same functionality non-visually.
 8. For IK/pose features, non-visual tests include explicit anomaly guards tied to the visual risk (for example
    pole-front/back sign checks, knee flexion/lateral-offset bounds).
 9. If the user reports a visual contradiction after a prior pass, gate outcome must be re-opened as `FOLLOW-UP REQUIRED`
    until new evidence resolves the contradiction.
+10. **Scene-Setup Gate:** If the scene setup itself is wrong (for example marker semantics swapped, camera angles mislabeled, or directional intent contradicts visible pose), the gate is `FOLLOW-UP REQUIRED` even if screenshots appear "distinct." Do not accept visual evidence from a broken setup.
 
 ### Outcome States
 

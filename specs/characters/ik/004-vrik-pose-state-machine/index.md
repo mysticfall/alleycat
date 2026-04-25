@@ -42,6 +42,10 @@ responsibility.
    tunable rather than a fixed offset from standing.
 7. Players must be able to transition from kneeling back to a crouched/upright posture within the Standing continuum by leaning back or upright beyond a configurable reverse
    threshold, without requiring explicit button input. This return transition is bidirectional with the forward kneeling transition.
+8. Standing-family hip reconciliation must allow more natural stoop/lean poses by reducing hip travel for motion
+   perpendicular to the hip rest up axis, while preserving strong vertical crouch response.
+9. Players must experience a smooth transition between reduced perpendicular response and full aligned response,
+   without abrupt discontinuities.
 
 ## Technical Requirements
 
@@ -106,15 +110,35 @@ responsibility.
      `TimeSeek` scrubbing and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
      the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
 20. For the Standing pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
-     (a) positional head-offset contribution and (b) rotational-offset contribution derived from rest→current head
-     orientation delta and rest neck→head geometry, then apply opposite-direction hip compensation to mitigate
-     unnatural neck bending. Rotational contribution magnitude must be configurable per profile/resource via
-     `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`) and no mandatory fixed default
-     value in this spec revision. Vertical hip movement for this family is owned by the hip profile, not by the
-     animation clip. Other pose families may diverge.
-21. Unit-level regression tests must cover the weighted rotational-compensation contract for
-     `HeadTrackingHipProfile`, including sign correctness, proportional scaling by weight, non-negative clamp behaviour,
-     epsilon-combined snap behaviour, and overload equivalence for profile evaluation entry points.
+     three contributions: (a) positional head-offset contribution, (b) per-axis positional modulation, and (c)
+     rotational-offset contribution.
+
+     **Per-axis positional modulation** decomposes the head-position offset into three components in the hip
+     rest local frame: up/down, side-to-side, and forward/back. Each axis applies its own configurable scalar weight:
+
+| Axis         | Configurable parameter                | Authored standing-profile default |
+|--------------|---------------------------------------|------------------------------------|
+| Up / Down    | `VerticalPositionWeight`         | `1.0` (full offset)                |
+| Side-to-Side | `LateralPositionWeight`         | `0.5` (50 % offset)                |
+| Forward/Back | `ForwardPositionWeight`         | `0.1` (10 % offset)                |
+
+     The rest up axis is derived from the hip bone's rest-pose or global-rest basis in skeleton-local space.
+     The combined weights produce strong vertical crouch response and reduced lateral/forward-back hip travel,
+     enabling natural stooping and leaning while preserving +up/-up symmetry. All three parameters are
+     independently configurable and clamped to the `[0, 1]` range; the defaults above represent the authored
+     standing profile and may be overridden in derived resources. The rotational-offset contribution is derived
+     from rest→current head orientation delta and rest neck→head geometry, then applies opposite-direction hip
+     compensation to mitigate unnatural neck bending. Rotational contribution magnitude must be configurable
+     per profile/resource via `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`)
+     and no mandatory fixed default value in this spec revision. Vertical hip movement for this family is
+     owned by the hip profile, not by the animation clip. Other pose families may diverge.
+21. Unit-level regression tests must cover both: (a) the weighted rotational-compensation contract for
+      `HeadTrackingHipProfile` (sign correctness, proportional scaling by weight, non-negative clamp behaviour,
+      epsilon-combined snap behaviour, and overload equivalence for profile evaluation entry points); and
+      (b) the per-axis positional-modulation contract (rest-up-axis derivation correctness, per-axis weight
+      application correctness, up/down full-response preservation, side-to-side partial-response verification
+      at the authored default, forward/back minimal-response verification at the authored default,
+      diagonal/interpolated response continuity, and +up/-up symmetry).
 22. The Standing pose family is backed by a single `AnimationTree` state, `StandingCrouching`, whose
      sub-graph continuously runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")` driven by a normalised scalar
      representing the full standing-to-crouching continuum. A single framework-level `StandingPoseState` resource
@@ -189,6 +213,7 @@ Both linked pages are normative dependencies for implementation.
 | AC-08 | Transition contracts define linear clip + `TimeSeek` as the default for long continuous transitions and permit state-specific non-linear exceptions. | Technical |
 | AC-09 | The spec does not require a mandatory catch-all ambiguity state for this phase. | Technical |
 | AC-10 | Across supported MVP movement scenarios, players see coherent visible full-body pose continuity while moving between required pose states. | User |
+| AC-10b | Standing-family hip reconciliation must allow more natural stoop/lean poses by reducing hip travel for motion perpendicular to the hip rest up axis, while preserving strong vertical crouch response; players must experience smooth transition between reduced perpendicular response and full aligned response, without abrupt discontinuities. | User |
 | AC-11 | Each pose state binds both animation selection (or AnimationTree parameter control) and hip reconciliation behaviour as a coupled responsibility. | Technical |
 | AC-12 | State switching relies on inferred signals from IK-target transforms and runtime state; explicit button-based pose switching is avoided by default. | User + Technical |
 | AC-13 | State and transition Resources expose a public extension surface permitting developer-supplied states and classifiers without editing core source. | Technical |
@@ -198,8 +223,8 @@ Both linked pages are normative dependencies for implementation.
 | AC-17 | State and transition identifiers are authored as `StringName`; internal selection may use `StringName` or `string` provided identity semantics are preserved. | Technical |
 | AC-18 | Hip reconciliation profiles return an absolute hip target position in skeleton-local space as a nullable value (`Vector3?`); returning `null` leaves the animated hip pose untouched. | Technical |
 | AC-19 | Hip reconciliation profiles compute the hip target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry, and must not read or depend on the currently animated hip bone pose. | Technical |
-| AC-20 | For the Standing pose family's default profile is `HeadTrackingHipProfile`, combining positional head offset and rotational offset (from rest→current head orientation delta plus rest neck→head geometry) with opposite-direction hip compensation to mitigate unnatural neck bending; rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, and not fixed to a mandatory numeric default by this spec. | Technical |
-| AC-21 | Unit-level regression tests cover the weighted `HeadTrackingHipProfile` rotational-compensation contract, including sign correctness, proportional weight scaling, non-negative weight clamp behaviour, epsilon-combined snap behaviour, and overload equivalence. | Technical |
+| AC-20 | For the Standing pose family's default profile is `HeadTrackingHipProfile`, combining (a) positional head offset, (b) per-axis positional modulation decomposed into up/down, side-to-side, and forward/back components in the hip rest local frame, and (c) rotational offset (from rest→current head orientation delta plus rest neck→head geometry) with opposite-direction hip compensation to mitigate unnatural neck bending. Per-axis weights are independently configurable: `VerticalPositionWeight` (default `1.0`, full offset), `LateralPositionWeight` (default `0.5`, 50 % offset), and `ForwardPositionWeight` (default `0.1`, 10 % offset). The rest up axis is derived from the hip bone's rest-pose or global-rest basis in skeleton-local space. The combined weights produce strong vertical crouch response and reduced lateral/forward-back hip travel, preserving +up/-up symmetry. All three parameters are clamped to the `[0, 1]` range and independently configurable; the defaults above represent the authored standing profile and may be overridden in derived resources. Rotational contribution magnitude is configurable via `RotationCompensationWeight`, clamped to non-negative values, with no mandatory fixed default in this spec. | Technical |
+| AC-21 | Unit-level regression tests cover both: (a) the weighted `HeadTrackingHipProfile` rotational-compensation contract (sign correctness, proportional weight scaling, non-negative weight clamp behaviour, epsilon-combined snap behaviour, and overload equivalence); and (b) the per-axis positional-modulation contract (rest-up-axis derivation correctness, per-axis weight application correctness, up/down full-response preservation, side-to-side partial-response verification at the authored default, forward/back minimal-response verification at the authored default, diagonal/interpolated response continuity, and +up/-up symmetry). | Technical |
 | AC-22 | The Standing pose family is backed by a single `AnimationTree` state (`StandingCrouching`) running `TimeSeek → AnimationNodeAnimation("Crouch-seek")`, with a single framework-level `StandingPoseState` resource mapping to this `AnimationTree` state. There is no separate framework-level CrouchingPoseState; the standing-to-crouching continuum is covered by one StandingPoseState. | Technical |
 | AC-23 | The `Idle` clip remains in the animation library as a deferred-but-supported extension point for future layering (for example additive breathing) and is not wired into the `AnimationTree` for MVP. | Technical |
 | AC-24 | The Standing→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the transition can trigger, requiring the player to be at or near full crouch depth on the standing-to-crouching continuum (tunable gate). | Technical |
@@ -232,8 +257,10 @@ Increment 2.1 plus the Standing→Kneeling bidirectional transition with the fol
 The implementation also includes the `PoseStateMachine` wiring on the player, the `StandingCrouchingSeekAnimationBinding` animation
 binding targeting the single `StandingCrouching` `AnimationTree` state (sub-graph `TimeSeek → AnimationNodeAnimation
 ("Crouch-seek")`), the `HeadTrackingHipProfile` hip reconciliation profile (replacing the deprecated
-`LateralHeadOffsetHipReconciliationProfile`) with rotational hip correction added for the Standing path alongside positional
-head offset and configurable `RotationCompensationWeight` (non-negative clamp), the concrete `StandingPoseState` resource
+`LateralHeadOffsetHipReconciliationProfile`) with per-axis positional modulation using the hip rest local frame —
+`VerticalPositionWeight` (default `1.0`, full offset), `LateralPositionWeight` (default `0.5`, 50 % offset), and
+`ForwardPositionWeight` (default `0.1`, 10 % offset) — plus rotational hip correction with configurable
+`RotationCompensationWeight` (non-negative clamp), the concrete `StandingPoseState` resource
 (covering the full standing-to-crouching continuum — there is no separate `CrouchingPoseState`), the
 `StandingToKneelingPoseTransition`/`KneelingToStandingPoseTransition` pair for bidirectional kneel gating from the standing continuum,
 and the `HipReconciliationModifier` ordering in `player.tscn` placed between
@@ -244,7 +271,16 @@ and the `HipReconciliationModifier` ordering in `player.tscn` placed between
 - The standing/crouching seek blend now uses `FullCrouchDepthRatio` normalised by `RestHeadHeight` as the body-proportion-safe reference, replacing any absolute-metre-based crouch depth parameter. This ensures the seek curve scales correctly across different avatar proportions.
 Hip reconciliation profiles now return an absolute hip target position in skeleton-local
 space (`Vector3?`), with `null` meaning "do not override the animated hip bone". Unit regression coverage now includes
-weighted rotational compensation maths (sign, scaling, non-negative clamp, epsilon-combined snap, and overload equivalence).
+per-axis positional modulation (rest-up-axis derivation, per-axis weight application, up/down full response, side-to-side at
+authored default, forward/back at authored default, diagonal continuity, +up/-up symmetry)
+and weighted rotational compensation maths (sign, scaling, non-negative clamp, epsilon-combined snap, and overload equivalence).
+
+**Spec-to-code sync note — hip reconciliation positional weighting:** This specification revision specifies per-axis
+configurable weights (`VerticalPositionWeight`, `LateralPositionWeight`, `ForwardPositionWeight`) applied to the
+head-position offset decomposed in the hip rest local frame. Authored defaults for the standing profile are
+`1.0` / `0.5` / `0.1` respectively. The combined weights produce strong vertical crouch response and reduced
+lateral/forward-back hip travel, no dependency on the currently animated hip bone, and no mandatory fixed numeric defaults
+beyond the authored standing-profile values listed above.
 
 Known deferrals tracked against this revision:
 
