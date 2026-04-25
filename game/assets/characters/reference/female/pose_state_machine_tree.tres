@@ -1,12 +1,12 @@
 [gd_resource type="AnimationNodeStateMachine" format=3 uid="uid://cc3jg4usnahhh"]
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_5dtbs"]
-animation = &"female/Kneel-seek"
+animation = &"Kneel-seek"
 
 [sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_vivgd"]
 
 [sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_5tb7q"]
-graph_offset = Vector2(54.898438, 135.26563)
+graph_offset = Vector2(-4.8710938, 89.328125)
 nodes/output/position = Vector2(700, 180)
 nodes/Animation/node = SubResource("AnimationNodeAnimation_5dtbs")
 nodes/Animation/position = Vector2(120, 160)
@@ -15,12 +15,12 @@ nodes/TimeSeek/position = Vector2(460, 160)
 node_connections = [&"output", 0, &"TimeSeek", &"TimeSeek", 0, &"Animation"]
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_wnsqo"]
-animation = &"female/Crouch-seek"
+animation = &"Crouch-seek"
 
 [sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_75f16"]
 
 [sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_c3l26"]
-graph_offset = Vector2(54.898438, 135.26563)
+graph_offset = Vector2(-137.45221, 80.23668)
 nodes/output/position = Vector2(700, 180)
 nodes/Animation/node = SubResource("AnimationNodeAnimation_wnsqo")
 nodes/Animation/position = Vector2(120, 160)
@@ -41,4 +41,4 @@ states/StandingCrouching/node = SubResource("AnimationNodeBlendTree_c3l26")
 states/StandingCrouching/position = Vector2(360, 100)
 states/Start/position = Vector2(120, 100)
 transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_vh5ah"), "StandingCrouching", "Kneeling", SubResource("AnimationNodeStateMachineTransition_8dm8s"), "Kneeling", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_6u2h0")]
-graph_offset = Vector2(-178.70313, 9.6171875)
+graph_offset = Vector2(-107.98828, -3.1054688)

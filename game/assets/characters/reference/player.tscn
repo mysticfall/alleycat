@@ -3,12 +3,11 @@
 [ext_resource type="PackedScene" uid="uid://yo3x41aa1t8a" path="res://assets/characters/reference/female/reference_female_ik.tscn" id="1_edvvb"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
 [ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/ik/vrik.tscn" id="7_2a5tg"]
-[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animations/animation_tree_player.tscn" id="8_2a5tg"]
+[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_2a5tg"]
 
 [node name="Player" unique_id=1792987446 instance=ExtResource("1_edvvb")]
 
-[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(57851072) index="0" unique_id=469333434]
-bones/0/position = Vector3(0, -0.0018030107, 6.100163e-08)
+[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(716732083) index="0" unique_id=441014641]
 bones/1/position = Vector3(0, 0.8389602, 0.022851786)
 bones/1/rotation = Quaternion(0, 0, 0, 1)
 bones/2/rotation = Quaternion(0, 0, 0, 1)
@@ -30,12 +29,10 @@ bones/18/rotation = Quaternion(0, 0, 0, 1)
 bones/19/rotation = Quaternion(0, 0, 0, 1)
 bones/20/rotation = Quaternion(0, 0, 0, 1)
 bones/21/rotation = Quaternion(0, 0, 0, 1)
-bones/22/rotation = Quaternion(0, 0, 0, 1)
 bones/23/rotation = Quaternion(-0.21418673, 0.67388725, 0.21418673, 0.67388725)
 bones/24/rotation = Quaternion(-1.4901163e-08, 0, 0, 1)
 bones/24/scale = Vector3(0.99999994, 0.9999999, 0.9999999)
 bones/25/rotation = Quaternion(0, 0, 0, 1)
-bones/25/scale = Vector3(1, 1.0000001, 1.0000001)
 bones/26/rotation = Quaternion(0.5, -0.5, -0.5, -0.5)
 bones/27/rotation = Quaternion(0, 1, 0, 0)
 bones/28/rotation = Quaternion(0, 0.70710677, 0, 0.70710677)
@@ -51,12 +48,10 @@ bones/37/rotation = Quaternion(0, 0, 0, 1)
 bones/38/rotation = Quaternion(0, 0, 0, 1)
 bones/39/rotation = Quaternion(0, 0, 0, 1)
 bones/40/rotation = Quaternion(0, 0, 0, 1)
-bones/41/rotation = Quaternion(0, 0, 0, 1)
 bones/42/rotation = Quaternion(-0.21418673, -0.67388725, -0.21418673, 0.67388725)
 bones/43/rotation = Quaternion(-1.4901163e-08, 0, 0, 1)
 bones/43/scale = Vector3(0.99999994, 0.9999999, 0.9999999)
 bones/44/rotation = Quaternion(0, 0, 0, 1)
-bones/44/scale = Vector3(1, 1.0000001, 1.0000001)
 bones/45/rotation = Quaternion(0, 0, 0, 1)
 bones/46/rotation = Quaternion(0, 0, 0, 1)
 bones/47/rotation = Quaternion(0, 0, 1, 0)
@@ -77,7 +72,7 @@ process_thread_group = 0
 physics_interpolation_mode = 0
 auto_translate_mode = 0
 editor_description = ""
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0, 0)
 rotation_edit_mode = 0
 rotation_order = 2
 top_level = false
@@ -90,13 +85,15 @@ StateMachine = NodePath("../../../VRIK/PoseStateMachine")
 metadata/_custom_type_script = "uid://bfa76a86uhk1m"
 
 [node name="Head" parent="Female_export/GeneralSkeleton" index="26" unique_id=694402195]
-transform = Transform3D(0.99999994, 5.820766e-11, -1.1641532e-10, 0, 1, 1.1920929e-07, 5.820766e-11, -8.940697e-08, 1, 4.092726e-12, 1.4670644, 0.036714755)
+transform = Transform3D(0.99999994, 5.820766e-11, -1.1641532e-10, -1.4551915e-11, 1, 1.1920929e-07, 5.820766e-11, -8.940697e-08, 1, 4.092726e-12, 1.4670644, 0.036714755)
 
-[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "RightHandIKTarget", "LeftHandIKTarget", "Skeleton") instance=ExtResource("7_2a5tg")]
+[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "Skeleton") instance=ExtResource("7_2a5tg")]
 Viewpoint = NodePath("../Female_export/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
 RightHandIKTarget = NodePath("../IKTargets/RightHand")
 LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
+RightFootIKTarget = NodePath("../IKTargets/RightFoot")
+LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
 Skeleton = NodePath("../Female_export/GeneralSkeleton")
 
 [node name="PoseStateMachine" parent="VRIK" index="0" unique_id=1387079067 node_paths=PackedStringArray("AnimationTree")]
@@ -109,10 +106,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.34334025, 1.2379239, 0.1926
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3432512, 1.2373346, 0.19254468)
 
 [node name="RightKnee" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="5" unique_id=1677817895]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.20110184, 0.45955017, -0.39509067)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.21420275, 0.3563919, -0.48655817)
 
 [node name="LeftKnee" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="6" unique_id=1717634996]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.20110264, 0.45954785, -0.3951003)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21418138, 0.35640913, -0.4865856)
 
 [node name="RightFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="7" unique_id=1245707026]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15998398, 0.0683572, -0.027253313)
@@ -120,6 +117,9 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15
 [node name="LeftFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="8" unique_id=1292107592]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.15998398, 0.0683572, -0.027253283)
 
-[node name="AnimationTree" parent="." index="4" unique_id=527893103 instance=ExtResource("8_2a5tg")]
+[node name="AnimationTree" parent="." index="3" unique_id=527893103 instance=ExtResource("8_2a5tg")]
+
+[node name="AnimationPlayer" parent="." index="4" unique_id=1003732286]
+root_motion_track = NodePath("")
 
 [editable path="VRIK"]

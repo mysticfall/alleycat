@@ -6,10 +6,10 @@
 [ext_resource type="Resource" uid="uid://cwp2tklor5usj" path="res://assets/characters/ik/pose/crouching_pose_state.tres" id="5_tjnc4"]
 [ext_resource type="Resource" uid="uid://dtbp67huupmeo" path="res://assets/characters/ik/pose/standing_to_crouching_transition.tres" id="6_3g0js"]
 [ext_resource type="Resource" uid="uid://qhx1x2iaovwc" path="res://assets/characters/ik/pose/crouching_to_standing_transition.tres" id="7_l8ne0"]
-[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animations/animation_tree_player.tscn" id="8_qmk8b"]
+[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_qmk8b"]
 [ext_resource type="Script" uid="uid://dq8mx4eet2kcv" path="res://src/IK/Pose/PoseStateMachineMarkerDriver.cs" id="9_5v7n4"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_pose_state.tres" id="10_rv40o"]
-[ext_resource type="Resource" path="res://assets/characters/ik/pose/crouching_to_kneeling_transition.tres" id="11_j2eh4"]
+[ext_resource type="Resource" uid="uid://cqlywbxf8w02b" path="res://assets/characters/ik/pose/crouching_to_kneeling_transition.tres" id="11_j2eh4"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_to_crouching_transition.tres" id="12_y6tyd"]
 
 [node name="Photobooth" instance=ExtResource("1_eh1w4")]
