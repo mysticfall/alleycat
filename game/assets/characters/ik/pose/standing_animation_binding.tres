@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="StandingCrouchingSeekAnimationBinding" format=3 uid="uid://bdr4h8dhwds37"]
+[gd_resource type="Resource" script_class="CrouchingSeekAnimationBinding" format=3 uid="uid://bdr4h8dhwds37"]
 
-[ext_resource type="Script" uid="uid://cxxloai5pv0c1" path="res://src/IK/Pose/StandingCrouchingSeekAnimationBinding.cs" id="1_rrhig"]
+[ext_resource type="Script" uid="uid://cxxloai5pv0c1" path="res://src/IK/Pose/CrouchingSeekAnimationBinding.cs" id="1_rrhig"]
 
 [resource]
 resource_name = "StandingAnimationBinding"

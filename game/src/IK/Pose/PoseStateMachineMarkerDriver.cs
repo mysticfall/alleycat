@@ -249,7 +249,7 @@ public partial class PoseStateMachineMarkerDriver : Node3D
     /// Returns the current standing-crouching seek binding parameter path, or empty when unavailable.
     /// </summary>
     public StringName GetCurrentBindingSeekParameter()
-        => (_stateMachine.CurrentState?.AnimationBinding as StandingCrouchingSeekAnimationBinding)?.SeekRequestParameter
+        => (_stateMachine.CurrentState?.AnimationBinding as CrouchingSeekAnimationBinding)?.SeekRequestParameter
            ?? new StringName();
 
     private PoseStateContext BuildContext(

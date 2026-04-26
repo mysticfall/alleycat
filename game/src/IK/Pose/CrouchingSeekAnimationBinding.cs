@@ -9,7 +9,7 @@ namespace AlleyCat.IK.Pose;
 /// <see cref="PoseState"/> is active.
 /// </summary>
 [GlobalClass]
-public partial class StandingCrouchingSeekAnimationBinding : AnimationBinding
+public partial class CrouchingSeekAnimationBinding : AnimationBinding
 {
     private const float RestHeadHeightFloor = 1e-3f;
     private const float RatioFloor = 1e-3f;
@@ -87,7 +87,7 @@ public partial class StandingCrouchingSeekAnimationBinding : AnimationBinding
             if (!_warnedMissingTree)
             {
                 GD.PushWarning(
-                    $"{nameof(StandingCrouchingSeekAnimationBinding)}.{nameof(Apply)} called with null AnimationTree; skipping.");
+                    $"{nameof(CrouchingSeekAnimationBinding)}.{nameof(Apply)} called with null AnimationTree; skipping.");
                 _warnedMissingTree = true;
             }
 
@@ -134,7 +134,7 @@ public partial class StandingCrouchingSeekAnimationBinding : AnimationBinding
             if (!_warnedMissingSeekPath)
             {
                 GD.PushWarning(
-                    $"{nameof(StandingCrouchingSeekAnimationBinding)}.{nameof(SeekRequestParameter)} is empty; skipping seek writes.");
+                    $"{nameof(CrouchingSeekAnimationBinding)}.{nameof(SeekRequestParameter)} is empty; skipping seek writes.");
                 _warnedMissingSeekPath = true;
             }
 
@@ -159,7 +159,7 @@ public partial class StandingCrouchingSeekAnimationBinding : AnimationBinding
             if (!_warnedMissingPlayback)
             {
                 GD.PushWarning(
-                    $"{nameof(StandingCrouchingSeekAnimationBinding)} could not resolve playback object at '{PlaybackParameter}'.");
+                    $"{nameof(CrouchingSeekAnimationBinding)} could not resolve playback object at '{PlaybackParameter}'.");
                 _warnedMissingPlayback = true;
             }
 

@@ -7,7 +7,7 @@ namespace AlleyCat.IK.Pose;
 /// </summary>
 /// <remarks>
 /// The standing pose family owns the full standing-to-crouching range through a single framework-
-/// level state. The accompanying <see cref="StandingCrouchingSeekAnimationBinding"/> scrubs the
+/// level state. The accompanying <see cref="CrouchingSeekAnimationBinding"/> scrubs the
 /// shared <c>StandingCrouching</c> AnimationTree state across that continuum, while
 /// <see cref="HeadTrackingHipProfile"/> provides the matching hip reconciliation behaviour.
 /// </remarks>

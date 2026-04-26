@@ -280,7 +280,7 @@ Increment 2.1 plus the Standing→Kneeling bidirectional transition with the fol
 - The `StandingToKneelingPoseTransition` transition resource implements the forward contracts, and
   `KneelingToStandingPoseTransition` implements the reverse contracts.
 
-The implementation also includes the `PoseStateMachine` wiring on the player, the `StandingCrouchingSeekAnimationBinding` animation
+The implementation also includes the `PoseStateMachine` wiring on the player, the `CrouchingSeekAnimationBinding` animation
 binding targeting the single `StandingCrouching` `AnimationTree` state (sub-graph `TimeSeek → AnimationNodeAnimation
 ("Crouch-seek")`), the `HeadTrackingHipProfile` hip reconciliation profile (replacing the deprecated
 `LateralHeadOffsetHipReconciliationProfile`) with per-axis positional modulation using the hip rest local frame —
