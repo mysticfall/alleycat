@@ -55,4 +55,17 @@ public interface IPoseTransition
     /// </summary>
     /// <param name="context">Current pose-state context snapshot.</param>
     void OnTransitionExit(PoseStateContext context);
+
+    /// <summary>
+    /// Invoked on every non-selected transition immediately after another transition has fired
+    /// in the same tick.
+    /// </summary>
+    /// <remarks>
+    /// Use this hook to implement cross-transition lockouts so that firing one direction can
+    /// gate the opposite direction until a shared neutral condition is restored. Implementations
+    /// must be a safe no-op by default so transitions that have no cross-gating semantics are
+    /// unaffected.
+    /// </remarks>
+    /// <param name="context">Current pose-state context snapshot.</param>
+    void OnAnotherTransitionFired(PoseStateContext context);
 }

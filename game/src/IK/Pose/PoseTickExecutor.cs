@@ -13,6 +13,13 @@ namespace AlleyCat.IK.Pose;
 public static class PoseTickExecutor
 {
     /// <summary>
+    /// Result returned for a single pose-state-machine tick.
+    /// </summary>
+    /// <param name="ActiveState">State that remains active after the tick completes.</param>
+    /// <param name="SelectedTransition">Transition that fired during the tick, if any.</param>
+    public readonly record struct Result(IPoseState ActiveState, IPoseTransition? SelectedTransition);
+
+    /// <summary>
     /// Callback invoked after the state machine switches from <paramref name="oldState"/> to
     /// <paramref name="newState"/>.
     /// </summary>
@@ -35,7 +42,7 @@ public static class PoseTickExecutor
     /// The state that is active at the end of this tick. The return value equals
     /// <paramref name="currentState"/> when no transition fired.
     /// </returns>
-    public static IPoseState Execute(
+    public static Result Execute(
         IPoseState currentState,
         IReadOnlyList<IPoseTransition> transitions,
         PoseStateContext context,
@@ -63,12 +70,30 @@ public static class PoseTickExecutor
             currentState.OnExit(context);
             nextState.OnEnter(context);
             selected.OnTransitionExit(context);
+            NotifyOtherTransitionsOfFire(transitions, selected, context);
             onStateChanged?.Invoke(currentState, nextState);
 
             activeState = nextState;
         }
 
         activeState.OnUpdate(context);
-        return activeState;
+        return new Result(activeState, selected);
+    }
+
+    private static void NotifyOtherTransitionsOfFire(
+        IReadOnlyList<IPoseTransition> transitions,
+        IPoseTransition selected,
+        PoseStateContext context)
+    {
+        for (int i = 0; i < transitions.Count; i++)
+        {
+            IPoseTransition candidate = transitions[i];
+            if (ReferenceEquals(candidate, selected))
+            {
+                continue;
+            }
+
+            candidate.OnAnotherTransitionFired(context);
+        }
     }
 }

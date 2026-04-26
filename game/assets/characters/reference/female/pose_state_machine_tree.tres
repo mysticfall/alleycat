@@ -1,44 +1,66 @@
 [gd_resource type="AnimationNodeStateMachine" format=3 uid="uid://cc3jg4usnahhh"]
 
-[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_5dtbs"]
-animation = &"Kneel-seek"
-
-[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_vivgd"]
-
-[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_5tb7q"]
-graph_offset = Vector2(-4.8710938, 89.328125)
-nodes/output/position = Vector2(700, 180)
-nodes/Animation/node = SubResource("AnimationNodeAnimation_5dtbs")
-nodes/Animation/position = Vector2(120, 160)
-nodes/TimeSeek/node = SubResource("AnimationNodeTimeSeek_vivgd")
-nodes/TimeSeek/position = Vector2(460, 160)
-node_connections = [&"output", 0, &"TimeSeek", &"TimeSeek", 0, &"Animation"]
-
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_wnsqo"]
+animation = &"Kneel"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_75f16"]
+animation = &"Kneel-enter"
+use_custom_timeline = true
+timeline_length = 2.3
+stretch_time_scale = false
+start_offset = 0.0
+loop_mode = 0
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_ujfj7"]
+animation = &"Kneel-enter"
+play_mode = 1
+use_custom_timeline = true
+timeline_length = 2.3
+stretch_time_scale = false
+start_offset = 2.299999999999997
+loop_mode = 0
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_41lal"]
 animation = &"Crouch-seek"
 
-[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_75f16"]
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_pdjoo"]
 
-[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_c3l26"]
+[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_va517"]
 graph_offset = Vector2(-137.45221, 80.23668)
-nodes/output/position = Vector2(700, 180)
-nodes/Animation/node = SubResource("AnimationNodeAnimation_wnsqo")
+nodes/Animation/node = SubResource("AnimationNodeAnimation_41lal")
 nodes/Animation/position = Vector2(120, 160)
-nodes/TimeSeek/node = SubResource("AnimationNodeTimeSeek_75f16")
+nodes/TimeSeek/node = SubResource("AnimationNodeTimeSeek_pdjoo")
 nodes/TimeSeek/position = Vector2(460, 160)
 node_connections = [&"output", 0, &"TimeSeek", &"TimeSeek", 0, &"Animation"]
 
-[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_vh5ah"]
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_fd1sw"]
 
-[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_8dm8s"]
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_kcdmd"]
+xfade_time = 0.5
 
-[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_6u2h0"]
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_iotod"]
+xfade_time = 0.2
+switch_mode = 2
+advance_mode = 2
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_ygbbo"]
+xfade_time = 0.2
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_6pp6w"]
+xfade_time = 0.5
+switch_mode = 2
+advance_mode = 2
 
 [resource]
-states/Kneeling/node = SubResource("AnimationNodeBlendTree_5tb7q")
-states/Kneeling/position = Vector2(620, 260)
-states/StandingCrouching/node = SubResource("AnimationNodeBlendTree_c3l26")
+states/End/position = Vector2(995.6367, 100)
+states/Kneeling/node = SubResource("AnimationNodeAnimation_wnsqo")
+states/Kneeling/position = Vector2(880, 100)
+states/KneelingEnter/node = SubResource("AnimationNodeAnimation_75f16")
+states/KneelingEnter/position = Vector2(620, 100)
+states/KneelingExit/node = SubResource("AnimationNodeAnimation_ujfj7")
+states/KneelingExit/position = Vector2(620, 260)
+states/StandingCrouching/node = SubResource("AnimationNodeBlendTree_va517")
 states/StandingCrouching/position = Vector2(360, 100)
-states/Start/position = Vector2(120, 100)
-transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_vh5ah"), "StandingCrouching", "Kneeling", SubResource("AnimationNodeStateMachineTransition_8dm8s"), "Kneeling", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_6u2h0")]
-graph_offset = Vector2(-107.98828, -3.1054688)
+states/Start/position = Vector2(182.8711, 100)
+transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_fd1sw"), "StandingCrouching", "KneelingEnter", SubResource("AnimationNodeStateMachineTransition_kcdmd"), "KneelingEnter", "Kneeling", SubResource("AnimationNodeStateMachineTransition_iotod"), "Kneeling", "KneelingExit", SubResource("AnimationNodeStateMachineTransition_ygbbo"), "KneelingExit", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_6pp6w")]
+graph_offset = Vector2(0.625, 55.027344)

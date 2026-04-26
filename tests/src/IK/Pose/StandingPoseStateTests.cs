@@ -4,10 +4,10 @@ using Xunit;
 namespace AlleyCat.Tests.IK.Pose;
 
 /// <summary>
-/// Unit coverage for the standing-crouching blend math and travel-decision helper exposed by
-/// <see cref="CrouchingSeekAnimationBinding"/>.
+/// Unit coverage for the standing-crouching blend math in
+/// <see cref="StandingPoseState"/>.
 /// </summary>
-public sealed class CrouchingSeekAnimationBindingTests
+public sealed class StandingPoseStateTests
 {
     private const float RestHeadHeight = 1.6f;
     private const float FullCrouchDepthRatio = 0.375f;
@@ -19,7 +19,7 @@ public sealed class CrouchingSeekAnimationBindingTests
     [Fact]
     public void ComputePoseBlend_ZeroDescent_ReturnsZero()
     {
-        float blend = CrouchingSeekAnimationBinding.ComputePoseBlend(
+        float blend = StandingPoseState.ComputePoseBlend(
             restHeadY: 1.6f,
             currentHeadY: 1.6f,
             restHeadHeight: RestHeadHeight,
@@ -34,7 +34,7 @@ public sealed class CrouchingSeekAnimationBindingTests
     [Fact]
     public void ComputePoseBlend_DescentEqualsFullCrouchDepth_ReturnsOne()
     {
-        float blend = CrouchingSeekAnimationBinding.ComputePoseBlend(
+        float blend = StandingPoseState.ComputePoseBlend(
             restHeadY: 1.6f,
             currentHeadY: 1.6f - FullCrouchDepthMetres,
             restHeadHeight: RestHeadHeight,
@@ -49,7 +49,7 @@ public sealed class CrouchingSeekAnimationBindingTests
     [Fact]
     public void ComputePoseBlend_DescentBeyondFullCrouchDepth_ClampsToOne()
     {
-        float blend = CrouchingSeekAnimationBinding.ComputePoseBlend(
+        float blend = StandingPoseState.ComputePoseBlend(
             restHeadY: 1.6f,
             currentHeadY: 1.6f - (FullCrouchDepthMetres * 2f),
             restHeadHeight: RestHeadHeight,
@@ -64,7 +64,7 @@ public sealed class CrouchingSeekAnimationBindingTests
     [Fact]
     public void ComputePoseBlend_NegativeDescent_ClampsToZero()
     {
-        float blend = CrouchingSeekAnimationBinding.ComputePoseBlend(
+        float blend = StandingPoseState.ComputePoseBlend(
             restHeadY: 1.6f,
             currentHeadY: 1.8f,
             restHeadHeight: RestHeadHeight,
@@ -79,7 +79,7 @@ public sealed class CrouchingSeekAnimationBindingTests
     [Fact]
     public void ComputePoseBlend_HalfDescent_ReturnsHalf()
     {
-        float blend = CrouchingSeekAnimationBinding.ComputePoseBlend(
+        float blend = StandingPoseState.ComputePoseBlend(
             restHeadY: 1.6f,
             currentHeadY: 1.6f - (FullCrouchDepthMetres * 0.5f),
             restHeadHeight: RestHeadHeight,
@@ -100,7 +100,7 @@ public sealed class CrouchingSeekAnimationBindingTests
         float restHeadHeight,
         float fullCrouchDepthRatio)
     {
-        float blend = CrouchingSeekAnimationBinding.ComputePoseBlend(
+        float blend = StandingPoseState.ComputePoseBlend(
             restHeadY: 1.6f,
             currentHeadY: 1.4f,
             restHeadHeight: restHeadHeight,
@@ -108,71 +108,5 @@ public sealed class CrouchingSeekAnimationBindingTests
 
         Assert.False(float.IsNaN(blend));
         Assert.InRange(blend, 0f, 1f);
-    }
-
-    /// <summary>
-    /// A populated target must always request travel regardless of previous travel state.
-    /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("Idle")]
-    [InlineData("Crouch-seek")]
-    public void ShouldTravel_PopulatedTarget_IgnoresLastTravelled(string? lastTravelled) =>
-        Assert.True(CrouchingSeekAnimationBinding.ShouldTravel("Idle", lastTravelled));
-
-    /// <summary>
-    /// Standing → Crouching → Standing round-trips must request travel on each switch.
-    /// </summary>
-    [Fact]
-    public void ShouldTravel_StandingCrouchingStandingRoundTrip_RequestsTravelEachSwitch()
-    {
-        string? standingLastTravelled = null;
-        bool standingFirstTravel = CrouchingSeekAnimationBinding.ShouldTravel(
-            currentTargetName: "Idle",
-            lastTravelled: standingLastTravelled);
-        standingLastTravelled = "Idle";
-
-        string? crouchingLastTravelled = null;
-        bool crouchingTravel = CrouchingSeekAnimationBinding.ShouldTravel(
-            currentTargetName: "Crouch-seek",
-            lastTravelled: crouchingLastTravelled);
-        crouchingLastTravelled = "Crouch-seek";
-
-        bool standingReturnTravel = CrouchingSeekAnimationBinding.ShouldTravel(
-            currentTargetName: "Idle",
-            lastTravelled: standingLastTravelled);
-
-        Assert.True(standingFirstTravel);
-        Assert.True(crouchingTravel);
-        Assert.True(standingReturnTravel);
-        Assert.Equal("Crouch-seek", crouchingLastTravelled);
-    }
-
-    /// <summary>
-    /// Same-target per-tick requests remain true with unconditional travel semantics.
-    /// </summary>
-    [Fact]
-    public void ShouldTravel_SameTargetAcrossTicks_AlwaysRequestsTravel()
-    {
-        for (int tick = 0; tick < 5; tick++)
-        {
-            Assert.True(CrouchingSeekAnimationBinding.ShouldTravel(
-                currentTargetName: "Idle",
-                lastTravelled: "Idle"));
-        }
-    }
-
-    /// <summary>
-    /// Null or empty target names must suppress travel requests.
-    /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void ShouldTravel_NullOrEmptyTarget_ReturnsFalse(string? currentTarget)
-    {
-        Assert.False(CrouchingSeekAnimationBinding.ShouldTravel(
-            currentTargetName: currentTarget,
-            lastTravelled: "Idle"));
     }
 }

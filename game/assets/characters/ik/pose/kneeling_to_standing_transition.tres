@@ -1,11 +1,13 @@
-[gd_resource type="Resource" script_class="KneelingToStandingPoseTransition" format=3]
+[gd_resource type="Resource" script_class="KneelingToStandingPoseTransition" format=3 uid="uid://drkyc2pa7vma6"]
 
-[ext_resource type="Script" path="res://src/IK/Pose/KneelingToStandingPoseTransition.cs" id="1_chtlm"]
+[ext_resource type="Script" uid="uid://b4r473ayudj8e" path="res://src/IK/Pose/KneelingToStandingPoseTransition.cs" id="1_chtlm"]
 
 [resource]
 resource_name = "KneelingToStandingTransition"
 script = ExtResource("1_chtlm")
-FullCrouchForwardOffsetRatio = 0.053
-MaximumForwardOffsetFromFullCrouchRatio = 0.02
+FullCrouchForwardOffsetRatio = -0.027
+ArmingForwardOffsetFromFullCrouchRatio = 0.2
+TriggerRetreatFromArmedPeakRatio = 0.04
+NeutralReturnMaxOffsetRatio = 0.05
 From = &"Kneeling"
 To = &"Standing"

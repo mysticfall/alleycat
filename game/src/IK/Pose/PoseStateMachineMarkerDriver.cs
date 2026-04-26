@@ -240,18 +240,6 @@ public partial class PoseStateMachineMarkerDriver : Node3D
     /// </summary>
     public bool IsAnimationTreeBound() => _stateMachine.AnimationTree is not null;
 
-    /// <summary>
-    /// Returns whether the active state currently has a non-null animation binding.
-    /// </summary>
-    public bool CurrentStateHasAnimationBinding() => _stateMachine.CurrentState?.AnimationBinding is not null;
-
-    /// <summary>
-    /// Returns the current standing-crouching seek binding parameter path, or empty when unavailable.
-    /// </summary>
-    public StringName GetCurrentBindingSeekParameter()
-        => (_stateMachine.CurrentState?.AnimationBinding as CrouchingSeekAnimationBinding)?.SeekRequestParameter
-           ?? new StringName();
-
     private PoseStateContext BuildContext(
         Transform3D headTargetTransform,
         Transform3D leftHandTargetTransform,
@@ -269,6 +257,7 @@ public partial class PoseStateMachineMarkerDriver : Node3D
         _contextBuilder.HeadTargetRestTransform = headTargetRestTransform;
         _contextBuilder.WorldScale = WorldScale;
         _contextBuilder.Skeleton = _skeleton;
+        _contextBuilder.AnimationTree = _animationTree;
         _contextBuilder.HeadBoneIndex = _headBoneIndex;
         _contextBuilder.HipBoneIndex = _hipBoneIndex;
         _contextBuilder.Delta = delta;

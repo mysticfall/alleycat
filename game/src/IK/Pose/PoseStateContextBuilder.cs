@@ -91,6 +91,15 @@ public sealed class PoseStateContextBuilder
     }
 
     /// <summary>
+    /// Gets or sets the current <see cref="AnimationTree"/> for the tick.
+    /// </summary>
+    public AnimationTree? AnimationTree
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
     /// Gets or sets the cached hip bone index.
     /// </summary>
     public int HipBoneIndex
@@ -159,6 +168,7 @@ public sealed class PoseStateContextBuilder
         HeadTargetRestTransform = HeadTargetRestTransform,
         WorldScale = WorldScale,
         Skeleton = Skeleton,
+        AnimationTree = AnimationTree,
         HipBoneIndex = HipBoneIndex,
         HeadBoneIndex = HeadBoneIndex,
         Delta = Delta,

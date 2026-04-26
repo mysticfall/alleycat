@@ -8,7 +8,7 @@ namespace AlleyCat.IK.Pose;
 /// <remarks>
 /// Defined as an interface so the transition evaluator and lifecycle driver can be exercised
 /// without instantiating Godot <see cref="Resource"/>-backed subclasses. Concrete state content
-/// (animation binding, hip profile) is carried by the <see cref="PoseState"/> Resource subclass.
+/// (AnimationTree control, hip profile) is carried by the <see cref="PoseState"/> Resource subclass.
 /// </remarks>
 public interface IPoseState
 {

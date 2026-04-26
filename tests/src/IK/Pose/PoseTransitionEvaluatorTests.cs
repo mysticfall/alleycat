@@ -120,5 +120,9 @@ public sealed class PoseTransitionEvaluatorTests
         public void OnTransitionExit(PoseStateContext context)
         {
         }
+
+        public void OnAnotherTransitionFired(PoseStateContext context)
+        {
+        }
     }
 }

@@ -3,7 +3,7 @@ using Godot;
 namespace AlleyCat.IK.Pose;
 
 /// <summary>
-/// Pure helpers for kneeling transition/binding metrics.
+/// Pure helpers for kneeling transition and state metrics.
 /// </summary>
 public static class KneelingPoseMetrics
 {

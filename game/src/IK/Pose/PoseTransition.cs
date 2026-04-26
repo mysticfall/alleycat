@@ -12,6 +12,19 @@ namespace AlleyCat.IK.Pose;
 [GlobalClass]
 public abstract partial class PoseTransition : Resource, IPoseTransition
 {
+    private bool _warnedMissingPlayback;
+
+    /// <summary>
+    /// Optional AnimationTree playback parameter used when this transition also owns animation
+    /// state-machine travel.
+    /// </summary>
+    [Export]
+    public StringName PlaybackParameter
+    {
+        get;
+        set;
+    } = new("parameters/playback");
+
     /// <summary>
     /// Identifier of the source state this transition applies to.
     /// </summary>
@@ -58,6 +71,66 @@ public abstract partial class PoseTransition : Resource, IPoseTransition
     /// <param name="context">Current pose-state context snapshot.</param>
     public virtual void OnTransitionExit(PoseStateContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
+        AnimationTree? tree = context.AnimationTree;
+        if (tree is null)
+        {
+            return;
+        }
+
+        bool requiresPlayback = !TransitionAnimationStateName.IsEmpty;
+        AnimationNodeStateMachinePlayback? playback = ResolvePlayback(tree);
+        if (requiresPlayback && playback is null)
+        {
+            WarnMissingPlayback();
+            return;
+        }
+
+        if (playback is not null && !TransitionAnimationStateName.IsEmpty)
+        {
+            playback.Travel(TransitionAnimationStateName);
+        }
+    }
+
+    /// <summary>
+    /// Invoked on every non-selected transition immediately after another transition has fired
+    /// in the same tick.
+    /// </summary>
+    /// <remarks>
+    /// Default implementation is a no-op. Subclasses that maintain armed/trigger state shared
+    /// with an opposite-direction transition should override this hook to reset their internal
+    /// state when any sibling transition fires, preventing same-tick ping-pong across an
+    /// overlapping trigger region.
+    /// </remarks>
+    /// <param name="context">Current pose-state context snapshot.</param>
+    public virtual void OnAnotherTransitionFired(PoseStateContext context)
+    {
         // No-op by default.
+    }
+
+    /// <summary>
+    /// Gets the AnimationTree state-machine node played immediately when this transition fires.
+    /// </summary>
+    protected virtual StringName TransitionAnimationStateName => new();
+
+    /// <summary>
+    /// Resolves the configured AnimationTree state-machine playback object.
+    /// </summary>
+    protected AnimationNodeStateMachinePlayback? ResolvePlayback(AnimationTree tree) =>
+        PlaybackParameter.IsEmpty
+            ? null
+            : tree.Get(PlaybackParameter).As<AnimationNodeStateMachinePlayback>();
+
+    private void WarnMissingPlayback()
+    {
+        if (_warnedMissingPlayback)
+        {
+            return;
+        }
+
+        GD.PushWarning(
+            $"{GetType().Name} could not resolve playback object at '{PlaybackParameter}'.");
+        _warnedMissingPlayback = true;
     }
 }

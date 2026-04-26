@@ -4,7 +4,7 @@ namespace AlleyCat.IK.Pose;
 
 /// <summary>
 /// Read-only snapshot of IK target, skeleton, and runtime inputs required for pose-state classification,
-/// transitions, animation binding, and hip reconciliation during a single tick.
+/// transitions, state-owned animation control, and hip reconciliation during a single tick.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -124,6 +124,16 @@ public sealed record PoseStateContext
     /// Gets the solved skeleton for this tick, or <c>null</c> if not yet resolved.
     /// </summary>
     public Skeleton3D? Skeleton
+    {
+        get;
+        init;
+    }
+
+    /// <summary>
+    /// Gets the current <see cref="AnimationTree"/> instance for this tick, or <c>null</c> when
+    /// no runtime animation tree is bound.
+    /// </summary>
+    public AnimationTree? AnimationTree
     {
         get;
         init;

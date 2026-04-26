@@ -10,6 +10,16 @@ namespace AlleyCat.Tests.IK.Pose;
 public sealed class PoseStateContextBuilderTests
 {
     /// <summary>
+    /// Built contexts leave the animation tree unset until a producer binds one explicitly.
+    /// </summary>
+    [Fact]
+    public void Build_WithoutAnimationTree_LeavesAnimationTreeUnset()
+    {
+        PoseStateContext contextWithoutTree = new PoseStateContextBuilder().Build();
+        Assert.Null(contextWithoutTree.AnimationTree);
+    }
+
+    /// <summary>
     /// Rest head-height measure is intrinsic to skeleton space and invariant to world offsets.
     /// </summary>
     [Fact]

@@ -36,18 +36,21 @@ responsibility.
    foot transforms at the beginning of each IK solve cycle.
 4. Players must receive predictable calibration behaviour across non-standing poses, without relying on standing-only
    head-rest assumptions.
-5. Players must be able to transition from the Standing pose to kneeling by leaning forward beyond a configurable depth threshold
-   from the full-crouch baseline, without requiring explicit button input.
-6. Players must see the kneeling pose seek forward from the full-crouch baseline, with the forward travel distance being short and
-   tunable rather than a fixed offset from standing.
-7. Players must be able to transition from kneeling back to a crouched/upright posture within the Standing continuum by leaning back or upright beyond a configurable reverse
-   threshold, without requiring explicit button input. This return transition is bidirectional with the forward kneeling transition.
-8. Standing-family hip reconciliation must allow more natural stoop/lean poses by reducing hip travel for motion
+5. Players must be able to transition from the Standing pose to kneeling using an armed-then-retreat trigger model:
+   the transition initiates from the full-crouch baseline, becomes armed after sufficient forward travel from that baseline (measured in head-offset space),
+   and fires only after retreating from the armed peak by a configurable amount. This prevents accidental firing and provides intentional player control.
+6. The Standing→Kneeling transition must require a crouch-depth gate—near-full crouch on the standing-to-crouching continuum—before kneeling becomes reachable.
+7. Players must be able to transition from kneeling back to a crouched or upright posture within the Standing continuum using the same armed-then-retreat model:
+   the return path is measured from the full-crouch baseline, arms after sufficient forward travel from that baseline, and fires only after retreating from the armed peak by a configurable amount.
+   This return transition is bidirectional with the forward kneeling transition.
+8. Following any kneeling transition (forward or reverse), both transition directions must remain locked until the forward-axis offset returns to near the neutral or full-crouch baseline.
+   This prevents immediate bounce-back and re-triggering.
+9. Standing-family hip reconciliation must allow more natural stoop/lean poses by reducing hip travel for motion
    perpendicular to the hip rest up axis, while preserving strong vertical crouch response.
-9. Players must experience a smooth transition between reduced perpendicular response and full aligned response,
-   without abrupt discontinuities.
-10. Standing-family reconciliation must keep strong vertical hip drop during crouch where head remains roughly above hips.
-11. Standing-family reconciliation must avoid chasing the head down when the head leads forward (stoop) or backward (lean-back);
+10. Players must experience a smooth transition between reduced perpendicular response and full aligned response,
+    without abrupt discontinuities.
+11. Standing-family reconciliation must keep strong vertical hip drop during crouch where head remains roughly above hips.
+12. Standing-family reconciliation must avoid chasing the head down when the head leads forward (stoop) or backward (lean-back);
     hips should stay upright.
 
 ## Technical Requirements
@@ -69,52 +72,64 @@ responsibility.
    must not replace that ownership model.
 8. Hip reconciliation must be translation-centric with state-dependent behaviour contracts; clamp constraints are
    intentionally deferred for this phase.
-9. Transition orchestration must default to linear clip progression with `TimeSeek` for long, continuous,
-   player-driven transitions. Rationale: player motion is non-linear; a non-linear transition clip would desynchronise
-   the avatar from the headset and risks motion sickness. `AnimationNodeBlend2D` is unsuitable for such transitions
-   because feet are parented under the hip, so blend-based hip shifts induce foot float/slide that downstream foot IK
-   cannot correct (animated feet remain the source of truth). State-specific non-linear exceptions are permitted when
-   justified.
-10. The architecture must permit ambiguous-input handling when needed, but no mandatory catch-all ambiguity state is
-     required in this phase.
-11. This specification revision must focus on requirements and implementation contracts, not fixed numeric thresholds
-     or performance metrics.
-12. Each pose state must drive BOTH (a) animation selection or `AnimationTree` parameter control and (b) the hip
-     reconciliation profile for that state. Animation and hip behaviour are a coupled per-state responsibility.
-13. State selection must be inferred from IK-target transforms and animation/runtime signals (for example head pitch
-     and hand height from `PoseStateContext`). Explicit button input for pose switching must be avoided unless no automatic
-     signal is viable for a specific transition.
-14. State and transition `Resource` types must expose a documented public extension surface (subclassable base resources
-     and pluggable classifier/evaluator interfaces) so new states, transitions, and classifiers can be added from
-     consumer code without modifying core state-machine source.
-15. The state machine must evaluate per tick from an immutable read-only context snapshot (suggested name
-     `PoseStateContext`) that bundles IK-target inputs and skeleton/runtime signals. The context is the canonical
-     input surface for classifiers, transitions, animation bindings, and hip reconciliation profiles, including
-     `HeadTargetTransform` (current head IK-target global transform), `HeadTargetRestTransform` (head IK-target
-     global rest transform), `LeftHandTargetTransform`, and `RightHandTargetTransform`. Detailed composition is
-     defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
-16. Runtime responsibilities may be split across two cooperating nodes — a `PoseStateMachine` node that runs `Tick`
-     per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
-     the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
-     before downstream consumers read pending hip translation. This may be driven by a non-modifier runtime node, or by
-     begin-stage modifier-callback flow (for example `PlayerVRIK` begin-stage callback invoked by `StageModifier`).
-     This split is permitted as the canonical pattern but is not mandated; any equivalent topology that preserves this
-     ordering and AC-HR-07 ordering is acceptable.
-17. Transition Resources must support optional lifecycle hooks invoked around each state switch in this order:
-     `OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`. The state machine must emit a
-     state-changed observation (signal or event) so consumers can react.
-18. State and transition identifiers are authored as `StringName` in editor contexts for designer ergonomics. The
-     internal selection layer may use either `StringName` or `string` for testability, provided identity semantics are
-     preserved.
-19. Hip reconciliation profiles must return an **absolute hip target position in skeleton-local space** as a nullable
-     value (`Vector3?`). Returning `null` means "do not override the animated hip bone". Profiles must compute the hip
-     target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry
-     exposed through `PoseStateContext`, and must not read or depend on the currently animated hip bone pose, so that
-     `TimeSeek` scrubbing and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
-     the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
+9. The architecture must permit ambiguous-input handling when needed, but no mandatory catch-all ambiguity state is
+   required in this phase.
+10. This specification revision must focus on requirements and implementation contracts, not fixed numeric thresholds
+    or performance metrics.
+11. Each pose state must drive BOTH (a) animation control via the `PoseState` resource and (b) the hip
+    reconciliation profile for that state. Animation and hip behaviour are a coupled per-state responsibility.
+12. State selection must be inferred from IK-target transforms and animation/runtime signals (for example head pitch
+    and hand height from `PoseStateContext`). Explicit button input for pose switching must be avoided unless no automatic
+    signal is viable for a specific transition.
+13. State and transition `Resource` types must expose a documented public extension surface (subclassable base resources
+    and pluggable classifier/evaluator interfaces) so new states, transitions, and classifiers can be added from
+    consumer code without modifying core state-machine source.
+14. The state machine must evaluate per tick from an immutable read-only context snapshot (`PoseStateContext`) that bundles
+    IK-target inputs, skeleton signals, and runtime services. The context is the canonical input surface for classifiers,
+    transitions, states, and hip reconciliation profiles, including:
+    - `HeadTargetTransform` (current head IK-target global transform)
+    - `HeadTargetRestTransform` (head IK-target global rest transform)
+    - `LeftHandTargetTransform` (left hand IK-target global transform)
+    - `RightHandTargetTransform` (right hand IK-target global transform)
+    - `AnimationTree` (the runtime animation tree for this player, enabling transition/state logic to
+      drive animation or access debugging helpers from context)
+    - Rest-pose body measures (for example `RestHeadHeight`) for ratio-based threshold computation
+    - Tick delta
+    - Auxiliary-signals lookup for extensible computed values
+
+    Detailed composition is defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
+15. Runtime responsibilities may be split across two cooperating nodes — a `PoseStateMachine` node that runs `Tick`
+    per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
+    the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
+    before downstream consumers read pending hip translation. This may be driven by a non-modifier runtime node, or by
+    begin-stage modifier-callback flow (for example `PlayerVRIK` begin-stage callback invoked by `StageModifier`).
+    This split is permitted as the canonical pattern but is not mandated; any equivalent topology that preserves this
+    ordering and AC-HR-07 ordering is acceptable.
+16. Animation control for pose states is now owned by `PoseState` resources, not by a separate animation-binding abstraction.
+    Each `PoseState` resource provides lifecycle callbacks (`OnEnter`, `OnUpdate`, `OnExit`) driven by the
+    state-machine runtime, plus a startup-only `Start(AnimationTree)` method that is called only once after
+    initial-state resolution to seed the initial animation state. The standing pose family uses this pattern.
+17. Animation control for transitions is owned by `PoseTransition` resources. Each `PoseTransition` resource
+    provides lifecycle hooks that may own AnimationTree travel into authored transition states when they fire.
+    `PoseTransition` resources may drive AnimationTree state changes directly.
+18. `PoseStateMachine` permits a one-time startup exception: after resolving `InitialStateId`, it may call
+    `PoseState.Start(AnimationTree)` once to seed the initial authored state. This startup path is exclusive
+    to initial state setup and is not used during normal tick evaluation.
+19. Transition Resources must support optional lifecycle hooks invoked around each state switch in this order:
+    `OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`. The state machine must emit a
+    state-changed observation (signal or event) so consumers can react.
+20. State and transition identifiers are authored as `StringName` in editor contexts for designer ergonomics. The
+    internal selection layer may use either `StringName` or `string` for testability, provided identity semantics are
+    preserved.
+21. Hip reconciliation profiles must return an **absolute hip target position in skeleton-local space** as a nullable
+    value (`Vector3?`). Returning `null` means "do not override the animated hip bone". Profiles must compute the hip
+    target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry
+exposed through `PoseStateContext`, and must not read or depend on the currently animated hip bone pose, so that
+    authored state-machine transitions and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
+    the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
 20. For the Standing pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
-      four contributions: (a) positional head-offset contribution, (b) per-axis positional modulation, (c) alignment-based vertical damping, and (d)
-      rotational-offset contribution.
+       four contributions: (a) positional head-offset contribution, (b) per-axis positional modulation, (c) alignment-based vertical damping, and (d)
+       rotational-offset contribution.
 
      **Per-axis positional modulation** decomposes the head-position offset into three components in the hip
      rest local frame: up/down, side-to-side, and forward/back. Each axis applies its own configurable scalar weight:
@@ -168,19 +183,29 @@ responsibility.
      maps to this `AnimationTree` state — there is no separate framework-level `CrouchingPoseState`. The `Idle` clip
      remains in the animation library as a deferred-but-supported extension point (for example, additive breathing
      layering) and is not wired into the tree for MVP.
-23. The Standing→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the
-     transition can trigger. The gate requires the player to be at or near full crouch depth on the standing-to-crouching continuum before kneeling becomes reachable.
-24. The Standing→Kneeling transition trigger and the kneeling pose seek are both measured from the full-crouch baseline (the
-     head position when fully crouching on the continuum), not from the standing baseline. Forward lean beyond the full-crouch baseline drives
-     the transition.
-25. The kneeling forward travel range (how far the kneeling pose seeks forward from the full-crouch baseline) is short and
-     tunable via a configuration parameter. The range is measured in head-offset space from the full-crouch position.
-26. The kneeling transition thresholds must use normalised ratios derived from rest-pose body measures, not absolute metres.
-     At minimum, the head-height measure from rest pose must define the reference for the normalised crouch-depth gate.
-     Tunable parameters in this spec use flexible ratios (for example 0.85 × rest-head-height) rather than fixed absolute values.
-27. The Kneeling→Standing return transition is gated by a configurable reverse-threshold that is also expressed as a normalised
-     ratio from the full-crouch baseline. The return transition uses the same full-crouch baseline as the forward transition but
-     in the reverse direction (leaning back or upright from kneeling).
+23. The Standing→Kneeling transition uses an armed-then-retreat trigger model measured from the full-crouch baseline:
+     - The trigger input is the forward-axis offset from the pose-neutral or full-crouch baseline, not total 3D head-offset magnitude.
+     - The transition becomes armed after sufficient forward travel from the full-crouch baseline.
+     - The transition fires only after retreating from the armed peak by a configurable amount (configurable `ArmedRetreatThreshold` style parameter).
+     - This model prevents accidental firing during normal crouching and provides intentional player control.
+24. The Standing→Kneeling transition is additionally gated by a crouch-depth threshold that must be satisfied before the
+     transition can trigger. The gate requires the player to be at or near full crouch depth on the standing-to-crouching continuum before
+     kneeling becomes reachable.
+25. The kneeling pose (KneelingEnter, Kneeling, KneelingExit) is authored as separate AnimationTree state-machine nodes
+     using normal animation playback. The AnimationTree uses authored auto-advance for transition clips (for example
+     `KneelingEnter → Kneeling`, `KneelingExit → StandingCrouching`) rather than per-tick TimeSeek scrubbing.
+     Transition Resources may own AnimationTree travel into their authored transition states when they fire.
+26. Following any kneeling transition, both transition directions (Standing→Kneeling and Kneeling→Standing) remain locked
+     until the forward-axis offset returns near the neutral or full-crouch baseline (configurable `NeutralReturnMaxOffsetRatio`
+     style contract). This prevents immediate bounce-back and re-triggering.
+27. The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres.
+     At minimum, the head-height measure from rest pose (`RestHeadHeight`) defines the reference for normalised crouch-depth gates.
+     Tunable parameters use flexible ratios (for example 0.85 × rest-head-height) rather than fixed absolute values.
+28. The Kneeling→Standing return transition uses the same armed-then-retreat model:
+     - measured from the full-crouch baseline,
+     - arms after sufficient forward travel from that baseline,
+     - fires after retreating from the armed peak by a configurable amount.
+     This provides bidirectional standing-continuum↔kneel transitions.
 
 ## Incremental Delivery
 
@@ -242,9 +267,9 @@ Both linked pages are normative dependencies for implementation.
 | AC-11 | Each pose state binds both animation selection (or AnimationTree parameter control) and hip reconciliation behaviour as a coupled responsibility. | Technical |
 | AC-12 | State switching relies on inferred signals from IK-target transforms and runtime state; explicit button-based pose switching is avoided by default. | User + Technical |
 | AC-13 | State and transition Resources expose a public extension surface permitting developer-supplied states and classifiers without editing core source. | Technical |
-| AC-14 | The state machine evaluates per tick from an immutable read-only context snapshot that is the canonical input surface for classifiers, transitions, animation bindings, and hip reconciliation profiles, including `HeadTargetTransform`, `HeadTargetRestTransform`, `LeftHandTargetTransform`, and `RightHandTargetTransform` as required context fields. | Technical |
+| AC-14 | The state machine evaluates per tick from an immutable read-only context snapshot that is the canonical input surface for classifiers, transitions, states, and hip reconciliation profiles, including `HeadTargetTransform`, `HeadTargetRestTransform`, `LeftHandTargetTransform`, `RightHandTargetTransform`, `AnimationTree`, rest-pose body measures (for example `RestHeadHeight`), tick delta, and auxiliary-signals lookup. The context carries the runtime `AnimationTree` so transition/state logic may access debugging helpers and animation services. | Technical |
 | AC-15 | Runtime responsibilities may be split into a `PoseStateMachine` node and a `HipReconciliationModifier` (`SkeletonModifier3D`) as the canonical pattern, without mandating that specific split, provided AC-HR-07 ordering is preserved and `Tick` runs after follower updates, before downstream consumers read pending hip translation, and may use begin-stage modifier-callback flow (for example `PlayerVRIK` via `StageModifier`) or equivalent topology preserving this ordering. | Technical |
-| AC-16 | Transition Resources support optional lifecycle hooks (`OnTransitionEnter` → `OnExit` → `OnEnter` → `OnTransitionExit`) and the state machine emits a state-changed observation. | Technical |
+| AC-16 | Animation control for pose states is owned by `PoseState` resources (not a separate animation-binding abstraction). Each `PoseState` resource provides lifecycle callbacks (`OnEnter`, `OnUpdate`, `OnExit`) driven by the state-machine runtime, plus a startup-only `Start(AnimationTree)` method that is called only once after initial-state resolution to seed the initial animation state. Per-frame state animation work flows through lifecycle callbacks, not through `Tick(PoseStateContext)`. | Technical |
 | AC-17 | State and transition identifiers are authored as `StringName`; internal selection may use `StringName` or `string` provided identity semantics are preserved. | Technical |
 | AC-18 | Hip reconciliation profiles return an absolute hip target position in skeleton-local space as a nullable value (`Vector3?`); returning `null` leaves the animated hip pose untouched. | Technical |
 | AC-19 | Hip reconciliation profiles compute the hip target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry, and must not read or depend on the currently animated hip bone pose. | Technical |
@@ -253,49 +278,49 @@ Both linked pages are normative dependencies for implementation.
 | AC-21b | Unit-level regression tests cover the alignment-damping contract: high-alignment (pure vertical crouch) preserves full vertical response, low-alignment (forward stoop or lean-back) applies vertical damping down to `MinimumAlignmentWeight`, `MinimumAlignmentWeight` is clamped to `[0,1]`, diagonal offsets preserve per-axis weighting alongside alignment damping, and +up/-up symmetry under alignment damping is verified. | Technical |
 | AC-22 | The Standing pose family is backed by a single `AnimationTree` state (`StandingCrouching`) running `TimeSeek → AnimationNodeAnimation("Crouch-seek")`, with a single framework-level `StandingPoseState` resource mapping to this `AnimationTree` state. There is no separate framework-level CrouchingPoseState; the standing-to-crouching continuum is covered by one StandingPoseState. | Technical |
 | AC-23 | The `Idle` clip remains in the animation library as a deferred-but-supported extension point for future layering (for example additive breathing) and is not wired into the `AnimationTree` for MVP. | Technical |
-| AC-24 | The Standing→Kneeling transition is gated by a configurable crouch-depth threshold that must be satisfied before the transition can trigger, requiring the player to be at or near full crouch depth on the standing-to-crouching continuum (tunable gate). | Technical |
-| AC-25 | The Standing→Kneeling transition trigger and kneeling pose seek are measured from the full-crouch baseline (head position at full crouch on the continuum), not from the standing baseline. Forward lean from the full-crouch baseline drives the transition. | Technical |
-| AC-26 | The kneeling forward travel range is short and tunable via a configuration parameter, measured from the full-crouch baseline in head-offset space. | Technical |
-| AC-26a | The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres. At minimum, the head-height measure from rest pose defines the reference for the normalised crouch-depth gate. | Technical |
-| AC-26b | The Kneeling→Standing return transition is gated by a configurable reverse-threshold expressed as a normalised ratio from the full-crouch baseline, providing bidirectional standing-continuum↔kneel transitions. | Technical |
+| AC-24 | The Standing→Kneeling transition uses an armed-then-retreat trigger model measured from the full-crouch baseline: the transition becomes armed after sufficient forward travel from the baseline, and fires only after retreating from the armed peak by a configurable amount. Both directions use the same model. | User |
+| AC-24b | The Standing→Kneeling transition is additionally gated by a crouch-depth threshold that requires near-full crouch on the standing-to-crouching continuum before kneeling becomes reachable. | Technical |
+| AC-25 | The kneeling pose (KneelingEnter, Kneeling, KneelingExit) is authored as separate AnimationTree state-machine nodes using normal animation playback. The AnimationTree uses authored auto-advance for transition clips (for example KneelingEnter → Kneeling, KneelingExit → StandingCrouching) rather than per-tick TimeSeek scrubbing. | Technical |
+| AC-26 | Following any kneeling transition, both transition directions remain locked until the forward-axis offset returns near the neutral or full-crouch baseline, preventing immediate bounce-back and re-triggering. | User + Technical |
+| AC-26a | The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres. At minimum, the head-height measure from rest pose defines the reference for the normalised crouch-depth gate. Tunable parameters use flexible ratios (for example 0.85 × RestHeadHeight) rather than fixed absolute values. | Technical |
+| AC-26b | The Kneeling→Standing return transition uses the same armed-then-retreat model: measured from the full-crouch baseline, arms after sufficient forward travel from that baseline, fires after retreating from the armed peak by a configurable amount, providing bidirectional standing-continuum↔kneel transitions. | Technical |
 | AC-27 | Foot-target synchronisation stage re-synchronises foot IK targets from animated foot transforms (position + rotation) at the beginning of each leg IK solve cycle, before pole-target computation. `FootTargetSyncController` must run before `HipReconciliationModifier` and any other foot-mutating modifiers. This ensures deterministic solve behaviour when animation timing or `TimeSeek` position changes. Ordering is a scene/pipeline authoring contract — runtime auto-reordering is intentionally not used. See IK-003 AC-05a. | User + Technical |
 
 ## Code-Spec Sync Note
 
-Increment 2.2 is delivered alongside this specification state. The shipped implementation includes all content from
-Increment 2.1 plus the Standing→Kneeling bidirectional transition with the following contracts:
+Increment 2.3 is delivered alongside this specification revision. The shipped implementation includes all content from previous increments plus the following architectural contracts that this revision codifies:
 
-- The `KneelingPoseState` concrete state resource is now shipped.
-- The Standing→Kneeling transition is gated by a configurable crouch-depth threshold (`CrouchDepthGate`) that requires
-  the player to be at or near full crouch depth on the standing-to-crouching continuum before kneeling becomes reachable.
-- The Standing→Kneeling transition trigger and kneeling pose seek are measured from the full-crouch baseline (head position at full crouch on the continuum),
-  not from the standing baseline. Forward lean from the full-crouch baseline drives the transition.
-- The kneeling forward travel range (`KneelingForwardRange`) is short and tunable via a configuration parameter, measured
-  in head-offset space from the full-crouch baseline.
-- The return transition now provides bidirectional standing-continuum↔kneel transitions, gated by a configurable
-  reverse-threshold (expressed as a normalised ratio from the full-crouch baseline).
-- Kneeling transition thresholds now use normalised ratios derived from rest-pose body measures, not absolute metres. At minimum,
-  the head-height measure from rest pose (`RestHeadHeight`) defines the reference for the normalised crouch-depth gate. Tunable parameters use flexible ratios
-  (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
-- The `StandingToKneelingPoseTransition` transition resource implements the forward contracts, and
-  `KneelingToStandingPoseTransition` implements the reverse contracts.
+### Animation Ownership Architecture
 
-The implementation also includes the `PoseStateMachine` wiring on the player, the `CrouchingSeekAnimationBinding` animation
-binding targeting the single `StandingCrouching` `AnimationTree` state (sub-graph `TimeSeek → AnimationNodeAnimation
-("Crouch-seek")`), the `HeadTrackingHipProfile` hip reconciliation profile (replacing the deprecated
-`LateralHeadOffsetHipReconciliationProfile`) with per-axis positional modulation using the hip rest local frame —
-`VerticalPositionWeight` (default `1.0`, full offset), `LateralPositionWeight` (default `0.5`, 50 % offset), and
-`ForwardPositionWeight` (default `0.1`, 10 % offset) — plus rotational hip correction with configurable
-`RotationCompensationWeight` (non-negative clamp), the concrete `StandingPoseState` resource
-(covering the full standing-to-crouching continuum — there is no separate `CrouchingPoseState`), the
-`StandingToKneelingPoseTransition`/`KneelingToStandingPoseTransition` pair for bidirectional kneel gating from the standing continuum,
-and the `HipReconciliationModifier` ordering in `player.tscn` placed between
-`VRIKBeginStage` and the existing IK modifier chain so AC-HR-07 ordering is preserved. In this wiring,
-`PoseStateMachine.Tick` executes in begin-stage flow after IK follower adjustments have produced current tracked transforms.
-`PoseStateContext` now standardises head IK-target transforms as `HeadTargetTransform` and `HeadTargetRestTransform`.
-`PoseStateContext` additionally exposes rest-pose body measures (for example `RestHeadHeight`) for ratio-based threshold computation.
-- The standing/crouching seek blend now uses `FullCrouchDepthRatio` normalised by `RestHeadHeight` as the body-proportion-safe reference, replacing any absolute-metre-based crouch depth parameter. This ensures the seek curve scales correctly across different avatar proportions.
-Hip reconciliation profiles now return an absolute hip target position in skeleton-local
+- `AnimationBinding` abstraction has been removed.
+- Animation control for pose states is now owned by `PoseState` resources. Each `PoseState` resource provides lifecycle callbacks (`OnEnter`, `OnUpdate`, `OnExit`) driven by the state-machine runtime, plus a startup-only `Start(AnimationTree)` method that is called only once after initial-state resolution to seed the initial animation state. Per-frame state animation work flows through lifecycle callbacks, not through `Tick(PoseStateContext)`.
+- Animation control for transitions is owned by `PoseTransition` resources. Each `PoseTransition` resource provides lifecycle hooks that may own AnimationTree travel into authored transition states when they fire.
+- `PoseStateMachine` permits a one-time startup exception: after resolving `InitialStateId`, it may call `PoseState.Start(AnimationTree)` once to seed the initial authored state. This startup path is exclusive to initial state setup and is not used during normal tick evaluation.
+- Per-frame state animation work now flows through lifecycle callbacks (`OnEnter`/`OnUpdate`/`OnExit`), not through concrete-only post-processing. `PoseStateContext` carries the runtime `AnimationTree` as the canonical per-tick input surface for transitions, states, hip reconciliation, and debugging helpers.
+
+### Standing/Crouching Animation Authoring
+
+- Standing family remains a single `StandingPoseState` mapped to the `StandingCrouching` AnimationTree state.
+- That state uses `TimeSeek → AnimationNodeAnimation("Crouch-seek")` for the continuous standing↔crouching continuum.
+- There is no separate framework-level crouching state.
+
+### Kneeling Animation Authoring and Transitions
+
+- Kneeling entry/hold/exit are authored as separate AnimationTree state-machine nodes (`KneelingEnter`, `Kneeling`, `KneelingExit`) using normal animation playback rather than per-tick TimeSeek scrubbing.
+- The AnimationTree uses authored auto-advance for transition clips (for example `KneelingEnter → Kneeling`, `KneelingExit → StandingCrouching`).
+- Transition Resources may own AnimationTree travel into their authored transition states when they fire.
+
+### Armed-Then-Retreat Trigger Model
+
+- Both Standing→Kneeling and Kneeling→Standing use the same armed-then-retreat trigger model:
+  - transitions are measured from the full-crouch forward baseline,
+  - arming occurs after sufficient forward travel from that baseline,
+  - firing occurs only after retreat from the armed peak by a configurable amount,
+  - both directions are normalized by rest-pose body measures (at minimum `RestHeadHeight`).
+- The Standing→Kneeling path has a crouch-depth gate requiring near-full crouch before kneeling becomes reachable.
+- The trigger model is driven by the forward-axis offset from the pose-neutral/full-crouch baseline, not by total 3D head-offset magnitude.
+- After a transition fires, both directions are locked out until the forward-axis offset returns near the neutral/full-crouch baseline (`NeutralReturnMaxOffsetRatio` style contract). This prevents immediate bounce-back and re-triggering.
+Hip reconciliation profiles return an absolute hip target position in skeleton-local
 space (`Vector3?`), with `null` meaning "do not override the animated hip bone". Unit regression coverage now includes
 per-axis positional modulation (rest-up-axis derivation, per-axis weight application, up/down full response, side-to-side at
 authored default, forward/back at authored default, diagonal continuity, +up/-up symmetry)

@@ -1,3 +1,5 @@
+using System.Reflection;
+using AlleyCat.IK.Pose;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -28,10 +30,13 @@ public sealed class PoseStateMachineIntegrationTests
     private const string RightLegTwoBoneIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightLegTwoBoneIKController";
     private const string CopyLeftFootRotationPath = "Subject/Female/Female_export/GeneralSkeleton/CopyLeftFootRotation";
     private const string CopyRightFootRotationPath = "Subject/Female/Female_export/GeneralSkeleton/CopyRightFootRotation";
+    private const string StandingPoseStateResourcePath = "res://assets/characters/ik/pose/standing_pose_state.tres";
+    private const string KneelingPoseStateResourcePath = "res://assets/characters/ik/pose/kneeling_pose_state.tres";
+    private const string StandingToKneelingTransitionResourcePath = "res://assets/characters/ik/pose/standing_to_kneeling_transition.tres";
+    private const string KneelingToStandingTransitionResourcePath = "res://assets/characters/ik/pose/kneeling_to_standing_transition.tres";
+    private const string PoseStateMachineTreeResourcePath = "res://assets/characters/reference/female/pose_state_machine_tree.tres";
     private static readonly StringName _standingCrouchingSeekParameter =
         new("parameters/StandingCrouching/TimeSeek/seek_request");
-    private static readonly StringName _kneelingSeekParameter =
-        new("parameters/Kneeling/TimeSeek/seek_request");
 
     private const float MinimumMidwaySeek = 0.2f;
     private const float MinimumFullSeek = 0.6f;
@@ -39,10 +44,10 @@ public sealed class PoseStateMachineIntegrationTests
     private const float MinimumFullCrouchHipDropMetres = 0.08f;
     private const float MinimumFullCrouchKneeFlexionIncreaseRadians = 0.08f;
     private const float MinimumFullCrouchKneeFlexionAbsoluteRadians = 0.15f;
-    private const float MinimumKneelingSeek = 0.1f;
     private const float MinimumKneelingKneeFlexionIncreaseRadians = 0.05f;
     private const float FootTargetPositionToleranceMetres = 0.03f;
     private const float FootTargetRotationToleranceRadians = 0.06f;
+    private const int TransitionAutoAdvanceWaitFrames = 320;
 
     /// <summary>
     /// Verifies marker scenarios drive the standing-continuum seek values,
@@ -67,7 +72,11 @@ public sealed class PoseStateMachineIntegrationTests
         Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
         AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
         Assert.True((bool)driver.Call("IsAnimationTreeBound"), "Expected marker driver to bind AnimationTree.");
-        _ = animationTree;
+
+        Resource standingState = LoadRequiredResource(StandingPoseStateResourcePath);
+        StringName standingAnimationStateName = GetRequiredStringNameProperty(standingState, "AnimationStateName");
+        Assert.Equal("Standing", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        Assert.Equal(standingAnimationStateName, ResolvePlayback(animationTree).GetCurrentNode());
 
         int hipsIndex = RequireBoneIndex(skeleton, "Hips");
         int leftUpperLegIndex = RequireBoneIndex(skeleton, "LeftUpperLeg");
@@ -159,8 +168,8 @@ public sealed class PoseStateMachineIntegrationTests
     }
 
     /// <summary>
-    /// Verifies standing-continuum-to-kneeling only triggers near full crouch, uses dedicated
-    /// kneel seek, and can transition back to the standing continuum.
+    /// Verifies standing-continuum-to-kneeling honours the crouch gate plus armed-retreat trigger,
+    /// uses trigger-driven kneel entry playback once entered, and can round-trip back to standing.
     /// </summary>
     [Headless]
     [Fact]
@@ -180,7 +189,6 @@ public sealed class PoseStateMachineIntegrationTests
         Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
         Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
         AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
-
         int leftUpperLegIndex = RequireBoneIndex(skeleton, "LeftUpperLeg");
         int leftLowerLegIndex = RequireBoneIndex(skeleton, "LeftLowerLeg");
         int leftFootIndex = RequireBoneIndex(skeleton, "LeftFoot");
@@ -196,13 +204,36 @@ public sealed class PoseStateMachineIntegrationTests
             leftLowerLegIndex,
             leftFootIndex);
 
-        TickScenario(sceneRoot, driver, "KneelForward");
+        // Arm StandingToKneeling with a strong forward pose in the overlap region.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.32f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
-        float kneelingSeek = ReadSeekRequest(animationTree, _kneelingSeekParameter);
+        var armedStandingState = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal("Standing", armedStandingState.ToString());
+
+        // Retreat from the armed peak by enough to fire the armed-retreat trigger.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
         var kneelingState = (StringName)driver.Call("GetCurrentStateId");
         Assert.Equal("Kneeling", kneelingState.ToString());
+        AssertPlaybackNodeIsOneOf(ResolvePlayback(animationTree), "KneelingEnter", "Kneeling");
+        await AssertPlaybackConvergesToNodeWithoutInputAsync(
+            sceneTree,
+            ResolvePlayback(animationTree),
+            KneelingPoseState.DefaultAnimationStateName,
+            TransitionAutoAdvanceWaitFrames);
+
         float kneelingKneeFlexion = ComputeKneeFlexionRadians(
             skeleton,
             leftUpperLegIndex,
@@ -210,13 +241,41 @@ public sealed class PoseStateMachineIntegrationTests
             leftFootIndex);
 
         Assert.True(
-            kneelingSeek >= MinimumKneelingSeek,
-            $"Kneeling seek should be at least {MinimumKneelingSeek:F2} after crouch-gated forward transition.");
-        Assert.True(
             kneelingKneeFlexion >= crouchMidwayKneeFlexion + MinimumKneelingKneeFlexionIncreaseRadians,
             "Kneeling should increase left-knee flexion beyond crouch-midway, guarding against implausible shallow kneel poses.");
 
-        TickScenario(sceneRoot, driver, "CrouchFull");
+        // Holding the retreated pose must not bounce the state back to standing while the
+        // cross-transition neutral-return gate holds.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        var stillKneelingState = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal("Kneeling", stillKneelingState.ToString());
+
+        // Returning the head to the neutral forward baseline clears the cross-transition gate;
+        // a subsequent forward-then-retreat cycle must then fire KneelingToStanding.
+        TickScenario(sceneRoot, driver, "Standing");
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.32f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -224,6 +283,249 @@ public sealed class PoseStateMachineIntegrationTests
         Assert.Equal(
             "Standing",
             standingStateAfterKneel.ToString());
+        await AssertPlaybackConvergesToNodeAsync(
+            sceneTree,
+            sceneRoot,
+            driver,
+            ResolvePlayback(animationTree),
+            StandingPoseState.DefaultAnimationStateName,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f),
+            TransitionAutoAdvanceWaitFrames);
+    }
+
+    /// <summary>
+    /// Verifies a kneel entry that fires while still inside the shared forward region does not
+    /// immediately bounce back to standing on subsequent ticks.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_StandingToKneeling_OverlapRegionDoesNotImmediatelyReverse()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+
+        // Arm StandingToKneeling with a strong forward pose beyond the arming threshold.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.32f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        // Retreat past the trigger-retreat ratio fires StandingToKneeling inside the overlap region.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        var kneelingState = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal("Kneeling", kneelingState.ToString());
+
+        // Holding the retreated pose must not immediately reverse: the opposite-direction
+        // transition is cross-locked until the forward-only neutral-return gate clears.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        var stillKneelingState = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal("Kneeling", stillKneelingState.ToString());
+    }
+
+    /// <summary>
+    /// Verifies kneel exit honours the cross-transition lockout: after
+    /// <see cref="StandingToKneelingPoseTransition"/> fires, the opposite-direction
+    /// <see cref="KneelingToStandingPoseTransition"/> is gated until the head returns to the
+    /// forward-only neutral baseline. Once the gate clears, a fresh forward-then-retreat cycle
+    /// fires the exit transition.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_KneelingToStanding_ExitsAfterNeutralReturnAndForwardRetreat()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+        _ = animationTree;
+
+        // Arm and fire StandingToKneeling via a forward-then-retreat cycle in the overlap region.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.32f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Kneeling", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        AssertPlaybackNodeIsOneOf(ResolvePlayback(animationTree), "KneelingEnter", "Kneeling");
+        await AssertPlaybackConvergesToNodeWithoutInputAsync(
+            sceneTree,
+            ResolvePlayback(animationTree),
+            KneelingPoseState.DefaultAnimationStateName,
+            TransitionAutoAdvanceWaitFrames);
+
+        // Holding the retreated forward pose must keep the state in kneeling: the opposite-
+        // direction transition is cross-locked until the forward-only neutral-return gate clears.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+        Assert.Equal("Kneeling", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+
+        // Returning the head to the standing scenario brings the forward offset within the
+        // neutral-return threshold, clearing the cross-transition gate.
+        TickScenario(sceneRoot, driver, "Standing");
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        // A fresh forward-then-retreat cycle now fires KneelingToStanding.
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.32f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        var standingState = (StringName)driver.Call("GetCurrentStateId");
+        Assert.Equal("Standing", standingState.ToString());
+        await AssertPlaybackConvergesToNodeAsync(
+            sceneTree,
+            sceneRoot,
+            driver,
+            ResolvePlayback(animationTree),
+            StandingPoseState.DefaultAnimationStateName,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f),
+            TransitionAutoAdvanceWaitFrames);
+    }
+
+    /// <summary>
+    /// Verifies transition-owned playback can move into the kneeling path while the standing state
+    /// only writes crouch seek values when its steady-state AnimationTree node is actually active.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_KneelEntry_StandingStateRemainsPassiveOutsideItsActiveAnimationState()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        driver.Set("Active", false);
+
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+        AnimationNodeStateMachinePlayback playback = ResolvePlayback(animationTree);
+        AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(ResourceLoader.Load(PoseStateMachineTreeResourcePath), exactMatch: false);
+        Resource standingState = LoadRequiredResource(StandingPoseStateResourcePath);
+        Resource standingToKneelingTransition = LoadRequiredResource(StandingToKneelingTransitionResourcePath);
+
+        _ = Assert.IsType<AnimationNodeAnimation>(stateMachine.GetNode("KneelingEnter"), exactMatch: false);
+        _ = Assert.IsType<AnimationNodeAnimation>(stateMachine.GetNode("Kneeling"), exactMatch: false);
+        AnimationNodeAnimation kneelingExitNode = Assert.IsType<AnimationNodeAnimation>(
+            stateMachine.GetNode("KneelingExit"),
+            exactMatch: false);
+        Assert.Equal("Kneel-enter", kneelingExitNode.Animation.ToString());
+        Assert.Equal(1L, kneelingExitNode.Get("play_mode").AsInt64());
+
+        StringName standingAnimationStateName = GetRequiredStringNameProperty(standingState, "AnimationStateName");
+        StringName standingSeekRequestParameter = GetRequiredStringNameProperty(standingState, "SeekRequestParameter");
+
+        playback.Start(standingAnimationStateName, true);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        object kneelingContext = CreateRuntimeScenarioContext(
+            standingToKneelingTransition,
+            nameof(IPoseTransition.OnTransitionExit),
+            0,
+            sceneRoot,
+            "KneelForward",
+            1.0 / 60.0);
+        object standingContext = CreateRuntimeScenarioContext(
+            standingState,
+            nameof(IPoseState.OnUpdate),
+            0,
+            sceneRoot,
+            "CrouchFull",
+            1e-6);
+
+        InvokeMethod(standingState, nameof(IPoseState.OnUpdate), standingContext);
+        float activeStandingSeek = ReadSeekRequest(animationTree, standingSeekRequestParameter);
+        Assert.True(activeStandingSeek > 0f, "Standing state should write a positive crouch seek when its AnimationTree node is active.");
+
+        InvokeMethod(standingToKneelingTransition, nameof(IPoseTransition.OnTransitionExit), kneelingContext);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        AssertPlaybackNodeIsOneOf(playback, "KneelingEnter", "Kneeling");
+
+        float inactiveSeekBeforeApply = ReadSeekRequest(animationTree, standingSeekRequestParameter);
+
+        InvokeMethod(standingState, nameof(IPoseState.OnUpdate), standingContext);
+
+        AssertPlaybackNodeIsOneOf(playback, "KneelingEnter", "Kneeling");
+
+        float inactiveSeekAfterApply = ReadSeekRequest(animationTree, standingSeekRequestParameter);
+        Assert.Equal(
+            inactiveSeekBeforeApply,
+            inactiveSeekAfterApply,
+            precision: 5);
     }
 
     /// <summary>
@@ -346,7 +648,21 @@ public sealed class PoseStateMachineIntegrationTests
             leftKneeFlexionRadians);
     }
 
-    private static void TickScenario(Node sceneRoot, Node driver, string scenarioName)
+    private static void TickScenario(
+        Node sceneRoot,
+        Node driver,
+        string scenarioName,
+        int tickCount = -1,
+        double delta = -1.0)
+        => TickScenarioWithHeadOverride(sceneRoot, driver, scenarioName, headTargetOverride: null, tickCount, delta);
+
+    private static void TickScenarioWithHeadOverride(
+        Node sceneRoot,
+        Node driver,
+        string scenarioName,
+        Transform3D? headTargetOverride,
+        int tickCount = -1,
+        double delta = -1.0)
     {
         Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
         Node3D scenarioNode = Assert.IsType<Node3D>(
@@ -359,10 +675,11 @@ public sealed class PoseStateMachineIntegrationTests
         Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
         Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
 
-        Transform3D headTargetTransform = ResolveScenarioMarkerTransform(
-            scenarioNode,
-            markerName: "Head",
-            fallback: scenarioNode.GlobalTransform);
+        Transform3D headTargetTransform = headTargetOverride
+            ?? ResolveScenarioMarkerTransform(
+                scenarioNode,
+                markerName: "Head",
+                fallback: scenarioNode.GlobalTransform);
         Transform3D leftHandTargetTransform = ResolveScenarioMarkerTransform(
             scenarioNode,
             markerName: "LeftHand",
@@ -381,19 +698,182 @@ public sealed class PoseStateMachineIntegrationTests
             fallback: rightFootTarget.GlobalTransform);
 
         _ = driver.Call(
-            "TickPoseTargets",
+            nameof(PoseStateMachineMarkerDriver.TickPoseTargets),
             headTargetTransform,
             leftHandTargetTransform,
             rightHandTargetTransform,
             leftFootTargetTransform,
             rightFootTargetTransform,
             headRestMarker.GlobalTransform,
-            -1,
-            -1.0);
+            tickCount,
+            delta);
     }
+
+    private static Transform3D CreateScenarioHeadTransform(Node sceneRoot, string scenarioName, float? y = null, float? z = null)
+    {
+        Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
+        Node3D scenarioNode = Assert.IsType<Node3D>(
+            scenariosRoot.GetNodeOrNull(new NodePath(scenarioName)),
+            exactMatch: false);
+        Transform3D baseTransform = ResolveScenarioMarkerTransform(
+            scenarioNode,
+            markerName: "Head",
+            fallback: scenarioNode.GlobalTransform);
+        Vector3 origin = baseTransform.Origin;
+        origin = new Vector3(origin.X, y ?? origin.Y, z ?? origin.Z);
+        return new Transform3D(baseTransform.Basis, origin);
+    }
+
+    private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
+        => animationTree.Get(new StringName("parameters/playback")).As<AnimationNodeStateMachinePlayback>()
+           ?? throw new Xunit.Sdk.XunitException("Expected AnimationTree playback object.");
 
     private static float ReadSeekRequest(AnimationTree animationTree, StringName seekRequestParameter)
         => animationTree.Get(seekRequestParameter).AsSingle();
+
+    private static async Task AssertPlaybackConvergesToNodeWithoutInputAsync(
+        SceneTree sceneTree,
+        AnimationNodeStateMachinePlayback playback,
+        StringName expectedNode,
+        int maxWaitFrames)
+    {
+        for (int frame = 0; frame < maxWaitFrames; frame++)
+        {
+            if (playback.GetCurrentNode() == expectedNode)
+            {
+                return;
+            }
+
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+
+        Assert.Equal(expectedNode.ToString(), playback.GetCurrentNode().ToString());
+    }
+
+    private static async Task AssertPlaybackConvergesToNodeAsync(
+        SceneTree sceneTree,
+        Node sceneRoot,
+        Node driver,
+        AnimationNodeStateMachinePlayback playback,
+        StringName expectedNode,
+        string scenarioName,
+        Transform3D? headTargetOverride,
+        int maxWaitFrames)
+    {
+        for (int frame = 0; frame < maxWaitFrames; frame++)
+        {
+            if (playback.GetCurrentNode() == expectedNode)
+            {
+                return;
+            }
+
+            if (headTargetOverride is null)
+            {
+                TickScenario(sceneRoot, driver, scenarioName);
+            }
+            else
+            {
+                TickScenarioWithHeadOverride(sceneRoot, driver, scenarioName, headTargetOverride);
+            }
+
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+
+        Assert.Equal(expectedNode.ToString(), playback.GetCurrentNode().ToString());
+    }
+
+    private static object CreateRuntimeScenarioContext(
+        GodotObject target,
+        string methodName,
+        int contextParameterIndex,
+        Node sceneRoot,
+        string scenarioName,
+        double delta)
+    {
+        Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
+        Node3D scenarioNode = Assert.IsType<Node3D>(
+            scenariosRoot.GetNodeOrNull(new NodePath(scenarioName)),
+            exactMatch: false);
+        Node3D headRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadRestMarkerPath), exactMatch: false);
+
+        Type contextType = ResolveMethod(target, methodName, parameterCount: -1)
+            .GetParameters()[contextParameterIndex]
+            .ParameterType;
+        object? context = Activator.CreateInstance(contextType);
+        Assert.NotNull(context);
+        SetRequiredProperty(context, "HeadTargetRestTransform", headRestMarker.GlobalTransform);
+        SetRequiredProperty(
+            context,
+            "HeadTargetTransform",
+            ResolveScenarioMarkerTransform(
+                scenarioNode,
+                markerName: "Head",
+                fallback: scenarioNode.GlobalTransform));
+        AnimationTree? animationTree = sceneRoot.GetNodeOrNull<AnimationTree>(AnimationTreePath);
+        if (animationTree is not null)
+        {
+            _ = TrySetProperty(context, nameof(PoseStateContext.AnimationTree), animationTree);
+        }
+
+        SetRequiredProperty(context, "RestHeadHeight", headRestMarker.GlobalTransform.Origin.Y);
+        SetRequiredProperty(context, "Delta", delta);
+        return context;
+    }
+
+    private static Resource LoadRequiredResource(string resourcePath)
+    {
+        Resource? resource = ResourceLoader.Load<Resource>(resourcePath);
+        Assert.NotNull(resource);
+        return resource;
+    }
+
+    private static StringName GetRequiredStringNameProperty(GodotObject target, StringName propertyName)
+    {
+        Variant property = target.Get(propertyName);
+        StringName value = property.AsStringName();
+        Assert.False(value.IsEmpty);
+        return value;
+    }
+
+    private static float GetRequiredFloatProperty(GodotObject target, StringName propertyName)
+        => target.Get(propertyName).AsSingle();
+
+    private static void InvokeMethod(GodotObject target, string methodName, params object[] arguments)
+    {
+        MethodInfo method = ResolveMethod(target, methodName, arguments.Length);
+        _ = method.Invoke(target, arguments);
+    }
+
+    private static MethodInfo ResolveMethod(GodotObject target, string methodName, int parameterCount)
+        => target.GetType().GetMethods()
+               .Single(method => method.Name == methodName && (parameterCount < 0 || method.GetParameters().Length == parameterCount));
+
+    private static T GetRequiredPrivateField<T>(GodotObject target, string fieldName)
+    {
+        FieldInfo? field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        object? value = field.GetValue(target);
+        return Assert.IsType<T>(value);
+    }
+
+    private static void SetRequiredProperty(object target, string propertyName, object value)
+    {
+        PropertyInfo? property = target.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        property.SetValue(target, value);
+    }
+
+    private static bool TrySetProperty(object target, string propertyName, object value)
+    {
+        PropertyInfo? property = target.GetType().GetProperty(propertyName);
+        if (property is null)
+        {
+            return false;
+        }
+
+        property.SetValue(target, value);
+        return true;
+    }
 
     private static Transform3D ResolveScenarioMarkerTransform(
         Node3D scenarioNode,
@@ -449,6 +929,14 @@ public sealed class PoseStateMachineIntegrationTests
         float dot = Mathf.Abs(from.Dot(to));
         dot = Mathf.Clamp(dot, -1.0f, 1.0f);
         return 2.0f * Mathf.Acos(dot);
+    }
+
+    private static void AssertPlaybackNodeIsOneOf(
+        AnimationNodeStateMachinePlayback playback,
+        params string[] expectedNodes)
+    {
+        string currentNode = playback.GetCurrentNode().ToString();
+        Assert.Contains(currentNode, expectedNodes);
     }
 
     private sealed record PoseSnapshot(

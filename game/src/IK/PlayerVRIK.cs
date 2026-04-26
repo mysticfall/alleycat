@@ -450,6 +450,7 @@ public partial class PlayerVRIK : Node3D
         _poseContextBuilder.LeftFootTargetTransform = leftFootTargetTransform;
         _poseContextBuilder.WorldScale = _worldScale;
         _poseContextBuilder.Skeleton = skeleton;
+        _poseContextBuilder.AnimationTree = PoseStateMachine?.AnimationTree;
         _poseContextBuilder.HipBoneIndex = HipBoneIndex;
         _poseContextBuilder.HeadBoneIndex = HeadBoneIndex;
         _poseContextBuilder.Delta = delta;

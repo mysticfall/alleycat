@@ -68,7 +68,7 @@ public partial class PoseStateMachine : Node
     } = new();
 
     /// <summary>
-    /// Optional AnimationTree driven by the active state's <see cref="AnimationBinding"/>.
+    /// Optional AnimationTree observed and driven by the active state and transition resources.
     /// </summary>
     [Export]
     public AnimationTree? AnimationTree
@@ -140,21 +140,15 @@ public partial class PoseStateMachine : Node
 
         RebuildTransitionView();
 
-        IPoseState activeState = PoseTickExecutor.Execute(
+        PoseTickExecutor.Result tickResult = PoseTickExecutor.Execute(
             currentState,
             _transitionView,
             context,
             ResolveStateByIdForExecutor,
             OnExecutorStateChanged);
 
-        var activePoseState = (PoseState)activeState;
+        var activePoseState = (PoseState)tickResult.ActiveState;
         CurrentState = activePoseState;
-
-        AnimationBinding? binding = activePoseState.AnimationBinding;
-        if (binding is not null && AnimationTree is not null)
-        {
-            binding.Apply(AnimationTree, context);
-        }
 
         HipReconciliationProfile? profile = activePoseState.HipReconciliation;
         PendingHipLocalPosition = profile?.ComputeHipLocalPosition(context);
@@ -200,6 +194,12 @@ public partial class PoseStateMachine : Node
                 $"{nameof(PoseStateMachine)} cannot resolve initial state '{InitialStateId}'.");
 
         CurrentState = initial;
+
+        if (AnimationTree is not null)
+        {
+            initial.Start(AnimationTree);
+        }
+
         _initialStateResolved = true;
     }
 

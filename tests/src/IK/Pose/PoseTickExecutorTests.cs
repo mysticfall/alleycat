@@ -33,14 +33,15 @@ public sealed class PoseTickExecutorTests
 
         (IPoseState old, IPoseState next)? observed = null;
 
-        IPoseState active = PoseTickExecutor.Execute(
+        PoseTickExecutor.Result result = PoseTickExecutor.Execute(
             standing,
             [transition],
             new PoseStateContext(),
             resolveState: id => id == kneeling.Id ? kneeling : null,
             onStateChanged: (previous, current) => observed = (previous, current));
 
-        Assert.Same(kneeling, active);
+        Assert.Same(kneeling, result.ActiveState);
+        Assert.Same(transition, result.SelectedTransition);
         Assert.True(observed.HasValue, "StateChanged observer must fire exactly once per switch.");
         Assert.Same(standing, observed!.Value.old);
         Assert.Same(kneeling, observed.Value.next);
@@ -77,7 +78,7 @@ public sealed class PoseTickExecutorTests
 
         bool stateChanged = false;
 
-        IPoseState active = PoseTickExecutor.Execute(
+        PoseTickExecutor.Result result = PoseTickExecutor.Execute(
             standing,
             [transition],
             new PoseStateContext(),
@@ -85,9 +86,86 @@ public sealed class PoseTickExecutorTests
                 "Resolver must not be called when no transition matches."),
             onStateChanged: (_, _) => stateChanged = true);
 
-        Assert.Same(standing, active);
+        Assert.Same(standing, result.ActiveState);
+        Assert.Null(result.SelectedTransition);
         Assert.False(stateChanged);
         Assert.Equal(new[] { "Update:Standing" }, events);
+    }
+
+    /// <summary>
+    /// After a transition fires, every non-selected transition must receive an
+    /// <see cref="IPoseTransition.OnAnotherTransitionFired"/> notification so they can reset
+    /// cross-transition gating state. The selected transition itself must not receive it.
+    /// </summary>
+    [Fact]
+    public void Execute_TransitionFires_NotifiesOtherTransitionsOfFire()
+    {
+        List<string> events = [];
+        RecordingState standing = new("Standing", events);
+        RecordingState kneeling = new("Kneeling", events);
+
+        RecordingTransition selected = new(
+            standing.Id,
+            kneeling.Id,
+            shouldTransition: true,
+            events);
+        RecordingTransition sibling = new(
+            kneeling.Id,
+            standing.Id,
+            shouldTransition: false,
+            events);
+
+        _ = PoseTickExecutor.Execute(
+            standing,
+            [selected, sibling],
+            new PoseStateContext(),
+            resolveState: id => id == kneeling.Id ? kneeling : null,
+            onStateChanged: (_, _) => { });
+
+        // The selected transition fires its enter/exit hooks, the sibling receives
+        // OnAnotherTransitionFired, and the selected transition itself is not notified.
+        Assert.Contains("AnotherTransitionFired:Kneeling->Standing", events);
+        Assert.DoesNotContain("AnotherTransitionFired:Standing->Kneeling", events);
+
+        int notificationIndex = events.IndexOf("AnotherTransitionFired:Kneeling->Standing");
+        int selectedTransitionExitIndex = events.IndexOf("TransitionExit:Standing->Kneeling");
+        int updateIndex = events.IndexOf("Update:Kneeling");
+
+        Assert.True(selectedTransitionExitIndex < notificationIndex);
+        Assert.True(notificationIndex < updateIndex);
+    }
+
+    /// <summary>
+    /// When no transition fires, no sibling transition must receive the
+    /// <see cref="IPoseTransition.OnAnotherTransitionFired"/> notification.
+    /// </summary>
+    [Fact]
+    public void Execute_NoTransitionFires_DoesNotNotifySiblings()
+    {
+        List<string> events = [];
+        RecordingState standing = new("Standing", events);
+        RecordingState kneeling = new("Kneeling", events);
+
+        RecordingTransition first = new(
+            standing.Id,
+            kneeling.Id,
+            shouldTransition: false,
+            events);
+        RecordingTransition second = new(
+            kneeling.Id,
+            standing.Id,
+            shouldTransition: false,
+            events);
+
+        _ = PoseTickExecutor.Execute(
+            standing,
+            [first, second],
+            new PoseStateContext(),
+            resolveState: _ => throw new Xunit.Sdk.XunitException("Resolver must not be called."),
+            onStateChanged: (_, _) => throw new Xunit.Sdk.XunitException("StateChanged must not fire."));
+
+        Assert.DoesNotContain("AnotherTransitionFired:Standing->Kneeling", events);
+        Assert.DoesNotContain("AnotherTransitionFired:Kneeling->Standing", events);
     }
 
     /// <summary>
@@ -107,7 +185,7 @@ public sealed class PoseTickExecutorTests
             shouldTransition: true,
             events);
 
-        IPoseState active = PoseTickExecutor.Execute(
+        PoseTickExecutor.Result result = PoseTickExecutor.Execute(
             standing,
             [mismatched],
             new PoseStateContext(),
@@ -116,8 +194,40 @@ public sealed class PoseTickExecutorTests
             onStateChanged: (_, _) => throw new Xunit.Sdk.XunitException(
                 "StateChanged must not fire when no transition applies."));
 
-        Assert.Same(standing, active);
+        Assert.Same(standing, result.ActiveState);
+        Assert.Null(result.SelectedTransition);
         Assert.Equal(new[] { "Update:Standing" }, events);
+    }
+
+    /// <summary>
+    /// Verifies executor-driven lifecycle hooks observe the same context instance supplied to the
+    /// tick, so runtime data such as the current animation tree flows through the interface
+    /// contract rather than machine-side concrete callbacks.
+    /// </summary>
+    [Fact]
+    public void Execute_TransitionFires_PassesOriginalContextThroughLifecycleHooks()
+    {
+        PoseStateContext context = new()
+        {
+            Delta = 1.0 / 60.0,
+        };
+
+        ContextCapturingState standing = new("Standing");
+        ContextCapturingState kneeling = new("Kneeling");
+        ContextCapturingTransition transition = new(standing.Id, kneeling.Id, shouldTransition: true);
+
+        _ = PoseTickExecutor.Execute(
+            standing,
+            [transition],
+            context,
+            resolveState: id => id == kneeling.Id ? kneeling : null,
+            onStateChanged: (_, _) => { });
+
+        Assert.Same(context, transition.TransitionEnterContext);
+        Assert.Same(context, standing.ExitContext);
+        Assert.Same(context, kneeling.EnterContext);
+        Assert.Same(context, transition.TransitionExitContext);
+        Assert.Same(context, kneeling.UpdateContext);
     }
 
     private sealed class RecordingState(string id, List<string> log) : IPoseState
@@ -148,5 +258,67 @@ public sealed class PoseTickExecutorTests
 
         public void OnTransitionExit(PoseStateContext context) =>
             log.Add($"TransitionExit:{from}->{to}");
+
+        public void OnAnotherTransitionFired(PoseStateContext context) =>
+            log.Add($"AnotherTransitionFired:{from}->{to}");
+    }
+
+    private sealed class ContextCapturingState(string id) : IPoseState
+    {
+        public string Id => id;
+
+        public PoseStateContext? EnterContext
+        {
+            get;
+            private set;
+        }
+
+        public PoseStateContext? ExitContext
+        {
+            get;
+            private set;
+        }
+
+        public PoseStateContext? UpdateContext
+        {
+            get;
+            private set;
+        }
+
+        public void OnEnter(PoseStateContext context) => EnterContext = context;
+
+        public void OnExit(PoseStateContext context) => ExitContext = context;
+
+        public void OnUpdate(PoseStateContext context) => UpdateContext = context;
+    }
+
+    private sealed class ContextCapturingTransition(string from, string to, bool shouldTransition)
+        : IPoseTransition
+    {
+        public string From => from;
+
+        public string To => to;
+
+        public PoseStateContext? TransitionEnterContext
+        {
+            get;
+            private set;
+        }
+
+        public PoseStateContext? TransitionExitContext
+        {
+            get;
+            private set;
+        }
+
+        public bool ShouldTransition(PoseStateContext context) => shouldTransition;
+
+        public void OnTransitionEnter(PoseStateContext context) => TransitionEnterContext = context;
+
+        public void OnTransitionExit(PoseStateContext context) => TransitionExitContext = context;
+
+        public void OnAnotherTransitionFired(PoseStateContext context)
+        {
+        }
     }
 }
