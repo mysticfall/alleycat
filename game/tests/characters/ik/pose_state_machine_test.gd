@@ -179,6 +179,19 @@ func _build_visual_scenarios() -> Array[Dictionary]:
 			],
 		},
 		{
+			"name": "Standing_MidCrouch_Forward_Clamp",
+			"steps": [
+				{"marker": "CrouchMidwayForward"},
+			],
+			"capture_gate": {
+				"state_id": "Standing",
+				"playback_node": "StandingCrouching",
+				"settle_frames": 3,
+				"extra_frames": 2,
+				"extra_seconds": 0.05,
+			},
+		},
+		{
 			"name": "Kneel_Settled_After_Armed_Retreat",
 			"steps": [
 				{"marker": "CrouchMidwayForward"},

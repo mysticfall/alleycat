@@ -13,7 +13,7 @@ namespace AlleyCat.IK.Pose;
 /// The profile computes, in skeleton-local space:
 /// </para>
 /// <list type="number">
-///   <item><description><c>hipLocalRest = skeleton.GetBoneRest(hipBoneIndex).Origin</c>.</description></item>
+///   <item><description><c>hipLocalRest = skeleton.GetBoneGlobalRest(hipBoneIndex).Origin</c>.</description></item>
 ///   <item><description>
 ///     The current and rest head target transforms in skeleton-local space from
 ///     <see cref="PoseStateContext.HeadTargetTransform"/> and
@@ -126,7 +126,16 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
     public float MinimumAlignmentWeight { get; set; } = DefaultMinimumAlignmentWeight;
 
     /// <inheritdoc />
-    public override Vector3? ComputeHipLocalPosition(PoseStateContext context)
+    public override HipReconciliationProfileResult? ComputeHipResult(PoseStateContext context)
+        => ComputeHipResult(context, rotationCompensationScale: 1.0f);
+
+    /// <summary>
+    /// Computes solve data for the supplied context while scaling this profile's authored
+    /// rotation-compensation weight.
+    /// </summary>
+    public HipReconciliationProfileResult? ComputeHipResult(
+        PoseStateContext context,
+        float rotationCompensationScale)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -136,8 +145,9 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
             return null;
         }
 
-        Vector3 hipLocalRest = skeleton.GetBoneRest(context.HipBoneIndex).Origin;
-        Basis hipRestBasisLocal = skeleton.GetBoneGlobalRest(context.HipBoneIndex).Basis.Orthonormalized();
+        Transform3D hipGlobalRest = skeleton.GetBoneGlobalRest(context.HipBoneIndex);
+        Vector3 hipLocalRest = hipGlobalRest.Origin;
+        Basis hipRestBasisLocal = hipGlobalRest.Basis.Orthonormalized();
         Vector3 hipRestUpLocal = hipRestBasisLocal * Vector3.Up;
         Vector3 hipRestForwardLocal = hipRestBasisLocal * Vector3.Forward;
         Vector3 hipRestLateralLocal = hipRestBasisLocal * Vector3.Right;
@@ -156,19 +166,92 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
                 ? displacement
                 : Vector3.Zero;
 
-        return ComputeHipLocalPosition(
+        return ComputeHipResult(
             hipLocalRest,
             hipRestUpLocal,
             hipRestForwardLocal,
             hipRestLateralLocal,
-            restHeadLocalTransform.Origin,
-            currentHeadLocalTransform.Origin,
+            restHeadLocalTransform,
+            currentHeadLocalTransform,
             headRotationDisplacementLocal,
-            RotationCompensationWeight,
+            RotationCompensationWeight * Mathf.Max(rotationCompensationScale, 0.0f),
             VerticalPositionWeight,
             LateralPositionWeight,
             ForwardPositionWeight,
             MinimumAlignmentWeight);
+    }
+
+    /// <inheritdoc />
+    public override Vector3? ComputeHipLocalPosition(PoseStateContext context)
+        => ComputeHipResult(context)?.DesiredHipLocalPosition;
+
+    /// <summary>
+    /// Pure helper that computes solve data, including the desired hip target and the information
+    /// required to limit the head target when the final hip offset is clamped.
+    /// </summary>
+    public static HipReconciliationProfileResult ComputeHipResult(
+        Vector3 hipLocalRest,
+        Vector3 hipRestUpLocal,
+        Vector3 hipRestForwardLocal,
+        Vector3 hipRestLateralLocal,
+        Transform3D restHeadLocalTransform,
+        Transform3D currentHeadLocalTransform,
+        Vector3 headRotationDisplacementLocal,
+        float rotationCompensationWeight,
+        float verticalPositionWeight,
+        float lateralPositionWeight,
+        float forwardPositionWeight,
+        float minimumAlignmentWeight)
+    {
+        Vector3 headOffsetLocal = currentHeadLocalTransform.Origin - restHeadLocalTransform.Origin;
+
+        float alignment =
+            headOffsetLocal.LengthSquared() <= VectorEpsilonSquared
+            || hipRestUpLocal.LengthSquared() <= VectorEpsilonSquared
+                ? 1.0f
+                : Mathf.Abs(headOffsetLocal.Normalized().Dot(hipRestUpLocal.Normalized()));
+
+        float clampedMinimumAlignmentWeight = Mathf.Clamp(minimumAlignmentWeight, 0.0f, 1.0f);
+        float alignmentWeight = Mathf.Lerp(clampedMinimumAlignmentWeight, 1.0f, alignment);
+
+        float verticalComponent = headOffsetLocal.Dot(hipRestUpLocal);
+        float forwardComponent = headOffsetLocal.Dot(hipRestForwardLocal);
+        float lateralComponent = headOffsetLocal.Dot(hipRestLateralLocal);
+
+        float effectiveVerticalGain = Mathf.Clamp(verticalPositionWeight, 0.0f, 1.0f) * alignmentWeight;
+        float effectiveLateralGain = Mathf.Clamp(lateralPositionWeight, 0.0f, 1.0f);
+        float effectiveForwardGain = Mathf.Clamp(forwardPositionWeight, 0.0f, 1.0f);
+
+        float verticalScaled = verticalComponent * effectiveVerticalGain;
+        float lateralScaled = lateralComponent * effectiveLateralGain;
+        float forwardScaled = forwardComponent * effectiveForwardGain;
+
+        Vector3 weightedHeadOffsetLocal = (hipRestLateralLocal * lateralScaled)
+            + (hipRestUpLocal * verticalScaled)
+            + (hipRestForwardLocal * forwardScaled);
+
+        Vector3 weightedRotationDisplacementLocal =
+            headRotationDisplacementLocal * Mathf.Max(rotationCompensationWeight, 0.0f);
+        Vector3 combinedOffsetLocal = weightedHeadOffsetLocal - weightedRotationDisplacementLocal;
+
+        return new HipReconciliationProfileResult
+        {
+            DesiredHipLocalPosition = combinedOffsetLocal.LengthSquared() <= PositionEpsilonSquared
+                ? hipLocalRest
+                : hipLocalRest + combinedOffsetLocal,
+            HeadTargetLimit = new HeadTargetLimitSolve
+            {
+                HipRestLocalPosition = hipLocalRest,
+                RestHeadLocalTransform = restHeadLocalTransform,
+                CurrentHeadLocalTransform = currentHeadLocalTransform,
+                HipRestUpLocal = hipRestUpLocal,
+                HipRestForwardLocal = hipRestForwardLocal,
+                HipRestLateralLocal = hipRestLateralLocal,
+                OriginalHeadOffsetComponents = new Vector3(lateralComponent, verticalComponent, forwardComponent),
+                EffectivePositionalGains = new Vector3(effectiveLateralGain, effectiveVerticalGain, effectiveForwardGain),
+                WeightedRotationCompensationLocal = weightedRotationDisplacementLocal,
+            },
+        };
     }
 
     /// <summary>
@@ -298,39 +381,19 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
         float lateralPositionWeight,
         float forwardPositionWeight,
         float minimumAlignmentWeight)
-    {
-        Vector3 headOffsetLocal = currentHeadLocal - restHeadLocal;
-
-        float alignment =
-            headOffsetLocal.LengthSquared() <= VectorEpsilonSquared
-            || hipRestUpLocal.LengthSquared() <= VectorEpsilonSquared
-                ? 1.0f
-                : Mathf.Abs(headOffsetLocal.Normalized().Dot(hipRestUpLocal.Normalized()));
-
-        float clampedMinimumAlignmentWeight = Mathf.Clamp(minimumAlignmentWeight, 0.0f, 1.0f);
-        float alignmentWeight = Mathf.Lerp(clampedMinimumAlignmentWeight, 1.0f, alignment);
-
-        float verticalComponent = headOffsetLocal.Dot(hipRestUpLocal);
-        float forwardComponent = headOffsetLocal.Dot(hipRestForwardLocal);
-        float lateralComponent = headOffsetLocal.Dot(hipRestLateralLocal);
-
-        float verticalScaled = verticalComponent * Mathf.Clamp(verticalPositionWeight, 0.0f, 1.0f) * alignmentWeight;
-        float lateralScaled = lateralComponent * Mathf.Clamp(lateralPositionWeight, 0.0f, 1.0f);
-        float forwardScaled = forwardComponent * Mathf.Clamp(forwardPositionWeight, 0.0f, 1.0f);
-
-        Vector3 weightedHeadOffsetLocal =
-            (hipRestLateralLocal * lateralScaled)
-            + (hipRestUpLocal * verticalScaled)
-            + (hipRestForwardLocal * forwardScaled);
-
-        Vector3 weightedRotationDisplacementLocal =
-            headRotationDisplacementLocal * Mathf.Max(rotationCompensationWeight, 0.0f);
-        Vector3 combinedOffsetLocal = weightedHeadOffsetLocal - weightedRotationDisplacementLocal;
-
-        return combinedOffsetLocal.LengthSquared() <= PositionEpsilonSquared
-            ? hipLocalRest
-            : hipLocalRest + combinedOffsetLocal;
-    }
+        => ComputeHipResult(
+            hipLocalRest,
+            hipRestUpLocal,
+            hipRestForwardLocal,
+            hipRestLateralLocal,
+            new Transform3D(Basis.Identity, restHeadLocal),
+            new Transform3D(Basis.Identity, currentHeadLocal),
+            headRotationDisplacementLocal,
+            rotationCompensationWeight,
+            verticalPositionWeight,
+            lateralPositionWeight,
+            forwardPositionWeight,
+            minimumAlignmentWeight).DesiredHipLocalPosition;
 
     /// <summary>
     /// Compatibility overload that assumes the identity rest basis and full positional weight.

@@ -168,6 +168,98 @@ public abstract partial class PoseState : Resource, IPoseState
         // No-op by default.
     }
 
+    /// <summary>
+    /// Resolves the per-tick hip-reconciliation output for this state.
+    /// </summary>
+    public virtual HipReconciliationTickResult? ResolveHipReconciliation(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        HipReconciliationProfileResult? profileResult = HipReconciliation?.ComputeHipResult(context);
+        return profileResult is null ? null : ApplyHipReconciliation(context, profileResult);
+    }
+
+    /// <summary>
+    /// Applies this state's default hip-limit behaviour to the supplied profile result.
+    /// </summary>
+    protected virtual HipReconciliationTickResult ApplyHipReconciliation(
+        PoseStateContext context,
+        HipReconciliationProfileResult profileResult)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(profileResult);
+
+        HipLimitFrame limitFrame = BuildHipLimitFrame(context);
+        Transform3D skeletonGlobalTransform = context.Skeleton?.GlobalTransform ?? Transform3D.Identity;
+
+        return ApplyHipLimitFrame(
+            profileResult,
+            limitFrame,
+            context.RestHeadHeight,
+            skeletonGlobalTransform);
+    }
+
+    /// <summary>
+    /// Resolves the per-tick hip-limit reference and envelope for this state.
+    /// </summary>
+    public virtual HipLimitFrame BuildHipLimitFrame(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return new HipLimitFrame
+        {
+            ReferenceHipLocalPosition = ResolveDefaultHipLocalReference(context),
+        };
+    }
+
+    /// <summary>
+    /// Applies the supplied limit frame to a profile result and derives any limited head target.
+    /// </summary>
+    public static HipReconciliationTickResult ApplyHipLimitFrame(
+        HipReconciliationProfileResult profileResult,
+        HipLimitFrame limitFrame,
+        float restHeadHeight,
+        Transform3D skeletonGlobalTransform)
+    {
+        ArgumentNullException.ThrowIfNull(profileResult);
+        ArgumentNullException.ThrowIfNull(limitFrame);
+
+        Vector3 desiredFinalHipOffset = profileResult.DesiredHipLocalPosition - limitFrame.ReferenceHipLocalPosition;
+        Vector3 appliedHipLocalPosition = limitFrame.AbsoluteBounds?.ClampPosition(profileResult.DesiredHipLocalPosition)
+            ?? (limitFrame.OffsetEnvelope.HasValue
+                ? limitFrame.ReferenceHipLocalPosition
+                  + limitFrame.OffsetEnvelope.Value.ClampOffset(desiredFinalHipOffset, restHeadHeight)
+                : profileResult.DesiredHipLocalPosition);
+        Vector3 appliedFinalHipOffset = appliedHipLocalPosition - limitFrame.ReferenceHipLocalPosition;
+
+        Transform3D? limitedHeadTargetTransform = appliedFinalHipOffset.IsEqualApprox(desiredFinalHipOffset)
+            ? null
+            : profileResult.HeadTargetLimit?.CreateLimitedHeadTargetTransform(
+                appliedHipLocalPosition,
+                skeletonGlobalTransform);
+
+        return new HipReconciliationTickResult
+        {
+            AppliedHipLocalPosition = appliedHipLocalPosition,
+            DesiredFinalHipOffset = desiredFinalHipOffset,
+            AppliedFinalHipOffset = appliedFinalHipOffset,
+            LimitedHeadTargetTransform = limitedHeadTargetTransform,
+        };
+    }
+
+    /// <summary>
+    /// Resolves the default hip-reference position from the hip bone rest pose when available.
+    /// </summary>
+    protected static Vector3 ResolveDefaultHipLocalReference(PoseStateContext context)
+    {
+        Skeleton3D? skeleton = context.Skeleton;
+        int hipBoneIndex = context.HipBoneIndex;
+
+        return skeleton is not null && hipBoneIndex >= 0 && hipBoneIndex < skeleton.GetBoneCount()
+            ? skeleton.GetBoneGlobalRest(hipBoneIndex).Origin
+            : Vector3.Zero;
+    }
+
     private void WarnMissingPlayback()
     {
         if (_warnedMissingPlayback)

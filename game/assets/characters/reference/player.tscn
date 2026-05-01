@@ -85,11 +85,12 @@ StateMachine = NodePath("../../../VRIK/PoseStateMachine")
 metadata/_custom_type_script = "uid://bfa76a86uhk1m"
 
 [node name="Head" parent="Female_export/GeneralSkeleton" index="26" unique_id=694402195]
-transform = Transform3D(0.99999994, 5.820766e-11, -1.1641532e-10, -1.4551915e-11, 1, 1.1920929e-07, 5.820766e-11, -8.940697e-08, 1, 4.092726e-12, 1.4670644, 0.036714755)
+transform = Transform3D(0.99999994, 5.820766e-11, -1.1641532e-10, 0, 1, 1.1920929e-07, 5.820766e-11, -8.940697e-08, 1, 4.092726e-12, 1.4670644, 0.036714755)
 
-[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "Skeleton") instance=ExtResource("7_2a5tg")]
+[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "Skeleton") instance=ExtResource("7_2a5tg")]
 Viewpoint = NodePath("../Female_export/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
+HeadIKSolveTarget = NodePath("../IKTargets/HeadSolve")
 RightHandIKTarget = NodePath("../IKTargets/RightHand")
 LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
 RightFootIKTarget = NodePath("../IKTargets/RightFoot")
@@ -99,22 +100,22 @@ Skeleton = NodePath("../Female_export/GeneralSkeleton")
 [node name="PoseStateMachine" parent="VRIK" index="0" unique_id=1387079067 node_paths=PackedStringArray("AnimationTree")]
 AnimationTree = NodePath("../../AnimationTree")
 
-[node name="RightElbow" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="1" unique_id=1389246902]
+[node name="RightElbow" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="2" unique_id=1389246902]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.34334025, 1.2379239, 0.1926991)
 
-[node name="LeftElbow" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="2" unique_id=1323926424]
+[node name="LeftElbow" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="3" unique_id=1323926424]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3432512, 1.2373346, 0.19254468)
 
-[node name="RightKnee" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="5" unique_id=1677817895]
+[node name="RightKnee" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="6" unique_id=1677817895]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.21420275, 0.3563919, -0.48655817)
 
-[node name="LeftKnee" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="6" unique_id=1717634996]
+[node name="LeftKnee" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="7" unique_id=1717634996]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21418138, 0.35640913, -0.4865856)
 
-[node name="RightFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="7" unique_id=1245707026]
+[node name="RightFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="8" unique_id=1245707026]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15998398, 0.0683572, -0.027253313)
 
-[node name="LeftFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="8" unique_id=1292107592]
+[node name="LeftFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="9" unique_id=1292107592]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.15998398, 0.0683572, -0.027253283)
 
 [node name="AnimationTree" parent="." index="3" unique_id=527893103 instance=ExtResource("8_2a5tg")]

@@ -52,6 +52,9 @@ responsibility.
 11. Standing-family reconciliation must keep strong vertical hip drop during crouch where head remains roughly above hips.
 12. Standing-family reconciliation must avoid chasing the head down when the head leads forward (stoop) or backward (lean-back);
     hips should stay upright.
+13. Players must be protected from extreme hip deformation beyond a configurable state-defined limit envelope,
+    preventing unnatural body proportions when head motion exceeds what hip reconciliation can safely compensate.
+    The limit reference is defined per-pose-state; the Standing family defines a continuum-aware envelope.
 
 ## Technical Requirements
 
@@ -70,45 +73,70 @@ responsibility.
    implementation must not assume standing head rest pose as the baseline for non-standing states.
 7. Feet positions from animation remain the source of truth for this phase; pose-state and hip reconciliation logic
    must not replace that ownership model.
-8. Hip reconciliation must be translation-centric with state-dependent behaviour contracts; clamp constraints are
-   intentionally deferred for this phase.
-9. The architecture must permit ambiguous-input handling when needed, but no mandatory catch-all ambiguity state is
-   required in this phase.
-10. This specification revision must focus on requirements and implementation contracts, not fixed numeric thresholds
-    or performance metrics.
-11. Each pose state must drive BOTH (a) animation control via the `PoseState` resource and (b) the hip
-    reconciliation profile for that state. Animation and hip behaviour are a coupled per-state responsibility.
-12. State selection must be inferred from IK-target transforms and animation/runtime signals (for example head pitch
-    and hand height from `PoseStateContext`). Explicit button input for pose switching must be avoided unless no automatic
-    signal is viable for a specific transition.
-13. State and transition `Resource` types must expose a documented public extension surface (subclassable base resources
-    and pluggable classifier/evaluator interfaces) so new states, transitions, and classifiers can be added from
-    consumer code without modifying core state-machine source.
-14. The state machine must evaluate per tick from an immutable read-only context snapshot (`PoseStateContext`) that bundles
-    IK-target inputs, skeleton signals, and runtime services. The context is the canonical input surface for classifiers,
-    transitions, states, and hip reconciliation profiles, including:
-    - `HeadTargetTransform` (current head IK-target global transform)
-    - `HeadTargetRestTransform` (head IK-target global rest transform)
-    - `LeftHandTargetTransform` (left hand IK-target global transform)
-    - `RightHandTargetTransform` (right hand IK-target global transform)
-    - `AnimationTree` (the runtime animation tree for this player, enabling transition/state logic to
-      drive animation or access debugging helpers from context)
-    - Rest-pose body measures (for example `RestHeadHeight`) for ratio-based threshold computation
-    - Tick delta
-    - Auxiliary-signals lookup for extensible computed values
+8. Hip reconciliation must be translation-centric with state-dependent behaviour contracts, including configurable
+    limits on hip offsets from the state-defined reference baseline.
+9. The architecture must support configurable limits on hip offsets via a reusable Godot resource type
+     `OffsetLimits3D` in a `Common` namespace, representing optional directional limits (Up, Down, Left, Right, Forward, Back).
+     Each directional limit is optional; a limit side that is unconfigured or unmarked is treated as unbounded (no clamp applied).
+     This allows states to specify only the relevant bounds without requiring values for irrelevant directions.
+10. The limit reference is defined per-pose-state through the `PoseState` contract. Each `PoseState` resource
+    (or equivalent state-owned contract) resolves the per-tick hip-limit reference semantics for its associated
+    hip reconciliation profile. For the Standing family, the reference and envelope are continuum-aware.
+11. Hip reconciliation must clamp the final hip offset from the state-defined reference, not just sub-contributions.
+12. Residual (desired hip offset minus applied/clamped hip offset) must be propagated into head-target limiting before IK solve,
+     with XR-origin compensation in `PlayerVRIK.OnEndStage` absorbing remaining mismatch between virtual head target and physical headset.
+13. Existing directional weights (`LateralPositionWeight`, `ForwardPositionWeight`, etc.) still participate; the architecture must
+     support cancelling those weights from the residual when deriving the head-target clamp.
+14. For `StandingPoseState`, the hip-limit reference and envelope are continuum-aware in all directions:
+     - reference may shift forward/downward as crouch depth increases
+     - for sides authored in both envelopes, the envelope may narrow as posture approaches crouching/kneeling; however, single-sided authored bounds remain anchored to their authored reference and do not synthesise the opposite side
+     - near crouching/kneeling, lower body remains mostly animation-led with only slight head-driven adjustment
+10a. Standing vertical clamping is intentionally single-sided per envelope: when in upright mode, only the upright upper bound
+      (`UprightHipOffsetLimits.Up`) applies if authored — the `UprightHipOffsetLimits.Down` side is not synthesised if unconfigured
+      and must not impose synthetic clamping. When in crouched mode, only the crouched lower bound (`CrouchedHipOffsetLimits.Down`)
+      applies if authored — the `CrouchedHipOffsetLimits.Up` side is not synthesised if unconfigured and must not impose synthetic
+      clamping. A side that is authored in only one envelope remains active across the full standing-to-crouching continuum
+      and stays anchored to that envelope's reference (upright uses the upright/rest reference, crouched uses the full-crouch reference).
+      Only sides authored in both envelopes interpolate across the continuum. Vertical clamping occurs only when exceeding the relevant
+      bound for the current continuum position.
+15. The baseline for the limited hip offset is the state-defined reference for the current pose/tick, with configured limits chosen heuristically.
+16. The architecture must permit ambiguous-input handling when needed, but no mandatory catch-all ambiguity state is
+    required in this phase.
+17. This specification revision must focus on requirements and implementation contracts, not fixed numeric thresholds
+     or performance metrics.
+18. Each pose state must drive BOTH (a) animation control via the `PoseState` resource and (b) the hip
+     reconciliation profile for that state. Animation and hip behaviour are a coupled per-state responsibility.
+19. State selection must be inferred from IK-target transforms and animation/runtime signals (for example head pitch
+     and hand height from `PoseStateContext`). Explicit button input for pose switching must be avoided unless no automatic
+     signal is viable for a specific transition.
+20. State and transition `Resource` types must expose a documented public extension surface (subclassable base resources
+     and pluggable classifier/evaluator interfaces) so new states, transitions, and classifiers can be added from
+     consumer code without modifying core state-machine source.
+21. The state machine must evaluate per tick from an immutable read-only context snapshot (`PoseStateContext`) that bundles
+     IK-target inputs, skeleton signals, and runtime services. The context is the canonical input surface for classifiers,
+     transitions, states, and hip reconciliation profiles, including:
+     - `HeadTargetTransform` (current head IK-target global transform)
+     - `HeadTargetRestTransform` (head IK-target global rest transform)
+     - `LeftHandTargetTransform` (left hand IK-target global transform)
+     - `RightHandTargetTransform` (right hand IK-target global transform)
+     - `AnimationTree` (the runtime animation tree for this player, enabling transition/state logic to
+       drive animation or access debugging helpers from context)
+     - Rest-pose body measures (for example `RestHeadHeight`) for ratio-based threshold computation
+     - Tick delta
+     - Auxiliary-signals lookup for extensible computed values
 
-    Detailed composition is defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
-15. Runtime responsibilities may be split across two cooperating nodes — a `PoseStateMachine` node that runs `Tick`
-    per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
-    the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
-    before downstream consumers read pending hip translation. This may be driven by a non-modifier runtime node, or by
-    begin-stage modifier-callback flow (for example `PlayerVRIK` begin-stage callback invoked by `StageModifier`).
-    This split is permitted as the canonical pattern but is not mandated; any equivalent topology that preserves this
-    ordering and AC-HR-07 ordering is acceptable.
-16. Animation control for pose states is now owned by `PoseState` resources, not by a separate animation-binding abstraction.
-    Each `PoseState` resource provides lifecycle callbacks (`OnEnter`, `OnUpdate`, `OnExit`) driven by the
-    state-machine runtime, plus a startup-only `Start(AnimationTree)` method that is called only once after
-    initial-state resolution to seed the initial animation state. The standing pose family uses this pattern.
+     Detailed composition is defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
+22. Runtime responsibilities may be split across two cooperating nodes — a `PoseStateMachine` node that runs `Tick`
+     per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
+     the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
+     before downstream consumers read pending hip translation. This may be driven by a non-modifier runtime node, or by
+     begin-stage modifier-callback flow (for example `PlayerVRIK` begin-stage callback invoked by `StageModifier`).
+     This split is permitted as the canonical pattern but is not mandated; any equivalent topology that preserves this
+     ordering and AC-HR-07 ordering is acceptable.
+23. Animation control for pose states is now owned by `PoseState` resources, not by a separate animation-binding abstraction.
+     Each `PoseState` resource provides lifecycle callbacks (`OnEnter`, `OnUpdate`, `OnExit`) driven by the
+     state-machine runtime, plus a startup-only `Start(AnimationTree)` method that is called only once after
+     initial-state resolution to seed the initial animation state. The standing pose family uses this pattern.
 17. Animation control for transitions is owned by `PoseTransition` resources. Each `PoseTransition` resource
     provides lifecycle hooks that may own AnimationTree travel into authored transition states when they fire.
     `PoseTransition` resources may drive AnimationTree state changes directly.
@@ -125,9 +153,9 @@ responsibility.
     value (`Vector3?`). Returning `null` means "do not override the animated hip bone". Profiles must compute the hip
     target solely from pose-state-specific heuristics plus the current head position and rig rest-pose geometry
 exposed through `PoseStateContext`, and must not read or depend on the currently animated hip bone pose, so that
-    authored state-machine transitions and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
-    the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
-20. For the Standing pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
+authored state-machine transitions and animation changes cannot feed back into hip reconciliation. Detailed contract lives in
+     the [Hip Reconciliation Contract](hip-reconciliation-contract.md).
+22. For the Standing pose family, the default profile is `HeadTrackingHipProfile`. The profile must combine
        four contributions: (a) positional head-offset contribution, (b) per-axis positional modulation, (c) alignment-based vertical damping, and (d)
        rotational-offset contribution.
 
@@ -169,39 +197,39 @@ exposed through `PoseStateContext`, and must not read or depend on the currently
      then applies opposite-direction hip compensation to mitigate unnatural neck bending. Rotational contribution magnitude
      must be configurable per profile/resource via `RotationCompensationWeight`, with non-negative clamp behaviour (`max(0, weight)`)
      and no mandatory fixed default value in this spec revision. Vertical hip movement for this family is
-     owned by the hip profile, not by the animation clip. Other pose families may diverge.
-21. Unit-level regression tests must cover both: (a) the weighted rotational-compensation contract for
-      `HeadTrackingHipProfile` (sign correctness, proportional scaling by weight, non-negative clamp behaviour,
-      epsilon-combined snap behaviour, and overload equivalence for profile evaluation entry points); and
-      (b) the per-axis positional-modulation contract (rest-up-axis derivation correctness, per-axis weight
-      application correctness, up/down full-response preservation, side-to-side partial-response verification
-      at the authored default, forward/back minimal-response verification at the authored default,
-      diagonal/interpolated response continuity, and +up/-up symmetry).
-22. The Standing pose family is backed by a single `AnimationTree` state, `StandingCrouching`, whose
+owned by the hip profile, not by the animation clip. Other pose families may diverge.
+23. Unit-level regression tests must cover both: (a) the weighted rotational-compensation contract for
+     `HeadTrackingHipProfile` (sign correctness, proportional scaling by weight, non-negative clamp behaviour,
+     epsilon-combined snap behaviour, and overload equivalence for profile evaluation entry points); and
+     (b) the per-axis positional-modulation contract (rest-up-axis derivation correctness, per-axis weight
+     application correctness, up/down full-response preservation, side-to-side partial-response verification
+     at the authored default, forward/back minimal-response verification at the authored default,
+     diagonal/interpolated response continuity, and +up/-up symmetry).
+24. The Standing pose family is backed by a single `AnimationTree` state, `StandingCrouching`, whose
      sub-graph continuously runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")` driven by a normalised scalar
      representing the full standing-to-crouching continuum. A single framework-level `StandingPoseState` resource
      maps to this `AnimationTree` state — there is no separate framework-level `CrouchingPoseState`. The `Idle` clip
      remains in the animation library as a deferred-but-supported extension point (for example, additive breathing
      layering) and is not wired into the tree for MVP.
-23. The Standing→Kneeling transition uses an armed-then-retreat trigger model measured from the full-crouch baseline:
+25. The Standing→Kneeling transition uses an armed-then-retreat trigger model measured from the full-crouch baseline:
      - The trigger input is the forward-axis offset from the pose-neutral or full-crouch baseline, not total 3D head-offset magnitude.
      - The transition becomes armed after sufficient forward travel from the full-crouch baseline.
      - The transition fires only after retreating from the armed peak by a configurable amount (configurable `ArmedRetreatThreshold` style parameter).
      - This model prevents accidental firing during normal crouching and provides intentional player control.
-24. The Standing→Kneeling transition is additionally gated by a crouch-depth threshold that must be satisfied before the
+26. The Standing→Kneeling transition is additionally gated by a crouch-depth threshold that must be satisfied before the
      transition can trigger. The gate requires the player to be at or near full crouch depth on the standing-to-crouching continuum before
      kneeling becomes reachable.
-25. The kneeling pose (KneelingEnter, Kneeling, KneelingExit) is authored as separate AnimationTree state-machine nodes
+27. The kneeling pose (KneelingEnter, Kneeling, KneelingExit) is authored as separate AnimationTree state-machine nodes
      using normal animation playback. The AnimationTree uses authored auto-advance for transition clips (for example
      `KneelingEnter → Kneeling`, `KneelingExit → StandingCrouching`) rather than per-tick TimeSeek scrubbing.
      Transition Resources may own AnimationTree travel into their authored transition states when they fire.
-26. Following any kneeling transition, both transition directions (Standing→Kneeling and Kneeling→Standing) remain locked
+28. Following any kneeling transition, both transition directions (Standing→Kneeling and Kneeling→Standing) remain locked
      until the forward-axis offset returns near the neutral or full-crouch baseline (configurable `NeutralReturnMaxOffsetRatio`
      style contract). This prevents immediate bounce-back and re-triggering.
-27. The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres.
+29. The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres.
      At minimum, the head-height measure from rest pose (`RestHeadHeight`) defines the reference for normalised crouch-depth gates.
      Tunable parameters use flexible ratios (for example 0.85 × rest-head-height) rather than fixed absolute values.
-28. The Kneeling→Standing return transition uses the same armed-then-retreat model:
+30. The Kneeling→Standing return transition uses the same armed-then-retreat model:
      - measured from the full-crouch baseline,
      - arms after sufficient forward travel from that baseline,
      - fires after retreating from the armed peak by a configurable amount.
@@ -257,7 +285,12 @@ Both linked pages are normative dependencies for implementation.
 | AC-04 | Input contracts for this phase are restricted to head and hand IK-target transforms (`HeadTargetTransform`, `LeftHandTargetTransform`, `RightHandTargetTransform`) and internal or animation-derived values, with collision/locomotion inputs explicitly deferred. | Technical |
 | AC-05 | Calibration contracts require viewpoint-node semantics and body-proportion references, and forbid standing-rest-pose assumptions for non-standing states. | Technical |
 | AC-06 | Feet positions from animation are explicitly defined as source of truth for this phase. | User + Technical |
-| AC-07 | Hip reconciliation is specified as translation-centric, state-dependent behaviour, with clamping deferred. | Technical |
+| AC-07 | Hip reconciliation is specified as translation-centric, state-dependent behaviour with configurable limits on hip offsets from the state-defined reference baseline using an `OffsetLimits3D` resource type representing optional directional limits. Each directional limit is optional; unconfigured or unmarked limits are treated as unbounded. The architecture must support applying only the relevant bounds without requiring values for irrelevant directions. | Technical |
+| AC-07e | Standing vertical clamping is intentionally single-sided per envelope: when in upright mode, only the upright upper bound (`UprightHipOffsetLimits.Up`) applies if authored — the `UprightHipOffsetLimits.Down` side is not synthesised if unconfigured and must not impose synthetic clamping. When in crouched mode, only the crouched lower bound (`CrouchedHipOffsetLimits.Down`) applies if authored — the `CrouchedHipOffsetLimits.Up` side is not synthesised if unconfigured and must not impose synthetic clamping. A side that is authored in only one envelope remains active across the full standing-to-crouching continuum and stays anchored to that envelope's reference (upright uses the upright/rest reference, crouched uses the full-crouch reference). Only sides authored in both envelopes interpolate across the continuum. Vertical clamping occurs only when exceeding the relevant bound for the current continuum position. | Technical |
+| AC-07a | Hip reconciliation profiles may use configurable `OffsetLimits3D` limits to limit (clamp) the final hip offset from the state-defined reference, not just sub-contributions. | Technical |
+| AC-07b | Residual (desired hip offset minus applied/clamped hip offset) must be propagated into head-target limiting before IK solve. | Technical |
+| AC-07c | XR-origin compensation in `PlayerVRIK.OnEndStage` must absorb the remaining mismatch between virtual head target and physical headset when hip limiting reduces head-target motion. | Technical |
+| AC-07d | Players are protected from extreme hip deformation beyond configurable state-defined limits, preventing unnatural body proportions. | User |
 | AC-08 | Transition contracts define linear clip + `TimeSeek` as the default for long continuous transitions and permit state-specific non-linear exceptions. | Technical |
 | AC-09 | The spec does not require a mandatory catch-all ambiguity state for this phase. | Technical |
 | AC-10 | Across supported MVP movement scenarios, players see coherent visible full-body pose continuity while moving between required pose states. | User |

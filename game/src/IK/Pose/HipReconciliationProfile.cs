@@ -24,6 +24,20 @@ namespace AlleyCat.IK.Pose;
 public abstract partial class HipReconciliationProfile : Resource
 {
     /// <summary>
+    /// Computes the desired hip-reconciliation solve data for the given tick context.
+    /// </summary>
+    public virtual HipReconciliationProfileResult? ComputeHipResult(PoseStateContext context)
+    {
+        Vector3? hipLocalPosition = ComputeHipLocalPosition(context);
+        return hipLocalPosition is Vector3 absoluteHipLocalPosition
+            ? new HipReconciliationProfileResult
+            {
+                DesiredHipLocalPosition = absoluteHipLocalPosition,
+            }
+            : null;
+    }
+
+    /// <summary>
     /// Computes the absolute hip bone position in skeleton-local space for the given tick
     /// context.
     /// </summary>

@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.IK.Pose;
@@ -16,6 +17,7 @@ public partial class StandingPoseState : PoseState
 {
     private const float RestHeadHeightFloor = 1e-3f;
     private const float RatioFloor = 1e-3f;
+    private const float SoftLimitBlendRangeFloor = 1e-4f;
 
     private bool _warnedMissingSeekPath;
 
@@ -51,14 +53,69 @@ public partial class StandingPoseState : PoseState
     } = 1.0f;
 
     /// <summary>
-    /// Full-crouch head-descent ratio relative to <see cref="PoseStateContext.RestHeadHeight"/>.
+    /// Standing-envelope limits used at the upright end of the continuum.
     /// </summary>
     [Export]
-    public float FullCrouchDepthRatio
+    public OffsetLimits3D? UprightHipOffsetLimits
     {
         get;
         set;
-    } = 0.375f;
+    }
+
+    /// <summary>
+    /// Crouched-envelope limits used near the kneeling end of the continuum.
+    /// </summary>
+    [Export]
+    public OffsetLimits3D? CrouchedHipOffsetLimits
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Blend-in range for limited-head behaviour, expressed as a ratio of rest head height.
+    /// Small residuals inside this range only partially apply the limited head target so the
+    /// first contact with the crouch envelope does not pop abruptly.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,0.25,0.001,or_greater")]
+    public float HeadLimitBlendRangeRatio
+    {
+        get;
+        set;
+    } = 0.02f;
+
+    /// <summary>
+    /// Scale applied to rotational hip compensation at full crouch. The standing continuum lerps
+    /// towards this value as crouch depth approaches 1.0 so lean-back head tilt does not drive an
+    /// excessive forward origin shift under the tight crouched envelope.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float FullCrouchRotationCompensationScale
+    {
+        get;
+        set;
+    } = 0.1f;
+
+    /// <summary>
+    /// Full-crouch reference hip height along skeleton-local up, expressed as a ratio of rest head
+    /// height.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float FullCrouchReferenceHipHeightRatio
+    {
+        get;
+        set;
+    } = 0.21f;
+
+    /// <summary>
+    /// Forward reference shift at full crouch, expressed as a ratio of rest head height.
+    /// </summary>
+    [Export(PropertyHint.Range, "-0.5,0.5,0.01")]
+    public float FullCrouchReferenceForwardShiftRatio
+    {
+        get;
+        set;
+    }
 
     /// <summary>
     /// Initialises the state and seeds <see cref="PoseState.Id"/> with <see cref="DefaultId"/>.
@@ -77,13 +134,13 @@ public partial class StandingPoseState : PoseState
         float restHeadY,
         float currentHeadY,
         float restHeadHeight,
-        float fullCrouchDepthRatio)
+        float fullCrouchReferenceHipHeightRatio)
     {
         float safeRestHeadHeight = restHeadHeight > RestHeadHeightFloor
             ? restHeadHeight
             : 1f;
-        float safeFullCrouchDepthRatio = fullCrouchDepthRatio > RatioFloor
-            ? fullCrouchDepthRatio
+        float safeFullCrouchDepthRatio = fullCrouchReferenceHipHeightRatio > RatioFloor
+            ? fullCrouchReferenceHipHeightRatio
             : RatioFloor;
         float safeFullCrouchDepthMetres = safeRestHeadHeight * safeFullCrouchDepthRatio;
 
@@ -100,6 +157,69 @@ public partial class StandingPoseState : PoseState
     }
 
     /// <inheritdoc />
+    public override HipLimitFrame BuildHipLimitFrame(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        Skeleton3D? skeleton = context.Skeleton;
+        Vector3 defaultReference = ResolveDefaultHipLocalReference(context);
+
+        HipLimitEnvelope? uprightEnvelope = HipLimitEnvelope.FromOffsetLimits(UprightHipOffsetLimits);
+        HipLimitEnvelope? crouchedEnvelope = HipLimitEnvelope.FromOffsetLimits(CrouchedHipOffsetLimits);
+        if (uprightEnvelope is null && crouchedEnvelope is null)
+        {
+            return new HipLimitFrame
+            {
+                ReferenceHipLocalPosition = defaultReference,
+            };
+        }
+
+        if (skeleton is null || context.HipBoneIndex < 0 || context.HipBoneIndex >= skeleton.GetBoneCount())
+        {
+            HipLimitEnvelope fallbackEnvelope = ResolveFallbackEnvelope(
+                uprightEnvelope,
+                crouchedEnvelope,
+                ComputePoseBlend(context));
+            return new HipLimitFrame
+            {
+                ReferenceHipLocalPosition = defaultReference,
+                OffsetEnvelope = fallbackEnvelope,
+            };
+        }
+
+        Transform3D hipGlobalRest = skeleton.GetBoneGlobalRest(context.HipBoneIndex);
+        Vector3 hipLocalRest = hipGlobalRest.Origin;
+        return ComputeHipLimitFrame(
+            hipLocalRest,
+            Vector3.Up,
+            Vector3.Forward,
+            context.HeadTargetRestTransform.Origin.Y,
+            context.HeadTargetTransform.Origin.Y,
+            context.RestHeadHeight,
+            FullCrouchReferenceHipHeightRatio,
+            FullCrouchReferenceForwardShiftRatio,
+            uprightEnvelope,
+            crouchedEnvelope);
+    }
+
+    /// <inheritdoc />
+    public override HipReconciliationTickResult? ResolveHipReconciliation(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (HipReconciliation is not HeadTrackingHipProfile headTrackingHipProfile)
+        {
+            return base.ResolveHipReconciliation(context);
+        }
+
+        HipReconciliationProfileResult? profileResult = headTrackingHipProfile.ComputeHipResult(
+            context,
+            ComputeRotationCompensationScale(context));
+
+        return profileResult is null ? null : ApplyHipReconciliation(context, profileResult);
+    }
+
+    /// <inheritdoc />
     protected override void ApplyAnimation(PoseStateContext context)
     {
         if (context.AnimationTree == null)
@@ -107,14 +227,310 @@ public partial class StandingPoseState : PoseState
             return;
         }
 
-        float poseBlend = ComputePoseBlend(
-            context.HeadTargetRestTransform.Origin.Y,
-            context.HeadTargetTransform.Origin.Y,
-            context.RestHeadHeight,
-            FullCrouchDepthRatio);
+        float poseBlend = ComputePoseBlend(context);
 
         WriteSeekRequest(context.AnimationTree, poseBlend);
     }
+
+    /// <inheritdoc />
+    protected override HipReconciliationTickResult ApplyHipReconciliation(
+        PoseStateContext context,
+        HipReconciliationProfileResult profileResult)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(profileResult);
+
+        HipReconciliationTickResult tickResult = base.ApplyHipReconciliation(context, profileResult);
+        if (!tickResult.LimitedHeadTargetTransform.HasValue)
+        {
+            return tickResult;
+        }
+
+        float safeRestHeadHeight = context.RestHeadHeight > RestHeadHeightFloor
+            ? context.RestHeadHeight
+            : 1f;
+        float blendRange = Mathf.Max(HeadLimitBlendRangeRatio, 0f) * safeRestHeadHeight;
+        if (blendRange <= SoftLimitBlendRangeFloor)
+        {
+            return tickResult;
+        }
+
+        float clampBlend = Mathf.Clamp(tickResult.ResidualFinalHipOffset.Length() / blendRange, 0f, 1f);
+        if (clampBlend >= 1f)
+        {
+            return tickResult;
+        }
+
+        Transform3D currentHeadTargetTransform = context.HeadTargetTransform;
+        Transform3D limitedHeadTargetTransform = tickResult.LimitedHeadTargetTransform.Value;
+
+        return tickResult with
+        {
+            LimitedHeadTargetTransform = new Transform3D(
+                currentHeadTargetTransform.Basis,
+                currentHeadTargetTransform.Origin.Lerp(limitedHeadTargetTransform.Origin, clampBlend)),
+        };
+    }
+
+    /// <summary>
+    /// Computes the standing-family hip-limit frame for the current continuum position.
+    /// </summary>
+    public static HipLimitFrame ComputeHipLimitFrame(
+        Vector3 hipLocalRest,
+        Vector3 hipRestUpLocal,
+        Vector3 hipRestForwardLocal,
+        float restHeadY,
+        float currentHeadY,
+        float restHeadHeight,
+        float fullCrouchReferenceHipHeightRatio,
+        float fullCrouchReferenceForwardShiftRatio,
+        HipLimitEnvelope? uprightEnvelope,
+        HipLimitEnvelope? crouchedEnvelope)
+    {
+        float poseBlend = ComputePoseBlend(
+            restHeadY,
+            currentHeadY,
+            restHeadHeight,
+            fullCrouchReferenceHipHeightRatio);
+
+        float safeRestHeadHeight = restHeadHeight > RestHeadHeightFloor
+            ? restHeadHeight
+            : 1f;
+        Vector3 safeHipRestUpLocal = TryNormaliseAxis(hipRestUpLocal, Vector3.Up);
+        Vector3 safeHipRestForwardLocal = TryNormaliseAxis(hipRestForwardLocal, Vector3.Forward);
+        Vector3 referenceHipLocalPosition = ComputeReferenceHipLocalPosition(
+            hipLocalRest,
+            safeHipRestUpLocal,
+            safeHipRestForwardLocal,
+            safeRestHeadHeight,
+            fullCrouchReferenceHipHeightRatio,
+            fullCrouchReferenceForwardShiftRatio,
+            poseBlend);
+
+        HipLimitEnvelope? interpolatedEnvelope = InterpolateEnvelopeSides(
+            uprightEnvelope,
+            crouchedEnvelope,
+            poseBlend);
+        HipLimitBounds? absoluteBounds = ResolveStandingAbsoluteBounds(
+            hipLocalRest,
+            safeHipRestUpLocal,
+            safeHipRestForwardLocal,
+            safeRestHeadHeight,
+            fullCrouchReferenceHipHeightRatio,
+            fullCrouchReferenceForwardShiftRatio,
+            poseBlend,
+            uprightEnvelope,
+            crouchedEnvelope,
+            referenceHipLocalPosition);
+
+        return new HipLimitFrame
+        {
+            ReferenceHipLocalPosition = referenceHipLocalPosition,
+            AbsoluteBounds = absoluteBounds,
+            OffsetEnvelope = interpolatedEnvelope,
+        };
+    }
+
+    /// <summary>
+    /// Computes the standing family's effective rotation-compensation scale for the supplied pose
+    /// blend.
+    /// </summary>
+    public static float ComputeRotationCompensationScale(
+        float poseBlend,
+        float fullCrouchRotationCompensationScale)
+        => Mathf.Lerp(
+            1f,
+            Mathf.Clamp(fullCrouchRotationCompensationScale, 0f, 1f),
+            Mathf.Clamp(poseBlend, 0f, 1f));
+
+    private static Vector3 TryNormaliseAxis(Vector3 axis, Vector3 fallback)
+        => axis.LengthSquared() > Mathf.Epsilon
+            ? axis.Normalized()
+            : fallback;
+
+    private static HipLimitEnvelope ResolveFallbackEnvelope(
+        HipLimitEnvelope? uprightEnvelope,
+        HipLimitEnvelope? crouchedEnvelope,
+        float poseBlend)
+        => InterpolateEnvelopeSides(uprightEnvelope, crouchedEnvelope, poseBlend)
+           ?? uprightEnvelope
+           ?? crouchedEnvelope
+           ?? default;
+
+    private static Vector3 ComputeReferenceHipLocalPosition(
+        Vector3 hipLocalRest,
+        Vector3 safeHipRestUpLocal,
+        Vector3 safeHipRestForwardLocal,
+        float safeRestHeadHeight,
+        float fullCrouchReferenceHipHeightRatio,
+        float fullCrouchReferenceForwardShiftRatio,
+        float poseBlend)
+    {
+        float fullCrouchReferenceHeight = safeRestHeadHeight * Mathf.Max(fullCrouchReferenceHipHeightRatio, 0f);
+        float restHipHeight = hipLocalRest.Dot(safeHipRestUpLocal);
+        float downwardShift = Mathf.Max(restHipHeight - fullCrouchReferenceHeight, 0f) * poseBlend;
+        float forwardShift = safeRestHeadHeight * Mathf.Max(fullCrouchReferenceForwardShiftRatio, 0f) * poseBlend;
+        return hipLocalRest
+            - (safeHipRestUpLocal * downwardShift)
+            + (safeHipRestForwardLocal * forwardShift);
+    }
+
+    private static HipLimitEnvelope? InterpolateEnvelopeSides(
+        HipLimitEnvelope? uprightEnvelope,
+        HipLimitEnvelope? crouchedEnvelope,
+        float poseBlend)
+        => (uprightEnvelope, crouchedEnvelope) switch
+        {
+            (null, null) => null,
+            ({ } upright, null) => upright,
+            (null, { } crouched) => crouched,
+            ({ } upright, { } crouched) => HipLimitEnvelope.Lerp(upright, crouched, poseBlend),
+        };
+
+    private static HipLimitBounds? ResolveStandingAbsoluteBounds(
+        Vector3 hipLocalRest,
+        Vector3 safeHipRestUpLocal,
+        Vector3 safeHipRestForwardLocal,
+        float safeRestHeadHeight,
+        float fullCrouchReferenceHipHeightRatio,
+        float fullCrouchReferenceForwardShiftRatio,
+        float poseBlend,
+        HipLimitEnvelope? uprightEnvelope,
+        HipLimitEnvelope? crouchedEnvelope,
+        Vector3 currentReferenceHipLocalPosition)
+    {
+        if (uprightEnvelope is null && crouchedEnvelope is null)
+        {
+            return null;
+        }
+
+        Vector3 crouchedReferenceHipLocalPosition = ComputeReferenceHipLocalPosition(
+            hipLocalRest,
+            safeHipRestUpLocal,
+            safeHipRestForwardLocal,
+            safeRestHeadHeight,
+            fullCrouchReferenceHipHeightRatio,
+            fullCrouchReferenceForwardShiftRatio,
+            poseBlend: 1f);
+
+        return new HipLimitBounds(
+            ResolveUpperBound(
+                uprightEnvelope?.Up,
+                crouchedEnvelope?.Up,
+                hipLocalRest.Y,
+                crouchedReferenceHipLocalPosition.Y,
+                currentReferenceHipLocalPosition.Y,
+                safeRestHeadHeight,
+                poseBlend),
+            ResolveLowerBound(
+                uprightEnvelope?.Down,
+                crouchedEnvelope?.Down,
+                hipLocalRest.Y,
+                crouchedReferenceHipLocalPosition.Y,
+                currentReferenceHipLocalPosition.Y,
+                safeRestHeadHeight,
+                poseBlend),
+            ResolveLowerBound(
+                uprightEnvelope?.Left,
+                crouchedEnvelope?.Left,
+                hipLocalRest.X,
+                crouchedReferenceHipLocalPosition.X,
+                currentReferenceHipLocalPosition.X,
+                safeRestHeadHeight,
+                poseBlend),
+            ResolveUpperBound(
+                uprightEnvelope?.Right,
+                crouchedEnvelope?.Right,
+                hipLocalRest.X,
+                crouchedReferenceHipLocalPosition.X,
+                currentReferenceHipLocalPosition.X,
+                safeRestHeadHeight,
+                poseBlend),
+            ResolveLowerBound(
+                uprightEnvelope?.Forward,
+                crouchedEnvelope?.Forward,
+                hipLocalRest.Z,
+                crouchedReferenceHipLocalPosition.Z,
+                currentReferenceHipLocalPosition.Z,
+                safeRestHeadHeight,
+                poseBlend),
+            ResolveUpperBound(
+                uprightEnvelope?.Back,
+                crouchedEnvelope?.Back,
+                hipLocalRest.Z,
+                crouchedReferenceHipLocalPosition.Z,
+                currentReferenceHipLocalPosition.Z,
+                safeRestHeadHeight,
+                poseBlend));
+    }
+
+    private static float? ResolveUpperBound(
+        float? uprightLimit,
+        float? crouchedLimit,
+        float uprightReference,
+        float crouchedReference,
+        float currentReference,
+        float normalisationDistance,
+        float poseBlend)
+        => ResolveBound(
+            uprightLimit,
+            crouchedLimit,
+            uprightReference,
+            crouchedReference,
+            currentReference,
+            normalisationDistance,
+            poseBlend,
+            static (reference, limit, distance) => reference + (Mathf.Max(limit, 0f) * distance));
+
+    private static float? ResolveLowerBound(
+        float? uprightLimit,
+        float? crouchedLimit,
+        float uprightReference,
+        float crouchedReference,
+        float currentReference,
+        float normalisationDistance,
+        float poseBlend)
+        => ResolveBound(
+            uprightLimit,
+            crouchedLimit,
+            uprightReference,
+            crouchedReference,
+            currentReference,
+            normalisationDistance,
+            poseBlend,
+            static (reference, limit, distance) => reference - (Mathf.Max(limit, 0f) * distance));
+
+    private static float? ResolveBound(
+        float? uprightLimit,
+        float? crouchedLimit,
+        float uprightReference,
+        float crouchedReference,
+        float currentReference,
+        float normalisationDistance,
+        float poseBlend,
+        Func<float, float, float, float> applyLimit)
+        => (uprightLimit, crouchedLimit) switch
+        {
+            (null, null) => null,
+            ({ } limit, null) => applyLimit(uprightReference, limit, normalisationDistance),
+            (null, { } limit) => applyLimit(crouchedReference, limit, normalisationDistance),
+            ({ } upright, { } crouched) => applyLimit(
+                currentReference,
+                Mathf.Lerp(upright, crouched, poseBlend),
+                normalisationDistance),
+        };
+
+    private float ComputePoseBlend(PoseStateContext context)
+        => ComputePoseBlend(
+            context.HeadTargetRestTransform.Origin.Y,
+            context.HeadTargetTransform.Origin.Y,
+            context.RestHeadHeight,
+            FullCrouchReferenceHipHeightRatio);
+
+    private float ComputeRotationCompensationScale(PoseStateContext context)
+        => ComputeRotationCompensationScale(
+            ComputePoseBlend(context),
+            FullCrouchRotationCompensationScale);
 
     private void WriteSeekRequest(AnimationTree tree, float poseBlend)
     {

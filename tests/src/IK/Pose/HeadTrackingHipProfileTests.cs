@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using AlleyCat.IK.Pose;
 using Godot;
 using Xunit;
@@ -657,6 +658,281 @@ public sealed class HeadTrackingHipProfileTests
             Mathf.Abs(crouchAndBackwardResult.Y - crouchResult.Y) <= CrouchDepthTolerance,
             $"Backward lean while crouched must not restore hip height. " +
             $"crouch.Y={crouchResult.Y:F4}, crouchAndBackward.Y={crouchAndBackwardResult.Y:F4}.");
+    }
+
+    /// <summary>
+    /// Final hip offset limits clamp against the supplied reference frame rather than the hip rest pose.
+    /// </summary>
+    [Fact]
+    public void ApplyLimitFrame_ReferenceRelativeClamp_AppliesToFinalHipOffset()
+    {
+        Vector3 referenceHipLocal = new(0.10f, 0.85f, 0.02f);
+        Vector3 desiredHipLocal = new(0.70f, 0.25f, -0.58f);
+        Vector3 desiredFinalHipOffset = desiredHipLocal - referenceHipLocal;
+        Vector3 appliedFinalHipOffset = OffsetLimits3D.ClampOffset(
+            desiredFinalHipOffset,
+            normalisationDistance: 2.0f,
+            up: 0.30f,
+            down: 0.20f,
+            left: 0.10f,
+            right: 0.25f,
+            forward: 0.15f,
+            back: 0.05f);
+
+        Vector3 expectedAppliedOffset = new(
+            0.50f,
+            -0.40f,
+            -0.30f);
+
+        AssertClose(expectedAppliedOffset, appliedFinalHipOffset);
+        AssertClose(referenceHipLocal + expectedAppliedOffset, referenceHipLocal + appliedFinalHipOffset);
+        AssertClose(desiredFinalHipOffset - expectedAppliedOffset, desiredFinalHipOffset - appliedFinalHipOffset);
+    }
+
+    /// <summary>
+    /// Applying a limit frame is independent from any animated hip pose because the animated pose is not an input.
+    /// </summary>
+    [Fact]
+    public void ApplyLimitFrame_IgnoresAnimatedHipPoseAndUsesStateReference()
+    {
+        HipReconciliationProfileResult profileResult = new()
+        {
+            DesiredHipLocalPosition = new Vector3(0.32f, 0.44f, -0.18f),
+        };
+
+        HipReconciliationTickResult result = PoseState.ApplyHipLimitFrame(
+            profileResult,
+            new HipLimitFrame
+            {
+                ReferenceHipLocalPosition = new Vector3(0.10f, 0.80f, -0.02f),
+                OffsetEnvelope = new HipLimitEnvelope(1.0f, 0.10f, 1.0f, 1.0f, 1.0f, 1.0f),
+            },
+            restHeadHeight: 1.0f,
+            skeletonGlobalTransform: Transform3D.Identity);
+
+        AssertClose(new Vector3(0.22f, -0.36f, -0.16f), result.DesiredFinalHipOffset);
+        AssertClose(new Vector3(0.22f, -0.10f, -0.16f), result.AppliedFinalHipOffset);
+        AssertClose(new Vector3(0.32f, 0.70f, -0.18f), result.AppliedHipLocalPosition);
+    }
+
+    /// <summary>
+    /// A pure crouch that remains inside the standing-family limit envelope must not synthesise a
+    /// forward/back head-limit correction or residual origin compensation.
+    /// </summary>
+    [Fact]
+    public void ApplyLimitFrame_PureCrouchWithinStandingEnvelope_DoesNotCreateArtificialForwardCompensation()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Transform3D restHeadLocalTransform = new(Basis.Identity, CreateRestHead());
+        Transform3D currentHeadLocalTransform = new(Basis.Identity, CreateRestHead() + new Vector3(0f, -0.60f, 0f));
+        HipReconciliationProfileResult profileResult = HeadTrackingHipProfile.ComputeHipResult(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHeadLocalTransform,
+            currentHeadLocalTransform,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 0.0f,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 0.5f,
+            forwardPositionWeight: 0.1f,
+            minimumAlignmentWeight: 1.0f);
+
+        HipLimitFrame limitFrame = StandingPoseState.ComputeHipLimitFrame(
+            hipLocalRest: hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            restHeadY: CreateRestHead().Y,
+            currentHeadY: currentHeadLocalTransform.Origin.Y,
+            restHeadHeight: 1.6f,
+            fullCrouchReferenceHipHeightRatio: 0.21f,
+            fullCrouchReferenceForwardShiftRatio: 0.04f,
+            uprightEnvelope: new HipLimitEnvelope(0.15f, null, 0.2f, 0.2f, 0.25f, 0.15f),
+            crouchedEnvelope: new HipLimitEnvelope(null, 0.03f, 0.06f, 0.06f, 0.08f, 0.05f));
+
+        HipReconciliationTickResult tickResult = PoseState.ApplyHipLimitFrame(
+            profileResult,
+            limitFrame,
+            restHeadHeight: 1.6f,
+            skeletonGlobalTransform: Transform3D.Identity);
+
+        AssertClose(new Vector3(0f, 0.014f, 0.064f), tickResult.DesiredFinalHipOffset);
+        AssertClose(new Vector3(0f, 0.014f, 0.064f), tickResult.AppliedFinalHipOffset);
+        AssertClose(new Vector3(0f, 0.35f, 0f), tickResult.AppliedHipLocalPosition);
+        AssertClose(Vector3.Zero, tickResult.ResidualFinalHipOffset);
+        Assert.False(tickResult.LimitedHeadTargetTransform.HasValue);
+    }
+
+    /// <summary>
+    /// Head-target limiting cancels positional gains from the clamped solve while preserving the
+    /// rotation-compensation term.
+    /// </summary>
+    [Fact]
+    public void ComputeHipResult_ClampedFinalOffset_DerivesLimitedHeadTargetFromResidual()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Transform3D restHeadLocalTransform = new(Basis.Identity, CreateRestHead());
+        Transform3D currentHeadLocalTransform = new(Basis.Identity, CreateRestHead() + new Vector3(0.20f, -0.30f, -0.40f));
+        Vector3 rotationDisplacement = new(0.03f, 0.02f, -0.01f);
+        HipReconciliationProfileResult profileResult = HeadTrackingHipProfile.ComputeHipResult(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHeadLocalTransform,
+            currentHeadLocalTransform,
+            rotationDisplacement,
+            rotationCompensationWeight: 1.0f,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 0.5f,
+            forwardPositionWeight: 0.1f,
+            minimumAlignmentWeight: 1.0f);
+
+        HipReconciliationTickResult tickResult = PoseState.ApplyHipLimitFrame(
+            profileResult,
+            new HipLimitFrame
+            {
+                ReferenceHipLocalPosition = hipRest,
+                OffsetEnvelope = new HipLimitEnvelope(1.0f, 0.10f, 1.0f, 0.04f, 0.08f, 1.0f),
+            },
+            restHeadHeight: 1.0f,
+            skeletonGlobalTransform: Transform3D.Identity);
+
+        AssertClose(new Vector3(0.04f, -0.10f, -0.03f), tickResult.AppliedFinalHipOffset);
+        AssertClose(new Vector3(0.03f, -0.22f, 0.00f), tickResult.ResidualFinalHipOffset);
+
+        Assert.True(tickResult.LimitedHeadTargetTransform.HasValue);
+        Transform3D limitedHeadTargetTransform = tickResult.LimitedHeadTargetTransform.Value;
+        Vector3 limitedHeadOffset = limitedHeadTargetTransform.Origin - restHeadLocalTransform.Origin;
+
+        AssertClose(new Vector3(0.14f, -0.08f, -0.40f), limitedHeadOffset);
+        Assert.Equal(currentHeadLocalTransform.Basis, limitedHeadTargetTransform.Basis);
+    }
+
+    /// <summary>
+    /// When the state reference is shifted away from hip rest, limited-head reconstruction must use
+    /// the absolute applied hip result rather than only the clamped offset relative to that shifted
+    /// reference.
+    /// </summary>
+    [Fact]
+    public void ApplyLimitFrame_ShiftedReference_ReconstructsLimitedHeadFromAppliedAbsoluteHipPosition()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Transform3D restHeadLocalTransform = new(Basis.Identity, CreateRestHead());
+        Transform3D currentHeadLocalTransform = new(Basis.Identity, CreateRestHead() + new Vector3(0f, -0.60f, -0.20f));
+        HipReconciliationProfileResult profileResult = HeadTrackingHipProfile.ComputeHipResult(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHeadLocalTransform,
+            currentHeadLocalTransform,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 0.0f,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 1.0f,
+            forwardPositionWeight: 1.0f,
+            minimumAlignmentWeight: 1.0f);
+
+        HipLimitFrame limitFrame = new()
+        {
+            ReferenceHipLocalPosition = new Vector3(0f, 0.336f, -0.064f),
+            OffsetEnvelope = new HipLimitEnvelope(1.0f, 1.0f, 1.0f, 1.0f, 0.05f, 1.0f),
+        };
+
+        HipReconciliationTickResult tickResult = PoseState.ApplyHipLimitFrame(
+            profileResult,
+            limitFrame,
+            restHeadHeight: 1.6f,
+            skeletonGlobalTransform: Transform3D.Identity);
+
+        AssertClose(new Vector3(0f, 0.35f, -0.144f), tickResult.AppliedHipLocalPosition);
+        AssertClose(new Vector3(0f, 0.014f, -0.136f), tickResult.DesiredFinalHipOffset);
+        AssertClose(new Vector3(0f, 0.014f, -0.08f), tickResult.AppliedFinalHipOffset);
+
+        Assert.True(tickResult.LimitedHeadTargetTransform.HasValue);
+        Transform3D limitedHeadTargetTransform = tickResult.LimitedHeadTargetTransform.Value;
+        Vector3 limitedHeadOffset = limitedHeadTargetTransform.Origin - restHeadLocalTransform.Origin;
+
+        AssertClose(new Vector3(0f, -0.60f, -0.144f), limitedHeadOffset);
+        Assert.Equal(currentHeadLocalTransform.Basis, limitedHeadTargetTransform.Basis);
+    }
+
+    /// <summary>
+    /// Near full crouch, the standing-family downward allowance remains slight so the hips do not
+    /// continue dropping far below the authored crouch reference.
+    /// </summary>
+    [Fact]
+    public void ApplyLimitFrame_FullCrouchDownwardAllowance_ClampsToTightCrouchedFloor()
+    {
+        Vector3 hipRest = CreateHipRest();
+        HipLimitFrame limitFrame = StandingPoseState.ComputeHipLimitFrame(
+            hipLocalRest: hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            restHeadY: CreateRestHead().Y,
+            currentHeadY: CreateRestHead().Y - 0.60f,
+            restHeadHeight: 1.6f,
+            fullCrouchReferenceHipHeightRatio: 0.21f,
+            fullCrouchReferenceForwardShiftRatio: 0.04f,
+            uprightEnvelope: new HipLimitEnvelope(0.15f, null, 0.2f, 0.2f, 0.25f, 0.15f),
+            crouchedEnvelope: new HipLimitEnvelope(null, 0.03f, 0.06f, 0.06f, 0.08f, 0.05f));
+
+        HipReconciliationTickResult tickResult = PoseState.ApplyHipLimitFrame(
+            new HipReconciliationProfileResult
+            {
+                DesiredHipLocalPosition = new Vector3(0f, 0.16f, 0f),
+            },
+            limitFrame,
+            restHeadHeight: 1.6f,
+            skeletonGlobalTransform: Transform3D.Identity);
+
+        AssertClose(new Vector3(0f, -0.176f, 0.064f), tickResult.DesiredFinalHipOffset);
+        AssertClose(new Vector3(0f, -0.048f, 0.064f), tickResult.AppliedFinalHipOffset);
+        AssertClose(new Vector3(0f, 0.288f, 0f), tickResult.AppliedHipLocalPosition);
+        AssertClose(new Vector3(0f, -0.128f, 0f), tickResult.ResidualFinalHipOffset);
+    }
+
+    /// <summary>
+    /// Zero-gain positional axes are not inverted during head-target limiting; the original head
+    /// motion is preserved and the mismatch is left for XR-origin compensation.
+    /// </summary>
+    [Fact]
+    public void ComputeHipResult_ZeroEffectiveGain_PreservesOriginalHeadAxisComponent()
+    {
+        Vector3 hipRest = CreateHipRest();
+        Transform3D restHeadLocalTransform = new(Basis.Identity, CreateRestHead());
+        Transform3D currentHeadLocalTransform = new(Basis.Identity, CreateRestHead() + new Vector3(0.18f, -0.25f, -0.30f));
+        HipReconciliationProfileResult profileResult = HeadTrackingHipProfile.ComputeHipResult(
+            hipRest,
+            hipRestUpLocal: Vector3.Up,
+            hipRestForwardLocal: Vector3.Forward,
+            hipRestLateralLocal: Vector3.Right,
+            restHeadLocalTransform,
+            currentHeadLocalTransform,
+            headRotationDisplacementLocal: Vector3.Zero,
+            rotationCompensationWeight: 0.0f,
+            verticalPositionWeight: 1.0f,
+            lateralPositionWeight: 0.0f,
+            forwardPositionWeight: 0.1f,
+            minimumAlignmentWeight: 1.0f);
+
+        HipReconciliationTickResult tickResult = PoseState.ApplyHipLimitFrame(
+            profileResult,
+            new HipLimitFrame
+            {
+                ReferenceHipLocalPosition = hipRest,
+                OffsetEnvelope = new HipLimitEnvelope(1.0f, 0.15f, 1.0f, 0.01f, 1.0f, 1.0f),
+            },
+            restHeadHeight: 1.0f,
+            skeletonGlobalTransform: Transform3D.Identity);
+
+        Assert.True(tickResult.LimitedHeadTargetTransform.HasValue);
+        Transform3D limitedHeadTargetTransform = tickResult.LimitedHeadTargetTransform.Value;
+        Vector3 limitedHeadOffset = limitedHeadTargetTransform.Origin - restHeadLocalTransform.Origin;
+
+        AssertClose(new Vector3(0.18f, -0.15f, -0.30f), limitedHeadOffset);
     }
 
     private static Vector3 ComputeDefaultWeightedHipPosition(Basis hipRestBasisLocal, Vector3 headOffsetLocal)

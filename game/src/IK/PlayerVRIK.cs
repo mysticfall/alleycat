@@ -1,5 +1,8 @@
+using System.Globalization;
+using System.Text;
 using AlleyCat.Common;
 using AlleyCat.IK.Pose;
+using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
 
@@ -15,6 +18,7 @@ public partial class PlayerVRIK : Node3D
 
     private Marker3D? _viewpoint;
     private CharacterBody3D? _headIKTarget;
+    private Node3D? _headIKSolveTarget;
     private CharacterBody3D? _rightHandIKTarget;
     private CharacterBody3D? _leftHandIKTarget;
     private Node3D? _rightFootIKTarget;
@@ -40,6 +44,16 @@ public partial class PlayerVRIK : Node3D
     /// </summary>
     [Export]
     public CharacterBody3D? HeadIKTarget
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Virtual head target consumed by downstream IK after hip-limit application.
+    /// </summary>
+    [Export]
+    public Node3D? HeadIKSolveTarget
     {
         get;
         set;
@@ -126,6 +140,36 @@ public partial class PlayerVRIK : Node3D
     } = true;
 
     /// <summary>
+    /// When enabled, shows per-side hip clamp residuals in the debug overlay during play tests.
+    /// </summary>
+    [Export]
+    public bool HipClampDebugOutputEnabled
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// When enabled, shows current hip and reference positions for standing-reference tuning.
+    /// </summary>
+    [Export]
+    public bool HipPositionReferenceDebugOutputEnabled
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// When enabled, shows forward/back seam instrumentation for clamp, limited-head, and XR-origin correlation.
+    /// </summary>
+    [Export]
+    public bool HipForwardBackSeamDebugOutputEnabled
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
     /// Pose state machine driven from the XR bridge. When set, <c>_Process</c> builds a
     /// <see cref="PoseStateContext"/> per tick and invokes <see cref="PoseStateMachine.Tick"/>
     /// so hip reconciliation and animation bindings observe the same snapshot as the modifier
@@ -172,11 +216,14 @@ public partial class PlayerVRIK : Node3D
     private IXRHandController? _leftHandController;
 
     private bool _isBound;
+    private bool _isDrivingDebugOverlay;
     private Transform3D _viewpointLocalTransform = Transform3D.Identity;
     private Transform3D _viewpointLocalInverseTransform = Transform3D.Identity;
     private float _worldScale = 1.0f;
+    private Vector3 _mostRecentOriginCompensationDelta = Vector3.Zero;
 
     private readonly PoseStateContextBuilder _poseContextBuilder = new();
+    private readonly StringBuilder _debugMessageBuilder = new();
 
     /// <inheritdoc />
     public override void _Ready()
@@ -283,17 +330,20 @@ public partial class PlayerVRIK : Node3D
 
     private void OnBeginStage(double delta)
     {
+        ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
+
         if (!Active || !_isBound)
         {
+            ClearHipDebugMessage();
             return;
         }
 
         IXROrigin? origin = _origin;
         PoseStateMachine? stateMachine = PoseStateMachine;
 
-        if (origin is null || _headFollower is null || _rightHandFollower is null || _leftHandFollower is null ||
-            stateMachine is null || !_isBound)
+        if (origin is null || _headFollower is null || _rightHandFollower is null || _leftHandFollower is null || !_isBound)
         {
+            ClearHipDebugMessage();
             return;
         }
 
@@ -303,9 +353,18 @@ public partial class PlayerVRIK : Node3D
         _rightHandFollower.Follow(delta);
         _leftHandFollower.Follow(delta);
 
+        ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
+
+        if (stateMachine is null || !stateMachine.Active)
+        {
+            ClearHipDebugMessage();
+            return;
+        }
+
         Skeleton3D skeleton = GetResolvedSkeleton();
         PoseStateContext context = BuildPoseStateContext(skeleton, delta);
-        stateMachine.Tick(context);
+        PoseStateMachineTickResult tickResult = stateMachine.Tick(context);
+        UpdateHipDebugMessage(context, tickResult);
     }
 
     private void OnEndStage(double delta)
@@ -317,10 +376,12 @@ public partial class PlayerVRIK : Node3D
 
         Skeleton3D skeleton = GetResolvedSkeleton();
 
-        _origin.OriginNode.GlobalTransform = ComputeCompensatedOriginTransform(
+        Transform3D compensatedOriginTransform = ComputeCompensatedOriginTransform(
             skeleton,
             _camera.CameraNode,
             _origin.OriginNode);
+
+        _origin.OriginNode.GlobalTransform = compensatedOriginTransform;
     }
 
     /// <summary>
@@ -347,6 +408,18 @@ public partial class PlayerVRIK : Node3D
         return camera is null
             ? _headIKTarget?.GlobalTransform ?? Transform3D.Identity
             : camera.CameraNode.GlobalTransform * _viewpointLocalInverseTransform;
+    }
+
+    private void ApplyHeadSolveTargetTransform(Transform3D? limitedHeadTargetTransform)
+    {
+        Node3D? headIKSolveTarget = _headIKSolveTarget;
+        CharacterBody3D? headIKTarget = _headIKTarget;
+        if (headIKSolveTarget is null || headIKTarget is null)
+        {
+            return;
+        }
+
+        headIKSolveTarget.GlobalTransform = limitedHeadTargetTransform ?? headIKTarget.GlobalTransform;
     }
 
     private Transform3D BuildRightHandTargetTransform()
@@ -383,6 +456,180 @@ public partial class PlayerVRIK : Node3D
         return true;
     }
 
+    private void UpdateHipDebugMessage(PoseStateContext context, PoseStateMachineTickResult tickResult)
+    {
+        if (!HipClampDebugOutputEnabled
+            && !HipPositionReferenceDebugOutputEnabled
+            && !HipForwardBackSeamDebugOutputEnabled)
+        {
+            ClearHipDebugMessage();
+            return;
+        }
+
+        StringBuilder messageBuilder = _debugMessageBuilder;
+        _ = messageBuilder.Clear();
+
+        if (HipClampDebugOutputEnabled)
+        {
+            AppendHipClampDebugLine(messageBuilder, tickResult.ResidualHipOffset);
+        }
+
+        if (HipPositionReferenceDebugOutputEnabled)
+        {
+            if (tickResult.HipLocalPosition is not Vector3 hipLocalPosition || tickResult.ActiveState is null)
+            {
+                AppendHipPositionReferenceUnavailableLine(messageBuilder);
+            }
+            else
+            {
+                if (messageBuilder.Length > 0)
+                {
+                    _ = messageBuilder.Append('\n');
+                }
+
+                HipLimitFrame limitFrame = tickResult.ActiveState.BuildHipLimitFrame(context);
+                AppendHipPositionReferenceDebugLine(
+                    messageBuilder,
+                    hipLocalPosition,
+                    limitFrame.ReferenceHipLocalPosition,
+                    context.RestHeadHeight);
+            }
+        }
+
+        if (HipForwardBackSeamDebugOutputEnabled)
+        {
+            AppendHipForwardBackSeamDebugLine(
+                messageBuilder,
+                context,
+                tickResult,
+                _mostRecentOriginCompensationDelta);
+        }
+
+        _isDrivingDebugOverlay = this.SetDebugMessage(messageBuilder.ToString());
+    }
+
+    private void ClearHipDebugMessage()
+    {
+        if (!_isDrivingDebugOverlay)
+        {
+            return;
+        }
+
+        this.ClearDebugMessage();
+        _isDrivingDebugOverlay = false;
+    }
+
+    private static void AppendHipClampDebugLine(StringBuilder messageBuilder, Vector3 residualHipOffset)
+    {
+        float left = Mathf.Max(-residualHipOffset.X, 0.0f);
+        float right = Mathf.Max(residualHipOffset.X, 0.0f);
+        float down = Mathf.Max(-residualHipOffset.Y, 0.0f);
+        float up = Mathf.Max(residualHipOffset.Y, 0.0f);
+        float forward = Mathf.Max(-residualHipOffset.Z, 0.0f);
+        float back = Mathf.Max(residualHipOffset.Z, 0.0f);
+
+        _ = messageBuilder.Append("Hip Clamp U:");
+        _ = messageBuilder.Append(FormatFloat(up));
+        _ = messageBuilder.Append(" D:");
+        _ = messageBuilder.Append(FormatFloat(down));
+        _ = messageBuilder.Append(" L:");
+        _ = messageBuilder.Append(FormatFloat(left));
+        _ = messageBuilder.Append(" R:");
+        _ = messageBuilder.Append(FormatFloat(right));
+        _ = messageBuilder.Append(" F:");
+        _ = messageBuilder.Append(FormatFloat(forward));
+        _ = messageBuilder.Append(" B:");
+        _ = messageBuilder.Append(FormatFloat(back));
+    }
+
+    private static void AppendHipPositionReferenceUnavailableLine(StringBuilder messageBuilder)
+    {
+        AppendDebugLineSeparator(messageBuilder);
+
+        _ = messageBuilder.Append("Hip Pos Ref: unavailable");
+    }
+
+    private static void AppendHipPositionReferenceDebugLine(
+        StringBuilder messageBuilder,
+        Vector3 hipLocalPosition,
+        Vector3 referenceHipLocalPosition,
+        float restHeadHeight)
+    {
+        Vector3 divergence = hipLocalPosition - referenceHipLocalPosition;
+
+        _ = messageBuilder.Append("Hip Pos Cur:");
+        _ = messageBuilder.Append(FormatVector3(hipLocalPosition));
+        _ = messageBuilder.Append(" Ref:");
+        _ = messageBuilder.Append(FormatVector3(referenceHipLocalPosition));
+        _ = messageBuilder.Append(" Δ:");
+        _ = messageBuilder.Append(FormatVector3(divergence));
+        _ = messageBuilder.Append(" Δn:");
+
+        if (Mathf.Abs(restHeadHeight) <= HeightEpsilon || !float.IsFinite(restHeadHeight))
+        {
+            _ = messageBuilder.Append("n/a");
+            return;
+        }
+
+        _ = messageBuilder.Append(FormatVector3(divergence / restHeadHeight));
+    }
+
+    private static void AppendHipForwardBackSeamDebugLine(
+        StringBuilder messageBuilder,
+        PoseStateContext context,
+        PoseStateMachineTickResult tickResult,
+        Vector3 originCompensationDelta)
+    {
+        AppendDebugLineSeparator(messageBuilder);
+
+        Vector3 appliedHipDelta = Vector3.Zero;
+        if (tickResult.HipLocalPosition is Vector3 hipLocalPosition && tickResult.ActiveState is not null)
+        {
+            HipLimitFrame limitFrame = tickResult.ActiveState.BuildHipLimitFrame(context);
+            appliedHipDelta = hipLocalPosition - limitFrame.ReferenceHipLocalPosition;
+        }
+
+        Vector3 desiredHipDelta = appliedHipDelta + tickResult.ResidualHipOffset;
+        Vector3 limitedHeadDelta = Vector3.Zero;
+        bool limitedHeadActive;
+        if (tickResult.LimitedHeadTargetTransform is Transform3D limitedHeadTargetTransform)
+        {
+            limitedHeadActive = true;
+            limitedHeadDelta = limitedHeadTargetTransform.Origin - context.HeadTargetTransform.Origin;
+        }
+        else
+        {
+            limitedHeadActive = false;
+        }
+
+        _ = messageBuilder.Append("Hip Seam Zapp:");
+        _ = messageBuilder.Append(FormatFloat(appliedHipDelta.Z));
+        _ = messageBuilder.Append(" Zdes:");
+        _ = messageBuilder.Append(FormatFloat(desiredHipDelta.Z));
+        _ = messageBuilder.Append(" Zres:");
+        _ = messageBuilder.Append(FormatFloat(tickResult.ResidualHipOffset.Z));
+        _ = messageBuilder.Append(" LH:");
+        _ = messageBuilder.Append(limitedHeadActive ? 'Y' : 'N');
+        _ = messageBuilder.Append(" ΔLH:");
+        _ = messageBuilder.Append(FormatVector3(limitedHeadDelta));
+        _ = messageBuilder.Append(" ΔOrg:");
+        _ = messageBuilder.Append(FormatVector3(originCompensationDelta));
+    }
+
+    private static void AppendDebugLineSeparator(StringBuilder messageBuilder)
+    {
+        if (messageBuilder.Length > 0)
+        {
+            _ = messageBuilder.Append('\n');
+        }
+    }
+
+    private static string FormatVector3(Vector3 value)
+        => $"({FormatFloat(value.X)},{FormatFloat(value.Y)},{FormatFloat(value.Z)})";
+
+    private static string FormatFloat(float value)
+        => value.ToString("F3", CultureInfo.InvariantCulture);
+
     private sealed partial class StageModifier : SkeletonModifier3D
     {
         public Action<double>? Callback
@@ -407,6 +654,7 @@ public partial class PlayerVRIK : Node3D
 
         _viewpoint = Viewpoint ?? this.RequireNode<Marker3D>("Female_export/GeneralSkeleton/Head/Viewpoint");
         _headIKTarget = HeadIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/Head");
+        _headIKSolveTarget = HeadIKSolveTarget ?? this.RequireNode<Node3D>("IKTargets/HeadSolve");
         _rightHandIKTarget = RightHandIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/RightHand");
         _leftHandIKTarget = LeftHandIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/LeftHand");
         _rightFootIKTarget = RightFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/RightFoot");

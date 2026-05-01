@@ -20,7 +20,7 @@ public sealed class HeadTrackingHipProfileIntegrationTests
     private const string RightHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestRight";
     private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
     private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
-    private const string HeadIKTargetPath = "Subject/Female/IKTargets/Head";
+    private const string HeadIKSolveTargetPath = "Subject/Female/IKTargets/HeadSolve";
     private const string SkeletonPath = "Subject/Female/Female_export/GeneralSkeleton";
     private const string AnimationTreePath = "Subject/Female/AnimationTree";
     private const float MinimumVerticalHipDropMetres = 0.15f;
@@ -34,6 +34,8 @@ public sealed class HeadTrackingHipProfileIntegrationTests
     // spring-up behaviour it regression-guards against (which would exceed 0.15 m).
     private const float MaximumCrouchDepthLossOnForwardLeanMetres = 0.08f;
     private const float MinimumCrouchThenStoopForwardHeadOffsetMetres = 0.08f;
+    private const float MaximumRepeatedVerticalCrouchForwardDriftMetres = 0.015f;
+    private const float MaximumRepeatedVerticalCrouchHipOscillationMetres = 0.02f;
 
     /// <summary>
     /// Verifies the standing-family hip profile keeps a visibly stronger downward response for a
@@ -82,11 +84,11 @@ public sealed class HeadTrackingHipProfileIntegrationTests
         Assert.Equal("Standing", leanBack.StateId);
         Assert.Equal("Standing", crouchThenStoop.StateId);
 
-        // The head bone must follow the scenario marker that drives the head IK target. The head
-        // bone sits at a fixed rigid offset from the head IK target (the Viewpoint offset inside
+        // The head bone must follow the scenario marker that drives the head solve target. The head
+        // bone sits at a fixed rigid offset from the solved head pose inside
         // the rig), so we assert that the head bone's *delta* from the standing pose matches the
         // marker's delta from the standing marker. This is the regression guard: if the runner
-        // (or the integration test) forgets to drive IKTargets/Head with the scenario transform,
+        // (or the integration test) forgets to drive IKTargets/HeadSolve with the scenario transform,
         // the head will stay anchored to its rest location and every scenario's head delta will
         // collapse to zero.
         AssertHeadFollowsMarkerDelta(standing, verticalCrouch, "VerticalCrouchStrong");
@@ -148,6 +150,55 @@ public sealed class HeadTrackingHipProfileIntegrationTests
             $"standing.z_local={standingHeadLocal.Z:F4}, crouchThenStoop.z_local={crouchThenStoopHeadLocal.Z:F4}.");
     }
 
+    /// <summary>
+    /// Verifies repeated pure vertical crouch input remains stable rather than drifting forward or oscillating.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DirectionWeightedHipProfile_RepeatedVerticalCrouch_RemainsStable()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        int hipsIndex = RequireBoneIndex(skeleton, "Hips");
+
+        var samples = new List<Vector3>();
+        for (int iteration = 0; iteration < 12; iteration++)
+        {
+            _ = TickScenario(sceneRoot, driver, "VerticalCrouchStrong");
+            await WaitForFramesAsync(sceneTree, 2);
+            _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+            samples.Add(ResolveBoneWorldPosition(skeleton, hipsIndex));
+        }
+
+        Vector3 first = samples[0];
+        float forwardDrift = 0f;
+        float verticalOscillation = 0f;
+
+        for (int i = 1; i < samples.Count; i++)
+        {
+            forwardDrift = Mathf.Max(forwardDrift, Mathf.Abs(samples[i].Z - first.Z));
+            verticalOscillation = Mathf.Max(verticalOscillation, Mathf.Abs(samples[i].Y - first.Y));
+        }
+
+        Assert.True(
+            forwardDrift <= MaximumRepeatedVerticalCrouchForwardDriftMetres,
+            $"Repeated vertical crouch should not drift forward over time. Observed drift={forwardDrift:F4} m.");
+        Assert.True(
+            verticalOscillation <= MaximumRepeatedVerticalCrouchHipOscillationMetres,
+            $"Repeated vertical crouch should remain vertically stable. Observed oscillation={verticalOscillation:F4} m.");
+    }
+
     private static void AssertHeadFollowsMarkerDelta(
         ScenarioSnapshot standing,
         ScenarioSnapshot scenario,
@@ -206,12 +257,12 @@ public sealed class HeadTrackingHipProfileIntegrationTests
         Node3D rightHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandRestMarkerPath), exactMatch: false);
         Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
         Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
-        Node3D headIKTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadIKTargetPath), exactMatch: false);
+        Node3D headIKSolveTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadIKSolveTargetPath), exactMatch: false);
 
-        // Drive the head IK target with the scenario marker transform so the neck-spine CCDIK
+        // Drive the real head solve target with the scenario marker transform so the neck-spine CCDIK
         // modifier actually moves the head bone; the PoseStateMachineMarkerDriver does not
         // manipulate IK target nodes on its own.
-        headIKTarget.GlobalTransform = scenarioNode.GlobalTransform;
+        headIKSolveTarget.GlobalTransform = scenarioNode.GlobalTransform;
 
         _ = driver.Call(
             "TickPoseTargets",

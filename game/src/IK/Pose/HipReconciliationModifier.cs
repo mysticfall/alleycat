@@ -8,9 +8,9 @@ namespace AlleyCat.IK.Pose;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The modifier is intentionally a consumer only: it reads
-/// <see cref="PoseStateMachine.PendingHipLocalPosition"/> each tick and writes the resulting
-/// pose. The state machine's <c>Tick</c> method is invoked by a higher-level driver
+/// The modifier is intentionally a consumer only: it reads the most recent hip target produced
+/// by <see cref="PoseStateMachine.Tick"/> each tick and writes the resulting pose. The state
+/// machine's <c>Tick</c> method is invoked by a higher-level driver
 /// (<c>PlayerVRIK</c>) so the context snapshot comes from the same producer that drives
 /// XR-to-IK.
 /// </para>
@@ -31,7 +31,7 @@ namespace AlleyCat.IK.Pose;
 public partial class HipReconciliationModifier : SkeletonModifier3D
 {
     /// <summary>
-    /// State machine providing <see cref="PoseStateMachine.PendingHipLocalPosition"/>.
+    /// State machine providing the latest hip target from <see cref="PoseStateMachine.Tick"/>.
     /// </summary>
     [Export]
     public PoseStateMachine? StateMachine
@@ -69,8 +69,7 @@ public partial class HipReconciliationModifier : SkeletonModifier3D
             return;
         }
 
-        Vector3? target = stateMachine.PendingHipLocalPosition;
-        if (target is null)
+        if (!stateMachine.TryGetLatestHipLocalPosition(out Vector3 target))
         {
             return;
         }
@@ -92,6 +91,6 @@ public partial class HipReconciliationModifier : SkeletonModifier3D
             _hipBoneResolved = true;
         }
 
-        skeleton.SetBonePosePosition(_hipBoneIndex, target.Value);
+        skeleton.SetBonePosePosition(_hipBoneIndex, target);
     }
 }

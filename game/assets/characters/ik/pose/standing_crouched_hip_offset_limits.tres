@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="OffsetLimits3D" format=3]
+
+[ext_resource type="Script" path="res://src/Common/OffsetLimits3D.cs" id="1_qoeeb"]
+
+[resource]
+resource_name = "StandingCrouchedHipOffsetLimits"
+script = ExtResource("1_qoeeb")
+Up = 0.05
+Down = 0.03
+Left = 0.06
+Right = 0.06
+Forward = 0.08
+Back = 0.05

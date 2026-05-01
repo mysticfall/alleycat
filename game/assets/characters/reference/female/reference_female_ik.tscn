@@ -41,7 +41,7 @@ LeftFootTarget = NodePath("../../../IKTargets/LeftFoot")
 RightFootTarget = NodePath("../../../IKTargets/RightFoot")
 
 [node name="NeckSpineIK" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1414464346) index="10" unique_id=1404822698 instance=ExtResource("3_kuxso")]
-settings/0/target_node = NodePath("../../../IKTargets/Head")
+settings/0/target_node = NodePath("../../../IKTargets/HeadSolve")
 settings/0/joints/4/rotation_axis = 3
 
 [node name="HeadCopyRotation" type="CopyTransformModifier3D" parent="Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1414464346) index="11" unique_id=1092458642]
@@ -50,7 +50,7 @@ settings/0/amount = 1.0
 settings/0/apply_bone_name = "Head"
 settings/0/apply_bone = 46
 settings/0/reference_type = 1
-settings/0/reference_node = NodePath("../../../IKTargets/Head")
+settings/0/reference_node = NodePath("../../../IKTargets/HeadSolve")
 settings/0/copy = 2
 settings/0/axes = 7
 settings/0/invert = 0
@@ -278,17 +278,21 @@ transform = Transform3D(-0.99999994, 0, -8.742277e-08, 0, 1, 0, 8.742277e-08, 0,
 top_level = true
 motion_mode = 1
 
+[node name="HeadSolve" type="Marker3D" parent="IKTargets" index="1" unique_id=366596223]
+transform = Transform3D(-0.99999994, 0, -8.742277e-08, 0, 1, 0, 8.742277e-08, 0, -0.99999994, -3.2787548e-09, 1.4763433, -0.037504584)
+top_level = true
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="IKTargets/Head" index="0" unique_id=1582370589]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02673018, 0.028144896)
 shape = SubResource("CapsuleShape3D_u7ew7")
 
-[node name="RightElbow" type="Marker3D" parent="IKTargets" index="1" unique_id=1389246902]
+[node name="RightElbow" type="Marker3D" parent="IKTargets" index="2" unique_id=1389246902]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.34265485, 1.2372674, 0.1917456)
 
-[node name="LeftElbow" type="Marker3D" parent="IKTargets" index="2" unique_id=1323926424]
+[node name="LeftElbow" type="Marker3D" parent="IKTargets" index="3" unique_id=1323926424]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.342566, 1.2366596, 0.19158667)
 
-[node name="RightHand" type="CharacterBody3D" parent="IKTargets" index="3" unique_id=1777382594]
+[node name="RightHand" type="CharacterBody3D" parent="IKTargets" index="4" unique_id=1777382594]
 transform = Transform3D(-4.3711385e-08, 0.99999994, -4.371139e-08, 0, -4.3711385e-08, -1, -0.99999994, -4.3711385e-08, 1.9106855e-15, 0.581, 1.244, 0)
 top_level = true
 motion_mode = 1
@@ -297,7 +301,7 @@ motion_mode = 1
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6567192e-14, 0.085626364, -5.3127646e-21)
 shape = SubResource("BoxShape3D_u7ew7")
 
-[node name="LeftHand" type="CharacterBody3D" parent="IKTargets" index="4" unique_id=2075201392]
+[node name="LeftHand" type="CharacterBody3D" parent="IKTargets" index="5" unique_id=2075201392]
 transform = Transform3D(-4.371139e-08, -1, 4.371139e-08, 0, -4.371139e-08, -1, 1, -4.371139e-08, 1.9106855e-15, -0.581, 1.244, 0)
 top_level = true
 motion_mode = 1
@@ -306,13 +310,13 @@ motion_mode = 1
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6567192e-14, 0.085626364, -5.3127646e-21)
 shape = SubResource("BoxShape3D_u7ew7")
 
-[node name="RightKnee" type="Marker3D" parent="IKTargets" index="5" unique_id=1677817895]
+[node name="RightKnee" type="Marker3D" parent="IKTargets" index="6" unique_id=1677817895]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.21420273, 0.35639194, -0.48655832)
 
-[node name="LeftKnee" type="Marker3D" parent="IKTargets" index="6" unique_id=1717634996]
+[node name="LeftKnee" type="Marker3D" parent="IKTargets" index="7" unique_id=1717634996]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21418135, 0.35640916, -0.48658562)
 
-[node name="RightFoot" type="CharacterBody3D" parent="IKTargets" index="7" unique_id=1245707026]
+[node name="RightFoot" type="CharacterBody3D" parent="IKTargets" index="8" unique_id=1245707026]
 transform = Transform3D(1, -1.5802857e-07, 7.787371e-10, -7.7873236e-10, 2.9802326e-08, 1, -1.5802857e-07, -1, 2.9802326e-08, 0.159984, 0.0683572, -0.027253393)
 top_level = true
 motion_mode = 1
@@ -321,7 +325,7 @@ motion_mode = 1
 transform = Transform3D(0.9999935, 0, 0, 0, 1, -1.030287e-13, 0, 3.872458e-13, 0.9999935, 0.0074920356, 0.058213953, 0)
 shape = SubResource("BoxShape3D_nn3w6")
 
-[node name="LeftFoot" type="CharacterBody3D" parent="IKTargets" index="8" unique_id=1292107592]
+[node name="LeftFoot" type="CharacterBody3D" parent="IKTargets" index="9" unique_id=1292107592]
 transform = Transform3D(1, -1.681699e-08, -7.7873186e-10, 7.7873236e-10, 2.9802326e-08, 1, -1.681699e-08, -1, 2.9802326e-08, -0.159984, 0.0683572, -0.027253363)
 top_level = true
 motion_mode = 1

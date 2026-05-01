@@ -1,13 +1,18 @@
 [gd_resource type="Resource" script_class="StandingPoseState" format=3 uid="uid://byk1qyey80254"]
 
 [ext_resource type="Resource" uid="uid://c7f40jgif80ac" path="res://assets/characters/ik/pose/head_tracking_hip_profile.tres" id="2_6oie5"]
+[ext_resource type="Resource" uid="uid://cnupuy26n4xtb" path="res://assets/characters/ik/pose/standing_hip_offset_limits.tres" id="3_p0eiy"]
 [ext_resource type="Script" uid="uid://cjovqcnp8ie1q" path="res://src/IK/Pose/StandingPoseState.cs" id="3_wysak"]
+[ext_resource type="Resource" uid="uid://ba1j128cdsh5y" path="res://assets/characters/ik/pose/standing_continuum_crouched_hip_offset_limits.tres" id="4_vlfio"]
 
 [resource]
 resource_name = "StandingPoseState"
 script = ExtResource("3_wysak")
 SeekRequestParameter = &"parameters/StandingCrouching/TimeSeek/seek_request"
 ClipDurationSeconds = 1.6666666
+UprightHipOffsetLimits = ExtResource("3_p0eiy")
+CrouchedHipOffsetLimits = ExtResource("4_vlfio")
+FullCrouchRotationCompensationScale = 0.1
 Id = &"Standing"
 HipReconciliation = ExtResource("2_6oie5")
 AnimationStateName = &"StandingCrouching"

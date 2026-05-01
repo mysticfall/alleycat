@@ -219,7 +219,7 @@ public partial class PoseStateMachineMarkerDriver : Node3D
                 rightFootTargetTransform,
                 headTargetRestTransform,
                 stepDelta);
-            _stateMachine.Tick(context);
+            _ = _stateMachine.Tick(context);
         }
     }
 

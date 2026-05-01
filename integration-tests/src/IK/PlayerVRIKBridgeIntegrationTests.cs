@@ -1,3 +1,4 @@
+using System.Reflection;
 using AlleyCat.IK;
 using AlleyCat.XR;
 using Godot;
@@ -170,6 +171,104 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies end-stage origin compensation still aligns the physical and virtual head poses
+    /// when the virtual head pose has diverged from the physical camera.
+    /// </summary>
+    [Fact]
+    public async Task ComputeCompensatedOriginTransform_WhenVirtualHeadDiffers_RealignsPhysicalHeadPose()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+
+            fixture.Origin.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(0.3f, 0.2f, -0.4f));
+            fixture.Skeleton.SetBonePosePosition(fixture.HeadBoneIndex, new Vector3(0.05f, -0.35f, 0.08f));
+
+            Transform3D compensatedOrigin = fixture.PlayerVRIK.ComputeCompensatedOriginTransform(
+                fixture.Skeleton,
+                fixture.Camera.CameraNode,
+                fixture.Origin);
+
+            Transform3D physicalHeadPose = fixture.Camera.CameraNode.GlobalTransform * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+            Transform3D localPose = fixture.Origin.GlobalTransform.Inverse() * physicalHeadPose;
+            Transform3D virtualHeadPose = fixture.Skeleton.GlobalTransform * fixture.Skeleton.GetBoneGlobalPose(fixture.HeadBoneIndex);
+            Transform3D recomposedHeadPose = compensatedOrigin * localPose;
+
+            AssertTransformApproximately(virtualHeadPose, recomposedHeadPose);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies inactive begin-stage processing clears any stale limited head solve target.
+    /// </summary>
+    [Fact]
+    public async Task PlayerVRIKBeginStage_WhenInactive_ResetsHeadSolveTargetToHeadTarget()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+
+            fixture.HeadIKTarget.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(0.4f, 1.2f, -0.3f));
+            fixture.HeadIKSolveTarget.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(-1.5f, 0.1f, 2.2f));
+            fixture.PlayerVRIK.Active = false;
+
+            InvokeOnBeginStage(fixture.PlayerVRIK, 1.0d / 60.0d);
+
+            AssertTransformApproximately(fixture.HeadIKTarget.GlobalTransform, fixture.HeadIKSolveTarget.GlobalTransform);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies unbound begin-stage processing also clears any stale limited head solve target.
+    /// </summary>
+    [Fact]
+    public async Task PlayerVRIKBeginStage_WhenUnbound_ResetsHeadSolveTargetToHeadTarget()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            fixture.HeadIKTarget.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(-0.6f, 1.4f, 0.25f));
+            fixture.HeadIKSolveTarget.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(2.0f, -0.3f, 1.1f));
+
+            InvokeOnBeginStage(fixture.PlayerVRIK, 1.0d / 60.0d);
+
+            AssertTransformApproximately(fixture.HeadIKTarget.GlobalTransform, fixture.HeadIKSolveTarget.GlobalTransform);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
     private static async Task<VrikFixture> CreateVrikFixtureAsync(SceneTree sceneTree, float xrCameraHeight, float initialWorldScale)
     {
         Node3D root = new()
@@ -224,6 +323,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         };
         ikTargets.AddChild(headIKTarget);
 
+        Node3D headIKSolveTarget = new()
+        {
+            Name = "HeadSolve",
+        };
+        ikTargets.AddChild(headIKSolveTarget);
+
         CharacterBody3D rightHandIKTarget = new()
         {
             Name = "RightHand",
@@ -241,6 +346,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Name = "VRIK",
             Viewpoint = viewpoint,
             HeadIKTarget = headIKTarget,
+            HeadIKSolveTarget = headIKSolveTarget,
             RightHandIKTarget = rightHandIKTarget,
             LeftHandIKTarget = leftHandIKTarget,
             Skeleton = skeleton,
@@ -295,16 +401,32 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             root,
             playerVRIK,
             skeleton,
+            headBoneIndex,
+            headIKTarget,
+            headIKSolveTarget,
             origin,
             camera,
             rightHandController,
             leftHandController);
     }
 
+    private static void InvokeOnBeginStage(PlayerVRIK playerVRIK, double delta)
+    {
+        MethodInfo method = typeof(PlayerVRIK).GetMethod(
+                                "OnBeginStage",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException("PlayerVRIK.OnBeginStage was not found.");
+
+        _ = method.Invoke(playerVRIK, [delta]);
+    }
+
     private sealed class VrikFixture(
         Node3D root,
         PlayerVRIK playerVRIK,
         Skeleton3D skeleton,
+        int headBoneIndex,
+        CharacterBody3D headIKTarget,
+        Node3D headIKSolveTarget,
         TestXROrigin origin,
         TestXRCamera camera,
         TestXRHandController rightHandController,
@@ -315,6 +437,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         public PlayerVRIK PlayerVRIK { get; } = playerVRIK;
 
         public Skeleton3D Skeleton { get; } = skeleton;
+
+        public int HeadBoneIndex { get; } = headBoneIndex;
+
+        public CharacterBody3D HeadIKTarget { get; } = headIKTarget;
+
+        public Node3D HeadIKSolveTarget { get; } = headIKSolveTarget;
 
         public TestXROrigin Origin { get; } = origin;
 
@@ -332,6 +460,26 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
                 await WaitForNextFrameAsync(sceneTree);
             }
         }
+    }
+
+    private static void AssertTransformApproximately(Transform3D expected, Transform3D actual, float epsilon = 1e-4f)
+    {
+        AssertVectorApproximately(expected.Origin, actual.Origin, epsilon);
+        AssertBasisApproximately(expected.Basis, actual.Basis, epsilon);
+    }
+
+    private static void AssertBasisApproximately(Basis expected, Basis actual, float epsilon)
+    {
+        AssertVectorApproximately(expected.X, actual.X, epsilon);
+        AssertVectorApproximately(expected.Y, actual.Y, epsilon);
+        AssertVectorApproximately(expected.Z, actual.Z, epsilon);
+    }
+
+    private static void AssertVectorApproximately(Vector3 expected, Vector3 actual, float epsilon)
+    {
+        Assert.InRange(actual.X, expected.X - epsilon, expected.X + epsilon);
+        Assert.InRange(actual.Y, expected.Y - epsilon, expected.Y + epsilon);
+        Assert.InRange(actual.Z, expected.Z - epsilon, expected.Z + epsilon);
     }
 
     private sealed partial class TestXRManager : XRManager

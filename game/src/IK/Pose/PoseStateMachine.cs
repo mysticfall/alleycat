@@ -13,17 +13,16 @@ namespace AlleyCat.IK.Pose;
 /// snapshot for each call.
 /// </para>
 /// <para>
-/// The most recent absolute hip target produced by the active state's reconciliation profile
-/// is published via <see cref="PendingHipLocalPosition"/> and consumed by
-/// <see cref="HipReconciliationModifier"/> inside the skeleton modifier pipeline. The state
-/// machine itself does not mutate bone poses directly. A <see langword="null"/> value means
-/// "no hip override for this tick", so the modifier leaves the animated hip pose untouched.
+/// The active state's reconciliation output is returned from <see cref="Tick"/> and cached
+/// internally for consumers such as <see cref="HipReconciliationModifier"/> that run later in
+/// the same frame. The state machine itself does not mutate bone poses directly.
 /// </para>
 /// </remarks>
 [GlobalClass]
 public partial class PoseStateMachine : Node
 {
     private readonly List<IPoseTransition> _transitionView = [];
+    private PoseStateMachineTickResult _lastTickResult;
     private bool _initialStateResolved;
 
     /// <summary>
@@ -97,17 +96,6 @@ public partial class PoseStateMachine : Node
     }
 
     /// <summary>
-    /// Absolute hip bone target position in skeleton-local space published by the most recent
-    /// <see cref="Tick"/> call, or <see langword="null"/> when the active profile opts out of
-    /// overriding the animated hip for this tick.
-    /// </summary>
-    public Vector3? PendingHipLocalPosition
-    {
-        get;
-        private set;
-    }
-
-    /// <summary>
     /// Raised after the state machine switches from one active state to another.
     /// </summary>
     public event Action<PoseState, PoseState>? StateChanged;
@@ -123,13 +111,13 @@ public partial class PoseStateMachine : Node
     /// <exception cref="InvalidOperationException">
     /// When the state machine has no states, no initial state, or the initial state cannot be resolved.
     /// </exception>
-    public void Tick(PoseStateContext context)
+    public PoseStateMachineTickResult Tick(PoseStateContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         if (!Active)
         {
-            return;
+            return _lastTickResult;
         }
 
         EnsureInitialStateResolved();
@@ -150,8 +138,28 @@ public partial class PoseStateMachine : Node
         var activePoseState = (PoseState)tickResult.ActiveState;
         CurrentState = activePoseState;
 
-        HipReconciliationProfile? profile = activePoseState.HipReconciliation;
-        PendingHipLocalPosition = profile?.ComputeHipLocalPosition(context);
+        HipReconciliationTickResult? hipTickResult = activePoseState.ResolveHipReconciliation(context);
+        _lastTickResult = hipTickResult is null
+            ? new PoseStateMachineTickResult(activePoseState, null, null, Vector3.Zero)
+            : new PoseStateMachineTickResult(
+                activePoseState,
+                hipTickResult.AppliedHipLocalPosition,
+                hipTickResult.LimitedHeadTargetTransform,
+                hipTickResult.ResidualFinalHipOffset);
+
+        return _lastTickResult;
+    }
+
+    internal bool TryGetLatestHipLocalPosition(out Vector3 hipLocalPosition)
+    {
+        if (_lastTickResult.HipLocalPosition is Vector3 target)
+        {
+            hipLocalPosition = target;
+            return true;
+        }
+
+        hipLocalPosition = Vector3.Zero;
+        return false;
     }
 
     private IPoseState? ResolveStateByIdForExecutor(string id) => ResolveStateByName(id);
@@ -240,3 +248,12 @@ public partial class PoseStateMachine : Node
         }
     }
 }
+
+/// <summary>
+/// Per-tick pose-state-machine output returned to immediate callers and cached for downstream consumers.
+/// </summary>
+public readonly record struct PoseStateMachineTickResult(
+    PoseState? ActiveState,
+    Vector3? HipLocalPosition,
+    Transform3D? LimitedHeadTargetTransform,
+    Vector3 ResidualHipOffset);
