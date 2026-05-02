@@ -27,8 +27,6 @@ public enum LegSide
 public partial class LegIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-6f;
-    private static readonly Vector3 _skeletonSpaceForwardAxis = new(0.0f, 0.0f, 1.0f);
-    private static readonly Vector3 _skeletonSpaceUpAxis = new(0.0f, 1.0f, 0.0f);
 
     /// <summary>
     /// The foot IK goal consumed by downstream solvers.
@@ -90,28 +88,13 @@ public partial class LegIKController : SkeletonModifier3D
         set;
     } = 0.1f;
 
-    /// <summary>
-    /// Small side-outward bias to keep neutral knee planes from crossing inward.
-    /// </summary>
-    [Export(PropertyHint.Range, "0,1.0,0.01")]
-    public float SideBiasWeight
-    {
-        get;
-        set;
-    } = 0.2f;
-
     private Skeleton3D? _skeleton;
     private bool _bonesResolved;
-    private bool _footAxesResolved;
 
-    private int _hipsIdx = -1;
     private int _upperLegIdx = -1;
     private int _lowerLegIdx = -1;
     private int _footIdx = -1;
     private float _restLegLength;
-
-    private Vector3 _footForwardLocalAxis = Vector3.Forward;
-    private Vector3 _footUpLocalAxis = Vector3.Up;
 
     /// <inheritdoc />
     public override void _ProcessModificationWithDelta(double delta)
@@ -145,36 +128,9 @@ public partial class LegIKController : SkeletonModifier3D
         Vector3 o2 = (upperLegPosition + currentFootPosition) * 0.5f;
 
         Vector3 animationPoleDirectionRaw = lowerLegPosition - o2;
-        bool hasAnimationPoleDirection = TryNormalise(animationPoleDirectionRaw, out Vector3 poleDirection);
-        if (!hasAnimationPoleDirection)
+        if (!TryNormalise(animationPoleDirectionRaw, out Vector3 poleDirection))
         {
-            if (!_footAxesResolved && !TryCacheFootTargetLocalAxes())
-            {
-                return;
-            }
-
-            Vector3 legDirection = o1 - upperLegPosition;
-            if (!TryNormalise(legDirection, out legDirection))
-            {
-                return;
-            }
-
-            Basis footBasis = FootTarget.GlobalTransform.Basis.Orthonormalized();
-            Vector3 footForwardAxis = footBasis * _footForwardLocalAxis;
-            Vector3 footUpAxis = footBasis * _footUpLocalAxis;
-
-            Vector3 sideOutwardAxis = ComputeSideOutwardAxis(upperLegPosition, legDirection);
-            poleDirection = ComputePoleDirection(
-                legDirection,
-                footForwardAxis,
-                footUpAxis,
-                sideOutwardAxis,
-                SideBiasWeight);
-
-            if (poleDirection.LengthSquared() <= DegenerateThreshold)
-            {
-                return;
-            }
+            return;
         }
 
         float currentLegLength = (o1 - upperLegPosition).Length() * 2.0f;
@@ -200,13 +156,11 @@ public partial class LegIKController : SkeletonModifier3D
 
         string sidePrefix = Side == LegSide.Left ? "Left" : "Right";
 
-        _hipsIdx = skeleton.FindBone("Hips");
         _upperLegIdx = skeleton.FindBone($"{sidePrefix}UpperLeg");
         _lowerLegIdx = skeleton.FindBone($"{sidePrefix}LowerLeg");
         _footIdx = skeleton.FindBone($"{sidePrefix}Foot");
 
-        if (_hipsIdx < 0
-            || _upperLegIdx < 0
+        if (_upperLegIdx < 0
             || _lowerLegIdx < 0
             || _footIdx < 0)
         {
@@ -224,153 +178,8 @@ public partial class LegIKController : SkeletonModifier3D
         return _restLegLength > DegenerateThreshold;
     }
 
-    private Vector3 ComputeSideOutwardAxis(Vector3 upperLegPosition, Vector3 legDirection)
-    {
-        if (_skeleton is null)
-        {
-            return Side == LegSide.Left ? Vector3.Left : Vector3.Right;
-        }
-
-        Vector3 hipsPosition = BoneGlobalPosition(_hipsIdx);
-        Vector3 hipsToLeg = upperLegPosition - hipsPosition;
-        Vector3 projected = hipsToLeg - (hipsToLeg.Dot(legDirection) * legDirection);
-
-        return projected.LengthSquared() > DegenerateThreshold
-            ? projected.Normalized()
-            : Side == LegSide.Left
-            ? -_skeleton.GlobalTransform.Basis.Column0.Normalized()
-            : _skeleton.GlobalTransform.Basis.Column0.Normalized();
-    }
-
     private Vector3 BoneGlobalPosition(int boneIndex) =>
         _skeleton!.GlobalTransform * _skeleton.GetBoneGlobalPose(boneIndex).Origin;
-
-    private bool TryCacheFootTargetLocalAxes()
-    {
-        Transform3D footRestPose = _skeleton!.GetBoneGlobalRest(_footIdx);
-        Basis footRestBasis = footRestPose.Basis.Orthonormalized();
-        Basis inverseFootRest = footRestBasis.Inverse();
-
-        Vector3 footForwardLocal = inverseFootRest * _skeletonSpaceForwardAxis;
-        Vector3 footUpLocal = inverseFootRest * _skeletonSpaceUpAxis;
-
-        if (!TryNormalise(footForwardLocal, out footForwardLocal)
-            || !TryNormalise(footUpLocal, out footUpLocal))
-        {
-            return false;
-        }
-
-        footUpLocal = Reject(footUpLocal, footForwardLocal);
-        if (!TryNormalise(footUpLocal, out footUpLocal))
-        {
-            return false;
-        }
-
-        _footForwardLocalAxis = footForwardLocal;
-        _footUpLocalAxis = footUpLocal;
-        _footAxesResolved = true;
-
-        return true;
-    }
-
-    private static AxisBlendWeights ComputeAxisBlendWeights(
-        Vector3 legDirection,
-        Vector3 footForwardAxis,
-        Vector3 footUpAxis)
-    {
-        if (!TryNormalise(legDirection, out Vector3 legDir)
-            || !TryNormalise(footForwardAxis, out Vector3 footForward)
-            || !TryNormalise(footUpAxis, out _))
-        {
-            return new AxisBlendWeights(0.5f, 0.5f);
-        }
-
-        float forwardAlignment = Mathf.Abs(footForward.Dot(legDir));
-        float footUpWeight = Mathf.SmoothStep(0.0f, 1.0f, Mathf.Clamp(forwardAlignment, 0.0f, 1.0f));
-        float footForwardWeight = 1.0f - footUpWeight;
-
-        return new AxisBlendWeights(footForwardWeight, footUpWeight);
-    }
-
-    private static Vector3 ComputePoleDirection(
-        Vector3 legDirection,
-        Vector3 footForwardAxis,
-        Vector3 footUpAxis,
-        Vector3 sideOutwardAxis,
-        float sideBiasWeight)
-    {
-        if (!TryNormalise(legDirection, out Vector3 legDir)
-            || !TryNormalise(footForwardAxis, out Vector3 footForward)
-            || !TryNormalise(footUpAxis, out Vector3 footUp))
-        {
-            return Vector3.Zero;
-        }
-
-        Vector3 projectedForwardRaw = Reject(footForward, legDir);
-        Vector3 projectedUpRaw = Reject(footUp, legDir);
-
-        bool hasProjectedForward = TryNormalise(projectedForwardRaw, out Vector3 projectedForward);
-        bool hasProjectedUp = TryNormalise(projectedUpRaw, out Vector3 projectedUp);
-
-        if (!hasProjectedForward && !hasProjectedUp)
-        {
-            projectedForwardRaw = Reject(sideOutwardAxis, legDir);
-            return TryNormalise(projectedForwardRaw, out Vector3 sideFallback)
-                ? sideFallback
-                : Vector3.Zero;
-        }
-
-        AxisBlendWeights weights = ComputeAxisBlendWeights(legDir, footForward, footUp);
-
-        float projectedForwardStrength = hasProjectedForward ? projectedForwardRaw.Length() : 0.0f;
-        float projectedUpStrength = hasProjectedUp ? projectedUpRaw.Length() : 0.0f;
-
-        float forwardWeight = weights.FootForwardWeight * projectedForwardStrength;
-        float upWeight = weights.FootUpWeight * projectedUpStrength;
-        float combinedWeight = forwardWeight + upWeight;
-
-        Vector3 blendedProjected = combinedWeight > DegenerateThreshold
-            ? ((projectedForward * forwardWeight) + (projectedUp * upWeight)) / combinedWeight
-            : hasProjectedForward
-                ? projectedForward
-                : projectedUp;
-
-        if (!TryNormalise(blendedProjected, out Vector3 poleDirection))
-        {
-            Vector3 preferredAxis = weights.FootForwardWeight >= weights.FootUpWeight
-                ? (hasProjectedForward ? projectedForward : projectedUp)
-                : (hasProjectedUp ? projectedUp : projectedForward);
-            Vector3 secondaryAxis = weights.FootForwardWeight >= weights.FootUpWeight
-                ? (hasProjectedUp ? projectedUp : projectedForward)
-                : (hasProjectedForward ? projectedForward : projectedUp);
-
-            if (!TryNormalise(preferredAxis, out poleDirection))
-            {
-                if (!TryNormalise(secondaryAxis, out poleDirection))
-                {
-                    Vector3 sideFallback = Reject(sideOutwardAxis, legDir);
-                    if (!TryNormalise(sideFallback, out poleDirection))
-                    {
-                        return Vector3.Zero;
-                    }
-                }
-            }
-        }
-
-        if (TryNormalise(Reject(sideOutwardAxis, legDir), out Vector3 sideAxis) && sideBiasWeight > 0.0f)
-        {
-            Vector3 biased = poleDirection + (sideAxis * sideBiasWeight);
-            if (TryNormalise(biased, out Vector3 biasedDirection))
-            {
-                poleDirection = biasedDirection;
-            }
-        }
-
-        return poleDirection;
-    }
-
-    private static Vector3 Reject(Vector3 vector, Vector3 normal) =>
-        vector - (vector.Dot(normal) * normal);
 
     private static bool TryNormalise(Vector3 value, out Vector3 normalised)
     {
@@ -383,6 +192,4 @@ public partial class LegIKController : SkeletonModifier3D
         normalised = value.Normalized();
         return true;
     }
-
-    private readonly record struct AxisBlendWeights(float FootForwardWeight, float FootUpWeight);
 }

@@ -6,22 +6,35 @@ title: Leg-Feet IK Contract
 
 ## Purpose
 
-Define the solver and controller contract for IK-003: per-leg `TwoBoneIK3D` solving with knee pole-target prediction
-derived from current animation geometry (primary method) with foot orientation-based fallback for degenerate cases.
+Define the user-observable and technical contract for IK-003: per-leg `TwoBoneIK3D` solving with knee pole-target prediction derived from current animation geometry.
 
-## Contract Scope
+## User Requirements
+
+The pole direction is derived from the animated leg geometry each frame. Foot target position is used as the desired goal reference point; foot target rotation, orientation, and basis are not used for knee pole calculation. When the animated pose produces a degenerate pole vector that cannot be normalised, `LegIKController` does not update the pole target for that frame — the previous pole target state persists.
+
+Key user-observable behaviours:
+
+1. **Animated-geometry pole direction**: Knee pole points in the direction suggested by the current animation, producing natural bending behaviour.
+2. **Degenerate-pose stability**: When the animated leg geometry collapses or inverts (for example during rapid transitions), the pole target is not updated — no discontinuities or popping.
+3. **Foot target read-only**: Foot target transforms are consumed as goals and are never mutated by runtime IK logic.
+4. **Solve-to-target**: Each leg solve moves the character towards the foot target position and orientation as provided.
+
+## Technical Requirements
+
+### Contract Scope
 
 - One `TwoBoneIK3D` chain per leg (left and right), solving upper leg to foot.
 - A per-leg controller (`LegIKController`) that updates pole-target position before IK solve.
-- **Primary geometric method**: Knee pole direction derived from current animation geometry:
+- **Pole direction contract**: Knee pole direction derived from current animation geometry:
   - `o1` = midpoint(upper leg origin, foot IK target position)
   - `o2` = midpoint(upper leg origin, current foot bone position) (line origin for pole-target placement)
-  - Primary pole direction = normalise(lower leg origin - o2)
-- **Fallback method**: Foot orientation-based pole direction when animation-derived direction is degenerate.
+  - Pole direction = normalise(lower leg origin - `o2`)
+- Foot target rotation, orientation, and basis are not used in the pole-direction computation.
+- Degenerate-vector handling: when `lower leg origin - o2` is degenerate (zero or near-zero magnitude after normalisation attempts), `LegIKController` does not write the pole target for that frame.
 - Unconditional knee pole minimum-offset safeguarding derived from rest leg length.
 - Read-only foot target contract: runtime logic consumes target transforms as goals and never mutates them.
 
-## Mechanism
+### Mechanism
 
 Each leg uses a Godot `TwoBoneIK3D` node configured for upper-leg → lower-leg → foot.
 
@@ -49,8 +62,9 @@ Sync ordering (per tick):
 
 This ordering guarantees deterministic solve behaviour when animation timing or `TimeSeek` position changes.
 
-`LegIKController` computes a pole-target direction using the primary geometric method each frame, with fallback to foot orientation
-when the animation-derived direction is degenerate, then writes the resulting pole-target transform for downstream IK solve.
+`LegIKController` computes a pole-target direction from current animation geometry each frame and writes the resulting
+pole-target transform for downstream IK solve. Foot target position is used as the desired goal reference point; foot target
+rotation, orientation, and basis are not used in the pole-direction computation.
 
 The solver/controller pipeline must solve towards provided foot targets as inputs. Foot target transforms are read-only
 for IK-003 runtime logic and must not be modified by `LegIKController` or companion solver wiring.
@@ -63,9 +77,9 @@ for IK-003 runtime logic and must not be modified by `LegIKController` or compan
 
 ## Knee Pole Prediction
 
-The knee pole prediction uses a primary geometric method with fallback to foot orientation for degenerate cases.
+The knee pole direction is derived from current animation geometry. Foot target position is used as the desired goal reference point; foot target rotation, orientation, and basis are not used for knee pole calculation.
 
-### Primary Geometric Method
+### Pole Direction Computation
 
 The controller computes the knee pole direction from current animation geometry:
 
@@ -73,41 +87,17 @@ The controller computes the knee pole direction from current animation geometry:
    - `o1` = midpoint(upper leg origin position, foot IK target position)
    - `o2` = midpoint(upper leg origin position, current foot bone position)
 
-2. **Compute primary pole direction**:
+2. **Compute pole direction**:
    - Vector from `o2` to lower leg origin = lower leg origin - `o2`
-   - Primary pole direction = normalise(lower leg origin - `o2`)
+   - Pole direction = normalise(lower leg origin - `o2`)
 
 3. **Line origin for pole-target placement**:
-   - The pole-target line passes through `o2` along the primary pole direction.
+   - The pole-target line passes through `o2` along the pole direction.
    - Offset distance logic remains unchanged (ratio/minimum/floor as defined in Technical Requirements).
-
-### Fallback Trigger And Method
-
-When the animation-derived direction is degenerate, the system must fall back to foot orientation-based pole direction:
-
-1. **Fallback trigger**: The direction from `o2` to lower leg origin is degenerate when:
-   - Magnitude is too short (below implementation-defined threshold), OR
-   - Direction is near-zero (near-zero magnitude after normalisation attempts)
-
-2. **Fallback method**: Use foot IK target orientation to derive pole direction:
-   - Uses the existing foot forward/up axis interpolation contract.
-   - Foot forward axis and foot up axis are extracted from foot IK target rotation.
-   - The forward/up interpolation weighting uses the dot product between foot forward and leg direction.
-
-3. **Fallback pole direction**: Same interpolation formula as the original contract, applied to foot IK target orientation.
-
-### Primary-to-Fallback Transition
-
-The transition between primary and fallback methods must be:
-
-1. **Deterministic**: Given identical skeleton pose, the same method is always selected.
-2. **Smooth**: No discontinuous jumps when switching from primary to fallback.
-3. **Deterministic threshold**: Fallback trigger threshold is an implementation-defined internal constant (not exposed as a tunable parameter).
 
 ### Offset Distance Logic
 
 The offset distance computation remains unchanged from the original contract:
-
 - Uses ratio-based offset (for example 0.5 * leg length)
 - Enforces minimum floor unconditionally: `max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)`
 - Line origin for placement uses `o2` (not `o1`)
@@ -115,12 +105,11 @@ The offset distance computation remains unchanged from the original contract:
 ### Side Consistency Requirement
 
 The resulting pole direction must preserve left/right side consistency so knees do not cross inward unexpectedly during
-neutral standing poses, regardless of whether primary or fallback method is used.
+neutral standing poses.
 
 ### Determinism Requirement
 
-Given identical skeleton pose and foot target transforms, knee pole output must be deterministic, including the
-determination of whether primary or fallback method is active.
+Given identical skeleton pose and foot target transforms, knee pole output must be deterministic.
 
 ### Unconditional Knee-Pole Minimum Offset Safeguard
 
@@ -181,9 +170,7 @@ This contract defines details for:
 
 - AC-01
 - AC-02
-- AC-03 (primary geometric method)
-- AC-04 (fallback trigger and method)
-- AC-05 (primary-to-fallback transition)
+- AC-03 (pole direction from animation geometry)
 - AC-06 (solve-to-target)
 - AC-06a (foot target sync stage)
 - AC-07
