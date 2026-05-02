@@ -119,7 +119,7 @@ public partial class StandingPoseState : PoseState
     {
         get;
         set;
-    }
+    } = 0.04f;
 
     /// <summary>
     /// Initialises the state and seeds <see cref="PoseState.Id"/> with <see cref="DefaultId"/>.
