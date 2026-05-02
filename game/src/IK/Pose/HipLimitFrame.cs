@@ -34,6 +34,66 @@ public sealed record HipLimitFrame
 }
 
 /// <summary>
+/// Avatar-relative hip-limit axis semantics resolved into skeleton-local directions for the
+/// current character rig.
+/// </summary>
+internal readonly record struct HipLimitSemanticFrame(
+    Vector3 UpLocal,
+    Vector3 AvatarForwardLocal,
+    Vector3 AvatarRightLocal)
+{
+    /// <summary>
+    /// Semantic frame for the current reference character rig.
+    /// </summary>
+    /// <remarks>
+    /// The imported skeleton lives under a container rotated 180 degrees around Y, so avatar-forward
+    /// resolves to skeleton-local +Z and avatar-right resolves to skeleton-local -X.
+    /// </remarks>
+    public static HipLimitSemanticFrame ReferenceRig => new(
+        Vector3.Up,
+        Vector3.Back,
+        Vector3.Left);
+
+    /// <summary>
+    /// Resolves authored avatar-relative limits into raw skeleton-local signed-axis clamp slots.
+    /// </summary>
+    public HipLimitEnvelope? ResolveOffsetEnvelope(OffsetLimits3D? limits)
+        => limits is null
+            ? null
+            : new HipLimitEnvelope(
+                limits.UpLimit,
+                limits.DownLimit,
+                ResolveNegativeXAxisLimit(limits.LeftLimit, limits.RightLimit),
+                ResolvePositiveXAxisLimit(limits.LeftLimit, limits.RightLimit),
+                ResolveNegativeZAxisLimit(limits.ForwardLimit, limits.BackLimit),
+                ResolvePositiveZAxisLimit(limits.ForwardLimit, limits.BackLimit));
+
+    private float? ResolveNegativeXAxisLimit(float? leftLimit, float? rightLimit)
+        => MapsAvatarRightToPositiveX()
+            ? leftLimit
+            : rightLimit;
+
+    private float? ResolvePositiveXAxisLimit(float? leftLimit, float? rightLimit)
+        => MapsAvatarRightToPositiveX()
+            ? rightLimit
+            : leftLimit;
+
+    private float? ResolveNegativeZAxisLimit(float? forwardLimit, float? backLimit)
+        => MapsAvatarForwardToPositiveZ()
+            ? backLimit
+            : forwardLimit;
+
+    private float? ResolvePositiveZAxisLimit(float? forwardLimit, float? backLimit)
+        => MapsAvatarForwardToPositiveZ()
+            ? forwardLimit
+            : backLimit;
+
+    private bool MapsAvatarRightToPositiveX() => AvatarRightLocal.Dot(Vector3.Right) >= 0f;
+
+    private bool MapsAvatarForwardToPositiveZ() => AvatarForwardLocal.Dot(Vector3.Back) >= 0f;
+}
+
+/// <summary>
 /// Absolute skeleton-local directional hip bounds resolved for a single tick.
 /// </summary>
 public readonly record struct HipLimitBounds(
@@ -85,6 +145,15 @@ public readonly record struct HipLimitEnvelope(
                 limits.RightLimit,
                 limits.ForwardLimit,
                 limits.BackLimit);
+
+    /// <summary>
+    /// Creates an envelope from an authored <see cref="OffsetLimits3D"/> resource after resolving
+    /// avatar-relative semantic directions into raw skeleton-local signed-axis slots.
+    /// </summary>
+    internal static HipLimitEnvelope? FromOffsetLimits(
+        OffsetLimits3D? limits,
+        HipLimitSemanticFrame semanticFrame)
+        => semanticFrame.ResolveOffsetEnvelope(limits);
 
     /// <summary>
     /// Interpolates between two envelopes component-wise without synthesising new directional bounds.

@@ -123,7 +123,7 @@ public sealed class StandingPoseStateTests
         HipLimitFrame frame = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: new Vector3(0f, 0.95f, 0f),
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: 1.6f,
             currentHeadY: 1.6f,
             restHeadHeight: RestHeadHeight,
@@ -152,7 +152,7 @@ public sealed class StandingPoseStateTests
         HipLimitFrame frame = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: new Vector3(0f, 0.95f, 0f),
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: 1.6f,
             currentHeadY: 1.6f - (FullCrouchDepthMetres * 0.5f),
             restHeadHeight: RestHeadHeight,
@@ -161,7 +161,7 @@ public sealed class StandingPoseStateTests
             uprightEnvelope: _uprightEnvelope,
             crouchedEnvelope: _crouchedEnvelope);
 
-        AssertApproximately(frame.ReferenceHipLocalPosition, new Vector3(0f, 0.835f, -0.032f));
+        AssertApproximately(frame.ReferenceHipLocalPosition, new Vector3(0f, 0.835f, 0.032f));
 
         Assert.True(frame.AbsoluteBounds.HasValue);
         HipLimitBounds bounds = frame.AbsoluteBounds.Value;
@@ -187,7 +187,7 @@ public sealed class StandingPoseStateTests
         HipLimitFrame frame = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: new Vector3(0f, 0.95f, 0f),
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: 1.6f,
             currentHeadY: 1.6f - FullCrouchDepthMetres,
             restHeadHeight: RestHeadHeight,
@@ -196,7 +196,7 @@ public sealed class StandingPoseStateTests
             uprightEnvelope: _uprightEnvelope,
             crouchedEnvelope: _crouchedEnvelope);
 
-        AssertApproximately(frame.ReferenceHipLocalPosition, new Vector3(0f, 0.72f, -0.064f));
+        AssertApproximately(frame.ReferenceHipLocalPosition, new Vector3(0f, 0.72f, 0.064f));
         Assert.True(frame.AbsoluteBounds.HasValue);
         HipLimitBounds bounds = frame.AbsoluteBounds.Value;
         AssertBoundApproximately(bounds.Up, 1.19f);
@@ -210,6 +210,31 @@ public sealed class StandingPoseStateTests
         AssertLimitApproximately(envelope.Right, _crouchedEnvelope.Right);
         AssertLimitApproximately(envelope.Forward, _crouchedEnvelope.Forward);
         AssertLimitApproximately(envelope.Back, _crouchedEnvelope.Back);
+    }
+
+    /// <summary>
+    /// A positive forward-shift ratio must move the standing reference along avatar-forward after
+    /// resolving that semantic direction into skeleton-local space for this rig.
+    /// </summary>
+    [Fact]
+    public void ComputeHipLimitFrame_PositiveForwardShiftRatio_MovesReferenceAlongAvatarForwardLocal()
+    {
+        HipLimitFrame frame = StandingPoseState.ComputeHipLimitFrame(
+            hipLocalRest: new Vector3(0f, 0.95f, 0f),
+            hipRestUpLocal: Vector3.Up,
+            avatarForwardLocal: Vector3.Back,
+            restHeadY: 1.6f,
+            currentHeadY: 1.6f - FullCrouchDepthMetres,
+            restHeadHeight: RestHeadHeight,
+            fullCrouchReferenceHipHeightRatio: FullCrouchReferenceHipHeightRatio,
+            fullCrouchReferenceForwardShiftRatio: FullCrouchReferenceForwardShiftRatio,
+            uprightEnvelope: _uprightEnvelope,
+            crouchedEnvelope: _crouchedEnvelope);
+
+        Assert.True(
+            frame.ReferenceHipLocalPosition.Z > 0f,
+            $"Expected positive forward shift to move along avatar-forward resolved into skeleton-local +Z, got {frame.ReferenceHipLocalPosition}.");
+        AssertApproximately(frame.ReferenceHipLocalPosition, new Vector3(0f, 0.72f, 0.064f));
     }
 
     /// <summary>
@@ -229,7 +254,7 @@ public sealed class StandingPoseStateTests
             StandingPoseState.ComputeHipLimitFrame(
                 hipLocalRest: new Vector3(0f, 0.95f, 0f),
                 hipRestUpLocal: Vector3.Up,
-                hipRestForwardLocal: Vector3.Forward,
+                avatarForwardLocal: Vector3.Back,
                 restHeadY: 1.6f,
                 currentHeadY: 1.6f - (FullCrouchDepthMetres * 0.999f),
                 restHeadHeight: RestHeadHeight,
@@ -245,7 +270,7 @@ public sealed class StandingPoseStateTests
             StandingPoseState.ComputeHipLimitFrame(
                 hipLocalRest: new Vector3(0f, 0.95f, 0f),
                 hipRestUpLocal: Vector3.Up,
-                hipRestForwardLocal: Vector3.Forward,
+                avatarForwardLocal: Vector3.Back,
                 restHeadY: 1.6f,
                 currentHeadY: 1.6f - FullCrouchDepthMetres,
                 restHeadHeight: RestHeadHeight,
@@ -271,7 +296,7 @@ public sealed class StandingPoseStateTests
         HipLimitFrame frame = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: new Vector3(0f, 0.30f, 0f),
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: 1.6f,
             currentHeadY: 1.6f - FullCrouchDepthMetres,
             restHeadHeight: RestHeadHeight,
@@ -292,7 +317,7 @@ public sealed class StandingPoseStateTests
         HipLimitFrame first = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: new Vector3(0f, 0.95f, 0f),
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: 1.6f,
             currentHeadY: 1.2f,
             restHeadHeight: RestHeadHeight,
@@ -304,7 +329,7 @@ public sealed class StandingPoseStateTests
         HipLimitFrame second = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: new Vector3(0f, 0.95f, 0f),
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: 1.6f,
             currentHeadY: 1.2f,
             restHeadHeight: RestHeadHeight,

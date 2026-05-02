@@ -742,7 +742,7 @@ public sealed class HeadTrackingHipProfileTests
         HipLimitFrame limitFrame = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: hipRest,
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: CreateRestHead().Y,
             currentHeadY: currentHeadLocalTransform.Origin.Y,
             restHeadHeight: 1.6f,
@@ -757,8 +757,8 @@ public sealed class HeadTrackingHipProfileTests
             restHeadHeight: 1.6f,
             skeletonGlobalTransform: Transform3D.Identity);
 
-        AssertClose(new Vector3(0f, 0.014f, 0.064f), tickResult.DesiredFinalHipOffset);
-        AssertClose(new Vector3(0f, 0.014f, 0.064f), tickResult.AppliedFinalHipOffset);
+        AssertClose(new Vector3(0f, 0.014f, -0.064f), tickResult.DesiredFinalHipOffset);
+        AssertClose(new Vector3(0f, 0.014f, -0.064f), tickResult.AppliedFinalHipOffset);
         AssertClose(new Vector3(0f, 0.35f, 0f), tickResult.AppliedHipLocalPosition);
         AssertClose(Vector3.Zero, tickResult.ResidualFinalHipOffset);
         Assert.False(tickResult.LimitedHeadTargetTransform.HasValue);
@@ -870,7 +870,7 @@ public sealed class HeadTrackingHipProfileTests
         HipLimitFrame limitFrame = StandingPoseState.ComputeHipLimitFrame(
             hipLocalRest: hipRest,
             hipRestUpLocal: Vector3.Up,
-            hipRestForwardLocal: Vector3.Forward,
+            avatarForwardLocal: Vector3.Back,
             restHeadY: CreateRestHead().Y,
             currentHeadY: CreateRestHead().Y - 0.60f,
             restHeadHeight: 1.6f,
@@ -888,8 +888,8 @@ public sealed class HeadTrackingHipProfileTests
             restHeadHeight: 1.6f,
             skeletonGlobalTransform: Transform3D.Identity);
 
-        AssertClose(new Vector3(0f, -0.176f, 0.064f), tickResult.DesiredFinalHipOffset);
-        AssertClose(new Vector3(0f, -0.048f, 0.064f), tickResult.AppliedFinalHipOffset);
+        AssertClose(new Vector3(0f, -0.176f, -0.064f), tickResult.DesiredFinalHipOffset);
+        AssertClose(new Vector3(0f, -0.048f, -0.064f), tickResult.AppliedFinalHipOffset);
         AssertClose(new Vector3(0f, 0.288f, 0f), tickResult.AppliedHipLocalPosition);
         AssertClose(new Vector3(0f, -0.128f, 0f), tickResult.ResidualFinalHipOffset);
     }

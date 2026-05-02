@@ -84,7 +84,7 @@ public sealed partial class PoseStateHipLimitIntegrationTests
 
     /// <summary>
     /// Standing hip-limit framing must shift from the hip rest expressed in skeleton-local space,
-    /// using Godot forward as negative Z.
+    /// using avatar semantic forward resolved into the rotated rig's local axes.
     /// </summary>
     [Headless]
     [Fact]
@@ -133,9 +133,9 @@ public sealed partial class PoseStateHipLimitIntegrationTests
                 });
 
             Assert.True(
-                frame.ReferenceHipLocalPosition.IsEqualApprox(new Vector3(0.30f, 0.70f, -0.13f)),
-                $"Expected standing reference shift in skeleton-local Y+/Z- axes, got {frame.ReferenceHipLocalPosition}.");
-            Assert.NotEqual(new Vector3(0.05f, 0.35f, -0.05f), frame.ReferenceHipLocalPosition);
+                frame.ReferenceHipLocalPosition.IsEqualApprox(new Vector3(0.30f, 0.70f, 0.07f)),
+                $"Expected standing reference shift in skeleton-local Y+/avatar-forward axes, got {frame.ReferenceHipLocalPosition}.");
+            Assert.NotEqual(new Vector3(0.05f, 0.35f, 0.15f), frame.ReferenceHipLocalPosition);
         }
         finally
         {
@@ -216,8 +216,59 @@ public sealed partial class PoseStateHipLimitIntegrationTests
             Assert.InRange(envelope.Down!.Value, 0.03f - PositionTolerance, 0.03f + PositionTolerance);
             Assert.InRange(envelope.Left!.Value, 0.06f - PositionTolerance, 0.06f + PositionTolerance);
             Assert.InRange(envelope.Right!.Value, 0.06f - PositionTolerance, 0.06f + PositionTolerance);
-            Assert.InRange(envelope.Forward!.Value, 0.08f - PositionTolerance, 0.08f + PositionTolerance);
-            Assert.InRange(envelope.Back!.Value, 0.05f - PositionTolerance, 0.05f + PositionTolerance);
+            Assert.InRange(envelope.Forward!.Value, 0.05f - PositionTolerance, 0.05f + PositionTolerance);
+            Assert.InRange(envelope.Back!.Value, 0.08f - PositionTolerance, 0.08f + PositionTolerance);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Standing authored directional limits must remain avatar-relative even though this rig's
+    /// skeleton-local X/Z signs are flipped by the imported container yaw.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task StandingBuildHipLimitFrame_AvatarRelativeDirectionalLimitsClampAgainstRotatedSkeletonAxes()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "StandingDirectionalSemanticsFixture",
+        };
+
+        Skeleton3D skeleton = CreateStandingHipLimitSkeleton();
+        int hipBoneIndex = RequireHipBoneIndex(skeleton);
+        root.AddChild(skeleton);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            StandingPoseState state = new()
+            {
+                UprightHipOffsetLimits = CreateAsymmetricDirectionalLimits(),
+                FullCrouchReferenceHipHeightRatio = 0.21f,
+                FullCrouchReferenceForwardShiftRatio = 0.04f,
+            };
+            PoseStateContext context = CreateContext(
+                skeleton,
+                hipBoneIndex,
+                restHeadY: 1.65f,
+                currentHeadY: 1.65f,
+                restHeadHeight: 1.6f);
+
+            HipLimitFrame frame = state.BuildHipLimitFrame(context);
+            Vector3 reference = frame.ReferenceHipLocalPosition;
+
+            AssertAppliedHipPosition(frame, reference + new Vector3(0.40f, 0f, 0f), reference + new Vector3(0.16f, 0f, 0f), context.RestHeadHeight);
+            AssertAppliedHipPosition(frame, reference + new Vector3(-0.40f, 0f, 0f), reference + new Vector3(-0.40f, 0f, 0f), context.RestHeadHeight);
+            AssertAppliedHipPosition(frame, reference + new Vector3(0f, 0f, 0.40f), reference + new Vector3(0f, 0f, 0.192f), context.RestHeadHeight);
+            AssertAppliedHipPosition(frame, reference + new Vector3(0f, 0f, -0.40f), reference + new Vector3(0f, 0f, -0.40f), context.RestHeadHeight);
         }
         finally
         {
@@ -534,7 +585,7 @@ public sealed partial class PoseStateHipLimitIntegrationTests
                 restHeadY: 1.65f,
                 currentHeadY: 1.05f,
                 restHeadHeight: 1.6f,
-                currentHeadLocalOffset: new Vector3(0f, 0f, -1.95f));
+                currentHeadLocalOffset: new Vector3(0f, 0f, 1.95f));
 
             PoseStateMachineTickResult hardClampResult = CreatePoseStateMachine(hardClampState).Tick(firstClampContext);
             PoseStateMachineTickResult softenedResult = CreatePoseStateMachine(softenedState).Tick(firstClampContext);
@@ -591,7 +642,7 @@ public sealed partial class PoseStateHipLimitIntegrationTests
                 restHeadY: 1.65f,
                 currentHeadY: 1.05f,
                 restHeadHeight: 1.6f,
-                currentHeadLocalOffset: new Vector3(0f, 0f, -1.95f));
+                currentHeadLocalOffset: new Vector3(0f, 0f, 1.95f));
 
             PoseStateMachineTickResult result = CreatePoseStateMachine(state).Tick(context);
 
@@ -608,7 +659,7 @@ public sealed partial class PoseStateHipLimitIntegrationTests
                 Mathf.Abs(limitedHeadOrigin.Y - context.HeadTargetTransform.Origin.Y) <= PositionTolerance,
                 $"Forward-only clamp should preserve the crouched head height. LimitedHead={limitedHeadOrigin}, currentHead={context.HeadTargetTransform.Origin}.");
             Assert.True(
-                limitedHeadOrigin.Z > context.HeadTargetTransform.Origin.Z,
+                limitedHeadOrigin.Z < context.HeadTargetTransform.Origin.Z,
                 $"Forward clamp should pull the limited head target back towards the body. LimitedHead={limitedHeadOrigin}, currentHead={context.HeadTargetTransform.Origin}.");
         }
         finally
@@ -663,7 +714,10 @@ public sealed partial class PoseStateHipLimitIntegrationTests
                 });
 
             Assert.True(
-                frame.ReferenceHipLocalPosition.IsEqualApprox(new Vector3(0f, 0.336f, -0.064f)),
+                frame.ReferenceHipLocalPosition.Z > 0f,
+                $"Expected positive forward shift to move along avatar-forward resolved into skeleton-local +Z, got {frame.ReferenceHipLocalPosition}.");
+            Assert.True(
+                frame.ReferenceHipLocalPosition.IsEqualApprox(new Vector3(0f, 0.336f, 0.064f)),
                 $"Expected kneeling reference anchor to match the full-crouch frame, got {frame.ReferenceHipLocalPosition}.");
             Assert.True(frame.OffsetEnvelope.HasValue);
             HipLimitEnvelope envelope = frame.OffsetEnvelope.Value;
@@ -671,8 +725,8 @@ public sealed partial class PoseStateHipLimitIntegrationTests
             Assert.Equal(limits.Down, envelope.Down);
             Assert.Equal(limits.Left, envelope.Left);
             Assert.Equal(limits.Right, envelope.Right);
-            Assert.Equal(limits.Forward, envelope.Forward);
-            Assert.Equal(limits.Back, envelope.Back);
+            Assert.Equal(limits.Back, envelope.Forward);
+            Assert.Equal(limits.Forward, envelope.Back);
         }
         finally
         {
@@ -732,6 +786,74 @@ public sealed partial class PoseStateHipLimitIntegrationTests
             Assert.True(
                 kneelingFrame.ReferenceHipLocalPosition.IsEqualApprox(standingFrame.ReferenceHipLocalPosition),
                 $"Expected kneeling reference {kneelingFrame.ReferenceHipLocalPosition} to match standing full-crouch reference {standingFrame.ReferenceHipLocalPosition}.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Kneeling must use the same avatar-relative left/right and forward/back semantics as
+    /// standing when limits are authored asymmetrically.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task KneelingBuildHipLimitFrame_MatchesStandingDirectionalAxisSemantics()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "KneelingDirectionalSemanticsFixture",
+        };
+
+        Skeleton3D skeleton = CreateStandingHipLimitSkeleton();
+        int hipBoneIndex = RequireHipBoneIndex(skeleton);
+        root.AddChild(skeleton);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            OffsetLimits3D asymmetricLimits = CreateAsymmetricDirectionalLimits();
+            StandingPoseState standingState = new()
+            {
+                UprightHipOffsetLimits = asymmetricLimits,
+                FullCrouchReferenceHipHeightRatio = 0.21f,
+                FullCrouchReferenceForwardShiftRatio = 0.04f,
+            };
+            KneelingPoseState kneelingState = new()
+            {
+                HipOffsetLimits = asymmetricLimits,
+                FullCrouchReferenceHipHeightRatio = 0.21f,
+                FullCrouchReferenceForwardShiftRatio = 0.04f,
+            };
+
+            PoseStateContext standingContext = CreateContext(
+                skeleton,
+                hipBoneIndex,
+                restHeadY: 1.65f,
+                currentHeadY: 1.65f,
+                restHeadHeight: 1.6f);
+            PoseStateContext kneelingContext = CreateContext(
+                skeleton,
+                hipBoneIndex,
+                restHeadY: 1.65f,
+                currentHeadY: 1.05f,
+                restHeadHeight: 1.6f);
+
+            HipLimitFrame standingFrame = standingState.BuildHipLimitFrame(standingContext);
+            HipLimitFrame kneelingFrame = kneelingState.BuildHipLimitFrame(kneelingContext);
+            Vector3 standingReference = standingFrame.ReferenceHipLocalPosition;
+            Vector3 kneelingReference = kneelingFrame.ReferenceHipLocalPosition;
+
+            AssertAppliedHipPosition(standingFrame, standingReference + new Vector3(0.40f, 0f, 0f), standingReference + new Vector3(0.16f, 0f, 0f), standingContext.RestHeadHeight);
+            AssertAppliedHipPosition(kneelingFrame, kneelingReference + new Vector3(0.40f, 0f, 0f), kneelingReference + new Vector3(0.16f, 0f, 0f), kneelingContext.RestHeadHeight);
+
+            AssertAppliedHipPosition(standingFrame, standingReference + new Vector3(0f, 0f, 0.40f), standingReference + new Vector3(0f, 0f, 0.192f), standingContext.RestHeadHeight);
+            AssertAppliedHipPosition(kneelingFrame, kneelingReference + new Vector3(0f, 0f, 0.40f), kneelingReference + new Vector3(0f, 0f, 0.192f), kneelingContext.RestHeadHeight);
         }
         finally
         {
@@ -807,6 +929,17 @@ public sealed partial class PoseStateHipLimitIntegrationTests
             FullCrouchReferenceForwardShiftRatio = 0.04f,
         };
 
+    private static OffsetLimits3D CreateAsymmetricDirectionalLimits()
+        => new()
+        {
+            HasUpLimit = false,
+            HasDownLimit = false,
+            Left = 0.10f,
+            Right = 0.30f,
+            Forward = 0.12f,
+            Back = 0.28f,
+        };
+
     private static Skeleton3D CreateStandingHipLimitSkeleton()
     {
         Skeleton3D skeleton = new()
@@ -821,6 +954,26 @@ public sealed partial class PoseStateHipLimitIntegrationTests
 
     private static int RequireHipBoneIndex(Skeleton3D skeleton)
         => RequireBoneIndex(skeleton, "Hips");
+
+    private static void AssertAppliedHipPosition(
+        HipLimitFrame frame,
+        Vector3 desiredHipLocalPosition,
+        Vector3 expectedAppliedHipLocalPosition,
+        float restHeadHeight)
+    {
+        HipReconciliationTickResult result = PoseState.ApplyHipLimitFrame(
+            new HipReconciliationProfileResult
+            {
+                DesiredHipLocalPosition = desiredHipLocalPosition,
+            },
+            frame,
+            restHeadHeight,
+            Transform3D.Identity);
+
+        Assert.True(
+            result.AppliedHipLocalPosition.IsEqualApprox(expectedAppliedHipLocalPosition),
+            $"Expected applied hip position {expectedAppliedHipLocalPosition}, got {result.AppliedHipLocalPosition} for desired {desiredHipLocalPosition}.");
+    }
 
     private static int RequireBoneIndex(Skeleton3D skeleton, string boneName)
     {

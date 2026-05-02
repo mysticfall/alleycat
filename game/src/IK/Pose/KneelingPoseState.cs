@@ -45,6 +45,10 @@ public partial class KneelingPoseState : PoseState
 
     /// <summary>
     /// Forward reference shift at full crouch, expressed as a ratio of rest head height.
+    /// Positive values move the reference along avatar-forward after that semantic direction has
+    /// been resolved into skeleton-local space for this rig. On the current reference rig, the
+    /// imported skeleton is yaw-flipped under its container, so avatar-forward resolves to
+    /// skeleton-local +Z.
     /// </summary>
     [Export(PropertyHint.Range, "0,1,0.01")]
     public float FullCrouchReferenceForwardShiftRatio
@@ -67,7 +71,8 @@ public partial class KneelingPoseState : PoseState
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        HipLimitEnvelope? offsetEnvelope = HipLimitEnvelope.FromOffsetLimits(HipOffsetLimits);
+        HipLimitSemanticFrame semanticFrame = HipLimitSemanticFrame.ReferenceRig;
+        HipLimitEnvelope? offsetEnvelope = HipLimitEnvelope.FromOffsetLimits(HipOffsetLimits, semanticFrame);
         Vector3 defaultReference = ResolveDefaultHipLocalReference(context);
 
         if (offsetEnvelope is null)
@@ -82,15 +87,17 @@ public partial class KneelingPoseState : PoseState
             ? context.RestHeadHeight
             : 1f;
         float fullCrouchReferenceHeight = safeRestHeadHeight * Mathf.Max(FullCrouchReferenceHipHeightRatio, 0f);
-        float restHipHeight = defaultReference.Y;
+        float restHipHeight = defaultReference.Dot(semanticFrame.UpLocal);
         float downwardShift = Mathf.Max(restHipHeight - fullCrouchReferenceHeight, 0f);
+        // The authored value is avatar-forward. This vector has already been resolved into the
+        // skeleton-local frame used by the imported rig.
         float forwardShift = safeRestHeadHeight * Mathf.Max(FullCrouchReferenceForwardShiftRatio, 0f);
 
         return new HipLimitFrame
         {
             ReferenceHipLocalPosition = defaultReference
-                - (Vector3.Up * downwardShift)
-                + (Vector3.Forward * forwardShift),
+                - (semanticFrame.UpLocal * downwardShift)
+                + (semanticFrame.AvatarForwardLocal * forwardShift),
             OffsetEnvelope = offsetEnvelope,
         };
     }

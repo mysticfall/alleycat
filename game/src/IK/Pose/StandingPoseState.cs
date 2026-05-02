@@ -109,8 +109,12 @@ public partial class StandingPoseState : PoseState
 
     /// <summary>
     /// Forward reference shift at full crouch, expressed as a ratio of rest head height.
+    /// Positive values move the reference along avatar-forward after that semantic direction has
+    /// been resolved into skeleton-local space for this rig. On the current reference rig, the
+    /// imported skeleton is yaw-flipped under its container, so avatar-forward resolves to
+    /// skeleton-local +Z. Negative values are not supported by the runtime and clamp to zero.
     /// </summary>
-    [Export(PropertyHint.Range, "-0.5,0.5,0.01")]
+    [Export(PropertyHint.Range, "0,0.5,0.01")]
     public float FullCrouchReferenceForwardShiftRatio
     {
         get;
@@ -163,9 +167,10 @@ public partial class StandingPoseState : PoseState
 
         Skeleton3D? skeleton = context.Skeleton;
         Vector3 defaultReference = ResolveDefaultHipLocalReference(context);
+        HipLimitSemanticFrame semanticFrame = HipLimitSemanticFrame.ReferenceRig;
 
-        HipLimitEnvelope? uprightEnvelope = HipLimitEnvelope.FromOffsetLimits(UprightHipOffsetLimits);
-        HipLimitEnvelope? crouchedEnvelope = HipLimitEnvelope.FromOffsetLimits(CrouchedHipOffsetLimits);
+        HipLimitEnvelope? uprightEnvelope = HipLimitEnvelope.FromOffsetLimits(UprightHipOffsetLimits, semanticFrame);
+        HipLimitEnvelope? crouchedEnvelope = HipLimitEnvelope.FromOffsetLimits(CrouchedHipOffsetLimits, semanticFrame);
         if (uprightEnvelope is null && crouchedEnvelope is null)
         {
             return new HipLimitFrame
@@ -191,8 +196,8 @@ public partial class StandingPoseState : PoseState
         Vector3 hipLocalRest = hipGlobalRest.Origin;
         return ComputeHipLimitFrame(
             hipLocalRest,
-            Vector3.Up,
-            Vector3.Forward,
+            semanticFrame.UpLocal,
+            semanticFrame.AvatarForwardLocal,
             context.HeadTargetRestTransform.Origin.Y,
             context.HeadTargetTransform.Origin.Y,
             context.RestHeadHeight,
@@ -274,11 +279,13 @@ public partial class StandingPoseState : PoseState
 
     /// <summary>
     /// Computes the standing-family hip-limit frame for the current continuum position.
+    /// The supplied axes and envelopes must already represent avatar/character semantic directions
+    /// resolved into skeleton-local space for the active rig.
     /// </summary>
     public static HipLimitFrame ComputeHipLimitFrame(
         Vector3 hipLocalRest,
         Vector3 hipRestUpLocal,
-        Vector3 hipRestForwardLocal,
+        Vector3 avatarForwardLocal,
         float restHeadY,
         float currentHeadY,
         float restHeadHeight,
@@ -297,11 +304,11 @@ public partial class StandingPoseState : PoseState
             ? restHeadHeight
             : 1f;
         Vector3 safeHipRestUpLocal = TryNormaliseAxis(hipRestUpLocal, Vector3.Up);
-        Vector3 safeHipRestForwardLocal = TryNormaliseAxis(hipRestForwardLocal, Vector3.Forward);
+        Vector3 safeAvatarForwardLocal = TryNormaliseAxis(avatarForwardLocal, Vector3.Back);
         Vector3 referenceHipLocalPosition = ComputeReferenceHipLocalPosition(
             hipLocalRest,
             safeHipRestUpLocal,
-            safeHipRestForwardLocal,
+            safeAvatarForwardLocal,
             safeRestHeadHeight,
             fullCrouchReferenceHipHeightRatio,
             fullCrouchReferenceForwardShiftRatio,
@@ -314,7 +321,7 @@ public partial class StandingPoseState : PoseState
         HipLimitBounds? absoluteBounds = ResolveStandingAbsoluteBounds(
             hipLocalRest,
             safeHipRestUpLocal,
-            safeHipRestForwardLocal,
+            safeAvatarForwardLocal,
             safeRestHeadHeight,
             fullCrouchReferenceHipHeightRatio,
             fullCrouchReferenceForwardShiftRatio,
@@ -369,6 +376,8 @@ public partial class StandingPoseState : PoseState
         float fullCrouchReferenceHeight = safeRestHeadHeight * Mathf.Max(fullCrouchReferenceHipHeightRatio, 0f);
         float restHipHeight = hipLocalRest.Dot(safeHipRestUpLocal);
         float downwardShift = Mathf.Max(restHipHeight - fullCrouchReferenceHeight, 0f) * poseBlend;
+        // The authored value is avatar-forward. This vector has already been resolved into the
+        // skeleton-local frame used by the imported rig.
         float forwardShift = safeRestHeadHeight * Mathf.Max(fullCrouchReferenceForwardShiftRatio, 0f) * poseBlend;
         return hipLocalRest
             - (safeHipRestUpLocal * downwardShift)
