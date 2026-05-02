@@ -200,12 +200,13 @@ public sealed class PoseTickExecutorTests
     }
 
     /// <summary>
-    /// Verifies executor-driven lifecycle hooks observe the same context instance supplied to the
-    /// tick, so runtime data such as the current animation tree flows through the interface
-    /// contract rather than machine-side concrete callbacks.
+    /// Verifies executor-driven lifecycle hooks receive the correct context: the original
+    /// context for transition hooks and OnExit (which should not see the source state) and a
+    /// context enriched with <see cref="PoseStateContext.TransitionSourceState"/> for the new
+    /// state's OnEnter and OnUpdate.
     /// </summary>
     [Fact]
-    public void Execute_TransitionFires_PassesOriginalContextThroughLifecycleHooks()
+    public void Execute_TransitionFires_PassesEnrichedContextToNewStateHooks()
     {
         PoseStateContext context = new()
         {
@@ -223,11 +224,22 @@ public sealed class PoseTickExecutorTests
             resolveState: id => id == kneeling.Id ? kneeling : null,
             onStateChanged: (_, _) => { });
 
+        // Transition hooks still receive the original context (no TransitionSourceState).
         Assert.Same(context, transition.TransitionEnterContext);
-        Assert.Same(context, standing.ExitContext);
-        Assert.Same(context, kneeling.EnterContext);
         Assert.Same(context, transition.TransitionExitContext);
-        Assert.Same(context, kneeling.UpdateContext);
+
+        // Old state OnExit receives the original context.
+        Assert.Same(context, standing.ExitContext);
+
+        // New state OnEnter receives a context with TransitionSourceState set to the source.
+        Assert.NotNull(kneeling.EnterContext);
+        Assert.Same(standing, kneeling.EnterContext!.TransitionSourceState);
+        Assert.Equal(context.Delta, kneeling.EnterContext.Delta);
+
+        // New state OnUpdate receives a context with TransitionSourceState set to the source.
+        Assert.NotNull(kneeling.UpdateContext);
+        Assert.Same(standing, kneeling.UpdateContext!.TransitionSourceState);
+        Assert.Equal(context.Delta, kneeling.UpdateContext.Delta);
     }
 
     private sealed class RecordingState(string id, List<string> log) : IPoseState

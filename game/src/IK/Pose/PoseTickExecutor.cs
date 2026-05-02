@@ -17,7 +17,9 @@ public static class PoseTickExecutor
     /// </summary>
     /// <param name="ActiveState">State that remains active after the tick completes.</param>
     /// <param name="SelectedTransition">Transition that fired during the tick, if any.</param>
-    public readonly record struct Result(IPoseState ActiveState, IPoseTransition? SelectedTransition);
+    /// <param name="Context">The context snapshot for this tick, carrying the
+    /// <see cref="PoseStateContext.TransitionSourceState"/> when a transition fired.</param>
+    public readonly record struct Result(IPoseState ActiveState, IPoseTransition? SelectedTransition, PoseStateContext Context);
 
     /// <summary>
     /// Callback invoked after the state machine switches from <paramref name="oldState"/> to
@@ -60,15 +62,22 @@ public static class PoseTickExecutor
             context);
 
         IPoseState activeState = currentState;
+        PoseStateContext activeContext = context;
+
         if (selected is not null)
         {
             IPoseState nextState = resolveState(selected.To)
                 ?? throw new InvalidOperationException(
                     $"Transition from '{currentState.Id}' targets unknown state '{selected.To}'.");
 
+            activeContext = context with
+            {
+                TransitionSourceState = currentState,
+            };
+
             selected.OnTransitionEnter(context);
             currentState.OnExit(context);
-            nextState.OnEnter(context);
+            nextState.OnEnter(activeContext);
             selected.OnTransitionExit(context);
             NotifyOtherTransitionsOfFire(transitions, selected, context);
             onStateChanged?.Invoke(currentState, nextState);
@@ -76,8 +85,8 @@ public static class PoseTickExecutor
             activeState = nextState;
         }
 
-        activeState.OnUpdate(context);
-        return new Result(activeState, selected);
+        activeState.OnUpdate(activeContext);
+        return new Result(activeState, selected, activeContext);
     }
 
     private static void NotifyOtherTransitionsOfFire(

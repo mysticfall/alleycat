@@ -84,7 +84,9 @@ public sealed partial class PoseStateHipLimitIntegrationTests
 
     /// <summary>
     /// Standing hip-limit framing must shift from the hip rest expressed in skeleton-local space,
-    /// using avatar semantic forward resolved into the rotated rig's local axes.
+    /// using avatar semantic forward resolved into the rig's local axes. The production rig
+    /// carries the container yaw flip above the skeleton rather than on the hip bone, so the hip
+    /// bone rest basis is identity and avatar-forward resolves via the semantic frame.
     /// </summary>
     [Headless]
     [Fact]
@@ -862,6 +864,324 @@ public sealed partial class PoseStateHipLimitIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Kneeling must shift its reference along avatar-forward resolved into skeleton-local
+    /// <c>+Z</c> for the production rig, where the hip bone rest basis is identity and the
+    /// container above the skeleton carries the yaw flip.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task KneelingBuildHipLimitFrame_UsesProductionAxisConvention_ReferenceShiftsAlongPositiveZ()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "KneelingProductionAxisConventionFixture",
+        };
+
+        Skeleton3D skeleton = CreateStandingHipLimitSkeleton();
+        int hipBoneIndex = RequireHipBoneIndex(skeleton);
+        root.AddChild(skeleton);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            const float restHeadHeight = 1.6f;
+            const float forwardShiftRatio = 0.09f;
+            KneelingPoseState state = new()
+            {
+                HipOffsetLimits = new OffsetLimits3D
+                {
+                    Up = 0.05f,
+                    Down = 0.03f,
+                    Left = 0.06f,
+                    Right = 0.06f,
+                    Forward = 0.08f,
+                    Back = 0.05f,
+                },
+                KneelingReferenceHipHeightRatio = 0.16f,
+                KneelingReferenceForwardShiftRatio = forwardShiftRatio,
+            };
+
+            HipLimitFrame frame = state.BuildHipLimitFrame(
+                new PoseStateContext
+                {
+                    Skeleton = skeleton,
+                    HipBoneIndex = hipBoneIndex,
+                    RestHeadHeight = restHeadHeight,
+                });
+
+            float expectedForwardShift = forwardShiftRatio * restHeadHeight;
+            Assert.True(
+                frame.ReferenceHipLocalPosition.Z > PositionTolerance,
+                $"Expected kneeling reference to shift along avatar-forward into +Z, got {frame.ReferenceHipLocalPosition}.");
+            Assert.True(
+                Mathf.Abs(frame.ReferenceHipLocalPosition.Z - expectedForwardShift) <= PositionTolerance,
+                $"Expected kneeling forward shift to be {expectedForwardShift:F4}, got Z={frame.ReferenceHipLocalPosition.Z:F4}.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Standing full-crouch must shift its reference along avatar-forward resolved into
+    /// skeleton-local <c>+Z</c> for the production rig, where the hip bone rest basis is identity
+    /// and the container above the skeleton carries the yaw flip.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task StandingBuildHipLimitFrame_UsesProductionAxisConvention_ReferenceShiftsAlongPositiveZ()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "StandingProductionAxisConventionFixture",
+        };
+
+        Skeleton3D skeleton = CreateStandingHipLimitSkeleton();
+        int hipBoneIndex = RequireHipBoneIndex(skeleton);
+        root.AddChild(skeleton);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            const float restHeadHeight = 1.6f;
+            const float forwardShiftRatio = 0.04f;
+            StandingPoseState state = CreateStandingHipLimitState();
+            state.FullCrouchReferenceForwardShiftRatio = forwardShiftRatio;
+
+            // Drive the continuum to full crouch so the forward shift applies at full weight.
+            PoseStateContext context = CreateContext(
+                skeleton,
+                hipBoneIndex,
+                restHeadY: 1.65f,
+                currentHeadY: 1.05f,
+                restHeadHeight: restHeadHeight);
+
+            HipLimitFrame frame = state.BuildHipLimitFrame(context);
+
+            float expectedForwardShift = forwardShiftRatio * restHeadHeight;
+            Assert.True(
+                frame.ReferenceHipLocalPosition.Z > PositionTolerance,
+                $"Expected standing full-crouch reference to shift along avatar-forward into +Z, got {frame.ReferenceHipLocalPosition}.");
+            Assert.True(
+                Mathf.Abs(frame.ReferenceHipLocalPosition.Z - expectedForwardShift) <= PositionTolerance,
+                $"Expected standing full-crouch forward shift to be {expectedForwardShift:F4}, got Z={frame.ReferenceHipLocalPosition.Z:F4}.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Kneeling entry from a standing (crouched) source must preserve the forward-axis seam:
+    /// the effective reference at the transition tick must match the standing source's
+    /// effective reference, then blend along <c>+Z</c> towards the authored kneeling anchor
+    /// over the transition duration.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task KneelingOnEnter_FromStandingSnapshot_PreservesForwardSeamContinuity()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "KneelingForwardContinuityFixture",
+        };
+
+        Skeleton3D skeleton = CreateStandingHipLimitSkeleton();
+        int hipBoneIndex = RequireHipBoneIndex(skeleton);
+        root.AddChild(skeleton);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            StandingPoseState standingSource = CreateStandingHipLimitState();
+            KneelingPoseState kneelingState = CreateKneelingHipLimitState();
+            kneelingState.TransitionBlendDurationSeconds = 0.5f;
+
+            // Transition driven from a full-crouch standing pose so the standing source's
+            // effective reference has already fully picked up the forward shift.
+            PoseStateContext transitionContext = CreateContext(
+                skeleton,
+                hipBoneIndex,
+                restHeadY: 1.65f,
+                currentHeadY: 1.05f,
+                restHeadHeight: 1.6f,
+                delta: 0.1);
+
+            Vector3 standingSourceReference = ((ICrouchingPoseTransitionSource)standingSource)
+                .GetEffectiveReferenceHipLocalPosition(transitionContext);
+            Vector3 authoredKneelingAnchor = kneelingState.BuildHipLimitFrame(transitionContext).ReferenceHipLocalPosition;
+
+            // Kneeling anchor must sit along +Z for production-like rigs.
+            Assert.True(
+                authoredKneelingAnchor.Z > PositionTolerance,
+                $"Expected authored kneeling anchor to sit along +Z, got {authoredKneelingAnchor}.");
+            Assert.True(
+                standingSourceReference.Z > PositionTolerance,
+                $"Expected standing source effective reference to sit along +Z, got {standingSourceReference}.");
+
+            PoseStateContext onEnterContext = transitionContext with
+            {
+                TransitionSourceState = standingSource,
+            };
+            kneelingState.OnEnter(onEnterContext);
+
+            // At the transition tick itself (OnEnter just happened, OnUpdate not yet invoked),
+            // the effective kneeling reference must equal the standing source's effective
+            // reference to preserve the forward seam.
+            HipLimitFrame transitionTickFrame = kneelingState.BuildHipLimitFrame(transitionContext);
+            Assert.True(
+                transitionTickFrame.ReferenceHipLocalPosition.IsEqualApprox(standingSourceReference),
+                $"Expected kneeling transition-tick reference {transitionTickFrame.ReferenceHipLocalPosition} to match standing source {standingSourceReference}.");
+
+            // Advance a few ticks without the transition source. Each OnUpdate adds delta to the
+            // internal timer, so after two ticks transitionBlend = 0.2/0.5 = 0.4.
+            kneelingState.OnUpdate(transitionContext);
+            kneelingState.OnUpdate(transitionContext);
+
+            HipLimitFrame partialBlendFrame = kneelingState.BuildHipLimitFrame(transitionContext);
+            Vector3 partialBlendReference = partialBlendFrame.ReferenceHipLocalPosition;
+
+            Assert.True(
+                partialBlendReference.Z > PositionTolerance,
+                $"Expected partial-blend kneeling reference to stay along +Z, got {partialBlendReference}.");
+            float lowerZ = Mathf.Min(standingSourceReference.Z, authoredKneelingAnchor.Z);
+            float upperZ = Mathf.Max(standingSourceReference.Z, authoredKneelingAnchor.Z);
+            Assert.InRange(partialBlendReference.Z, lowerZ - PositionTolerance, upperZ + PositionTolerance);
+            Assert.False(
+                partialBlendReference.IsEqualApprox(standingSourceReference),
+                $"Expected partial-blend reference to have moved off the standing snapshot, got {partialBlendReference}.");
+            Assert.False(
+                partialBlendReference.IsEqualApprox(authoredKneelingAnchor),
+                $"Expected partial-blend reference to still be short of the authored kneeling anchor, got {partialBlendReference}.");
+
+            // Advance far enough to guarantee blend completion (total elapsed well above
+            // TransitionBlendDurationSeconds).
+            for (int i = 0; i < 6; i++)
+            {
+                kneelingState.OnUpdate(transitionContext);
+            }
+
+            HipLimitFrame settledFrame = kneelingState.BuildHipLimitFrame(transitionContext);
+            Assert.True(
+                settledFrame.ReferenceHipLocalPosition.IsEqualApprox(authoredKneelingAnchor),
+                $"Expected settled kneeling reference {settledFrame.ReferenceHipLocalPosition} to match authored anchor {authoredKneelingAnchor}.");
+            Assert.True(
+                settledFrame.ReferenceHipLocalPosition.Z > PositionTolerance,
+                $"Expected settled kneeling reference to remain along +Z, got {settledFrame.ReferenceHipLocalPosition}.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Standing entry must snapshot the kneeling state's current effective values so the reverse
+    /// seam stays continuous on the transition tick and then blends back into the standing
+    /// continuum over time.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task StandingOnEnter_FromKneelingSnapshot_PreservesReverseSeamContinuity()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "StandingReverseContinuityFixture",
+        };
+
+        Skeleton3D skeleton = CreateStandingHipLimitSkeleton();
+        int hipBoneIndex = RequireHipBoneIndex(skeleton);
+        root.AddChild(skeleton);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            StandingPoseState sourceStandingState = CreateStandingHipLimitState();
+            KneelingPoseState kneelingState = CreateKneelingHipLimitState();
+            StandingPoseState receivingStandingState = CreateStandingHipLimitState();
+            receivingStandingState.TransitionBlendDurationSeconds = 0.5f;
+
+            PoseStateContext transitionContext = CreateContext(
+                skeleton,
+                hipBoneIndex,
+                restHeadY: 1.65f,
+                currentHeadY: 1.05f,
+                restHeadHeight: 1.6f,
+                delta: 0.25);
+
+            kneelingState.OnEnter(transitionContext with
+            {
+                TransitionSourceState = sourceStandingState,
+            });
+            kneelingState.OnUpdate(transitionContext);
+
+            ICrouchingPoseTransitionSource kneelingSource = kneelingState;
+            HipLimitFrame kneelingFrame = kneelingState.BuildHipLimitFrame(transitionContext);
+            float kneelingRotationScale = kneelingSource.GetEffectiveRotationCompensationScale(transitionContext);
+            HipLimitEnvelope? kneelingEnvelope = kneelingSource.GetEffectiveHipOffsetEnvelope(transitionContext);
+
+            PoseStateContext standingEntryContext = transitionContext with
+            {
+                TransitionSourceState = kneelingState,
+            };
+            receivingStandingState.OnEnter(standingEntryContext);
+
+            HipLimitFrame standingEntryFrame = receivingStandingState.BuildHipLimitFrame(standingEntryContext);
+            HipLimitFrame standingPersistedFrame = receivingStandingState.BuildHipLimitFrame(transitionContext);
+            float standingEntryRotationScale = receivingStandingState.GetEffectiveRotationCompensationScale(standingEntryContext);
+
+            Assert.True(
+                standingEntryFrame.ReferenceHipLocalPosition.IsEqualApprox(kneelingFrame.ReferenceHipLocalPosition),
+                $"Expected standing entry reference {standingEntryFrame.ReferenceHipLocalPosition} to match kneeling source {kneelingFrame.ReferenceHipLocalPosition}.");
+            Assert.True(
+                standingPersistedFrame.ReferenceHipLocalPosition.IsEqualApprox(kneelingFrame.ReferenceHipLocalPosition),
+                $"Expected standing snapshot to survive after the transition tick. Persisted={standingPersistedFrame.ReferenceHipLocalPosition}, source={kneelingFrame.ReferenceHipLocalPosition}.");
+            AssertEnvelopeApproximately(standingEntryFrame.OffsetEnvelope, kneelingEnvelope);
+            Assert.InRange(standingEntryRotationScale, kneelingRotationScale - PositionTolerance, kneelingRotationScale + PositionTolerance);
+
+            receivingStandingState.OnUpdate(transitionContext);
+
+            HipLimitFrame standingMidBlendFrame = receivingStandingState.BuildHipLimitFrame(transitionContext);
+            HipLimitFrame pureStandingFrame = CreateStandingHipLimitState().BuildHipLimitFrame(transitionContext);
+            float standingMidBlendRotationScale = receivingStandingState.GetEffectiveRotationCompensationScale(transitionContext);
+            float pureStandingRotationScale = CreateStandingHipLimitState().GetEffectiveRotationCompensationScale(transitionContext);
+
+            Assert.False(
+                standingMidBlendFrame.ReferenceHipLocalPosition.IsEqualApprox(kneelingFrame.ReferenceHipLocalPosition),
+                "Expected standing mid-blend reference to move away from the kneeling snapshot.");
+            Assert.False(
+                standingMidBlendFrame.ReferenceHipLocalPosition.IsEqualApprox(pureStandingFrame.ReferenceHipLocalPosition),
+                "Expected standing mid-blend reference to remain short of the pure standing target before the blend completes.");
+            Assert.InRange(
+                standingMidBlendRotationScale,
+                Mathf.Min(kneelingRotationScale, pureStandingRotationScale) - PositionTolerance,
+                Mathf.Max(kneelingRotationScale, pureStandingRotationScale) + PositionTolerance);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
     private static PoseStateMachine CreatePoseStateMachine(StandingPoseState state)
     {
         PoseStateMachine stateMachine = new()
@@ -881,17 +1201,45 @@ public sealed partial class PoseStateHipLimitIntegrationTests
         float restHeadHeight,
         int headBoneIndex = -1,
         Basis? currentHeadBasis = null,
-        Vector3? currentHeadLocalOffset = null)
+        Vector3? currentHeadLocalOffset = null,
+        double delta = 0.0)
         => new()
         {
             Skeleton = skeleton,
             HipBoneIndex = hipBoneIndex,
             HeadBoneIndex = headBoneIndex,
             RestHeadHeight = restHeadHeight,
+            Delta = delta,
             HeadTargetRestTransform = new Transform3D(Basis.Identity, new Vector3(0f, restHeadY, 0f)),
             HeadTargetTransform = new Transform3D(
                 currentHeadBasis ?? Basis.Identity,
                 new Vector3(0f, currentHeadY, 0f) + (currentHeadLocalOffset ?? Vector3.Zero)),
+        };
+
+    private static KneelingPoseState CreateKneelingHipLimitState()
+        => new()
+        {
+            HipReconciliation = new HeadTrackingHipProfile
+            {
+                RotationCompensationWeight = 0f,
+                VerticalPositionWeight = 1f,
+                LateralPositionWeight = 0.5f,
+                ForwardPositionWeight = 0.1f,
+                MinimumAlignmentWeight = 0.1f,
+            },
+            HipOffsetLimits = new OffsetLimits3D
+            {
+                Up = 0.05f,
+                Down = 0.03f,
+                Left = 0.06f,
+                Right = 0.06f,
+                Forward = 0.08f,
+                Back = 0.05f,
+            },
+            KneelingReferenceHipHeightRatio = 0.16f,
+            KneelingReferenceForwardShiftRatio = 0.09f,
+            TransitionBlendDurationSeconds = 0.5f,
+            KneelingRotationCompensationScale = 0.1f,
         };
 
     private static StandingPoseState CreateStandingHipLimitState()
@@ -948,6 +1296,8 @@ public sealed partial class PoseStateHipLimitIntegrationTests
         };
 
         int hipBoneIndex = skeleton.AddBone("Hips");
+        // The production rig carries the container yaw flip above the skeleton rather than on the
+        // hip bone, so the hip bone rest basis is identity here.
         skeleton.SetBoneRest(hipBoneIndex, new Transform3D(Basis.Identity, new Vector3(0f, 0.95f, 0f)));
         return skeleton;
     }
@@ -973,6 +1323,31 @@ public sealed partial class PoseStateHipLimitIntegrationTests
         Assert.True(
             result.AppliedHipLocalPosition.IsEqualApprox(expectedAppliedHipLocalPosition),
             $"Expected applied hip position {expectedAppliedHipLocalPosition}, got {result.AppliedHipLocalPosition} for desired {desiredHipLocalPosition}.");
+    }
+
+    private static void AssertEnvelopeApproximately(HipLimitEnvelope? actual, HipLimitEnvelope? expected, float epsilon = PositionTolerance)
+    {
+        Assert.Equal(expected.HasValue, actual.HasValue);
+        if (!actual.HasValue || !expected.HasValue)
+        {
+            return;
+        }
+
+        AssertOptionalFloatApproximately(actual.Value.Up, expected.Value.Up, epsilon);
+        AssertOptionalFloatApproximately(actual.Value.Down, expected.Value.Down, epsilon);
+        AssertOptionalFloatApproximately(actual.Value.Left, expected.Value.Left, epsilon);
+        AssertOptionalFloatApproximately(actual.Value.Right, expected.Value.Right, epsilon);
+        AssertOptionalFloatApproximately(actual.Value.Forward, expected.Value.Forward, epsilon);
+        AssertOptionalFloatApproximately(actual.Value.Back, expected.Value.Back, epsilon);
+    }
+
+    private static void AssertOptionalFloatApproximately(float? actual, float? expected, float epsilon)
+    {
+        Assert.Equal(expected.HasValue, actual.HasValue);
+        if (actual.HasValue && expected.HasValue)
+        {
+            Assert.InRange(actual.Value, expected.Value - epsilon, expected.Value + epsilon);
+        }
     }
 
     private static int RequireBoneIndex(Skeleton3D skeleton, string boneName)

@@ -138,14 +138,16 @@ public partial class PoseStateMachine : Node
         var activePoseState = (PoseState)tickResult.ActiveState;
         CurrentState = activePoseState;
 
-        HipReconciliationTickResult? hipTickResult = activePoseState.ResolveHipReconciliation(context);
+        PoseStateContext enrichedContext = tickResult.Context;
+        HipReconciliationTickResult? hipTickResult = activePoseState.ResolveHipReconciliation(enrichedContext);
         _lastTickResult = hipTickResult is null
-            ? new PoseStateMachineTickResult(activePoseState, null, null, Vector3.Zero)
+            ? new PoseStateMachineTickResult(activePoseState, null, null, Vector3.Zero, enrichedContext)
             : new PoseStateMachineTickResult(
                 activePoseState,
                 hipTickResult.AppliedHipLocalPosition,
                 hipTickResult.LimitedHeadTargetTransform,
-                hipTickResult.ResidualFinalHipOffset);
+                hipTickResult.ResidualFinalHipOffset,
+                enrichedContext);
 
         return _lastTickResult;
     }
@@ -256,4 +258,5 @@ public readonly record struct PoseStateMachineTickResult(
     PoseState? ActiveState,
     Vector3? HipLocalPosition,
     Transform3D? LimitedHeadTargetTransform,
-    Vector3 ResidualHipOffset);
+    Vector3 ResidualHipOffset,
+    PoseStateContext Context);

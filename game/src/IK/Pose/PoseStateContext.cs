@@ -184,6 +184,17 @@ public sealed record PoseStateContext
         new Dictionary<StringName, float>();
 
     /// <summary>
+    /// Gets the state that was active when the current transition fired, or null when no
+    /// transition is in progress. Receiving states can type-test this against transition-
+    /// source interfaces to query effective source values for smooth blending.
+    /// </summary>
+    public IPoseState? TransitionSourceState
+    {
+        get;
+        init;
+    }
+
+    /// <summary>
     /// Attempts to resolve an auxiliary signal value by <paramref name="key"/>.
     /// </summary>
     /// <param name="key">Signal name to look up.</param>

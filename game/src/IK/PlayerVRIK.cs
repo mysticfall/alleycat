@@ -364,7 +364,7 @@ public partial class PlayerVRIK : Node3D
         Skeleton3D skeleton = GetResolvedSkeleton();
         PoseStateContext context = BuildPoseStateContext(skeleton, delta);
         PoseStateMachineTickResult tickResult = stateMachine.Tick(context);
-        UpdateHipDebugMessage(context, tickResult);
+        UpdateHipDebugMessage(tickResult.Context, tickResult);
     }
 
     private void OnEndStage(double delta)

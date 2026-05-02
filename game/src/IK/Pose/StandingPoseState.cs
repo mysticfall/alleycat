@@ -13,13 +13,17 @@ namespace AlleyCat.IK.Pose;
 /// <see cref="HeadTrackingHipProfile"/> provides the matching hip reconciliation behaviour.
 /// </remarks>
 [GlobalClass]
-public partial class StandingPoseState : PoseState
+public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSource
 {
     private const float RestHeadHeightFloor = 1e-3f;
     private const float RatioFloor = 1e-3f;
     private const float SoftLimitBlendRangeFloor = 1e-4f;
 
     private bool _warnedMissingSeekPath;
+    private double _timeSinceEnter = -1.0;
+    private float? _snapshotRotationCompensationScale;
+    private HipLimitEnvelope? _snapshotHipOffsetEnvelope;
+    private Vector3? _snapshotReferenceHipLocalPosition;
 
     /// <summary>
     /// Canonical identifier used by <see cref="StandingPoseState"/>.
@@ -122,6 +126,17 @@ public partial class StandingPoseState : PoseState
     } = 0.04f;
 
     /// <summary>
+    /// Duration in seconds over which the standing continuum blends from a captured crouching
+    /// source snapshot back into its own reference, envelope, and rotation continuum.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,5,0.01,or_greater")]
+    public float TransitionBlendDurationSeconds
+    {
+        get;
+        set;
+    } = 0.5f;
+
+    /// <summary>
     /// Initialises the state and seeds <see cref="PoseState.Id"/> with <see cref="DefaultId"/>.
     /// </summary>
     public StandingPoseState()
@@ -161,7 +176,62 @@ public partial class StandingPoseState : PoseState
     }
 
     /// <inheritdoc />
+    public override void OnEnter(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        _timeSinceEnter = 0.0;
+
+        if (context.TransitionSourceState is ICrouchingPoseTransitionSource source)
+        {
+            _snapshotRotationCompensationScale = source.GetEffectiveRotationCompensationScale(context);
+            _snapshotHipOffsetEnvelope = source.GetEffectiveHipOffsetEnvelope(context);
+            _snapshotReferenceHipLocalPosition = source.GetEffectiveReferenceHipLocalPosition(context);
+        }
+        else
+        {
+            _snapshotRotationCompensationScale = null;
+            _snapshotHipOffsetEnvelope = null;
+            _snapshotReferenceHipLocalPosition = null;
+        }
+    }
+
+    /// <inheritdoc />
+    public override void OnUpdate(PoseStateContext context)
+    {
+        base.OnUpdate(context);
+        _timeSinceEnter += context.Delta;
+    }
+
+    /// <inheritdoc />
     public override HipLimitFrame BuildHipLimitFrame(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        HipLimitFrame standingFrame = BuildStandingHipLimitFrame(context);
+        float transitionBlend = ComputeTransitionBlend();
+        if ((_snapshotReferenceHipLocalPosition is null && _snapshotHipOffsetEnvelope is null) || transitionBlend >= 1.0f)
+        {
+            return standingFrame;
+        }
+
+        Vector3 blendedReferenceHipLocalPosition = (_snapshotReferenceHipLocalPosition ?? standingFrame.ReferenceHipLocalPosition)
+            .Lerp(standingFrame.ReferenceHipLocalPosition, transitionBlend);
+        HipLimitEnvelope? blendedOffsetEnvelope = ResolveTransitionEnvelope(standingFrame.OffsetEnvelope, transitionBlend);
+        HipLimitBounds? blendedAbsoluteBounds = ResolveTransitionAbsoluteBounds(
+            standingFrame.AbsoluteBounds,
+            context.RestHeadHeight,
+            transitionBlend);
+
+        return standingFrame with
+        {
+            ReferenceHipLocalPosition = blendedReferenceHipLocalPosition,
+            AbsoluteBounds = blendedAbsoluteBounds,
+            OffsetEnvelope = blendedOffsetEnvelope,
+        };
+    }
+
+    private HipLimitFrame BuildStandingHipLimitFrame(PoseStateContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -194,10 +264,16 @@ public partial class StandingPoseState : PoseState
 
         Transform3D hipGlobalRest = skeleton.GetBoneGlobalRest(context.HipBoneIndex);
         Vector3 hipLocalRest = hipGlobalRest.Origin;
+        // Use the rig's avatar-relative semantic axes so the reference shift direction stays
+        // independent of the per-bone rest basis. The production rig carries its yaw flip on
+        // the container rather than the hip bone, so a hip-basis-derived forward would point
+        // opposite to avatar-forward for this rig.
+        Vector3 hipRestUpLocal = semanticFrame.UpLocal;
+        Vector3 avatarForwardLocal = semanticFrame.AvatarForwardLocal;
         return ComputeHipLimitFrame(
             hipLocalRest,
-            semanticFrame.UpLocal,
-            semanticFrame.AvatarForwardLocal,
+            hipRestUpLocal,
+            avatarForwardLocal,
             context.HeadTargetRestTransform.Origin.Y,
             context.HeadTargetTransform.Origin.Y,
             context.RestHeadHeight,
@@ -219,7 +295,7 @@ public partial class StandingPoseState : PoseState
 
         HipReconciliationProfileResult? profileResult = headTrackingHipProfile.ComputeHipResult(
             context,
-            ComputeRotationCompensationScale(context));
+            ResolveEffectiveRotationCompensationScale(context));
 
         return profileResult is null ? null : ApplyHipReconciliation(context, profileResult);
     }
@@ -354,6 +430,42 @@ public partial class StandingPoseState : PoseState
         => axis.LengthSquared() > Mathf.Epsilon
             ? axis.Normalized()
             : fallback;
+
+    private static HipLimitBounds CreateAbsoluteBounds(
+        Vector3 referenceHipLocalPosition,
+        HipLimitEnvelope envelope,
+        float restHeadHeight)
+    {
+        float safeRestHeadHeight = restHeadHeight > RestHeadHeightFloor
+            ? restHeadHeight
+            : 1f;
+
+        return new HipLimitBounds(
+            envelope.Up.HasValue ? referenceHipLocalPosition.Y + (Mathf.Max(envelope.Up.Value, 0f) * safeRestHeadHeight) : null,
+            envelope.Down.HasValue ? referenceHipLocalPosition.Y - (Mathf.Max(envelope.Down.Value, 0f) * safeRestHeadHeight) : null,
+            envelope.Left.HasValue ? referenceHipLocalPosition.X - (Mathf.Max(envelope.Left.Value, 0f) * safeRestHeadHeight) : null,
+            envelope.Right.HasValue ? referenceHipLocalPosition.X + (Mathf.Max(envelope.Right.Value, 0f) * safeRestHeadHeight) : null,
+            envelope.Forward.HasValue ? referenceHipLocalPosition.Z - (Mathf.Max(envelope.Forward.Value, 0f) * safeRestHeadHeight) : null,
+            envelope.Back.HasValue ? referenceHipLocalPosition.Z + (Mathf.Max(envelope.Back.Value, 0f) * safeRestHeadHeight) : null);
+    }
+
+    private static HipLimitBounds LerpBounds(HipLimitBounds from, HipLimitBounds to, float weight)
+        => new(
+            LerpOptionalBound(from.Up, to.Up, weight),
+            LerpOptionalBound(from.Down, to.Down, weight),
+            LerpOptionalBound(from.Left, to.Left, weight),
+            LerpOptionalBound(from.Right, to.Right, weight),
+            LerpOptionalBound(from.Forward, to.Forward, weight),
+            LerpOptionalBound(from.Back, to.Back, weight));
+
+    private static float? LerpOptionalBound(float? from, float? to, float weight)
+        => (from, to) switch
+        {
+            (null, null) => null,
+            ({ } fromValue, null) => weight >= 1f ? null : fromValue,
+            (null, { } toValue) => weight <= 0f ? null : toValue,
+            ({ } fromValue, { } toValue) => Mathf.Lerp(fromValue, toValue, Mathf.Clamp(weight, 0f, 1f)),
+        };
 
     private static HipLimitEnvelope ResolveFallbackEnvelope(
         HipLimitEnvelope? uprightEnvelope,
@@ -536,7 +648,70 @@ public partial class StandingPoseState : PoseState
             context.RestHeadHeight,
             FullCrouchReferenceHipHeightRatio);
 
-    private float ComputeRotationCompensationScale(PoseStateContext context)
+    private float ComputeTransitionBlend()
+        => _timeSinceEnter < 0.0 || TransitionBlendDurationSeconds <= 1e-4f
+            ? 1.0f
+            : (float)Mathf.Clamp(_timeSinceEnter / TransitionBlendDurationSeconds, 0.0, 1.0);
+
+    private HipLimitEnvelope? ResolveTransitionEnvelope(HipLimitEnvelope? standingEnvelope, float transitionBlend)
+    {
+        if (transitionBlend >= 1.0f)
+        {
+            return standingEnvelope;
+        }
+
+        HipLimitEnvelope? sourceEnvelope = _snapshotHipOffsetEnvelope;
+        return sourceEnvelope is null
+            ? standingEnvelope
+            : standingEnvelope is null
+                ? sourceEnvelope
+                : HipLimitEnvelope.Lerp(sourceEnvelope.Value, standingEnvelope.Value, transitionBlend);
+    }
+
+    private HipLimitBounds? ResolveTransitionAbsoluteBounds(
+        HipLimitBounds? standingAbsoluteBounds,
+        float restHeadHeight,
+        float transitionBlend)
+    {
+        HipLimitBounds? sourceAbsoluteBounds = _snapshotHipOffsetEnvelope is null || _snapshotReferenceHipLocalPosition is null
+            ? null
+            : CreateAbsoluteBounds(_snapshotReferenceHipLocalPosition.Value, _snapshotHipOffsetEnvelope.Value, restHeadHeight);
+
+        return (sourceAbsoluteBounds, standingAbsoluteBounds) switch
+        {
+            (null, null) => null,
+            ({ } sourceBounds, null) => transitionBlend >= 1.0f ? null : sourceBounds,
+            (null, { } targetBounds) => targetBounds,
+            ({ } sourceBounds, { } targetBounds) => LerpBounds(sourceBounds, targetBounds, transitionBlend),
+        };
+    }
+
+    private float ResolveEffectiveRotationCompensationScale(PoseStateContext context)
+    {
+        float standingScale = ComputeStandingRotationCompensationScale(context);
+        float transitionBlend = ComputeTransitionBlend();
+        return _snapshotRotationCompensationScale is null || transitionBlend >= 1.0f
+            ? standingScale
+            : Mathf.Lerp(_snapshotRotationCompensationScale.Value, standingScale, transitionBlend);
+    }
+
+    /// <inheritdoc />
+    public float GetEffectiveRotationCompensationScale(PoseStateContext context)
+        => ResolveEffectiveRotationCompensationScale(context);
+
+    /// <inheritdoc />
+    public HipLimitEnvelope? GetEffectiveHipOffsetEnvelope(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return BuildHipLimitFrame(context).OffsetEnvelope;
+    }
+
+    /// <inheritdoc />
+    public Vector3 GetEffectiveReferenceHipLocalPosition(PoseStateContext context)
+        => BuildHipLimitFrame(context).ReferenceHipLocalPosition;
+
+    private float ComputeStandingRotationCompensationScale(PoseStateContext context)
         => ComputeRotationCompensationScale(
             ComputePoseBlend(context),
             FullCrouchRotationCompensationScale);
