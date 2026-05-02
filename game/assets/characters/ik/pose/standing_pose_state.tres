@@ -13,6 +13,7 @@ ClipDurationSeconds = 1.6666666
 UprightHipOffsetLimits = ExtResource("3_p0eiy")
 CrouchedHipOffsetLimits = ExtResource("4_vlfio")
 FullCrouchRotationCompensationScale = 0.1
+FullCrouchReferenceForwardShiftRatio = 0.04
 Id = &"Standing"
 HipReconciliation = ExtResource("2_6oie5")
 AnimationStateName = &"StandingCrouching"

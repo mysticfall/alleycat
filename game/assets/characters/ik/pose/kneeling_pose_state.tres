@@ -1,14 +1,16 @@
 [gd_resource type="Resource" script_class="KneelingPoseState" format=3 uid="uid://b0ajquunweskg"]
 
+[ext_resource type="Resource" uid="uid://b2460i3j2o40w" path="res://assets/characters/ik/pose/kneeling_hip_offset_limits.tres" id="1_ox1rd"]
 [ext_resource type="Resource" uid="uid://c7f40jgif80ac" path="res://assets/characters/ik/pose/head_tracking_hip_profile.tres" id="2_se4rj"]
-[ext_resource type="Resource" path="res://assets/characters/ik/pose/standing_crouched_hip_offset_limits.tres" id="3_6xdtr"]
 [ext_resource type="Script" uid="uid://b3sexmlxouovy" path="res://src/IK/Pose/KneelingPoseState.cs" id="3_nj0i1"]
 
 [resource]
 resource_name = "KneelingPoseState"
 script = ExtResource("3_nj0i1")
-HipOffsetLimits = ExtResource("3_6xdtr")
-FullCrouchReferenceHipHeightRatio = 0.21
-FullCrouchReferenceForwardShiftRatio = 0.04
+HipOffsetLimits = ExtResource("1_ox1rd")
+KneelingReferenceHipHeightRatio = 0.16
+KneelingReferenceForwardShiftRatio = 0.09
+TransitionSourceHipHeightRatio = 0.21
+TransitionSourceForwardShiftRatio = 0.04
 Id = &"Kneeling"
 HipReconciliation = ExtResource("2_se4rj")

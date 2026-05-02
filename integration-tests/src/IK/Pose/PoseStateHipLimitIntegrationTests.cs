@@ -674,7 +674,7 @@ public sealed partial class PoseStateHipLimitIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task KneelingBuildHipLimitFrame_UsesFullCrouchCompatibleReferenceAnchor()
+    public async Task KneelingBuildHipLimitFrame_UsesKneelingReferenceAnchor()
     {
         SceneTree sceneTree = GetSceneTree();
         Node3D root = new()
@@ -717,8 +717,8 @@ public sealed partial class PoseStateHipLimitIntegrationTests
                 frame.ReferenceHipLocalPosition.Z > 0f,
                 $"Expected positive forward shift to move along avatar-forward resolved into skeleton-local +Z, got {frame.ReferenceHipLocalPosition}.");
             Assert.True(
-                frame.ReferenceHipLocalPosition.IsEqualApprox(new Vector3(0f, 0.336f, 0.064f)),
-                $"Expected kneeling reference anchor to match the full-crouch frame, got {frame.ReferenceHipLocalPosition}.");
+                frame.ReferenceHipLocalPosition.IsEqualApprox(new Vector3(0f, 0.256f, 0.144f)),
+                $"Expected kneeling reference anchor {frame.ReferenceHipLocalPosition} to use the kneeling reference ratios.");
             Assert.True(frame.OffsetEnvelope.HasValue);
             HipLimitEnvelope envelope = frame.OffsetEnvelope.Value;
             Assert.Equal(limits.Up, envelope.Up);
@@ -769,8 +769,8 @@ public sealed partial class PoseStateHipLimitIntegrationTests
                     Forward = 0.08f,
                     Back = 0.05f,
                 },
-                FullCrouchReferenceHipHeightRatio = standingState.FullCrouchReferenceHipHeightRatio,
-                FullCrouchReferenceForwardShiftRatio = standingState.FullCrouchReferenceForwardShiftRatio,
+                KneelingReferenceHipHeightRatio = standingState.FullCrouchReferenceHipHeightRatio,
+                KneelingReferenceForwardShiftRatio = standingState.FullCrouchReferenceForwardShiftRatio,
             };
 
             PoseStateContext context = CreateContext(
@@ -827,8 +827,8 @@ public sealed partial class PoseStateHipLimitIntegrationTests
             KneelingPoseState kneelingState = new()
             {
                 HipOffsetLimits = asymmetricLimits,
-                FullCrouchReferenceHipHeightRatio = 0.21f,
-                FullCrouchReferenceForwardShiftRatio = 0.04f,
+                KneelingReferenceHipHeightRatio = 0.21f,
+                KneelingReferenceForwardShiftRatio = 0.04f,
             };
 
             PoseStateContext standingContext = CreateContext(
