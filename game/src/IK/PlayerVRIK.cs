@@ -170,6 +170,16 @@ public partial class PlayerVRIK : Node3D
     }
 
     /// <summary>
+    /// When enabled, shows general pose-state animation debug lines in the debug overlay.
+    /// </summary>
+    [Export]
+    public bool AnimationDebugOutputEnabled
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
     /// Pose state machine driven from the XR bridge. When set, <c>_Process</c> builds a
     /// <see cref="PoseStateContext"/> per tick and invokes <see cref="PoseStateMachine.Tick"/>
     /// so hip reconciliation and animation bindings observe the same snapshot as the modifier
@@ -458,9 +468,14 @@ public partial class PlayerVRIK : Node3D
 
     private void UpdateHipDebugMessage(PoseStateContext context, PoseStateMachineTickResult tickResult)
     {
+        string? animationDebugMessage = AnimationDebugOutputEnabled
+            ? tickResult.ActiveState?.BuildAnimationDebugMessage(context)
+            : null;
+
         if (!HipClampDebugOutputEnabled
             && !HipPositionReferenceDebugOutputEnabled
-            && !HipForwardBackSeamDebugOutputEnabled)
+            && !HipForwardBackSeamDebugOutputEnabled
+            && string.IsNullOrEmpty(animationDebugMessage))
         {
             ClearHipDebugMessage();
             return;
@@ -503,6 +518,12 @@ public partial class PlayerVRIK : Node3D
                 context,
                 tickResult,
                 _mostRecentOriginCompensationDelta);
+        }
+
+        if (!string.IsNullOrEmpty(animationDebugMessage))
+        {
+            AppendDebugLineSeparator(messageBuilder);
+            _ = messageBuilder.Append(animationDebugMessage);
         }
 
         _isDrivingDebugOverlay = this.SetDebugMessage(messageBuilder.ToString());

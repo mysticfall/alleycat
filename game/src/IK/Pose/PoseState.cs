@@ -110,6 +110,17 @@ public abstract partial class PoseState : Resource, IPoseState
     }
 
     /// <summary>
+    /// Builds an optional debug-overlay line describing this state's current animation-facing
+    /// state for play tests. Return <see langword="null"/> to omit animation debug output.
+    /// </summary>
+    public virtual string? BuildAnimationDebugMessage(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return null;
+    }
+
+    /// <summary>
     /// Returns the current AnimationTree state-machine node from the supplied context, or empty
     /// when playback is not available.
     /// </summary>

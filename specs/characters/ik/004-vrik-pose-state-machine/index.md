@@ -126,6 +126,9 @@ responsibility.
      - Auxiliary-signals lookup for extensible computed values
 
      Detailed composition is defined in the [Pose State Machine Contract](pose-state-machine-contract.md).
+
+      > **Debug overlay note:** `PlayerVRIK` owns the aggregated debug-overlay output path for play-test instrumentation. Pose states may surface state-specific animation debug lines through that output path. Debug overlay follows the existing toggle-driven pattern; pose-state implementations that add debug output must route through `PlayerVRIK`'s debug-aggregation contract.
+
 22. Runtime responsibilities may be split across two cooperating nodes — a `PoseStateMachine` node that runs `Tick`
      per frame and a `HipReconciliationModifier` (`SkeletonModifier3D`) that applies the pending hip translation inside
      the skeleton modifier pipeline. `Tick` must run after follower updates provide current tracked transforms and
