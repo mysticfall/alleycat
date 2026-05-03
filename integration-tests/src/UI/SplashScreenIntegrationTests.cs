@@ -4,6 +4,7 @@ using AlleyCat.UI;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
+using UIControl = Godot.Control;
 
 namespace AlleyCat.IntegrationTests.UI;
 
@@ -66,7 +67,7 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
 
         try
         {
-            Control splashControl = Assert.IsType<Control>(splashScreen, exactMatch: false);
+            UIControl splashControl = Assert.IsType<UIControl>(splashScreen, exactMatch: false);
             Sprite2D logo = splashScreen.GetNode<Sprite2D>("Logo/Image");
 
             float viewportWidth = splashControl.GetViewport().GetVisibleRect().Size.X;

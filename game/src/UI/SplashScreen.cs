@@ -1,5 +1,6 @@
 using AlleyCat.Common;
 using Godot;
+using UIControl = Godot.Control;
 
 namespace AlleyCat.UI;
 
@@ -7,7 +8,7 @@ namespace AlleyCat.UI;
 /// Displays the opening splash screen, fades the logo in, then fades it out.
 /// </summary>
 [GlobalClass]
-public partial class SplashScreen : Control
+public partial class SplashScreen : UIControl
 {
     private const float TargetLogoWidthRatio = 0.5f;
 

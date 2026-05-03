@@ -1,4 +1,5 @@
 using Godot;
+using UIControl = Godot.Control;
 
 namespace AlleyCat.UI;
 
@@ -6,7 +7,7 @@ namespace AlleyCat.UI;
 /// Hosts reusable UI widgets and resolves them by interface type.
 /// </summary>
 [GlobalClass]
-public partial class UIOverlay : Control
+public partial class UIOverlay : UIControl
 {
     /// <summary>
     /// Finds the first widget implementing <typeparamref name="TWidget"/>.

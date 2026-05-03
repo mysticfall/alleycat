@@ -1,6 +1,7 @@
 using AlleyCat.Common;
 using Godot;
 using Array = Godot.Collections.Array;
+using UIControl = Godot.Control;
 
 namespace AlleyCat.UI;
 
@@ -8,7 +9,7 @@ namespace AlleyCat.UI;
 /// Displays loading progress while asynchronously preparing a scene transition.
 /// </summary>
 [GlobalClass]
-public partial class LoadingScreen : Control
+public partial class LoadingScreen : UIControl
 {
     private readonly Array _threadedProgress = [0.0f];
 

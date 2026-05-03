@@ -2,6 +2,7 @@ using AlleyCat.UI;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
+using UIControl = Godot.Control;
 
 namespace AlleyCat.IntegrationTests.UI;
 
@@ -26,10 +27,10 @@ public sealed class LoadingScreenIntegrationTests
 
         try
         {
-            Control loadingScreenControl = Assert.IsType<Control>(loadingScreen, exactMatch: false);
+            UIControl loadingScreenControl = Assert.IsType<UIControl>(loadingScreen, exactMatch: false);
             Label loadingMessage = loadingScreen.GetNode<Label>("CenterContent/LoadingMessage");
             ProgressBar loadingProgressBar = loadingScreen.GetNode<ProgressBar>("CenterContent/LoadingProgressBar");
-            Control centreContent = loadingScreen.GetNode<Control>("CenterContent");
+            UIControl centreContent = loadingScreen.GetNode<UIControl>("CenterContent");
 
             Assert.NotNull(loadingMessage);
             Assert.NotNull(loadingProgressBar);
