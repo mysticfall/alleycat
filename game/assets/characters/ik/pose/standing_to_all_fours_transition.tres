@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="AllFoursEntryPoseTransition" format=3]
+
+[ext_resource type="Script" path="res://src/IK/Pose/AllFoursEntryPoseTransition.cs" id="1_62pwd"]
+
+[resource]
+resource_name = "StandingToAllFoursTransition"
+script = ExtResource("1_62pwd")
+TransitionStateName = &"AllFoursTransitioning"
+ArmingForwardOffsetThreshold = 0.42
+ContinueForwardMargin = 0.06
+From = &"Standing"
+To = &"AllFours"

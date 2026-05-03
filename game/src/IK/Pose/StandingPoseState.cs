@@ -19,8 +19,17 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     private const float RatioFloor = 1e-3f;
     private const float SoftLimitBlendRangeFloor = 1e-4f;
 
+    private readonly record struct TransitionBoundTranslationMask(
+        bool Up,
+        bool Down,
+        bool Left,
+        bool Right,
+        bool Forward,
+        bool Back);
+
     private bool _warnedMissingSeekPath;
     private double _timeSinceEnter = -1.0;
+    private PoseState? _snapshotTransitionSourceState;
     private float? _snapshotRotationCompensationScale;
     private HipLimitEnvelope? _snapshotHipOffsetEnvelope;
     private Vector3? _snapshotReferenceHipLocalPosition;
@@ -184,12 +193,14 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
 
         if (context.TransitionSourceState is ICrouchingPoseTransitionSource source)
         {
+            _snapshotTransitionSourceState = context.TransitionSourceState as PoseState;
             _snapshotRotationCompensationScale = source.GetEffectiveRotationCompensationScale(context);
             _snapshotHipOffsetEnvelope = source.GetEffectiveHipOffsetEnvelope(context);
             _snapshotReferenceHipLocalPosition = source.GetEffectiveReferenceHipLocalPosition(context);
         }
         else
         {
+            _snapshotTransitionSourceState = null;
             _snapshotRotationCompensationScale = null;
             _snapshotHipOffsetEnvelope = null;
             _snapshotReferenceHipLocalPosition = null;
@@ -209,6 +220,7 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
         ArgumentNullException.ThrowIfNull(context);
 
         HipLimitFrame standingFrame = BuildStandingHipLimitFrame(context);
+        TransitionBoundTranslationMask standingTransitionBoundTranslationMask = BuildStandingTransitionBoundTranslationMask();
         float transitionBlend = ComputeTransitionBlend();
         if ((_snapshotReferenceHipLocalPosition is null && _snapshotHipOffsetEnvelope is null) || transitionBlend >= 1.0f)
         {
@@ -220,6 +232,9 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
         HipLimitEnvelope? blendedOffsetEnvelope = ResolveTransitionEnvelope(standingFrame.OffsetEnvelope, transitionBlend);
         HipLimitBounds? blendedAbsoluteBounds = ResolveTransitionAbsoluteBounds(
             standingFrame.AbsoluteBounds,
+            standingFrame.ReferenceHipLocalPosition,
+            blendedReferenceHipLocalPosition,
+            standingTransitionBoundTranslationMask,
             context.RestHeadHeight,
             transitionBlend);
 
@@ -288,16 +303,19 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        HipReconciliationTickResult? standingTickResult;
         if (HipReconciliation is not HeadTrackingHipProfile headTrackingHipProfile)
         {
-            return base.ResolveHipReconciliation(context);
+            standingTickResult = base.ResolveHipReconciliation(context);
+            return BlendTransitionSourceTickResult(context, standingTickResult);
         }
 
         HipReconciliationProfileResult? profileResult = headTrackingHipProfile.ComputeHipResult(
             context,
             ResolveEffectiveRotationCompensationScale(context));
 
-        return profileResult is null ? null : ApplyHipReconciliation(context, profileResult);
+        standingTickResult = profileResult is null ? null : ApplyHipReconciliation(context, profileResult);
+        return BlendTransitionSourceTickResult(context, standingTickResult);
     }
 
     /// <inheritdoc />
@@ -457,6 +475,18 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
             LerpOptionalBound(from.Right, to.Right, weight),
             LerpOptionalBound(from.Forward, to.Forward, weight),
             LerpOptionalBound(from.Back, to.Back, weight));
+
+    private static HipLimitBounds TranslateBounds(HipLimitBounds bounds, Vector3 delta, TransitionBoundTranslationMask translationMask)
+        => new(
+            translationMask.Up ? TranslateOptionalBound(bounds.Up, delta.Y) : bounds.Up,
+            translationMask.Down ? TranslateOptionalBound(bounds.Down, delta.Y) : bounds.Down,
+            translationMask.Left ? TranslateOptionalBound(bounds.Left, delta.X) : bounds.Left,
+            translationMask.Right ? TranslateOptionalBound(bounds.Right, delta.X) : bounds.Right,
+            translationMask.Forward ? TranslateOptionalBound(bounds.Forward, delta.Z) : bounds.Forward,
+            translationMask.Back ? TranslateOptionalBound(bounds.Back, delta.Z) : bounds.Back);
+
+    private static float? TranslateOptionalBound(float? value, float delta)
+        => value.HasValue ? value.Value + delta : null;
 
     private static float? LerpOptionalBound(float? from, float? to, float weight)
         => (from, to) switch
@@ -648,6 +678,21 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
             context.RestHeadHeight,
             FullCrouchReferenceHipHeightRatio);
 
+    private TransitionBoundTranslationMask BuildStandingTransitionBoundTranslationMask()
+    {
+        HipLimitSemanticFrame semanticFrame = HipLimitSemanticFrame.ReferenceRig;
+        HipLimitEnvelope? uprightEnvelope = HipLimitEnvelope.FromOffsetLimits(UprightHipOffsetLimits, semanticFrame);
+        HipLimitEnvelope? crouchedEnvelope = HipLimitEnvelope.FromOffsetLimits(CrouchedHipOffsetLimits, semanticFrame);
+
+        return new TransitionBoundTranslationMask(
+            Up: uprightEnvelope?.Up is not null && crouchedEnvelope?.Up is not null,
+            Down: uprightEnvelope?.Down is not null && crouchedEnvelope?.Down is not null,
+            Left: uprightEnvelope?.Left is not null && crouchedEnvelope?.Left is not null,
+            Right: uprightEnvelope?.Right is not null && crouchedEnvelope?.Right is not null,
+            Forward: uprightEnvelope?.Forward is not null && crouchedEnvelope?.Forward is not null,
+            Back: uprightEnvelope?.Back is not null && crouchedEnvelope?.Back is not null);
+    }
+
     private float ComputeTransitionBlend()
         => _timeSinceEnter < 0.0 || TransitionBlendDurationSeconds <= 1e-4f
             ? 1.0f
@@ -670,6 +715,9 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
 
     private HipLimitBounds? ResolveTransitionAbsoluteBounds(
         HipLimitBounds? standingAbsoluteBounds,
+        Vector3 standingReferenceHipLocalPosition,
+        Vector3 effectiveReferenceHipLocalPosition,
+        TransitionBoundTranslationMask standingTransitionBoundTranslationMask,
         float restHeadHeight,
         float transitionBlend)
     {
@@ -681,9 +729,68 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
         {
             (null, null) => null,
             ({ } sourceBounds, null) => transitionBlend >= 1.0f ? null : sourceBounds,
-            (null, { } targetBounds) => targetBounds,
+            (null, { } targetBounds) => TranslateBounds(
+                targetBounds,
+                effectiveReferenceHipLocalPosition - standingReferenceHipLocalPosition,
+                standingTransitionBoundTranslationMask),
             ({ } sourceBounds, { } targetBounds) => LerpBounds(sourceBounds, targetBounds, transitionBlend),
         };
+    }
+
+    private HipReconciliationTickResult? BlendTransitionSourceTickResult(
+        PoseStateContext context,
+        HipReconciliationTickResult? standingTickResult)
+    {
+        float transitionBlend = ComputeTransitionBlend();
+        if (standingTickResult is null || _snapshotTransitionSourceState is null || transitionBlend >= 1.0f)
+        {
+            return standingTickResult;
+        }
+
+        HipReconciliationTickResult? sourceTickResult = _snapshotTransitionSourceState.ResolveHipReconciliation(context);
+        return sourceTickResult is null
+            ? standingTickResult
+            : BlendTickResults(
+                sourceTickResult,
+                standingTickResult,
+                context.HeadTargetTransform,
+                transitionBlend);
+    }
+
+    private static HipReconciliationTickResult BlendTickResults(
+        HipReconciliationTickResult source,
+        HipReconciliationTickResult target,
+        Transform3D currentHeadTargetTransform,
+        float blend)
+        => new()
+        {
+            AppliedHipLocalPosition = source.AppliedHipLocalPosition.Lerp(target.AppliedHipLocalPosition, blend),
+            DesiredFinalHipOffset = source.DesiredFinalHipOffset.Lerp(target.DesiredFinalHipOffset, blend),
+            AppliedFinalHipOffset = source.AppliedFinalHipOffset.Lerp(target.AppliedFinalHipOffset, blend),
+            LimitedHeadTargetTransform = BlendLimitedHeadTargetTransform(
+                source.LimitedHeadTargetTransform,
+                target.LimitedHeadTargetTransform,
+                currentHeadTargetTransform,
+                blend),
+        };
+
+    private static Transform3D? BlendLimitedHeadTargetTransform(
+        Transform3D? source,
+        Transform3D? target,
+        Transform3D currentHeadTargetTransform,
+        float blend)
+    {
+        if (!source.HasValue && !target.HasValue)
+        {
+            return null;
+        }
+
+        Transform3D from = source ?? currentHeadTargetTransform;
+        Transform3D to = target ?? currentHeadTargetTransform;
+
+        return new Transform3D(
+            currentHeadTargetTransform.Basis,
+            from.Origin.Lerp(to.Origin, blend));
     }
 
     private float ResolveEffectiveRotationCompensationScale(PoseStateContext context)

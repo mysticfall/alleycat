@@ -3,9 +3,13 @@
 [ext_resource type="Script" uid="uid://dvtvdxo5ew24i" path="res://src/IK/PlayerVRIK.cs" id="1_rv273"]
 [ext_resource type="Script" uid="uid://66gi6n1gstbb" path="res://src/IK/Pose/PoseStateMachine.cs" id="2_e2mse"]
 [ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://assets/characters/ik/pose/standing_pose_state.tres" id="3_qbuv4"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/all_fours_pose_state.tres" id="4_tn3t6"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_pose_state.tres" id="7_t6v58"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/standing_to_kneeling_transition.tres" id="8_n2e12"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_to_standing_transition.tres" id="9_4sbfj"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/standing_to_all_fours_transition.tres" id="10_bv7wy"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_to_all_fours_transition.tres" id="11_63w8f"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/all_fours_to_standing_transition.tres" id="12_rc7x7"]
 
 [node name="VRIK" type="Node3D" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "RightHandIKTarget", "LeftHandIKTarget", "Skeleton", "PoseStateMachine")]
 script = ExtResource("1_rv273")
@@ -19,7 +23,7 @@ metadata/_custom_type_script = "uid://dvtvdxo5ew24i"
 
 [node name="PoseStateMachine" type="Node" parent="." unique_id=1387079067]
 script = ExtResource("2_e2mse")
-States = [ExtResource("3_qbuv4"), ExtResource("7_t6v58")]
-Transitions = [ExtResource("8_n2e12"), ExtResource("9_4sbfj")]
+States = [ExtResource("3_qbuv4"), ExtResource("7_t6v58"), ExtResource("4_tn3t6")]
+Transitions = [ExtResource("8_n2e12"), ExtResource("9_4sbfj"), ExtResource("10_bv7wy"), ExtResource("11_63w8f"), ExtResource("12_rc7x7")]
 InitialStateId = &"Standing"
 metadata/_custom_type_script = "uid://66gi6n1gstbb"

@@ -5,4 +5,5 @@
 [node name="AnimationTree" type="AnimationTree" unique_id=527893103]
 tree_root = ExtResource("1_pw6e2")
 anim_player = NodePath("../AnimationPlayer")
+parameters/AllFoursTransitioning/TimeSeek/seek_request = -1.0
 parameters/StandingCrouching/TimeSeek/seek_request = -1.0

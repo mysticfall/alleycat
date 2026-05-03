@@ -47,6 +47,10 @@ public sealed class PoseStateMachineIntegrationTests
     private const float MinimumKneelingKneeFlexionIncreaseRadians = 0.05f;
     private const float FootTargetPositionToleranceMetres = 0.03f;
     private const float FootTargetRotationToleranceRadians = 0.06f;
+    private const float MaximumAllFoursExitHipShiftMetres = 0.15f;
+    private const float MaximumAllFoursExitClampFloorShiftMetres = 0.08f;
+    private const float MaximumAllFoursExitDownClampDeltaMetres = 0.08f;
+    private const float MaximumAllFoursExitSourceVsStandingDownClampDeltaMetres = 0.02f;
     private const int TransitionAutoAdvanceWaitFrames = 320;
 
     /// <summary>
@@ -230,6 +234,7 @@ public sealed class PoseStateMachineIntegrationTests
         AssertPlaybackNodeIsOneOf(ResolvePlayback(animationTree), "KneelingEnter", "Kneeling");
         await AssertPlaybackConvergesToNodeWithoutInputAsync(
             sceneTree,
+            animationTree,
             ResolvePlayback(animationTree),
             KneelingPoseState.DefaultAnimationStateName,
             TransitionAutoAdvanceWaitFrames);
@@ -399,6 +404,7 @@ public sealed class PoseStateMachineIntegrationTests
         AssertPlaybackNodeIsOneOf(ResolvePlayback(animationTree), "KneelingEnter", "Kneeling");
         await AssertPlaybackConvergesToNodeWithoutInputAsync(
             sceneTree,
+            animationTree,
             ResolvePlayback(animationTree),
             KneelingPoseState.DefaultAnimationStateName,
             TransitionAutoAdvanceWaitFrames);
@@ -526,6 +532,424 @@ public sealed class PoseStateMachineIntegrationTests
             inactiveSeekBeforeApply,
             inactiveSeekAfterApply,
             precision: 5);
+    }
+
+    /// <summary>
+    /// Verifies all-fours can be entered from the standing continuum via armed-then-continue-forward,
+    /// switches into crawl hold after the forward threshold, and returns to standing only after backing out from transitioning.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_AllFours_EntersCrawlsAndReturnsToStandingFromTransitioning()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.65f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Standing", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.76f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("AllFours", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        Assert.Equal("AllFoursTransitioning", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 1.12f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("AllFours", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        Assert.Equal("Crawling", GetCurrentActiveStatePropertyValue(driver, nameof(AllFoursPoseState.CurrentPhase))?.ToString());
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 1.12f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("AllFours", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        Assert.Equal("Transitioning", GetCurrentActiveStatePropertyValue(driver, nameof(AllFoursPoseState.CurrentPhase))?.ToString());
+        Assert.Equal("AllFoursTransitioning", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 0.20f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Standing", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        await AssertPlaybackConvergesToNodeAsync(
+            sceneTree,
+            sceneRoot,
+            driver,
+            ResolvePlayback(animationTree),
+            StandingPoseState.DefaultAnimationStateName,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 0.20f),
+            TransitionAutoAdvanceWaitFrames);
+    }
+
+    /// <summary>
+    /// Verifies runtime all-fours entry rebases the applied hip solve onto the all-fours reference
+    /// instead of leaving it anchored to the standing/rest baseline.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_AllFoursEntry_RebasesAppliedHipTowardAllFoursReference()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+        int hipBoneIndex = RequireBoneIndex(skeleton, "Hips");
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.65f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Standing", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+
+        Transform3D allFoursEntryHeadTarget = CreateSkeletonLocalHeadTransform(
+            sceneRoot,
+            normalizedLocalY: 0.20f,
+            normalizedForwardOffset: 0.76f);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            allFoursEntryHeadTarget);
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("AllFours", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        Assert.Equal("AllFoursTransitioning", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+
+        object stateMachine = ResolveMethod(driver, nameof(PoseStateMachineMarkerDriver.GetDrivenStateMachine), 0)
+            .Invoke(driver, null)
+            ?? throw new Xunit.Sdk.XunitException("Expected driven pose state machine.");
+        object allFoursEntryContext = CreateRuntimeScenarioContext(
+            (GodotObject)stateMachine,
+            nameof(PoseStateMachine.Tick),
+            0,
+            sceneRoot,
+            skeleton,
+            animationTree,
+            hipBoneIndex,
+            RequireBoneIndex(skeleton, "Head"),
+            "CrouchFull",
+            allFoursEntryHeadTarget,
+            1.0 / 60.0);
+
+        object tickResult = stateMachine.GetType().GetMethod(nameof(PoseStateMachine.Tick))!
+            .Invoke(stateMachine, [allFoursEntryContext])
+            ?? throw new Xunit.Sdk.XunitException("Expected pose state machine tick result.");
+        object activeState = GetRequiredPropertyValue(tickResult, nameof(PoseStateMachineTickResult.ActiveState))
+            ?? throw new Xunit.Sdk.XunitException("Expected active all-fours state.");
+
+        Assert.Equal("AllFours", GetRequiredPropertyValue(activeState, nameof(PoseState.Id))?.ToString());
+
+        Vector3 appliedHipLocalPosition = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(tickResult, nameof(PoseStateMachineTickResult.HipLocalPosition)));
+        object allFoursLimitFrame = activeState.GetType().GetMethod(nameof(PoseState.BuildHipLimitFrame))!
+            .Invoke(activeState, [allFoursEntryContext])
+            ?? throw new Xunit.Sdk.XunitException("Expected all-fours hip-limit frame.");
+        Vector3 defaultHipReference = skeleton.GetBoneGlobalRest(hipBoneIndex).Origin;
+        Vector3 allFoursEffectiveReference = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(allFoursLimitFrame, nameof(HipLimitFrame.ReferenceHipLocalPosition)));
+
+        float distanceToAllFoursReference = appliedHipLocalPosition.DistanceTo(allFoursEffectiveReference);
+        float distanceToStandingBaseline = appliedHipLocalPosition.DistanceTo(defaultHipReference);
+        Assert.True(
+            distanceToAllFoursReference < distanceToStandingBaseline,
+            $"All-fours entry hip should stay anchored to the all-fours reference (distance {distanceToAllFoursReference:F4}) rather than the standing/rest baseline (distance {distanceToStandingBaseline:F4}).");
+
+        Vector3 avatarForwardLocal = Vector3.Back;
+        float forwardShiftFromStandingBaseline = (appliedHipLocalPosition - defaultHipReference)
+            .Dot(avatarForwardLocal);
+        Assert.True(
+            forwardShiftFromStandingBaseline > 0f,
+            $"All-fours entry hip should shift in avatar-forward direction; measured forward shift was {forwardShiftFromStandingBaseline:F4}.");
+
+        float forwardShiftBeyondAllFoursReference = (appliedHipLocalPosition - allFoursEffectiveReference)
+            .Dot(avatarForwardLocal);
+        Assert.True(
+            forwardShiftBeyondAllFoursReference <= 0.03f,
+            $"All-fours entry hip should stay near the authored all-fours forward reference instead of overshooting it; extra forward shift was {forwardShiftBeyondAllFoursReference:F4}.");
+    }
+
+    /// <summary>
+    /// Verifies the first standing-family tick after an all-fours return keeps the hip solve near
+    /// the outgoing all-fours-transitioning solve rather than snapping to a mismatched standing
+    /// clamp frame.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_AllFoursReturn_FirstStandingTickKeepsHipSolveContinuous()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+        int hipBoneIndex = RequireBoneIndex(skeleton, "Hips");
+        int headBoneIndex = RequireBoneIndex(skeleton, "Head");
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.65f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.76f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 1.12f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Transform3D returnTransitioningHeadTarget = CreateSkeletonLocalHeadTransform(
+            sceneRoot,
+            normalizedLocalY: 0.55f,
+            normalizedForwardOffset: 1.12f);
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            returnTransitioningHeadTarget);
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        object stateMachine = ResolveMethod(driver, nameof(PoseStateMachineMarkerDriver.GetDrivenStateMachine), 0)
+            .Invoke(driver, null)
+            ?? throw new Xunit.Sdk.XunitException("Expected driven pose state machine.");
+
+        object returnTransitioningContext = CreateRuntimeScenarioContext(
+            (GodotObject)stateMachine,
+            nameof(PoseStateMachine.Tick),
+            0,
+            sceneRoot,
+            skeleton,
+            animationTree,
+            hipBoneIndex,
+            headBoneIndex,
+            "CrouchFull",
+            returnTransitioningHeadTarget,
+            1.0 / 60.0);
+
+        object returnTransitioningTickResult = stateMachine.GetType().GetMethod(nameof(PoseStateMachine.Tick))!
+            .Invoke(stateMachine, [returnTransitioningContext])
+            ?? throw new Xunit.Sdk.XunitException("Expected all-fours transitioning tick result.");
+        object returnTransitioningActiveState = GetRequiredPropertyValue(
+                returnTransitioningTickResult,
+                nameof(PoseStateMachineTickResult.ActiveState))!
+            ?? throw new Xunit.Sdk.XunitException("Expected all-fours active state.");
+        Assert.Equal(
+            "AllFours",
+            GetRequiredPropertyValue(returnTransitioningActiveState, nameof(PoseState.Id))?.ToString());
+        Vector3 returnTransitioningHipLocalPosition = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(returnTransitioningTickResult, nameof(PoseStateMachineTickResult.HipLocalPosition)));
+        object returnTransitioningFrame = returnTransitioningActiveState.GetType().GetMethod(nameof(PoseState.BuildHipLimitFrame))!
+                .Invoke(returnTransitioningActiveState, [returnTransitioningContext])
+            ?? throw new Xunit.Sdk.XunitException("Expected all-fours transition frame.");
+        float returnTransitioningRestHeadHeight = GetRequiredFloatProperty(
+            GetRequiredPropertyValue(returnTransitioningTickResult, nameof(PoseStateMachineTickResult.Context))!,
+            nameof(PoseStateContext.RestHeadHeight));
+        float returnTransitioningClampFloor = ResolveLowerClampBound(
+            returnTransitioningFrame,
+            returnTransitioningRestHeadHeight);
+        float returnTransitioningDownClamp = ResolveDownClampMagnitude(returnTransitioningTickResult);
+
+        Transform3D exitHeadTarget = CreateSkeletonLocalHeadTransform(
+            sceneRoot,
+            normalizedLocalY: 0.55f,
+            normalizedForwardOffset: 0.20f);
+        object exitContext = CreateRuntimeScenarioContext(
+            (GodotObject)stateMachine,
+            nameof(PoseStateMachine.Tick),
+            0,
+            sceneRoot,
+            skeleton,
+            animationTree,
+            hipBoneIndex,
+            headBoneIndex,
+            "CrouchFull",
+            exitHeadTarget,
+            1.0 / 60.0);
+
+        object exitTickResult = stateMachine.GetType().GetMethod(nameof(PoseStateMachine.Tick))!
+            .Invoke(stateMachine, [exitContext])
+            ?? throw new Xunit.Sdk.XunitException("Expected standing return tick result.");
+        object exitActiveState = GetRequiredPropertyValue(
+                exitTickResult,
+                nameof(PoseStateMachineTickResult.ActiveState))!
+            ?? throw new Xunit.Sdk.XunitException("Expected standing active state.");
+        Assert.Equal(
+            "Standing",
+            GetRequiredPropertyValue(exitActiveState, nameof(PoseState.Id))?.ToString());
+        Vector3 exitHipLocalPosition = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(exitTickResult, nameof(PoseStateMachineTickResult.HipLocalPosition)));
+        object exitFrame = exitActiveState.GetType().GetMethod(nameof(PoseState.BuildHipLimitFrame))!
+                .Invoke(exitActiveState, [exitContext])
+            ?? throw new Xunit.Sdk.XunitException("Expected standing entry frame.");
+        float exitRestHeadHeight = GetRequiredFloatProperty(
+            GetRequiredPropertyValue(exitTickResult, nameof(PoseStateMachineTickResult.Context))!,
+            nameof(PoseStateContext.RestHeadHeight));
+        float exitClampFloor = ResolveLowerClampBound(exitFrame, exitRestHeadHeight);
+        float exitDownClamp = ResolveDownClampMagnitude(exitTickResult);
+
+        object hypotheticalSourceExitTickResult = returnTransitioningActiveState.GetType()
+                .GetMethod(nameof(PoseState.ResolveHipReconciliation))!
+                .Invoke(returnTransitioningActiveState, [exitContext])
+            ?? throw new Xunit.Sdk.XunitException("Expected hypothetical all-fours source tick result.");
+        float hypotheticalSourceExitDownClamp = ResolveDownClampMagnitudeFromHipTick(hypotheticalSourceExitTickResult);
+
+        float transitionHipShift = returnTransitioningHipLocalPosition.DistanceTo(exitHipLocalPosition);
+        Assert.True(
+            transitionHipShift <= MaximumAllFoursExitHipShiftMetres,
+            $"All-fours exit should keep the first standing-family hip solve close to the outgoing transitioning solve; measured shift was {transitionHipShift:F4} m (from {returnTransitioningHipLocalPosition} to {exitHipLocalPosition}).");
+        Assert.True(
+            Mathf.Abs(returnTransitioningClampFloor - exitClampFloor) <= MaximumAllFoursExitClampFloorShiftMetres,
+            $"All-fours exit should keep the downward clamp floor continuous; outgoing floor={returnTransitioningClampFloor:F4}, standing-entry floor={exitClampFloor:F4}.");
+        Assert.True(
+            Mathf.Abs(returnTransitioningDownClamp - exitDownClamp) <= MaximumAllFoursExitDownClampDeltaMetres,
+            $"All-fours exit should avoid a sudden downward clamp jump; outgoing down clamp={returnTransitioningDownClamp:F4}, standing-entry down clamp={exitDownClamp:F4}.");
+        Assert.True(
+            Mathf.Abs(hypotheticalSourceExitDownClamp - exitDownClamp)
+            <= MaximumAllFoursExitSourceVsStandingDownClampDeltaMetres,
+            $"All-fours exit should keep the first standing-family downward clamp close to the frozen outgoing all-fours solve for the same re-entry head pose; hypothetical source down clamp={hypotheticalSourceExitDownClamp:F4}, standing-entry down clamp={exitDownClamp:F4}.");
+    }
+
+    /// <summary>
+    /// Verifies the runtime can enter all-fours from kneeling and that transition ordering does
+    /// not incorrectly divert the gesture into kneeling-to-standing.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PoseStateMachineMarkerDriver_KneelingToAllFours_UsesForwardContinueAndDoesNotDivertToStanding()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
+
+        await EnterKneelingAsync(sceneTree, sceneRoot, driver, skeleton, animationTree);
+
+        object kneelingToAllFoursTransition = GetTransitionByEndpoints(driver, from: "Kneeling", to: "AllFours");
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.76f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Kneeling", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        AssertPlaybackNodeIsOneOf(ResolvePlayback(animationTree), "Kneeling", "KneelingExit");
+        Assert.True(GetPrivateFieldValue<bool>(kneelingToAllFoursTransition, "_isArmed"));
+        float armedForwardOffsetRatio = GetPrivateFieldValue<float>(kneelingToAllFoursTransition, "_armedForwardOffsetRatio");
+        float continueForwardOffsetRatio = MathF.Max(armedForwardOffsetRatio + 0.12f, 0.80f);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: continueForwardOffsetRatio));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        string stateAfterContinueForward = ((StringName)driver.Call("GetCurrentStateId")).ToString();
+        bool isStillArmedAfterContinueForward = GetPrivateFieldValue<bool>(kneelingToAllFoursTransition, "_isArmed");
+        float armedForwardOffsetAfterContinueForward = GetPrivateFieldValue<float>(kneelingToAllFoursTransition, "_armedForwardOffsetRatio");
+        Assert.True(
+            string.Equals(stateAfterContinueForward, "AllFours", StringComparison.Ordinal),
+            $"Expected Kneeling->AllFours to fire. Actual state: {stateAfterContinueForward}; transition armed: {isStillArmedAfterContinueForward}; armed forward offset: {armedForwardOffsetAfterContinueForward:F3}; continue forward target: {continueForwardOffsetRatio:F3}.");
+        Assert.False(GetPrivateFieldValue<bool>(kneelingToAllFoursTransition, "_isArmed"));
+        Assert.Equal("Crawling", GetCurrentActiveStatePropertyValue(driver, nameof(AllFoursPoseState.CurrentPhase))?.ToString());
+        await AssertPlaybackConvergesToNodeAsync(
+            sceneTree,
+            sceneRoot,
+            driver,
+            ResolvePlayback(animationTree),
+            AllFoursPoseState.DefaultCrawlingAnimationStateName,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: continueForwardOffsetRatio),
+            TransitionAutoAdvanceWaitFrames);
     }
 
     /// <summary>
@@ -724,6 +1148,27 @@ public sealed class PoseStateMachineIntegrationTests
         return new Transform3D(baseTransform.Basis, origin);
     }
 
+    private static Transform3D CreateSkeletonLocalHeadTransform(
+        Node sceneRoot,
+        float normalizedLocalY,
+        float normalizedForwardOffset)
+    {
+        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
+        Node3D headRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadRestMarkerPath), exactMatch: false);
+
+        float restHeadHeight = PoseStateContextBuilder.ComputeRestHeadHeightMeasure(
+            skeleton.GlobalTransform,
+            headRestMarker.GlobalTransform);
+        Vector3 skeletonLocalHeadPosition = new(
+            0f,
+            normalizedLocalY * restHeadHeight,
+            normalizedForwardOffset * restHeadHeight);
+
+        return new Transform3D(
+            headRestMarker.GlobalTransform.Basis,
+            skeleton.GlobalTransform * skeletonLocalHeadPosition);
+    }
+
     private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
         => animationTree.Get(new StringName("parameters/playback")).As<AnimationNodeStateMachinePlayback>()
            ?? throw new Xunit.Sdk.XunitException("Expected AnimationTree playback object.");
@@ -733,6 +1178,7 @@ public sealed class PoseStateMachineIntegrationTests
 
     private static async Task AssertPlaybackConvergesToNodeWithoutInputAsync(
         SceneTree sceneTree,
+        AnimationTree animationTree,
         AnimationNodeStateMachinePlayback playback,
         StringName expectedNode,
         int maxWaitFrames)
@@ -744,6 +1190,7 @@ public sealed class PoseStateMachineIntegrationTests
                 return;
             }
 
+            animationTree.Advance(1.0 / 60.0);
             await WaitForFramesAsync(sceneTree, 1);
         }
 
@@ -782,6 +1229,39 @@ public sealed class PoseStateMachineIntegrationTests
         Assert.Equal(expectedNode.ToString(), playback.GetCurrentNode().ToString());
     }
 
+    private static async Task EnterKneelingAsync(
+        SceneTree sceneTree,
+        Node sceneRoot,
+        Node driver,
+        Skeleton3D skeleton,
+        AnimationTree animationTree)
+    {
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.32f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "KneelForward",
+            CreateScenarioHeadTransform(sceneRoot, "KneelForward", z: 0.26f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Kneeling", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+        AssertPlaybackNodeIsOneOf(ResolvePlayback(animationTree), "KneelingEnter", "Kneeling");
+        await AssertPlaybackConvergesToNodeWithoutInputAsync(
+            sceneTree,
+            animationTree,
+            ResolvePlayback(animationTree),
+            KneelingPoseState.DefaultAnimationStateName,
+            TransitionAutoAdvanceWaitFrames);
+    }
+
     private static object CreateRuntimeScenarioContext(
         GodotObject target,
         string methodName,
@@ -789,12 +1269,58 @@ public sealed class PoseStateMachineIntegrationTests
         Node sceneRoot,
         string scenarioName,
         double delta)
+        => CreateRuntimeScenarioContext(
+            target,
+            methodName,
+            contextParameterIndex,
+            sceneRoot,
+            skeleton: null,
+            animationTree: sceneRoot.GetNodeOrNull<AnimationTree>(AnimationTreePath),
+            hipBoneIndex: null,
+            headBoneIndex: null,
+            scenarioName: scenarioName,
+            headTargetOverride: null,
+            delta: delta);
+
+    private static object CreateRuntimeScenarioContext(
+        GodotObject target,
+        string methodName,
+        int contextParameterIndex,
+        Node sceneRoot,
+        Skeleton3D? skeleton,
+        AnimationTree? animationTree,
+        int? hipBoneIndex,
+        int? headBoneIndex,
+        string scenarioName,
+        Transform3D? headTargetOverride,
+        double delta)
     {
         Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
         Node3D scenarioNode = Assert.IsType<Node3D>(
             scenariosRoot.GetNodeOrNull(new NodePath(scenarioName)),
             exactMatch: false);
         Node3D headRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadRestMarkerPath), exactMatch: false);
+        Node3D leftHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftHandRestMarkerPath), exactMatch: false);
+        Node3D rightHandRestMarker = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandRestMarkerPath), exactMatch: false);
+        Node3D leftFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftFootTargetPath), exactMatch: false);
+        Node3D rightFootTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightFootTargetPath), exactMatch: false);
+
+        Transform3D headTargetTransform = headTargetOverride
+            ?? ResolveScenarioMarkerTransform(
+                scenarioNode,
+                markerName: "Head",
+                fallback: scenarioNode.GlobalTransform);
+        float restHeadHeight = skeleton is not null
+            ? PoseStateContextBuilder.ComputeRestHeadHeightMeasure(
+                skeleton.GlobalTransform,
+                headRestMarker.GlobalTransform)
+            : headRestMarker.GlobalTransform.Origin.Y;
+        Vector3 normalizedHeadLocalOffset = skeleton is not null
+            ? PoseStateContextBuilder.ComputeNormalizedHeadLocalOffset(
+                skeleton.GlobalTransform,
+                headRestMarker.GlobalTransform,
+                headTargetTransform)
+            : Vector3.Zero;
 
         Type contextType = ResolveMethod(target, methodName, parameterCount: -1)
             .GetParameters()[contextParameterIndex]
@@ -805,17 +1331,57 @@ public sealed class PoseStateMachineIntegrationTests
         SetRequiredProperty(
             context,
             "HeadTargetTransform",
+            headTargetTransform);
+        _ = TrySetProperty(
+            context,
+            nameof(PoseStateContext.LeftHandTargetTransform),
             ResolveScenarioMarkerTransform(
                 scenarioNode,
-                markerName: "Head",
-                fallback: scenarioNode.GlobalTransform));
-        AnimationTree? animationTree = sceneRoot.GetNodeOrNull<AnimationTree>(AnimationTreePath);
+                markerName: "LeftHand",
+                fallback: leftHandRestMarker.GlobalTransform));
+        _ = TrySetProperty(
+            context,
+            nameof(PoseStateContext.RightHandTargetTransform),
+            ResolveScenarioMarkerTransform(
+                scenarioNode,
+                markerName: "RightHand",
+                fallback: rightHandRestMarker.GlobalTransform));
+        _ = TrySetProperty(
+            context,
+            nameof(PoseStateContext.LeftFootTargetTransform),
+            ResolveScenarioMarkerTransform(
+                scenarioNode,
+                markerName: "LeftFoot",
+                fallback: leftFootTarget.GlobalTransform));
+        _ = TrySetProperty(
+            context,
+            nameof(PoseStateContext.RightFootTargetTransform),
+            ResolveScenarioMarkerTransform(
+                scenarioNode,
+                markerName: "RightFoot",
+                fallback: rightFootTarget.GlobalTransform));
         if (animationTree is not null)
         {
             _ = TrySetProperty(context, nameof(PoseStateContext.AnimationTree), animationTree);
         }
 
-        SetRequiredProperty(context, "RestHeadHeight", headRestMarker.GlobalTransform.Origin.Y);
+        if (skeleton is not null)
+        {
+            _ = TrySetProperty(context, nameof(PoseStateContext.Skeleton), skeleton);
+        }
+
+        if (hipBoneIndex.HasValue)
+        {
+            _ = TrySetProperty(context, nameof(PoseStateContext.HipBoneIndex), hipBoneIndex.Value);
+        }
+
+        if (headBoneIndex.HasValue)
+        {
+            _ = TrySetProperty(context, nameof(PoseStateContext.HeadBoneIndex), headBoneIndex.Value);
+        }
+
+        _ = TrySetProperty(context, nameof(PoseStateContext.NormalizedHeadLocalOffset), normalizedHeadLocalOffset);
+        SetRequiredProperty(context, nameof(PoseStateContext.RestHeadHeight), restHeadHeight);
         SetRequiredProperty(context, "Delta", delta);
         return context;
     }
@@ -838,6 +1404,13 @@ public sealed class PoseStateMachineIntegrationTests
     private static float GetRequiredFloatProperty(GodotObject target, StringName propertyName)
         => target.Get(propertyName).AsSingle();
 
+    private static float GetRequiredFloatProperty(object target, string propertyName)
+    {
+        object? value = GetRequiredPropertyValue(target, propertyName);
+        Assert.NotNull(value);
+        return Assert.IsType<float>(value);
+    }
+
     private static void InvokeMethod(GodotObject target, string methodName, params object[] arguments)
     {
         MethodInfo method = ResolveMethod(target, methodName, arguments.Length);
@@ -856,11 +1429,50 @@ public sealed class PoseStateMachineIntegrationTests
         return Assert.IsType<T>(value);
     }
 
+    private static T GetPrivateFieldValue<T>(object target, string fieldName)
+    {
+        FieldInfo? field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        object? value = field.GetValue(target);
+        return Assert.IsType<T>(value);
+    }
+
     private static void SetRequiredProperty(object target, string propertyName, object value)
     {
         PropertyInfo? property = target.GetType().GetProperty(propertyName);
         Assert.NotNull(property);
         property.SetValue(target, value);
+    }
+
+    private static object? GetRequiredPropertyValue(object target, string propertyName)
+    {
+        PropertyInfo? property = target.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return property.GetValue(target);
+    }
+
+    private static object? GetCurrentActiveStatePropertyValue(Node driver, string propertyName)
+    {
+        MethodInfo method = ResolveMethod(driver, nameof(PoseStateMachineMarkerDriver.GetDrivenStateMachine), 0);
+        object stateMachine = method.Invoke(driver, null)
+            ?? throw new Xunit.Sdk.XunitException("Expected driven pose state machine.");
+        object? currentState = GetRequiredPropertyValue(stateMachine, nameof(PoseStateMachine.CurrentState));
+        Assert.NotNull(currentState);
+        return GetRequiredPropertyValue(currentState, propertyName);
+    }
+
+    private static object GetTransitionByEndpoints(Node driver, string from, string to)
+    {
+        MethodInfo method = ResolveMethod(driver, nameof(PoseStateMachineMarkerDriver.GetDrivenStateMachine), 0);
+        object stateMachine = method.Invoke(driver, null)
+            ?? throw new Xunit.Sdk.XunitException("Expected driven pose state machine.");
+        object? transitionsValue = GetRequiredPropertyValue(stateMachine, nameof(PoseStateMachine.Transitions));
+        Array transitions = Assert.IsAssignableFrom<Array>(transitionsValue);
+        object? transition = transitions.Cast<object>().SingleOrDefault(candidate =>
+            string.Equals(GetRequiredPropertyValue(candidate, nameof(PoseTransition.From))?.ToString(), from, StringComparison.Ordinal)
+            && string.Equals(GetRequiredPropertyValue(candidate, nameof(PoseTransition.To))?.ToString(), to, StringComparison.Ordinal));
+        Assert.NotNull(transition);
+        return transition;
     }
 
     private static bool TrySetProperty(object target, string propertyName, object value)
@@ -909,6 +1521,47 @@ public sealed class PoseStateMachineIntegrationTests
         float clampedDot = Mathf.Clamp(thighDirection.Dot(shinDirection), -1.0f, 1.0f);
 
         return Mathf.Acos(clampedDot);
+    }
+
+    private static float ResolveLowerClampBound(object frame, float restHeadHeight)
+    {
+        object? absoluteBounds = GetRequiredPropertyValue(frame, nameof(HipLimitFrame.AbsoluteBounds));
+        float? absoluteDown = absoluteBounds is null ? null : GetNullableFloatPropertyValue(absoluteBounds, nameof(HipLimitBounds.Down));
+        if (absoluteDown.HasValue)
+        {
+            return absoluteDown.Value;
+        }
+
+        Vector3 referenceHipLocalPosition = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(frame, nameof(HipLimitFrame.ReferenceHipLocalPosition)));
+        object? offsetEnvelope = GetRequiredPropertyValue(frame, nameof(HipLimitFrame.OffsetEnvelope));
+        float? envelopeDown = offsetEnvelope is null ? null : GetNullableFloatPropertyValue(offsetEnvelope, nameof(HipLimitEnvelope.Down));
+        return envelopeDown.HasValue
+            ? referenceHipLocalPosition.Y - (envelopeDown.Value * restHeadHeight)
+            : referenceHipLocalPosition.Y;
+    }
+
+    private static float ResolveDownClampMagnitude(object tickResult)
+    {
+        Vector3 residualHipOffset = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(tickResult, nameof(PoseStateMachineTickResult.ResidualHipOffset)));
+        return Mathf.Max(-residualHipOffset.Y, 0f);
+    }
+
+    private static float ResolveDownClampMagnitudeFromHipTick(object tickResult)
+    {
+        Vector3 desiredFinalHipOffset = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(tickResult, nameof(HipReconciliationTickResult.DesiredFinalHipOffset)));
+        Vector3 appliedFinalHipOffset = Assert.IsType<Vector3>(
+            GetRequiredPropertyValue(tickResult, nameof(HipReconciliationTickResult.AppliedFinalHipOffset)));
+        Vector3 residualFinalHipOffset = desiredFinalHipOffset - appliedFinalHipOffset;
+        return Mathf.Max(-residualFinalHipOffset.Y, 0f);
+    }
+
+    private static float? GetNullableFloatPropertyValue(object target, string propertyName)
+    {
+        object? value = GetRequiredPropertyValue(target, propertyName);
+        return value is null ? null : Assert.IsType<float>(value);
     }
 
     private static void AssertTargetMatchesFootPose(Node3D footTarget, Transform3D expectedFootPose, string message)

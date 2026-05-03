@@ -28,6 +28,18 @@ Ensure implementers can deliver stable pose classification and transition flow w
    This prevents immediate bounce-back and re-triggering.
 7. Kneeling transition thresholds must use normalised ratios derived from rest-pose body measures, not absolute metres.
    At minimum, the head-height measure from rest pose (`RestHeadHeight`) defines the reference for the normalised crouch-depth gate.
+8. Players must be able to transition from the Standing pose to an all-fours crawling pose by moving the head forward
+   beyond a head forward offset threshold, where the transition becomes armed once the head's forward offset reaches a
+   configurable threshold and fires when the player continues forward past that armed point by a configurable additional margin.
+9. Players must be able to transition from the Kneeling pose to an all-fours crawling pose by moving the head forward
+   beyond a head forward offset threshold, where the transition becomes armed once the head's forward offset reaches a
+   configurable threshold and fires when the player continues forward past that armed point by a configurable additional margin.
+10. When in AllFours, players must experience a smooth transition animation from the entering position to the crawling hold pose,
+    driven by the head's forward offset position.
+11. While crawling on all fours, if the player raises their head vertically above a configurable threshold, they must
+    transition back to the entering (transitioning) state to prepare for a return to standing.
+12. While in the AllFours transitioning state, if the player's head forward offset drops below a configurable return threshold,
+    the pose must automatically transition back to the Standing pose (crouching baseline) rather than to kneeling.
 
 ## Technical Requirements
 
@@ -146,6 +158,41 @@ Ensure implementers can deliver stable pose classification and transition flow w
      - arms after sufficient forward travel from that baseline,
      - fires after retreating from the armed peak by a configurable amount.
      This provides bidirectional standing-continuum↔kneel transitions.
+26. The state machine must include a new `AllFoursPoseState` resource that provides the all-fours crawling pose behaviour.
+    This state is distinct from the previously defined crawling (all fours) in that it implements a structured internal
+    state machine with two phases: `transitioning` and `crawling`.
+27. The AllFours pose must be reachable as a transition target from both `StandingPoseState` and `KneelingPoseState`.
+    Both transitions use a forward-travel-beyond-armed-point model with the forward-axis offset as the trigger signal,
+    but with a distinct threshold range calibrated for the all-fours entry gesture.
+28. The AllFours entry trigger uses head forward offset as the primary signal:
+    - The transition becomes armed when the head's normalised forward offset from the skeleton's local origin exceeds a
+      configurable threshold (default range start: 0.42).
+    - The transition fires when the player continues forward past the armed point by a configurable additional margin
+      (configurable `AllFoursForwardContinueThreshold`).
+    - The forward offset is normalised using rest-pose body measures, mapping the range 0.42 to 0.73 to the animation seek
+      window.
+29. `AllFoursPoseState` implements two internal sub-states:
+    - `transitioning`: active immediately upon entering AllFours, drives the entry animation via `AnimationNodeTimeSeek`.
+    - `crawling`: active after the entry animation completes, holds the crawl pose.
+30. In the `transitioning` sub-state, the state drives an `AnimationNodeTimeSeek` node using animation `All Fours-enter`
+    with a custom seek window spanning 1.2 seconds to 3.5417 seconds.
+31. The seek position in the entry animation is calculated from the head's normalised forward offset:
+    - Normalise the forward offset to the range [0.42, 0.73] using the formula:
+      `seekPosition = (headForwardOffset - 0.42) / (0.73 - 0.42)`.
+    - Map the normalised value to the seek window duration [1.2, 3.5417] seconds.
+32. When the head forward offset exceeds 0.73, the internal state transitions from `transitioning` to `crawling`.
+    The `crawling` sub-state plays the looping animation `All Fours`.
+33. While in the `crawling` sub-state, if the head's vertical offset increases above a configurable threshold
+    (default: 0.3, expressed as a normalised ratio of rest head height), the state returns to `transitioning`.
+34. While in the `transitioning` sub-state, if the head's forward offset decreases below 0.42 minus a configurable
+    return margin (default margin: configurable `AllFoursReturnMargin`), the framework transitions back to
+    `StandingPoseState` (the crouching baseline). The return destination is always Standing, not source-dependent.
+35. AllFours threshold parameters (forward offset entry threshold, forward offset return threshold, vertical offset
+    climb threshold, forward continue margin, return margin) must be configurable properties on the `AllFoursPoseState`
+    or its associated transition resources.
+36. The AllFours animation entry and crawl loops are authored as part of the AnimationTree, separate from the
+    standing-family `TimeSeek` pattern. The entry uses `TimeSeek` scrubbing to match head position; the crawl
+    hold uses standard animation playback.
 
 ## In Scope
 
@@ -187,6 +234,13 @@ Ensure implementers can deliver stable pose classification and transition flow w
 | AC-PS-20 | Following any kneeling transition, both transition directions remain locked until the forward-axis offset returns near the neutral or full-crouch baseline, preventing immediate bounce-back and re-triggering. | User + Technical |
 | AC-PS-21 | The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres. At minimum, the head-height measure from rest pose (`RestHeadHeight`) defines the reference for the normalised crouch-depth gate. Tunable parameters use flexible ratios rather than fixed absolute values. | Technical |
 | AC-PS-22 | The Kneeling→Standing return transition uses the same armed-then-retreat model: measured from the full-crouch baseline, arms after sufficient forward travel from that baseline, fires after retreating from the armed peak by a configurable amount, providing bidirectional standing-continuum↔kneel transitions. | Technical |
+| AC-PS-23 | The state machine includes an `AllFoursPoseState` resource providing all-fours crawling behaviour with two internal sub-states: `transitioning` and `crawling`. | Technical |
+| AC-PS-24 | AllFours pose is reachable via transition from both `StandingPoseState` and `KneelingPoseState` using a forward-travel-beyond-armed-point model triggered by head forward offset. | User |
+| AC-PS-25 | In the `transitioning` sub-state, the state drives an `AnimationNodeTimeSeek` node using animation `All Fours-enter` with a custom seek window spanning 1.2s to 3.5417s, where seek position is calculated from the head's normalised forward offset mapping the range 0.42 to 0.73. | Technical |
+| AC-PS-26 | When the head forward offset exceeds 0.73, the internal state changes from `transitioning` to `crawling`, playing the looping animation `All Fours`. | User + Technical |
+| AC-PS-27 | While in `crawling`, if the head's vertical offset rises above a configurable threshold (default 0.3 as normalised ratio), the state returns to `transitioning`. | User + Technical |
+| AC-PS-28 | While in `transitioning`, if the head's forward offset drops below 0.42 minus a configurable return margin, the pose transitions back to `StandingPoseState`. The return destination is always Standing regardless of source state. | User + Technical |
+| AC-PS-29 | AllFours threshold parameters (forward offset entry threshold 0.42, forward offset exit threshold 0.73, vertical offset climb threshold 0.3, forward continue margin, return margin) are configurable via `AllFoursPoseState` or transition resource properties. | Technical |
 
 ## References
 

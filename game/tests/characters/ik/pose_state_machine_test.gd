@@ -7,6 +7,7 @@ const HEAD_REST_MARKER_PATH := ^"Markers/PoseStateMachine/RestHeadTarget"
 const LEFT_HAND_REST_MARKER_PATH := ^"Markers/PoseStateMachine/HandTargetRestLeft"
 const RIGHT_HAND_REST_MARKER_PATH := ^"Markers/PoseStateMachine/HandTargetRestRight"
 const ANIMATION_TREE_PATH := ^"Subject/Female/AnimationTree"
+const SKELETON_PATH := ^"Subject/Female/Female_export/GeneralSkeleton"
 const LEFT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/LeftFoot"
 const RIGHT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/RightFoot"
 const PLAYBACK_PARAMETER := &"parameters/playback"
@@ -58,6 +59,7 @@ func _run() -> void:
 	var left_hand_rest_marker: Node3D = SceneUtils.require_node(photobooth, LEFT_HAND_REST_MARKER_PATH) as Node3D
 	var right_hand_rest_marker: Node3D = SceneUtils.require_node(photobooth, RIGHT_HAND_REST_MARKER_PATH) as Node3D
 	var animation_tree: AnimationTree = SceneUtils.require_node(photobooth, ANIMATION_TREE_PATH) as AnimationTree
+	var skeleton: Skeleton3D = SceneUtils.require_node(photobooth, SKELETON_PATH) as Skeleton3D
 	var left_foot_target: Node3D = SceneUtils.require_node(photobooth, LEFT_FOOT_TARGET_PATH) as Node3D
 	var right_foot_target: Node3D = SceneUtils.require_node(photobooth, RIGHT_FOOT_TARGET_PATH) as Node3D
 
@@ -68,6 +70,7 @@ func _run() -> void:
 		or left_hand_rest_marker == null
 		or right_hand_rest_marker == null
 		or animation_tree == null
+		or skeleton == null
 		or left_foot_target == null
 		or right_foot_target == null
 	):
@@ -88,6 +91,7 @@ func _run() -> void:
 		photobooth,
 		driver,
 		animation_tree,
+		skeleton,
 		scenarios_root,
 		rest_marker,
 		left_hand_rest_marker,
@@ -122,6 +126,7 @@ func _capture_scenarios(
 	photobooth: Photobooth,
 	driver: Node,
 	animation_tree: AnimationTree,
+	skeleton: Skeleton3D,
 	scenarios_root: Node3D,
 	head_rest_marker: Node3D,
 	left_hand_rest_marker: Node3D,
@@ -140,6 +145,7 @@ func _capture_scenarios(
 		await _apply_visual_scenario(
 			driver,
 			animation_tree,
+			skeleton,
 			scenarios_root,
 			visual_scenario,
 			head_rest_marker,
@@ -177,6 +183,32 @@ func _build_visual_scenarios() -> Array[Dictionary]:
 			"steps": [
 				{"marker": "CrouchFull"},
 			],
+		},
+		{
+			"name": "AllFours_HipEntry_PreEntry_Standing",
+			"steps": [
+				{"marker": "CrouchFull", "head_normalized_local_y": 0.20, "head_normalized_forward_offset": 0.65},
+			],
+			"capture_gate": {
+				"state_id": "Standing",
+				"playback_node": "StandingCrouching",
+				"settle_frames": 3,
+				"extra_frames": 2,
+				"extra_seconds": 0.05,
+			},
+		},
+		{
+			"name": "AllFours_HipEntry_Transitioning_OnEntry",
+			"steps": [
+				{"marker": "CrouchFull", "head_normalized_local_y": 0.20, "head_normalized_forward_offset": 0.76},
+			],
+			"capture_gate": {
+				"state_id": "AllFours",
+				"playback_node": "AllFoursTransitioning",
+				"settle_frames": 3,
+				"extra_frames": 2,
+				"extra_seconds": 0.05,
+			},
 		},
 		{
 			"name": "Standing_MidCrouch_Forward_Clamp",
@@ -290,6 +322,7 @@ func _find_visual_scenario(visual_scenarios: Array[Dictionary], scenario_name: S
 func _apply_visual_scenario(
 	driver: Node,
 	animation_tree: AnimationTree,
+	skeleton: Skeleton3D,
 	scenarios_root: Node3D,
 	visual_scenario: Dictionary,
 	head_rest_marker: Node3D,
@@ -304,6 +337,7 @@ func _apply_visual_scenario(
 		var show_marker: bool = step_index == steps.size() - 1
 		_apply_pose_step(
 			driver,
+			skeleton,
 			scenarios_root,
 			step,
 			show_marker,
@@ -373,6 +407,7 @@ func _get_current_playback_node(animation_tree: AnimationTree) -> StringName:
 
 func _apply_pose_step(
 	driver: Node,
+	skeleton: Skeleton3D,
 	scenarios_root: Node3D,
 	step: Dictionary,
 	show_marker: bool,
@@ -401,6 +436,12 @@ func _apply_pose_step(
 		right_foot_target)
 	if step.has("head_z"):
 		pose_targets["head"] = _override_transform_z(pose_targets["head"], float(step["head_z"]))
+	if step.has("head_normalized_local_y") and step.has("head_normalized_forward_offset"):
+		pose_targets["head"] = _create_skeleton_local_head_transform(
+			skeleton,
+			head_rest_marker,
+			float(step["head_normalized_local_y"]),
+			float(step["head_normalized_forward_offset"]))
 
 	driver.call(
 		"TickPoseTargets",
@@ -449,6 +490,25 @@ func _override_transform_z(transform: Transform3D, z: float) -> Transform3D:
 	var origin: Vector3 = transform.origin
 	origin.z = z
 	return Transform3D(transform.basis, origin)
+
+
+func _create_skeleton_local_head_transform(
+	skeleton: Skeleton3D,
+	head_rest_marker: Node3D,
+	normalized_local_y: float,
+	normalized_forward_offset: float
+) -> Transform3D:
+	var rest_head_local: Vector3 = (skeleton.global_transform.affine_inverse() * head_rest_marker.global_transform).origin
+	var rest_head_height: float = absf(rest_head_local.y)
+	if rest_head_height <= 0.0001:
+		rest_head_height = 1.0
+	var skeleton_local_head_position := Vector3(
+		0.0,
+		normalized_local_y * rest_head_height,
+		normalized_forward_offset * rest_head_height)
+	return Transform3D(
+		head_rest_marker.global_transform.basis,
+		skeleton.global_transform * skeleton_local_head_position)
 
 
 func _to_slug(value: Variant) -> String:

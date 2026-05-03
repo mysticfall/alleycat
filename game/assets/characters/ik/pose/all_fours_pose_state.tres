@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AllFoursPoseState" format=3 uid="uid://cuvgylplksi3l"]
+
+[ext_resource type="Resource" uid="uid://d3vqkjum5x4ml" path="res://assets/characters/ik/pose/all_fours_hip_profile.tres" id="1_x8frl"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/all_fours_transitioning_hip_offset_limits.tres" id="2_3cm5p"]
+[ext_resource type="Script" uid="uid://d2cx4kf3bsrvp" path="res://src/IK/Pose/AllFoursPoseState.cs" id="2_4550p"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/all_fours_crawling_hip_offset_limits.tres" id="3_3x2ik"]
+
+[resource]
+resource_name = "AllFoursPoseState"
+script = ExtResource("2_4550p")
+ReferenceHipHeightRatio = 0.26
+ReferenceForwardShiftRatio = 0.26
+TransitioningHipOffsetLimits = ExtResource("2_3cm5p")
+CrawlingHipOffsetLimits = ExtResource("3_3x2ik")
+SeekWindowStartSeconds = 1.2
+SeekWindowEndSeconds = 3.5417
+EntryForwardOffsetThreshold = 0.42
+CrawlForwardOffsetThreshold = 0.73
+CrawlingVerticalReturnThreshold = 0.3
+ReturnForwardMargin = 0.05
+Id = &"AllFours"
+HipReconciliation = ExtResource("1_x8frl")

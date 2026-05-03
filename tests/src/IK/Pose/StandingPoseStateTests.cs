@@ -1,3 +1,4 @@
+using System.Reflection;
 using AlleyCat.IK.Pose;
 using Godot;
 using Xunit;
@@ -361,6 +362,93 @@ public sealed class StandingPoseStateTests
             fullCrouchRotationCompensationScale);
 
         AssertApproximately(scale, expectedScale);
+    }
+
+    /// <summary>
+    /// When returning from a source that supplied only a shifted reference, the standing absolute
+    /// bounds helper must translate the authored limits with that blended reference instead of
+    /// leaving them anchored to the standing baseline.
+    /// </summary>
+    [Fact]
+    public void TranslateBounds_ShiftsAllAuthoredSidesWithReferenceDelta()
+    {
+        MethodInfo method = typeof(StandingPoseState).GetMethod(
+                "TranslateBounds",
+                BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException("Expected TranslateBounds helper.");
+
+        HipLimitBounds targetBounds = new(
+            Up: 1.10f,
+            Down: 0.70f,
+            Left: -0.15f,
+            Right: 0.25f,
+            Forward: 0.30f,
+            Back: 0.50f);
+        Vector3 delta = new(-0.08f, -0.18f, 0.24f);
+        Type translationMaskType = typeof(StandingPoseState).GetNestedType(
+                "TransitionBoundTranslationMask",
+                BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException("Expected transition translation-mask helper.");
+        object translationMask = Activator.CreateInstance(
+                translationMaskType,
+                [true, true, true, true, true, true])
+            ?? throw new Xunit.Sdk.XunitException("Expected translation-mask instance.");
+
+        HipLimitBounds translatedBounds = Assert.IsType<HipLimitBounds>(method.Invoke(null, [
+            targetBounds,
+            delta,
+            translationMask]));
+
+        AssertBoundApproximately(translatedBounds.Up, targetBounds.Up!.Value + delta.Y);
+        AssertBoundApproximately(translatedBounds.Down, targetBounds.Down!.Value + delta.Y);
+        AssertBoundApproximately(translatedBounds.Left, targetBounds.Left!.Value + delta.X);
+        AssertBoundApproximately(translatedBounds.Right, targetBounds.Right!.Value + delta.X);
+        AssertBoundApproximately(translatedBounds.Forward, targetBounds.Forward!.Value + delta.Z);
+        AssertBoundApproximately(translatedBounds.Back, targetBounds.Back!.Value + delta.Z);
+    }
+
+    /// <summary>
+    /// The transition solve blender keeps the first standing re-entry tick anchored to the outgoing
+    /// source solve so clamp residuals do not drop abruptly at the seam.
+    /// </summary>
+    [Fact]
+    public void BlendTickResults_ZeroBlend_PreservesOutgoingSourceResidual()
+    {
+        MethodInfo method = typeof(StandingPoseState).GetMethod(
+                "BlendTickResults",
+                BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException("Expected BlendTickResults helper.");
+
+        HipReconciliationTickResult sourceTick = new()
+        {
+            AppliedHipLocalPosition = new Vector3(0f, 0.42f, 0.18f),
+            DesiredFinalHipOffset = new Vector3(0f, -0.18f, 0f),
+            AppliedFinalHipOffset = new Vector3(0f, -0.07f, 0f),
+            LimitedHeadTargetTransform = new Transform3D(Basis.Identity, new Vector3(0f, 1.12f, 0.18f)),
+        };
+        HipReconciliationTickResult standingTick = new()
+        {
+            AppliedHipLocalPosition = new Vector3(0f, 0.56f, 0.04f),
+            DesiredFinalHipOffset = new Vector3(0f, -0.03f, 0f),
+            AppliedFinalHipOffset = new Vector3(0f, -0.03f, 0f),
+            LimitedHeadTargetTransform = null,
+        };
+
+        HipReconciliationTickResult blendedTick = Assert.IsType<HipReconciliationTickResult>(method.Invoke(null, [
+            sourceTick,
+            standingTick,
+            Transform3D.Identity,
+            0f]));
+
+        AssertApproximately(
+            blendedTick.ResidualFinalHipOffset.Y,
+            sourceTick.ResidualFinalHipOffset.Y);
+        AssertApproximately(
+            Mathf.Max(-blendedTick.ResidualFinalHipOffset.Y, 0f),
+            Mathf.Max(-sourceTick.ResidualFinalHipOffset.Y, 0f));
+        AssertApproximately(
+            blendedTick.AppliedHipLocalPosition.Y,
+            sourceTick.AppliedHipLocalPosition.Y);
     }
 
     private static void AssertApproximately(float actual, float expected, float epsilon = 1e-5f)

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="HeadTrackingHipProfile" format=3 uid="uid://d3vqkjum5x4ml"]
+
+[ext_resource type="Script" uid="uid://o7msh1gjb5fh" path="res://src/IK/Pose/HeadTrackingHipProfile.cs" id="1_juohy"]
+
+[resource]
+resource_name = "AllFoursTrackingHipProfile"
+script = ExtResource("1_juohy")
+VerticalPositionWeight = 0.1
+ForwardPositionWeight = 0.0

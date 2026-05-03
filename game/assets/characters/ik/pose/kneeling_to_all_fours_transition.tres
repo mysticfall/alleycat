@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="AllFoursEntryPoseTransition" format=3]
+
+[ext_resource type="Script" path="res://src/IK/Pose/AllFoursEntryPoseTransition.cs" id="1_n1xrl"]
+
+[resource]
+resource_name = "KneelingToAllFoursTransition"
+script = ExtResource("1_n1xrl")
+TransitionStateName = &"AllFoursTransitioning"
+ArmingForwardOffsetThreshold = 0.42
+ContinueForwardMargin = 0.06
+From = &"Kneeling"
+To = &"AllFours"

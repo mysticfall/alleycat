@@ -3,11 +3,15 @@
 [ext_resource type="PackedScene" uid="uid://iljwxhb7keyb" path="res://assets/testing/photobooth/templates/full_body_ik_5_cams.tscn" id="1_eh1w4"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="2_ynml4"]
 [ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://assets/characters/ik/pose/standing_pose_state.tres" id="4_6h6qw"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/all_fours_pose_state.tres" id="5_02pgv"]
 [ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_qmk8b"]
 [ext_resource type="Script" uid="uid://dq8mx4eet2kcv" path="res://src/IK/Pose/PoseStateMachineMarkerDriver.cs" id="9_5v7n4"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_pose_state.tres" id="10_rv40o"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/standing_to_kneeling_transition.tres" id="11_j2eh4"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_to_standing_transition.tres" id="12_y6tyd"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/standing_to_all_fours_transition.tres" id="13_1b5h7"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_to_all_fours_transition.tres" id="14_5kmsa"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/all_fours_to_standing_transition.tres" id="15_4j6te"]
 
 [node name="Photobooth" instance=ExtResource("1_eh1w4")]
 
@@ -16,8 +20,8 @@ active = true
 
 [node name="PoseStateMachineDriver" type="Node3D" parent="." node_paths=PackedStringArray("AnimationTree", "Skeleton")]
 script = ExtResource("9_5v7n4")
-States = [ExtResource("4_6h6qw"), ExtResource("10_rv40o")]
-Transitions = [ExtResource("11_j2eh4"), ExtResource("12_y6tyd")]
+States = [ExtResource("4_6h6qw"), ExtResource("10_rv40o"), ExtResource("5_02pgv")]
+Transitions = [ExtResource("11_j2eh4"), ExtResource("12_y6tyd"), ExtResource("13_1b5h7"), ExtResource("14_5kmsa"), ExtResource("15_4j6te")]
 InitialStateId = &"Standing"
 AnimationTree = NodePath("../Subject/Female/AnimationTree")
 Skeleton = NodePath("../Subject/Female/Female_export/GeneralSkeleton")
