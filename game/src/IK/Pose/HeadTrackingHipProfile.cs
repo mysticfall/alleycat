@@ -83,7 +83,7 @@ public partial class HeadTrackingHipProfile : HipReconciliationProfile
     private const float DefaultRotationCompensationWeight = 1.25f;
     private const float DefaultVerticalPositionWeight = 1.0f;
     private const float DefaultLateralPositionWeight = 0.5f;
-    private const float DefaultForwardPositionWeight = 0.1f;
+    private const float DefaultForwardPositionWeight = 0.5f;
     private const float DefaultMinimumAlignmentWeight = 0.1f;
     private const float PositionEpsilon = 1e-4f;
     private const float PositionEpsilonSquared = PositionEpsilon * PositionEpsilon;

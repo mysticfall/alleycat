@@ -10,7 +10,5 @@ script = ExtResource("3_nj0i1")
 HipOffsetLimits = ExtResource("1_ox1rd")
 KneelingReferenceHipHeightRatio = 0.16
 KneelingReferenceForwardShiftRatio = 0.09
-TransitionSourceHipHeightRatio = 0.21
-TransitionSourceForwardShiftRatio = 0.04
 Id = &"Kneeling"
 HipReconciliation = ExtResource("2_se4rj")
