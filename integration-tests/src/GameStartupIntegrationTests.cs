@@ -88,10 +88,10 @@ public sealed partial class GameStartupIntegrationTests
     }
 
     /// <summary>
-    /// Verifies successful startup orchestration flow (show/hide loading, remove splash, and request start-scene load).
+    /// Verifies startup keeps the loading screen visible until load completion is signalled.
     /// </summary>
     [Fact]
-    public async Task StartupFlow_OnSuccessfulStartup_ShowsThenHidesLoading_RemovesSplash_AndRequestsStartSceneLoad()
+    public async Task StartupFlow_OnSuccessfulStartup_KeepsLoadingVisibleUntilCompletion_RemovesSplash_AndRequestsStartSceneLoad()
     {
         SceneTree sceneTree = GetSceneTree();
         StartupFixture fixture = await CreateStartupFixtureAsync(sceneTree);
@@ -113,8 +113,9 @@ public sealed partial class GameStartupIntegrationTests
             Assert.True(fixture.LoadingScreen.Visible);
             Assert.Null(fixture.SplashScreen.GetParent());
 
-            await WaitForNextFrameAsync(sceneTree);
+            await WaitForFramesAsync(sceneTree, 3);
             Assert.False(GodotObject.IsInstanceValid(fixture.SplashScreen));
+            Assert.True(fixture.LoadingScreen.Visible);
 
             fixture.LoadingScreen.EmitLoadCompleted();
             await WaitForNextFrameAsync(sceneTree);

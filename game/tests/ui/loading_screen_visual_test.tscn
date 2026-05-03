@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/photobooth.tscn" id="1_448gh"]
+[ext_resource type="PackedScene" path="res://assets/ui/loading_screen.tscn" id="2_5f583"]
+[ext_resource type="Script" path="res://src/UI/LoadingScreen.cs" id="3_itv78"]
+
+[node name="Photobooth" unique_id=406188165 instance=ExtResource("1_448gh")]
+
+[node name="UILayer" type="CanvasLayer" parent="." index="5" unique_id=2141447350]
+
+[node name="LoadingScreen" type="Control" parent="UILayer" index="0" unique_id=1488371994 instance=ExtResource("2_5f583")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_itv78")
+metadata/_custom_type_script = "uid://cd1ukkf3dw26e"

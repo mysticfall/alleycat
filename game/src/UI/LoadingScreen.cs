@@ -1,4 +1,5 @@
 using AlleyCat.Common;
+using AlleyCat.XR;
 using Godot;
 using Array = Godot.Collections.Array;
 using UIControl = Godot.Control;
@@ -16,14 +17,29 @@ public partial class LoadingScreen : UIControl
     private Label? _loadingMessage;
     private ProgressBar? _progressBar;
     private SceneTree? _sceneTree;
+    private XRManager? _xrManager;
+    private PackedScene? _loadedScene;
     private string? _pendingScenePath;
     private bool _isLoading;
+    private bool _isWaitingForPoseRecenter;
 
     /// <summary>
     /// Message shown above the loading progress indicator.
     /// </summary>
     [Export]
     public string LoadingMessage { get; set; } = "Loading…";
+
+    /// <summary>
+    /// Message shown once scene loading completes and the player must recentre before continuing.
+    /// </summary>
+    [Export]
+    public string RecenterInstructionMessage { get; set; } = "Stand up straight and recentre your headset to continue.";
+
+    /// <summary>
+    /// Path to the XR manager that provides the pose-recenter signal.
+    /// </summary>
+    [Export]
+    public NodePath XRManagerPath { get; set; } = new("../..");
 
     /// <summary>
     /// Emitted when scene loading finishes and the scene has been changed successfully.
@@ -36,6 +52,7 @@ public partial class LoadingScreen : UIControl
     {
         _sceneTree = GetTree();
         EnsureUiNodesBound();
+        ResetUiForLoading();
         ProcessMode = ProcessModeEnum.Always;
         SetProcess(true);
     }
@@ -70,9 +87,11 @@ public partial class LoadingScreen : UIControl
             return Error.Busy;
         }
 
+        ResetUiForLoading();
+
         _pendingScenePath = scenePath;
-        _progressBar!.Value = 0.0;
         _threadedProgress[0] = 0.0f;
+        _loadedScene = null;
 
         Error requestError = ResourceLoader.LoadThreadedRequest(scenePath);
         if (requestError != Error.Ok)
@@ -85,7 +104,10 @@ public partial class LoadingScreen : UIControl
         return Error.Ok;
     }
 
-    private void CompleteSceneChange(string scenePath)
+    /// <inheritdoc />
+    public override void _ExitTree() => DisconnectFromPoseRecentered();
+
+    private void CompleteLoadAndWaitForPoseRecenter(string scenePath)
     {
         Resource loadedResource = ResourceLoader.LoadThreadedGet(scenePath);
         if (loadedResource is not PackedScene packedScene)
@@ -96,20 +118,39 @@ public partial class LoadingScreen : UIControl
             return;
         }
 
-        SceneTree sceneTree = ResolveSceneTree();
-        Error changeSceneError = sceneTree.ChangeSceneToPacked(packedScene);
-        if (changeSceneError != Error.Ok)
-        {
-            GD.PushError($"Failed to change scene to '{scenePath}' with error '{changeSceneError}'.");
-            _isLoading = false;
-            _pendingScenePath = null;
-            return;
-        }
-
+        _loadedScene = packedScene;
         _isLoading = false;
         _pendingScenePath = null;
 
         _progressBar!.Value = _progressBar.MaxValue;
+        _progressBar.Hide();
+        _loadingMessage!.Text = RecenterInstructionMessage;
+        _isWaitingForPoseRecenter = true;
+
+        ResolveXRManager().PoseRecentered += OnPoseRecentered;
+    }
+
+    private void CompleteSceneChange()
+    {
+        if (_loadedScene is null)
+        {
+            GD.PushError("Cannot complete scene change without a loaded PackedScene.");
+            return;
+        }
+
+        DisconnectFromPoseRecentered();
+        _isWaitingForPoseRecenter = false;
+
+        SceneTree sceneTree = ResolveSceneTree();
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(_loadedScene);
+        if (changeSceneError != Error.Ok)
+        {
+            GD.PushError($"Failed to change scene with error '{changeSceneError}'.");
+            _loadedScene = null;
+            return;
+        }
+
+        _loadedScene = null;
         _ = EmitSignal(SignalName.LoadCompleted);
     }
 
@@ -134,7 +175,7 @@ public partial class LoadingScreen : UIControl
 
         if (reportedComplete || reachedTerminalProgress)
         {
-            CompleteSceneChange(scenePath);
+            CompleteLoadAndWaitForPoseRecenter(scenePath);
             return;
         }
 
@@ -161,15 +202,42 @@ public partial class LoadingScreen : UIControl
         _loadingMessage ??= this.RequireNode<Label>("CenterContent/LoadingMessage");
         _progressBar ??= this.RequireNode<ProgressBar>("CenterContent/LoadingProgressBar");
 
-        _loadingMessage.Text = LoadingMessage;
-
         _progressBar.MinValue = 0.0;
         _progressBar.MaxValue = 1.0;
+    }
+
+    private void ResetUiForLoading()
+    {
+        DisconnectFromPoseRecentered();
+        _isWaitingForPoseRecenter = false;
+        _loadingMessage!.Text = LoadingMessage;
+        _progressBar!.Show();
 
         if (!_isLoading)
         {
             _progressBar.Value = 0.0;
         }
+    }
+
+    private XRManager ResolveXRManager()
+        => _xrManager ??= this.RequireNode<XRManager>(XRManagerPath);
+
+    private void DisconnectFromPoseRecentered()
+    {
+        if (_xrManager is not null)
+        {
+            _xrManager.PoseRecentered -= OnPoseRecentered;
+        }
+    }
+
+    private void OnPoseRecentered()
+    {
+        if (!_isWaitingForPoseRecenter)
+        {
+            return;
+        }
+
+        CompleteSceneChange();
     }
 
     private SceneTree ResolveSceneTree()
