@@ -7,7 +7,7 @@ namespace AlleyCat.Control;
 /// Concrete locomotion component for the reference player.
 /// </summary>
 [GlobalClass]
-public partial class PlayerLocomotion : Node, ILocomotion
+public partial class PlayerLocomotion : LocomotionBase
 {
     private const float RootMotionSpeedEpsilon = 1e-4f;
     private static readonly StringName _playbackParameter = new("parameters/playback");
@@ -181,17 +181,19 @@ public partial class PlayerLocomotion : Node, ILocomotion
     /// <inheritdoc />
     public override void _Ready()
     {
+        base._Ready();
         TargetCharacterBodyResolved = TargetCharacterBodyNode ?? this.RequireNode<CharacterBody3D>("..");
         AnimationTreeResolved = AnimationTree ?? this.RequireNode<AnimationTree>("../AnimationTree");
         RootMotionReferenceResolved = RootMotionReference ?? this.RequireNode<Node3D>("../Female_export");
+
         SetPhysicsProcess(true);
     }
 
     /// <inheritdoc />
-    public void SetMovementInput(Vector2 input) => _movementInput = ApplyDeadzone(input, InputDeadzone);
+    public override void SetMovementInput(Vector2 input) => _movementInput = ApplyDeadzone(input, InputDeadzone);
 
     /// <inheritdoc />
-    public void SetRotationInput(Vector2 input) => _rotationInput = ApplyDeadzone(input, InputDeadzone);
+    public override void SetRotationInput(Vector2 input) => _rotationInput = ApplyDeadzone(input, InputDeadzone);
 
     /// <inheritdoc />
     public override void _PhysicsProcess(double delta)
@@ -201,9 +203,11 @@ public partial class PlayerLocomotion : Node, ILocomotion
             return;
         }
 
-        ApplyRotation(delta);
-        Vector2 locomotionBlendInput = GetLocomotionBlendInput();
-        Vector3 desiredVelocity = ComputeDesiredPlanarVelocity();
+        LocomotionPermissions permissions = GetCurrentLocomotionPermissions();
+
+        ApplyRotation(delta, permissions);
+        Vector2 locomotionBlendInput = GetLocomotionBlendInput(permissions);
+        Vector3 desiredVelocity = ComputeDesiredPlanarVelocity(locomotionBlendInput);
         UpdateLocomotionAnimationState(locomotionBlendInput);
         UpdateAnimationBlend(locomotionBlendInput);
         Vector3 planarVelocity = ResolvePlanarVelocity(delta, desiredVelocity);
@@ -217,7 +221,7 @@ public partial class PlayerLocomotion : Node, ILocomotion
         _ = targetCharacterBody.MoveAndSlide();
     }
 
-    private void ApplyRotation(double delta)
+    private void ApplyRotation(double delta, LocomotionPermissions permissions)
     {
         float yawDelta = TurnMode switch
         {
@@ -230,6 +234,8 @@ public partial class PlayerLocomotion : Node, ILocomotion
             TurnMode.Snap => ApplySnapTurn(delta),
             _ => throw new InvalidOperationException($"Unsupported {nameof(TurnMode)} value '{TurnMode}'."),
         };
+
+        yawDelta = ApplyRotationPermissions(yawDelta, permissions);
 
         if (Mathf.IsZeroApprox(yawDelta))
         {
@@ -257,20 +263,20 @@ public partial class PlayerLocomotion : Node, ILocomotion
         return yawDelta;
     }
 
-    private Vector3 ComputeDesiredPlanarVelocity()
+    private Vector3 ComputeDesiredPlanarVelocity(Vector2 locomotionBlendInput)
     {
-        Vector2 clampedInput = GetLocomotionBlendInput();
-        if (clampedInput.IsZeroApprox())
+        if (locomotionBlendInput.IsZeroApprox())
         {
             return Vector3.Zero;
         }
 
-        Vector3 localDirection = new(clampedInput.X, 0f, -clampedInput.Y);
+        Vector3 localDirection = new(locomotionBlendInput.X, 0f, -locomotionBlendInput.Y);
         Vector3 worldDirection = (GetMovementBasis() * localDirection).Normalized();
-        return worldDirection * (MovementSpeedMultiplier * clampedInput.Length());
+        return worldDirection * (MovementSpeedMultiplier * locomotionBlendInput.Length());
     }
 
-    private Vector2 GetLocomotionBlendInput() => _movementInput.LimitLength(1f);
+    private Vector2 GetLocomotionBlendInput(LocomotionPermissions permissions)
+        => ApplyMovementPermissions(_movementInput, permissions);
 
     private Vector3 ResolvePlanarVelocity(double delta, Vector3 desiredVelocity)
     {

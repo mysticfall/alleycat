@@ -1,3 +1,4 @@
+using AlleyCat.Control;
 using Godot;
 
 namespace AlleyCat.IK.Pose;
@@ -107,6 +108,15 @@ public abstract partial class PoseState : Resource, IPoseState
         }
 
         ApplyAnimation(context);
+    }
+
+    /// <summary>
+    /// Resolves locomotion permissions contributed by this pose state.
+    /// </summary>
+    public virtual LocomotionPermissions GetLocomotionPermissions(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return LocomotionPermissions.RotationOnly;
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Reflection;
+using AlleyCat.Control;
 using AlleyCat.IK.Pose;
 using Godot;
 using Xunit;
@@ -113,6 +114,40 @@ public sealed class StandingPoseStateTests
 
         Assert.False(float.IsNaN(blend));
         Assert.InRange(blend, 0f, 1f);
+    }
+
+    /// <summary>
+    /// Near-full standing stance should permit movement.
+    /// </summary>
+    [Fact]
+    public void ComputeLocomotionPermissions_NearFullStanding_AllowsMovement()
+    {
+        LocomotionPermissions permissions = StandingPoseState.ComputeLocomotionPermissions(
+            restHeadY: 1.6f,
+            currentHeadY: 1.6f - (FullCrouchDepthMetres * 0.1f),
+            restHeadHeight: RestHeadHeight,
+            fullCrouchReferenceHipHeightRatio: FullCrouchReferenceHipHeightRatio,
+            movementAllowedMaximumPoseBlend: 0.15f);
+
+        Assert.True(permissions.MovementAllowed);
+        Assert.True(permissions.RotationAllowed);
+    }
+
+    /// <summary>
+    /// Movement should be blocked once the standing continuum moves past the authored upright threshold.
+    /// </summary>
+    [Fact]
+    public void ComputeLocomotionPermissions_BeyondStandingThreshold_BlocksMovementButAllowsRotation()
+    {
+        LocomotionPermissions permissions = StandingPoseState.ComputeLocomotionPermissions(
+            restHeadY: 1.6f,
+            currentHeadY: 1.6f - (FullCrouchDepthMetres * 0.3f),
+            restHeadHeight: RestHeadHeight,
+            fullCrouchReferenceHipHeightRatio: FullCrouchReferenceHipHeightRatio,
+            movementAllowedMaximumPoseBlend: 0.15f);
+
+        Assert.False(permissions.MovementAllowed);
+        Assert.True(permissions.RotationAllowed);
     }
 
     /// <summary>
@@ -475,4 +510,5 @@ public sealed class StandingPoseStateTests
         AssertApproximately(actual.Y, expected.Y, epsilon);
         AssertApproximately(actual.Z, expected.Z, epsilon);
     }
+
 }

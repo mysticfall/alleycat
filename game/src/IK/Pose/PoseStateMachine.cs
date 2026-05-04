@@ -1,3 +1,4 @@
+using AlleyCat.Control;
 using Godot;
 
 namespace AlleyCat.IK.Pose;
@@ -19,10 +20,15 @@ namespace AlleyCat.IK.Pose;
 /// </para>
 /// </remarks>
 [GlobalClass]
-public partial class PoseStateMachine : Node
+public partial class PoseStateMachine : Node, ILocomotionPermissionSource
 {
     private readonly List<IPoseTransition> _transitionView = [];
-    private PoseStateMachineTickResult _lastTickResult;
+    private PoseStateMachineTickResult _lastTickResult = new(
+        ActiveState: null,
+        HipLocalPosition: null,
+        LimitedHeadTargetTransform: null,
+        ResidualHipOffset: Vector3.Zero,
+        Context: new PoseStateContext());
     private bool _initialStateResolved;
 
     /// <summary>
@@ -102,6 +108,21 @@ public partial class PoseStateMachine : Node
 
     /// <inheritdoc />
     public override void _Ready() => EnsureInitialStateResolved();
+
+    /// <inheritdoc />
+    public LocomotionPermissions LocomotionPermissions
+    {
+        get
+        {
+            EnsureInitialStateResolved();
+
+            PoseState activeState = CurrentState
+                ?? throw new InvalidOperationException(
+                    $"{nameof(PoseStateMachine)} has no active pose state.");
+
+            return activeState.GetLocomotionPermissions(_lastTickResult.Context);
+        }
+    }
 
     /// <summary>
     /// Advances the state machine by one tick.

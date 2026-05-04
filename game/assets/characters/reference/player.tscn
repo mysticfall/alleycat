@@ -124,11 +124,12 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.1
 root_motion_track = NodePath("%GeneralSkeleton:Root")
 parameters/Walking/blend_position = Vector2(0, 0)
 
-[node name="Locomotion" type="Node" parent="." index="6" unique_id=668991861 node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference")]
+[node name="Locomotion" type="Node" parent="." index="6" unique_id=668991861 node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference", "PermissionSourceNodes")]
 script = ExtResource("9_ctrlloco")
 TargetCharacterBodyNode = NodePath("..")
 AnimationTree = NodePath("../AnimationTree")
 RootMotionReference = NodePath("../Female_export")
+PermissionSourceNodes = Array[NodePath]([NodePath("../VRIK/PoseStateMachine")])
 AnimationBlendParameter = &"parameters/Walking/blend_position"
 RootMotionAnimationStateName = &"Walking"
 

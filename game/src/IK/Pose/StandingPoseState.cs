@@ -1,4 +1,5 @@
 using AlleyCat.Common;
+using AlleyCat.Control;
 using Godot;
 
 namespace AlleyCat.IK.Pose;
@@ -121,6 +122,17 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     } = 0.21f;
 
     /// <summary>
+    /// Maximum standing-continuum pose blend at which movement remains allowed.
+    /// Lower values require a more upright stance.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float MovementAllowedMaximumPoseBlend
+    {
+        get;
+        set;
+    } = 0.1f;
+
+    /// <summary>
     /// Forward reference shift at full crouch, expressed as a ratio of rest head height.
     /// Positive values move the reference along avatar-forward after that semantic direction has
     /// been resolved into skeleton-local space for this rig. On the current reference rig, the
@@ -212,6 +224,40 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     {
         base.OnUpdate(context);
         _timeSinceEnter += context.Delta;
+    }
+
+    /// <inheritdoc />
+    public override LocomotionPermissions GetLocomotionPermissions(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return ComputeLocomotionPermissions(
+            restHeadY: context.HeadTargetRestTransform.Origin.Y,
+            currentHeadY: context.HeadTargetTransform.Origin.Y,
+            restHeadHeight: context.RestHeadHeight,
+            fullCrouchReferenceHipHeightRatio: FullCrouchReferenceHipHeightRatio,
+            movementAllowedMaximumPoseBlend: MovementAllowedMaximumPoseBlend);
+    }
+
+    /// <summary>
+    /// Resolves locomotion permissions for the standing continuum from the current head height and
+    /// upright movement threshold.
+    /// </summary>
+    public static LocomotionPermissions ComputeLocomotionPermissions(
+        float restHeadY,
+        float currentHeadY,
+        float restHeadHeight,
+        float fullCrouchReferenceHipHeightRatio,
+        float movementAllowedMaximumPoseBlend)
+    {
+        float maximumPoseBlend = Mathf.Clamp(movementAllowedMaximumPoseBlend, 0f, 1f);
+        return ComputePoseBlend(
+                   restHeadY,
+                   currentHeadY,
+                   restHeadHeight,
+                   fullCrouchReferenceHipHeightRatio) <= maximumPoseBlend
+            ? LocomotionPermissions.Allowed
+            : LocomotionPermissions.RotationOnly;
     }
 
     /// <inheritdoc />

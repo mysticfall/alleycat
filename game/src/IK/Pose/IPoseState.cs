@@ -1,3 +1,4 @@
+using AlleyCat.Control;
 using Godot;
 
 namespace AlleyCat.IK.Pose;
@@ -42,4 +43,14 @@ public interface IPoseState
     /// </summary>
     /// <param name="context">Current pose-state context snapshot.</param>
     void OnUpdate(PoseStateContext context);
+
+    /// <summary>
+    /// Resolves locomotion permissions contributed by this pose state.
+    /// </summary>
+    /// <param name="context">Current pose-state context snapshot.</param>
+    LocomotionPermissions GetLocomotionPermissions(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return LocomotionPermissions.Allowed;
+    }
 }
