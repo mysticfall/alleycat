@@ -7,6 +7,9 @@
 [sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
 size = Vector2(10, 10)
 
+[sub_resource type="BoxShape3D" id="BoxShape3D_shmn4"]
+size = Vector3(10, 0.01, 10)
+
 [node name="MirrorRoom" type="Node3D" unique_id=973335562]
 
 [node name="Mirrors" type="Node3D" parent="." unique_id=770923602]
@@ -29,6 +32,12 @@ size = Vector2(4, 2)
 
 [node name="Floor" type="MeshInstance3D" parent="." unique_id=732614940]
 mesh = SubResource("PlaneMesh_0r23o")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="Floor" unique_id=597068289]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor/StaticBody3D" unique_id=1376618379]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+shape = SubResource("BoxShape3D_shmn4")
 
 [node name="Female" parent="." unique_id=1792987446 instance=ExtResource("2_o5j6c")]
 
