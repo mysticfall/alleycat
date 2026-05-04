@@ -2,12 +2,16 @@
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
 
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_osxwe"]
+radius = 0.2
+height = 1.6
+
 [node name="Female" unique_id=263578101 instance=ExtResource("1_5molt")]
 
-[node name="Female_export" parent="." index="0" unique_id=610951205]
+[node name="Female_export" parent="." index="0" unique_id=2077080586]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="GeneralSkeleton" parent="Female_export" index="0" unique_id=1414464346]
+[node name="GeneralSkeleton" parent="Female_export" index="0" unique_id=2078001243]
 bones/1/position = Vector3(0, 0.8389602, 0.022851828)
 bones/1/rotation = Quaternion(-2.9802322e-08, 0, 0, 1)
 bones/2/rotation = Quaternion(-2.9802322e-08, 0, 0, 1)
@@ -72,5 +76,9 @@ bone_idx = 46
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.032278657, 0.0937431)
 
-[node name="AnimationPlayer" parent="." index="1" unique_id=836013217]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." index="1" unique_id=385661659]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("CapsuleShape3D_osxwe")
+
+[node name="AnimationPlayer" parent="." index="2" unique_id=1374427213]
 root_motion_track = NodePath("%GeneralSkeleton:Root")

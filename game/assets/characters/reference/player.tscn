@@ -4,10 +4,12 @@
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
 [ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/ik/vrik.tscn" id="7_2a5tg"]
 [ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_2a5tg"]
+[ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/PlayerLocomotion.cs" id="9_ctrlloco"]
+[ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
 
 [node name="Player" unique_id=1792987446 instance=ExtResource("1_edvvb")]
 
-[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(716732083) index="0" unique_id=441014641]
+[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(2077080586) index="0" unique_id=2078001243]
 bones/1/position = Vector3(0, 0.8389602, 0.022851786)
 bones/1/rotation = Quaternion(0, 0, 0, 1)
 bones/2/rotation = Quaternion(0, 0, 0, 1)
@@ -118,9 +120,20 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15
 [node name="LeftFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="9" unique_id=1292107592]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.15998398, 0.0683572, -0.027253283)
 
-[node name="AnimationTree" parent="." index="3" unique_id=527893103 instance=ExtResource("8_2a5tg")]
+[node name="AnimationTree" parent="." index="5" unique_id=527893103 instance=ExtResource("8_2a5tg")]
+root_motion_track = NodePath("%GeneralSkeleton:Root")
+parameters/Walking/blend_position = Vector2(0, 0)
 
-[node name="AnimationPlayer" parent="." index="4" unique_id=1003732286]
-root_motion_track = NodePath("")
+[node name="Locomotion" type="Node" parent="." index="6" unique_id=668991861 node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference")]
+script = ExtResource("9_ctrlloco")
+TargetCharacterBodyNode = NodePath("..")
+AnimationTree = NodePath("../AnimationTree")
+RootMotionReference = NodePath("../Female_export")
+AnimationBlendParameter = &"parameters/Walking/blend_position"
+RootMotionAnimationStateName = &"Walking"
+
+[node name="PlayerController" type="Node" parent="." index="7" unique_id=1206579480 node_paths=PackedStringArray("LocomotionNode")]
+script = ExtResource("10_ctrlplayer")
+LocomotionNode = NodePath("../Locomotion")
 
 [editable path="VRIK"]

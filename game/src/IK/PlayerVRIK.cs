@@ -239,6 +239,7 @@ public partial class PlayerVRIK : Node3D
     public override void _Ready()
     {
         EnsureResolvedNodes();
+        ConfigurePlayerBodyCollisionExceptions();
         EnsureFollowers();
 
         InsertStageModifiers();
@@ -759,5 +760,32 @@ public partial class PlayerVRIK : Node3D
         {
             MaximumSpeed = HandTargetMaximumSpeed,
         };
+    }
+
+    private void ConfigurePlayerBodyCollisionExceptions()
+    {
+        if (GetParent() is not CharacterBody3D playerBody)
+        {
+            return;
+        }
+
+        // TODO: This self-collision suppression is a temporary workaround for the current IK target rig.
+        // PlayerVRIK may not be the right long-term owner once collision responsibilities are separated cleanly.
+        AddBidirectionalCollisionException(playerBody, _headIKTarget);
+        AddBidirectionalCollisionException(playerBody, _rightHandIKTarget);
+        AddBidirectionalCollisionException(playerBody, _leftHandIKTarget);
+        AddBidirectionalCollisionException(playerBody, _rightFootIKTarget as PhysicsBody3D);
+        AddBidirectionalCollisionException(playerBody, _leftFootIKTarget as PhysicsBody3D);
+    }
+
+    private static void AddBidirectionalCollisionException(PhysicsBody3D source, PhysicsBody3D? other)
+    {
+        if (other is null || source == other)
+        {
+            return;
+        }
+
+        source.AddCollisionExceptionWith(other);
+        other.AddCollisionExceptionWith(source);
     }
 }

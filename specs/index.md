@@ -15,6 +15,8 @@
 ## Characters
 
 - [CHAR-000: Character Skeleton Profile](characters/000-character-skeleton/index.md)
+- [CTRL: Player Character Control System](characters/ctrl/index.md)
+  - [CTRL-001: Locomotion](characters/ctrl/001-locomotion/index.md)
 - [IK: Player VRIK System](characters/ik/index.md)
   - [IK Implementation Notes](characters/ik/implementation-notes.md)
   - [IK-001: Reusable Neck-Spine CCDIK Setup](characters/ik/001-neck-spine-ik/index.md)
