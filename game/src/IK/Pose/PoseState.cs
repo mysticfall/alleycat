@@ -120,6 +120,15 @@ public abstract partial class PoseState : Resource, IPoseState
     }
 
     /// <summary>
+    /// Resolves the optional locomotion animation-state override contributed by this pose state.
+    /// </summary>
+    public virtual LocomotionStateTarget? GetLocomotionStateTarget(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return null;
+    }
+
+    /// <summary>
     /// Builds an optional debug-overlay line describing this state's current animation-facing
     /// state for play tests. Return <see langword="null"/> to omit animation debug output.
     /// </summary>

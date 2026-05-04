@@ -22,11 +22,34 @@ This contract covers the framework-level architecture. Detailed per-state behavi
 
 ## User Requirements
 
-1. MVP pose states must remain available and selectable across supported input conditions.
-2. Pose changes must feel continuous across common player-driven movement.
-3. State switching relies on inferred signals from IK-target transforms and runtime state; explicit button-based pose switching avoided by default.
-4. **Movement must be restricted when the player is in a pose that does not support walking** (for example, kneeling, sitting, crawling).
-5. **Rotation must remain available across all poses for MVP.**
+1. Pose changes must feel continuous across common player-driven movement.
+2. MVP pose states must remain available and selectable across supported input conditions.
+3. Players must be able to transition from crouching to kneeling using an armed-then-retreat trigger model:
+   the transition initiates from the full-crouch baseline, becomes armed after sufficient forward travel from that baseline
+   (measured in head-offset space), and fires only after retreating from the armed peak by a configurable amount.
+   This provides intentional player control and prevents accidental firing.
+4. The Standing→Kneeling transition must require a crouch-depth gate—near-full crouch on the standing-to-crouching continuum—before kneeling becomes reachable.
+5. Players must be able to transition from kneeling back to standing using the same armed-then-retreat model:
+   the return path is measured from the full-crouch baseline, arms after sufficient forward travel from that baseline, and fires only after retreating from the armed peak by a configurable amount.
+   This return transition is bidirectional with the forward kneeling transition.
+6. Following any kneeling transition (forward or reverse), both transition directions must remain locked until the forward-axis offset returns to near the neutral or full-crouch baseline.
+   This prevents immediate bounce-back and re-triggering.
+7. Kneeling transition thresholds must use normalised ratios derived from rest-pose body measures, not absolute metres.
+   At minimum, the head-height measure from rest pose (`RestHeadHeight`) defines the reference for the normalised crouch-depth gate.
+8. Players must be able to transition from the Standing pose to an all-fours crawling pose by moving the head forward
+   beyond a head forward offset threshold, where the transition becomes armed once the head's forward offset reaches a
+   configurable threshold and fires when the player continues forward past that armed point by a configurable additional margin.
+9. Players must be able to transition from the Kneeling pose to an all-fours crawling pose by moving the head forward
+   beyond a head forward offset threshold, where the transition becomes armed once the head's forward offset reaches a
+   configurable threshold and fires when the player continues forward past that armed point by a configurable additional margin.
+10. When in AllFours, players must experience a smooth transition animation from the entering position to the crawling hold pose,
+    driven by the head's forward offset position.
+11. While crawling on all fours, if the player raises their head vertically above a configurable threshold, they must
+    transition back to the entering (transitioning) state to prepare for a return to standing.
+12. While in the AllFours transitioning state, if the player's head forward offset drops below a configurable return threshold,
+    the pose must automatically transition back to the Standing pose (crouching baseline) rather than to kneeling.
+13. **Movement must be restricted when the player is in a pose that does not support walking** (for example, kneeling, sitting, all-fours transitioning).
+14. **Rotation must remain available across all poses for MVP.**
 
 ## Technical Requirements
 
@@ -82,42 +105,163 @@ This contract covers the framework-level architecture. Detailed per-state behavi
     - `Start(AnimationTree)` — called once after initial-state resolution to seed the initial animation state
     - Lifecycle callbacks (`OnEnter`, `OnUpdate`, `OnExit`) — called per-frame/state-change to drive animation work
     - Properties declaring the hip reconciliation profile for this state
-18. Animation control for transitions is owned by `PoseTransition` resources.
-19. `PoseStateMachine` permits a one-time startup exception: after resolving `InitialStateId`, it may call `PoseState.Start(AnimationTree)` once to seed the initial authored state.
+
+    Per-frame state animation work flows through lifecycle callbacks. The standing pose family uses this pattern.
+18. Animation control for transitions is owned by `PoseTransition` resources. Each `PoseTransition` resource may:
+    - Own AnimationTree travel into its authored transition states when it fires
+    - Provide lifecycle hooks for pre/post transition handling
+
+    `PoseTransition` resources may drive AnimationTree state changes directly.
+19. `PoseStateMachine` permits a one-time startup exception: after resolving `InitialStateId`, it may call
+    `PoseState.Start(AnimationTree)` once to seed the initial authored state. This startup path is exclusive
+    to initial state setup and is not used during normal tick evaluation.
 20. Transition Resources must support optional lifecycle hooks invoked in this order around a state switch:
-    `OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`.
-21. The state machine must emit a state-changed observation (signal or event) so consumers can react.
-22. State and transition identifiers are authored as `StringName` in editor contexts.
+    `OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`. The state machine must emit a
+    state-changed observation (signal or event) so consumers can react.
+21. State and transition identifiers are authored as `StringName` in editor contexts for designer ergonomics. The
+    internal selection layer may use either `StringName` or `string` for testability, provided identity semantics are
+    preserved.
+
+### Standing Pose Family
+
+22. The Standing pose family uses a single `AnimationTree` state, `StandingCrouching`, whose sub-graph
+    continuously runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")`. This is the canonical authoring pattern for a
+    "continuous player-driven pose continuum": a single `AnimationTree` state spanning the continuum with `TimeSeek`
+    driven by a normalised scalar. A single framework-level `StandingPoseState` resource maps to this `AnimationTree`
+    state — there is no separate framework-level `CrouchingPoseState`. The standing-to-crouching continuum is
+    covered by one standing-family `PoseState` resource.
+23. The `Idle` clip remains in the animation library for future layering (for example, an additive breathing blend on
+    top of the `StandingCrouching` sub-graph) but is not wired into the tree for MVP. This is a deferred-but-supported
+    extension point, not a dropped feature.
+
+### Kneeling Transitions
+
+24. The Standing→Kneeling transition uses an armed-then-retreat trigger model measured from the full-crouch baseline:
+    - The trigger input is the forward-axis offset from the pose-neutral or full-crouch baseline, not total 3D head-offset magnitude.
+    - The transition becomes armed after sufficient forward travel from the full-crouch baseline.
+    - The transition fires only after retreating from the armed peak by a configurable amount (configurable `ArmedRetreatThreshold` style parameter).
+    - This model prevents accidental firing during normal crouching and provides intentional player control.
+25. The Standing→Kneeling transition is additionally gated by a crouch-depth threshold that must be satisfied before the
+    transition can trigger. The gate requires the player to be at or near full crouch depth on the standing-to-crouching continuum.
+26. The kneeling pose (KneelingEnter, Kneeling, KneelingExit) is authored as separate AnimationTree state-machine nodes
+    using normal animation playback. The AnimationTree uses authored auto-advance for transition clips (for example
+    `KneelingEnter → Kneeling`, `KneelingExit → StandingCrouching`) rather than per-tick TimeSeek scrubbing.
+    Transition Resources may own AnimationTree travel into their authored transition states when they fire.
+27. Following any kneeling transition, both transition directions (Standing→Kneeling and Kneeling→Standing) remain locked
+    until the forward-axis offset returns near the neutral or full-crouch baseline (configurable `NeutralReturnMaxOffsetRatio`
+    style contract). This prevents immediate bounce-back and re-triggering.
+28. The kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres.
+    At minimum, the head-height measure from rest pose (`RestHeadHeight`) must define the reference for the normalised crouch-depth gate.
+    Tunable parameters use flexible ratios (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
+29. The Kneeling→Standing return transition uses the same armed-then-retreat model:
+     - measured from the full-crouch baseline,
+     - arms after sufficient forward travel from that baseline,
+     - fires after retreating from the armed peak by a configurable amount.
+     This provides bidirectional standing-continuum↔kneel transitions.
+
+### AllFours Pose
+
+30. The state machine must include a new `AllFoursPoseState` resource that provides the all-fours crawling pose behaviour.
+    This state is distinct from the previously defined crawling (all fours) in that it implements a structured internal
+    state machine with two phases: `transitioning` and `crawling`.
+31. The AllFours pose must be reachable as a transition target from both `StandingPoseState` and `KneelingPoseState`.
+    Both transitions use a forward-travel-beyond-armed-point model with the forward-axis offset as the trigger signal,
+    but with a distinct threshold range calibrated for the all-fours entry gesture.
+32. The AllFours entry trigger uses head forward offset as the primary signal:
+    - The transition becomes armed when the head's normalised forward offset from the skeleton's local origin exceeds a
+      configurable threshold (default range start: 0.42).
+    - The transition fires when the player continues forward past the armed point by a configurable additional margin
+      (configurable `AllFoursForwardContinueThreshold`).
+    - The forward offset is normalised using rest-pose body measures, mapping the range 0.42 to 0.73 to the animation seek
+      window.
+33. `AllFoursPoseState` implements two internal sub-states:
+    - `transitioning`: active immediately upon entering AllFours, drives the entry animation via `AnimationNodeTimeSeek`.
+    - `crawling`: active after the entry animation completes, holds the crawl pose.
+34. In the `transitioning` sub-state, the state drives an `AnimationNodeTimeSeek` node using animation `All Fours-enter`
+    with a custom seek window spanning 1.2 seconds to 3.5417 seconds.
+35. The seek position in the entry animation is calculated from the head's normalised forward offset:
+    - Normalise the forward offset to the range [0.42, 0.73] using the formula:
+      `seekPosition = (headForwardOffset - 0.42) / (0.73 - 0.42)`.
+    - Map the normalised value to the seek window duration [1.2, 3.5417] seconds.
+36. When the head forward offset exceeds 0.73, the internal state transitions from `transitioning` to `crawling`.
+    The `crawling` sub-state plays the looping animation `All Fours`.
+37. While in the `crawling` sub-state, if the head rises vertically above the height captured when crawl-hold became active by a configurable threshold
+    (default: 0.3, expressed as a normalised ratio of rest head height), the state returns to `transitioning`.
+    The exit signal is therefore a rise relative to the established crawl pose, not an absolute head-height gate that grounded crawl posture may already exceed.
+38. While in the `transitioning` sub-state, if the head's forward offset decreases below 0.42 minus a configurable
+    return margin (default margin: configurable `AllFoursReturnMargin`), the framework transitions back to
+    `StandingPoseState` (the crouching baseline). The return destination is always Standing, not source-dependent.
+39. AllFours threshold parameters (forward offset entry threshold, forward offset return threshold, vertical offset
+    climb threshold, forward continue margin, return margin) must be configurable properties on the `AllFoursPoseState`
+    or its associated transition resources.
+40. The AllFours animation entry and crawl loops are authored as part of the AnimationTree, separate from the
+    standing-family `TimeSeek` pattern. The entry uses `TimeSeek` scrubbing to match head position; the crawl
+    hold uses standard animation playback.
+41. **AllFours locomotion permissions**:
+    - The `transitioning` sub-state returns `LocomotionPermissions.RotationOnly` (blocks movement, allows rotation).
+    - The `crawling` sub-state returns `LocomotionPermissions.Allowed` (permits both movement and rotation), enabling
+      root-motion-driven crawl-hold locomotion.
+42. **AllFours locomotion animation-state target**:
+    - The `crawling` sub-state returns `LocomotionStateTarget(AllFours, AllFoursForward)` from `GetLocomotionStateTarget(PoseStateContext)`.
+    - The `transitioning` sub-state returns `null` (no locomotion animation-state target).
 
 ### Locomotion Permission Sources
 
-23. **The pose-state-machine must implement `ILocomotionPermissionSource`** and serve as a locomotion permission provider.
-24. The machine acts as a single permission source that delegates to the currently active pose state.
-25. Each tick, the machine queries the active pose state for its locomotion permissions.
-26. **Each `PoseState` must provide locomotion permissions** via `GetLocomotionPermissions(PoseStateContext context)`:
-    - Default implementation returns `LocomotionPermissions.RotationOnly` (blocks movement, allows rotation)
-    - Subclasses may override to provide different permission behaviour
-27. **Permission aggregation**:
-    - External systems (for example locomotion component) aggregate permissions across all sources using logical AND
-    - All sources must permit a permission for it to be granted
-28. **Runtime permission query**:
-    - The pose-state-machine exposes its `ILocomotionPermissionSource` contract to consumers
-    - Consumers read `ILocomotionPermissionSource.LocomotionPermissions` each tick to get the aggregate permissions
+43. **The pose-state-machine must implement `ILocomotionPermissionSource`** and serve as a locomotion permission provider.
+    - The machine acts as a single permission source that delegates to the currently active pose state.
+    - Each tick, the machine queries the active pose state for its locomotion permissions.
 
-### Standing Family Pattern
+44. **Each `PoseState` must provide locomotion permissions** via `GetLocomotionPermissions(PoseStateContext context)`:
+    - Default implementation returns `LocomotionPermissions.RotationOnly` (blocks movement, allows rotation).
+    - Subclasses may override to provide different permission behaviour.
 
-29. The Standing pose family uses a single `AnimationTree` state, `StandingCrouching`, whose sub-graph continuously runs `TimeSeek → AnimationNodeAnimation("Crouch-seek")`.
-30. A single framework-level `StandingPoseState` resource maps to this `AnimationTree` state — there is no separate framework-level `CrouchingPoseState`.
+45. **Standing pose family (`StandingPoseState`) permissions**:
+    - Allows movement only when the standing/crouching blend is at or below a configurable `MovementAllowedMaximumPoseBlend` threshold.
+    - Default threshold is 0.1 (near fully upright).
+    - Allows rotation in all cases.
 
-### Kneeling Pattern
+46. **Non-standing pose permissions**:
+    - Kneeling, sitting, stooping: return `LocomotionPermissions.RotationOnly`.
+    - AllFours transitioning: returns `LocomotionPermissions.RotationOnly`.
+    - AllFours crawling (crawl-hold): returns `LocomotionPermissions.Allowed`.
+    - Blocks movement while allowing rotation for non-crawling non-standing poses.
 
-31. The kneeling pose is authored as separate AnimationTree state-machine nodes using normal animation playback.
-32. The AnimationTree uses authored auto-advance for transition clips rather than per-tick TimeSeek scrubbing.
+47. **Permission aggregation**:
+    - External systems (for example locomotion component) aggregate permissions across all sources using logical AND.
+    - All sources must permit a permission for it to be granted.
 
-### AllFours Pattern
+48. **Runtime permission query**:
+    - The pose-state-machine exposes its `ILocomotionPermissionSource` contract to consumers.
+    - Consumers read `ILocomotionPermissionSource.LocomotionPermissions` each tick to get the aggregate permissions.
 
-33. The state machine must include an `AllFoursPoseState` resource that implements a structured internal state machine with two phases: `transitioning` and `crawling`.
-34. The AllFours pose must be reachable as a transition target from both `StandingPoseState` and `KneelingPoseState`.
+### Locomotion Animation-State Override
+
+49. **The pose-state-machine must implement `ILocomotionAnimationSource`** to provide locomotion animation-state targets to external locomotion systems:
+    - Property `LocomotionStateTarget: LocomotionStateTarget?` is exposed to external consumers.
+    - Each tick, the machine delegates to the active pose state's `GetLocomotionStateTarget(PoseStateContext)` method.
+
+50. **Each pose state may optionally return a locomotion animation-state target**:
+    - Default `IPoseState.GetLocomotionStateTarget(PoseStateContext)` returns `null`.
+    - Subclasses may override to return a target.
+
+51. **Interface contract**:
+    ```
+    IPoseState:
+      - Method: GetLocomotionStateTarget(context: PoseStateContext): LocomotionStateTarget?
+
+    ILocomotionAnimationSource:
+      - Property: LocomotionStateTarget: LocomotionStateTarget?
+
+    LocomotionStateTarget:
+      - Property: IdleStateName: StringName
+      - Property: MovementStateName: StringName
+    ```
+    - `IPoseState` defines the per-state hook that pose states optionally implement.
+    - `ILocomotionAnimationSource` is what external consumers (for example `LocomotionBase`) resolve from `PermissionSourceNodes`.
+
+52. **Pose-state-machine implementation**:
+    - The pose-state-machine implements `ILocomotionAnimationSource` and delegates to the active pose state each tick.
+    - External consumers query `ILocomotionAnimationSource.LocomotionStateTarget`.
 
 ## In Scope
 
@@ -150,7 +294,13 @@ This contract covers the framework-level architecture. Detailed per-state behavi
 | AC-30 | The pose-state-machine implements `ILocomotionPermissionSource` and serves as a locomotion permission provider. | Technical |
 | AC-31 | Each pose state provides `GetLocomotionPermissions(PoseStateContext)` that returns appropriate permissions for that pose. | Technical |
 | AC-32 | Non-standing poses (kneeling, sitting, crawling) return `LocomotionPermissions.RotationOnly` (blocks movement, allows rotation). | User + Technical |
+| AC-32a | AllFours Crawling (crawl-hold) sub-state permits movement to enable crawl-hold locomotion. | User + Technical |
+| AC-33 | The standing pose family allows movement only when the standing/crouching blend is below a configurable threshold. | User + Technical |
 | AC-34 | The movement permission threshold (`MovementAllowedMaximumPoseBlend`) is configurable on `StandingPoseState`. | Technical |
+| AC-35 | Pose states may optionally return a `LocomotionStateTarget?` from `GetLocomotionStateTarget(PoseStateContext)`. | Technical |
+| AC-36 | The pose-state-machine implements `ILocomotionAnimationSource` with `LocomotionStateTarget` property. | Technical |
+| AC-37 | AllFours Crawling sub-state returns `LocomotionStateTarget(AllFours, AllFoursForward)`. | Technical |
+| AC-38 | The pose-state-machine delegates to the active pose state each tick to resolve the target. | Technical |
 
 ## References
 

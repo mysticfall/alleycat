@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://djeh2d5hkxyoj"]
 
-[ext_resource type="AnimationNodeStateMachine" uid="uid://cfjxb86q88r7s" path="res://assets/characters/reference/female/pose_state_machine_tree.tres" id="1_pw6e2"]
+[ext_resource type="AnimationNodeStateMachine" uid="uid://bge48ng374i85" path="res://assets/characters/reference/female/pose_state_machine_tree.tres" id="1_pw6e2"]
 
 [node name="AnimationTree" type="AnimationTree" unique_id=527893103]
 tree_root = ExtResource("1_pw6e2")

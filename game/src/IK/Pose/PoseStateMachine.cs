@@ -20,7 +20,7 @@ namespace AlleyCat.IK.Pose;
 /// </para>
 /// </remarks>
 [GlobalClass]
-public partial class PoseStateMachine : Node, ILocomotionPermissionSource
+public partial class PoseStateMachine : Node, ILocomotionPermissionSource, ILocomotionAnimationSource
 {
     private readonly List<IPoseTransition> _transitionView = [];
     private PoseStateMachineTickResult _lastTickResult = new(
@@ -121,6 +121,21 @@ public partial class PoseStateMachine : Node, ILocomotionPermissionSource
                     $"{nameof(PoseStateMachine)} has no active pose state.");
 
             return activeState.GetLocomotionPermissions(_lastTickResult.Context);
+        }
+    }
+
+    /// <inheritdoc />
+    public LocomotionStateTarget? LocomotionStateTarget
+    {
+        get
+        {
+            EnsureInitialStateResolved();
+
+            PoseState activeState = CurrentState
+                ?? throw new InvalidOperationException(
+                    $"{nameof(PoseStateMachine)} has no active pose state.");
+
+            return activeState.GetLocomotionStateTarget(_lastTickResult.Context);
         }
     }
 

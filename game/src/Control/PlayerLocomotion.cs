@@ -9,10 +9,11 @@ namespace AlleyCat.Control;
 [GlobalClass]
 public partial class PlayerLocomotion : LocomotionBase
 {
-    private const float RootMotionSpeedEpsilon = 1e-4f;
     private static readonly StringName _playbackParameter = new("parameters/playback");
     private static readonly StringName _walkingAnimationStateName = new("Walking");
     private static readonly StringName _standingAnimationStateName = new("StandingCrouching");
+    private static readonly LocomotionStateTarget _defaultLocomotionStateTarget =
+        new(_standingAnimationStateName, _walkingAnimationStateName);
 
     private CharacterBody3D? TargetCharacterBodyResolved
     {
@@ -31,11 +32,11 @@ public partial class PlayerLocomotion : LocomotionBase
         get;
         set;
     }
+
     private Vector2 _movementInput;
     private Vector2 _rotationInput;
     private double _snapTurnCooldownRemainingSeconds;
     private bool _warnedMissingAnimationBlendParameter;
-    private bool _warnedRootMotionFallback;
     private bool _warnedUnsupportedAnimationBlendParameterType;
 
     /// <summary>
@@ -87,16 +88,6 @@ public partial class PlayerLocomotion : LocomotionBase
         get;
         set;
     } = TurnMode.Snap;
-
-    /// <summary>
-    /// Maximum planar movement speed multiplier.
-    /// </summary>
-    [Export(PropertyHint.Range, "0,10,0.01,or_greater")]
-    public float MovementSpeedMultiplier
-    {
-        get;
-        set;
-    } = 1.5f;
 
     /// <summary>
     /// Rotation speed multiplier.
@@ -207,10 +198,10 @@ public partial class PlayerLocomotion : LocomotionBase
 
         ApplyRotation(delta, permissions);
         Vector2 locomotionBlendInput = GetLocomotionBlendInput(permissions);
-        Vector3 desiredVelocity = ComputeDesiredPlanarVelocity(locomotionBlendInput);
-        UpdateLocomotionAnimationState(locomotionBlendInput);
+        LocomotionStateTarget locomotionStateTarget = ResolveLocomotionStateTarget();
+        UpdateLocomotionAnimationState(locomotionBlendInput, locomotionStateTarget);
         UpdateAnimationBlend(locomotionBlendInput);
-        Vector3 planarVelocity = ResolvePlanarVelocity(delta, desiredVelocity);
+        Vector3 planarVelocity = ResolvePlanarVelocity(delta, permissions, locomotionStateTarget);
 
         CharacterBody3D targetCharacterBody = GetTargetCharacterBody();
         targetCharacterBody.Velocity = new Vector3(
@@ -263,49 +254,32 @@ public partial class PlayerLocomotion : LocomotionBase
         return yawDelta;
     }
 
-    private Vector3 ComputeDesiredPlanarVelocity(Vector2 locomotionBlendInput)
-    {
-        if (locomotionBlendInput.IsZeroApprox())
-        {
-            return Vector3.Zero;
-        }
-
-        Vector3 localDirection = new(locomotionBlendInput.X, 0f, -locomotionBlendInput.Y);
-        Vector3 worldDirection = (GetMovementBasis() * localDirection).Normalized();
-        return worldDirection * (MovementSpeedMultiplier * locomotionBlendInput.Length());
-    }
-
     private Vector2 GetLocomotionBlendInput(LocomotionPermissions permissions)
         => ApplyMovementPermissions(_movementInput, permissions);
 
-    private Vector3 ResolvePlanarVelocity(double delta, Vector3 desiredVelocity)
+    private Vector3 ResolvePlanarVelocity(
+        double delta,
+        LocomotionPermissions permissions,
+        LocomotionStateTarget locomotionStateTarget)
     {
-        if (desiredVelocity.LengthSquared() <= RootMotionSpeedEpsilon * RootMotionSpeedEpsilon)
+        if (!permissions.MovementAllowed)
         {
             return Vector3.Zero;
         }
 
         if (AnimationTreeResolved is null || RootMotionReferenceResolved is null)
         {
-            return desiredVelocity;
+            return Vector3.Zero;
         }
 
-        if (!IsRootMotionStateActive())
+        if (!IsRootMotionStateActive(locomotionStateTarget, out _))
         {
-            return desiredVelocity;
+            return Vector3.Zero;
         }
 
-        Vector3 rootMotionDelta = AnimationTreeResolved.GetRootMotionPosition();
-        Vector3 worldRootMotionVelocity = RootMotionReferenceResolved.GlobalBasis * rootMotionDelta / (float)delta;
-        worldRootMotionVelocity = new Vector3(worldRootMotionVelocity.X, 0f, worldRootMotionVelocity.Z);
-
-        if (worldRootMotionVelocity.LengthSquared() <= RootMotionSpeedEpsilon * RootMotionSpeedEpsilon)
-        {
-            WarnRootMotionFallbackOnce();
-            return desiredVelocity;
-        }
-
-        return worldRootMotionVelocity * MovementSpeedMultiplier;
+        Vector3 rootMotionDelta = GetRootMotionPositionDelta();
+        Vector3 worldRootMotionVelocity = GetRootMotionReferenceBasis() * rootMotionDelta / (float)delta;
+        return new Vector3(worldRootMotionVelocity.X, 0f, worldRootMotionVelocity.Z);
     }
 
     private void UpdateAnimationBlend(Vector2 locomotionBlendInput)
@@ -355,7 +329,9 @@ public partial class PlayerLocomotion : LocomotionBase
         _warnedUnsupportedAnimationBlendParameterType = true;
     }
 
-    private void UpdateLocomotionAnimationState(Vector2 locomotionBlendInput)
+    private void UpdateLocomotionAnimationState(
+        Vector2 locomotionBlendInput,
+        LocomotionStateTarget locomotionStateTarget)
     {
         AnimationNodeStateMachinePlayback? playback = ResolvePlayback();
         if (playback is null)
@@ -366,44 +342,40 @@ public partial class PlayerLocomotion : LocomotionBase
         StringName currentNode = playback.GetCurrentNode();
         bool hasMovementInput = !locomotionBlendInput.IsZeroApprox();
 
-        if (currentNode == _standingAnimationStateName && hasMovementInput)
+        if (currentNode == locomotionStateTarget.IdleStateName && hasMovementInput)
         {
-            playback.Travel(_walkingAnimationStateName);
+            playback.Travel(locomotionStateTarget.MovementStateName);
             return;
         }
 
-        if (currentNode == _walkingAnimationStateName && !hasMovementInput)
+        if (currentNode == locomotionStateTarget.MovementStateName && !hasMovementInput)
         {
-            playback.Travel(_standingAnimationStateName);
+            playback.Travel(locomotionStateTarget.IdleStateName);
         }
     }
 
-    private bool IsRootMotionStateActive()
+    private bool IsRootMotionStateActive(
+        LocomotionStateTarget locomotionStateTarget,
+        out StringName rootMotionStateName)
     {
-        if (RootMotionAnimationStateName.IsEmpty)
+        rootMotionStateName = locomotionStateTarget == _defaultLocomotionStateTarget
+            ? RootMotionAnimationStateName
+            : locomotionStateTarget.MovementStateName;
+
+        if (rootMotionStateName.IsEmpty)
         {
             return false;
         }
 
         AnimationNodeStateMachinePlayback? playback = ResolvePlayback();
-        return playback is not null && playback.GetCurrentNode() == RootMotionAnimationStateName;
+        return playback is not null && playback.GetCurrentNode() == rootMotionStateName;
     }
+
+    private LocomotionStateTarget ResolveLocomotionStateTarget()
+        => GetLocomotionStateTarget() ?? _defaultLocomotionStateTarget;
 
     private AnimationNodeStateMachinePlayback? ResolvePlayback()
         => AnimationTreeResolved?.Get(_playbackParameter).As<AnimationNodeStateMachinePlayback>();
-
-    private void WarnRootMotionFallbackOnce()
-    {
-        if (_warnedRootMotionFallback)
-        {
-            return;
-        }
-
-        GD.PushWarning(
-            $"{nameof(PlayerLocomotion)} did not receive locomotion root motion from the current animation tree. " +
-            "Falling back to direct planar velocity until locomotion animation-tree reconciliation is completed.");
-        _warnedRootMotionFallback = true;
-    }
 
     private static Vector2 ApplyDeadzone(Vector2 input, float deadzone)
         => new(
@@ -415,9 +387,14 @@ public partial class PlayerLocomotion : LocomotionBase
             ?? throw new InvalidOperationException($"{nameof(PlayerLocomotion)} target body is not available before _Ready.");
 
     /// <summary>
-    /// Resolves the world-space basis used to convert local movement input into planar velocity.
+    /// Resolves the current locomotion root-motion position delta from the animation runtime.
     /// </summary>
-    protected virtual Basis GetMovementBasis() => GetTargetCharacterBody().GlobalBasis;
+    protected virtual Vector3 GetRootMotionPositionDelta() => AnimationTreeResolved?.GetRootMotionPosition() ?? Vector3.Zero;
+
+    /// <summary>
+    /// Resolves the world-space basis used to convert authored root motion into world-space velocity.
+    /// </summary>
+    protected virtual Basis GetRootMotionReferenceBasis() => RootMotionReferenceResolved?.GlobalBasis ?? Basis.Identity;
 
     /// <summary>
     /// Applies yaw rotation to the controlled character body.

@@ -9,7 +9,7 @@
 
 [node name="Player" unique_id=1792987446 instance=ExtResource("1_edvvb")]
 
-[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(2077080586) index="0" unique_id=2078001243]
+[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(1131309092) index="0" unique_id=1044870268]
 bones/1/position = Vector3(0, 0.8389602, 0.022851786)
 bones/1/rotation = Quaternion(0, 0, 0, 1)
 bones/2/rotation = Quaternion(0, 0, 0, 1)
@@ -122,16 +122,14 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.1
 
 [node name="AnimationTree" parent="." index="5" unique_id=527893103 instance=ExtResource("8_2a5tg")]
 root_motion_track = NodePath("%GeneralSkeleton:Root")
-parameters/Walking/blend_position = Vector2(0, 0)
 
 [node name="Locomotion" type="Node" parent="." index="6" unique_id=668991861 node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference", "PermissionSourceNodes")]
 script = ExtResource("9_ctrlloco")
 TargetCharacterBodyNode = NodePath("..")
 AnimationTree = NodePath("../AnimationTree")
 RootMotionReference = NodePath("../Female_export")
-PermissionSourceNodes = Array[NodePath]([NodePath("../VRIK/PoseStateMachine")])
 AnimationBlendParameter = &"parameters/Walking/blend_position"
-RootMotionAnimationStateName = &"Walking"
+PermissionSourceNodes = [NodePath("../VRIK/PoseStateMachine")]
 
 [node name="PlayerController" type="Node" parent="." index="7" unique_id=1206579480 node_paths=PackedStringArray("LocomotionNode")]
 script = ExtResource("10_ctrlplayer")

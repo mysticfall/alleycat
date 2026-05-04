@@ -1,7 +1,10 @@
-[gd_resource type="AnimationNodeStateMachine" format=3 uid="uid://cfjxb86q88r7s"]
+[gd_resource type="AnimationNodeStateMachine" format=3 uid="uid://bge48ng374i85"]
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_2e8d8"]
 animation = &"All Fours"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_crawlf"]
+animation = &"All Fours-forward"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_qx4p0"]
 animation = &"All Fours-enter"
@@ -108,9 +111,17 @@ xfade_time = 0.5
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_75f16"]
 xfade_time = 0.5
 
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_crawlf"]
+xfade_time = 0.2
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_crawlb"]
+xfade_time = 0.2
+
 [resource]
 states/AllFours/node = SubResource("AnimationNodeAnimation_2e8d8")
 states/AllFours/position = Vector2(880, -33)
+states/AllFoursForward/node = SubResource("AnimationNodeAnimation_crawlf")
+states/AllFoursForward/position = Vector2(880, -117.64844)
 states/AllFoursTransitioning/node = SubResource("AnimationNodeBlendTree_okcsg")
 states/AllFoursTransitioning/position = Vector2(604, -33)
 states/End/position = Vector2(995.6367, 100)
@@ -125,5 +136,5 @@ states/StandingCrouching/position = Vector2(360, 100)
 states/Start/position = Vector2(182.8711, 100)
 states/Walking/node = SubResource("AnimationNodeBlendSpace2D_fd1sw")
 states/Walking/position = Vector2(360, -33)
-transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_fd1sw"), "StandingCrouching", "KneelingEnter", SubResource("AnimationNodeStateMachineTransition_kcdmd"), "KneelingEnter", "Kneeling", SubResource("AnimationNodeStateMachineTransition_iotod"), "Kneeling", "KneelingExit", SubResource("AnimationNodeStateMachineTransition_ygbbo"), "KneelingExit", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_6pp6w"), "StandingCrouching", "AllFoursTransitioning", SubResource("AnimationNodeStateMachineTransition_4ikd3"), "Kneeling", "AllFoursTransitioning", SubResource("AnimationNodeStateMachineTransition_38tlw"), "AllFoursTransitioning", "AllFours", SubResource("AnimationNodeStateMachineTransition_34n0n"), "AllFours", "AllFoursTransitioning", SubResource("AnimationNodeStateMachineTransition_fh8ir"), "AllFoursTransitioning", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_umipn"), "Walking", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_wnsqo"), "StandingCrouching", "Walking", SubResource("AnimationNodeStateMachineTransition_75f16")]
-graph_offset = Vector2(-38.871094, -74.61114)
+transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_fd1sw"), "StandingCrouching", "KneelingEnter", SubResource("AnimationNodeStateMachineTransition_kcdmd"), "KneelingEnter", "Kneeling", SubResource("AnimationNodeStateMachineTransition_iotod"), "Kneeling", "KneelingExit", SubResource("AnimationNodeStateMachineTransition_ygbbo"), "KneelingExit", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_6pp6w"), "StandingCrouching", "AllFoursTransitioning", SubResource("AnimationNodeStateMachineTransition_4ikd3"), "Kneeling", "AllFoursTransitioning", SubResource("AnimationNodeStateMachineTransition_38tlw"), "AllFoursTransitioning", "AllFours", SubResource("AnimationNodeStateMachineTransition_34n0n"), "AllFours", "AllFoursTransitioning", SubResource("AnimationNodeStateMachineTransition_fh8ir"), "AllFoursTransitioning", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_umipn"), "Walking", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_wnsqo"), "StandingCrouching", "Walking", SubResource("AnimationNodeStateMachineTransition_75f16"), "AllFours", "AllFoursForward", SubResource("AnimationNodeStateMachineTransition_crawlf"), "AllFoursForward", "AllFours", SubResource("AnimationNodeStateMachineTransition_crawlb")]
+graph_offset = Vector2(117.36719, -106.94318)

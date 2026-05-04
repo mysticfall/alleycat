@@ -1,4 +1,5 @@
 using AlleyCat.Common;
+using AlleyCat.Control;
 using Godot;
 
 namespace AlleyCat.IK.Pose;
@@ -42,7 +43,14 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
     /// </summary>
     public static readonly StringName DefaultCrawlingAnimationStateName = new("AllFours");
 
+    /// <summary>
+    /// Authored AnimationTree node used for crawl locomotion.
+    /// </summary>
+    public static readonly StringName DefaultCrawlLocomotionAnimationStateName = new("AllFoursForward");
+
     private bool _warnedMissingSeekPath;
+    private float? _crawlBaselineVerticalOffset;
+    private bool _requiresVerticalResetBeforeCrawling;
     private double _timeSinceEnter = -1.0;
     private HipLimitEnvelope? _snapshotHipOffsetEnvelope;
     private Vector3? _snapshotReferenceHipLocalPosition;
@@ -77,6 +85,16 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
         get;
         set;
     } = DefaultCrawlingAnimationStateName;
+
+    /// <summary>
+    /// AnimationTree node name used while locomotion drives crawling root motion.
+    /// </summary>
+    [Export]
+    public StringName CrawlLocomotionAnimationStateName
+    {
+        get;
+        set;
+    } = DefaultCrawlLocomotionAnimationStateName;
 
     /// <summary>
     /// All-fours reference hip height along skeleton-local up, expressed as a ratio of rest head
@@ -220,6 +238,8 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
 
         _timeSinceEnter = 0.0;
         CurrentPhase = Phase.Transitioning;
+        _crawlBaselineVerticalOffset = null;
+        _requiresVerticalResetBeforeCrawling = false;
 
         if (context.TransitionSourceState is ICrouchingPoseTransitionSource source)
         {
@@ -243,17 +263,33 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
 
         float forwardOffset = ResolveForwardOffset(context);
         float verticalOffset = ResolveVerticalOffset(context);
+        float verticalRiseFromCrawl = ComputeVerticalRiseFromCrawl(verticalOffset, _crawlBaselineVerticalOffset);
 
+        Phase previousPhase = CurrentPhase;
         Phase nextPhase = ComputeNextPhase(
-            CurrentPhase,
+            previousPhase,
             forwardOffset,
-            verticalOffset,
+            verticalRiseFromCrawl,
             CrawlForwardOffsetThreshold,
-            CrawlingVerticalReturnThreshold);
+            CrawlingVerticalReturnThreshold,
+            _requiresVerticalResetBeforeCrawling);
 
-        if (CurrentPhase == Phase.Crawling && nextPhase == Phase.Transitioning)
+        if (previousPhase == Phase.Transitioning && nextPhase == Phase.Crawling)
         {
+            _crawlBaselineVerticalOffset = verticalOffset;
+            verticalRiseFromCrawl = 0f;
+        }
+
+        if (previousPhase == Phase.Crawling && nextPhase == Phase.Transitioning)
+        {
+            _requiresVerticalResetBeforeCrawling = true;
             EnsurePlaybackState(context.AnimationTree, TransitioningAnimationStateName);
+        }
+
+        if (_requiresVerticalResetBeforeCrawling
+            && verticalRiseFromCrawl <= 0f)
+        {
+            _requiresVerticalResetBeforeCrawling = false;
         }
 
         CurrentPhase = nextPhase;
@@ -276,7 +312,7 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
             return;
         }
 
-        EnsurePlaybackState(context.AnimationTree, CrawlingAnimationStateName);
+        EnsureCrawlingPlaybackState(context.AnimationTree);
         _timeSinceEnter += context.Delta;
     }
 
@@ -287,7 +323,33 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
 
         float forwardOffset = ResolveForwardOffset(context);
         float verticalOffset = ResolveVerticalOffset(context);
-        return $"AllFours: {CurrentPhase} forward={forwardOffset:F3} vertical={verticalOffset:F3}";
+        bool movementAllowed = GetLocomotionPermissions(context).MovementAllowed;
+        return $"AllFours: {CurrentPhase} forward={forwardOffset:F3} crawl_threshold={CrawlForwardOffsetThreshold:F3} " +
+               $"vertical={verticalOffset:F3} movement={(movementAllowed ? "allowed" : "blocked")}";
+    }
+
+    /// <inheritdoc />
+    public override LocomotionPermissions GetLocomotionPermissions(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return CurrentPhase == Phase.Crawling
+            ? LocomotionPermissions.Allowed
+            : LocomotionPermissions.RotationOnly;
+    }
+
+    /// <inheritdoc />
+    public override LocomotionStateTarget? GetLocomotionStateTarget(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return CurrentPhase == Phase.Crawling
+               && !CrawlingAnimationStateName.IsEmpty
+               && !CrawlLocomotionAnimationStateName.IsEmpty
+            ? new LocomotionStateTarget(
+                CrawlingAnimationStateName,
+                CrawlLocomotionAnimationStateName)
+            : null;
     }
 
     /// <summary>
@@ -306,24 +368,33 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
     }
 
     /// <summary>
-    /// Resolves the next internal all-fours phase from the supplied forward and vertical metrics.
+    /// Resolves the next internal all-fours phase from the supplied forward and vertical-rise metrics.
     /// </summary>
     public static Phase ComputeNextPhase(
         Phase currentPhase,
         float forwardOffset,
-        float verticalOffset,
+        float verticalRiseFromCrawl,
         float crawlForwardOffsetThreshold,
-        float crawlingVerticalReturnThreshold)
+        float crawlingVerticalReturnThreshold,
+        bool requiresVerticalResetBeforeCrawling = false)
     {
-        float verticalReturnThreshold = Mathf.Max(crawlingVerticalReturnThreshold, 0f);
-        return currentPhase == Phase.Crawling && verticalOffset > verticalReturnThreshold
+        float verticalRiseThreshold = Mathf.Max(crawlingVerticalReturnThreshold, 0f);
+        return currentPhase == Phase.Crawling && verticalRiseFromCrawl > verticalRiseThreshold
             ? Phase.Transitioning
             : currentPhase == Phase.Transitioning
-               && verticalOffset <= verticalReturnThreshold
+               && !requiresVerticalResetBeforeCrawling
                && forwardOffset > Mathf.Max(crawlForwardOffsetThreshold, 0f)
-            ? Phase.Crawling
-            : currentPhase;
+             ? Phase.Crawling
+             : currentPhase;
     }
+
+    /// <summary>
+    /// Computes how far the head has risen above the vertical offset captured when crawling became active.
+    /// </summary>
+    public static float ComputeVerticalRiseFromCrawl(float verticalOffset, float? crawlBaselineVerticalOffset)
+        => crawlBaselineVerticalOffset.HasValue
+            ? verticalOffset - crawlBaselineVerticalOffset.Value
+            : 0f;
 
     /// <summary>
     /// Computes the all-fours reference hip position from the rest hip, semantic up axis, and
@@ -555,6 +626,30 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
         }
 
         playback.Travel(targetState);
+        tree.Advance(0.0);
+    }
+
+    private void EnsureCrawlingPlaybackState(AnimationTree? tree)
+    {
+        if (tree is null || CrawlingAnimationStateName.IsEmpty)
+        {
+            return;
+        }
+
+        AnimationNodeStateMachinePlayback? playback = ResolvePlayback(tree);
+        if (playback is null)
+        {
+            return;
+        }
+
+        StringName currentNode = playback.GetCurrentNode();
+        if (currentNode == CrawlingAnimationStateName
+            || (!CrawlLocomotionAnimationStateName.IsEmpty && currentNode == CrawlLocomotionAnimationStateName))
+        {
+            return;
+        }
+
+        playback.Travel(CrawlingAnimationStateName);
         tree.Advance(0.0);
     }
 

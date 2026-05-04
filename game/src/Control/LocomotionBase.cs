@@ -7,6 +7,7 @@ namespace AlleyCat.Control;
 /// </summary>
 public abstract partial class LocomotionBase : Node, ILocomotion
 {
+    private ILocomotionAnimationSource[] _locomotionAnimationSources = [];
     private ILocomotionPermissionSource[] _permissionSources = [];
 
     /// <summary>
@@ -20,7 +21,11 @@ public abstract partial class LocomotionBase : Node, ILocomotion
     } = [];
 
     /// <inheritdoc />
-    public override void _Ready() => _permissionSources = ResolvePermissionSources();
+    public override void _Ready()
+    {
+        _permissionSources = ResolvePermissionSources();
+        _locomotionAnimationSources = ResolveLocomotionAnimationSources();
+    }
 
     /// <summary>
     /// Resolves the current combined locomotion permissions.
@@ -35,6 +40,24 @@ public abstract partial class LocomotionBase : Node, ILocomotion
         }
 
         return combined;
+    }
+
+    /// <summary>
+    /// Resolves the current locomotion animation-state override, if any.
+    /// </summary>
+    protected LocomotionStateTarget? GetLocomotionStateTarget()
+    {
+        for (int i = 0; i < _locomotionAnimationSources.Length; i++)
+        {
+            LocomotionStateTarget? target =
+                _locomotionAnimationSources[i].LocomotionStateTarget;
+            if (target.HasValue)
+            {
+                return target;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -54,6 +77,27 @@ public abstract partial class LocomotionBase : Node, ILocomotion
 
     /// <inheritdoc />
     public abstract void SetRotationInput(Vector2 input);
+
+    private ILocomotionAnimationSource[] ResolveLocomotionAnimationSources()
+    {
+        if (PermissionSourceNodes.Length == 0)
+        {
+            return [];
+        }
+
+        List<ILocomotionAnimationSource> sources = new(PermissionSourceNodes.Length);
+
+        for (int i = 0; i < PermissionSourceNodes.Length; i++)
+        {
+            if (PermissionSourceNodes[i] is ILocomotionAnimationSource source
+                && !sources.Contains(source))
+            {
+                sources.Add(source);
+            }
+        }
+
+        return [.. sources];
+    }
 
     private ILocomotionPermissionSource[] ResolvePermissionSources()
     {

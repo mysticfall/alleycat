@@ -53,4 +53,14 @@ public interface IPoseState
         ArgumentNullException.ThrowIfNull(context);
         return LocomotionPermissions.Allowed;
     }
+
+    /// <summary>
+    /// Resolves the optional locomotion animation-state override contributed by this pose state.
+    /// </summary>
+    /// <param name="context">Current pose-state context snapshot.</param>
+    LocomotionStateTarget? GetLocomotionStateTarget(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return null;
+    }
 }

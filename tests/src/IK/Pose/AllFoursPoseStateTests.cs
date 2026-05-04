@@ -57,7 +57,7 @@ public sealed class AllFoursPoseStateTests
         AllFoursPoseState.Phase nextPhase = AllFoursPoseState.ComputeNextPhase(
             AllFoursPoseState.Phase.Transitioning,
             forwardOffset: 0.75f,
-            verticalOffset: 0.20f,
+            verticalRiseFromCrawl: 0.95f,
             crawlForwardOffsetThreshold: 0.73f,
             crawlingVerticalReturnThreshold: 0.30f);
 
@@ -73,7 +73,7 @@ public sealed class AllFoursPoseStateTests
         AllFoursPoseState.Phase nextPhase = AllFoursPoseState.ComputeNextPhase(
             AllFoursPoseState.Phase.Crawling,
             forwardOffset: 0.75f,
-            verticalOffset: 0.35f,
+            verticalRiseFromCrawl: 0.35f,
             crawlForwardOffsetThreshold: 0.73f,
             crawlingVerticalReturnThreshold: 0.30f);
 
@@ -90,11 +90,26 @@ public sealed class AllFoursPoseStateTests
         AllFoursPoseState.Phase nextPhase = AllFoursPoseState.ComputeNextPhase(
             AllFoursPoseState.Phase.Transitioning,
             forwardOffset: 0.90f,
-            verticalOffset: 0.35f,
+            verticalRiseFromCrawl: 0.35f,
             crawlForwardOffsetThreshold: 0.73f,
-            crawlingVerticalReturnThreshold: 0.30f);
+            crawlingVerticalReturnThreshold: 0.30f,
+            requiresVerticalResetBeforeCrawling: true);
 
         Assert.Equal(AllFoursPoseState.Phase.Transitioning, nextPhase);
+    }
+
+    /// <summary>
+    /// Runtime crawl hold must remain stable when the player repeats the same grounded posture on
+    /// consecutive ticks.
+    /// </summary>
+    [Fact]
+    public void ComputeVerticalRiseFromCrawl_IdenticalVerticalOffsets_ProducesNoRise()
+    {
+        float rise = AllFoursPoseState.ComputeVerticalRiseFromCrawl(
+            verticalOffset: 0.95f,
+            crawlBaselineVerticalOffset: 0.95f);
+
+        Assert.Equal(0f, rise, precision: 4);
     }
 
     /// <summary>
