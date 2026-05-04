@@ -560,7 +560,7 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.65f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.41f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -570,7 +570,17 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.76f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.43f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Standing", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.50f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -580,7 +590,7 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 1.12f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.75f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -591,7 +601,7 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 1.12f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 0.75f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -603,7 +613,7 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 0.20f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 0.36f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -615,7 +625,7 @@ public sealed class PoseStateMachineIntegrationTests
             ResolvePlayback(animationTree),
             StandingPoseState.DefaultAnimationStateName,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 0.20f),
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.55f, normalizedForwardOffset: 0.36f),
             TransitionAutoAdvanceWaitFrames);
     }
 
@@ -647,7 +657,17 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.65f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.41f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        Assert.Equal("Standing", ((StringName)driver.Call("GetCurrentStateId")).ToString());
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.43f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -656,7 +676,7 @@ public sealed class PoseStateMachineIntegrationTests
         Transform3D allFoursEntryHeadTarget = CreateSkeletonLocalHeadTransform(
             sceneRoot,
             normalizedLocalY: 0.20f,
-            normalizedForwardOffset: 0.76f);
+            normalizedForwardOffset: 0.50f);
 
         TickScenarioWithHeadOverride(
             sceneRoot,
@@ -752,7 +772,7 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.65f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.41f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -760,7 +780,7 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.76f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.43f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -768,14 +788,22 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 1.12f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.50f));
+        await WaitForFramesAsync(sceneTree, 2);
+        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+
+        TickScenarioWithHeadOverride(
+            sceneRoot,
+            driver,
+            "CrouchFull",
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.75f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
         Transform3D returnTransitioningHeadTarget = CreateSkeletonLocalHeadTransform(
             sceneRoot,
             normalizedLocalY: 0.55f,
-            normalizedForwardOffset: 1.12f);
+            normalizedForwardOffset: 0.75f);
         TickScenarioWithHeadOverride(
             sceneRoot,
             driver,
@@ -827,7 +855,7 @@ public sealed class PoseStateMachineIntegrationTests
         Transform3D exitHeadTarget = CreateSkeletonLocalHeadTransform(
             sceneRoot,
             normalizedLocalY: 0.55f,
-            normalizedForwardOffset: 0.20f);
+            normalizedForwardOffset: 0.36f);
         object exitContext = CreateRuntimeScenarioContext(
             (GodotObject)stateMachine,
             nameof(PoseStateMachine.Tick),
@@ -915,21 +943,19 @@ public sealed class PoseStateMachineIntegrationTests
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.76f));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.43f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
         Assert.Equal("Kneeling", ((StringName)driver.Call("GetCurrentStateId")).ToString());
         AssertPlaybackNodeIsOneOf(ResolvePlayback(animationTree), "Kneeling", "KneelingExit");
         Assert.True(GetPrivateFieldValue<bool>(kneelingToAllFoursTransition, "_isArmed"));
-        float armedForwardOffsetRatio = GetPrivateFieldValue<float>(kneelingToAllFoursTransition, "_armedForwardOffsetRatio");
-        float continueForwardOffsetRatio = MathF.Max(armedForwardOffsetRatio + 0.12f, 0.80f);
 
         TickScenarioWithHeadOverride(
             sceneRoot,
             driver,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: continueForwardOffsetRatio));
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.50f));
         await WaitForFramesAsync(sceneTree, 2);
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
@@ -938,9 +964,9 @@ public sealed class PoseStateMachineIntegrationTests
         float armedForwardOffsetAfterContinueForward = GetPrivateFieldValue<float>(kneelingToAllFoursTransition, "_armedForwardOffsetRatio");
         Assert.True(
             string.Equals(stateAfterContinueForward, "AllFours", StringComparison.Ordinal),
-            $"Expected Kneeling->AllFours to fire. Actual state: {stateAfterContinueForward}; transition armed: {isStillArmedAfterContinueForward}; armed forward offset: {armedForwardOffsetAfterContinueForward:F3}; continue forward target: {continueForwardOffsetRatio:F3}.");
+            $"Expected Kneeling->AllFours to fire. Actual state: {stateAfterContinueForward}; transition armed: {isStillArmedAfterContinueForward}; armed forward offset: {armedForwardOffsetAfterContinueForward:F3}; continue forward target: 0.500.");
         Assert.False(GetPrivateFieldValue<bool>(kneelingToAllFoursTransition, "_isArmed"));
-        Assert.Equal("Crawling", GetCurrentActiveStatePropertyValue(driver, nameof(AllFoursPoseState.CurrentPhase))?.ToString());
+        Assert.Equal("Transitioning", GetCurrentActiveStatePropertyValue(driver, nameof(AllFoursPoseState.CurrentPhase))?.ToString());
         await AssertPlaybackConvergesToNodeAsync(
             sceneTree,
             sceneRoot,
@@ -948,7 +974,7 @@ public sealed class PoseStateMachineIntegrationTests
             ResolvePlayback(animationTree),
             AllFoursPoseState.DefaultCrawlingAnimationStateName,
             "CrouchFull",
-            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: continueForwardOffsetRatio),
+            CreateSkeletonLocalHeadTransform(sceneRoot, normalizedLocalY: 0.20f, normalizedForwardOffset: 0.75f),
             TransitionAutoAdvanceWaitFrames);
     }
 

@@ -29,6 +29,17 @@ public partial class AllFoursToStandingPoseTransition : PoseTransition
     } = 0.42f;
 
     /// <summary>
+    /// Authored all-fours reference forward shift ratio used by the all-fours state hip reference.
+    /// Kept here for resource compatibility; it does not rebase the return trigger metric.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.001,or_greater")]
+    public float ReferenceForwardShiftRatio
+    {
+        get;
+        set;
+    } = 0.26f;
+
+    /// <summary>
     /// Additional margin below <see cref="EntryForwardOffsetThreshold"/> that permits standing return.
     /// </summary>
     [Export(PropertyHint.Range, "0,1,0.001,or_greater")]

@@ -7,6 +7,7 @@ resource_name = "KneelingToAllFoursTransition"
 script = ExtResource("1_n1xrl")
 TransitionStateName = &"AllFoursTransitioning"
 ArmingForwardOffsetThreshold = 0.42
+ReferenceForwardShiftRatio = 0.26
 ContinueForwardMargin = 0.06
 From = &"Kneeling"
 To = &"AllFours"

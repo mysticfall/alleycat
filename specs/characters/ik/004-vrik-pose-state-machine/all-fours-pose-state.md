@@ -33,29 +33,31 @@ Provide detailed behaviour requirements for the AllFours pose, including the dua
 ### Transition Triggers
 
 2. The AllFours entry trigger uses head forward offset as the primary signal:
+   - The forward metric is the head's normalised avatar-forward offset from the skeleton-local origin, resolved on the rig's semantic avatar-forward axis.
+   - The authored all-fours hip reference forward shift must not be subtracted from this trigger metric; hip-reference placement and head-entry thresholds are separate baselines.
    - The transition becomes armed when the head's normalised forward offset exceeds a configurable threshold (default range start: 0.42).
    - The transition fires when the player continues forward past the armed point by a configurable margin.
-3. The forward offset is normalised using rest-pose body measures, mapping the range 0.42 to 0.73 to the animation seek window.
+3. The forward offset is normalised using rest-pose body measures and mapped directly from the skeleton-origin range 0.42 to 0.73 to the animation seek window.
 4. AllFours is reachable from both `StandingPoseState` and `KneelingPoseState`.
 
 ### Animation Control - Transitioning
 
 5. In the `transitioning` sub-state, the state drives an `AnimationNodeTimeSeek` node using animation `All Fours-enter`.
 6. The seek window spans 1.2 seconds to 3.5417 seconds.
-7. The seek position is calculated from head's normalised forward offset:
-   - Normalise: `seekPosition = (headForwardOffset - 0.42) / (0.73 - 0.42)`
+7. The seek position is calculated from the head's normalised forward offset from the skeleton-local origin:
+   - Normalise: `seekPosition = (headForwardOffsetFromSkeletonOrigin - 0.42) / (0.73 - 0.42)`
    - Map to seek window duration [1.2, 3.5417] seconds.
 
 ### Animation Control - Crawling
 
-8. When head forward offset exceeds 0.73, the internal state transitions from `transitioning` to `crawling`.
+8. When the head forward offset from the skeleton-local origin exceeds 0.73, the internal state transitions from `transitioning` to `crawling`.
 9. The `crawling` sub-state plays the looping animation `All Fours`.
 10. The AllFours entry and crawl loops use different patterns: entry uses TimeSeek scrubbing, crawl holds use standard playback.
 
 ### Return Transitions
 
 11. While in the `crawling` sub-state, if the head's vertical offset increases above a configurable threshold (default: 0.3 as normalised ratio of rest head height), the state returns to `transitioning`.
-12. While in the `transitioning` sub-state, if the head's forward offset decreases below 0.42 minus a configurable return margin, the framework transitions back to `StandingPoseState`.
+12. While in the `transitioning` sub-state, if the head forward offset from the skeleton-local origin decreases below 0.42 minus a configurable return margin, the framework transitions back to `StandingPoseState`.
 13. The return destination is always Standing, not source-dependent.
 
 ### Configuration Parameters

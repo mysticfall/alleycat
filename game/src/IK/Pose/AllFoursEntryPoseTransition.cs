@@ -29,6 +29,17 @@ public partial class AllFoursEntryPoseTransition : PoseTransition
     } = 0.42f;
 
     /// <summary>
+    /// Authored all-fours reference forward shift ratio used by the all-fours state hip reference.
+    /// Kept here for resource compatibility; it does not rebase the entry trigger metric.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.001,or_greater")]
+    public float ReferenceForwardShiftRatio
+    {
+        get;
+        set;
+    } = 0.26f;
+
+    /// <summary>
     /// Additional forward travel required after arming before the transition fires.
     /// </summary>
     [Export(PropertyHint.Range, "0,1,0.001,or_greater")]

@@ -27,6 +27,28 @@ public sealed class AllFoursPoseStateTests
     }
 
     /// <summary>
+    /// The all-fours head trigger metric reads semantic avatar-forward in skeleton-local space even
+    /// when the solved skeleton is yaw-rotated in world space.
+    /// </summary>
+    [Fact]
+    public void ComputeNormalizedForwardOffsetFromSkeletonOrigin_UsesSemanticAvatarForwardAxis()
+    {
+        Transform3D skeletonGlobalTransform = new(
+            new Basis(Vector3.Up, Mathf.Pi),
+            new Vector3(1.2f, 0.4f, -0.8f));
+        Transform3D headTargetTransform = new(
+            Basis.Identity,
+            skeletonGlobalTransform * new Vector3(0f, 0.3f, 0.70f));
+
+        float forwardOffset = AllFoursPoseMetrics.ComputeNormalizedForwardOffsetFromSkeletonOrigin(
+            skeletonGlobalTransform,
+            headTargetTransform,
+            restHeadHeight: 1.0f);
+
+        Assert.Equal(0.70f, forwardOffset, precision: 4);
+    }
+
+    /// <summary>
     /// Forward travel past the crawl threshold should move the state from transitioning into crawling.
     /// </summary>
     [Fact]

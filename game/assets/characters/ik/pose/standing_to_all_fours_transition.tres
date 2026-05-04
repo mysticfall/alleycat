@@ -7,6 +7,7 @@ resource_name = "StandingToAllFoursTransition"
 script = ExtResource("1_62pwd")
 TransitionStateName = &"AllFoursTransitioning"
 ArmingForwardOffsetThreshold = 0.42
+ReferenceForwardShiftRatio = 0.26
 ContinueForwardMargin = 0.06
 From = &"Standing"
 To = &"AllFours"
