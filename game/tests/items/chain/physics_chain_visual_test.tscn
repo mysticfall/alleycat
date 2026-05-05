@@ -1,0 +1,92 @@
+[gd_scene format=3 uid="uid://glqbryqyy0k1"]
+
+[ext_resource type="PackedScene" uid="uid://6b8las20aee4" path="res://assets/testing/photobooth/photobooth.tscn" id="1_oilne"]
+[ext_resource type="PackedScene" uid="uid://doedwhsg5x0o0" path="res://assets/items/chain/physics_chain.tscn" id="2_4vr1t"]
+[ext_resource type="PackedScene" uid="uid://utn2mx2dm0vl" path="res://assets/testing/photobooth/camera_rig.tscn" id="4_o5fbl"]
+[ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="6_gbg6e"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_kjrqf"]
+size = Vector3(0.06, 0.12, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_26nlb"]
+size = Vector3(0.06, 0.12, 0.06)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_yjo60"]
+radius = 0.075
+
+[sub_resource type="SphereMesh" id="SphereMesh_4jb44"]
+radius = 0.075
+height = 0.15
+
+[node name="PhysicsChainVisualTest" unique_id=406188165 instance=ExtResource("1_oilne")]
+
+[node name="Chain" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=1490776132 node_paths=PackedStringArray("StartAttachedBody", "StartAttachedBodyAnchor", "EndAttachedBody", "EndAttachedBodyAnchor") instance=ExtResource("2_4vr1t")]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 1.2, 0)
+LinkCount = 10
+StartAttachedBody = NodePath("../StartAnchor")
+StartAttachedBodyAnchor = NodePath("../StartAnchor/AttachmentPoint")
+EndAttachedBody = NodePath("../EndWeight")
+EndAttachedBodyAnchor = NodePath("../EndWeight/AttachmentPoint")
+
+[node name="StartAnchor" type="RigidBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="1" unique_id=190181110]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2707611, -4.703843e-10)
+mass = 5.0
+gravity_scale = 0.0
+freeze = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Subject/StartAnchor" index="0" unique_id=1157710694]
+shape = SubResource("BoxShape3D_kjrqf")
+
+[node name="Mesh" type="MeshInstance3D" parent="Subject/StartAnchor" index="1" unique_id=1940406859]
+mesh = SubResource("BoxMesh_26nlb")
+
+[node name="AttachmentPoint" type="Marker3D" parent="Subject/StartAnchor" index="2" unique_id=676195756]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, 0)
+
+[node name="EndWeight" type="RigidBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="2" unique_id=38794651]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.88130695, 1.0652165e-08)
+mass = 0.6
+linear_damp = 0.02
+angular_damp = 0.05
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Subject/EndWeight" index="0" unique_id=1082619385]
+shape = SubResource("SphereShape3D_yjo60")
+
+[node name="Mesh" type="MeshInstance3D" parent="Subject/EndWeight" index="1" unique_id=611322767]
+mesh = SubResource("SphereMesh_4jb44")
+
+[node name="AttachmentPoint" type="Marker3D" parent="Subject/EndWeight" index="2" unique_id=1154955388]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
+
+[node name="FrontCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("4_o5fbl")]
+transform = Transform3D(1, 0, 0, 0, 0.99956775, 0.029399058, 0, -0.029399058, 0.99956775, 0, 1, 1.7)
+projection = 0
+image_size = Vector2(768, 768)
+fov = 38.0
+
+[node name="RightCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=347559334 instance=ExtResource("4_o5fbl")]
+transform = Transform3D(0.31622776, 0, 0.94868326, 0, 0.99999994, 0, -0.9486833, 0, 0.31622773, 1.35, 0.95, 0.45)
+projection = 0
+image_size = Vector2(768, 768)
+fov = 40.0
+
+[node name="TopCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="2" unique_id=2144933087 instance=ExtResource("4_o5fbl")]
+transform = Transform3D(1, 0, 0, 0, 0.47628313, 0.879292, 0, -0.879292, 0.47628313, 0, 2.15, 0.65)
+projection = 0
+image_size = Vector2(768, 768)
+fov = 42.0
+
+[node name="ChainFocusMarker" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=1247060835 instance=ExtResource("6_gbg6e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+visible = false
+label_text = "Chain Focus"
+
+[node name="StartAnchorMarker" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=1672304928 instance=ExtResource("6_gbg6e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 0)
+visible = false
+label_text = "Start Anchor"
+
+[node name="EndWeightMarker" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="2" unique_id=1593888500 instance=ExtResource("6_gbg6e")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)
+visible = false
+label_text = "End Weight"

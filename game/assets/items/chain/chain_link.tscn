@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://d2w7heqikheds"]
+
+[ext_resource type="PackedScene" uid="uid://dq2cfbisyau0q" path="res://assets/items/chain/chain.blend" id="1_7o5g4"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_8wtm7"]
+radius = 0.012
+height = 0.04
+
+[node name="ChainLink" type="RigidBody3D" unique_id=1856433065]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1808611262]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 3.92005e-10, -0.008968029)
+shape = SubResource("CapsuleShape3D_8wtm7")
+
+[node name="chain" parent="." unique_id=1059011140 instance=ExtResource("1_7o5g4")]

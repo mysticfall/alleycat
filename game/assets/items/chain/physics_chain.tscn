@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://doedwhsg5x0o0"]
+
+[ext_resource type="Script" uid="uid://b2s8avmfl3rnm" path="res://src/Items/PhysicsChain.cs" id="1_lkr1h"]
+
+[node name="PhysicsChain" type="Node3D" unique_id=1490776132]
+script = ExtResource("1_lkr1h")
+
+[node name="Links" type="Node3D" parent="." unique_id=1239911648]
+
+[node name="Joints" type="Node3D" parent="." unique_id=2109005641]
+
+[node name="AttachmentJoints" type="Node3D" parent="." unique_id=669412225]

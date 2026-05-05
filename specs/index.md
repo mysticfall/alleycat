@@ -37,6 +37,10 @@
 - [UI-002: Loading Screen](ui/002-loading-screen/index.md)
 - [UI-003: UI Overlay](ui/003-ui-overlay/index.md)
 
+## Items
+
+- [ITEM-001: Physics Chain Asset](items/001-physics-chain/index.md)
+
 ## Speech
 
 - [SPEECH-001: Wav2Arkit Blendshape Feasibility Prototype](speech/001-wav2arkit-blendshape-player/index.md)
