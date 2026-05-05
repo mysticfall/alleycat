@@ -1,5 +1,5 @@
 ---
-id: SPEECH-002
+id: SPCH-002
 title: Audio2Face BlendShape Player
 ---
 
@@ -9,7 +9,7 @@ title: Audio2Face BlendShape Player
 
 Generate lipsync and facial expression animation from speech audio using NVIDIA Audio2Face
 inference served over HTTP. This implementation produces higher-quality ARKit blendshape output
-than Wav2Arkit (SPEECH-001), with additional support for emotion inference and dedicated eye
+than Wav2Arkit (SPCH-001), with additional support for emotion inference and dedicated eye
 rotation data for accurate eye movements. It requires an NVIDIA GPU on the inference server.
 
 ## Goal

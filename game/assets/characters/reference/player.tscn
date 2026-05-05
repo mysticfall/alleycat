@@ -3,6 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://yo3x41aa1t8a" path="res://assets/characters/reference/female/reference_female_ik.tscn" id="1_edvvb"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
 [ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/ik/vrik.tscn" id="7_2a5tg"]
+[ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/OpenAITranscriber.cs" id="7_j7l2f"]
 [ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_2a5tg"]
 [ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/PlayerLocomotion.cs" id="9_ctrlloco"]
 [ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
@@ -134,5 +135,10 @@ PermissionSourceNodes = [NodePath("../VRIK/PoseStateMachine")]
 [node name="PlayerController" type="Node" parent="." index="7" unique_id=1206579480 node_paths=PackedStringArray("LocomotionNode")]
 script = ExtResource("10_ctrlplayer")
 LocomotionNode = NodePath("../Locomotion")
+
+[node name="OpenAITranscriber" type="Node" parent="." index="8" unique_id=1267890585]
+script = ExtResource("7_j7l2f")
+DebugNotificationOutputEnabled = true
+metadata/_custom_type_script = "uid://cmo0rjfoojh7u"
 
 [editable path="VRIK"]

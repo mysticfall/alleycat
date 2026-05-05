@@ -1,5 +1,5 @@
 ---
-id: SPEECH-001
+id: SPCH-001
 title: Wav2Arkit Blendshape Player
 ---
 

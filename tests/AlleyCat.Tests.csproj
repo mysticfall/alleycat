@@ -7,26 +7,25 @@
         <Nullable>enable</Nullable>
         <LangVersion>default</LangVersion>
         <RootNamespace>AlleyCat.Tests</RootNamespace>
-        <GodotProjectDir>../game</GodotProjectDir>
     </PropertyGroup>
 
     <ItemGroup>
-        <CompilerVisibleProperty Include="GodotProjectDir"/>
         <CompilerVisibleProperty Include="RootNamespace"/>
         <CompilerVisibleProperty Include="ProjectDir"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="coverlet.collector" Version="8.0.1">
+        <PackageReference Include="coverlet.collector" Version="10.0.0">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
         <PackageReference Include="xunit" Version="2.9.3"/>
         <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.203" />
     </ItemGroup>
 
     <ItemGroup>
@@ -34,6 +33,17 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../game/AlleyCat.csproj"/>
+        <Reference Include="AlleyCat">
+            <HintPath>../game/.godot/mono/temp/bin/$(Configuration)/AlleyCat.dll</HintPath>
+            <Private>true</Private>
+        </Reference>
+        <Reference Include="GodotSharp">
+            <HintPath>../game/.godot/mono/temp/bin/$(Configuration)/GodotSharp.dll</HintPath>
+            <Private>true</Private>
+        </Reference>
     </ItemGroup>
+
+    <Target Name="BuildGameAssembly" BeforeTargets="ResolveReferences">
+        <MSBuild Projects="../game/AlleyCat.csproj" Targets="Build" Properties="Configuration=$(Configuration)"/>
+    </Target>
 </Project>

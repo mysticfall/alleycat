@@ -40,4 +40,16 @@ public partial class MockXRHandControllerNode : Node3D, IXRHandController
     /// <inheritdoc />
     public override void _Ready()
         => HandPositionNodeResolved = this.RequireNode<Node3D>("HandPosition");
+
+    /// <summary>
+    /// Emits a mock XR action-button press for integration tests.
+    /// </summary>
+    public void TriggerActionButtonPressed(string actionName)
+        => ActionButtonPressed?.Invoke(actionName);
+
+    /// <summary>
+    /// Emits a mock XR action-button release for integration tests.
+    /// </summary>
+    public void TriggerActionButtonReleased(string actionName)
+        => ActionButtonReleased?.Invoke(actionName);
 }
