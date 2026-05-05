@@ -1,7 +1,7 @@
 using System.Text;
 using Godot;
 
-namespace AlleyCat.Speech;
+namespace AlleyCat.Speech.BlendShapes;
 
 /// <summary>
 /// Loads an audio clip through a concrete backend and plays ARKit blendshape values onto character meshes.

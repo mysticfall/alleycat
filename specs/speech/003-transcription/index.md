@@ -23,7 +23,7 @@ Enable voice input capture and transcription capabilities in the AlleyCat VR exp
 
 ## Technical Requirements
 
-1. An abstract `Transcriber` class must be defined as a `Node` or `Node3D` subclass in `@game/src/Speech/Transcriber.cs`.
+1. An abstract `Transcriber` class must be defined as a `Node` or `Node3D` subclass in `@game/src/Speech/Transcription/Transcriber.cs`.
 2. Recording initiation must be bound to a configurable XR action, defaulting to the left controller trigger input.
 3. Audio capture must use Godot's microphone recording API and produce an `AudioStreamWav` for transcription.
 4. An abstract method `Transcribe(AudioStreamWav audio)` must be defined as `async Task<string>`.
@@ -49,7 +49,7 @@ Enable voice input capture and transcription capabilities in the AlleyCat VR exp
 - Error handling contract using `GD.PushError` and `NotificationUIExtensions`.
 - `OpenAITranscriber` concrete implementation using OpenAI .NET SDK.
 - Configuration contract from `AlleyCat.cfg`.
-- Implementation under `@game/src/Speech/`.
+- Implementation under `@game/src/Speech/Transcription/`.
 - Integration tests under `@integration-tests/src/`.
 
 ## Out Of Scope
@@ -150,15 +150,15 @@ On transcription failure:
 3. Error handling contract uses both `GD.PushError` for raw errors and `NotificationUIExtensions` for player-facing messages.
 4. `OpenAITranscriber` implementation uses the official OpenAI .NET SDK and loads configuration from `AlleyCat.cfg`.
 5. Runtime integration boundaries (XR binding, microphone, config, API, signals, lifecycle) are explicitly defined.
-6. Implementation path `@game/src/Speech/` and test path `@integration-tests/src/` are specified.
+6. Implementation path `@game/src/Speech/Transcription/` and test path `@integration-tests/src/` are specified.
 7. The spec does not exclude any mandatory delivery contracts through `Out Of Scope`.
 
 ## References
 
 ### Implementation
 
-- `@game/src/Speech/Transcriber.cs` - Abstract Transcriber class
-- `@game/src/Speech/OpenAITranscriber.cs` - OpenAI-compatible implementation
+- `@game/src/Speech/Transcription/Transcriber.cs` - Abstract Transcriber class
+- `@game/src/Speech/Transcription/OpenAITranscriber.cs` - OpenAI-compatible implementation
 - `@game/src/UI/NotificationUIExtensions.cs` - Notification helpers
 - `@game/AlleyCat.cfg` - Configuration file
 

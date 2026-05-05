@@ -2,7 +2,7 @@ using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
 
-namespace AlleyCat.Speech;
+namespace AlleyCat.Speech.Transcription;
 
 /// <summary>
 /// Base XR speech-transcription component that records microphone input and dispatches transcription requests.

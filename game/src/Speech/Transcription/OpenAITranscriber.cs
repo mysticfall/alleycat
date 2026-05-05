@@ -1,12 +1,12 @@
-using System.ClientModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using AlleyCat.UI;
 using Godot;
-using OpenAI;
-using OpenAI.Audio;
 
-namespace AlleyCat.Speech;
+namespace AlleyCat.Speech.Transcription;
 
 /// <summary>
 /// OpenAI-compatible speech transcriber backed by the official OpenAI .NET SDK.
@@ -62,27 +62,18 @@ public partial class OpenAITranscriber : Transcriber
     {
         OpenAITranscriberSettings settings = _settings ?? OpenAITranscriberSettings.Load(ConfigPath);
 
-        using MemoryStream wavStream = CreateWaveFileStream(audioStream);
+        byte[] wavBytes = CreateWaveFileBytes(audioStream);
+        using System.Net.Http.HttpClient httpClient = CreateHttpClient(settings);
+        using HttpRequestMessage request = CreateTranscriptionRequest(settings, wavBytes, "alleycat-recording.wav");
+        using HttpResponseMessage response = await httpClient.SendAsync(request);
+        string responseBody = await response.Content.ReadAsStringAsync();
 
-        var clientOptions = new OpenAIClientOptions
-        {
-            Endpoint = settings.CreateEndpointUri(),
-        };
+        _ = response.IsSuccessStatusCode
+            ? 0
+            : throw new HttpRequestException(
+                $"OpenAI transcription request failed with status {(int)response.StatusCode} ({response.StatusCode}). Response: {responseBody}");
 
-        if (settings.TimeoutSeconds is int timeoutSeconds)
-        {
-            clientOptions.NetworkTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-        }
-
-        AudioClient client = new(
-            settings.Model,
-            new ApiKeyCredential(settings.GetApiKeyOrDefault()),
-            clientOptions);
-
-        ClientResult<AudioTranscription> transcription = await client
-            .TranscribeAudioAsync(wavStream, "alleycat-recording.wav", settings.CreateTranscriptionOptions());
-
-        return transcription.Value.Text.Trim();
+        return ParseTranscriptionText(responseBody).Trim();
     }
 
     /// <inheritdoc />
@@ -133,6 +124,55 @@ public partial class OpenAITranscriber : Transcriber
         return stream;
     }
 
+    internal static HttpRequestMessage CreateTranscriptionRequest(
+        OpenAITranscriberSettings settings,
+        byte[] wavBytes,
+        string audioFilename)
+    {
+        HttpRequestMessage request = new(HttpMethod.Post, CreateTranscriptionEndpointUri(settings.CreateEndpointUri()));
+
+        if (settings.TryGetApiKey(out string? apiKey))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
+
+        request.Content = CreateTranscriptionRequestContent(settings, wavBytes, audioFilename);
+        return request;
+    }
+
+    internal static MultipartFormDataContent CreateTranscriptionRequestContent(
+        OpenAITranscriberSettings settings,
+        byte[] wavBytes,
+        string audioFilename)
+    {
+        ByteArrayContent audioContent = new(wavBytes);
+        audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+
+        MultipartFormDataContent content = [];
+        content.Add(audioContent, "file", audioFilename);
+        content.Add(new StringContent(settings.Model), "model");
+
+        if (!string.IsNullOrWhiteSpace(settings.Language))
+        {
+            content.Add(new StringContent(settings.Language), "language");
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.Prompt))
+        {
+            content.Add(new StringContent(settings.Prompt), "prompt");
+        }
+
+        if (settings.Temperature is float temperature)
+        {
+            content.Add(
+                new StringContent(temperature.ToString(CultureInfo.InvariantCulture)),
+                "temperature");
+        }
+
+        return content;
+    }
+
+    [SuppressMessage("ReSharper", "UseUtf8StringLiteral")]
     private static MemoryStream CreateWaveFileStream(
         byte[] data,
         int mixRate,
@@ -160,10 +200,10 @@ public partial class OpenAITranscriber : Transcriber
         MemoryStream stream = new(capacity: capacity);
         using BinaryWriter writer = new(stream, Encoding.ASCII, leaveOpen: true);
 
-        writer.Write("RIFF");
+        writer.Write(Encoding.ASCII.GetBytes("RIFF"));
         writer.Write(36 + data.Length);
-        writer.Write("WAVE");
-        writer.Write("fmt ");
+        writer.Write(Encoding.ASCII.GetBytes("WAVE"));
+        writer.Write(Encoding.ASCII.GetBytes("fmt "));
         writer.Write(16);
         writer.Write((short)1);
         writer.Write(channelCount);
@@ -171,7 +211,7 @@ public partial class OpenAITranscriber : Transcriber
         writer.Write(byteRate);
         writer.Write(blockAlign);
         writer.Write((short)bitsPerSample);
-        writer.Write("data");
+        writer.Write(Encoding.ASCII.GetBytes("data"));
         writer.Write(data.Length);
         writer.Write(data);
         writer.Flush();
@@ -192,6 +232,34 @@ public partial class OpenAITranscriber : Transcriber
     private static string FormatDebugTranscript(string text)
         => string.IsNullOrWhiteSpace(text) ? "<empty>" : text.Trim();
 
+    private static System.Net.Http.HttpClient CreateHttpClient(OpenAITranscriberSettings settings)
+    {
+        System.Net.Http.HttpClient client = new();
+
+        if (settings.TimeoutSeconds is int timeoutSeconds)
+        {
+            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+        }
+
+        return client;
+    }
+
+    private static Uri CreateTranscriptionEndpointUri(Uri endpointUri)
+        => new($"{endpointUri.AbsoluteUri.TrimEnd('/')}/audio/transcriptions");
+
+    internal static string ParseTranscriptionText(string responseBody)
+    {
+        TranscriptionResponse? response = JsonSerializer.Deserialize<TranscriptionResponse>(responseBody, JsonOptions);
+        return string.IsNullOrWhiteSpace(response?.Text)
+            ? throw new InvalidOperationException(
+                "OpenAI transcription response did not contain a non-empty 'text' field.")
+            : response.Text;
+    }
+
+    private static JsonSerializerOptions JsonOptions { get; } = new() { PropertyNameCaseInsensitive = true };
+
+    private sealed record TranscriptionResponse(string Text);
+
     internal sealed record OpenAITranscriberSettings(
         string Host,
         string? ApiKey,
@@ -203,6 +271,12 @@ public partial class OpenAITranscriber : Transcriber
     {
         public string GetApiKeyOrDefault()
             => string.IsNullOrWhiteSpace(ApiKey) ? DefaultCompatibleBackendApiKey : ApiKey.Trim();
+
+        public bool TryGetApiKey(out string? apiKey)
+        {
+            apiKey = string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey.Trim();
+            return apiKey is not null;
+        }
 
         public Uri CreateEndpointUri()
         {
@@ -226,28 +300,6 @@ public partial class OpenAITranscriber : Transcriber
                 : 0;
 
             return endpointUri;
-        }
-
-        public AudioTranscriptionOptions CreateTranscriptionOptions()
-        {
-            AudioTranscriptionOptions options = new();
-
-            if (!string.IsNullOrWhiteSpace(Language))
-            {
-                options.Language = Language;
-            }
-
-            if (!string.IsNullOrWhiteSpace(Prompt))
-            {
-                options.Prompt = Prompt;
-            }
-
-            if (Temperature is not null)
-            {
-                options.Temperature = Temperature.Value;
-            }
-
-            return options;
         }
 
         private string ConfigPathDescription

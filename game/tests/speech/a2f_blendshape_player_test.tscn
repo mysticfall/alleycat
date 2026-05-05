@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://5fk2h1g7a6m8"]
 
 [ext_resource type="PackedScene" uid="uid://dsoyrofkocge2" path="res://assets/testing/photobooth/templates/face_cam.tscn" id="1_base"]
-[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/A2FBlendShapePlayer.cs" id="2_hm21w"]
+[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/BlendShapes/A2FBlendShapePlayer.cs" id="2_hm21w"]
 [ext_resource type="AudioStream" uid="uid://bx5m8h03bjsdl" path="res://assets/audio/samples/sample-voice.wav" id="3_hm21w"]
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_dvpdu"]

@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 using Godot;
 using HttpClient = System.Net.Http.HttpClient;
 
-namespace AlleyCat.Speech;
+namespace AlleyCat.Speech.BlendShapes;
 
 /// <summary>
 /// Audio2Face HTTP API-backed <see cref="BlendShapePlayer"/> implementation.

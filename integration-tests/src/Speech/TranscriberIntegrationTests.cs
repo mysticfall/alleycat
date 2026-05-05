@@ -1,5 +1,5 @@
 using System.Reflection;
-using AlleyCat.Speech;
+using AlleyCat.Speech.Transcription;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;

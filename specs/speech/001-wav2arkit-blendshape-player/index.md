@@ -64,7 +64,7 @@ This spec documents a **feasibility prototype** only. It does not define a produ
 
 ## Implementation References
 
-- `@game/src/Speech/BlendShapePlayer.cs`
+- `@game/src/Speech/BlendShapes/BlendShapePlayer.cs`
 - `@game/tests/speech/blendshape_playback_test.tscn`
 - `@game/tests/speech/blendshape_playback_test.gd`
 - `@game/models/wav2arkit_cpu/config.json`

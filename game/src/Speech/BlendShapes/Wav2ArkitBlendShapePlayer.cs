@@ -4,7 +4,7 @@ using Godot;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace AlleyCat.Speech;
+namespace AlleyCat.Speech.BlendShapes;
 
 /// <summary>
 /// wav2arkit_cpu-backed <see cref="BlendShapePlayer"/> implementation.

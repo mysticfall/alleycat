@@ -1,4 +1,4 @@
-using AlleyCat.Speech;
+using AlleyCat.Speech.Transcription;
 using Godot;
 using Xunit;
 

@@ -193,8 +193,8 @@ Violations produce explicit initialisation errors.
 
 ## Implementation References
 
-- `@game/src/Speech/A2fBlendShapePlayer.cs`
-- `@game/src/Speech/BlendShapePlayer.cs`
+- `@game/src/Speech/BlendShapes/A2fBlendShapePlayer.cs`
+- `@game/src/Speech/BlendShapes/BlendShapePlayer.cs`
 - `@game/tests/speech/blendshape_playback_test.tscn`
 
 ## Validation Workflow
