@@ -1,5 +1,6 @@
 using AlleyCat.Speech.Transcription;
 using Godot;
+using OpenAI.Audio;
 using Xunit;
 
 namespace AlleyCat.Tests.Speech;
@@ -87,6 +88,47 @@ public sealed class OpenAITranscriberTests
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(settings.CreateEndpointUri);
 
         Assert.Contains("must include the API base path", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// SDK transcription options must reflect the configured optional request fields.
+    /// </summary>
+    [Fact]
+    public void CreateTranscriptionOptions_WithConfiguredFields_MapsSdkOptions()
+    {
+        OpenAITranscriber.OpenAITranscriberSettings settings = new(
+            Host: "https://api.openai.com/v1",
+            ApiKey: string.Empty,
+            Model: "whisper-1",
+            Language: "en",
+            Prompt: "Transcribe clearly.",
+            Temperature: 0.35f,
+            TimeoutSeconds: 30);
+
+        AudioTranscriptionOptions options = OpenAITranscriber.CreateTranscriptionOptions(settings);
+
+        Assert.Equal("en", options.Language);
+        Assert.Equal("Transcribe clearly.", options.Prompt);
+        Assert.Equal(0.35f, options.Temperature);
+    }
+
+    /// <summary>
+    /// Empty transcription payloads must fail fast instead of surfacing blank transcripts.
+    /// </summary>
+    [Fact]
+    public void GetTranscriptionTextOrThrow_EmptyText_Throws()
+    {
+        AudioTranscription response = OpenAIAudioModelFactory.AudioTranscription(
+            text: string.Empty,
+            duration: null,
+            language: "en",
+            words: [],
+            segments: []);
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => OpenAITranscriber.GetTranscriptionTextOrThrow(response));
+
+        Assert.Contains("did not contain a non-empty 'text' field", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

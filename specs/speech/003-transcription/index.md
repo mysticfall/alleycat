@@ -94,7 +94,7 @@ The `Transcriber` class must define the following:
 The `AlleyCat.cfg` file (or custom path) must contain `Host` and may contain optional authentication and transcription settings:
 
 ```ini
-[Speech]
+[STT]
 Host=https://api.openai.com/v1
 ApiKey=sk-...
 Model=whisper-1
