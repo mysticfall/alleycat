@@ -21,6 +21,12 @@ public static class TestUtils
         => _ = await sceneTree.ToSignal(sceneTree, SceneTree.SignalName.ProcessFrame);
 
     /// <summary>
+    /// Waits for the next physics frame.
+    /// </summary>
+    public static async Task WaitForNextPhysicsFrameAsync(SceneTree sceneTree)
+        => _ = await sceneTree.ToSignal(sceneTree, SceneTree.SignalName.PhysicsFrame);
+
+    /// <summary>
     /// Waits for the given number of process frames.
     /// </summary>
     public static async Task WaitForFramesAsync(SceneTree sceneTree, int frameCount)
@@ -32,6 +38,17 @@ public static class TestUtils
     }
 
     /// <summary>
+    /// Waits for the given number of physics frames.
+    /// </summary>
+    public static async Task WaitForPhysicsFramesAsync(SceneTree sceneTree, int frameCount)
+    {
+        for (int frame = 0; frame < frameCount; frame++)
+        {
+            await WaitForNextPhysicsFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Waits using a <see cref="SceneTreeTimer"/>, then synchronises one process frame.
     /// </summary>
     public static async Task WaitForSecondsAsync(SceneTree sceneTree, double seconds)
@@ -39,6 +56,16 @@ public static class TestUtils
         SceneTreeTimer timer = sceneTree.CreateTimer(seconds);
         _ = await sceneTree.ToSignal(timer, SceneTreeTimer.SignalName.Timeout);
         await WaitForNextFrameAsync(sceneTree);
+    }
+
+    /// <summary>
+    /// Waits for the given amount of simulated physics time, then synchronises one physics frame.
+    /// </summary>
+    public static async Task WaitForPhysicsSecondsAsync(SceneTree sceneTree, double seconds)
+    {
+        SceneTreeTimer timer = sceneTree.CreateTimer(seconds, processAlways: true, processInPhysics: true);
+        _ = await sceneTree.ToSignal(timer, SceneTreeTimer.SignalName.Timeout);
+        await WaitForNextPhysicsFrameAsync(sceneTree);
     }
 
     /// <summary>
