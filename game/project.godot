@@ -18,6 +18,7 @@ config/icon="uid://pxfkxvp2stfj"
 
 [audio]
 
+buses/default_bus_layout="uid://db1tdailluj7o"
 driver/enable_input=true
 
 [autoload]
