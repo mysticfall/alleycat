@@ -1,5 +1,6 @@
 using System.ClientModel;
 using System.Globalization;
+using AlleyCat.Configuration;
 using AlleyCat.UI;
 using Godot;
 using OpenAI;
@@ -14,7 +15,7 @@ namespace AlleyCat.Speech.Generation;
 public partial class OpenAISpeechGenerator : SpeechGenerator
 {
     private const string ConfigSection = "TTS";
-    private const string DefaultConfigPath = "res://AlleyCat.cfg";
+    private const string DefaultConfigPath = ConfigProvider.DefaultBaseConfigPath;
     private const string DefaultModel = "tts-1";
     private const string DefaultVoice = "alloy";
     private const string DefaultFormat = "mp3";
@@ -172,41 +173,49 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
         } = DefaultConfigPath;
 
         public static OpenAISpeechGeneratorSettings Load(string configPath)
-        {
-            ConfigFile configFile = new();
-            Error error = configFile.Load(configPath);
-            _ = error != Error.Ok
-                ? throw new InvalidOperationException(
-                    $"Failed to load OpenAI speech-generator config '{configPath}': {error}.")
-                : 0;
+            => Load(configPath, () => ConfigProvider.LoadMerged(), ConfigProvider.Load);
 
+        internal static OpenAISpeechGeneratorSettings Load(
+            string configPath,
+            Func<ConfigProvider> mergedConfigLoader,
+            Func<string, ConfigProvider> singleConfigLoader)
+            => Load(LoadConfigProvider(configPath, mergedConfigLoader, singleConfigLoader), configPath);
+
+        internal static OpenAISpeechGeneratorSettings Load(ConfigProvider configProvider, string configPathDescription)
+        {
             return new OpenAISpeechGeneratorSettings(
-                GetString(configFile, nameof(Host)),
-                GetOptionalString(configFile, nameof(ApiKey)),
-                GetOptionalString(configFile, nameof(Model)) ?? DefaultModel,
-                GetOptionalString(configFile, nameof(Voice)) ?? DefaultVoice,
-                GetOptionalString(configFile, "Format") ?? DefaultFormat,
-                GetOptionalFloat(configFile, nameof(SpeedRatio)),
-                GetOptionalInt(configFile, "Timeout"))
+                GetString(configProvider, nameof(Host)),
+                GetOptionalString(configProvider, nameof(ApiKey)),
+                GetOptionalString(configProvider, nameof(Model)) ?? DefaultModel,
+                GetOptionalString(configProvider, nameof(Voice)) ?? DefaultVoice,
+                GetOptionalString(configProvider, "Format") ?? DefaultFormat,
+                GetOptionalFloat(configProvider, nameof(SpeedRatio)),
+                GetOptionalInt(configProvider, "Timeout"))
             {
-                ConfigPathDescription = configPath,
+                ConfigPathDescription = configPathDescription,
             };
         }
 
-        private static string GetString(ConfigFile configFile, string key)
-            => GetOptionalString(configFile, key) ?? string.Empty;
+        private static ConfigProvider LoadConfigProvider(
+            string configPath,
+            Func<ConfigProvider> mergedConfigLoader,
+            Func<string, ConfigProvider> singleConfigLoader)
+            => string.Equals(configPath, DefaultConfigPath, StringComparison.Ordinal)
+                ? mergedConfigLoader()
+                : singleConfigLoader(configPath);
 
-        private static string? GetOptionalString(ConfigFile configFile, string key)
+        private static string GetString(ConfigProvider configProvider, string key)
+            => GetOptionalString(configProvider, key) ?? string.Empty;
+
+        private static string? GetOptionalString(ConfigProvider configProvider, string key)
         {
-            Variant value = configFile.GetValue(ConfigSection, key, Variant.From(string.Empty));
-            string text = value.AsString().Trim();
+            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
 
-        private static float? GetOptionalFloat(ConfigFile configFile, string key)
+        private static float? GetOptionalFloat(ConfigProvider configProvider, string key)
         {
-            Variant value = configFile.GetValue(ConfigSection, key, Variant.From(string.Empty));
-            string text = value.AsString().Trim();
+            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
             return string.IsNullOrWhiteSpace(text)
                 ? null
                 : float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)
@@ -215,10 +224,9 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
                         $"Config key '{ConfigSection}/{key}' must be a valid float. Got '{text}'.");
         }
 
-        private static int? GetOptionalInt(ConfigFile configFile, string key)
+        private static int? GetOptionalInt(ConfigProvider configProvider, string key)
         {
-            Variant value = configFile.GetValue(ConfigSection, key, Variant.From(string.Empty));
-            string text = value.AsString().Trim();
+            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
             return string.IsNullOrWhiteSpace(text)
                 ? null
                 : int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)

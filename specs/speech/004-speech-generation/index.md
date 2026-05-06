@@ -29,7 +29,7 @@ Enable text-to-speech capabilities in the AlleyCat VR experience, with a concret
 4. An exported `Enabled` property must control whether generation is permitted.
 5. On generation failure, raw errors must be logged via `GD.PushError`, and a fallback action must be taken.
 6. The concrete `OpenAISpeechGenerator` implementation must use the official OpenAI .NET SDK.
-7. Configuration must be loaded from a file (default: `res://AlleyCat.cfg`) containing:
+7. Configuration must be loaded from the merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)), which combines project defaults from `res://AlleyCat.cfg` with user overrides from `user://AlleyCat.cfg`. The [TTS] section must contain:
    - `Host`: full endpoint URL including scheme and path (e.g., `https://api.openai.com/v1`)
    - `ApiKey`: optional API key for authenticated backends
    - Additional API-supported properties (model, voice, etc.)
@@ -45,7 +45,7 @@ Enable text-to-speech capabilities in the AlleyCat VR experience, with a concret
 - Signal contracts for generation completion and failure.
 - Error handling contract using `GD.PushError`.
 - `OpenAISpeechGenerator` concrete implementation using OpenAI .NET SDK.
-- Configuration contract from `AlleyCat.cfg`.
+- Configuration contract from merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)).
 - Implementation under `@game/src/Speech/Generation/`.
 - Integration tests under `@integration-tests/src/`.
 
@@ -73,14 +73,21 @@ The `SpeechGenerator` class must define the following:
 
 ### Config File Contract
 
-The `AlleyCat.cfg` file (or custom path) must contain `Host` and may contain optional authentication and TTS settings:
+Configuration is loaded through the merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)). The merged [TTS] section must contain `Host` and may contain optional authentication and TTS settings:
 
+**Base file (`res://AlleyCat.cfg`):**
 ```ini
 [TTS]
 Host=https://api.openai.com/v1
-ApiKey=sk-...
+ApiKey=
 Model=tts-1
 Voice=alloy
+```
+
+**User override file (`user://AlleyCat.cfg`) - optional:**
+```ini
+[TTS]
+ApiKey=sk-...
 ```
 
 | Property | Type | Required | Description |
@@ -128,7 +135,7 @@ On generation failure:
 1. The spec defines both user-visible speech generation outcomes and technical implementation contracts.
 2. The abstract `SpeechGenerator` class defines `Enabled` property, generation method, and signal contracts explicitly.
 3. Error handling contract uses `GD.PushError` for raw errors.
-4. `OpenAISpeechGenerator` implementation uses the official OpenAI .NET SDK and loads configuration from `AlleyCat.cfg`.
+4. `OpenAISpeechGenerator` implementation uses the official OpenAI .NET SDK and loads configuration from the merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)).
 5. Runtime integration boundaries (config, API, signals, lifecycle) are explicitly defined.
 6. Implementation path `@game/src/Speech/Generation/` and test path `@integration-tests/src/` are specified.
 7. The spec does not exclude any mandatory delivery contracts through `Out Of Scope`.
@@ -146,6 +153,7 @@ On generation failure:
 - [SPCH-001: Wav2Arkit Blendshape Player](../../speech/001-wav2arkit-blendshape-player/index.md)
 - [SPCH-002: Audio2Face BlendShape Player](../../speech/002-audio2face-blendshape-player/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
+- [CORE-002: Configuration API](../../002-configuration-api/index.md)
 
 ### External Dependencies
 

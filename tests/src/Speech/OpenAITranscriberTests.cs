@@ -1,3 +1,4 @@
+using AlleyCat.Configuration;
 using AlleyCat.Speech.Transcription;
 using Godot;
 using OpenAI.Audio;
@@ -110,6 +111,118 @@ public sealed class OpenAITranscriberTests
         Assert.Equal("en", options.Language);
         Assert.Equal("Transcribe clearly.", options.Prompt);
         Assert.Equal(0.35f, options.Temperature);
+    }
+
+    /// <summary>
+    /// Merged configuration must preserve base values while allowing user overrides for STT settings.
+    /// </summary>
+    [Fact]
+    public void Load_MergedConfigProvider_UsesMergedSttValues()
+    {
+        Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
+        {
+            ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Host"] = "https://base.example/v1",
+                ["Model"] = "whisper-1",
+                ["Prompt"] = "Base prompt",
+            },
+        };
+        Dictionary<string, IReadOnlyDictionary<string, string>> overrideSections = new(StringComparer.Ordinal)
+        {
+            ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ApiKey"] = "sk-user",
+                ["Temperature"] = "0.25",
+            },
+        };
+
+        var configProvider = ConfigProvider.FromSections(baseSections, overrideSections);
+
+        var settings =
+            OpenAITranscriber.OpenAITranscriberSettings.Load(configProvider, "merged-test-config");
+
+        Assert.Equal("https://base.example/v1", settings.Host);
+        Assert.Equal("whisper-1", settings.Model);
+        Assert.Equal("Base prompt", settings.Prompt);
+        Assert.Equal("sk-user", settings.ApiKey);
+        Assert.Equal(0.25f, settings.Temperature);
+    }
+
+    /// <summary>
+    /// The default config path must route through merged loading so user STT overrides apply.
+    /// </summary>
+    [Fact]
+    public void Load_DefaultConfigPath_UsesMergedConfigRouting()
+    {
+        Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
+        {
+            ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Host"] = "https://base.example/v1",
+                ["Model"] = "whisper-1",
+            },
+        };
+        Dictionary<string, IReadOnlyDictionary<string, string>> overrideSections = new(StringComparer.Ordinal)
+        {
+            ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ApiKey"] = "sk-user",
+                ["Temperature"] = "0.4",
+            },
+        };
+
+        bool mergedLoaderCalled = false;
+
+        var settings = OpenAITranscriber.OpenAITranscriberSettings.Load(
+            ConfigProvider.DefaultBaseConfigPath,
+            mergedConfigLoader: () =>
+            {
+                mergedLoaderCalled = true;
+                return ConfigProvider.FromSections(baseSections, overrideSections);
+            },
+            singleConfigLoader: _ => throw new Xunit.Sdk.XunitException(
+                "Single-file loader should not be used for the default config path."));
+
+        Assert.True(mergedLoaderCalled);
+        Assert.Equal("https://base.example/v1", settings.Host);
+        Assert.Equal("sk-user", settings.ApiKey);
+        Assert.Equal(0.4f, settings.Temperature);
+    }
+
+    /// <summary>
+    /// Custom config paths must load only the requested file without implicit user override merging.
+    /// </summary>
+    [Fact]
+    public void Load_CustomConfigPath_UsesDirectConfigRoutingWithoutImplicitMerge()
+    {
+        const string customConfigPath = "res://custom-stt.cfg";
+        Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
+        {
+            ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Host"] = "https://custom.example/v1",
+                ["Model"] = "whisper-custom",
+            },
+        };
+
+        string? loadedPath = null;
+
+        var settings = OpenAITranscriber.OpenAITranscriberSettings.Load(
+            customConfigPath,
+            mergedConfigLoader: () => throw new Xunit.Sdk.XunitException(
+                "Merged loader should not be used for a custom config path."),
+            singleConfigLoader: path =>
+            {
+                loadedPath = path;
+                return ConfigProvider.FromSections(baseSections);
+            });
+
+        Assert.Equal(customConfigPath, loadedPath);
+        Assert.Equal("https://custom.example/v1", settings.Host);
+        Assert.Equal("whisper-custom", settings.Model);
+        Assert.Null(settings.ApiKey);
+        Assert.Null(settings.Temperature);
     }
 
     /// <summary>
