@@ -171,8 +171,8 @@ On transcription failure:
 
 ### Related Specs
 
-- [SPCH-001: Wav2Arkit Blendshape Player](../../speech/001-wav2arkit-blendshape-player/index.md)
-- [SPCH-002: Audio2Face BlendShape Player](../../speech/002-audio2face-blendshape-player/index.md)
+- [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
+- [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [CORE-002: Configuration API](../../002-configuration-api/index.md)
 

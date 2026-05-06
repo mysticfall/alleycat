@@ -44,8 +44,8 @@
 
 ## Speech
 
-- [SPCH-001: Wav2Arkit Blendshape Feasibility Prototype](speech/001-wav2arkit-blendshape-player/index.md)
-- [SPCH-002: Audio2Face BlendShape Player](speech/002-audio2face-blendshape-player/index.md)
+- [SPCH-001: Wav2Arkit LipSync Player](speech/001-wav2arkit-lipsync-player/index.md)
+- [SPCH-002: Audio2Face LipSync Player](speech/002-audio2face-lipsync-player/index.md)
 - [SPCH-003: Transcriber Component](speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](speech/004-speech-generation/index.md)
 

@@ -1,9 +1,9 @@
 ---
 id: SPCH-002
-title: Audio2Face BlendShape Player
+title: Audio2Face LipSync Player
 ---
 
-# Audio2Face BlendShape Player
+# Audio2Face LipSync Player
 
 ## Requirement
 
@@ -24,14 +24,46 @@ ARKit eye-look blendshape channels.
    inference.
 2. Eye movement output should be more accurate when dedicated eye-rotation translation is enabled.
 3. Contributors must be able to validate server connectivity and playback behaviour with a repeatable workflow.
+4. Playback must be triggered manually by the user via the `LipSyncPlayer.Play(AudioStreamWav)` method.
 
 ## Technical Requirements
 
 1. The player must convert supported `AudioStreamWav` PCM input to the API payload format expected by Audio2Face.
 2. Inference integration must use HTTP endpoint contracts (`/health`, `/blendshapes`) with configurable server URI.
-3. Returned frames must be mapped into the base `BlendShapePlayer` playback pipeline with audio synchronisation.
-4. Optional eye-rotation translation must define baseline subtraction, smoothing, directional mapping, and clamp rules.
-5. Model/mode compatibility handling and health probing behaviour must be explicitly defined.
+3. Returned frames must be mapped into the base `LipSyncPlayer` playback pipeline with audio synchronisation.
+4. The player must expose `Play(AudioStreamWav speech)` for manual playback initiation.
+5. **Interruption contract**: If `Play` is called while a previous playback is active, the player must stop the current playback immediately and begin the new playback without delay.
+
+The implementation is not required to cancel an in-flight HTTP request in progress—only the active audio playback and frame application need to stop.
+6. Optional eye-rotation translation must define baseline subtraction, smoothing, directional mapping, and clamp rules.
+7. Model/mode compatibility handling and health probing behaviour must be explicitly defined.
+
+## Manual Playback Contract
+
+The player does **not** auto-start inference during `_Ready()`. Instead, playback is initiated manually:
+
+```csharp
+// Example invocation via user interaction (e.g., button press)
+var player = GetNode<LipSyncPlayer>("LipSyncPlayer");
+player.Play(speechAudioStream);
+```
+
+When `Play(AudioStreamWav speech)` is called:
+
+1. If `AudioStreamPlayer3D` is currently playing, stop it immediately.
+2. Stop current blendshape frame application.
+3. Begin inference with the provided audio stream.
+4. Start audio playback and apply blendshape frames synchronously.
+
+## Interruption Contract
+
+If `Play` is called while a previous playback is still active:
+
+- Current audio playback must stop immediately.
+- Current blendshape frame application must stop.
+- New inference and playback must begin without queuing or delay.
+
+This ensures responsive manual control during validation and testing. The player is not required to cancel an in-flight HTTP request in progress.
 
 ## Prototype Status
 
@@ -40,7 +72,7 @@ guarantees.
 
 ## Overview
 
-`A2fBlendShapePlayer` is a concrete subclass of `BlendShapePlayer` that replaces local ONNX
+`A2FLipSyncPlayer` is a concrete subclass of `LipSyncPlayer` that replaces local ONNX
 inference with a remote NVIDIA Audio2Face blendshape service. The player:
 
 1. Accepts a Godot `AudioStreamWav` (16-bit PCM, 16 kHz, mono).
@@ -50,10 +82,10 @@ inference with a remote NVIDIA Audio2Face blendshape service. The player:
 5. Optionally translates dedicated eye-rotation tensors into ARKit `eyeLook*` blendshape
    channels.
 6. Delegates frame-to-mesh application and audio-synchronised playback to the base
-   `BlendShapePlayer`.
+   `LipSyncPlayer`.
 
 All inference state is remote. The player itself is stateless after initialisation — it calls the
-API once during `_Ready`, stores the resulting frames, and then plays them back synchronised to
+API once during `Play()`, stores the resulting frames, and then plays them back synchronised to
 the `AudioStreamPlayer3D` timeline.
 
 ## Architecture
@@ -77,7 +109,7 @@ AudioStreamWav (16-bit / 16 kHz / mono)
   Eye rotation → blendshape translation (optional)
         │
         ▼
-  BlendShapePlayer base class (frame storage + audio-synchronised playback)
+  LipSyncPlayer base class (frame storage + audio-synchronised playback)
         │
         ▼
   MeshInstance3D blendshape weight updates
@@ -166,12 +198,13 @@ Violations produce explicit initialisation errors.
 
 ## In Scope
 
-- HTTP-based Audio2Face inference integration as a `BlendShapePlayer` backend.
+- HTTP-based Audio2Face inference integration as a `LipSyncPlayer` backend.
 - Server health probing with retry during initialisation.
 - Model/mode auto-adjustment for known Audio2Face model families.
 - Eye rotation tensor → ARKit eye-look blendshape translation with baseline subtraction,
   temporal smoothing, and directional pair mapping.
-- Audio-synchronised playback via the base `BlendShapePlayer`.
+- Manual playback invocation via `LipSyncPlayer.Play(AudioStreamWav)`.
+- Audio-synchronised playback via the base `LipSyncPlayer`.
 
 ## Out Of Scope
 
@@ -180,48 +213,53 @@ Violations produce explicit initialisation errors.
 - Dialogue system integration or runtime model switching.
 - Retargeting quality tuning, animation polish, and expressive-quality acceptance criteria.
 - Docker container lifecycle management or orchestration.
-- Automated regression coverage beyond the prototype test scene.
+- Automated regression coverage beyond the mock-backed integration tests.
 
 ## Acceptance Criteria
 
 1. The specification defines both user-visible prototype outcomes and technical implementation contracts.
 2. Prototype scope is explicitly bounded as feasibility work rather than production runtime guarantees.
 3. HTTP integration, audio-format contracts, and playback synchronisation obligations are explicitly defined.
-4. Eye-rotation translation behaviour and fallback handling are explicitly defined.
-5. Validation workflow defines reproducible checks for server readiness, frame generation, mapping, and playback
-   progression.
+4. **Manual playback contract** is explicitly defined: playback must be triggered via `LipSyncPlayer.Play(AudioStreamWav)`, not auto-started in `_Ready()`.
+5. **Interruption contract** is explicitly defined: calling `Play` while playback is active must stop current playback and begin new playback immediately. The player is not required to cancel an in-flight HTTP request.
+6. Eye-rotation translation behaviour and fallback handling are explicitly defined.
+7. Validation workflow defines reproducible checks for server readiness, frame generation, mapping, playback
+   initiation, and playback progression.
 
 ## Implementation References
 
-- `@game/src/Speech/BlendShapes/A2fBlendShapePlayer.cs`
-- `@game/src/Speech/BlendShapes/BlendShapePlayer.cs`
-- `@game/tests/speech/blendshape_playback_test.tscn`
+- `@game/src/Speech/LipSync/A2FLipSyncPlayer.cs`
+- `@game/src/Speech/LipSync/LipSyncPlayer.cs`
+- `@game/tests/speech/a2f_lipsync_player_test.tscn`
 
 ## Validation Workflow
 
-1. Start the Audio2Face API server:
-   - `docker run --rm --gpus all -p 8765:8765 audio2face-api`
-2. Run formatting verification:
+1. Run formatting verification:
    - `dotnet format --verify-no-changes AlleyCat.sln`
-3. Run build verification:
+2. Run build verification:
    - `dotnet build AlleyCat.sln -warnaserror`
-4. Open the test scene in the Godot editor and run it:
-   - `godot-mono --path game game/tests/speech/blendshape_playback_test.tscn`
-5. Confirm blendshape-driven facial animation is visible on the character mesh.
+3. Run the manual-button validation script (tests button routing and Play() call flow only — not runtime facial motion):
+   - `godot-mono --path game --script res://tests/speech/lipsync_manual_button_validation.gd`
+4. Run the integration test with mock inference backend (tests playback contract, interruption contract, and frame application):
+    - `dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- --test-class AlleyCat.IntegrationTests.Speech.LipSyncManualPlaybackIntegrationTests`
+
+**Note:** Visual/runtime verification of the prototype scene is NOT required for this refactor. Live Docker/server verification is NOT required. Mock-backed unit and integration tests provide sufficient coverage for acceptance.
 
 ## Validation Criteria
 
-- `A2fBlendShapePlayer` initialises without error (server is reachable, health probe passes).
-- Inferred frame count is greater than zero.
-- At least one mesh and one channel are mapped for application.
-- Audio playback is active during the sampled validation window.
-- Applied frame count increases over time (playback advances).
-- Eye-look blendshape channels receive non-zero values when eye rotation translation is enabled.
+**Automated Verification:**
+- `A2FLipSyncPlayer` is consistently defined (build verifies compilation and repository consistency).
+- Manual-button validation script confirms Play() routing works correctly (button-routing evidence only).
+- Integration test `LipSyncManualPlaybackIntegrationTests` with mock inference backend verifies the shared playback contract:
+  - Playback initiates correctly with audio stream input
+  - Blendshape frames are applied to mapped mesh channels
+  - Calling `Play` while playback is active restarts playback immediately (interruption contract verified)
+  - Frame progression advances over time during playback
 
 ## Known Limitations
 
-- Inference is a single blocking HTTP call during `_Ready`. Long audio clips will cause a
-  noticeable startup pause.
+- Inference is a single blocking HTTP call during `Play()`. Long audio clips will cause a
+  noticeable pause.
 - The player does not cache inference results across scene reloads.
 - The Docker server must be running before the game starts (or within the health-probe retry
   window).
@@ -239,4 +277,4 @@ Violations produce explicit initialisation errors.
 ## References
 
 - @specs/index.md
-- @specs/speech/001-wav2arkit-blendshape-player/index.md
+- @specs/speech/001-wav2arkit-lipsync-player/index.md

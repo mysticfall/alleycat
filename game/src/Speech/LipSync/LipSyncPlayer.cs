@@ -1,12 +1,12 @@
 using System.Text;
 using Godot;
 
-namespace AlleyCat.Speech.BlendShapes;
+namespace AlleyCat.Speech.LipSync;
 
 /// <summary>
 /// Loads an audio clip through a concrete backend and plays ARKit blendshape values onto character meshes.
 /// </summary>
-public abstract partial class BlendShapePlayer : Node
+public abstract partial class LipSyncPlayer : Node
 {
     /// <summary>
     /// List of meshes to drive.
@@ -19,16 +19,6 @@ public abstract partial class BlendShapePlayer : Node
     } = [];
 
     /// <summary>
-    /// Audio stream used for both inference input and runtime playback.
-    /// </summary>
-    [Export]
-    public AudioStreamWav AudioStream
-    {
-        get;
-        set;
-    } = null!;
-
-    /// <summary>
     /// Optional audio player for synchronised audio/blendshape playback.
     /// </summary>
     [Export]
@@ -37,16 +27,6 @@ public abstract partial class BlendShapePlayer : Node
         get;
         set;
     } = null!;
-
-    /// <summary>
-    /// Whether playback should begin automatically when initialisation succeeds.
-    /// </summary>
-    [Export]
-    public bool PlayOnReady
-    {
-        get;
-        set;
-    } = true;
 
     /// <summary>
     /// Playback speed multiplier for frame advancement.
@@ -87,7 +67,7 @@ public abstract partial class BlendShapePlayer : Node
     } = string.Empty;
 
     /// <summary>
-    /// Number of inferred blendshape frames.
+    /// Number of inferred lip-sync frames.
     /// </summary>
     public int FrameCount => _frames.Length;
 
@@ -177,30 +157,14 @@ public abstract partial class BlendShapePlayer : Node
     private double _audioStartGraceSeconds;
 
     /// <inheritdoc />
-    public override void _Ready()
-    {
-        InitialisationError = string.Empty;
-        PlaybackError = string.Empty;
-        IsAudioPlaying = false;
-        IsInitialised = false;
-
-        try
-        {
-            Initialise();
-            IsInitialised = true;
-        }
-        catch (Exception ex)
-        {
-            DisposeBackend();
-            IsInitialised = false;
-            InitialisationError = ex.ToString();
-            GD.PushError($"BlendShapePlayer: initialisation failed: {InitialisationError}");
-            SetProcess(false);
-        }
-    }
+    public override void _Ready() => TryInitialise();
 
     /// <inheritdoc />
-    public override void _ExitTree() => DisposeBackend();
+    public override void _ExitTree()
+    {
+        StopPlayback(resetWeights: true, clearFrames: true);
+        DisposeBackend();
+    }
 
     /// <inheritdoc />
     public override void _Process(double delta)
@@ -226,7 +190,7 @@ public abstract partial class BlendShapePlayer : Node
             bool nearNaturalEnd = _playbackTimeSeconds >= durationSeconds - (1f / _outputFps);
             if (nearNaturalEnd)
             {
-                _isPlaying = false;
+                StopPlayback(resetWeights: false, clearFrames: false);
                 return;
             }
 
@@ -236,28 +200,28 @@ public abstract partial class BlendShapePlayer : Node
                 return;
             }
 
-            FailPlaybackAndStop("BlendShapePlayer: audio sync lost - AudioPlayer is not playing during active blendshape playback.");
+            FailPlaybackAndStop("LipSyncPlayer: audio sync lost - AudioPlayer is not playing during active lip-sync playback.");
             return;
         }
 
-        int targetFrameIndex = Mathf.FloorToInt((float)(_playbackTimeSeconds * _outputFps));
+        int targetFrameIndex = Mathf.FloorToInt((float)(_playbackTimeSeconds * _outputFps * PlaybackSpeed));
         if (targetFrameIndex >= _frames.Length)
         {
             if (!LoopPlayback)
             {
-                _isPlaying = false;
+                StopPlayback(resetWeights: false, clearFrames: false);
                 return;
             }
 
             float durationSeconds = _frames.Length / _outputFps;
             if (durationSeconds <= 0f)
             {
-                _isPlaying = false;
+                StopPlayback(resetWeights: false, clearFrames: false);
                 return;
             }
 
             _playbackTimeSeconds %= durationSeconds;
-            targetFrameIndex = Mathf.FloorToInt((float)(_playbackTimeSeconds * _outputFps));
+            targetFrameIndex = Mathf.FloorToInt((float)(_playbackTimeSeconds * _outputFps * PlaybackSpeed));
             _lastAppliedFrameIndex = -1;
         }
 
@@ -271,15 +235,45 @@ public abstract partial class BlendShapePlayer : Node
     }
 
     /// <summary>
+    /// Begins manual playback for the supplied speech clip.
+    /// </summary>
+    public void Play(AudioStreamWav speech)
+    {
+        PlaybackError = string.Empty;
+
+        if (!EnsureInitialised())
+        {
+            return;
+        }
+
+        StopPlayback(resetWeights: true, clearFrames: true);
+
+        if (speech is null)
+        {
+            SetPlaybackError("LipSyncPlayer: speech clip is not assigned.");
+            return;
+        }
+
+        try
+        {
+            StartPlayback(speech);
+        }
+        catch (Exception ex)
+        {
+            StopPlayback(resetWeights: true, clearFrames: true);
+            SetPlaybackError($"LipSyncPlayer: playback failed: {ex}");
+        }
+    }
+
+    /// <summary>
     /// Prepares backend resources required before inference runs.
     /// </summary>
-    /// <param name="audioStream">Resolved input audio stream.</param>
-    protected abstract void InitialiseBackend(AudioStreamWav audioStream);
+    protected abstract void InitialiseBackend();
 
     /// <summary>
     /// Executes backend inference and returns normalised playback data.
     /// </summary>
-    protected abstract BlendShapeInferenceResult RunBackendInference();
+    protected abstract LipSyncInferenceResult RunBackendInference(AudioStreamWav speech);
 
     /// <summary>
     /// Releases backend resources allocated during initialisation or inference.
@@ -287,59 +281,147 @@ public abstract partial class BlendShapePlayer : Node
     protected abstract void DisposeBackend();
 
     /// <summary>
-    /// Data returned by a concrete blendshape inference backend.
+    /// Data returned by a concrete lip-sync inference backend.
     /// </summary>
-    protected sealed record BlendShapeInferenceResult(float[][] Frames, IReadOnlyList<string> BlendshapeNames, float OutputFps);
+    protected sealed record LipSyncInferenceResult(float[][] Frames, IReadOnlyList<string> BlendshapeNames, float OutputFps);
+
+    private bool EnsureInitialised()
+    {
+        if (IsInitialised)
+        {
+            return true;
+        }
+
+        TryInitialise();
+        if (IsInitialised)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(InitialisationError))
+        {
+            PlaybackError = InitialisationError;
+        }
+
+        return false;
+    }
+
+    private void TryInitialise()
+    {
+        InitialisationError = string.Empty;
+        PlaybackError = string.Empty;
+        IsInitialised = false;
+
+        try
+        {
+            Initialise();
+            IsInitialised = true;
+        }
+        catch (Exception ex)
+        {
+            DisposeBackend();
+            IsInitialised = false;
+            InitialisationError = ex.ToString();
+            GD.PushError($"LipSyncPlayer: initialisation failed: {InitialisationError}");
+            SetProcess(false);
+        }
+    }
 
     private void Initialise()
     {
-        BlendshapeChannelCount = 0;
+        if (AudioPlayer is null)
+        {
+            throw new InvalidOperationException("LipSyncPlayer: AudioPlayer is not assigned.");
+        }
+
+        ResetPlaybackMetrics();
+        ResetPlaybackTiming();
+        ClearPreparedPlayback();
+        InitialiseBackend();
+        SetProcess(false);
+    }
+
+    private void StartPlayback(AudioStreamWav speech)
+    {
+        LipSyncInferenceResult inferenceResult = RunBackendInference(speech);
+        if (inferenceResult.Frames.Length == 0)
+        {
+            throw new InvalidOperationException("LipSyncPlayer: inference produced zero frames.");
+        }
+
+        _frames = inferenceResult.Frames;
+        _outputFps = inferenceResult.OutputFps > 0f ? inferenceResult.OutputFps : DefaultOutputFps;
+        BlendshapeChannelCount = _frames[0].Length;
+
+        BuildMeshBindings(inferenceResult.BlendshapeNames);
+        ResetPlaybackMetrics();
+        ResetPlaybackTiming();
+
+        GD.Print(
+            $"LipSyncPlayer: loaded {_frames.Length} frames at {_outputFps:0.###} fps, mapped {_meshBindings.Count} mesh(es).");
+
+        AudioPlayer.Stop();
+        AudioPlayer.Stream = speech;
+        AudioPlayer.Play();
+
+        _isPlaying = true;
+        IsAudioPlaying = true;
+
+        ApplyFrame(0);
+        _lastAppliedFrameIndex = 0;
+        SetProcess(true);
+    }
+
+    private void ResetPlaybackMetrics()
+    {
         AppliedFrameCount = 0;
         WeightChangeEventCount = 0;
         MaxObservedWeightDelta = 0f;
-        MappedMeshCount = 0;
-        MappedChannelCount = 0;
         IsAudioPlaying = false;
         PlaybackError = string.Empty;
+    }
+
+    private void ResetPlaybackTiming()
+    {
+        _isPlaying = false;
+        _playbackTimeSeconds = 0d;
+        _lastAppliedFrameIndex = -1;
+        _lastAppliedChannelValues = [];
         _audioWasObservedPlaying = false;
         _audioStartGraceSeconds = 0d;
-        _lastAppliedChannelValues = [];
+    }
 
-        if (AudioStream is null)
+    private void ClearPreparedPlayback()
+    {
+        _frames = [];
+        _meshBindings.Clear();
+        BlendshapeChannelCount = 0;
+        MappedMeshCount = 0;
+        MappedChannelCount = 0;
+    }
+
+    private void StopPlayback(bool resetWeights, bool clearFrames)
+    {
+        bool hadPreparedBindings = _meshBindings.Count > 0;
+
+        if (AudioPlayer is not null && AudioPlayer.IsPlaying())
         {
-            throw new InvalidOperationException("BlendShapePlayer: AudioStream is not assigned.");
+            AudioPlayer.Stop();
         }
 
-        AudioStreamWav audioStream = AudioStream;
-        InitialiseBackend(audioStream);
-        BlendShapeInferenceResult inferenceResult = RunBackendInference();
-        _frames = inferenceResult.Frames;
-        _outputFps = inferenceResult.OutputFps > 0f ? inferenceResult.OutputFps : DefaultOutputFps;
-        BlendshapeChannelCount = _frames.Length > 0
-            ? _frames[0].Length
-            : inferenceResult.BlendshapeNames.Count;
-
-        BuildMeshBindings(inferenceResult.BlendshapeNames);
-
-        GD.Print(
-            $"BlendShapePlayer: loaded {_frames.Length} frames at {_outputFps:0.###} fps, mapped {_meshBindings.Count} mesh(es).");
-
-        if (PlayOnReady && _frames.Length > 0)
+        if (resetWeights && hadPreparedBindings)
         {
-            _playbackTimeSeconds = 0d;
-            _lastAppliedFrameIndex = -1;
-            _isPlaying = true;
-            _audioWasObservedPlaying = false;
-            _audioStartGraceSeconds = 0d;
-
-            AudioPlayer.Stream = audioStream;
-            AudioPlayer.Play();
-
-            ApplyFrame(0);
-            _lastAppliedFrameIndex = 0;
+            ResetAppliedBlendshapeWeights();
         }
 
-        SetProcess(true);
+        ResetPlaybackTiming();
+        IsAudioPlaying = false;
+        SetProcess(false);
+
+        if (clearFrames)
+        {
+            ClearPreparedPlayback();
+        }
     }
 
     private void BuildMeshBindings(IReadOnlyList<string> blendshapeNames)
@@ -350,7 +432,7 @@ public abstract partial class BlendShapePlayer : Node
 
         if (blendshapeNames.Count == 0)
         {
-            GD.PushWarning("BlendShapePlayer: config contains zero blendshape names.");
+            GD.PushWarning("LipSyncPlayer: config contains zero blendshape names.");
             return;
         }
 
@@ -405,7 +487,18 @@ public abstract partial class BlendShapePlayer : Node
 
         if (missingNames is { Count: > 0 })
         {
-            GD.PushWarning($"BlendShapePlayer: unmapped blendshapes ({missingNames.Count}): {string.Join(", ", missingNames)}");
+            GD.PushWarning($"LipSyncPlayer: unmapped blendshapes ({missingNames.Count}): {string.Join(", ", missingNames)}");
+        }
+    }
+
+    private void ResetAppliedBlendshapeWeights()
+    {
+        foreach (MeshBinding meshBinding in _meshBindings)
+        {
+            foreach (ShapeChannelBinding channel in meshBinding.Channels)
+            {
+                meshBinding.Mesh.SetBlendShapeValue(channel.MeshBlendShapeIndex, 0f);
+            }
         }
     }
 
@@ -417,7 +510,6 @@ public abstract partial class BlendShapePlayer : Node
         }
 
         float[] frame = _frames[frameIndex];
-
         if (_lastAppliedChannelValues.Length != frame.Length)
         {
             _lastAppliedChannelValues = new float[frame.Length];
@@ -459,13 +551,14 @@ public abstract partial class BlendShapePlayer : Node
 
     private void FailPlaybackAndStop(string message)
     {
-        _isPlaying = false;
-        IsAudioPlaying = false;
+        StopPlayback(resetWeights: false, clearFrames: false);
+        SetPlaybackError(message);
+    }
+
+    private void SetPlaybackError(string message)
+    {
         PlaybackError = message;
-        IsInitialised = false;
-        InitialisationError = message;
         GD.PushError(message);
-        SetProcess(false);
     }
 
     /// <summary>

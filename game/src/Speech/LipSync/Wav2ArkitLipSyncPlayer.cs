@@ -4,13 +4,13 @@ using Godot;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace AlleyCat.Speech.BlendShapes;
+namespace AlleyCat.Speech.LipSync;
 
 /// <summary>
-/// wav2arkit_cpu-backed <see cref="BlendShapePlayer"/> implementation.
+/// wav2arkit_cpu-backed <see cref="LipSyncPlayer"/> implementation.
 /// </summary>
 [GlobalClass]
-public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
+public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
 {
     /// <summary>
     /// Path to wav2arkit JSON config.
@@ -36,24 +36,23 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
 
     private InferenceSession? _session;
     private Wav2ArkitConfig _config = Wav2ArkitConfig.CreateDefault();
-    private float[] _monoWaveform = [];
 
     /// <inheritdoc />
-    protected override void InitialiseBackend(AudioStreamWav audioStream)
+    protected override void InitialiseBackend()
     {
         _config = LoadConfig(ConfigPath);
-        _monoWaveform = LoadAudioWaveform(audioStream, _config.Preprocessing.SampleRate);
         _session = BuildSession(ModelPath);
     }
 
     /// <inheritdoc />
-    protected override BlendShapeInferenceResult RunBackendInference()
+    protected override LipSyncInferenceResult RunBackendInference(AudioStreamWav speech)
     {
         InferenceSession session = _session
-            ?? throw new InvalidOperationException("BlendShapePlayer: backend session was not initialised.");
+            ?? throw new InvalidOperationException("LipSyncPlayer: backend session was not initialised.");
 
-        float[][] frames = RunInference(session, _config, _monoWaveform);
-        return new BlendShapeInferenceResult(frames, _config.BlendshapeNames, _config.OutputSpec.Fps);
+        float[] monoWaveform = LoadAudioWaveform(speech, _config.Preprocessing.SampleRate);
+        float[][] frames = RunInference(session, _config, monoWaveform);
+        return new LipSyncInferenceResult(frames, _config.BlendshapeNames, _config.OutputSpec.Fps);
     }
 
     /// <inheritdoc />
@@ -61,7 +60,6 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
     {
         _session?.Dispose();
         _session = null;
-        _monoWaveform = [];
         _config = Wav2ArkitConfig.CreateDefault();
     }
 
@@ -70,12 +68,12 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
         string absoluteConfigPath = ProjectSettings.GlobalizePath(configPath);
         string configJson = File.ReadAllText(absoluteConfigPath);
         Wav2ArkitConfig? config = JsonSerializer.Deserialize<Wav2ArkitConfig>(configJson, _jsonOptions)
-            ?? throw new InvalidOperationException($"BlendShapePlayer: failed to parse config at '{configPath}'.");
+            ?? throw new InvalidOperationException($"LipSyncPlayer: failed to parse config at '{configPath}'.");
 
         return config.Preprocessing.SampleRate <= 0
-            ? throw new InvalidOperationException("BlendShapePlayer: config sample rate must be > 0.")
+            ? throw new InvalidOperationException("LipSyncPlayer: config sample rate must be > 0.")
             : config.BlendshapeNames.Count == 0
-            ? throw new InvalidOperationException("BlendShapePlayer: config blendshape_names is empty.")
+            ? throw new InvalidOperationException("LipSyncPlayer: config blendshape_names is empty.")
             : config;
     }
 
@@ -84,7 +82,7 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
         string absoluteModelPath = ProjectSettings.GlobalizePath(modelPath);
         if (!File.Exists(absoluteModelPath))
         {
-            throw new FileNotFoundException($"BlendShapePlayer: ONNX model not found at '{modelPath}'.", absoluteModelPath);
+            throw new FileNotFoundException($"LipSyncPlayer: ONNX model not found at '{modelPath}'.", absoluteModelPath);
         }
 
         var sessionOptions = new SessionOptions
@@ -128,7 +126,7 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
         if (dimensions.Length != 3)
         {
             throw new InvalidOperationException(
-                $"BlendShapePlayer: expected output tensor rank 3, got rank {dimensions.Length}.");
+                $"LipSyncPlayer: expected output tensor rank 3, got rank {dimensions.Length}.");
         }
 
         int frameCount = dimensions[1];
@@ -152,27 +150,27 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
         if (audioStream.Format != AudioStreamWav.FormatEnum.Format16Bits)
         {
             throw new InvalidOperationException(
-                $"BlendShapePlayer: expected AudioStreamWav format {AudioStreamWav.FormatEnum.Format16Bits}, got {audioStream.Format}.");
+                $"LipSyncPlayer: expected AudioStreamWav format {AudioStreamWav.FormatEnum.Format16Bits}, got {audioStream.Format}.");
         }
 
         if (audioStream.MixRate != 16000)
         {
-            throw new InvalidOperationException($"BlendShapePlayer: expected 16000 Hz audio, got {audioStream.MixRate} Hz.");
+            throw new InvalidOperationException($"LipSyncPlayer: expected 16000 Hz audio, got {audioStream.MixRate} Hz.");
         }
 
         if (audioStream.Stereo)
         {
-            throw new InvalidOperationException("BlendShapePlayer: expected mono audio stream, but stream is stereo.");
+            throw new InvalidOperationException("LipSyncPlayer: expected mono audio stream, but stream is stereo.");
         }
 
         if (targetSampleRate != 16000)
         {
             throw new InvalidOperationException(
-                $"BlendShapePlayer: model expects {targetSampleRate} Hz but strict prototype requires 16000 Hz.");
+                $"LipSyncPlayer: model expects {targetSampleRate} Hz but strict prototype requires 16000 Hz.");
         }
 
         byte[] data = audioStream.Data.Length == 0
-            ? throw new InvalidOperationException("BlendShapePlayer: AudioStreamWav contains no PCM data.")
+            ? throw new InvalidOperationException("LipSyncPlayer: AudioStreamWav contains no PCM data.")
             : audioStream.Data;
 
         return DecodePcm16Bytes(data);
@@ -182,7 +180,7 @@ public partial class Wav2ArkitBlendShapePlayer : BlendShapePlayer
     {
         if ((data.Count & 1) != 0)
         {
-            throw new InvalidOperationException("BlendShapePlayer: PCM16 data length must be even.");
+            throw new InvalidOperationException("LipSyncPlayer: PCM16 data length must be even.");
         }
 
         int sampleCount = data.Count / 2;

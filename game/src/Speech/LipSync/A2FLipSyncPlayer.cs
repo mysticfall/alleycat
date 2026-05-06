@@ -6,13 +6,13 @@ using System.Text.Json.Serialization;
 using Godot;
 using HttpClient = System.Net.Http.HttpClient;
 
-namespace AlleyCat.Speech.BlendShapes;
+namespace AlleyCat.Speech.LipSync;
 
 /// <summary>
-/// Audio2Face HTTP API-backed <see cref="BlendShapePlayer"/> implementation.
+/// Audio2Face HTTP API-backed <see cref="LipSyncPlayer"/> implementation.
 /// </summary>
 [GlobalClass]
-public partial class A2FBlendShapePlayer : BlendShapePlayer
+public partial class A2FLipSyncPlayer : LipSyncPlayer
 {
     /// <summary>
     /// Model selection sent as the server `model` query parameter.
@@ -307,14 +307,13 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
     } = 0.4f;
 
     private HttpClient? _httpClient;
-    private float[] _monoWaveform = [];
     private Uri? _blendshapeEndpointUri;
     private bool _hasWarnedModeAutoAdjust;
     private bool _hasWarnedMissingEyeRotationFrames;
     private bool _hasWarnedMissingEyeBlendshapeChannels;
 
     /// <inheritdoc />
-    protected override void InitialiseBackend(AudioStreamWav audioStream)
+    protected override void InitialiseBackend()
     {
         _blendshapeEndpointUri = BuildBlendshapeEndpointUri(EndpointUrl);
         _hasWarnedModeAutoAdjust = false;
@@ -327,8 +326,6 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         };
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        _monoWaveform = LoadAudioWaveform(audioStream);
-
         if (ProbeHealthOnInitialise)
         {
             ProbeHealthWithRetry(_httpClient, _blendshapeEndpointUri, ProbeHealthRetries, ProbeHealthRetryDelayMs);
@@ -336,20 +333,16 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
     }
 
     /// <inheritdoc />
-    protected override BlendShapeInferenceResult RunBackendInference()
+    protected override LipSyncInferenceResult RunBackendInference(AudioStreamWav speech)
     {
         HttpClient httpClient = _httpClient
-            ?? throw new InvalidOperationException("BlendShapePlayer: HTTP client was not initialised.");
+            ?? throw new InvalidOperationException("LipSyncPlayer: HTTP client was not initialised.");
         Uri endpointUri = _blendshapeEndpointUri
-            ?? throw new InvalidOperationException("BlendShapePlayer: endpoint URI was not initialised.");
+            ?? throw new InvalidOperationException("LipSyncPlayer: endpoint URI was not initialised.");
         Uri requestUri = BuildInferenceUri(endpointUri);
+        float[] monoWaveform = LoadAudioWaveform(speech);
 
-        if (_monoWaveform.Length == 0)
-        {
-            return new BlendShapeInferenceResult([], [], 60f);
-        }
-
-        using var requestContent = new ByteArrayContent(FloatsToBytesLittleEndian(_monoWaveform));
+        using var requestContent = new ByteArrayContent(FloatsToBytesLittleEndian(monoWaveform));
         requestContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         using HttpResponseMessage response = httpClient
@@ -362,14 +355,14 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         {
             string errorMessage = TryParseApiError(jsonPayload) ?? jsonPayload;
             throw new InvalidOperationException(
-                $"BlendShapePlayer: Audio2Face API request failed ({(int)response.StatusCode} {response.StatusCode}): {errorMessage}");
+                $"LipSyncPlayer: Audio2Face API request failed ({(int)response.StatusCode} {response.StatusCode}): {errorMessage}");
         }
 
         A2fInferenceResponse? payload = JsonSerializer.Deserialize<A2fInferenceResponse>(jsonPayload, _jsonOptions)
-            ?? throw new InvalidOperationException("BlendShapePlayer: failed to parse Audio2Face API response.");
+            ?? throw new InvalidOperationException("LipSyncPlayer: failed to parse Audio2Face API response.");
 
         List<string> blendshapeNames = payload.BlendshapeNames.Count == 0
-            ? throw new InvalidOperationException("BlendShapePlayer: API returned no blendshape names.")
+            ? throw new InvalidOperationException("LipSyncPlayer: API returned no blendshape names.")
             : payload.BlendshapeNames;
 
         for (int frameIndex = 0; frameIndex < payload.Frames.Length; frameIndex++)
@@ -377,7 +370,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
             if (payload.Frames[frameIndex].Length != blendshapeNames.Count)
             {
                 throw new InvalidOperationException(
-                    $"BlendShapePlayer: API frame {frameIndex} has {payload.Frames[frameIndex].Length} channels, expected {blendshapeNames.Count}.");
+                    $"LipSyncPlayer: API frame {frameIndex} has {payload.Frames[frameIndex].Length} channels, expected {blendshapeNames.Count}.");
             }
         }
 
@@ -386,7 +379,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
             ApplyEyeRotationBlendshapeTranslation(payload.Frames, blendshapeNames, payload.EyeRotationFrames);
         }
 
-        return new BlendShapeInferenceResult(payload.Frames, blendshapeNames, payload.Fps);
+        return new LipSyncInferenceResult(payload.Frames, blendshapeNames, payload.Fps);
     }
 
     /// <inheritdoc />
@@ -394,7 +387,6 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
     {
         _httpClient?.Dispose();
         _httpClient = null;
-        _monoWaveform = [];
         _blendshapeEndpointUri = null;
         _hasWarnedModeAutoAdjust = false;
         _hasWarnedMissingEyeRotationFrames = false;
@@ -406,7 +398,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out Uri? endpointUri))
         {
             throw new InvalidOperationException(
-                $"BlendShapePlayer: EndpointUrl must be an absolute URL, got '{endpointUrl}'.");
+                $"LipSyncPlayer: EndpointUrl must be an absolute URL, got '{endpointUrl}'.");
         }
 
         bool isHttpScheme = endpointUri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
@@ -414,7 +406,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         _ = isHttpScheme
             ? true
             : throw new InvalidOperationException(
-                $"BlendShapePlayer: EndpointUrl must use HTTP or HTTPS, got '{endpointUri.Scheme}'.");
+                $"LipSyncPlayer: EndpointUrl must use HTTP or HTTPS, got '{endpointUri.Scheme}'.");
 
         return endpointUri;
     }
@@ -467,7 +459,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         }
 
         throw new InvalidOperationException(
-            $"BlendShapePlayer: health probe failed after {attempts} attempt(s) at '{healthUri}'. Last error: {lastError}");
+            $"LipSyncPlayer: health probe failed after {attempts} attempt(s) at '{healthUri}'. Last error: {lastError}");
     }
 
     private static Uri BuildHealthUri(Uri blendshapeEndpointUri)
@@ -605,7 +597,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         if (WarnOnModeAutoAdjust && !_hasWarnedModeAutoAdjust)
         {
             GD.PushWarning(
-                $"A2fBlendShapePlayer: auto-adjusted mode from '{requestedMode}' to '{requiredMode}' for model '{modelId}'.");
+                $"A2FLipSyncPlayer: auto-adjusted mode from '{requestedMode}' to '{requiredMode}' for model '{modelId}'.");
             _hasWarnedModeAutoAdjust = true;
         }
 
@@ -673,7 +665,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
             if (!_hasWarnedMissingEyeRotationFrames)
             {
                 GD.PushWarning(
-                    "A2fBlendShapePlayer: eye_rotation_frames missing from server response; eye translation skipped. " +
+                    "A2FLipSyncPlayer: eye_rotation_frames missing from server response; eye translation skipped. " +
                     "Set execution to include eyes.");
                 _hasWarnedMissingEyeRotationFrames = true;
             }
@@ -692,17 +684,12 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
             if (!_hasWarnedMissingEyeBlendshapeChannels)
             {
                 GD.PushWarning(
-                    "A2fBlendShapePlayer: required ARKit eyeLook blendshape channels are missing in blendshape_names; eye translation skipped.");
+                    "A2FLipSyncPlayer: required ARKit eyeLook blendshape channels are missing in blendshape_names; eye translation skipped.");
                 _hasWarnedMissingEyeBlendshapeChannels = true;
             }
             return;
         }
 
-        // SDK eye rotation values include per-eye constant offsets (from
-        // AnimatorEyesParams offsets + saccade seed) that are meant for bone
-        // rotation where a rest pose already exists. For blendshape mapping
-        // we need delta-from-neutral, so compute the per-component mean across
-        // all frames and subtract it as baseline.
         float[] baseline = ComputeEyeRotationBaseline(eyeRotationFrames);
 
         float scale = Mathf.Max(0f, EyeRotationToBlendshapeScale);
@@ -713,10 +700,6 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         {
             float[] frame = blendshapeFrames[frameIndex];
             float[]? eyeFrame = eyeRotationFrames[frameIndex];
-            // SDK eye rotation output layout (6 floats):
-            //   [rightX, rightY, rightZ(=0), leftX, leftY, leftZ(=0)]
-            // X = horizontal rotation (positive = look right in world space)
-            // Y = vertical rotation (positive = look up)
             if (eyeFrame is null || eyeFrame.Length < 6)
             {
                 continue;
@@ -727,7 +710,6 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
             float leftH = eyeFrame[3] - baseline[3];
             float leftV = eyeFrame[4] - baseline[4];
 
-            // Temporal smoothing (exponential moving average).
             rightH = prevRightH + ((rightH - prevRightH) * alpha);
             rightV = prevRightV + ((rightV - prevRightV) * alpha);
             leftH = prevLeftH + ((leftH - prevLeftH) * alpha);
@@ -748,25 +730,13 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
                 leftV = -leftV;
             }
 
-            // Horizontal: both eyes share same world-space sign convention.
-            // Positive = look right in world space.
-            //   Right eye: look right = outward  → RightOut
-            //   Left eye:  look right = inward   → LeftIn
             WriteDirectionalPair(frame, indices.RightOut, indices.RightIn, rightH, scale);
             WriteDirectionalPair(frame, indices.LeftIn, indices.LeftOut, leftH, scale);
-
-            // Vertical: positive = look up for both eyes.
             WriteDirectionalPair(frame, indices.RightUp, indices.RightDown, rightV, scale);
             WriteDirectionalPair(frame, indices.LeftUp, indices.LeftDown, leftV, scale);
         }
     }
 
-    /// <summary>
-    /// Computes per-component mean of eye rotation frames to use as baseline.
-    /// Subtracting this baseline removes constant offsets from AnimatorEyesParams
-    /// (eyeball rotation offsets, saccade seed) so the residual represents
-    /// delta-from-neutral rotation suitable for blendshape mapping.
-    /// </summary>
     private static float[] ComputeEyeRotationBaseline(float[][]? eyeRotationFrames)
     {
         float[] sums = new float[6];
@@ -803,11 +773,6 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         return sums;
     }
 
-    /// <summary>
-    /// Writes a signed rotation value into a pair of directional blendshapes.
-    /// Positive value drives <paramref name="positiveIndex"/>, negative drives
-    /// <paramref name="negativeIndex"/>. The other channel is zeroed.
-    /// </summary>
     private static void WriteDirectionalPair(
         float[] frame,
         int positiveIndex,
@@ -826,7 +791,6 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         out EyeBlendshapeIndices indices
     )
     {
-        // Keys are already normalized (lowercase, no separators).
         if (!nameToIndex.TryGetValue("eyelookinleft", out int leftIn)
             || !nameToIndex.TryGetValue("eyelookoutleft", out int leftOut)
             || !nameToIndex.TryGetValue("eyelookupleft", out int leftUp)
@@ -887,21 +851,21 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
         if (audioStream.Format != AudioStreamWav.FormatEnum.Format16Bits)
         {
             throw new InvalidOperationException(
-                $"BlendShapePlayer: expected AudioStreamWav format {AudioStreamWav.FormatEnum.Format16Bits}, got {audioStream.Format}.");
+                $"LipSyncPlayer: expected AudioStreamWav format {AudioStreamWav.FormatEnum.Format16Bits}, got {audioStream.Format}.");
         }
 
         if (audioStream.MixRate != 16000)
         {
-            throw new InvalidOperationException($"BlendShapePlayer: expected 16000 Hz audio, got {audioStream.MixRate} Hz.");
+            throw new InvalidOperationException($"LipSyncPlayer: expected 16000 Hz audio, got {audioStream.MixRate} Hz.");
         }
 
         if (audioStream.Stereo)
         {
-            throw new InvalidOperationException("BlendShapePlayer: expected mono audio stream, but stream is stereo.");
+            throw new InvalidOperationException("LipSyncPlayer: expected mono audio stream, but stream is stereo.");
         }
 
         byte[] data = audioStream.Data.Length == 0
-            ? throw new InvalidOperationException("BlendShapePlayer: AudioStreamWav contains no PCM data.")
+            ? throw new InvalidOperationException("LipSyncPlayer: AudioStreamWav contains no PCM data.")
             : audioStream.Data;
 
         return DecodePcm16Bytes(data);
@@ -911,7 +875,7 @@ public partial class A2FBlendShapePlayer : BlendShapePlayer
     {
         if ((data.Count & 1) != 0)
         {
-            throw new InvalidOperationException("BlendShapePlayer: PCM16 data length must be even.");
+            throw new InvalidOperationException("LipSyncPlayer: PCM16 data length must be even.");
         }
 
         int sampleCount = data.Count / 2;
