@@ -21,7 +21,7 @@ public sealed class OpenAISpeechGeneratorTests
             ApiKey: null,
             Model: "tts-1",
             Voice: "alloy",
-            Format: "mp3",
+            Format: "wav",
             SpeedRatio: null,
             TimeoutSeconds: null);
 
@@ -41,7 +41,7 @@ public sealed class OpenAISpeechGeneratorTests
             ApiKey: string.Empty,
             Model: "tts-1",
             Voice: "alloy",
-            Format: "mp3",
+            Format: "wav",
             SpeedRatio: null,
             TimeoutSeconds: null);
 
@@ -61,7 +61,7 @@ public sealed class OpenAISpeechGeneratorTests
             ApiKey: string.Empty,
             Model: "tts-1",
             Voice: "alloy",
-            Format: "mp3",
+            Format: "wav",
             SpeedRatio: null,
             TimeoutSeconds: null);
 
@@ -81,7 +81,7 @@ public sealed class OpenAISpeechGeneratorTests
             ApiKey: string.Empty,
             Model: "tts-1",
             Voice: "alloy",
-            Format: "mp3",
+            Format: "wav",
             SpeedRatio: null,
             TimeoutSeconds: null);
 
@@ -111,6 +111,27 @@ public sealed class OpenAISpeechGeneratorTests
 
         Assert.Equal(1.25f, options.SpeedRatio);
         Assert.Equal(GeneratedSpeechFormat.Wav, options.ResponseFormat);
+    }
+
+    /// <summary>
+    /// Non-WAV OpenAI output formats must be rejected because generator-side normalisation only supports WAV PCM.
+    /// </summary>
+    [Fact]
+    public void GetFormat_NonWavFormat_ThrowsClearError()
+    {
+        OpenAISpeechGenerator.OpenAISpeechGeneratorSettings settings = new(
+            Host: "https://api.openai.com/v1",
+            ApiKey: string.Empty,
+            Model: "tts-1",
+            Voice: "alloy",
+            Format: "mp3",
+            SpeedRatio: null,
+            TimeoutSeconds: null);
+
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => settings.GetFormat());
+
+        Assert.Contains("must be 'wav'", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("mp3", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -229,7 +250,7 @@ public sealed class OpenAISpeechGeneratorTests
         Assert.Equal("tts-custom", settings.Model);
         Assert.Equal("custom-voice", settings.Voice);
         Assert.Null(settings.ApiKey);
-        Assert.Equal("mp3", settings.Format);
+        Assert.Equal("wav", settings.Format);
         Assert.Null(settings.SpeedRatio);
     }
 
@@ -244,7 +265,7 @@ public sealed class OpenAISpeechGeneratorTests
             ApiKey: string.Empty,
             Model: "tts-1",
             Voice: "vendor-voice-01",
-            Format: "mp3",
+            Format: "wav",
             SpeedRatio: null,
             TimeoutSeconds: null);
 
@@ -264,7 +285,7 @@ public sealed class OpenAISpeechGeneratorTests
             ApiKey: string.Empty,
             Model: "tts-1",
             Voice: "alloy",
-            Format: "mp3",
+            Format: "wav",
             SpeedRatio: null,
             TimeoutSeconds: null);
 
@@ -284,7 +305,7 @@ public sealed class OpenAISpeechGeneratorTests
             ApiKey: string.Empty,
             Model: "tts-1",
             Voice: " vendor-default ",
-            Format: "mp3",
+            Format: "wav",
             SpeedRatio: null,
             TimeoutSeconds: null);
 

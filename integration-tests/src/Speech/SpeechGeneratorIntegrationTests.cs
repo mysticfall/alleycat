@@ -175,6 +175,98 @@ public sealed partial class SpeechGeneratorIntegrationTests
         }
     }
 
+    /// <summary>
+    /// The signal-driven generator path must emit audio after base-level normalisation when a target rate is configured.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task InvokeGenerationAsync_WithTargetSampleRate_EmitsNormalisedCompletionAudio()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            TargetSampleRate = 16000,
+            NextResultFactory = static (_, _) => Task.FromResult(CreateWaveFileBytes(
+                [0x00, 0x00, 0x10, 0x00, 0x20, 0x00, 0x30, 0x00],
+                sampleRate: 8000,
+                channelCount: 1,
+                bitsPerSample: 16)),
+        };
+
+        sceneTree.Root.AddChild(speechGenerator);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        byte[]? generatedAudio = null;
+        _ = speechGenerator.Connect(
+            SpeechGenerator.SignalName.SpeechGenerationCompleted,
+            Callable.From<byte[]>(audio => generatedAudio = audio));
+
+        try
+        {
+            await InvokeGenerationAsync(speechGenerator, "Hello alley cat", instruction: null);
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.Equal(1, speechGenerator.GenerateCallCount);
+            byte[] audio = Assert.IsType<byte[]>(generatedAudio);
+            Assert.Equal(16000, ReadWaveSampleRate(audio));
+            Assert.Equal(16, ReadWaveDataLength(audio));
+        }
+        finally
+        {
+            speechGenerator.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// Resampling requests for unsupported input must fail through the existing failure path instead of emitting corrupted audio.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task InvokeGenerationAsync_WhenResamplingUnsupportedAudio_EmitsFailureSignal_AndSkipsCompletionSignal()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            TargetSampleRate = 16000,
+            NextResultFactory = static (_, _) => Task.FromResult<byte[]>([0x01, 0x02, 0x03]),
+        };
+
+        sceneTree.Root.AddChild(speechGenerator);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        string? failureText = null;
+        int completedCount = 0;
+        int failedCount = 0;
+        _ = speechGenerator.Connect(
+            SpeechGenerator.SignalName.SpeechGenerationCompleted,
+            Callable.From<byte[]>(_ => completedCount++));
+        _ = speechGenerator.Connect(
+            SpeechGenerator.SignalName.SpeechGenerationFailed,
+            Callable.From<string>(error =>
+            {
+                failedCount++;
+                failureText = error;
+            }));
+
+        try
+        {
+            await InvokeGenerationAsync(speechGenerator, "Hello alley cat", instruction: null);
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.Equal(1, speechGenerator.GenerateCallCount);
+            Assert.False(speechGenerator.IsGenerating);
+            Assert.Equal(0, completedCount);
+            Assert.Equal(1, failedCount);
+            Assert.Contains("Audio resampling failed", failureText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            speechGenerator.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
     private static async Task InvokeGenerationAsync(SpeechGenerator speechGenerator, string text, string? instruction)
     {
         Task invocation = (Task?)_invokeGenerationAsyncMethod.Invoke(speechGenerator, [text, instruction])
@@ -189,6 +281,39 @@ public sealed partial class SpeechGeneratorIntegrationTests
         Label newestLabel = Assert.IsType<Label>(messages.GetChild(0), exactMatch: false);
         return newestLabel.Text;
     }
+
+    private static byte[] CreateWaveFileBytes(byte[] data, int sampleRate, short channelCount, short bitsPerSample)
+    {
+        using MemoryStream stream = new();
+        using BinaryWriter writer = new(stream, System.Text.Encoding.ASCII, leaveOpen: true);
+
+        short blockAlign = (short)(channelCount * bitsPerSample / 8);
+        int byteRate = sampleRate * blockAlign;
+
+        writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+        writer.Write(36 + data.Length);
+        writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVE"));
+        writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write(channelCount);
+        writer.Write(sampleRate);
+        writer.Write(byteRate);
+        writer.Write(blockAlign);
+        writer.Write(bitsPerSample);
+        writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+        writer.Write(data.Length);
+        writer.Write(data);
+        writer.Flush();
+
+        return stream.ToArray();
+    }
+
+    private static int ReadWaveSampleRate(byte[] audio)
+        => BitConverter.ToInt32(audio, 24);
+
+    private static int ReadWaveDataLength(byte[] audio)
+        => BitConverter.ToInt32(audio, 40);
 
     private static async Task<(Node global, NotificationWidget notificationWidget)> CreateNotificationHostAsync(SceneTree sceneTree)
     {
@@ -276,7 +401,7 @@ public sealed partial class SpeechGeneratorIntegrationTests
             private set;
         }
 
-        public override Task<byte[]> Generate(string text, string? instruction = null)
+        protected override Task<byte[]> GenerateCore(string text, string? instruction = null)
         {
             GenerateCallCount++;
             return NextResultFactory(text, instruction);

@@ -18,7 +18,7 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
     private const string DefaultConfigPath = ConfigProvider.DefaultBaseConfigPath;
     private const string DefaultModel = "tts-1";
     private const string DefaultVoice = "alloy";
-    private const string DefaultFormat = "mp3";
+    private const string DefaultFormat = "wav";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
     private const string ConfigLoadFailureNotification = "Speech generation is unavailable. Please check the TTS configuration.";
 
@@ -60,7 +60,7 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
     }
 
     /// <inheritdoc />
-    public override async Task<byte[]> Generate(string text, string? instruction = null)
+    protected override async Task<byte[]> GenerateCore(string text, string? instruction = null)
     {
         OpenAISpeechGeneratorSettings settings = _settings ?? OpenAISpeechGeneratorSettings.Load(ConfigPath);
         AudioClient client = settings.CreateAudioClient();
@@ -115,17 +115,10 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
                 : voiceOverride.Trim();
 
         public GeneratedSpeechFormat GetFormat()
-            => Format.Trim().ToLowerInvariant() switch
-            {
-                "mp3" => GeneratedSpeechFormat.Mp3,
-                "opus" => GeneratedSpeechFormat.Opus,
-                "aac" => GeneratedSpeechFormat.Aac,
-                "flac" => GeneratedSpeechFormat.Flac,
-                "wav" => GeneratedSpeechFormat.Wav,
-                "pcm" => GeneratedSpeechFormat.Pcm,
-                var format => throw new InvalidOperationException(
-                    $"Config key '{ConfigSection}/Format' must be a supported audio format. Got '{format}'."),
-            };
+            => string.Equals(Format.Trim(), "wav", StringComparison.OrdinalIgnoreCase)
+                ? GeneratedSpeechFormat.Wav
+                : throw new InvalidOperationException(
+                    $"Config key '{ConfigSection}/Format' must be 'wav' for OpenAI speech generation. Got '{Format.Trim()}'.");
 
         public Uri CreateEndpointUri()
         {
