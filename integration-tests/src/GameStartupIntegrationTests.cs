@@ -1,4 +1,5 @@
 using System.Reflection;
+using AlleyCat.Testing;
 using AlleyCat.UI;
 using Godot;
 using Xunit;
@@ -11,6 +12,7 @@ namespace AlleyCat.IntegrationTests;
 /// </summary>
 public sealed partial class GameStartupIntegrationTests
 {
+    private const string EditorRunStartupBypassScenePath = "res://tests/startup/startup_bypass_runtime_test.tscn";
     private const string StartScenePath = "res://assets/scenes/empty.tscn";
 
     private static readonly FieldInfo _splashScreenField = typeof(Game)
@@ -179,6 +181,54 @@ public sealed partial class GameStartupIntegrationTests
         {
             await DestroyFixtureAsync(sceneTree, fixture);
         }
+    }
+
+    /// <summary>
+    /// Verifies editor-run <c>res://tests/...</c> scenes bypass both Game and XR startup on the live scene tree.
+    /// </summary>
+    [Fact]
+    public async Task EditorRunTestScene_WhenLoadedFromTestsPath_BypassesGameAndXRStartup()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node game = LoadPackedScene(EditorRunStartupBypassScenePath).Instantiate();
+
+        try
+        {
+            sceneTree.Root.AddChild(game);
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Node xrManager = game.GetNode<Node>("XR");
+            SubViewport uiRoot = game.GetNode<SubViewport>("XR/SubViewport");
+            CanvasItem loadingScreen = game.GetNode<CanvasItem>("XR/SubViewport/LoadingScreen");
+
+            Assert.Equal(EditorRunStartupBypassScenePath, game.SceneFilePath);
+            Assert.True(RuntimeContext.ShouldBypassGlobalStartup(sceneTree));
+            Assert.False(ReadBooleanProperty(xrManager, "InitialisationAttempted"));
+            Assert.False(ReadBooleanProperty(xrManager, "InitialisationSucceeded"));
+            Assert.Null(ReadPropertyValue(xrManager, "Runtime"));
+            Assert.Equal(1, xrManager.GetChildCount());
+            Assert.Equal(1, uiRoot.GetChildCount());
+            Assert.False(loadingScreen.Visible);
+        }
+        finally
+        {
+            if (GodotObject.IsInstanceValid(game) && game.IsInsideTree())
+            {
+                game.QueueFree();
+                await WaitForNextFrameAsync(sceneTree);
+            }
+        }
+    }
+
+    private static bool ReadBooleanProperty(object instance, string propertyName)
+        => Assert.IsType<bool>(ReadPropertyValue(instance, propertyName));
+
+    private static object? ReadPropertyValue(object instance, string propertyName)
+    {
+        PropertyInfo property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new InvalidOperationException($"Expected public property '{propertyName}' on '{instance.GetType().FullName}'.");
+
+        return property.GetValue(instance);
     }
 
     private static async Task<StartupFixture> CreateStartupFixtureAsync(SceneTree sceneTree)

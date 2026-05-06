@@ -1,3 +1,5 @@
+using Godot;
+
 namespace AlleyCat.Testing;
 
 /// <summary>
@@ -5,6 +7,8 @@ namespace AlleyCat.Testing;
 /// </summary>
 public static class RuntimeContext
 {
+    private const string TestScenePrefix = "res://tests/";
+
     /// <summary>
     /// Environment variable carrying the explicit runtime-context value.
     /// </summary>
@@ -22,8 +26,21 @@ public static class RuntimeContext
     /// Returns <c>true</c> when the current process is running integration tests.
     /// </summary>
     public static bool IsIntegrationTest() => IsIntegrationTest(
-        Environment.GetEnvironmentVariable(IntegrationTestContextEnvironmentVariable),
-        Environment.GetCommandLineArgs());
+        System.Environment.GetEnvironmentVariable(IntegrationTestContextEnvironmentVariable),
+        System.Environment.GetCommandLineArgs());
+
+    /// <summary>
+    /// Returns <c>true</c> when global startup should be bypassed for the active scene.
+    /// </summary>
+    public static bool ShouldBypassGlobalStartup(SceneTree tree)
+    {
+        string configuredMainScenePath = ResolveMainScenePath(ProjectSettings.GetSetting("application/run/main_scene").AsString());
+        return ShouldBypassGlobalStartup(
+            System.Environment.GetEnvironmentVariable(IntegrationTestContextEnvironmentVariable),
+            System.Environment.GetCommandLineArgs(),
+            ResolveStartupScenePath(tree, configuredMainScenePath),
+            configuredMainScenePath);
+    }
 
     /// <summary>
     /// Returns <c>true</c> when the provided runtime context indicates integration-test execution.
@@ -51,5 +68,48 @@ public static class RuntimeContext
         }
 
         return false;
+    }
+
+    internal static bool ShouldBypassGlobalStartup(
+        string? explicitContext,
+        IReadOnlyList<string>? commandLineArguments,
+        string? currentScenePath,
+        string? configuredMainScenePath)
+        => IsIntegrationTest(explicitContext, commandLineArguments)
+            || (!string.IsNullOrWhiteSpace(currentScenePath)
+                && !string.IsNullOrWhiteSpace(configuredMainScenePath)
+                && currentScenePath.StartsWith(TestScenePrefix, StringComparison.Ordinal)
+                && !string.Equals(currentScenePath, configuredMainScenePath, StringComparison.Ordinal));
+
+    private static string ResolveMainScenePath(string configuredMainScenePath)
+        => string.IsNullOrWhiteSpace(configuredMainScenePath)
+            ? string.Empty
+            : GD.Load<PackedScene>(configuredMainScenePath)?.ResourcePath ?? configuredMainScenePath;
+
+    private static string? ResolveStartupScenePath(SceneTree tree, string configuredMainScenePath)
+    {
+        if (!string.IsNullOrWhiteSpace(tree.CurrentScene?.SceneFilePath))
+        {
+            return tree.CurrentScene.SceneFilePath;
+        }
+
+        Window root = tree.Root;
+        for (int index = 0; index < root.GetChildCount(); index++)
+        {
+            if (root.GetChild(index) is not Node child)
+            {
+                continue;
+            }
+
+            string sceneFilePath = child.SceneFilePath;
+            if (!string.IsNullOrWhiteSpace(sceneFilePath)
+                && sceneFilePath.StartsWith(TestScenePrefix, StringComparison.Ordinal)
+                && !string.Equals(sceneFilePath, configuredMainScenePath, StringComparison.Ordinal))
+            {
+                return sceneFilePath;
+            }
+        }
+
+        return null;
     }
 }

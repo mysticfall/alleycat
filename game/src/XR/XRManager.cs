@@ -82,6 +82,11 @@ public partial class XRManager : Node
     /// <inheritdoc />
     public override void _Ready()
     {
+        if (RuntimeContext.ShouldBypassGlobalStartup(GetTree()))
+        {
+            return;
+        }
+
         PackedScene runtimeScene = RuntimeContext.IsIntegrationTest() ? MockRuntimeScene : OpenXrRuntimeScene;
 
         Node runtimeNode = runtimeScene.Instantiate()
@@ -105,7 +110,10 @@ public partial class XRManager : Node
     {
         _ = _initialisationStates.Remove(GetInstanceId());
 
-        Runtime.PoseRecentered -= EmitPoseRecenteredSignal;
+        if (Runtime is not null)
+        {
+            Runtime.PoseRecentered -= EmitPoseRecenteredSignal;
+        }
     }
 
     private void EmitPoseRecenteredSignal() => _ = EmitSignal(SignalName.PoseRecentered);

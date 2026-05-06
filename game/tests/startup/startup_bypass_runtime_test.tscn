@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://cwkucqmp5fqvl"]
+
+[ext_resource type="Script" uid="uid://dnifm5vgeh8bn" path="res://src/Game.cs" id="1_wgf4r"]
+[ext_resource type="Script" uid="uid://bmvh0kef7f276" path="res://src/XR/XRManager.cs" id="2_2gy7c"]
+[ext_resource type="PackedScene" uid="uid://kxw5dgct6125" path="res://assets/ui/loading_screen.tscn" id="3_tuw6d"]
+[ext_resource type="PackedScene" uid="uid://bt5ksnc6kjekx" path="res://assets/xr/openxr_runtime.tscn" id="4_egq6o"]
+[ext_resource type="PackedScene" uid="uid://djamb77looxqd" path="res://assets/xr/mock_runtime.tscn" id="5_2dch6"]
+
+[node name="Game" type="Node" unique_id=1162751682]
+script = ExtResource("1_wgf4r")
+StartScenePath = "res://assets/scenes/empty.tscn"
+
+[node name="XR" type="Node" parent="." unique_id=1277120654]
+script = ExtResource("2_2gy7c")
+OpenXrRuntimeScene = ExtResource("4_egq6o")
+MockRuntimeScene = ExtResource("5_2dch6")
+
+[node name="SubViewport" type="SubViewport" parent="XR" unique_id=663872886]
+disable_3d = true
+transparent_bg = true
+
+[node name="LoadingScreen" parent="XR/SubViewport" unique_id=1043279243 instance=ExtResource("3_tuw6d")]
+visible = false

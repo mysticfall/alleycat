@@ -36,7 +36,7 @@ public partial class Game : Node
     /// <inheritdoc />
     public override void _EnterTree()
     {
-        if (RuntimeContext.IsIntegrationTest())
+        if (RuntimeContext.ShouldBypassGlobalStartup(GetTree()))
         {
             return;
         }
@@ -55,7 +55,7 @@ public partial class Game : Node
     /// <inheritdoc />
     public override void _Ready()
     {
-        if (RuntimeContext.IsIntegrationTest())
+        if (RuntimeContext.ShouldBypassGlobalStartup(GetTree()))
         {
             return;
         }
