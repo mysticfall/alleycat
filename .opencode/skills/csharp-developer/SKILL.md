@@ -69,6 +69,43 @@ using AlleyCat.Common;
 Label3D label = this.RequireNode<Label3D>("Label3D");
 ```
 
+## Component and Trait Pattern
+
+For reusable gameplay behaviour, follow [CORE-003: Component/Trait System](@specs/003-component-system/index.md):
+
+- **Components** implementing reusable capability should implement `IComponent` (defined in `AlleyCat.Component`).
+- **Holders** (entities owning components) should implement `IComponentHolder` with an explicit/cached list of components,
+  providing deterministic iteration order.
+- Query components using extension methods on `IComponentHolder` (bring into scope with `using AlleyCat.Component;`):
+  - `RequireComponent<T>` — returns the single matching component or throws `InvalidOperationException` with clear holder/type information.
+  - `TryGetComponent<T>(out T? component)` — returns `true` when exactly one match is found.
+  - `GetComponents<T>()` — returns all matching components in deterministic order.
+
+These follow the same fail-fast pattern as `RequireNode`:
+
+```csharp
+using AlleyCat.Component;
+
+// Fail-fast: throws if missing or multiple matches
+ILocomotion locomotion = holder.RequireComponent<ILocomotion>();
+
+// Nullable fall-back: safe when absence is valid
+if (holder.TryGetComponent<ILocomotion>(out var locomotion))
+{
+    locomotion.MoveTo(targetPosition);
+}
+
+// Multiple retrieval:
+IReadOnlyList<ILocomotion> locomotionComponents = holder.GetComponents<ILocomotion>();
+```
+
+- **Interface naming**:
+  - **Capability interfaces** (what a component provides) name the behaviour: `ILocomotion`, `ISpeechGenerator`.
+  - **Trait interfaces** (what a holder can do) use adjective/noun naming: `ILocomotive`, `IAnimatable`, `ISeeing`, `ISpeaking`.
+  - Use `IHasX` naming when adjective/noun is unclear (for example `IHasInventory`).
+- **Default interface members** are permitted only for typed consumption — do not use them as true mixins to inject concrete implementation.
+- **Do not force interfaces** on every Godot node or where Godot serialisation is brittle. Prefer composition through holder pattern when appropriate.
+
 ## Late-Bound Dependency Convention
 
 - For dependencies that are resolved after `_Ready()` (for example runtime services or XR abstractions), prefer:

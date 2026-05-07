@@ -1,3 +1,4 @@
+using AlleyCat.Component;
 using Godot;
 
 namespace AlleyCat.Control;
@@ -5,7 +6,7 @@ namespace AlleyCat.Control;
 /// <summary>
 /// Control-layer contract for player locomotion.
 /// </summary>
-public interface ILocomotion
+public interface ILocomotion : IComponent
 {
     /// <summary>
     /// Updates the current movement-intent vector.

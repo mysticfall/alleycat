@@ -20,6 +20,7 @@ public partial class PlayerController : Node
     /// <summary>
     /// Optional direct locomotion node reference.
     /// </summary>
+    // TODO: Refactor this to target ILocomotive once a player node type owns locomotion as a holder trait.
     [Export]
     public Node? LocomotionNode
     {
@@ -111,8 +112,8 @@ public partial class PlayerController : Node
     {
         Node locomotionNode = LocomotionNode ?? this.RequireNode<Node>("../Locomotion");
         return locomotionNode as ILocomotion
-               ?? throw new InvalidOperationException(
-                   $"Node '{locomotionNode.GetPath()}' must implement {nameof(ILocomotion)}.");
+            ?? throw new InvalidOperationException(
+                $"Node '{locomotionNode.GetPath()}' must implement {nameof(ILocomotion)}.");
     }
 
     private XRManager? ResolveXRManager()

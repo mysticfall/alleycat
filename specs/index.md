@@ -8,6 +8,7 @@
 
 - [CORE-001: Global Scene](001-global-scene/index.md)
 - [CORE-002: Configuration API](002-configuration-api/index.md)
+- [CORE-003: Component/Trait System](003-component-system/index.md)
 
 ## XR
 
