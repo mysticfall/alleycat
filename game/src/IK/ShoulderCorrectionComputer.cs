@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.IK;
@@ -60,11 +61,11 @@ public static class ShoulderCorrectionComputer
     /// Values outside the range are clamped.
     /// </param>
     /// <returns>Normalised anatomical-neutral arm direction in body space.</returns>
-    public static Vector3 ComputeAnatomicalNeutralDirection(ArmSide side, float lateralBias)
+    public static Vector3 ComputeAnatomicalNeutralDirection(LimbSide side, float lateralBias)
     {
         float clampedBias = Mathf.Clamp(lateralBias, 0f, 0.95f);
         float downComponent = Mathf.Sqrt(1f - (clampedBias * clampedBias));
-        float lateralSign = side == ArmSide.Left ? -1f : 1f;
+        float lateralSign = side == LimbSide.Left ? -1f : 1f;
 
         return new Vector3(lateralSign * clampedBias, -downComponent, 0f);
     }
@@ -121,7 +122,7 @@ public static class ShoulderCorrectionComputer
     /// <returns>Correction quaternion in body space.</returns>
     public static Quaternion ComputeCorrection(
         Vector3 currentArmDirectionBody,
-        ArmSide side,
+        LimbSide side,
         float anatomicalNeutralY,
         float maxElevationAngle,
         float maxOverheadElevationBoost,
@@ -147,11 +148,11 @@ public static class ShoulderCorrectionComputer
         // Overhead boost ramps from 0 at horizontal-or-below (arm-Y ≤ 0) to 1 at arm-Y = 1 (straight up).
         float overheadT = Smoothstep(0f, 1f, armDir.Y);
 
-        Vector3 elevationAxis = side == ArmSide.Left
+        Vector3 elevationAxis = side == LimbSide.Left
             ? new Vector3(0f, 0f, -1f)
             : new Vector3(0f, 0f, 1f);
 
-        Vector3 protractionAxis = side == ArmSide.Left
+        Vector3 protractionAxis = side == LimbSide.Left
             ? new Vector3(0f, 1f, 0f)
             : new Vector3(0f, -1f, 0f);
 

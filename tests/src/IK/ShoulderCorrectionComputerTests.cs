@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using AlleyCat.IK;
 using Godot;
 using Xunit;
@@ -16,10 +17,10 @@ public sealed class ShoulderCorrectionComputerTests
     /// Verifies anatomical neutral uses the expected left/right lateral sign and remains unit length.
     /// </summary>
     [Fact]
-    public void ComputeAnatomicalNeutralDirection_UsesArmSideSignAndUnitLength()
+    public void ComputeAnatomicalNeutralDirection_UsesLimbSideSignAndUnitLength()
     {
-        Vector3 left = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Left, 0.3f);
-        Vector3 right = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 0.3f);
+        Vector3 left = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Left, 0.3f);
+        Vector3 right = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 0.3f);
 
         Assert.True(left.X < 0f, $"Left neutral should have negative X. Got {left.X}.");
         Assert.True(right.X > 0f, $"Right neutral should have positive X. Got {right.X}.");
@@ -35,10 +36,10 @@ public sealed class ShoulderCorrectionComputerTests
     [Fact]
     public void ComputeAnatomicalNeutralDirection_ClampsLateralBias()
     {
-        Vector3 clampedHigh = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 5f);
-        Vector3 explicitHigh = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 0.95f);
-        Vector3 clampedLow = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Left, -3f);
-        Vector3 explicitLow = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Left, 0f);
+        Vector3 clampedHigh = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 5f);
+        Vector3 explicitHigh = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 0.95f);
+        Vector3 clampedLow = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Left, -3f);
+        Vector3 explicitLow = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Left, 0f);
 
         AssertVectorClose(clampedHigh, explicitHigh);
         AssertVectorClose(clampedLow, explicitLow);
@@ -50,11 +51,11 @@ public sealed class ShoulderCorrectionComputerTests
     [Fact]
     public void ComputeCorrection_DegenerateDirectionAndZeroWeight_ReturnIdentity()
     {
-        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 0.2f).Y;
+        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 0.2f).Y;
 
         Quaternion degenerate = ShoulderCorrectionComputer.ComputeCorrection(
             Vector3.Zero,
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 1.2f,
             maxOverheadElevationBoost: 0.4f,
@@ -64,7 +65,7 @@ public sealed class ShoulderCorrectionComputerTests
 
         Quaternion zeroWeight = ShoulderCorrectionComputer.ComputeCorrection(
             new Vector3(0.6f, 0.7f, 0.4f).Normalized(),
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 1.2f,
             maxOverheadElevationBoost: 0.4f,
@@ -83,11 +84,11 @@ public sealed class ShoulderCorrectionComputerTests
     public void ComputeCorrection_IncreasesAngleAsWeightIncreases()
     {
         Vector3 armDirection = new Vector3(0.35f, 0.78f, 0.52f).Normalized();
-        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 0.2f).Y;
+        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 0.2f).Y;
 
         Quaternion lowWeight = ShoulderCorrectionComputer.ComputeCorrection(
             armDirection,
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 1.1f,
             maxOverheadElevationBoost: 0.35f,
@@ -97,7 +98,7 @@ public sealed class ShoulderCorrectionComputerTests
 
         Quaternion highWeight = ShoulderCorrectionComputer.ComputeCorrection(
             armDirection,
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 1.1f,
             maxOverheadElevationBoost: 0.35f,
@@ -119,11 +120,11 @@ public sealed class ShoulderCorrectionComputerTests
     public void ComputeCorrection_ForwardElevationDampingReducesElevation()
     {
         Vector3 armDirection = new Vector3(0.1f, 0.82f, 0.56f).Normalized();
-        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 0.2f).Y;
+        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 0.2f).Y;
 
         Quaternion noDamping = ShoulderCorrectionComputer.ComputeCorrection(
             armDirection,
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 1.1f,
             maxOverheadElevationBoost: 0.2f,
@@ -133,7 +134,7 @@ public sealed class ShoulderCorrectionComputerTests
 
         Quaternion fullDamping = ShoulderCorrectionComputer.ComputeCorrection(
             armDirection,
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 1.1f,
             maxOverheadElevationBoost: 0.2f,
@@ -155,11 +156,11 @@ public sealed class ShoulderCorrectionComputerTests
     public void ComputeCorrection_OverheadBoostIncreasesCorrectionForOverheadPose()
     {
         Vector3 armDirection = new Vector3(0.04f, 0.999f, 0.02f).Normalized();
-        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 0.25f).Y;
+        float neutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 0.25f).Y;
 
         Quaternion withoutBoost = ShoulderCorrectionComputer.ComputeCorrection(
             armDirection,
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 0.9f,
             maxOverheadElevationBoost: 0f,
@@ -169,7 +170,7 @@ public sealed class ShoulderCorrectionComputerTests
 
         Quaternion withBoost = ShoulderCorrectionComputer.ComputeCorrection(
             armDirection,
-            ArmSide.Right,
+            LimbSide.Right,
             neutralY,
             maxElevationAngle: 0.9f,
             maxOverheadElevationBoost: 0.45f,
@@ -193,12 +194,12 @@ public sealed class ShoulderCorrectionComputerTests
         Vector3 rightDirection = new Vector3(0.62f, 0.57f, 0.54f).Normalized();
         Vector3 leftDirection = new Vector3(-0.62f, 0.57f, 0.54f).Normalized();
 
-        float rightNeutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Right, 0.2f).Y;
-        float leftNeutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(ArmSide.Left, 0.2f).Y;
+        float rightNeutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Right, 0.2f).Y;
+        float leftNeutralY = ShoulderCorrectionComputer.ComputeAnatomicalNeutralDirection(LimbSide.Left, 0.2f).Y;
 
         Quaternion right = ShoulderCorrectionComputer.ComputeCorrection(
             rightDirection,
-            ArmSide.Right,
+            LimbSide.Right,
             rightNeutralY,
             maxElevationAngle: 1.15f,
             maxOverheadElevationBoost: 0.35f,
@@ -208,7 +209,7 @@ public sealed class ShoulderCorrectionComputerTests
 
         Quaternion left = ShoulderCorrectionComputer.ComputeCorrection(
             leftDirection,
-            ArmSide.Left,
+            LimbSide.Left,
             leftNeutralY,
             maxElevationAngle: 1.15f,
             maxOverheadElevationBoost: 0.35f,

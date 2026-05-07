@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.IK.Anchors;
@@ -43,12 +44,12 @@ public partial class ArmPoleAnchorSetResource : Resource
     /// <param name="vector">The input body-space vector.</param>
     /// <param name="side">The side to evaluate.</param>
     /// <returns>
-    /// <c>(-x, y, z)</c> for <see cref="ArmSide.Left"/>, otherwise the vector unchanged.
+    /// <c>(-x, y, z)</c> for <see cref="LimbSide.Left"/>, otherwise the vector unchanged.
     /// </returns>
     [SuppressMessage("Performance", "CA1822:Mark members as static")]
-    public Vector3 MirrorXForSide(Vector3 vector, ArmSide side)
+    public Vector3 MirrorXForSide(Vector3 vector, LimbSide side)
     {
-        return side == ArmSide.Left
+        return side == LimbSide.Left
             ? new Vector3(-vector.X, vector.Y, vector.Z)
             : vector;
     }

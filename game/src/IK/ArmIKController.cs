@@ -1,23 +1,8 @@
+using AlleyCat.Common;
 using AlleyCat.IK.Anchors;
 using Godot;
 
 namespace AlleyCat.IK;
-
-/// <summary>
-/// Which arm this controller drives.
-/// </summary>
-public enum ArmSide
-{
-    /// <summary>
-    /// The left arm.
-    /// </summary>
-    Left,
-
-    /// <summary>
-    /// The right arm.
-    /// </summary>
-    Right
-}
 
 /// <summary>
 /// Computes elbow pole-target positions each frame for VR arm IK.
@@ -53,7 +38,7 @@ public partial class ArmIKController : SkeletonModifier3D
     /// Which arm this controller drives.
     /// </summary>
     [Export]
-    public ArmSide Side
+    public LimbSide Side
     {
         get; set;
     }
@@ -538,7 +523,7 @@ public partial class ArmIKController : SkeletonModifier3D
         _leftShoulderIdx = skeleton.FindBone("LeftShoulder");
         _rightShoulderIdx = skeleton.FindBone("RightShoulder");
 
-        string sidePrefix = Side == ArmSide.Left ? "Left" : "Right";
+        string sidePrefix = Side == LimbSide.Left ? "Left" : "Right";
 
         _shoulderIdx = skeleton.FindBone($"{sidePrefix}Shoulder");
         _upperArmIdx = skeleton.FindBone($"{sidePrefix}UpperArm");
@@ -755,7 +740,7 @@ public partial class ArmIKController : SkeletonModifier3D
 
         if (polePerpendicular.LengthSquared() < DegenerateThreshold)
         {
-            Vector3 lateral = Side == ArmSide.Left ? -bodyRight : bodyRight;
+            Vector3 lateral = Side == LimbSide.Left ? -bodyRight : bodyRight;
             polePerpendicular = ProjectPerpendicular(lateral, directionToHand);
         }
 

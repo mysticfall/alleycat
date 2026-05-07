@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.IK.Anchors.Authoring;
@@ -37,11 +38,11 @@ public partial class ArmPoleAnchorSetAuthoringRoot : Node3D
     /// Gets or sets which side the authored poses represent.
     /// </summary>
     [Export]
-    public ArmSide AuthoredSide
+    public LimbSide AuthoredSide
     {
         get;
         set;
-    } = ArmSide.Right;
+    } = LimbSide.Right;
 
     /// <summary>
     /// Gets or sets the output resource path to write.
@@ -217,7 +218,7 @@ public partial class ArmPoleAnchorSetAuthoringRoot : Node3D
 
             Vector3 poleIntent = polePerpendicular.Normalized();
 
-            if (AuthoredSide == ArmSide.Left)
+            if (AuthoredSide == LimbSide.Left)
             {
                 armDirBody = MirrorX(armDirBody);
                 poleIntent = MirrorX(poleIntent);
@@ -263,7 +264,7 @@ public partial class ArmPoleAnchorSetAuthoringRoot : Node3D
             $"to '{OutputResourcePath}' (AuthoredSide={AuthoredSide}, Epsilon={WeightEpsilonRadians:0.####}, ReachWeight={ReachWeight:0.####}).");
     }
 
-    private bool TryResolveRequiredBones(Skeleton3D skeleton, ArmSide side, out BoneIndices bones)
+    private bool TryResolveRequiredBones(Skeleton3D skeleton, LimbSide side, out BoneIndices bones)
     {
         bones = new BoneIndices
         {
@@ -273,7 +274,7 @@ public partial class ArmPoleAnchorSetAuthoringRoot : Node3D
             RightShoulder = skeleton.FindBone("RightShoulder")
         };
 
-        string sidePrefix = side == ArmSide.Left ? "Left" : "Right";
+        string sidePrefix = side == LimbSide.Left ? "Left" : "Right";
 
         bones.Shoulder = skeleton.FindBone($"{sidePrefix}Shoulder");
         bones.UpperArm = skeleton.FindBone($"{sidePrefix}UpperArm");

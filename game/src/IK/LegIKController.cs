@@ -1,22 +1,7 @@
+using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.IK;
-
-/// <summary>
-/// Which leg this controller drives.
-/// </summary>
-public enum LegSide
-{
-    /// <summary>
-    /// The left leg.
-    /// </summary>
-    Left,
-
-    /// <summary>
-    /// The right leg.
-    /// </summary>
-    Right,
-}
 
 /// <summary>
 /// Computes and applies per-leg knee pole-target placement before
@@ -52,7 +37,7 @@ public partial class LegIKController : SkeletonModifier3D
     /// Side assignment for this per-leg controller instance.
     /// </summary>
     [Export]
-    public LegSide Side
+    public LimbSide Side
     {
         get;
         set;
@@ -154,7 +139,7 @@ public partial class LegIKController : SkeletonModifier3D
 
         _skeleton = skeleton;
 
-        string sidePrefix = Side == LegSide.Left ? "Left" : "Right";
+        string sidePrefix = Side == LimbSide.Left ? "Left" : "Right";
 
         _upperLegIdx = skeleton.FindBone($"{sidePrefix}UpperLeg");
         _lowerLegIdx = skeleton.FindBone($"{sidePrefix}LowerLeg");

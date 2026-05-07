@@ -1,3 +1,4 @@
+using AlleyCat.Common;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
@@ -36,30 +37,14 @@ public abstract partial class Transcriber : Node
     public delegate void TranscriptionFailedEventHandler(string error);
 
     /// <summary>
-    /// Selects which XR hand-controller triggers microphone recording.
-    /// </summary>
-    public enum RecordingHand
-    {
-        /// <summary>
-        /// Left-hand XR controller.
-        /// </summary>
-        Left,
-
-        /// <summary>
-        /// Right-hand XR controller.
-        /// </summary>
-        Right
-    }
-
-    /// <summary>
     /// XR controller hand used for microphone recording.
     /// </summary>
     [Export]
-    public RecordingHand RecordHand
+    public LimbSide RecordHand
     {
         get;
         set;
-    } = RecordingHand.Left;
+    } = LimbSide.Left;
 
     /// <summary>
     /// XR action button used to begin and end microphone capture.
@@ -295,7 +280,7 @@ public abstract partial class Transcriber : Node
 
         DisconnectController();
 
-        _recordController = RecordHand == RecordingHand.Left
+        _recordController = RecordHand == LimbSide.Left
             ? xrManager.Runtime.LeftHandController
             : xrManager.Runtime.RightHandController;
 

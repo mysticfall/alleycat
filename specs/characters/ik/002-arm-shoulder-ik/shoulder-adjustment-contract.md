@@ -62,7 +62,7 @@ full overhead reach while preserving the T-pose baseline as the neutral referenc
 
 | Parameter | Type | Default | Description |
 | --------- | ---- | ------- | ----------- |
-| `Side` | `ArmSide` | — | Arm instance to process (same enum used by `ArmIKController`). |
+| `Side` | `LimbSide` | — | Arm instance to process (uses `LimbSide` enum from `AlleyCat.Common`). |
 | `ShoulderWeight` | `float` | 0.2 | Overall strength applied to shoulder correction component blend. |
 | `AnatomicalNeutralLateralBias` | `float` | 0.15 | Lateral offset added to anatomical neutral pose in body basis. |
 | `MaxElevationAngleDegrees` | `float` | 160 | Maximum elevation angle from neutral in degrees. |
