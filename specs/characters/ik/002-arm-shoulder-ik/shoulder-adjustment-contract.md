@@ -4,83 +4,57 @@ title: Shoulder Correction Contract
 
 # Shoulder Correction Contract
 
-## Purpose
+## Requirement
 
-Define the shoulder-correction contract for IK-002: pre-IK correction behaviour integrated into `ArmIKController`,
+Define the shoulder-correction contract for IK-002: pre-IK correction behaviour,
 parameterisation, ordering, and testability requirements.
 
-## Contract Scope
+## Goal
 
-- Shoulder correction inside `ArmIKController` before arm IK solve.
-- Anatomical decomposition into elevation and protraction components using pose/body-basis reference.
-- Side-aware signed contribution with configurable sign conventions.
-- Exported parameter behaviour for per-instance tuning.
-- Shoulder-specific testability and deterministic behaviour requirements.
+Prevent visible deformation at the shoulder joint, preserve natural silhouette
+in high-elevation and behind-body poses, and enable raised-overhead poses to
+exceed T-pose shoulder lift while preserving the T-pose baseline.
 
-## Shoulder Correction Placement
+## User Requirements
 
-`ArmIKController` is the execution point for shoulder correction. Per arm, it applies corrective shoulder rotation, then
-updates pole-target prediction for the downstream `TwoBoneIK3D` solve.
+- Shoulder correction must prevent visible deformation during arm movement.
+- Natural silhouette must be preserved in high-elevation and behind-body poses.
+- Raised-overhead poses must exceed T-pose shoulder lift while preserving the
+  T-pose baseline as the neutral reference.
+- Forward-reached arm poses must not appear over-corrected.
 
-The correction exists to:
+## Technical Requirements
 
-- Prevent visible deformation at the shoulder joint.
-- Preserve natural silhouette in high-elevation and behind-body poses.
-- Enable raised-overhead poses to exceed T-pose shoulder lift while preserving T-pose baseline.
+### Execution Point
 
-## Correction Mechanism
-
-Correction uses anatomical decomposition in body-basis space rather than rest-relative delta. The computation is performed by
-`ShoulderCorrectionComputer` and consumed by `ArmIKController`.
+`ArmIKController` is the execution point for shoulder correction. Each instance
+applies corrective shoulder rotation before the downstream `TwoBoneIK3D` solve.
 
 ### Anatomical Decomposition
 
-1. **Body Basis Derivation**: Derive body-local basis each frame from skeleton landmarks:
-   - **Up**: `Hips` → `Neck` direction in world space.
-   - **Right**: `LeftShoulder` → `RightShoulder` direction, orthonormalised against up.
-   - **Forward**: cross product of right and up.
+Shoulder orientation must be decomposed into elevation and protraction components
+using body-basis reference, not rest-relative delta:
 
-2. **Shoulder Plane Decomposition**: Decompose shoulder orientation into two anatomical components in body basis:
-   - **Elevation**: upward rotation from anatomical neutral (arms-at-sides), measured in the shoulder plane.
-   - **Protraction**: forward reach rotation from anatomical neutral, measured orthogonal to elevation.
+- **Elevation**: upward rotation from anatomical neutral, measured in the shoulder
+  plane.
+- **Protraction**: forward reach rotation from anatomical neutral, measured
+  orthogonal to elevation.
 
-3. **Side-Aware Sign Application**: Apply signed contributions based on arm side:
-   - Left arm: elevation and protraction use standard sign orientation.
-   - Right arm: elevation and protraction signs are mirrored to maintain symmetric anatomical behaviour.
+### Side-Aware Sign Application
 
-### Forward Elevation Damping
+Signed contributions must be applied based on arm side:
 
-Elevated arm poses in front of the body (forward reach) receive reduced correction weight to preserve
-natural player experience. This damping prevents over-correction during active reaching poses.
+- Left arm uses standard sign orientation.
+- Right arm mirrors elevation and protraction signs to maintain symmetric
+  anatomical behaviour.
 
-### Overhead Elevation Boost
+### Placement and Ordering
 
-Raised-overhead poses can exceed the T-pose shoulder lift baseline through an additive boost. This enables
-full overhead reach while preserving the T-pose baseline as the neutral reference point.
+`ArmIKController` must extend `SkeletonModifier3D` and be a direct child of
+`Skeleton3D`.
 
-## Exported Parameters
-
-| Parameter | Type | Default | Description |
-| --------- | ---- | ------- | ----------- |
-| `Side` | `LimbSide` | — | Arm instance to process (uses `LimbSide` enum from `AlleyCat.Common`). |
-| `ShoulderWeight` | `float` | 0.2 | Overall strength applied to shoulder correction component blend. |
-| `AnatomicalNeutralLateralBias` | `float` | 0.15 | Lateral offset added to anatomical neutral pose in body basis. |
-| `MaxElevationAngleDegrees` | `float` | 160 | Maximum elevation angle from neutral in degrees. |
-| `MaxProtractionAngleDegrees` | `float` | 20 | Maximum protraction angle from neutral in degrees. |
-| `ForwardElevationDamping` | `float` | 0.3 | Multiplier applied to elevation when arm is forward-reached. |
-| `MaxOverheadElevationBoostDegrees` | `float` | 120 | Additional elevation boost for overhead poses in degrees. |
-
-> **Note:** Default values reflect initial implementation tuning. Values may require character-specific adjustment and should be
-> treated as illustrative rather than normative. All parameters are exported on `ArmIKController` and must be configurable per
-> instance in the Godot editor.
-
-`Side` must be set before the node enters the scene tree. Runtime arm-side switching is not required.
-
-## Placement And Ordering
-
-`ArmIKController` extends `SkeletonModifier3D` and must be a direct child of `Skeleton3D`.
-
-Shoulder correction must run within each controller before the arm `TwoBoneIK3D` nodes. Required sequence:
+Shoulder correction must run within each controller before arm `TwoBoneIK3D`
+nodes. Required sequence:
 
 1. `ArmIKController` (left)
 2. `ArmIKController` (right)
@@ -88,34 +62,46 @@ Shoulder correction must run within each controller before the arm `TwoBoneIK3D`
 4. `TwoBoneIK3D` (right)
 5. `CopyTransformModifier3D`
 
-Each `ArmIKController` instance processes one side only, based on `Side`.
+Each `ArmIKController` instance processes one side only, based on the `Side`
+parameter.
 
-## Testability Requirement
+### Testability Requirement
 
-`ShoulderCorrectionComputer` must exist as a static helper with no Godot scene-tree dependencies.
-
-It provides pure math helpers for:
-
-- Body-basis derivation from skeleton landmarks.
-- Shoulder plane decomposition into elevation and protraction components.
-- Signed component application based on arm side.
-- Forward elevation damping computation.
-- Overhead elevation boost computation.
-- Clamped component angle application using MaxElevationAngleDegrees and MaxProtractionAngleDegrees.
+`ShoulderCorrectionComputer` must exist as a static helper with no Godot scene-tree
+dependencies. It provides pure math helpers for body-basis derivation, shoulder
+plane decomposition, signed component application, damping computation, boost
+computation, and clamped angle application.
 
 Dedicated C# unit tests in `@tests/src/IK/` must validate known input/output pairs.
 
-## Acceptance Criteria Coverage
+### Parameter Export Requirements
+
+All configurable parameters must be exported on `ArmIKController` and be
+configurable per instance in the Godot editor. The `Side` parameter must be set
+before the node enters the scene tree.
+
+## In Scope
+
+- Shoulder correction inside `ArmIKController` before arm IK solve.
+- Anatomical decomposition into elevation and protraction components.
+- Side-aware signed contribution with configurable sign conventions.
+- Forward elevation damping for forward-reached poses.
+- Overhead elevation boost for raised-overhead poses.
+- Parameter export for per-instance tuning.
+- Shoulder-specific testability and deterministic behaviour.
+
+## Out Of Scope
+
+- Exact threshold numbers or final tuning constants (deferred to implementation
+  tuning).
+- Runtime arm-side switching after scene tree entry (not required).
+- Character-specific parameter adjustment (deferred to character setup).
+
+## Acceptance Criteria
 
 This contract defines details for:
 
-- AC-06
-- AC-11
-- AC-12
-- AC-13
-- AC-14
-- AC-15
-- AC-16
+- AC-06, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16
 
 Source-of-truth criteria wording is maintained in [IK-002 Overview](index.md#acceptance-criteria).
 

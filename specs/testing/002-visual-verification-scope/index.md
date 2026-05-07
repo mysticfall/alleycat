@@ -7,27 +7,27 @@ title: Visual Verification Scope
 
 ## Requirement
 
-Provide AI agents with a practical, repeatable workflow for validating visual behaviour when logic assertions alone are
-insufficient.
+Provide AI agents with a practical, repeatable workflow for validating visual behaviour when logic assertions
+alone are insufficient.
 
 ## Goal
 
-Standardise a photobooth-based verification process where C# integration tests are the primary acceptance mechanism and
-screenshots serve as a diagnostic aid.
+Standardise a photobooth-based verification process where C# integration tests are the primary acceptance
+mechanism and screenshots serve as a diagnostic aid.
 
 ## User Requirements
 
-1. Contributors and agents must be able to verify visual feature intent using a repeatable workflow rather than ad-hoc
-   screenshot runs.
+1. Contributors and agents must be able to verify visual feature intent using a repeatable workflow rather
+   than ad-hoc screenshot runs.
 2. Verification handoffs must include enough artefacts for reviewers to understand what was checked.
 3. Visual evidence should support debugging when assertions fail, without replacing objective test assertions.
 
 ## Technical Requirements
 
 1. Visual verification must use reusable photobooth test scenes and scripted scenario capture.
-2. Camera/marker framing validation must happen before feature-level capture.
+2. Camera and marker framing validation must happen before feature-level capture.
 3. C# integration assertions must remain the primary acceptance gate for the same behaviour under test.
-4. Handoff artefacts must include scene/runner/output/test paths needed for reproducibility.
+4. Handoff artefacts must include scene, runner, output, and test paths needed for reproducibility.
 
 ## In Scope
 
@@ -42,41 +42,43 @@ screenshots serve as a diagnostic aid.
 ## Out Of Scope
 
 - Subjective art-direction judgement (mood, atmosphere, style preference).
-- Replacing existing logic/unit/integration tests that already validate behaviour sufficiently.
+- Replacing existing logic, unit, or integration tests that already validate behaviour sufficiently.
 - One-off screenshot workflows that skip reusable test-scene setup.
 
 ## Workflow Contract
 
-1. **Create A Test Scene (Photobooth)**
+1. **Create a test scene (Photobooth)**
    - Inherit a suitable base under `@game/assets/...` when available.
    - Default base: `@game/assets/testing/photobooth/photobooth.tscn`.
    - Save feature verification scene under `@game/tests/<feature>/...`.
-2. **Verify Cameras And Markers First**
+2. **Verify cameras and markers first**
    - Add markers via Photobooth API.
    - Capture per-camera framing screenshots before feature-level verification.
    - Confirm required subject regions and markers are visible for the intended checks.
-3. **Add C# Integration Coverage**
+3. **Add C# integration coverage**
    - C# integration tests are the **primary** verification mechanism.
    - Load the same test scene in C# integration tests.
    - Assert non-visual equivalents (pole-target direction, bone positions, transform bounds).
-   - When assertions fail, capture screenshots from relevant cameras using `Object.Call()` to invoke GDScript
-     `Photobooth`/`CameraRig` methods.
-4. **Run Feature Scenarios For Diagnostic Screenshots**
+   - When assertions fail, capture screenshots from relevant cameras using `Object.Call()` to invoke
+     GDScript `Photobooth` or `CameraRig` methods.
+4. **Run feature scenarios for diagnostic screenshots**
    - Use a runner script with the same base name as the test scene (`.tscn` + `.gd`).
    - Apply scenario states and capture screenshots with `Photobooth.capture_screenshots(...)`.
-   - The GDScript runner produces multi-camera screenshots for all scenarios, but these serve as a **diagnostic aid**
-     reviewed when C# tests fail — they are not the primary acceptance gate.
+   - The GDScript runner produces multi-camera screenshots for all scenarios, but these serve as a
+     **diagnostic aid** reviewed when C# tests fail — they are not the primary acceptance gate.
 
 ## Acceptance Criteria
 
-1. The specification defines both user-facing verification workflow outcomes and technical implementation contracts.
+1. The specification defines both user-facing verification workflow outcomes and technical implementation
+   contracts.
 2. Visual-verification tasks use the workflow contract above unless a spec explicitly overrides it.
-3. Verification scenes are reusable, stored under `@game/tests/<feature>/...`, and based on an appropriate photobooth
-   inheritance chain.
-4. Camera/marker framing validation is completed before feature-level screenshot review.
-5. C# non-visual assertions are the primary verification mechanism; screenshot evidence serves as a diagnostic aid when
-   assertions fail.
-6. Handoffs include test-scene path, runner script path, screenshot output location, and C# integration test location.
+3. Verification scenes are reusable, stored under `@game/tests/<feature>/...`, and based on an appropriate
+   photobooth inheritance chain.
+4. Camera and marker framing validation is completed before feature-level screenshot review.
+5. C# non-visual assertions are the primary verification mechanism; screenshot evidence serves as a
+   diagnostic aid when assertions fail.
+6. Handoffs include test-scene path, runner script path, screenshot output location, and C# integration
+   test location.
 
 ## References
 

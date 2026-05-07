@@ -7,17 +7,17 @@ title: Kneeling Pose State
 
 ## Requirement
 
-Define the implementation contract for the Kneeling pose state, including animation control, transition triggers from standing, and locomotion permission output.
+Define the implementation contract for the kneeling pose state: trigger model, animation control, and locomotion output.
 
 ## Goal
 
-Provide detailed behaviour requirements for the kneeling pose, including the armed-then-retreat transition model, animation state management, and movement restrictions.
+Deliver kneeling behaviour: armed-then-retreat trigger model, transition constraints, movement limits.
 
 ## User Requirements
 
 1. Players must be able to transition from crouching to kneeling using an armed-then-retreat trigger model.
 2. The Standing→Kneeling transition must require a crouch-depth gate before kneeling becomes reachable.
-3. Following any kneeling transition, both transition directions must remain locked until the forward-axis offset returns to near the baseline.
+3. After kneeling, both transition directions stay locked until forward-axis returns to baseline.
 4. Players must have movement restricted while in the kneeling pose (rotation remains allowed).
 5. Players must retain rotation capability while kneeling.
 
@@ -29,34 +29,26 @@ Provide detailed behaviour requirements for the kneeling pose, including the arm
    - The trigger input is the forward-axis offset from the pose-neutral or full-crouch baseline.
    - The transition becomes armed after sufficient forward travel from the full-crouch baseline.
    - The transition fires only after retreating from the armed peak by a configurable amount.
-2. The Standing→Kneeling transition is additionally gated by a crouch-depth threshold that must be satisfied before the transition can trigger.
+2. The Standing→Kneeling transition additionally requires a crouch-depth threshold before triggering.
 3. The Kneeling→Standing return transition uses the same armed-then-retreat model, providing bidirectional transitions.
-4. Following any kneeling transition, both transition directions remain locked until the forward-axis offset returns near the neutral or full-crouch baseline.
+4. After kneeling, transitions stay locked until forward-axis returns near the baseline.
 5. Kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres.
-6. At minimum, the head-height measure from rest pose (`RestHeadHeight`) defines the reference for the normalised crouch-depth gate.
+6. The crouch-depth gate uses at minimum the head-height measure from rest pose (`RestHeadHeight`).
 
 ### Animation Control
 
-7. The kneeling pose (KneelingEnter, Kneeling, KneelingExit) is authored as separate AnimationTree state-machine nodes using normal animation playback.
-8. The AnimationTree uses authored auto-advance for transition clips rather than per-tick TimeSeek scrubbing.
-9. Transition Resources own AnimationTree travel into authored transition states when they fire.
-
-### Transition Lifecycle
-
-10. Transition Resources must support optional lifecycle hooks invoked in this order around a state switch:
-    `OnTransitionEnter` → state `OnExit` → state `OnEnter` → `OnTransitionExit`.
-11. The state machine must emit a state-changed observation so consumers can react.
+7. The kneeling pose uses AnimationTree state-machine nodes with authored auto-advance transitions.
+8. The pose state machine emits state-changed observations for consumer reaction.
 
 ### Locomotion Permissions
 
-12. The kneeling pose returns `LocomotionPermissions.RotationOnly` (blocks movement, allows rotation).
-13. The pose-state-machine implements `ILocomotionPermissionSource` and delegates to the active pose state.
-14. Each pose state provides `GetLocomotionPermissions(PoseStateContext)` that returns appropriate permissions.
+9. Kneeling returns `LocomotionPermissions.RotationOnly`: blocks movement, allows rotation.
+10. The pose-state-machine exposes locomotion permissions by delegating to the active pose state.
 
 ### Parameters
 
-15. Tunable parameters use flexible ratios (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
-16. Configuration parameters include:
+11. Tunable parameters use flexible ratios (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
+12. Configuration parameters include:
     - Armed threshold for forward travel
     - Retreat threshold for firing
     - Neutral return max offset ratio for transition lockout
@@ -86,7 +78,7 @@ Provide detailed behaviour requirements for the kneeling pose, including the arm
 | AC-K-02 | Crouch-depth gate must be satisfied before kneeling transition triggers. | User + Technical |
 | AC-K-03 | Transition lockout persists until forward-axis returns to baseline. | User + Technical |
 | AC-K-04 | Kneeling returns `LocomotionPermissions.RotationOnly`. | User + Technical |
-| AC-K-05 | Kneeling animation uses authored auto-advance for transitions, not TimeSeek. | Technical |
+| AC-K-05 | Kneeling animation uses AnimationTree state-machine with authored auto-advance. | Technical |
 | AC-K-06 | Transition thresholds use normalised ratios from rest-pose body measures. | Technical |
 | AC-K-07 | Players can transition from kneeling back to standing using armed-then-retreat model. | User |
 

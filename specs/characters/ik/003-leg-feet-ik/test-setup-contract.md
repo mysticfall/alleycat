@@ -4,35 +4,35 @@ title: Leg-Feet IK Test Setup Contract
 
 # Leg-Feet IK Test Setup Contract
 
-## Purpose
+## Requirement
 
-Define the IK-003 verification-scene and test-harness contract, including lower-body photobooth inheritance and
-`BoneAttachment3D` hips override behaviour.
+Define the IK-003 verification-scene and test-harness contract for leg-feet inverse kinematics validation.
 
-## Contract Scope
+## Goal
 
-- Verification scene inheritance and required file layout under `@game/tests/characters/ik/`.
-- Required lower-body pose scenarios for visual and non-visual checks.
-- Hips mobility harness using `BoneAttachment3D` override bone position without animation.
-- Integration-test expectations aligned with IK-002-style validation flow.
+Enable repeatable verification of leg-feet IK behaviour through a photobooth-based test scene with hips-override
+capability and defined pose scenarios.
 
-## Verification Scene Basis
+## User Requirements
 
-The IK-003 verification scene must inherit from:
+Visual validation must make knee bend-plane behaviour and foot correction behaviour observable from inherited
+cameras.
 
-- `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`
+## Technical Requirements
+
+### Verification Scene Basis
+
+The IK-003 verification scene must inherit from `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`.
 
 Required test artefacts:
 
 - Scene: `@game/tests/characters/ik/leg_feet_ik_test.tscn`
-- Runner script (same base name): `@game/tests/characters/ik/leg_feet_ik_test.gd`
+- Runner script: `@game/tests/characters/ik/leg_feet_ik_test.gd`
 
-## Hips Override Harness
+### Hips Override Harness
 
-The verification scene must include a `BoneAttachment3D` bound to the hips bone and configured to allow explicit hips
+The verification scene must include a `BoneAttachment3D` bound to the hips bone, configured to allow explicit
 position override without animation playback.
-
-The harness exists to validate IK response when pelvis position is manually offset in test scenarios.
 
 Contract requirements:
 
@@ -40,36 +40,42 @@ Contract requirements:
 2. Hips override works while animation does not drive the same transform.
 3. Required pose scenarios include at least one non-neutral hips offset state.
 
-## Required Pose Coverage
+### Required Pose Coverage
 
-At minimum, test scenarios must cover:
+Test scenarios must cover:
 
-- Neutral standing lower-body pose (to exercise primary geometric method).
-- Forward foot placement variation.
-- Outward/inward foot rotation variation (to exercise forward-dot-driven forward/up axis interpolation during fallback).
-- A hips-offset pose via `BoneAttachment3D` override (to exercise primary geometric method under different geometry).
-- **Degenerate pose scenario**: A pose that triggers fallback mode (animation-derived direction too short or near-zero).
+1. Neutral standing lower-body pose (primary geometric method).
+2. Forward foot placement variation.
+3. Outward/inward foot rotation variation (forward-dot-driven forward/up axis interpolation during fallback).
+4. Hips-offset pose via `BoneAttachment3D` override (geometric method under different geometry).
+5. Degenerate pose scenario: triggers fallback mode (animation-derived direction too short or near-zero).
 
-Exact marker values are implementation-defined, but each scenario must have stable reproducible setup in scene data.
-
-## Validation Workflow
-
-### Visual Validation
-
-- Runner performs capture scenarios following `@specs/testing/002-visual-verification-scope/index.md`.
-- Captures must make knee bend-plane behaviour and foot correction behaviour observable from inherited cameras.
+Marker values are implementation-defined; each scenario must have stable reproducible setup.
 
 ### Non-Visual Validation
 
-A C# integration test must load the same scene and assert:
+A C# integration test must load the scene and assert:
 
 - Pole-direction continuity under continuous foot rotation changes.
-- Solve-to-target runtime behaviour with provided foot targets consumed as goal inputs.
-- Foot target transform immutability across IK runtime updates (targets remain read-only inputs).
+- Solve-to-target runtime behaviour with foot targets consumed as goal inputs.
+- Foot target transform immutability across IK runtime updates (targets remain read-only).
 - Stable behaviour under hips-override scenarios.
-- Corner-case response: the system responds deterministically to degenerate animation geometries without unstable behaviour.
+- Deterministic corner-case response to degenerate animation geometries.
 
-## Acceptance Criteria Coverage
+## In Scope
+
+- Verification scene inheritance from lower-body photobooth template.
+- Lower-body pose scenarios for visual and non-visual checks.
+- Hips mobility harness using `BoneAttachment3D` override.
+- Integration-test expectations aligned with IK-002-style validation flow.
+
+## Out Of Scope
+
+- Specific threshold values for IK solver parameters.
+- Runtime performance benchmarking.
+- Character animation authoring beyond test pose scenarios.
+
+## Acceptance Criteria
 
 This contract defines details for:
 

@@ -7,67 +7,74 @@ title: Reusable Neck-Spine CCDIK Setup
 
 ## Requirement
 
-Provide a reusable character IK setup that uses Godot `CCDIK3D` to adjust neck-spine bones towards a target head
-position with constrained, natural-looking motion.
+Provide a reusable character IK setup using Godot `CCDIK3D` to adjust neck-spine bones
+towards a target head position with constrained, natural-looking motion.
 
 ## Goal
 
-Define a spec-first, testable contract for implementing and verifying a reusable neck-spine IK scene that can be
+Define a spec-first, testable contract for a reusable neck-spine IK scene that can be
 instantiated across character setups.
 
 ## User Requirements
 
-1. Players should see neck and spine motion that follows head intent without implausible twisting.
-2. Neck/spine behaviour should remain visually stable across representative head-target poses.
+1. Players should see neck and spine motion that follows head intent without implausible
+   twisting.
+2. Neck/spine behaviour should remain visually stable across representative head-target
+   poses.
 
 ## Technical Requirements
 
-1. Implementation must define a reusable `CCDIK3D` neck-spine setup with explicit joint constraints.
+1. Implementation must define a reusable `CCDIK3D` neck-spine setup with explicit joint
+   constraints.
 2. Consuming scenes must provide head targets externally so the reusable setup remains portable.
-3. Verification workflow must include photobooth visual checks and C# non-visual integration assertions.
+3. Verification workflow must include photobooth visual checks and C# non-visual
+   integration assertions.
 
 ## In Scope
 
-- A `CCDIK3D`-based neck-spine IK chain configured to drive relevant neck and spine bones towards a provided head target
+- A `CCDIK3D`-based neck-spine IK chain driving neck and spine bones towards a head target
   position.
-- Joint constraint configuration for the IK chain to prevent implausible neck/spine rotations.
+- Joint constraint configuration to prevent implausible neck/spine rotations.
 - A standalone reusable IK setup scene for reuse in character scenes.
-- Visual verification using the reference character scene and representative target head positions.
+- Visual verification using reference character scene and representative target head poses.
 
 ## Out Of Scope
 
 - Full-body IK, limb IK, locomotion blending, or animation state machine design.
 - Retargeting rigs across different skeleton topologies.
 - Physics-based secondary motion (for example, spring bones or ragdoll behaviour).
-- Subjective animation polish beyond objective natural-pose checks defined in this spec.
+- Subjective animation polish beyond objective natural-pose checks in acceptance criteria.
 
 ## Acceptance Criteria
 
-1. The specification defines both user-visible motion outcomes and technical implementation contracts.
-2. The implementation uses a Godot `CCDIK3D` node to drive neck-spine adjustment towards a target head position supplied
-   by the consuming scene.
-3. The reusable IK scene includes explicit joint constraints on the neck-spine chain (serialised as joint limitations in
-   the saved `CCDIK3D` settings) to keep rotations within plausible ranges.
-4. The IK configuration is saved as a reusable scene at `@game/assets/characters/ik/neck_spine_ccdik.tscn`, with the
-   target node left unbound in the reusable scene so consuming scenes provide/bind the head target externally.
-5. A photobooth verification scene that inherits
-   `@game/assets/testing/photobooth/templates/full_body_5_cams.tscn` exists at:
-    - scene: `@game/tests/characters/ik/neck_spine_ccdik_test.tscn`
-    - runner script (same base name): `@game/tests/characters/ik/neck_spine_ccdik_test.gd`
-6. The verification scene defines target markers for visual and non-visual checks using `DebugMarker` for each required
-   pose.
-7. Visual checks cover both moderate and extreme target poses at minimum:
-    - forward, left, right, up, down,
-    - stoop-forward (head target down + forward),
-    - lean-back (head target up + back).
-8. Before feature-level pose capture, the runner performs a camera/marker framing pass (per-camera captures) to confirm
-   required markers and subject regions are visible from the inherited camera rigs.
-9. The runner executes pose scenarios and captures screenshots for all required poses using
-   `Photobooth.capture_screenshots(...)`.
-10. Visual checks confirm the resulting pose remains natural without obvious over-rotation, inversion, or discontinuous
-   neck-spine deformation across all required target poses.
-11. A C# integration test loads the same verification scene and validates the neck-spine IK behaviour using non-visual
-    assertions (for example target proximity/transform checks against the defined markers).
+1. The spec defines both user-visible motion outcomes and technical implementation
+   contracts. (TRACES UR-1, UR-2, TR-1, TR-2)
+2. The implementation uses a Godot `CCDIK3D` node to drive neck-spine adjustment
+   towards a target head position supplied by the consuming scene. (TRACES TR-1,
+   TR-2)
+3. The reusable IK scene includes explicit joint constraints on the neck-spine
+   chain (serialised in saved `CCDIK3D` settings) to keep rotations within plausible
+   ranges. (TRACES TR-1, TR-3)
+4. The IK configuration is saved as a reusable scene at
+   `@game/assets/characters/ik/neck_spine_ccdik.tscn`, with the target node left
+   unbound so consuming scenes provide/bind the head target externally. (TRACES TR-2)
+5. A photobooth verification scene exists at:
+   - `@game/tests/characters/ik/neck_spine_ccdik_test.tscn`
+   - runner script: `@game/tests/characters/ik/neck_spine_ccdik_test.gd`
+   (INHERITS `@game/assets/testing/photobooth/templates/full_body_5_cams.tscn`)
+6. The verification scene defines target markers for visual and non-visual checks
+   using `DebugMarker` for each required pose. (TRACES TR-3)
+7. Visual checks cover moderate and extreme target poses: forward, left, right, up,
+   down, stoop-forward, lean-back. (TRACES UR-1, UR-2)
+8. Before feature-level capture, runner performs a camera/marker framing pass to
+   confirm required markers and subject regions are visible.
+9. Runner executes pose scenarios and captures screenshots using
+   `Photobooth.capture_screenshots(...)`. (TRACES TR-3)
+10. Visual checks confirm resulting pose remains natural without obvious over-rotation,
+    inversion, or discontinuous neck-spine deformation. (TRACES UR-1, UR-2)
+11. A C# integration test loads the same verification scene and validates neck-spine
+    IK behaviour using non-visual assertions (for example, target proximity/transform
+    checks). (TRACES TR-3)
 
 ## References
 

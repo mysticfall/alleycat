@@ -7,48 +7,54 @@ title: Transcriber Component
 
 ## Requirement
 
-Provide an abstract `Transcriber` component that records microphone audio via Godot's XR input system, triggers transcription through an abstract async method, emits a Godot signal on completion, and handles errors appropriately. Deliver one concrete implementation `OpenAITranscriber` using the OpenAI .NET SDK with configuration from a file.
+Provide an abstract `Transcriber` component that captures microphone audio
+via Godot's XR input system, triggers async transcription, emits completion
+and failure signals, and surfaces results and errors to the player. Deliver one
+concrete `OpenAITranscriber` implementation using the OpenAI .NET SDK.
 
 ## Goal
 
-Enable voice input capture and transcription capabilities in the AlleyCat VR experience, with a concrete OpenAI-compatible implementation that can be extended to other STT backends.
+Enable voice input capture and transcription in the VR experience with a
+concrete OpenAI-compatible implementation that can be extended to other STT
+backends.
 
 ## User Requirements
 
-1. Players must be able to initiate voice recording using a configurable XR input button (default: left trigger).
-2. Recording must automatically stop when the input button is released or when a maximum duration is reached.
-3. Transcription results must be surfaced to the player via a UI notification upon completion.
-4. Transcription failures must be communicated to the player through a user-friendly error message.
-5. The system must support OpenAI-compatible API endpoints for transcription services.
+1. Players initiate voice recording via a configurable XR input button
+   (default: left trigger).
+2. Recording auto-stops on button release or maximum duration.
+3. Transcription results surface to the player via a UI notification.
+4. Transcription failures surface as a user-friendly error message.
+5. The system uses OpenAI-compatible API endpoints for transcription.
 
 ## Technical Requirements
 
-1. An abstract `Transcriber` class must be defined as a `Node` or `Node3D` subclass in `@game/src/Speech/Transcription/Transcriber.cs`.
-2. Recording initiation must be bound to a configurable XR action, defaulting to the left controller trigger input.
-3. Audio capture must use Godot's microphone recording API and produce an `AudioStreamWav` for transcription.
-4. An abstract method `Transcribe(AudioStreamWav audio)` must be defined as `async Task<string>`.
-5. A Godot signal `TranscriptionCompleted(string text)` must be emitted when transcription finishes successfully.
-6. On transcription failure, raw errors must be logged via `GD.PushError`, and a user-friendly message must be displayed via `@game/src/UI/NotificationUIExtensions.cs`.
-7. The concrete `OpenAITranscriber` implementation must use the official OpenAI .NET SDK.
-8. Configuration must be loaded from the merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)), which combines project defaults from `res://AlleyCat.cfg` with user overrides from `user://AlleyCat.cfg`. The [STT] section must contain:
-   - `Host`: full endpoint URL including scheme and path (e.g., `https://api.openai.com/v1`)
-   - `ApiKey`: optional API key for authenticated backends
-   - Additional API-supported properties (model, language, etc.)
-9. Runtime integration must specify:
-   - XR input binding and microphone recording prerequisites
-   - Config file contract and API contract
-   - Notification/error handling flow
-   - Signal contract
-   - Lifecycle (initialisation, recording, transcription, cleanup)
+1. Define abstract `Transcriber` as a `Node` or `Node3D` subclass under
+   `@game/src/Speech/Transcription/Transcriber.cs`.
+2. Bind recording initiation to a configurable XR action; default left
+   controller trigger.
+3. Use Godot microphone API to capture audio and produce `AudioStreamWav`.
+4. Define abstract method `Transcribe(AudioStreamWav)` as `async Task<string>`.
+5. Emit signal `TranscriptionCompleted(string text)` on success.
+6. On failure: log raw error via `GD.PushError`, display a user-friendly
+   message via `@game/src/UI/NotificationUIExtensions.cs`, and emit signal
+   `TranscriptionFailed(string error)`.
+7. Implement `OpenAITranscriber` using the official OpenAI .NET SDK.
+8. Load configuration from the merged configuration API
+   ([CORE-002](../../002-configuration-api/index.md)) [STT] section
+   containing `Host`, optional `ApiKey`, and additional model/timeout
+   settings.
+9. Specify runtime integration: XR binding, microphone prerequisites,
+   config contract, signal contract, and lifecycle.
 
 ## In Scope
 
-- Abstract `Transcriber` class definition with XR input binding and microphone recording.
-- Async abstract `Transcribe(AudioStreamWav)` method contract.
-- Signal contract for transcription completion.
+- Abstract `Transcriber` class with XR input binding and microphone recording.
+- Abstract `Transcribe(AudioStreamWav)` async method contract.
+- Signal contract for transcription completion and failure.
 - Error handling contract using `GD.PushError` and `NotificationUIExtensions`.
-- `OpenAITranscriber` concrete implementation using OpenAI .NET SDK.
-- Configuration contract from merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)).
+- `OpenAITranscriber` implementation using OpenAI .NET SDK.
+- Configuration contract from merged configuration API.
 - Implementation under `@game/src/Speech/Transcription/`.
 - Integration tests under `@integration-tests/src/`.
 
@@ -58,116 +64,50 @@ Enable voice input capture and transcription capabilities in the AlleyCat VR exp
 - Real-time streaming transcription.
 - Multiple simultaneous recording sessions.
 - Local-only transcription without network connectivity.
-- Non-OpenAI-compatible backend implementations beyond the provided `OpenAITranscriber`.
-- Audio preprocessing or custom voice activity detection beyond basic duration limits.
+- Non-OpenAI-compatible backend implementations beyond `OpenAITranscriber`.
+- Audio preprocessing or custom voice activity detection beyond duration limits.
 
-## Contract
+## Design Decisions
 
-### Abstract Transcriber Contract
+### Button Press/Release Recording Model
 
-The `Transcriber` class must define the following:
+Recording starts when the XR action value exceeds 0.5 and stops on release
+or timeout. This matches the natural hold-to-speak idiom common in VR voice
+input and avoids extra confirmation steps.
 
-| Member | Type | Description |
-|--------|------|-------------|
-| `RecordButton` | `String` | XR action name for record trigger. Default: `trigger_click` on left controller. |
-| `MaxRecordingDuration` | `double` | Maximum recording length in seconds before auto-stop. |
-| `TranscriptionCompleted(string)` | Signal | Emitted with transcribed text on success. |
-| `TranscriptionFailed(string)` | Signal | Emitted with error message on failure. |
-| `StartRecording()` | `void` | Begins microphone capture. |
-| `StopRecording()` | `void` | Stops capture and initiates transcription. |
-| `Transcribe(AudioStreamWav)` | `async Task<string>` | Abstract method for transcription. |
+### Error Dual-Channel Pattern
 
-### XR Input Binding
+Failures emit both a raw `GD.PushError` (for diagnostics) and a
+player-facing notification (for usability). Both are emitted; the notification
+supplies a static user-friendly message while the signal carries the raw detail
+for listeners that need it.
 
-- Default binding: Left controller trigger (`左手` / `trigger_click`).
-- Configurable via exported `RecordButton` property.
-- Recording starts on button press (value > 0.5) and stops on release or timeout.
+### No-Auth Backend Compatibility
 
-### Microphone Recording Prerequisites
-
-- Godot microphone subsystem must be initialised.
-- `AudioStreamMicrophone` must be configured and started.
-- Output must be convertible to `AudioStreamWav` for the transcription method.
-
-### Config File Contract
-
-Configuration is loaded through the merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)). The merged [STT] section must contain `Host` and may contain optional authentication and transcription settings:
-
-**Base file (`res://AlleyCat.cfg`):**
-```ini
-[STT]
-Host=https://api.openai.com/v1
-ApiKey=
-Model=whisper-1
-```
-
-**User override file (`user://AlleyCat.cfg`) - optional:**
-```ini
-[STT]
-ApiKey=sk-...
-```
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `Host` | string | Yes | Full endpoint URL including scheme and path (e.g., `https://api.openai.com/v1`) |
-| `ApiKey` | string | No | API authentication key for backends that require one. When omitted, the implementation may use a dummy credential value if the OpenAI-compatible backend accepts unauthenticated requests. |
-| `Model` | string | No | Transcription model (default: `whisper-1`) |
-| `Language` | string | No | Optional language code |
-| `Timeout` | int | No | Request timeout in seconds |
-
-### API Contract
-
-`OpenAITranscriber` must:
-
-- Use `OpenAI.Audio.AudioClient` with `OpenAIClientOptions` configured from the config.
-- Use the SDK's native async transcription path (`TranscribeAudioAsync`) rather than wrapping the synchronous API in `Task.Run`.
-- Accept `AudioStreamWav` input and convert to the format expected by the API.
-- Accept configuration where `ApiKey` is omitted for compatible no-auth backends, using a dummy credential only when the SDK requires a non-empty key value.
-- Return the transcribed text string from the API response.
-- Propagate errors as exceptions caught by the error handling contract.
-
-### Notification/Error Handling
-
-On transcription failure:
-
-1. Raw exception message logged via `GD.PushError("Transcription failed: " + ex.Message)`.
-2. User-friendly message posted via `this.PostNotification("Voice transcription failed. Please try again.")`.
-3. `TranscriptionFailed(string)` signal emitted with the error message.
-
-### Signal Contract
-
-| Signal | Payload | Description |
-|--------|---------|-------------|
-| `TranscriptionCompleted(string text)` | Transcribed text | Emitted when transcription succeeds |
-| `TranscriptionFailed(string error)` | Error message | Emitted when transcription fails |
-
-### Lifecycle
-
-1. **Initialisation**: Load config, initialise microphone subsystem, connect XR input signals.
-2. **Recording**: User presses record button → `StartRecording()` → microphone captures audio.
-3. **Stop**: User releases button OR `MaxRecordingDuration` reached → `StopRecording()`.
-4. **Transcription**: `Transcribe(AudioStreamWav)` called → async API request → result or exception.
-5. **Completion**: On success → emit `TranscriptionCompleted` + notification. On failure → emit `TranscriptionFailed` + error log + notification.
-6. **Cleanup**: Release microphone resources, reset state for next recording.
+`ApiKey` is optional in the [STT] config section. When omitted and the SDK
+requires a non-empty value, a dummy credential is used only if the target
+backend accepts unauthenticated requests. This avoids hard-coding credentials
+for compatible services.
 
 ## Acceptance Criteria
 
-1. The spec defines both user-visible voice input outcomes and technical implementation contracts.
-2. The abstract `Transcriber` class defines XR binding, recording, transcription method, and signal contracts explicitly.
-3. Error handling contract uses both `GD.PushError` for raw errors and `NotificationUIExtensions` for player-facing messages.
-4. `OpenAITranscriber` implementation uses the official OpenAI .NET SDK and loads configuration from the merged configuration API (see [CORE-002: Configuration API](../../002-configuration-api/index.md)).
-5. Runtime integration boundaries (XR binding, microphone, config, API, signals, lifecycle) are explicitly defined.
-6. Implementation path `@game/src/Speech/Transcription/` and test path `@integration-tests/src/` are specified.
-7. The spec does not exclude any mandatory delivery contracts through `Out Of Scope`.
+1. UR-1–UR-5 covered: player can record, auto-stop works, success/failure
+   messages reach the player.
+2. TR-1–TR-9 covered: abstract class, XR binding, microphone capture, async
+   contract, signals, dual-channel error handling, SDK implementation, config
+   loading, and runtime integration specified.
+3. `Out Of Scope` excludes only optional/unrelated work; no mandatory contract
+   omitted.
+
+**Traceability map:** UR-1–UR-5 → AC-1; TR-1–TR-9 → AC-2; OOS guard → AC-3.
 
 ## References
 
 ### Implementation
 
-- `@game/src/Speech/Transcription/Transcriber.cs` - Abstract Transcriber class
-- `@game/src/Speech/Transcription/OpenAITranscriber.cs` - OpenAI-compatible implementation
-- `@game/src/UI/NotificationUIExtensions.cs` - Notification helpers
-- `@game/AlleyCat.cfg` - Configuration file
+- `@game/src/Speech/Transcription/Transcriber.cs`
+- `@game/src/Speech/Transcription/OpenAITranscriber.cs`
+- `@game/src/UI/NotificationUIExtensions.cs`
 
 ### Related Specs
 
