@@ -43,6 +43,10 @@
 
 - [ITEM-001: Physics Chain Asset](items/001-physics-chain/index.md)
 
+## Interaction
+
+- [INTR-001: Grabbable Interface](interaction/001-grabbable/index.md)
+
 ## Speech
 
 - [SPCH-001: Wav2Arkit LipSync Player](speech/001-wav2arkit-lipsync-player/index.md)
