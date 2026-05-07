@@ -39,14 +39,14 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_SetMovementInput_DoesNotDriveDirectPlanarVelocity()
+    public async Task PlayerLocomotion_Move_DoesNotDriveDirectPlanarVelocity()
     {
         SceneTree sceneTree = GetSceneTree();
         LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: CreateLocomotionAnimationTree());
 
         try
         {
-            rig.Locomotion.SetMovementInput(new Vector2(0f, 1f));
+            rig.Locomotion.Move(new Vector2(0f, 1f));
 
             rig.Locomotion._PhysicsProcess(0.016d);
 
@@ -63,7 +63,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_SetRotationInput_SmoothTurnRotatesBody()
+    public async Task PlayerLocomotion_Rotate_SmoothTurnRotatesBody()
     {
         SceneTree sceneTree = GetSceneTree();
         RecordingTurnPlayerLocomotion locomotion = new();
@@ -74,7 +74,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
             locomotion.TurnMode = TurnMode.Smooth;
             locomotion.RotationSpeedMultiplier = 2f;
             locomotion.SmoothTurnSensitivity = 3f;
-            locomotion.SetRotationInput(new Vector2(-0.5f, 0f));
+            locomotion.Rotate(new Vector2(-0.5f, 0f));
 
             locomotion._PhysicsProcess(0.2d);
 
@@ -103,7 +103,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
             locomotion.SnapTurnAngleDegrees = 45f;
             locomotion.SnapTurnActivationThreshold = 0.5f;
             locomotion.SnapTurnCooldownSeconds = 0.25f;
-            locomotion.SetRotationInput(new Vector2(0.8f, 0f));
+            locomotion.Rotate(new Vector2(0.8f, 0f));
 
             locomotion._PhysicsProcess(0.016d);
             float firstTurnDelta = locomotion.LastAppliedYawDelta;
@@ -132,7 +132,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             rig.Locomotion.InputDeadzone = 0.15f;
-            rig.Locomotion.SetMovementInput(new Vector2(0.1f, 0.1f));
+            rig.Locomotion.Move(new Vector2(0.1f, 0.1f));
 
             rig.Locomotion._PhysicsProcess(0.016d);
 
@@ -169,8 +169,8 @@ public sealed partial class PlayerLocomotionIntegrationTests
             locomotion.TurnMode = TurnMode.Smooth;
             locomotion.RotationSpeedMultiplier = 2f;
             locomotion.SmoothTurnSensitivity = 3f;
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
-            locomotion.SetRotationInput(new Vector2(-0.5f, 0f));
+            locomotion.Move(new Vector2(0f, 1f));
+            locomotion.Rotate(new Vector2(-0.5f, 0f));
 
             Basis initialBasis = rig.Body.GlobalBasis;
             StartPlayback(rig.AnimationTree, "Walking");
@@ -215,7 +215,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             StartPlayback(rig.AnimationTree, "Walking");
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
+            locomotion.Move(new Vector2(0f, 1f));
 
             locomotion._PhysicsProcess(0.016d);
 
@@ -256,7 +256,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             StartPlayback(rig.AnimationTree, "Walking");
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
+            locomotion.Move(new Vector2(0f, 1f));
 
             locomotion._PhysicsProcess(0.016d);
 
@@ -287,7 +287,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
             locomotion.TurnMode = TurnMode.Smooth;
             locomotion.RotationSpeedMultiplier = 2f;
             locomotion.SmoothTurnSensitivity = 3f;
-            locomotion.SetRotationInput(new Vector2(-0.5f, 0f));
+            locomotion.Rotate(new Vector2(-0.5f, 0f));
 
             locomotion._PhysicsProcess(0.2d);
 
@@ -319,7 +319,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             StartPlayback(rig.AnimationTree, "Walking");
-            locomotion.SetMovementInput(new Vector2(0f, 0.25f));
+            locomotion.Move(new Vector2(0f, 0.25f));
 
             locomotion._PhysicsProcess(0.016d);
 
@@ -354,7 +354,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             StartPlayback(rig.AnimationTree, "Walking");
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
+            locomotion.Move(new Vector2(0f, 1f));
 
             locomotion._PhysicsProcess(0.016d);
 
@@ -388,7 +388,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             StartPlayback(rig.AnimationTree, "Walking");
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
+            locomotion.Move(new Vector2(0f, 1f));
 
             locomotion._PhysicsProcess(0.016d);
 
@@ -420,7 +420,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             StartPlayback(rig.AnimationTree, "StandingCrouching");
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
+            locomotion.Move(new Vector2(0f, 1f));
 
             locomotion._PhysicsProcess(0.016d);
 
@@ -458,7 +458,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         try
         {
             StartPlayback(rig.AnimationTree, "AllFours");
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
+            locomotion.Move(new Vector2(0f, 1f));
 
             locomotion._PhysicsProcess(0.016d);
             rig.AnimationTree.Advance(0.0);
@@ -469,7 +469,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
 
             Assert.True(Mathf.Abs(rig.Body.Velocity.Z + 0.4f) <= Tolerance, $"Expected crawl locomotion override to use root-motion velocity. Got {rig.Body.Velocity}.");
 
-            locomotion.SetMovementInput(Vector2.Zero);
+            locomotion.Move(Vector2.Zero);
             locomotion._PhysicsProcess(0.016d);
             rig.AnimationTree.Advance(0.0);
 
@@ -532,7 +532,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
             Assert.True(stateMachine.LocomotionStateTarget.HasValue);
 
             StartPlayback(animationTree, "AllFours");
-            locomotion.SetMovementInput(new Vector2(0f, 1f));
+            locomotion.Move(new Vector2(0f, 1f));
             locomotion._PhysicsProcess(0.016d);
             animationTree.Advance(0.0);
 

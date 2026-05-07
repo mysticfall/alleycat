@@ -73,10 +73,10 @@ public abstract partial class LocomotionBase : Node, ILocomotion
         => permissions.RotationAllowed ? desiredYawDelta : 0f;
 
     /// <inheritdoc />
-    public abstract void SetMovementInput(Vector2 input);
+    public abstract void Move(Vector2 input);
 
     /// <inheritdoc />
-    public abstract void SetRotationInput(Vector2 input);
+    public abstract void Rotate(Vector2 input);
 
     private ILocomotionAnimationSource[] ResolveLocomotionAnimationSources()
     {

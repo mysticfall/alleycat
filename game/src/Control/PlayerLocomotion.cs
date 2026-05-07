@@ -181,10 +181,10 @@ public partial class PlayerLocomotion : LocomotionBase
     }
 
     /// <inheritdoc />
-    public override void SetMovementInput(Vector2 input) => _movementInput = ApplyDeadzone(input, InputDeadzone);
+    public override void Move(Vector2 input) => _movementInput = ApplyDeadzone(input, InputDeadzone);
 
     /// <inheritdoc />
-    public override void SetRotationInput(Vector2 input) => _rotationInput = ApplyDeadzone(input, InputDeadzone);
+    public override void Rotate(Vector2 input) => _rotationInput = ApplyDeadzone(input, InputDeadzone);
 
     /// <inheritdoc />
     public override void _PhysicsProcess(double delta)

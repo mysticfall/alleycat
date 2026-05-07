@@ -204,8 +204,8 @@ public partial class PlayerController : Node
     }
 
     private void UpdateMovementInput(Vector2 value)
-        => _locomotion?.SetMovementInput(value);
+        => _locomotion?.Move(value);
 
     private void UpdateRotationInput(Vector2 value)
-        => _locomotion?.SetRotationInput(value);
+        => _locomotion?.Rotate(value);
 }
