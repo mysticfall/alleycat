@@ -6,7 +6,9 @@
 radius = 0.012
 height = 0.04
 
-[node name="ChainLink" type="RigidBody3D" unique_id=1856433065]
+[node name="ChainLink" type="RigidBody3D" groups=["hand_dynamic_interaction_body"] unique_id=1856433065]
+collision_layer = 2
+collision_mask = 11
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1808611262]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 3.92005e-10, -0.008968029)

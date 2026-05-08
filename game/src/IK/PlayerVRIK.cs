@@ -15,19 +15,23 @@ namespace AlleyCat.IK;
 public partial class PlayerVRIK : Node3D
 {
     private const float HeightEpsilon = 1e-4f;
+    private static readonly StringName _rightHandBoneName = new("RightHand");
+    private static readonly StringName _leftHandBoneName = new("LeftHand");
+    private static readonly StringName _rightLowerArmBoneName = new("RightLowerArm");
+    private static readonly StringName _leftLowerArmBoneName = new("LeftLowerArm");
 
     private Marker3D? _viewpoint;
     private CharacterBody3D? _headIKTarget;
     private Node3D? _headIKSolveTarget;
-    private CharacterBody3D? _rightHandIKTarget;
-    private CharacterBody3D? _leftHandIKTarget;
+    private AnimatableBody3D? _rightHandIKTarget;
+    private AnimatableBody3D? _leftHandIKTarget;
     private Node3D? _rightFootIKTarget;
     private Node3D? _leftFootIKTarget;
     private Skeleton3D? _skeleton;
 
     private IKTargetBodyFollower? _headFollower;
-    private IKTargetBodyFollower? _leftHandFollower;
-    private IKTargetBodyFollower? _rightHandFollower;
+    private IKTargetAnimatableFollower? _leftHandFollower;
+    private IKTargetAnimatableFollower? _rightHandFollower;
 
     /// <summary>
     /// Avatar viewpoint marker representing eye-centre in avatar space.
@@ -63,7 +67,7 @@ public partial class PlayerVRIK : Node3D
     /// Right-hand IK target body.
     /// </summary>
     [Export]
-    public CharacterBody3D? RightHandIKTarget
+    public AnimatableBody3D? RightHandIKTarget
     {
         get;
         set;
@@ -73,7 +77,7 @@ public partial class PlayerVRIK : Node3D
     /// Left-hand IK target body.
     /// </summary>
     [Export]
-    public CharacterBody3D? LeftHandIKTarget
+    public AnimatableBody3D? LeftHandIKTarget
     {
         get;
         set;
@@ -128,6 +132,116 @@ public partial class PlayerVRIK : Node3D
         get;
         set;
     } = 28.0f;
+
+    /// <summary>
+    /// Position-error gain for hand follower translation while using the current body-based hand targets.
+    /// </summary>
+    [Export]
+    public float HandTargetPositionResponsiveness
+    {
+        get;
+        set;
+    } = 14.0f;
+
+    /// <summary>
+    /// Maximum hand follower acceleration while using the current body-based hand targets.
+    /// </summary>
+    [Export]
+    public float HandTargetMaximumAcceleration
+    {
+        get;
+        set;
+    } = 48.0f;
+
+    /// <summary>
+    /// Distance within which hand followers progressively ease into their final settle movement.
+    /// </summary>
+    [Export]
+    public float HandTargetSettleDistance
+    {
+        get;
+        set;
+    } = 0.03f;
+
+    /// <summary>
+    /// Rotation-error gain for hand follower orientation smoothing.
+    /// </summary>
+    [Export]
+    public float HandTargetRotationResponsiveness
+    {
+        get;
+        set;
+    } = 24.0f;
+
+    /// <summary>
+    /// Collision mask queried for explicit hand-only interaction with dynamic rigid bodies.
+    /// </summary>
+    [Export]
+    public uint HandDynamicInteractionCollisionMask
+    {
+        get;
+        set;
+    } = 2;
+
+    /// <summary>
+    /// Minimum approach speed before a hand impact impulse may fire.
+    /// </summary>
+    [Export]
+    public float HandDynamicImpactApproachSpeedThreshold
+    {
+        get;
+        set;
+    } = HandDynamicBodyInteractionController.DefaultImpactApproachSpeedThreshold;
+
+    /// <summary>
+    /// Impact impulse gain applied per metre-per-second of hand approach speed.
+    /// </summary>
+    [Export]
+    public float HandDynamicImpactImpulsePerSpeed
+    {
+        get;
+        set;
+    } = HandDynamicBodyInteractionController.DefaultImpactImpulsePerSpeed;
+
+    /// <summary>
+    /// Maximum impact impulse magnitude applied by the hand interaction channel.
+    /// </summary>
+    [Export]
+    public float HandDynamicImpactImpulseCap
+    {
+        get;
+        set;
+    } = HandDynamicBodyInteractionController.DefaultImpactImpulseCap;
+
+    /// <summary>
+    /// Minimum pressing speed before the sustained hand push channel may fire.
+    /// </summary>
+    [Export]
+    public float HandDynamicSustainedPushSpeedThreshold
+    {
+        get;
+        set;
+    } = HandDynamicBodyInteractionController.DefaultSustainedPushSpeedThreshold;
+
+    /// <summary>
+    /// Sustained push-force gain applied per metre-per-second of hand pressing speed.
+    /// </summary>
+    [Export]
+    public float HandDynamicSustainedForcePerSpeed
+    {
+        get;
+        set;
+    } = HandDynamicBodyInteractionController.DefaultSustainedForcePerSpeed;
+
+    /// <summary>
+    /// Maximum sustained push-force magnitude applied by the hand interaction channel.
+    /// </summary>
+    [Export]
+    public float HandDynamicSustainedForceCap
+    {
+        get;
+        set;
+    } = HandDynamicBodyInteractionController.DefaultSustainedForceCap;
 
     /// <summary>
     /// When true, enables IK processing. When false, skips all IK target updates.
@@ -220,6 +334,15 @@ public partial class PlayerVRIK : Node3D
         private set;
     } = -1;
 
+    /// <summary>
+    /// Number of physics-timed follower update ticks executed since startup.
+    /// </summary>
+    public ulong PhysicsFollowerTickCount
+    {
+        get;
+        private set;
+    }
+
     private IXROrigin? _origin;
     private IXRCamera? _camera;
     private IXRHandController? _rightHandController;
@@ -238,11 +361,25 @@ public partial class PlayerVRIK : Node3D
     /// <inheritdoc />
     public override void _Ready()
     {
+        base._Ready();
         EnsureResolvedNodes();
         ConfigurePlayerBodyCollisionExceptions();
+        ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
         EnsureFollowers();
+        SetPhysicsProcess(true);
 
         InsertStageModifiers();
+    }
+
+    /// <inheritdoc />
+    public override void _PhysicsProcess(double delta)
+    {
+        if (delta <= 0d)
+        {
+            return;
+        }
+
+        UpdatePhysicalFollowers(delta);
     }
 
     /// <summary>
@@ -276,11 +413,15 @@ public partial class PlayerVRIK : Node3D
 
         EnsureResolvedNodes();
         EnsureFollowers();
+        ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
 
         CalibrateWorldScaleOnce();
         _isBound = true;
         return true;
     }
+
+    private void ConfigureGeneratedTargetProxyCollisionExceptionsDeferred()
+        => _ = CallDeferred(nameof(ConfigureGeneratedTargetProxyCollisionExceptions));
 
     private void InsertStageModifiers()
     {
@@ -359,10 +500,7 @@ public partial class PlayerVRIK : Node3D
         }
 
         origin.OriginNode.GlobalTransform = GlobalTransform;
-
         _headFollower.Follow(delta);
-        _rightHandFollower.Follow(delta);
-        _leftHandFollower.Follow(delta);
 
         ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
 
@@ -376,6 +514,26 @@ public partial class PlayerVRIK : Node3D
         PoseStateContext context = BuildPoseStateContext(skeleton, delta);
         PoseStateMachineTickResult tickResult = stateMachine.Tick(context);
         UpdateHipDebugMessage(tickResult.Context, tickResult);
+    }
+
+    private void UpdatePhysicalFollowers(double delta)
+    {
+        if (!Active || !_isBound)
+        {
+            return;
+        }
+
+        IXROrigin? origin = _origin;
+        if (origin is null || _rightHandFollower is null || _leftHandFollower is null)
+        {
+            return;
+        }
+
+        origin.OriginNode.GlobalTransform = GlobalTransform;
+        PhysicsFollowerTickCount += 1;
+
+        _rightHandFollower.Follow(delta);
+        _leftHandFollower.Follow(delta);
     }
 
     private void OnEndStage(double delta)
@@ -677,8 +835,8 @@ public partial class PlayerVRIK : Node3D
         _viewpoint = Viewpoint ?? this.RequireNode<Marker3D>("Female_export/GeneralSkeleton/Head/Viewpoint");
         _headIKTarget = HeadIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/Head");
         _headIKSolveTarget = HeadIKSolveTarget ?? this.RequireNode<Node3D>("IKTargets/HeadSolve");
-        _rightHandIKTarget = RightHandIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/RightHand");
-        _leftHandIKTarget = LeftHandIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/LeftHand");
+        _rightHandIKTarget = RightHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/RightHand");
+        _leftHandIKTarget = LeftHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/LeftHand");
         _rightFootIKTarget = RightFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/RightFoot");
         _leftFootIKTarget = LeftFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/LeftFoot");
         _skeleton = Skeleton ?? this.RequireNode<Skeleton3D>("Female_export/GeneralSkeleton");
@@ -739,26 +897,48 @@ public partial class PlayerVRIK : Node3D
         CharacterBody3D headTarget = _headIKTarget
                                      ?? throw new InvalidOperationException(
                                          "PlayerVRIK head target not resolved before follower setup.");
-        CharacterBody3D rightHandTarget = _rightHandIKTarget
+        AnimatableBody3D rightHandTarget = _rightHandIKTarget
+                                           ?? throw new InvalidOperationException(
+                                               "PlayerVRIK right-hand target not resolved before follower setup.");
+        AnimatableBody3D leftHandTarget = _leftHandIKTarget
                                           ?? throw new InvalidOperationException(
-                                              "PlayerVRIK right-hand target not resolved before follower setup.");
-        CharacterBody3D leftHandTarget = _leftHandIKTarget
-                                         ?? throw new InvalidOperationException(
-                                             "PlayerVRIK left-hand target not resolved before follower setup.");
+                                              "PlayerVRIK left-hand target not resolved before follower setup.");
 
         _headFollower = new IKTargetBodyFollower(headTarget, BuildHeadTargetTransform)
         {
             MaximumSpeed = HeadTargetMaximumSpeed,
         };
 
-        _rightHandFollower = new IKTargetBodyFollower(rightHandTarget, BuildRightHandTargetTransform)
+        _rightHandFollower = new IKTargetAnimatableFollower(rightHandTarget, BuildRightHandTargetTransform)
         {
             MaximumSpeed = HandTargetMaximumSpeed,
+            PositionResponsiveness = HandTargetPositionResponsiveness,
+            MaximumAcceleration = HandTargetMaximumAcceleration,
+            SnapDistance = HandTargetSettleDistance,
+            RotationResponsiveness = HandTargetRotationResponsiveness,
+            DynamicBodyInteractionCollisionMask = HandDynamicInteractionCollisionMask,
+            DynamicImpactApproachSpeedThreshold = HandDynamicImpactApproachSpeedThreshold,
+            DynamicImpactImpulsePerSpeed = HandDynamicImpactImpulsePerSpeed,
+            DynamicImpactImpulseCap = HandDynamicImpactImpulseCap,
+            DynamicSustainedPushSpeedThreshold = HandDynamicSustainedPushSpeedThreshold,
+            DynamicSustainedForcePerSpeed = HandDynamicSustainedForcePerSpeed,
+            DynamicSustainedForceCap = HandDynamicSustainedForceCap,
         };
 
-        _leftHandFollower = new IKTargetBodyFollower(leftHandTarget, BuildLeftHandTargetTransform)
+        _leftHandFollower = new IKTargetAnimatableFollower(leftHandTarget, BuildLeftHandTargetTransform)
         {
             MaximumSpeed = HandTargetMaximumSpeed,
+            PositionResponsiveness = HandTargetPositionResponsiveness,
+            MaximumAcceleration = HandTargetMaximumAcceleration,
+            SnapDistance = HandTargetSettleDistance,
+            RotationResponsiveness = HandTargetRotationResponsiveness,
+            DynamicBodyInteractionCollisionMask = HandDynamicInteractionCollisionMask,
+            DynamicImpactApproachSpeedThreshold = HandDynamicImpactApproachSpeedThreshold,
+            DynamicImpactImpulsePerSpeed = HandDynamicImpactImpulsePerSpeed,
+            DynamicImpactImpulseCap = HandDynamicImpactImpulseCap,
+            DynamicSustainedPushSpeedThreshold = HandDynamicSustainedPushSpeedThreshold,
+            DynamicSustainedForcePerSpeed = HandDynamicSustainedForcePerSpeed,
+            DynamicSustainedForceCap = HandDynamicSustainedForceCap,
         };
     }
 
@@ -776,6 +956,62 @@ public partial class PlayerVRIK : Node3D
         AddBidirectionalCollisionException(playerBody, _leftHandIKTarget);
         AddBidirectionalCollisionException(playerBody, _rightFootIKTarget as PhysicsBody3D);
         AddBidirectionalCollisionException(playerBody, _leftFootIKTarget as PhysicsBody3D);
+    }
+
+    private void ConfigureGeneratedTargetProxyCollisionExceptions()
+    {
+        DynamicPhysicalRig? rig = FindGeneratedPhysicalRig();
+        if (rig is null)
+        {
+            return;
+        }
+
+        if (rig.GeneratedProxyCount == 0)
+        {
+            ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
+            return;
+        }
+
+        AddGeneratedHandProxyCollisionExceptions(_rightHandIKTarget, rig, _rightHandBoneName, _rightLowerArmBoneName);
+        AddGeneratedHandProxyCollisionExceptions(_leftHandIKTarget, rig, _leftHandBoneName, _leftLowerArmBoneName);
+    }
+
+    private DynamicPhysicalRig? FindGeneratedPhysicalRig()
+    {
+        Skeleton3D skeleton = GetResolvedSkeleton();
+
+        foreach (Node child in skeleton.GetChildren())
+        {
+            if (child is DynamicPhysicalRig rig)
+            {
+                return rig;
+            }
+        }
+
+        return null;
+    }
+
+    private static void AddGeneratedHandProxyCollisionExceptions(
+        AnimatableBody3D? handTarget,
+        DynamicPhysicalRig rig,
+        StringName handBoneName,
+        StringName lowerArmBoneName)
+    {
+        if (handTarget is null)
+        {
+            return;
+        }
+
+        AddCollisionExceptionsForGeneratedBone(handTarget, rig, handBoneName);
+        AddCollisionExceptionsForGeneratedBone(handTarget, rig, lowerArmBoneName);
+    }
+
+    private static void AddCollisionExceptionsForGeneratedBone(PhysicsBody3D handTarget, DynamicPhysicalRig rig, StringName boneName)
+    {
+        foreach (PhysicsBody3D proxyBody in rig.GetGeneratedProxyBodiesForBone(boneName))
+        {
+            AddBidirectionalCollisionException(handTarget, proxyBody);
+        }
     }
 
     private static void AddBidirectionalCollisionException(PhysicsBody3D source, PhysicsBody3D? other)

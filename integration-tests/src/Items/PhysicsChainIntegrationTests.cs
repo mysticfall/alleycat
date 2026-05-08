@@ -11,6 +11,8 @@ namespace AlleyCat.IntegrationTests.Items;
 public sealed class PhysicsChainIntegrationTests
 {
     private const string ChainScenePath = "res://assets/items/chain/physics_chain.tscn";
+    private const string ChainLinkScenePath = "res://assets/items/chain/chain_link.tscn";
+    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string VisualTestScenePath = "res://tests/items/chain/physics_chain_visual_test.tscn";
     private const string ChainNodePath = "Subject/Chain";
     private const string LinksContainerPath = "Links";
@@ -138,6 +140,32 @@ public sealed class PhysicsChainIntegrationTests
     }
 
     /// <summary>
+    /// Verifies the chain test assets use the dedicated dynamic-body interaction layer while retaining world collision.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void PhysicsChain_TestAssets_UseDedicatedHandDynamicInteractionLayer()
+    {
+        RigidBody3D chainLink = LoadPackedScene(ChainLinkScenePath).Instantiate<RigidBody3D>();
+        Node3D mirrorRoom = LoadPackedScene(MirrorRoomScenePath).Instantiate<Node3D>();
+
+        try
+        {
+            RigidBody3D endWeight = Assert.IsType<RigidBody3D>(mirrorRoom.GetNodeOrNull("Items/EndWeight"), exactMatch: false);
+            RigidBody3D startAnchor = Assert.IsType<RigidBody3D>(mirrorRoom.GetNodeOrNull("Items/StartAnchor"), exactMatch: false);
+
+            AssertBodyCanCollideWithPlayerHands(chainLink);
+            AssertBodyCanCollideWithPlayerHands(endWeight);
+            AssertBodyCanCollideWithPlayerHands(startAnchor);
+        }
+        finally
+        {
+            chainLink.Free();
+            mirrorRoom.Free();
+        }
+    }
+
+    /// <summary>
     /// Verifies the chain stays connected and keeps both end attachments under impulse for the full 30-second acceptance window.
     /// </summary>
     [Headless]
@@ -233,5 +261,14 @@ public sealed class PhysicsChainIntegrationTests
             $"ITEM-001 long-run metrics: duration={LongRunSimulationSeconds:F0}s, max_weight_travel={longestObservedWeightTravel:F4} m, " +
             $"max_start_gap={worstObservedStartAttachmentGap:F4} m, max_end_gap={worstObservedEndAttachmentGap:F4} m, " +
             $"max_inter_link_gap={worstObservedInterLinkGap:F4} m.");
+    }
+
+    private static void AssertBodyCanCollideWithPlayerHands(PhysicsBody3D body)
+    {
+        const uint dynamicInteractionLayer = 2;
+        const uint environmentLayer = 1;
+
+        Assert.True((body.CollisionLayer & dynamicInteractionLayer) != 0, $"{body.Name} should use the dedicated dynamic interaction layer.");
+        Assert.True((body.CollisionMask & environmentLayer) != 0, $"{body.Name} collision mask should retain world collision.");
     }
 }

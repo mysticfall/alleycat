@@ -1,0 +1,931 @@
+using System.Reflection;
+using AlleyCat.IK;
+using AlleyCat.TestFramework;
+using AlleyCat.XR;
+using Godot;
+using Xunit;
+using static AlleyCat.IntegrationTests.Support.TestUtils;
+
+namespace AlleyCat.IntegrationTests.IK;
+
+/// <summary>
+/// Integration coverage for physics-timed IK target following and generated proxy synchronisation.
+/// </summary>
+public sealed class DynamicPhysicalRigIntegrationTests
+{
+    private const string CollidersScenePath = "res://assets/characters/reference/female/colliders.tscn";
+    private const float PositionToleranceMetres = 0.001f;
+
+    /// <summary>
+    /// Verifies runtime setup keeps follower and proxy synchronisation on physics processing and preserves proxy count.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_RuntimeSetup_EnablesPhysicsProcessingAndBuildsExpectedProxyCount()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            int sourceShapeCount = CountSourceShapes(fixture.Rig.SourceScene);
+            int generatedBodyCount = CountGeneratedProxyBodies(fixture.Rig);
+
+            Assert.Equal(sourceShapeCount, fixture.Rig.GeneratedProxyCount);
+            Assert.Equal(sourceShapeCount, generatedBodyCount);
+            Assert.Equal(0, fixture.Rig.SkippedSourceShapeCount);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies generated proxy bodies use the explicit physics-sync path and track skeleton-root motion.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_ProxyBodies_ArePhysicsSynchronisedAndTrackSkeletonMotion()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            AnimatableBody3D chestProxy = FindGeneratedProxyBody(fixture.Rig, "Chest");
+            ulong initialSyncTickCount = fixture.Rig.PhysicsProxySyncTickCount;
+            Transform3D expectedTransform = BuildExpectedProxyTransform(fixture.Rig.SourceScene, fixture.Rig.TargetSkeleton!, "Chest");
+
+            Assert.True(chestProxy.TopLevel, "Generated proxies should be top-level so physics sync is driven explicitly from world space.");
+            Assert.True(chestProxy.SyncToPhysics, "Generated proxies should use AnimatableBody3D physics synchronisation.");
+            Assert.Equal(fixture.Rig.ProxyCollisionLayer, chestProxy.CollisionLayer);
+            Assert.Equal(fixture.Rig.ProxyCollisionMask, chestProxy.CollisionMask);
+
+            InvokeRigPhysicsSync(fixture.Rig);
+
+            Assert.True(fixture.Rig.PhysicsProxySyncTickCount > initialSyncTickCount, "Explicit proxy physics sync should record a runtime tick.");
+            AssertVectorApproximately(expectedTransform.Origin, chestProxy.GlobalPosition, PositionToleranceMetres);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies only hand motion uses the physics-timed rewrite while the deferred head path stays off that schedule.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HandsUsePhysicsProcess_WhileHeadStaysOffThatPath()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            CharacterBody3D head = fixture.HeadTarget;
+            AnimatableBody3D rightHand = fixture.RightHandTarget;
+            Transform3D initialHeadTransform = head.GlobalTransform;
+            Transform3D initialTransform = rightHand.GlobalTransform;
+            ulong initialPhysicsTickCount = fixture.PlayerVRIK.PhysicsFollowerTickCount;
+            Transform3D movedControllerTransform = new(initialTransform.Basis, initialTransform.Origin + new Vector3(0.08f, 0.0f, 0.0f));
+            fixture.RightHandPosition.GlobalTransform = movedControllerTransform;
+
+            InvokeOnBeginStage(fixture.PlayerVRIK, 1.0d / 60.0d);
+            AssertTransformApproximately(initialTransform, rightHand.GlobalTransform, PositionToleranceMetres);
+            Assert.Equal(initialPhysicsTickCount, fixture.PlayerVRIK.PhysicsFollowerTickCount);
+
+            InvokeUpdatePhysicalFollowers(fixture.PlayerVRIK, 1.0d / 60.0d);
+
+            AssertTransformApproximately(initialHeadTransform, head.GlobalTransform, PositionToleranceMetres);
+            Assert.True(
+                fixture.PlayerVRIK.PhysicsFollowerTickCount > initialPhysicsTickCount,
+                "Follower ticks should now be recorded only from the physics-timed path.");
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the AnimatableBody3D collision-follower rewrite remains hand-only for the current subphase.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HandFollowers_UseAnimatableCollisionFollower_WhileHeadRemainsBaseline()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            IKTargetBodyFollower headFollower = GetPrivateField<IKTargetBodyFollower>(fixture.PlayerVRIK, "_headFollower");
+            IKTargetAnimatableFollower rightHandFollower = GetPrivateField<IKTargetAnimatableFollower>(fixture.PlayerVRIK, "_rightHandFollower");
+            IKTargetAnimatableFollower leftHandFollower = GetPrivateField<IKTargetAnimatableFollower>(fixture.PlayerVRIK, "_leftHandFollower");
+
+            Assert.False(headFollower.UseDampedFollow);
+
+            _ = Assert.IsType<AnimatableBody3D>(fixture.RightHandTarget);
+            _ = Assert.IsType<AnimatableBody3D>(fixture.LeftHandTarget);
+
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumSpeed, rightHandFollower.MaximumSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetPositionResponsiveness, rightHandFollower.PositionResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, rightHandFollower.MaximumAcceleration);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, rightHandFollower.SnapDistance);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, rightHandFollower.RotationResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, rightHandFollower.DynamicBodyInteractionCollisionMask);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, rightHandFollower.DynamicImpactApproachSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, rightHandFollower.DynamicImpactImpulsePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, rightHandFollower.DynamicImpactImpulseCap);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, rightHandFollower.DynamicSustainedPushSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, rightHandFollower.DynamicSustainedForcePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, rightHandFollower.DynamicSustainedForceCap);
+
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumSpeed, leftHandFollower.MaximumSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetPositionResponsiveness, leftHandFollower.PositionResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, leftHandFollower.MaximumAcceleration);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, leftHandFollower.SnapDistance);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, leftHandFollower.RotationResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, leftHandFollower.DynamicBodyInteractionCollisionMask);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, leftHandFollower.DynamicImpactApproachSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, leftHandFollower.DynamicImpactImpulsePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, leftHandFollower.DynamicImpactImpulseCap);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, leftHandFollower.DynamicSustainedPushSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, leftHandFollower.DynamicSustainedForcePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, leftHandFollower.DynamicSustainedForceCap);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies only authored hand targets keep the hand collision contract for the current subphase.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HandTargets_RetainHandCollisionLayers()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            AssertCollisionLayerContract(fixture.RightHandTarget, 8, 5);
+            AssertCollisionLayerContract(fixture.LeftHandTarget, 8, 5);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the deferred head baseline keeps its pre-hand-rewrite collision contract.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HeadTarget_RetainsDeferredBaselineCollisionLayers()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            AssertCollisionLayerContract(fixture.HeadTarget, 1, 1);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies deferred head collision work remains disabled for this hand-only subphase.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HeadTarget_DoesNotAddGeneratedProxyExceptionsInDeferredBaseline()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            CharacterBody3D head = fixture.HeadTarget;
+            AnimatableBody3D headProxy = FindGeneratedProxyBody(fixture.Rig, "Head");
+            AnimatableBody3D neckProxy = FindGeneratedProxyBody(fixture.Rig, "Neck");
+
+            AssertBodyDoesNotHaveCollisionException(head, headProxy);
+            AssertBodyDoesNotHaveCollisionException(head, neckProxy);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies each live hand target ignores its own generated hand and forearm proxies while retaining other body-proxy collisions.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HandTargets_IgnoreOwnHandAndForearmProxiesOnly()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            AnimatableBody3D rightHand = fixture.RightHandTarget;
+            AnimatableBody3D rightHandProxy = FindGeneratedProxyBody(fixture.Rig, "RightHand");
+            AnimatableBody3D rightLowerArmProxy = FindGeneratedProxyBody(fixture.Rig, "RightLowerArm");
+            AnimatableBody3D rightUpperArmProxy = FindGeneratedProxyBody(fixture.Rig, "RightUpperArm");
+            AnimatableBody3D chestProxy = FindGeneratedProxyBody(fixture.Rig, "Chest");
+
+            AssertBodyHasCollisionException(rightHand, rightHandProxy);
+            AssertBodyHasCollisionException(rightHand, rightLowerArmProxy);
+            AssertBodyDoesNotHaveCollisionException(rightHand, rightUpperArmProxy);
+            AssertBodyDoesNotHaveCollisionException(rightHand, chestProxy);
+
+            Transform3D handProxyApproach = BuildApproachTransform(rightHandProxy.GlobalTransform, new Vector3(0.12f, 0.0f, 0.0f));
+            bool ownHandCollisionBlocked = rightHand.TestMove(handProxyApproach, new Vector3(-0.08f, 0.0f, 0.0f));
+
+            Assert.False(ownHandCollisionBlocked, "Right-hand motion tests should ignore the generated proxy for the same hand.");
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the live right-hand body preserves generated-proxy and external-body collision eligibility.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_RightHand_PreservesGeneratedProxyAndExternalBodyCollisionEligibility()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            AnimatableBody3D rightHand = fixture.RightHandTarget;
+            AnimatableBody3D chestProxy = FindGeneratedProxyBody(fixture.Rig, "Chest");
+            AnimatableBody3D upperArmProxy = FindGeneratedProxyBody(fixture.Rig, "RightUpperArm");
+            AssertBodyDoesNotHaveCollisionException(rightHand, chestProxy);
+            AssertBodyDoesNotHaveCollisionException(rightHand, upperArmProxy);
+            AssertCollisionLayersCanInteract(rightHand, chestProxy);
+            AssertCollisionLayersCanInteract(rightHand, upperArmProxy);
+
+            Transform3D initialHandTransform = rightHand.GlobalTransform;
+            Vector3 outwardDirection = (initialHandTransform.Origin - chestProxy.GlobalPosition).Normalized();
+            StaticBody3D externalObstacle = CreateExternalObstacle(initialHandTransform.Origin + (outwardDirection * 0.16f));
+            fixture.Root.AddChild(externalObstacle);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+            AssertCollisionLayersCanInteract(rightHand, externalObstacle);
+
+            externalObstacle.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies direct-name source markers fail fast instead of silently skipping unresolved proxy shapes.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_InvalidDirectNameMarker_FailsFastAndClearsPartialRig()
+    {
+        Skeleton3D skeleton = CreateSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            SourceScene = CreatePackedSourceSceneWithUnresolvedMarker(),
+        };
+        skeleton.AddChild(rig);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => ForceBuildGeneratedRig(rig));
+
+        Assert.Contains("UnmappedBone", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("direct-name contract", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, rig.SkippedSourceShapeCount);
+        Assert.Equal(0, rig.GeneratedProxyCount);
+        Assert.Equal(0, CountGeneratedProxyBodies(rig));
+    }
+
+    private static void AssertCollisionLayerContract(PhysicsBody3D body, uint expectedLayer, uint expectedMask)
+    {
+        Assert.Equal(expectedLayer, body.CollisionLayer);
+        Assert.Equal(expectedMask, body.CollisionMask);
+    }
+
+    private static T GetPrivateField<T>(PlayerVRIK playerVRIK, string fieldName)
+    {
+        FieldInfo field = typeof(PlayerVRIK).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+                          ?? throw new InvalidOperationException($"PlayerVRIK field '{fieldName}' was not found.");
+
+        return Assert.IsType<T>(field.GetValue(playerVRIK));
+    }
+
+    private static void AssertBodyHasCollisionException(PhysicsBody3D source, PhysicsBody3D expected)
+    {
+        Godot.Collections.Array<PhysicsBody3D> exceptions = source.GetCollisionExceptions();
+        Assert.Contains(exceptions, body => ReferenceEquals(body, expected));
+    }
+
+    private static void AssertBodyDoesNotHaveCollisionException(PhysicsBody3D source, PhysicsBody3D other)
+    {
+        Godot.Collections.Array<PhysicsBody3D> exceptions = source.GetCollisionExceptions();
+        Assert.DoesNotContain(exceptions, body => ReferenceEquals(body, other));
+    }
+
+    private static void AssertCollisionLayersCanInteract(PhysicsBody3D source, PhysicsBody3D other)
+    {
+        Assert.True((source.CollisionMask & other.CollisionLayer) != 0, $"{source.Name} mask should include {other.Name} layer.");
+        Assert.True((other.CollisionMask & source.CollisionLayer) != 0, $"{other.Name} mask should include {source.Name} layer.");
+    }
+
+    private static Transform3D BuildApproachTransform(Transform3D targetTransform, Vector3 offset)
+        => new(targetTransform.Basis, targetTransform.Origin + offset);
+
+    private static StaticBody3D CreateExternalObstacle(Vector3 position)
+    {
+        StaticBody3D obstacle = new()
+        {
+            Name = "ExternalObstacle",
+            GlobalPosition = position,
+            CollisionLayer = 1,
+            CollisionMask = 8,
+        };
+
+        CollisionShape3D shape = new()
+        {
+            Shape = new BoxShape3D
+            {
+                Size = new Vector3(0.12f, 0.12f, 0.12f),
+            },
+        };
+
+        obstacle.AddChild(shape);
+        return obstacle;
+    }
+
+    private static Transform3D BuildExpectedProxyTransform(PackedScene? sourceScene, Skeleton3D skeleton, string boneName)
+    {
+        Node sourceRoot = sourceScene?.Instantiate()
+                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+
+        try
+        {
+            Node3D sourceBone = Assert.IsType<Node3D>(sourceRoot.GetNodeOrNull(boneName), exactMatch: false);
+            PhysicsBody3D sourceBody = Assert.IsAssignableFrom<PhysicsBody3D>(sourceBone.GetChild(0));
+            BoneAttachment3D attachment = Assert.IsType<BoneAttachment3D>(FindGeneratedAttachment(skeleton, boneName), exactMatch: false);
+            return attachment.GlobalTransform * sourceBody.Transform;
+        }
+        finally
+        {
+            sourceRoot.Free();
+        }
+    }
+
+    private static BoneAttachment3D FindGeneratedAttachment(Skeleton3D skeleton, string boneName)
+    {
+        foreach (Node child in skeleton.GetChildren())
+        {
+            if (child is BoneAttachment3D attachment && attachment.BoneName == boneName)
+            {
+                return attachment;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected generated attachment for bone '{boneName}'.");
+    }
+
+    private static AnimatableBody3D FindGeneratedProxyBody(DynamicPhysicalRig rig, string sourceBoneName)
+    {
+        foreach (Node child in rig.TargetSkeleton!.GetChildren())
+        {
+            if (child is not BoneAttachment3D attachment || attachment.BoneName != sourceBoneName)
+            {
+                continue;
+            }
+
+            if (attachment.GetNodeOrNull("ProxyBody") is not AnimatableBody3D proxyBody)
+            {
+                continue;
+            }
+
+            return proxyBody;
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected generated proxy body for source bone '{sourceBoneName}'.");
+    }
+
+    private static int CountGeneratedProxyBodies(DynamicPhysicalRig rig)
+    {
+        int count = 0;
+
+        foreach (Node child in rig.TargetSkeleton!.GetChildren())
+        {
+            if (child is not BoneAttachment3D attachment)
+            {
+                continue;
+            }
+
+            if (!attachment.Name.ToString().StartsWith("GeneratedCollider_", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (attachment.GetNodeOrNull("ProxyBody") is AnimatableBody3D)
+            {
+                count += 1;
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountSourceShapes(PackedScene? sourceScene)
+    {
+        Node sourceRoot = sourceScene?.Instantiate()
+                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+
+        try
+        {
+            int count = 0;
+            Stack<Node> pending = new([sourceRoot]);
+
+            while (pending.Count > 0)
+            {
+                Node current = pending.Pop();
+                if (current is CollisionShape3D)
+                {
+                    count += 1;
+                }
+
+                foreach (Node child in current.GetChildren())
+                {
+                    pending.Push(child);
+                }
+            }
+
+            return count;
+        }
+        finally
+        {
+            sourceRoot.Free();
+        }
+    }
+
+    private static void InvokeOnBeginStage(PlayerVRIK playerVRIK, double delta)
+    {
+        MethodInfo method = typeof(PlayerVRIK).GetMethod(
+                                "OnBeginStage",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException("PlayerVRIK.OnBeginStage was not found.");
+
+        _ = method.Invoke(playerVRIK, [delta]);
+    }
+
+    private static void InvokeUpdatePhysicalFollowers(PlayerVRIK playerVRIK, double delta)
+    {
+        MethodInfo method = typeof(PlayerVRIK).GetMethod(
+                                "UpdatePhysicalFollowers",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException("PlayerVRIK.UpdatePhysicalFollowers was not found.");
+
+        _ = method.Invoke(playerVRIK, [delta]);
+    }
+
+    private static void InvokeRigPhysicsSync(DynamicPhysicalRig rig)
+    {
+        MethodInfo method = typeof(DynamicPhysicalRig).GetMethod(
+                                "SyncProxyBodiesToPhysics",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException("DynamicPhysicalRig.SyncProxyBodiesToPhysics was not found.");
+
+        _ = method.Invoke(rig, null);
+    }
+
+    private static void ForceBuildGeneratedRig(DynamicPhysicalRig rig)
+    {
+        MethodInfo clearMethod = typeof(DynamicPhysicalRig).GetMethod(
+                                     "ClearGeneratedRig",
+                                     BindingFlags.Instance | BindingFlags.NonPublic)
+                                 ?? throw new InvalidOperationException("DynamicPhysicalRig.ClearGeneratedRig was not found.");
+        MethodInfo buildMethod = typeof(DynamicPhysicalRig).GetMethod(
+                                     "BuildGeneratedRig",
+                                     BindingFlags.Instance | BindingFlags.NonPublic)
+                                  ?? throw new InvalidOperationException("DynamicPhysicalRig.BuildGeneratedRig was not found.");
+
+        InvokeReflectedMethod(clearMethod, rig, null);
+        InvokeReflectedMethod(buildMethod, rig, null);
+    }
+
+    private static void InvokeReflectedMethod(MethodInfo method, object target, object?[]? args)
+    {
+        try
+        {
+            _ = method.Invoke(target, args);
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private static void AssertTransformApproximately(Transform3D expected, Transform3D actual, float epsilon)
+    {
+        AssertVectorApproximately(expected.Origin, actual.Origin, epsilon);
+        AssertBasisApproximately(expected.Basis, actual.Basis, epsilon);
+    }
+
+    private static void AssertBasisApproximately(Basis expected, Basis actual, float epsilon)
+    {
+        AssertVectorApproximately(expected.X, actual.X, epsilon);
+        AssertVectorApproximately(expected.Y, actual.Y, epsilon);
+        AssertVectorApproximately(expected.Z, actual.Z, epsilon);
+    }
+
+    private static void AssertVectorApproximately(Vector3 expected, Vector3 actual, float epsilon)
+    {
+        Assert.InRange(actual.X, expected.X - epsilon, expected.X + epsilon);
+        Assert.InRange(actual.Y, expected.Y - epsilon, expected.Y + epsilon);
+        Assert.InRange(actual.Z, expected.Z - epsilon, expected.Z + epsilon);
+    }
+
+    private static PackedScene CreatePackedSourceSceneWithUnresolvedMarker()
+    {
+        Node3D root = new()
+        {
+            Name = "InvalidCollidersRoot",
+        };
+        Node3D sourceBoneMarker = new()
+        {
+            Name = "UnmappedBone",
+        };
+        AnimatableBody3D sourceBody = new()
+        {
+            Name = "SourceBody",
+        };
+        CollisionShape3D sourceShape = new()
+        {
+            Name = "SourceShape",
+            Shape = new BoxShape3D
+            {
+                Size = new Vector3(0.1f, 0.1f, 0.1f),
+            },
+        };
+
+        root.AddChild(sourceBoneMarker);
+        sourceBoneMarker.Owner = root;
+        sourceBoneMarker.AddChild(sourceBody);
+        sourceBody.Owner = root;
+        sourceBody.AddChild(sourceShape);
+        sourceShape.Owner = root;
+
+        PackedScene sourceScene = new();
+        Error packResult = sourceScene.Pack(root);
+        root.Free();
+
+        Assert.Equal(Error.Ok, packResult);
+        return sourceScene;
+    }
+
+    private static Skeleton3D CreateSkeleton()
+    {
+        Skeleton3D skeleton = new()
+        {
+            Name = "GeneralSkeleton",
+        };
+
+        Dictionary<string, int> boneIndices = [];
+
+        foreach ((string name, _, _) in RuntimeFixture.BoneDefinitions)
+        {
+            boneIndices[name] = skeleton.AddBone(name);
+        }
+
+        foreach ((string name, string? parent, Vector3 position) in RuntimeFixture.BoneDefinitions)
+        {
+            int boneIndex = boneIndices[name];
+            skeleton.SetBoneRest(boneIndex, new Transform3D(Basis.Identity, position));
+
+            if (parent is not null)
+            {
+                skeleton.SetBoneParent(boneIndex, boneIndices[parent]);
+            }
+        }
+
+        return skeleton;
+    }
+
+    private sealed class RuntimeFixture(
+        Node3D root,
+        CharacterBody3D player,
+        PlayerVRIK playerVRIK,
+        DynamicPhysicalRig rig,
+        CharacterBody3D headTarget,
+        AnimatableBody3D rightHandTarget,
+        AnimatableBody3D leftHandTarget,
+        Node3D rightHandPosition)
+    {
+        internal static readonly (string Name, string? Parent, Vector3 Position)[] BoneDefinitions =
+        [
+            ("Hips", null, new Vector3(0.0f, 1.00f, 0.00f)),
+            ("Spine", "Hips", new Vector3(0.0f, 1.15f, 0.00f)),
+            ("Chest", "Spine", new Vector3(0.0f, 1.30f, 0.02f)),
+            ("UpperChest", "Chest", new Vector3(0.0f, 1.42f, 0.04f)),
+            ("Neck", "UpperChest", new Vector3(0.0f, 1.52f, 0.04f)),
+            ("Head", "Neck", new Vector3(0.0f, 1.62f, 0.05f)),
+            ("RightShoulder", "UpperChest", new Vector3(0.18f, 1.42f, 0.03f)),
+            ("RightUpperArm", "RightShoulder", new Vector3(0.38f, 1.40f, 0.03f)),
+            ("RightLowerArm", "RightUpperArm", new Vector3(0.55f, 1.33f, 0.02f)),
+            ("RightHand", "RightLowerArm", new Vector3(0.72f, 1.28f, 0.02f)),
+            ("LeftShoulder", "UpperChest", new Vector3(-0.18f, 1.42f, 0.03f)),
+            ("LeftUpperArm", "LeftShoulder", new Vector3(-0.38f, 1.40f, 0.03f)),
+            ("LeftLowerArm", "LeftUpperArm", new Vector3(-0.55f, 1.33f, 0.02f)),
+            ("LeftHand", "LeftLowerArm", new Vector3(-0.72f, 1.28f, 0.02f)),
+            ("RightUpperLeg", "Hips", new Vector3(0.10f, 0.86f, 0.00f)),
+            ("RightLowerLeg", "RightUpperLeg", new Vector3(0.10f, 0.50f, 0.00f)),
+            ("RightFoot", "RightLowerLeg", new Vector3(0.10f, 0.10f, 0.08f)),
+            ("RightToes", "RightFoot", new Vector3(0.10f, 0.04f, 0.20f)),
+            ("LeftUpperLeg", "Hips", new Vector3(-0.10f, 0.86f, 0.00f)),
+            ("LeftLowerLeg", "LeftUpperLeg", new Vector3(-0.10f, 0.50f, 0.00f)),
+            ("LeftFoot", "LeftLowerLeg", new Vector3(-0.10f, 0.10f, 0.08f)),
+            ("LeftToes", "LeftFoot", new Vector3(-0.10f, 0.04f, 0.20f)),
+            ("breast_r", "Chest", new Vector3(0.10f, 1.34f, 0.10f)),
+            ("breast_l", "Chest", new Vector3(-0.10f, 1.34f, 0.10f)),
+        ];
+
+        public Node3D Root { get; } = root;
+
+        public CharacterBody3D Player { get; } = player;
+
+        public PlayerVRIK PlayerVRIK { get; } = playerVRIK;
+
+        public DynamicPhysicalRig Rig { get; } = rig;
+
+        public CharacterBody3D HeadTarget { get; } = headTarget;
+
+        public AnimatableBody3D RightHandTarget { get; } = rightHandTarget;
+
+        public AnimatableBody3D LeftHandTarget { get; } = leftHandTarget;
+
+        public Node3D RightHandPosition { get; } = rightHandPosition;
+
+        public static async Task<RuntimeFixture> CreateAsync(SceneTree sceneTree, Action<PlayerVRIK>? configurePlayerVRIK = null)
+        {
+            Node3D root = new()
+            {
+                Name = "DynamicPhysicalRigTestRoot",
+            };
+
+            CharacterBody3D player = new()
+            {
+                Name = "Player",
+            };
+            root.AddChild(player);
+
+            Skeleton3D skeleton = CreateSkeleton();
+            player.AddChild(skeleton);
+
+            BoneAttachment3D headAttachment = new()
+            {
+                Name = "HeadAttachment",
+                BoneName = "Head",
+                BoneIdx = skeleton.FindBone("Head"),
+            };
+            skeleton.AddChild(headAttachment);
+
+            Marker3D viewpoint = new()
+            {
+                Name = "Viewpoint",
+                Transform = new Transform3D(Basis.Identity, new Vector3(0.0f, 0.03f, 0.09f)),
+            };
+            headAttachment.AddChild(viewpoint);
+
+            DynamicPhysicalRig rig = new()
+            {
+                Name = "DynamicPhysicalRig",
+                TargetSkeleton = skeleton,
+                SourceScene = LoadPackedScene(CollidersScenePath),
+                GenerateInEditor = true,
+            };
+            skeleton.AddChild(rig);
+
+            Node3D ikTargets = new()
+            {
+                Name = "IKTargets",
+            };
+            player.AddChild(ikTargets);
+
+            CharacterBody3D headTarget = CreateCharacterIkTargetBody("Head", new Vector3(0.0f, 1.62f, 0.05f), 1, 1, new CapsuleShape3D { Radius = 0.08f, Height = 0.18f });
+            AnimatableBody3D rightHandTarget = CreateAnimatableIkTargetBody("RightHand", new Vector3(0.72f, 1.28f, 0.02f), 8, 5, new BoxShape3D { Size = new Vector3(0.10f, 0.18f, 0.10f) });
+            AnimatableBody3D leftHandTarget = CreateAnimatableIkTargetBody("LeftHand", new Vector3(-0.72f, 1.28f, 0.02f), 8, 5, new BoxShape3D { Size = new Vector3(0.10f, 0.18f, 0.10f) });
+            Node3D headSolveTarget = new Marker3D { Name = "HeadSolve", TopLevel = true, GlobalTransform = headTarget.GlobalTransform };
+
+            ikTargets.AddChild(headTarget);
+            ikTargets.AddChild(headSolveTarget);
+            ikTargets.AddChild(rightHandTarget);
+            ikTargets.AddChild(leftHandTarget);
+
+            PlayerVRIK playerVRIK = new()
+            {
+                Name = "VRIK",
+                Viewpoint = viewpoint,
+                HeadIKTarget = headTarget,
+                HeadIKSolveTarget = headSolveTarget,
+                RightHandIKTarget = rightHandTarget,
+                LeftHandIKTarget = leftHandTarget,
+                Skeleton = skeleton,
+            };
+            configurePlayerVRIK?.Invoke(playerVRIK);
+            player.AddChild(playerVRIK);
+
+            Node3D originNode = new()
+            {
+                Name = "Origin",
+            };
+            Camera3D cameraNode = new()
+            {
+                Name = "Camera",
+            };
+            Node3D rightControllerNode = new()
+            {
+                Name = "RightController",
+            };
+            Node3D rightHandPosition = new()
+            {
+                Name = "RightHandPosition",
+            };
+            Node3D leftControllerNode = new()
+            {
+                Name = "LeftController",
+            };
+            Node3D leftHandPosition = new()
+            {
+                Name = "LeftHandPosition",
+            };
+
+            root.AddChild(originNode);
+            originNode.AddChild(cameraNode);
+            originNode.AddChild(rightControllerNode);
+            rightControllerNode.AddChild(rightHandPosition);
+            originNode.AddChild(leftControllerNode);
+            leftControllerNode.AddChild(leftHandPosition);
+
+            sceneTree.Root.AddChild(root);
+            await WaitForFramesAsync(sceneTree, 2);
+            await WaitForPhysicsFramesAsync(sceneTree, 4);
+
+            ForceBuildGeneratedRig(rig);
+            await WaitForFramesAsync(sceneTree, 1);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+
+            cameraNode.GlobalTransform = headTarget.GlobalTransform * viewpoint.Transform;
+            rightHandPosition.GlobalTransform = rightHandTarget.GlobalTransform;
+            leftHandPosition.GlobalTransform = leftHandTarget.GlobalTransform;
+
+            bool bound = playerVRIK.TryBind(
+                new TestXROrigin(originNode),
+                new TestXRCamera(cameraNode),
+                new TestXRHandController(rightControllerNode, rightHandPosition),
+                new TestXRHandController(leftControllerNode, leftHandPosition));
+
+            Assert.True(bound);
+            await WaitForPhysicsFramesAsync(sceneTree, 4);
+
+            return new RuntimeFixture(root, player, playerVRIK, rig, headTarget, rightHandTarget, leftHandTarget, rightHandPosition);
+        }
+
+        public async Task DisposeAsync(SceneTree sceneTree)
+        {
+            if (GodotObject.IsInstanceValid(Root) && Root.IsInsideTree())
+            {
+                Root.QueueFree();
+                await WaitForNextFrameAsync(sceneTree);
+            }
+        }
+
+        private static CharacterBody3D CreateCharacterIkTargetBody(string name, Vector3 position, uint collisionLayer, uint collisionMask, Shape3D shape)
+        {
+            CharacterBody3D body = new()
+            {
+                Name = name,
+                TopLevel = true,
+                CollisionLayer = collisionLayer,
+                CollisionMask = collisionMask,
+                MotionMode = CharacterBody3D.MotionModeEnum.Floating,
+                GlobalPosition = position,
+            };
+
+            CollisionShape3D collisionShape = new()
+            {
+                Name = "CollisionShape3D",
+                Shape = shape,
+            };
+
+            body.AddChild(collisionShape);
+            return body;
+        }
+
+        private static AnimatableBody3D CreateAnimatableIkTargetBody(string name, Vector3 position, uint collisionLayer, uint collisionMask, Shape3D shape)
+        {
+            AnimatableBody3D body = new()
+            {
+                Name = name,
+                TopLevel = true,
+                SyncToPhysics = false,
+                CollisionLayer = collisionLayer,
+                CollisionMask = collisionMask,
+                GlobalPosition = position,
+            };
+
+            CollisionShape3D collisionShape = new()
+            {
+                Name = "CollisionShape3D",
+                Shape = shape,
+            };
+
+            body.AddChild(collisionShape);
+            return body;
+        }
+    }
+
+    private sealed class TestXROrigin(Node3D originNode) : IXROrigin
+    {
+        public Node3D OriginNode => originNode;
+
+        public float WorldScale { get; set; } = 1.0f;
+    }
+
+    private sealed class TestXRCamera(Camera3D cameraNode) : IXRCamera
+    {
+        public Camera3D CameraNode => cameraNode;
+    }
+
+    private sealed class TestXRHandController(Node3D controllerNode, Node3D handPositionNode) : IXRHandController
+    {
+        public event Action<string>? ActionButtonPressed
+        {
+            add
+            {
+            }
+
+            remove
+            {
+            }
+        }
+
+        public event Action<string>? ActionButtonReleased
+        {
+            add
+            {
+            }
+
+            remove
+            {
+            }
+        }
+
+        public event Action<string, float>? ActionFloatInputChanged
+        {
+            add
+            {
+            }
+
+            remove
+            {
+            }
+        }
+
+        public event Action<string, Vector2>? ActionVector2InputChanged
+        {
+            add
+            {
+            }
+
+            remove
+            {
+            }
+        }
+
+        public Node3D ControllerNode => controllerNode;
+
+        public Node3D HandPositionNode => handPositionNode;
+    }
+}

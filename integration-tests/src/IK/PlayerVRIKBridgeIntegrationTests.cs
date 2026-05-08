@@ -329,15 +329,17 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         };
         ikTargets.AddChild(headIKSolveTarget);
 
-        CharacterBody3D rightHandIKTarget = new()
+        AnimatableBody3D rightHandIKTarget = new()
         {
             Name = "RightHand",
+            SyncToPhysics = false,
         };
         ikTargets.AddChild(rightHandIKTarget);
 
-        CharacterBody3D leftHandIKTarget = new()
+        AnimatableBody3D leftHandIKTarget = new()
         {
             Name = "LeftHand",
+            SyncToPhysics = false,
         };
         ikTargets.AddChild(leftHandIKTarget);
 

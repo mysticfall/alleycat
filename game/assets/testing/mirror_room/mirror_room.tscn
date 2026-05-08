@@ -1,14 +1,28 @@
 [gd_scene format=3 uid="uid://baut876fuyk5c"]
 
 [ext_resource type="PackedScene" uid="uid://dei4vqs1pclk8" path="res://assets/testing/test_mirror.tscn" id="1_70tdi"]
-[ext_resource type="PackedScene" uid="uid://ddvo8gcyxsws7" path="res://assets/characters/reference/player.tscn" id="2_o5j6c"]
+[ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/player.tscn" id="2_o5j6c"]
 [ext_resource type="PackedScene" uid="uid://bx2i1qev0800s" path="res://assets/testing/test_environment.tscn" id="3_shmn4"]
+[ext_resource type="PackedScene" uid="uid://doedwhsg5x0o0" path="res://assets/items/chain/physics_chain.tscn" id="4_3ounv"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
 size = Vector2(10, 10)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_shmn4"]
 size = Vector3(10, 0.01, 10)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ui8dj"]
+size = Vector3(0.06, 0.12, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_tl84k"]
+size = Vector3(0.06, 0.12, 0.06)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_dk4eq"]
+radius = 0.075
+
+[sub_resource type="SphereMesh" id="SphereMesh_yh5d4"]
+radius = 0.075
+height = 0.15
 
 [node name="MirrorRoom" type="Node3D" unique_id=973335562]
 
@@ -42,3 +56,48 @@ shape = SubResource("BoxShape3D_shmn4")
 [node name="Female" parent="." unique_id=1792987446 instance=ExtResource("2_o5j6c")]
 
 [node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_shmn4")]
+
+[node name="Items" type="Node3D" parent="." unique_id=1247114236]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7552289, -0.6124832)
+
+[node name="Chain" parent="Items" unique_id=1490776132 node_paths=PackedStringArray("StartAttachedBody", "StartAttachedBodyAnchor", "EndAttachedBody", "EndAttachedBodyAnchor") instance=ExtResource("4_3ounv")]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 1.2, 0)
+LinkCount = 32
+StartAttachedBody = NodePath("../StartAnchor")
+StartAttachedBodyAnchor = NodePath("../StartAnchor/AttachmentPoint")
+EndAttachedBody = NodePath("../EndWeight")
+EndAttachedBodyAnchor = NodePath("../EndWeight/AttachmentPoint")
+
+[node name="StartAnchor" type="RigidBody3D" parent="Items" groups=["hand_dynamic_interaction_body"] unique_id=920795106]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2707611, 0)
+collision_layer = 2
+collision_mask = 11
+mass = 5.0
+gravity_scale = 0.0
+freeze = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Items/StartAnchor" unique_id=1491942265]
+shape = SubResource("BoxShape3D_ui8dj")
+
+[node name="Mesh" type="MeshInstance3D" parent="Items/StartAnchor" unique_id=1363968189]
+mesh = SubResource("BoxMesh_tl84k")
+
+[node name="AttachmentPoint" type="Marker3D" parent="Items/StartAnchor" unique_id=162430268]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, 0)
+
+[node name="EndWeight" type="RigidBody3D" parent="Items" groups=["hand_dynamic_interaction_body"] unique_id=585176685]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35450745, 5.9604645e-08)
+collision_layer = 2
+collision_mask = 11
+mass = 0.6
+linear_damp = 0.02
+angular_damp = 0.05
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Items/EndWeight" unique_id=898110529]
+shape = SubResource("SphereShape3D_dk4eq")
+
+[node name="Mesh" type="MeshInstance3D" parent="Items/EndWeight" unique_id=1151649996]
+mesh = SubResource("SphereMesh_yh5d4")
+
+[node name="AttachmentPoint" type="Marker3D" parent="Items/EndWeight" unique_id=490933954]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
