@@ -1,4 +1,4 @@
-using AlleyCat.Common;
+using AlleyCat.Body;
 using AlleyCat.Component;
 using Godot;
 
