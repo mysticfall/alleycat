@@ -4,7 +4,7 @@ using Godot;
 namespace AlleyCat.Body.Hands;
 
 /// <summary>
-/// Component capability representing one hand that can expose and control a hand-pose override.
+/// Component capability representing one hand that can expose and control a pose override.
 /// </summary>
 public interface IHand : IComponent
 {
@@ -17,9 +17,9 @@ public interface IHand : IComponent
     }
 
     /// <summary>
-    /// Gets or sets the target hand pose resource; <see langword="null" /> clears the override.
+    /// Gets or sets the target pose resource; <see langword="null" /> clears the override.
     /// </summary>
-    Resource? HandPose
+    Resource? Pose
     {
         get;
         set;
@@ -28,27 +28,27 @@ public interface IHand : IComponent
     /// <summary>
     /// Gets or sets the clamped rest-to-pose blend weight.
     /// </summary>
-    float HandPoseWeight
+    float PoseWeight
     {
         get;
         set;
     }
 
     /// <summary>
-    /// Gets the currently applied hand pose after transition state has settled.
+    /// Gets the currently applied pose after transition state has settled.
     /// </summary>
-    Resource? CurrentHandPose
+    Resource? CurrentPose
     {
         get;
     }
 
     /// <summary>
-    /// Sets or clears the hand pose, optionally overriding the weight and bypassing smoothing.
+    /// Sets or clears the pose, optionally overriding the weight and bypassing smoothing.
     /// </summary>
-    void SetHandPose(Resource? pose, float? weight = null, bool immediate = false);
+    void SetPose(Resource? pose, float? weight = null, bool immediate = false);
 
     /// <summary>
-    /// Clears the current hand pose override.
+    /// Clears the current pose override.
     /// </summary>
-    void ClearHandPose(bool immediate = false);
+    void ClearPose(bool immediate = false);
 }

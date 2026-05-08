@@ -40,12 +40,12 @@ Provide a reusable hand component system that:
 1. Define `LimbSide` enum in `AlleyCat.Body` (`Left = 0`, `Right = 1`).
 2. Define `IHand : IComponent` capability interface in `AlleyCat.Body.Hands`:
    - `Side: LimbSide` — identifies the hand side.
-   - `HandPose: Resource?` — target pose resource; `null` clears override.
-   - `HandPoseWeight: float` — clamped [0, 1] rest-to-pose blend weight (default 1.0).
-   - `CurrentHandPose: Resource?` — read-only current pose after transition settles.
-   - `SetHandPose(Resource? pose, float? weight = null, bool immediate = false)` — sets pose
+   - `Pose: Resource?` — target pose resource; `null` clears override.
+   - `PoseWeight: float` — clamped [0, 1] rest-to-pose blend weight (default 1.0).
+   - `CurrentPose: Resource?` — read-only current pose after transition settles.
+   - `SetPose(Resource? pose, float? weight = null, bool immediate = false)` — sets pose
      with optional weight and immediate flag bypassing smoothing.
-   - `ClearHandPose(bool immediate = false)` — clears current hand pose override.
+   - `ClearPose(bool immediate = false)` — clears current hand pose override.
 3. Define `IHasHands : IComponentHolder` holder trait in `AlleyCat.Body.Hands`:
    - `TryGetHand(LimbSide side, out IHand? hand)` — resolves exactly one hand component for
      the requested side; returns `false` if zero or more than one hand component exists.
@@ -100,8 +100,8 @@ Provide a reusable hand component system that:
 | ID | Requirement Layer | Criterion |
 |----|-------------------|----------|
 | 1  | Technical         | `LimbSide` enum is defined in `AlleyCat.Body` with `Left = 0`, `Right = 1`. |
-| 2  | Technical         | `IHand : IComponent` interface defines `Side`, `HandPose`, `HandPoseWeight`, |
-|    |                   | `CurrentHandPose`, `SetHandPose`, and `ClearHandPose`. |
+| 2  | Technical         | `IHand : IComponent` interface defines `Side`, `Pose`, `PoseWeight`, |
+|    |                   | `CurrentPose`, `SetPose`, and `ClearPose`. |
 | 3  | Technical         | `IHasHands : IComponentHolder` defines `TryGetHand` and `RequireHand` methods. |
 | 4  | Technical         | `HandPoseBehaviour` implements `IHand` and exposes per-side pose properties. |
 | 5  | Technical         | Track filters on blend nodes match only finger bones, excluding the hand bone. |

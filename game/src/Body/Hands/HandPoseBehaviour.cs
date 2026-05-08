@@ -27,14 +27,14 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     }
 
     /// <inheritdoc />
-    public Resource? HandPose
+    public Resource? Pose
     {
         get => Side == LimbSide.Left ? LeftHandPose : RightHandPose;
-        set => SetHandPose(value);
+        set => SetPose(value);
     }
 
     /// <inheritdoc />
-    public float HandPoseWeight
+    public float PoseWeight
     {
         get => Side == LimbSide.Left ? LeftHandPoseWeight : RightHandPoseWeight;
         set
@@ -51,7 +51,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     }
 
     /// <inheritdoc />
-    public Resource? CurrentHandPose => Side == LimbSide.Left ? CurrentLeftHandPose : CurrentRightHandPose;
+    public Resource? CurrentPose => Side == LimbSide.Left ? CurrentLeftHandPose : CurrentRightHandPose;
 
     /// <summary>
     /// Gets or sets the target left hand pose resource.
@@ -182,9 +182,9 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     public override void _Process(double delta) => _controller?.Update(delta);
 
     /// <summary>
-    /// Sets or clears a hand pose, optionally overriding the weight and bypassing smoothing.
+    /// Sets or clears the pose for this hand, optionally overriding the weight and bypassing smoothing.
     /// </summary>
-    public void SetHandPose(Resource? pose, float? weight = null, bool immediate = false)
+    public void SetPose(Resource? pose, float? weight = null, bool immediate = false)
         => SetHandPose(Side, pose, weight, immediate);
 
     /// <summary>
@@ -224,5 +224,5 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         => _controller?.ClearHandPose(side, immediate);
 
     /// <inheritdoc />
-    public void ClearHandPose(bool immediate = false) => ClearHandPose(Side, immediate);
+    public void ClearPose(bool immediate = false) => ClearHandPose(Side, immediate);
 }
