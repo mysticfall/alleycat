@@ -2,7 +2,7 @@ using AlleyCat.Animation;
 using AlleyCat.Common;
 using Godot;
 
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Concrete locomotion component for the reference player.

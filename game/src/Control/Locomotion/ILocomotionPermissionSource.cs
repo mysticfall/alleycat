@@ -1,4 +1,4 @@
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Supplies movement and rotation permissions to a locomotion component.

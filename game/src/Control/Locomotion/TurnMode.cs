@@ -1,4 +1,4 @@
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Supported locomotion turn modes.

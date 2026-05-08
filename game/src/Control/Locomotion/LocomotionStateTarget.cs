@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Describes the animation-state pair used for locomotion travel and root-motion gating.

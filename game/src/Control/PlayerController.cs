@@ -1,4 +1,5 @@
 using AlleyCat.Common;
+using AlleyCat.Control.Locomotion;
 using AlleyCat.XR;
 using Godot;
 

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Shared base for locomotion components that consume permission sources.

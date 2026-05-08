@@ -1,5 +1,5 @@
 using AlleyCat.Animation;
-using AlleyCat.Control;
+using AlleyCat.Control.Locomotion;
 using Godot;
 
 namespace AlleyCat.IK.Pose;

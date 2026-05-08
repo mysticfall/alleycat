@@ -1,7 +1,7 @@
 using AlleyCat.Component;
 using Godot;
 
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Control-layer contract for player locomotion.

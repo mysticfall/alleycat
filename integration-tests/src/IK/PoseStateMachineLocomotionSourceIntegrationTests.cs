@@ -1,5 +1,5 @@
 using System.Reflection;
-using AlleyCat.Control;
+using AlleyCat.Control.Locomotion;
 using AlleyCat.IK.Pose;
 using AlleyCat.TestFramework;
 using Godot;

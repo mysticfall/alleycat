@@ -1,4 +1,4 @@
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Aggregated locomotion permissions for movement and rotation.

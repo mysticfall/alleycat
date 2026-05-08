@@ -1,7 +1,7 @@
 using AlleyCat.Component;
 using Godot;
 
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Trait for objects that can move and rotate through their composed locomotion capability.

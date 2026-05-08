@@ -42,7 +42,7 @@ public sealed partial class PlayerLocomotionPlayerSceneIntegrationTests
 
         Assert.Equal("AlleyCat.IK.PlayerVRIK", vrikNode.GetType().FullName);
         Assert.Equal("AlleyCat.IK.Pose.PoseStateMachine", poseStateMachineNode.GetType().FullName);
-        Assert.Equal("AlleyCat.Control.PlayerLocomotion", locomotionNode.GetType().FullName);
+        Assert.Equal("AlleyCat.Control.Locomotion.PlayerLocomotion", locomotionNode.GetType().FullName);
         Assert.Equal(
             "parameters/States/Walking/blend_position",
             locomotionNode.Get("AnimationBlendParameter").AsStringName().ToString());

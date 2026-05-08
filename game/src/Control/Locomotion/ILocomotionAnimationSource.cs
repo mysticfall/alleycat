@@ -1,4 +1,4 @@
-namespace AlleyCat.Control;
+namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
 /// Optionally supplies a pose-specific locomotion animation-state pair.
