@@ -660,6 +660,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     }
 
     private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
+        // Compatibility fixture: these tests intentionally build a simple state-machine-only tree.
         => animationTree.Get("parameters/playback").As<AnimationNodeStateMachinePlayback>()
            ?? throw new Xunit.Sdk.XunitException("Expected AnimationTree playback to be available.");
 

@@ -1,3 +1,4 @@
+using AlleyCat.Animation;
 using AlleyCat.Common;
 using AlleyCat.Control;
 using Godot;
@@ -64,7 +65,7 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
     {
         get;
         set;
-    } = new("parameters/AllFoursTransitioning/TimeSeek/seek_request");
+    } = new("parameters/States/AllFoursTransitioning/TimeSeek/seek_request");
 
     /// <summary>
     /// AnimationTree node name used while scrubbing the entry animation.
@@ -678,6 +679,9 @@ public partial class AllFoursPoseState : PoseState, ICrouchingPoseTransitionSour
             CrawlForwardOffsetThreshold,
             SeekWindowStartSeconds,
             SeekWindowEndSeconds);
-        tree.Set(SeekRequestParameter, seekTime);
+        StringName resolvedParameter = tree.Get(SeekRequestParameter).VariantType == Variant.Type.Nil
+            ? HandPoseAnimationTreePaths.GetNestedStateMachineParameter(SeekRequestParameter.ToString())
+            : SeekRequestParameter;
+        tree.Set(resolvedParameter, seekTime);
     }
 }

@@ -1,3 +1,4 @@
+using AlleyCat.Animation;
 using AlleyCat.Common;
 using AlleyCat.Control;
 using Godot;
@@ -884,6 +885,9 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
         }
 
         float seekTime = Mathf.Clamp(poseBlend, 0f, 1f) * ClipDurationSeconds;
-        tree.Set(SeekRequestParameter, seekTime);
+        StringName resolvedParameter = tree.Get(SeekRequestParameter).VariantType == Variant.Type.Nil
+            ? HandPoseAnimationTreePaths.GetNestedStateMachineParameter(SeekRequestParameter.ToString())
+            : SeekRequestParameter;
+        tree.Set(resolvedParameter, seekTime);
     }
 }

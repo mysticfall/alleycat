@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://c1rexm45hq1rf"]
 
-[ext_resource type="PackedScene" path="res://assets/characters/reference/female/reference_female_ik.tscn" id="1_edvvb"]
+[ext_resource type="PackedScene" uid="uid://e765iqdvmnjd" path="res://assets/characters/reference/female/reference_female_ik.tscn" id="1_edvvb"]
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/IK/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" path="res://assets/characters/reference/female/colliders.tscn" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
@@ -12,7 +12,7 @@
 
 [node name="Player" unique_id=1792987446 instance=ExtResource("1_edvvb")]
 
-[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(2074678510) index="0" unique_id=1174875389]
+[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(2076791994) index="0" unique_id=254595317]
 bones/1/position = Vector3(0, 0.8389602, 0.022851786)
 bones/1/rotation = Quaternion(0, 0, 0, 1)
 bones/2/rotation = Quaternion(0, 0, 0, 1)
@@ -136,7 +136,7 @@ script = ExtResource("9_ctrlloco")
 TargetCharacterBodyNode = NodePath("..")
 AnimationTree = NodePath("../AnimationTree")
 RootMotionReference = NodePath("../Female_export")
-AnimationBlendParameter = &"parameters/Walking/blend_position"
+AnimationBlendParameter = &"parameters/States/Walking/blend_position"
 PermissionSourceNodes = [NodePath("../VRIK/PoseStateMachine")]
 
 [node name="PlayerController" type="Node" parent="." index="7" unique_id=1206579480 node_paths=PackedStringArray("LocomotionNode")]

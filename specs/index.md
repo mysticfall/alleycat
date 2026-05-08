@@ -14,6 +14,10 @@
 
 - [XR-001: XRManager](xr/001-xr-manager/index.md)
 
+## Animation
+
+- [ANIM-001: Partial Animation Blending And Hand Poses](animation/001-partial-animation-blending/index.md)
+
 ## Characters
 
 - [CHAR-000: Character Skeleton Profile](characters/000-character-skeleton/index.md)

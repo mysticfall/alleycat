@@ -10,7 +10,7 @@ const ANIMATION_TREE_PATH := ^"Subject/Female/AnimationTree"
 const SKELETON_PATH := ^"Subject/Female/Female_export/GeneralSkeleton"
 const LEFT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/LeftFoot"
 const RIGHT_FOOT_TARGET_PATH := ^"Subject/Female/IKTargets/RightFoot"
-const PLAYBACK_PARAMETER := &"parameters/playback"
+const PLAYBACK_PARAMETER := &"parameters/States/playback"
 
 const HEAD_MARKER_NAME := "Head"
 const LEFT_HAND_MARKER_NAME := "LeftHand"

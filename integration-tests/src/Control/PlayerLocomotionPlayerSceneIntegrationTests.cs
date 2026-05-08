@@ -43,6 +43,9 @@ public sealed partial class PlayerLocomotionPlayerSceneIntegrationTests
         Assert.Equal("AlleyCat.IK.PlayerVRIK", vrikNode.GetType().FullName);
         Assert.Equal("AlleyCat.IK.Pose.PoseStateMachine", poseStateMachineNode.GetType().FullName);
         Assert.Equal("AlleyCat.Control.PlayerLocomotion", locomotionNode.GetType().FullName);
+        Assert.Equal(
+            "parameters/States/Walking/blend_position",
+            locomotionNode.Get("AnimationBlendParameter").AsStringName().ToString());
 
         Godot.Collections.Array permissionSources = locomotionNode.Get("PermissionSourceNodes").AsGodotArray();
         Variant permissionSource = Assert.Single(permissionSources);
@@ -57,7 +60,11 @@ public sealed partial class PlayerLocomotionPlayerSceneIntegrationTests
 
         try
         {
-            AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(authoredAnimationTree.TreeRoot, exactMatch: false);
+            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(authoredAnimationTree.TreeRoot, exactMatch: false);
+            AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(
+                rootTree.GetNode("States"),
+                exactMatch: false);
+
             Assert.NotNull(stateMachine.GetNode("AllFours"));
             Assert.NotNull(stateMachine.GetNode("AllFoursForward"));
             Assert.NotNull(stateMachine.GetNode("AllFoursTransitioning"));

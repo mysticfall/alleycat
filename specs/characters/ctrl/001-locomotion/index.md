@@ -73,7 +73,9 @@ respects pose-based permission gating.
 
 ### Animation Integration
 
-9. Wire animation blend parameter to `parameters/Walking/blend_position`.
+9. Wire animation blend parameter to `parameters/States/Walking/blend_position` when the
+   reference character uses the ANIM-001 partial animation blend tree. Legacy/simple state-machine-only test rigs may
+   continue to use `parameters/Walking/blend_position`.
 10. Consume root motion only when top-level state is Walking or active override.
 
 ### Configurable Parameters
@@ -120,7 +122,8 @@ respects pose-based permission gating.
 3. Player controller reads XR controller stick input and forwards.
 4. Both snap turn and smooth turn modes supported with configurable params.
 5. Root motion consumed when top-level state is Walking or active override.
-6. Animation blend parameter wired to `parameters/Walking/blend_position`.
+6. Animation blend parameter wired to the active state-machine path, currently
+   `parameters/States/Walking/blend_position` on the reference character.
 7. Transitions between StandingCrouching and Walking work based on input.
 8. Pose-state delegated locomotion animation-state override supported.
 9. Velocity derives from animation root motion output in root-motion states.

@@ -1,4 +1,5 @@
 using System.Reflection;
+using AlleyCat.Animation;
 using AlleyCat.IK.Pose;
 using AlleyCat.TestFramework;
 using Godot;
@@ -36,7 +37,7 @@ public sealed class PoseStateMachineIntegrationTests
     private const string KneelingToStandingTransitionResourcePath = "res://assets/characters/ik/pose/kneeling_to_standing_transition.tres";
     private const string PoseStateMachineTreeResourcePath = "res://assets/characters/reference/female/pose_state_machine_tree.tres";
     private static readonly StringName _standingCrouchingSeekParameter =
-        new("parameters/StandingCrouching/TimeSeek/seek_request");
+        new("parameters/States/StandingCrouching/TimeSeek/seek_request");
 
     private const float MinimumMidwaySeek = 0.2f;
     private const float MinimumFullSeek = 0.6f;
@@ -479,7 +480,7 @@ public sealed class PoseStateMachineIntegrationTests
 
         AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
         AnimationNodeStateMachinePlayback playback = ResolvePlayback(animationTree);
-        AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(ResourceLoader.Load(PoseStateMachineTreeResourcePath), exactMatch: false);
+        AnimationNodeStateMachine stateMachine = ResolveStateMachine(ResourceLoader.Load(PoseStateMachineTreeResourcePath));
         Resource standingState = LoadRequiredResource(StandingPoseStateResourcePath);
         Resource standingToKneelingTransition = LoadRequiredResource(StandingToKneelingTransitionResourcePath);
 
@@ -493,6 +494,9 @@ public sealed class PoseStateMachineIntegrationTests
 
         StringName standingAnimationStateName = GetRequiredStringNameProperty(standingState, "AnimationStateName");
         StringName standingSeekRequestParameter = GetRequiredStringNameProperty(standingState, "SeekRequestParameter");
+        Assert.Equal(
+            "parameters/States/StandingCrouching/TimeSeek/seek_request",
+            standingSeekRequestParameter.ToString());
 
         playback.Start(standingAnimationStateName, true);
         await WaitForFramesAsync(sceneTree, 2);
@@ -1196,11 +1200,29 @@ public sealed class PoseStateMachineIntegrationTests
     }
 
     private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
-        => animationTree.Get(new StringName("parameters/playback")).As<AnimationNodeStateMachinePlayback>()
+        => animationTree.Get(HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter()).As<AnimationNodeStateMachinePlayback>()
            ?? throw new Xunit.Sdk.XunitException("Expected AnimationTree playback object.");
 
     private static float ReadSeekRequest(AnimationTree animationTree, StringName seekRequestParameter)
-        => animationTree.Get(seekRequestParameter).AsSingle();
+    {
+        Variant value = animationTree.Get(seekRequestParameter);
+        return value.VariantType != Variant.Type.Nil
+            ? value.AsSingle()
+            : animationTree.Get(HandPoseAnimationTreePaths.GetNestedStateMachineParameter(seekRequestParameter.ToString())).AsSingle();
+    }
+
+    private static AnimationNodeStateMachine ResolveStateMachine(Resource resource)
+    {
+        if (resource is AnimationNodeStateMachine stateMachine)
+        {
+            return stateMachine;
+        }
+
+        AnimationNodeBlendTree root = Assert.IsType<AnimationNodeBlendTree>(resource, exactMatch: false);
+        return Assert.IsType<AnimationNodeStateMachine>(
+            root.GetNode(HandPoseAnimationTreePaths.UpstreamNode),
+            exactMatch: false);
+    }
 
     private static async Task AssertPlaybackConvergesToNodeWithoutInputAsync(
         SceneTree sceneTree,

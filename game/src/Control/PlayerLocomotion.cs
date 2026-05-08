@@ -1,3 +1,4 @@
+using AlleyCat.Animation;
 using AlleyCat.Common;
 using Godot;
 
@@ -9,7 +10,8 @@ namespace AlleyCat.Control;
 [GlobalClass]
 public partial class PlayerLocomotion : LocomotionBase
 {
-    private static readonly StringName _playbackParameter = new("parameters/playback");
+    private static readonly StringName _playbackParameter = HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter();
+    private static readonly StringName _legacyRootPlaybackParameter = new("parameters/playback");
     private static readonly StringName _walkingAnimationStateName = new("Walking");
     private static readonly StringName _standingAnimationStateName = new("StandingCrouching");
     private static readonly LocomotionStateTarget _defaultLocomotionStateTarget =
@@ -292,7 +294,8 @@ public partial class PlayerLocomotion : LocomotionBase
         float safeThreshold = Mathf.Max(AnimationBlendThreshold, 1e-3f);
         float blend = Mathf.Clamp(locomotionBlendInput.Length() / safeThreshold, 0f, 1f);
 
-        Variant currentValue = AnimationTreeResolved.Get(AnimationBlendParameter);
+        StringName resolvedBlendParameter = ResolveAnimationParameter(AnimationBlendParameter);
+        Variant currentValue = AnimationTreeResolved.Get(resolvedBlendParameter);
         if (currentValue.VariantType == Variant.Type.Nil)
         {
             if (!_warnedMissingAnimationBlendParameter)
@@ -308,13 +311,13 @@ public partial class PlayerLocomotion : LocomotionBase
 
         if (currentValue.VariantType is Variant.Type.Float or Variant.Type.Int)
         {
-            AnimationTreeResolved.Set(AnimationBlendParameter, blend);
+            AnimationTreeResolved.Set(resolvedBlendParameter, blend);
             return;
         }
 
         if (currentValue.VariantType == Variant.Type.Vector2)
         {
-            AnimationTreeResolved.Set(AnimationBlendParameter, locomotionBlendInput);
+            AnimationTreeResolved.Set(resolvedBlendParameter, locomotionBlendInput);
             return;
         }
 
@@ -375,7 +378,31 @@ public partial class PlayerLocomotion : LocomotionBase
         => GetLocomotionStateTarget() ?? _defaultLocomotionStateTarget;
 
     private AnimationNodeStateMachinePlayback? ResolvePlayback()
-        => AnimationTreeResolved?.Get(_playbackParameter).As<AnimationNodeStateMachinePlayback>();
+    {
+        return AnimationTreeResolved is null
+            ? null
+            : AnimationTreeResolved.Get(_playbackParameter).As<AnimationNodeStateMachinePlayback>()
+               // Compatibility for legacy/simple state-machine-only rigs where the state machine is the tree root.
+               ?? AnimationTreeResolved.Get(_legacyRootPlaybackParameter).As<AnimationNodeStateMachinePlayback>();
+    }
+
+    private StringName ResolveAnimationParameter(StringName parameter)
+    {
+        if (AnimationTreeResolved is null || parameter.IsEmpty)
+        {
+            return parameter;
+        }
+
+        Variant value = AnimationTreeResolved.Get(parameter);
+        if (value.VariantType != Variant.Type.Nil)
+        {
+            return parameter;
+        }
+
+        StringName nestedParameter = HandPoseAnimationTreePaths.GetNestedStateMachineParameter(parameter.ToString());
+        Variant nestedValue = AnimationTreeResolved.Get(nestedParameter);
+        return nestedValue.VariantType == Variant.Type.Nil ? parameter : nestedParameter;
+    }
 
     private static Vector2 ApplyDeadzone(Vector2 input, float deadzone)
         => new(

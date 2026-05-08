@@ -1,3 +1,4 @@
+using AlleyCat.Animation;
 using Godot;
 
 namespace AlleyCat.IK.Pose;
@@ -12,6 +13,7 @@ namespace AlleyCat.IK.Pose;
 [GlobalClass]
 public abstract partial class PoseTransition : Resource, IPoseTransition
 {
+    private static readonly StringName _legacyRootPlaybackParameter = new("parameters/playback");
     private bool _warnedMissingPlayback;
 
     /// <summary>
@@ -23,7 +25,7 @@ public abstract partial class PoseTransition : Resource, IPoseTransition
     {
         get;
         set;
-    } = new("parameters/playback");
+    } = HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter();
 
     /// <summary>
     /// Identifier of the source state this transition applies to.
@@ -120,7 +122,9 @@ public abstract partial class PoseTransition : Resource, IPoseTransition
     protected AnimationNodeStateMachinePlayback? ResolvePlayback(AnimationTree tree) =>
         PlaybackParameter.IsEmpty
             ? null
-            : tree.Get(PlaybackParameter).As<AnimationNodeStateMachinePlayback>();
+            : tree.Get(PlaybackParameter).As<AnimationNodeStateMachinePlayback>()
+              // Compatibility for legacy/simple state-machine-only rigs where the state machine is the tree root.
+              ?? tree.Get(_legacyRootPlaybackParameter).As<AnimationNodeStateMachinePlayback>();
 
     private void WarnMissingPlayback()
     {
