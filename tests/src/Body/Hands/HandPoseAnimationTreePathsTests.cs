@@ -1,10 +1,11 @@
-using AlleyCat.Animation;
+using AlleyCat.Body;
+using AlleyCat.Body.Hands;
 using Xunit;
 
-namespace AlleyCat.Tests.Animation;
+namespace AlleyCat.Tests.Body.Hands;
 
 /// <summary>
-/// Unit coverage for ANIM-001 hand-pose AnimationTree path helpers.
+/// Unit coverage for BODY-001 Hands hand-pose AnimationTree path helpers.
 /// </summary>
 public sealed class HandPoseAnimationTreePathsTests
 {
@@ -12,9 +13,9 @@ public sealed class HandPoseAnimationTreePathsTests
     /// Verifies final hand blend parameters are rooted in the functional blend tree.
     /// </summary>
     [Theory]
-    [InlineData(HandPoseSide.Left, "LeftHandBlend")]
-    [InlineData(HandPoseSide.Right, "RightHandBlend")]
-    public void GetHandBlendParameter_ReturnsFunctionalRootParameter(HandPoseSide side, string expectedNodeName)
+    [InlineData(LimbSide.Left, "LeftHandBlend")]
+    [InlineData(LimbSide.Right, "RightHandBlend")]
+    public void GetHandBlendParameter_ReturnsFunctionalRootParameter(LimbSide side, string expectedNodeName)
         => Assert.Equal(
             $"parameters/{expectedNodeName}/blend_amount",
             HandPoseAnimationTreePaths.GetHandBlendParameterPath(side));
@@ -34,21 +35,21 @@ public sealed class HandPoseAnimationTreePathsTests
     /// Verifies filter logic excludes hand and arm bones.
     /// </summary>
     [Theory]
-    [InlineData(HandPoseSide.Left, "%GeneralSkeleton:LeftHand")]
-    [InlineData(HandPoseSide.Left, "%GeneralSkeleton:LeftLowerArm")]
-    [InlineData(HandPoseSide.Right, "%GeneralSkeleton:RightHand")]
-    [InlineData(HandPoseSide.Right, "%GeneralSkeleton:RightUpperArm")]
-    public void IsFingerFilterPath_ExcludesHandsAndArmBones(HandPoseSide side, string path)
+    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftHand")]
+    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftLowerArm")]
+    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightHand")]
+    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightUpperArm")]
+    public void IsFingerFilterPath_ExcludesHandsAndArmBones(LimbSide side, string path)
         => Assert.False(HandPoseAnimationTreePaths.IsFingerFilterPath(side, path));
 
     /// <summary>
     /// Verifies filter logic includes finger descendants.
     /// </summary>
     [Theory]
-    [InlineData(HandPoseSide.Left, "%GeneralSkeleton:LeftIndexProximal")]
-    [InlineData(HandPoseSide.Left, "%GeneralSkeleton:LeftThumbMetacarpal")]
-    [InlineData(HandPoseSide.Right, "%GeneralSkeleton:RightRingDistal")]
-    [InlineData(HandPoseSide.Right, "%GeneralSkeleton:RightLittleIntermediate")]
-    public void IsFingerFilterPath_IncludesFingerBones(HandPoseSide side, string path)
+    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftIndexProximal")]
+    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftThumbMetacarpal")]
+    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightRingDistal")]
+    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightLittleIntermediate")]
+    public void IsFingerFilterPath_IncludesFingerBones(LimbSide side, string path)
         => Assert.True(HandPoseAnimationTreePaths.IsFingerFilterPath(side, path));
 }

@@ -1,4 +1,4 @@
-using AlleyCat.Animation;
+using AlleyCat.Body.Hands;
 using AlleyCat.Common;
 using Godot;
 

@@ -11,4 +11,4 @@ namespace AlleyCat.Interaction;
 public sealed record GrabPointCandidate(
     IGrabPoint Source,
     Transform3D HandTarget,
-    Godot.Animation Animation);
+    Animation Animation);

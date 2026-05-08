@@ -1,19 +1,19 @@
 using Godot;
 
-namespace AlleyCat.Animation;
+namespace AlleyCat.Body.Hands;
 
 /// <summary>
-/// Controls ANIM-001 post-pipeline hand pose parameters on an <see cref="AnimationTree"/>.
+/// Controls BODY-001 Hands hand-pose blend parameters on an <see cref="AnimationTree"/>.
 /// </summary>
 public sealed class HandPoseController
 {
-    private readonly HandChannel _left = new(HandPoseSide.Left);
-    private readonly HandChannel _right = new(HandPoseSide.Right);
+    private readonly HandChannel _left = new(LimbSide.Left);
+    private readonly HandChannel _right = new(LimbSide.Right);
 
     /// <summary>
     /// Initialises a controller bound to the supplied animation tree.
     /// </summary>
-    /// <param name="animationTree">AnimationTree containing the ANIM-001 blend nodes.</param>
+    /// <param name="animationTree">AnimationTree containing the BODY-001 Hands blend nodes.</param>
     public HandPoseController(AnimationTree animationTree)
     {
         AnimationTree = animationTree ?? throw new ArgumentNullException(nameof(animationTree));
@@ -40,7 +40,7 @@ public sealed class HandPoseController
     public Resource? LeftHandPose
     {
         get => _left.TargetPose;
-        set => SetHandPose(HandPoseSide.Left, value, immediate: false);
+        set => SetHandPose(LimbSide.Left, value, immediate: false);
     }
 
     /// <summary>
@@ -49,7 +49,7 @@ public sealed class HandPoseController
     public Resource? RightHandPose
     {
         get => _right.TargetPose;
-        set => SetHandPose(HandPoseSide.Right, value, immediate: false);
+        set => SetHandPose(LimbSide.Right, value, immediate: false);
     }
 
     /// <summary>
@@ -58,7 +58,7 @@ public sealed class HandPoseController
     public float LeftHandPoseWeight
     {
         get => _left.TargetWeight;
-        set => SetHandPoseWeight(HandPoseSide.Left, value);
+        set => SetHandPoseWeight(LimbSide.Left, value);
     }
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class HandPoseController
     public float RightHandPoseWeight
     {
         get => _right.TargetWeight;
-        set => SetHandPoseWeight(HandPoseSide.Right, value);
+        set => SetHandPoseWeight(LimbSide.Right, value);
     }
 
     /// <summary>
@@ -83,7 +83,7 @@ public sealed class HandPoseController
     /// <summary>
     /// Sets or clears a hand pose, optionally overriding the weight and bypassing smoothing.
     /// </summary>
-    public void SetHandPose(HandPoseSide side, Resource? pose, float? weight = null, bool immediate = false)
+    public void SetHandPose(LimbSide side, Resource? pose, float? weight = null, bool immediate = false)
     {
         HandChannel channel = GetChannel(side);
         channel.TargetPose = pose;
@@ -128,7 +128,7 @@ public sealed class HandPoseController
     /// <summary>
     /// Clears a hand pose for the requested side.
     /// </summary>
-    public void ClearHandPose(HandPoseSide side, bool immediate = false)
+    public void ClearHandPose(LimbSide side, bool immediate = false)
         => SetHandPose(side, null, immediate: immediate);
 
     /// <summary>
@@ -141,7 +141,7 @@ public sealed class HandPoseController
         UpdateChannel(_right, delta);
     }
 
-    private void SetHandPoseWeight(HandPoseSide side, float value)
+    private void SetHandPoseWeight(LimbSide side, float value)
     {
         HandChannel channel = GetChannel(side);
         channel.TargetWeight = Mathf.Clamp(value, 0f, 1f);
@@ -192,7 +192,7 @@ public sealed class HandPoseController
         poseNode.Animation = ResolveAnimationName(pose);
     }
 
-    private AnimationNodeAnimation ResolvePoseNode(HandPoseSide side)
+    private AnimationNodeAnimation ResolvePoseNode(LimbSide side)
     {
         return AnimationTree.TreeRoot is not AnimationNodeBlendTree rootTree
             ? throw new InvalidOperationException("Hand poses require the AnimationTree root to be an AnimationNodeBlendTree.")
@@ -212,11 +212,11 @@ public sealed class HandPoseController
             : new StringName(pose.ResourceName);
     }
 
-    private HandChannel GetChannel(HandPoseSide side) => side == HandPoseSide.Left ? _left : _right;
+    private HandChannel GetChannel(LimbSide side) => side == LimbSide.Left ? _left : _right;
 
-    private sealed class HandChannel(HandPoseSide side)
+    private sealed class HandChannel(LimbSide side)
     {
-        public HandPoseSide Side { get; } = side;
+        public LimbSide Side { get; } = side;
 
         public Resource? TargetPose
         {

@@ -117,9 +117,9 @@ public sealed class GrabbableTraitTests
     /// <summary>
     /// Godot resources cannot be constructed safely in the plain dotnet test host, so unit coverage only verifies that
     /// the non-nullable animation property participates in the candidate contract without instantiating the runtime type.
-    /// Runtime-backed tests should use a real <see cref="Godot.Animation" /> resource for value round-trip coverage.
+    /// Runtime-backed tests should use a real <see cref="Animation" /> resource for value round-trip coverage.
     /// </summary>
-    private static Godot.Animation NullAnimationForPlainUnitTestHost() => null!;
+    private static Animation NullAnimationForPlainUnitTestHost() => null!;
 
     private sealed class FakeGrabbable(params IComponent[] components) : IGrabbable
     {

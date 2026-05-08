@@ -74,7 +74,7 @@ respects pose-based permission gating.
 ### Animation Integration
 
 9. Wire animation blend parameter to `parameters/States/Walking/blend_position` when the
-   reference character uses the ANIM-001 partial animation blend tree. Legacy/simple state-machine-only test rigs may
+   reference character uses the hand-pose blend tree (BODY-001). Legacy/simple state-machine-only test rigs may
    continue to use `parameters/Walking/blend_position`.
 10. Consume root motion only when top-level state is Walking or active override.
 

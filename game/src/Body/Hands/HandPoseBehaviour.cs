@@ -1,12 +1,12 @@
 using Godot;
 
-namespace AlleyCat.Animation;
+namespace AlleyCat.Body.Hands;
 
 /// <summary>
-/// Godot node facade exposing ANIM-001 hand pose control to scene consumers.
+/// Godot node facade exposing BODY-001 Hands hand-pose control to scene consumers.
 /// </summary>
 [GlobalClass]
-public sealed partial class HandPoseBehaviour : Node
+public sealed partial class HandPoseBehaviour : Node, IHand
 {
     private HandPoseController? _controller;
 
@@ -18,6 +18,40 @@ public sealed partial class HandPoseBehaviour : Node
     {
         get; set;
     }
+
+    /// <inheritdoc />
+    [Export]
+    public LimbSide Side
+    {
+        get; set;
+    }
+
+    /// <inheritdoc />
+    public Resource? HandPose
+    {
+        get => Side == LimbSide.Left ? LeftHandPose : RightHandPose;
+        set => SetHandPose(value);
+    }
+
+    /// <inheritdoc />
+    public float HandPoseWeight
+    {
+        get => Side == LimbSide.Left ? LeftHandPoseWeight : RightHandPoseWeight;
+        set
+        {
+            if (Side == LimbSide.Left)
+            {
+                LeftHandPoseWeight = value;
+            }
+            else
+            {
+                RightHandPoseWeight = value;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public Resource? CurrentHandPose => Side == LimbSide.Left ? CurrentLeftHandPose : CurrentRightHandPose;
 
     /// <summary>
     /// Gets or sets the target left hand pose resource.
@@ -140,8 +174,8 @@ public sealed partial class HandPoseBehaviour : Node
             LeftHandPoseWeight = _leftHandPoseWeight,
             RightHandPoseWeight = _rightHandPoseWeight
         };
-        _controller.SetHandPose(HandPoseSide.Left, _leftHandPose, immediate: true);
-        _controller.SetHandPose(HandPoseSide.Right, _rightHandPose, immediate: true);
+        _controller.SetHandPose(LimbSide.Left, _leftHandPose, immediate: true);
+        _controller.SetHandPose(LimbSide.Right, _rightHandPose, immediate: true);
     }
 
     /// <inheritdoc />
@@ -150,11 +184,17 @@ public sealed partial class HandPoseBehaviour : Node
     /// <summary>
     /// Sets or clears a hand pose, optionally overriding the weight and bypassing smoothing.
     /// </summary>
-    public void SetHandPose(HandPoseSide side, Resource? pose, float? weight = null, bool immediate = false)
+    public void SetHandPose(Resource? pose, float? weight = null, bool immediate = false)
+        => SetHandPose(Side, pose, weight, immediate);
+
+    /// <summary>
+    /// Sets or clears a hand pose for the requested side, optionally overriding the weight and bypassing smoothing.
+    /// </summary>
+    public void SetHandPose(LimbSide side, Resource? pose, float? weight = null, bool immediate = false)
     {
         if (_controller is null)
         {
-            if (side == HandPoseSide.Left)
+            if (side == LimbSide.Left)
             {
                 _leftHandPose = pose;
                 if (weight.HasValue)
@@ -180,6 +220,9 @@ public sealed partial class HandPoseBehaviour : Node
     /// <summary>
     /// Clears the requested hand pose override.
     /// </summary>
-    public void ClearHandPose(HandPoseSide side, bool immediate = false)
+    public void ClearHandPose(LimbSide side, bool immediate = false)
         => _controller?.ClearHandPose(side, immediate);
+
+    /// <inheritdoc />
+    public void ClearHandPose(bool immediate = false) => ClearHandPose(Side, immediate);
 }

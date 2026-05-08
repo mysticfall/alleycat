@@ -67,7 +67,7 @@ Provide a reusable grabbable interface that:
    by the holder and the object state is unchanged, and completes or
    rejects gracefully.
 8. Configurable reach distance and angle thresholds per grab-point component.
-9. Define `LimbSide` enum in `AlleyCat.Common` (`Left = 0`, `Right = 1`),
+9. Define `LimbSide` enum in `AlleyCat.Body` (`Left = 0`, `Right = 1`),
    unifying existing hand-side representations.
 10. Multiple grab-point components per holder are supported; query order is
     deterministic as defined by the holder. This deterministic order only acts
@@ -84,6 +84,11 @@ Provide a reusable grabbable interface that:
 - Internal validation in execution phase.
 - Configurable thresholds.
 - Deterministic resolution from multiple grab components.
+
+## Concrete Implementations
+
+- [INTR-001-A: Spherical Grab Point](spherical-grab-point.md) — centre-origin
+  grab point approachable from any direction.
 
 ## Out Of Scope
 
@@ -114,7 +119,7 @@ Provide a reusable grabbable interface that:
 |    |                   | returning `null` when no component yields an eligible pose. |
 | 6  | Technical         | `Grab` validates source component is still |
 |    |                   | owned and object state unchanged. |
-| 7  | Technical         | `LimbSide` enum exists in `AlleyCat.Common`. |
+| 7  | Technical         | `LimbSide` enum exists in `AlleyCat.Body`. |
 | 8  | Technical         | Multiple grab-point components per holder are |
 |    |                   | all queried, with the closest eligible candidate selected. |
 | 9  | Technical         | Equal-distance eligible candidates keep holder |
@@ -131,7 +136,9 @@ Provide a reusable grabbable interface that:
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [IK-002: Arm And Shoulder IK System](../../characters/ik/002-arm-shoulder-ik/index.md)
 - [IK-003: Leg And Feet IK System](../../characters/ik/003-leg-feet-ik/index.md)
-- `game/src/Common/LimbSide.cs`
+- `game/src/Body/LimbSide.cs`
 - `game/src/Interaction/IGrabbable.cs`
 - `game/src/Interaction/IGrabPoint.cs`
 - `game/src/Interaction/GrabPointCandidate.cs`
+- [INTR-001-A: Spherical Grab Point](spherical-grab-point.md)
+- [BODY-001: Hands](../../body/001-hands/index.md)

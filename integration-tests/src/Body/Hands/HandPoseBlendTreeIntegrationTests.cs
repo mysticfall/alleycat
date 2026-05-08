@@ -1,12 +1,13 @@
-using AlleyCat.Animation;
+using AlleyCat.Body;
+using AlleyCat.Body.Hands;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 
-namespace AlleyCat.IntegrationTests.Animation;
+namespace AlleyCat.IntegrationTests.Body.Hands;
 
 /// <summary>
-/// Integration coverage for ANIM-001 reference tree resources and hand-pose controller behaviour.
+/// Integration coverage for BODY-001 Hands reference tree resources and hand-pose controller behaviour.
 /// </summary>
 public sealed class HandPoseBlendTreeIntegrationTests
 {
@@ -34,8 +35,8 @@ public sealed class HandPoseBlendTreeIntegrationTests
         Assert.Null(root.GetNode("PostPipeline"));
         Assert.Equal(1, CountNodesNamed(root, HandPoseAnimationTreePaths.UpstreamNode));
 
-        AssertHandBlendFilters(root, HandPoseSide.Left, HandPoseAnimationTreePaths.LeftHandBlendNode);
-        AssertHandBlendFilters(root, HandPoseSide.Right, HandPoseAnimationTreePaths.RightHandBlendNode);
+        AssertHandBlendFilters(root, LimbSide.Left, HandPoseAnimationTreePaths.LeftHandBlendNode);
+        AssertHandBlendFilters(root, LimbSide.Right, HandPoseAnimationTreePaths.RightHandBlendNode);
         AssertConnection(root, HandPoseAnimationTreePaths.LeftHandBlendNode, 0, HandPoseAnimationTreePaths.UpstreamNode);
         AssertConnection(root, HandPoseAnimationTreePaths.LeftHandBlendNode, 1, HandPoseAnimationTreePaths.LeftHandPoseNode);
         AssertConnection(root, HandPoseAnimationTreePaths.RightHandBlendNode, 0, HandPoseAnimationTreePaths.LeftHandBlendNode);
@@ -91,29 +92,29 @@ public sealed class HandPoseBlendTreeIntegrationTests
             TransitionDuration = 0.2f,
         };
 
-        controller.SetHandPose(HandPoseSide.Left, grabBall, weight: 1f, immediate: false);
+        controller.SetHandPose(LimbSide.Left, grabBall, weight: 1f, immediate: false);
 
-        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(HandPoseSide.Left)).AsSingle());
+        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle());
         controller.Update(0.1);
-        float halfwayBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(HandPoseSide.Left)).AsSingle();
+        float halfwayBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle();
 
         Assert.InRange(halfwayBlend, 0.45f, 0.55f);
         controller.Update(0.1);
 
-        Assert.Equal(1f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(HandPoseSide.Left)).AsSingle());
+        Assert.Equal(1f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle());
         Assert.Same(grabBall, controller.CurrentLeftHandPose);
 
-        controller.SetHandPose(HandPoseSide.Right, grabBall, weight: 0.4f, immediate: false);
+        controller.SetHandPose(LimbSide.Right, grabBall, weight: 0.4f, immediate: false);
         controller.Update(0.1);
-        float weightedHalfwayBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(HandPoseSide.Right)).AsSingle();
+        float weightedHalfwayBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle();
         Assert.InRange(weightedHalfwayBlend, 0.18f, 0.22f);
         controller.Update(0.1);
-        Assert.InRange(tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(HandPoseSide.Right)).AsSingle(), 0.39f, 0.41f);
+        Assert.InRange(tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle(), 0.39f, 0.41f);
 
-        controller.ClearHandPose(HandPoseSide.Left, immediate: true);
+        controller.ClearHandPose(LimbSide.Left, immediate: true);
 
         Assert.Null(controller.CurrentLeftHandPose);
-        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(HandPoseSide.Left)).AsSingle());
+        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle());
     }
 
     /// <summary>
@@ -127,7 +128,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         _ = Assert.IsType<PackedScene>(ResourceLoader.Load(AnimationTreeSceneUID), exactMatch: false);
     }
 
-    private static void AssertHandBlendFilters(AnimationNodeBlendTree root, HandPoseSide side, string nodeName)
+    private static void AssertHandBlendFilters(AnimationNodeBlendTree root, LimbSide side, string nodeName)
     {
         AnimationNodeBlend2 blend = Assert.IsType<AnimationNodeBlend2>(root.GetNode(nodeName), exactMatch: false);
         Assert.True(blend.FilterEnabled);
@@ -137,7 +138,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
             Assert.True(blend.IsPathFiltered(filterPath), $"Expected {nodeName} to filter {filterPath}.");
         }
 
-        string sideName = side == HandPoseSide.Left ? "Left" : "Right";
+        string sideName = side == LimbSide.Left ? "Left" : "Right";
         Assert.False(blend.IsPathFiltered(new NodePath($"%GeneralSkeleton:{sideName}Hand")));
         Assert.False(blend.IsPathFiltered(new NodePath($"%GeneralSkeleton:{sideName}LowerArm")));
         Assert.False(blend.IsPathFiltered(new NodePath($"%GeneralSkeleton:{sideName}UpperArm")));

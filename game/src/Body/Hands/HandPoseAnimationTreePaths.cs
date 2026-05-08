@@ -1,9 +1,9 @@
 using Godot;
 
-namespace AlleyCat.Animation;
+namespace AlleyCat.Body.Hands;
 
 /// <summary>
-/// Shared AnimationTree node and parameter paths for ANIM-001 hand-pose blending.
+/// Shared AnimationTree node and parameter paths for BODY-001 Hands hand-pose blending.
 /// </summary>
 public static class HandPoseAnimationTreePaths
 {
@@ -81,19 +81,19 @@ public static class HandPoseAnimationTreePaths
     /// <summary>
     /// Gets the pose source node name for a hand side.
     /// </summary>
-    public static StringName GetPoseAnimationNodeName(HandPoseSide side)
-        => new(side == HandPoseSide.Left ? LeftHandPoseNode : RightHandPoseNode);
+    public static StringName GetPoseAnimationNodeName(LimbSide side)
+        => new(side == LimbSide.Left ? LeftHandPoseNode : RightHandPoseNode);
 
     /// <summary>
     /// Gets the final filtered hand blend parameter path for a hand side.
     /// </summary>
-    public static StringName GetHandBlendParameter(HandPoseSide side)
+    public static StringName GetHandBlendParameter(LimbSide side)
         => new(GetHandBlendParameterPath(side));
 
     /// <summary>
     /// Gets the final filtered hand blend parameter path string for a hand side.
     /// </summary>
-    public static string GetHandBlendParameterPath(HandPoseSide side)
+    public static string GetHandBlendParameterPath(LimbSide side)
         => $"{ParametersPrefix}{GetHandBlendNodeName(side)}{BlendAmountSuffix}";
 
     /// <summary>
@@ -125,9 +125,9 @@ public static class HandPoseAnimationTreePaths
     /// <summary>
     /// Gets the exact finger-bone filter paths for a hand side, excluding hand and arm bones.
     /// </summary>
-    public static IReadOnlyList<NodePath> GetFingerFilterPaths(HandPoseSide side)
+    public static IReadOnlyList<NodePath> GetFingerFilterPaths(LimbSide side)
     {
-        string[] bones = side == HandPoseSide.Left ? _leftFingerBones : _rightFingerBones;
+        string[] bones = side == LimbSide.Left ? _leftFingerBones : _rightFingerBones;
         var paths = new NodePath[bones.Length];
 
         for (int index = 0; index < bones.Length; index++)
@@ -141,15 +141,15 @@ public static class HandPoseAnimationTreePaths
     /// <summary>
     /// Returns whether a filter path belongs to the configured finger-only set for a hand side.
     /// </summary>
-    public static bool IsFingerFilterPath(HandPoseSide side, NodePath path)
+    public static bool IsFingerFilterPath(LimbSide side, NodePath path)
         => IsFingerFilterPath(side, path.ToString());
 
     /// <summary>
     /// Returns whether a filter path string belongs to the configured finger-only set for a hand side.
     /// </summary>
-    public static bool IsFingerFilterPath(HandPoseSide side, string path)
+    public static bool IsFingerFilterPath(LimbSide side, string path)
     {
-        string[] bones = side == HandPoseSide.Left ? _leftFingerBones : _rightFingerBones;
+        string[] bones = side == LimbSide.Left ? _leftFingerBones : _rightFingerBones;
 
         for (int index = 0; index < bones.Length; index++)
         {
@@ -162,6 +162,6 @@ public static class HandPoseAnimationTreePaths
         return false;
     }
 
-    private static string GetHandBlendNodeName(HandPoseSide side)
-        => side == HandPoseSide.Left ? LeftHandBlendNode : RightHandBlendNode;
+    private static string GetHandBlendNodeName(LimbSide side)
+        => side == LimbSide.Left ? LeftHandBlendNode : RightHandBlendNode;
 }

@@ -14,9 +14,9 @@
 
 - [XR-001: XRManager](xr/001-xr-manager/index.md)
 
-## Animation
+## Body
 
-- [ANIM-001: Partial Animation Blending And Hand Poses](animation/001-partial-animation-blending/index.md)
+- [BODY-001: Hands](body/001-hands/index.md)
 
 ## Characters
 
@@ -50,6 +50,7 @@
 ## Interaction
 
 - [INTR-001: Grabbable Interface](interaction/001-grabbable/index.md)
+  - [INTR-001-A: Spherical Grab Point](interaction/001-grabbable/spherical-grab-point.md)
 
 ## Speech
 

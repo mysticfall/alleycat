@@ -1,4 +1,4 @@
-using AlleyCat.Animation;
+using AlleyCat.Body.Hands;
 using Godot;
 
 namespace AlleyCat.IK.Pose;

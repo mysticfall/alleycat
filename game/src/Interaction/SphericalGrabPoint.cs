@@ -47,7 +47,7 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
     /// Gets or sets the animation to play for a successful spherical grab candidate.
     /// </summary>
     [Export]
-    public Godot.Animation? GrabAnimation { get; set; } = null;
+    public Animation? GrabAnimation { get; set; } = null;
 
     /// <inheritdoc />
     public GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)

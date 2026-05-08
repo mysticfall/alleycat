@@ -22,7 +22,7 @@ public sealed class SphericalGrabPointIntegrationTests
     [Fact]
     public void GetGrabPoint_WithinReachAndPalmFacing_ReturnsCandidateForBothHands()
     {
-        using var animation = new Godot.Animation();
+        using var animation = new Animation();
         SphericalGrabPoint grabPoint = CreateGrabPoint(animation);
         Transform3D leftHand = CreateHandTransform(new Vector3(0.05f, 0.0f, 0.0f), Vector3.Left);
         Transform3D rightHand = CreateHandTransform(new Vector3(-0.05f, 0.0f, 0.0f), Vector3.Right);
@@ -48,7 +48,7 @@ public sealed class SphericalGrabPointIntegrationTests
     [Fact]
     public void GetGrabPoint_OutsideReach_ReturnsNull()
     {
-        using var animation = new Godot.Animation();
+        using var animation = new Animation();
         SphericalGrabPoint grabPoint = CreateGrabPoint(animation);
         Transform3D hand = CreateHandTransform(new Vector3(ReachDistanceMetres + 0.01f, 0.0f, 0.0f), Vector3.Left);
 
@@ -71,7 +71,7 @@ public sealed class SphericalGrabPointIntegrationTests
     [Fact]
     public void GetGrabPoint_PalmFacingAway_ReturnsNull()
     {
-        using var animation = new Godot.Animation();
+        using var animation = new Animation();
         SphericalGrabPoint grabPoint = CreateGrabPoint(animation);
         Transform3D hand = CreateHandTransform(new Vector3(0.05f, 0.0f, 0.0f), Vector3.Right);
 
@@ -94,7 +94,7 @@ public sealed class SphericalGrabPointIntegrationTests
     [Fact]
     public void GetGrabPoint_MultipleApproachAnglesAroundCentre_ReturnCandidatesAtCentre()
     {
-        using var animation = new Godot.Animation();
+        using var animation = new Animation();
         SphericalGrabPoint grabPoint = CreateGrabPoint(animation);
         Vector3[] handOrigins =
         [
@@ -129,7 +129,7 @@ public sealed class SphericalGrabPointIntegrationTests
     [Fact]
     public void GetGrabPoint_InvalidConfigurationOrZeroLengthDirection_ReturnsNull()
     {
-        using var animation = new Godot.Animation();
+        using var animation = new Animation();
         SphericalGrabPoint grabPoint = CreateGrabPoint(animation);
         Transform3D validHand = CreateHandTransform(new Vector3(0.05f, 0.0f, 0.0f), Vector3.Left);
 
@@ -162,7 +162,7 @@ public sealed class SphericalGrabPointIntegrationTests
     [Fact]
     public void GetGrabPoint_PalmFacingDotEqualsMinimum_ReturnsCandidate()
     {
-        using var animation = new Godot.Animation();
+        using var animation = new Animation();
         SphericalGrabPoint grabPoint = CreateGrabPoint(animation);
         Vector3 handOrigin = new(0.05f, 0.0f, 0.0f);
         Vector3 palmDirectionAtThreshold = ((0.75f * Vector3.Left)
@@ -185,7 +185,7 @@ public sealed class SphericalGrabPointIntegrationTests
         }
     }
 
-    private static SphericalGrabPoint CreateGrabPoint(Godot.Animation animation) =>
+    private static SphericalGrabPoint CreateGrabPoint(Animation animation) =>
         new()
         {
             ReachDistanceMetres = ReachDistanceMetres,
@@ -208,7 +208,7 @@ public sealed class SphericalGrabPointIntegrationTests
     private static void AssertCandidateMatchesGrabPoint(
         GrabPointCandidate? candidate,
         SphericalGrabPoint grabPoint,
-        Godot.Animation animation,
+        Animation animation,
         Transform3D expectedHandTransform)
     {
         Assert.NotNull(candidate);
