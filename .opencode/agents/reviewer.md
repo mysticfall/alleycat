@@ -60,6 +60,8 @@ When visual verification screenshots exist as verification artefacts:
 - [ ] Scene and resource changes use the GDScript API approach (not hand-editing `.tscn`/`.tres` files).
 - [ ] For inherited scenes, proper handling of `editable path` and `parent_id_path` when accessing internal nodes.
 - [ ] Custom type script metadata is set correctly when assigning C# scripts to nodes in scenes.
+- [ ] UID metadata is preserved on `ExtResource` references when mutating scenes/resources. After any
+  `.tscn`/`.tres` mutation, verify referenced assets still load by UID (`ResourceLoader.load("uid://...")`).
 - [ ] Full-screen UI uses 1152x648 resolution with transparent background (when applicable).
 
 ## Review Outcome Format

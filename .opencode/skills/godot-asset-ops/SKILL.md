@@ -153,3 +153,45 @@ Report:
 - Assets changed (if any).
 - What was validated.
 - Follow-up action needed from the user (if any).
+
+## UID Preservation
+
+When mutating scenes/resources that reference other assets via `ExtResource`, preserve the UID metadata on those
+references. Godot's `ResourceSaver.save()` often strips UID metadata from external resource entries, leading to
+ UID mismatches and broken references after asset mutations.
+
+### Problem
+
+A scene that references another resource like this:
+
+```
+[ext_resource type="AnimationTree" path="res://path/to/resource.tres" uid="uid://abc123"]
+```
+
+May lose the `uid="uid://abc123"` part after a `ResourceSaver.save()`, leaving only the path reference. This can
+cause UID mismatch warnings and reload issues, especially in projects that rely on UID-based loading.
+
+### Required Practice
+
+1. **Before saving**, capture the original ext-resource UIDs from the scene/resource header.
+2. **After saving**, restore the UID metadata on each `ExtResource` entry if it was stripped.
+3. **Verify** by loading the saved scene/resource by UID and confirming it resolves correctly.
+
+### Minimal UID Repair Pattern
+
+```gdscript
+func repair_ext_resource_uids(p_scene: PackedScene, p_ressource_path: String) -> void:
+    # Load original to capture UIDs
+    var original := load(p_ressource_path) as PackedScene
+    if not original:
+        return
+    
+    var original_exts := original.get_external_resources()
+    var saved_exts := p_scene.get_external_resources()
+    
+    # Patch UID metadata on each ext_resource entry (implementation-specific)
+    # Then re-save or use text-level repair if Godot API cannot preserve UIDs
+```
+
+For simple cases, a targeted text-level post-save repair script that adds only the missing `uid="..."` metadata
+to the serialised `.tscn`/`.tres` file is acceptable. Verify the result with `ResourceLoader.load("uid://...")`.
