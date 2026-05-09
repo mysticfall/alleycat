@@ -22,6 +22,7 @@ public partial class PlayerVRIK : CharacterIK
     /// <summary>
     /// When enabled, shows per-side hip clamp residuals in the debug overlay during play tests.
     /// </summary>
+    [ExportGroup("Debug")]
     [Export]
     public bool HipClampDebugOutputEnabled
     {
@@ -65,6 +66,7 @@ public partial class PlayerVRIK : CharacterIK
     /// so hip reconciliation and animation bindings observe the same snapshot as the modifier
     /// pipeline. Leave unset to disable the pose-state layer entirely.
     /// </summary>
+    [ExportGroup("Pose")]
     [Export]
     public PoseStateMachine? PoseStateMachine
     {
@@ -75,6 +77,7 @@ public partial class PlayerVRIK : CharacterIK
     /// <summary>
     /// Bone name used to resolve the hip-bone index supplied to the <see cref="PoseStateContext"/>.
     /// </summary>
+    [ExportGroup("Skeleton")]
     [Export]
     public StringName HipBoneName
     {

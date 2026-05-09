@@ -20,6 +20,7 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Avatar viewpoint marker representing eye-centre in avatar space.
     /// </summary>
+    [ExportGroup("Targets")]
     [Export]
     public Marker3D? Viewpoint
     {
@@ -92,6 +93,7 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Provider driving the head target and head/neck modifier influence.
     /// </summary>
+    [ExportGroup("Providers")]
     [Export]
     public IKTargetStateProvider? HeadTargetProvider
     {
@@ -137,6 +139,7 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Optional fallback provider for the head when no explicit head provider is assigned.
     /// </summary>
+    [ExportGroup("Fallbacks")]
     [Export]
     public IKTargetStateProvider? HeadFallbackProvider
     {
@@ -182,6 +185,7 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Modifiers controlled by the effective head provider influence.
     /// </summary>
+    [ExportGroup("Modifiers")]
     [Export]
     public SkeletonModifier3D[] HeadModifierGroup { get; set; } = [];
 
@@ -212,12 +216,14 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Maximum follow speed for the head target body.
     /// </summary>
+    [ExportGroup("Head Settings")]
     [Export]
     public float HeadTargetMaximumSpeed { get; set; } = 32.0f;
 
     /// <summary>
     /// Maximum follow speed for each hand target body.
     /// </summary>
+    [ExportGroup("Hand Settings")]
     [Export]
     public float HandTargetMaximumSpeed { get; set; } = 28.0f;
 
@@ -248,6 +254,7 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Collision mask queried for explicit hand-only interaction with dynamic rigid bodies.
     /// </summary>
+    [ExportGroup("Hand Collision")]
     [Export]
     public uint HandDynamicInteractionCollisionMask { get; set; } = 2;
 
@@ -314,6 +321,7 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// When true, enables IK processing. When false, skips provider target updates.
     /// </summary>
+    [ExportGroup("General")]
     [Export]
     public bool Active { get; set; } = true;
 
