@@ -447,7 +447,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 continue;
             }
 
-            if (!attachment.Name.ToString().StartsWith("GeneratedCollider_", StringComparison.Ordinal))
+            if (!attachment.Name.ToString().StartsWith("Collider_", StringComparison.Ordinal))
             {
                 continue;
             }
