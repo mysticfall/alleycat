@@ -131,7 +131,7 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     {
         get;
         set;
-    } = 0.1f;
+    } = 0.2f;
 
     /// <summary>
     /// Forward reference shift at full crouch, expressed as a ratio of rest head height.
