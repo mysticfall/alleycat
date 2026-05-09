@@ -103,6 +103,6 @@ Provide a grab point that:
 ## References
 
 - [INTR-001: Grabbable Interface](index.md)
-- [CORE-003: Component/Trait System](../../003-component-system/index.md)
+- [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - `game/src/Interaction/IGrabPoint.cs`
 - `game/src/Interaction/SphericalGrabPoint.cs`

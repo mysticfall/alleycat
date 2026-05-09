@@ -180,4 +180,4 @@ meets the LipSyncPlayer's requirements:
 - [SPCH-001: Wav2Arkit LipSync Player](../001-wav2arkit-lipsync-player/index.md)
 - [SPCH-002: Audio2Face LipSync Player](../002-audio2face-lipsync-player/index.md)
 - [SPCH-004: Speech Generator Component](../004-speech-generation/index.md)
-- [CORE-002: Configuration API](../../002-configuration-api/index.md)
+- [CORE-002: Configuration API](../../core/002-configuration-api/index.md)

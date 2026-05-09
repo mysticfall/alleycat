@@ -41,7 +41,7 @@ backends.
    `TranscriptionFailed(string error)`.
 7. Implement `OpenAITranscriber` using the official OpenAI .NET SDK.
 8. Load configuration from the merged configuration API
-   ([CORE-002](../../002-configuration-api/index.md)) [STT] section
+   ([CORE-002](../../core/002-configuration-api/index.md)) [STT] section
    containing `Host`, optional `ApiKey`, and additional model/timeout
    settings.
 9. Specify runtime integration: XR binding, microphone prerequisites,
@@ -114,7 +114,7 @@ for compatible services.
 - [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
 - [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
-- [CORE-002: Configuration API](../../002-configuration-api/index.md)
+- [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
 
 ### External Dependencies
 

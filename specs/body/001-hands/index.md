@@ -115,7 +115,7 @@ Provide a reusable hand component system that:
 ## References
 
 - [Project Specifications Index](../../index.md)
-- [CORE-003: Component/Trait System](../../003-component-system/index.md)
+- [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [IK-002: Arm And Shoulder IK System](../../characters/ik/002-arm-shoulder-ik/index.md)
 - [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../characters/ik/004-vrik-pose-state-machine/index.md)
 - [INTR-001: Grabbable Interface](../../interaction/001-grabbable/index.md)

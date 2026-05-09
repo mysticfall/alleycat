@@ -66,4 +66,4 @@ testable without hardware.
 - @game/src/XR/XRManager.cs
 - @game/src/XR/XRManagerAbstractions.cs
 - @game/src/XR/Mock/MockXRRuntimeNode.cs
-- [CORE-001: Global Scene](../../001-global-scene/index.md)
+- [CORE-001: Global Scene](../../core/001-global-scene/index.md)
