@@ -39,14 +39,14 @@ respects pose-based permission gating.
      In root-motion states, input is animation blend factor.
    - `SetRotationInput(Vector2)` — right stick rotation control.
 
-2. Implement `PlayerLocomotion` class:
+2. Implement `CharacterLocomotion` class:
    - Accepts movement and rotation input as `Vector2`.
    - Applies movement via `MoveAndSlide`.
    - Derives velocity from root motion output in locomotion states.
    - Returns zero planar velocity when movement is not allowed.
    - Aggregates permission sources separately for movement vs rotation.
 
-3. Add `PlayerLocomotion` as child of root node in `player.tscn`.
+3. Add `CharacterLocomotion` as child of root node in `player.tscn`.
 
 ### Permission Source API
 
@@ -90,7 +90,7 @@ respects pose-based permission gating.
 
 12. `IPoseState` defines `GetLocomotionStateTarget(PoseStateContext)`.
 13. Pose-state-machine implements `ILocomotionAnimationSource`.
-14. `PlayerLocomotion` queries `ILocomotionAnimationSource` providers.
+14. `CharacterLocomotion` queries `ILocomotionAnimationSource` providers.
 15. Standing pose family preserves default fallback behaviour.
 16. AllFours Crawling sub-state returns target pair `(AllFours, AllFoursForward)`.
 

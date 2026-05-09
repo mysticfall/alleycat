@@ -8,9 +8,9 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.Control;
 
 /// <summary>
-/// Integration coverage for PlayerLocomotion as a concrete runtime component.
+/// Integration coverage for CharacterLocomotion as a concrete runtime component.
 /// </summary>
-public sealed partial class PlayerLocomotionIntegrationTests
+public sealed partial class CharacterLocomotionIntegrationTests
 {
     private const float Tolerance = 1e-4f;
 
@@ -19,14 +19,14 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_Ready_EnablesPhysicsProcessing()
+    public async Task CharacterLocomotion_Ready_EnablesPhysicsProcessing()
     {
         SceneTree sceneTree = GetSceneTree();
         LocomotionTestRig rig = await CreateRigAsync(sceneTree);
 
         try
         {
-            Assert.True(rig.Locomotion.IsPhysicsProcessing(), "PlayerLocomotion should own physics-tick processing after ready.");
+            Assert.True(rig.Locomotion.IsPhysicsProcessing(), "CharacterLocomotion should own physics-tick processing after ready.");
         }
         finally
         {
@@ -39,7 +39,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_Move_DoesNotDriveDirectPlanarVelocity()
+    public async Task CharacterLocomotion_Move_DoesNotDriveDirectPlanarVelocity()
     {
         SceneTree sceneTree = GetSceneTree();
         LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: CreateLocomotionAnimationTree());
@@ -63,10 +63,10 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_Rotate_SmoothTurnRotatesBody()
+    public async Task CharacterLocomotion_Rotate_SmoothTurnRotatesBody()
     {
         SceneTree sceneTree = GetSceneTree();
-        RecordingTurnPlayerLocomotion locomotion = new();
+        RecordingTurnCharacterLocomotion locomotion = new();
         LocomotionTestRig rig = await CreateRigAsync(sceneTree, locomotion: locomotion);
 
         try
@@ -91,10 +91,10 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_SnapTurnCooldown_BlocksImmediateSecondTurn()
+    public async Task CharacterLocomotion_SnapTurnCooldown_BlocksImmediateSecondTurn()
     {
         SceneTree sceneTree = GetSceneTree();
-        RecordingTurnPlayerLocomotion locomotion = new();
+        RecordingTurnCharacterLocomotion locomotion = new();
         LocomotionTestRig rig = await CreateRigAsync(sceneTree, locomotion: locomotion);
 
         try
@@ -124,7 +124,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_MovementDeadzone_SuppressesLowMagnitudeInput()
+    public async Task CharacterLocomotion_MovementDeadzone_SuppressesLowMagnitudeInput()
     {
         SceneTree sceneTree = GetSceneTree();
         LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: CreateLocomotionAnimationTree());
@@ -149,12 +149,12 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_MultiplePermissionSources_AggregatePredictably()
+    public async Task CharacterLocomotion_MultiplePermissionSources_AggregatePredictably()
     {
         SceneTree sceneTree = GetSceneTree();
         StubPermissionSource movementBlockedSource = new(LocomotionPermissions.RotationOnly);
         StubPermissionSource rotationBlockedSource = new(new LocomotionPermissions(MovementAllowed: true, RotationAllowed: false));
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0064f),
         };
@@ -191,7 +191,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_PoseSource_BlocksMovementOutsideAllowedStandingThreshold()
+    public async Task CharacterLocomotion_PoseSource_BlocksMovementOutsideAllowedStandingThreshold()
     {
         SceneTree sceneTree = GetSceneTree();
         StandingPoseState standingState = new()
@@ -202,7 +202,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
 
         PoseStateMachine stateMachine = CreatePoseStateMachine(standingState);
         _ = stateMachine.Tick(CreateStandingPoseContext(restHeadHeight: 1.6f, restHeadY: 1.6f, currentHeadY: 1.384f));
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0064f),
         };
@@ -232,7 +232,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_PoseSource_AllowsMovementInNearFullStanding()
+    public async Task CharacterLocomotion_PoseSource_AllowsMovementInNearFullStanding()
     {
         SceneTree sceneTree = GetSceneTree();
         StandingPoseState standingState = new()
@@ -243,7 +243,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
 
         PoseStateMachine stateMachine = CreatePoseStateMachine(standingState);
         _ = stateMachine.Tick(CreateStandingPoseContext(restHeadHeight: 1.6f, restHeadY: 1.6f, currentHeadY: 1.528f));
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0064f),
         };
@@ -274,12 +274,12 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_PoseSource_AllowsRotationAcrossPoses()
+    public async Task CharacterLocomotion_PoseSource_AllowsRotationAcrossPoses()
     {
         SceneTree sceneTree = GetSceneTree();
         PoseStateMachine stateMachine = CreatePoseStateMachine(new KneelingPoseState());
         _ = stateMachine.Tick(new PoseStateContext());
-        RecordingTurnPlayerLocomotion locomotion = new();
+        RecordingTurnCharacterLocomotion locomotion = new();
         LocomotionTestRig rig = await CreateRigAsync(sceneTree, permissionSourceNodes: [stateMachine], locomotion: locomotion);
 
         try
@@ -304,10 +304,10 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_RootMotionActive_UsesRuntimeRootMotionVelocity()
+    public async Task CharacterLocomotion_RootMotionActive_UsesRuntimeRootMotionVelocity()
     {
         SceneTree sceneTree = GetSceneTree();
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0128f),
         };
@@ -338,10 +338,10 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_RootMotionActive_TransformsVelocityIntoWorldSpace()
+    public async Task CharacterLocomotion_RootMotionActive_TransformsVelocityIntoWorldSpace()
     {
         SceneTree sceneTree = GetSceneTree();
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0128f),
             RootMotionBasis = Basis.Identity.Rotated(Vector3.Up, Mathf.Pi * 0.5f),
@@ -373,10 +373,10 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_RootMotionActive_ZeroDelta_DoesNotInventPlanarVelocity()
+    public async Task CharacterLocomotion_RootMotionActive_ZeroDelta_DoesNotInventPlanarVelocity()
     {
         SceneTree sceneTree = GetSceneTree();
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = Vector3.Zero,
         };
@@ -405,10 +405,10 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_RootMotionInactive_DoesNotSynthesizeVelocity()
+    public async Task CharacterLocomotion_RootMotionInactive_DoesNotSynthesizeVelocity()
     {
         SceneTree sceneTree = GetSceneTree();
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0128f),
         };
@@ -437,7 +437,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_AnimationSource_UsesCrawlLocomotionStatePairAndRootMotionPath()
+    public async Task CharacterLocomotion_AnimationSource_UsesCrawlLocomotionStatePairAndRootMotionPath()
     {
         SceneTree sceneTree = GetSceneTree();
         StubAnimationSource source = new(
@@ -445,7 +445,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
             new LocomotionStateTarget(
                 new StringName("AllFours"),
                 new StringName("AllFoursForward")));
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0064f),
         };
@@ -486,7 +486,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerLocomotion_AllFoursPoseStateMachine_KeepsCrawlLocomotionActiveAcrossTicks()
+    public async Task CharacterLocomotion_AllFoursPoseStateMachine_KeepsCrawlLocomotionActiveAcrossTicks()
     {
         SceneTree sceneTree = GetSceneTree();
         AnimationTree animationTree = CreateLocomotionAnimationTree();
@@ -498,7 +498,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
             Active = true,
             AnimationTree = animationTree,
         };
-        RootMotionPlayerLocomotion locomotion = new()
+        RootMotionCharacterLocomotion locomotion = new()
         {
             RootMotionPositionDelta = new Vector3(0f, 0f, -0.0064f),
         };
@@ -552,11 +552,11 @@ public sealed partial class PlayerLocomotionIntegrationTests
         SceneTree sceneTree,
         Node[]? permissionSourceNodes = null,
         AnimationTree? animationTree = null,
-        PlayerLocomotion? locomotion = null)
+        CharacterLocomotion? locomotion = null)
     {
         Node3D root = new()
         {
-            Name = "PlayerLocomotionTestRoot",
+            Name = "CharacterLocomotionTestRoot",
         };
 
         CharacterBody3D body = new()
@@ -574,7 +574,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
             Name = "RootMotionReference",
         };
 
-        locomotion ??= new PlayerLocomotion();
+        locomotion ??= new CharacterLocomotion();
 
         locomotion.Name = "Locomotion";
         locomotion.TargetCharacterBodyNode = body;
@@ -664,7 +664,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         => animationTree.Get("parameters/playback").As<AnimationNodeStateMachinePlayback>()
            ?? throw new Xunit.Sdk.XunitException("Expected AnimationTree playback to be available.");
 
-    private sealed partial class RootMotionPlayerLocomotion : PlayerLocomotion
+    private sealed partial class RootMotionCharacterLocomotion : CharacterLocomotion
     {
         public Vector3 RootMotionPositionDelta
         {
@@ -683,7 +683,7 @@ public sealed partial class PlayerLocomotionIntegrationTests
         protected override Basis GetRootMotionReferenceBasis() => RootMotionBasis;
     }
 
-    private sealed partial class RecordingTurnPlayerLocomotion : PlayerLocomotion
+    private sealed partial class RecordingTurnCharacterLocomotion : CharacterLocomotion
     {
         public float LastAppliedYawDelta
         {
@@ -723,5 +723,5 @@ public sealed partial class PlayerLocomotionIntegrationTests
         CharacterBody3D Body,
         AnimationTree AnimationTree,
         Node3D RootMotionReference,
-        PlayerLocomotion Locomotion);
+        CharacterLocomotion Locomotion);
 }

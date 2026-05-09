@@ -87,9 +87,9 @@ public partial class PlayerController : Node
     /// <inheritdoc />
     public override void _ExitTree()
     {
-        if (_xrManager is not null)
+        if (_xrManager is XRManager xrManager)
         {
-            _xrManager.Initialised -= OnXRInitialised;
+            xrManager.Initialised -= OnXRInitialised;
         }
 
         DisconnectControllers();
@@ -152,15 +152,15 @@ public partial class PlayerController : Node
 
     private void DisconnectControllers()
     {
-        if (_leftHandController is not null)
+        if (_leftHandController is IXRHandController leftHandController)
         {
-            _leftHandController.ActionVector2InputChanged -= OnLeftControllerVector2Changed;
+            leftHandController.ActionVector2InputChanged -= OnLeftControllerVector2Changed;
             _leftHandController = null;
         }
 
-        if (_rightHandController is not null)
+        if (_rightHandController is IXRHandController rightHandController)
         {
-            _rightHandController.ActionVector2InputChanged -= OnRightControllerVector2Changed;
+            rightHandController.ActionVector2InputChanged -= OnRightControllerVector2Changed;
             _rightHandController = null;
         }
 

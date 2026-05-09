@@ -5,10 +5,10 @@ using Godot;
 namespace AlleyCat.Control.Locomotion;
 
 /// <summary>
-/// Concrete locomotion component for the reference player.
+/// Concrete locomotion component for a character rig.
 /// </summary>
 [GlobalClass]
-public partial class PlayerLocomotion : LocomotionBase
+public partial class CharacterLocomotion : LocomotionBase
 {
     private static readonly StringName _playbackParameter = HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter();
     private static readonly StringName _legacyRootPlaybackParameter = new("parameters/playback");
@@ -301,7 +301,7 @@ public partial class PlayerLocomotion : LocomotionBase
             if (!_warnedMissingAnimationBlendParameter)
             {
                 GD.PushWarning(
-                    $"{nameof(PlayerLocomotion)} could not resolve animation blend parameter '{AnimationBlendParameter}'. " +
+                    $"{nameof(CharacterLocomotion)} could not resolve animation blend parameter '{AnimationBlendParameter}'. " +
                     "Locomotion movement still runs, but walk blending remains blocked until the animation tree is reconciled.");
                 _warnedMissingAnimationBlendParameter = true;
             }
@@ -327,7 +327,7 @@ public partial class PlayerLocomotion : LocomotionBase
         }
 
         GD.PushWarning(
-            $"{nameof(PlayerLocomotion)} resolved animation blend parameter '{AnimationBlendParameter}' " +
+            $"{nameof(CharacterLocomotion)} resolved animation blend parameter '{AnimationBlendParameter}' " +
             $"with unsupported type '{currentValue.VariantType}'.");
         _warnedUnsupportedAnimationBlendParameterType = true;
     }
@@ -411,7 +411,7 @@ public partial class PlayerLocomotion : LocomotionBase
 
     private CharacterBody3D GetTargetCharacterBody()
         => TargetCharacterBodyResolved
-            ?? throw new InvalidOperationException($"{nameof(PlayerLocomotion)} target body is not available before _Ready.");
+            ?? throw new InvalidOperationException($"{nameof(CharacterLocomotion)} target body is not available before _Ready.");
 
     /// <summary>
     /// Resolves the current locomotion root-motion position delta from the animation runtime.
