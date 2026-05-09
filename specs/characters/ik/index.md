@@ -1,18 +1,34 @@
 ---
 id: IK
-title: Player VRIK System
+title: VRIK System
 ---
 
-# Player VRIK System
+# VRIK System
 
 ## Purpose
 
-Parent specification for the player VR humanoid IK spec family. Defines system-level scope,
-capability levels, and delivery boundaries across IK sub-specifications.
+Parent specification for the VR humanoid IK spec family. Defines system-level scope,
+capability levels, and delivery boundaries across IK sub-specifications. Covers both
+reusable character IK for NPCs and player-specific XR integration.
+
+## User Requirements
+
+1. Players must experience full-body VR humanoid IK that follows headset and controller inputs.
+2. Characters must have a reusable character IK foundation that is agnostic to input source.
+3. Head, hands, feet, and other limbs must all support provider-driven target and influence control.
+
+## Technical Requirements
+
+1. The IK system must provide a reusable base architecture supporting any humanoid character.
+2. Player-specific XR integration must attach to the base as a complementary layer.
+3. IKTargetStateProvider must be extensible to all limbs in the same manner as hands.
+4. Provider influence must gate corresponding IK modifiers including indirect side effects.
 
 ## In Scope
 
-- Full-body VR humanoid IK system for the player character.
+- Reusable full-body humanoid IK system for any humanoid character.
+- IKTargetStateProvider architecture covering head, hands, feet, and extensible to other limbs.
+- Player-specific XR-to-IK bridging for head and hand target driving.
 - Runtime XR-to-IK bridging for head and hand target driving.
 - Baseline support using headset and two controllers.
 - Optional refinement paths for additional tracking input when available.
@@ -24,12 +40,6 @@ capability levels, and delivery boundaries across IK sub-specifications.
 - XR runtime implementation details beyond the XRManager contract.
 - Network replication and backend concerns.
 
-## Runtime Integration Boundary
-
-- XR runtime contracts are defined in [XR-001: XRManager](../../xr/001-xr-manager/index.md).
-- Player XR-to-IK runtime bridge is defined in [IK Implementation Notes](implementation-notes.md).
-- IK component behaviour is defined by child IK specifications.
-
 ## Input And Capability Levels
 
 | Level | Input | Expected Outcome |
@@ -37,6 +47,30 @@ capability levels, and delivery boundaries across IK sub-specifications.
 | 1 | Headset + left/right controllers | Robust upper-body control with stable full-body pose approximation. |
 | 2 | Level 1 + hand tracking | Improved hand/arm intent interpretation. Must degrade to Level 1. |
 | 3 | Level 1 + body tracking | Improved whole-body pose fidelity. Must degrade to lower levels. |
+
+## Runtime Integration Boundary
+
+- XR runtime contracts are defined in [XR-001: XRManager](../../xr/001-xr-manager/index.md).
+- Character IK runtime bridge is defined in [IK Implementation Notes](implementation-notes.md).
+- Player XR integration layer is defined in [IK Implementation Notes](implementation-notes.md).
+- IK component behaviour is defined by child IK specifications.
+
+## Layered Architecture
+
+### General Character IK Layer
+- Reusable `CharacterIK` component applicable to any humanoid character.
+- Operates independently of input source.
+- Accepts IKTargetStateProvider for all configurable limbs.
+
+### Player XR Integration Layer
+- Attaches to `CharacterIK` as a complementary provider layer.
+- Exposes fallback provider properties for XR hand-controller binding.
+- Falls back gracefully when XR is unavailable.
+
+### Provider Architecture
+- IKTargetStateProvider is a general abstraction for any limb.
+- Provider influence gates corresponding IK modifiers and side effects.
+- Fallback providers are implemented as provider subclasses.
 
 ## Child Specifications
 

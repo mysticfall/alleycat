@@ -35,6 +35,9 @@ permission outputs that gate player movement in non-standing poses.
 1. IK-001, IK-002, and IK-003 are normative prerequisites and must be referenced as dependencies.
 2. Pose states and transitions must be implemented as Godot `Resource` definitions with customisable properties.
 3. Runtime state selection must use head and hand IK-target transforms plus internal or animation-derived values only.
+   - **Provider influence distinction**: Pose-state inputs are separate from provider influence. IK-target transforms
+     used for pose detection are the downstream result of provider processing, not the raw provider state itself.
+     The pose-state machine observes the resolved target transforms after provider influence has been applied.
 4. Collision-derived or locomotion-system-derived inputs must not be required for IK-004 delivery.
 5. Calibration must use viewpoint-node semantics and body-proportion signals without standing-only head-rest.
 6. Feet positions from animation remain the source of truth; pose-state and hip reconciliation must not replace that.
@@ -45,6 +48,9 @@ permission outputs that gate player movement in non-standing poses.
     delegates to the active pose state. Non-standing poses return rotation-only permissions except all-fours crawling.
 11. The pose-state-machine must expose locomotion animation-state targets by delegating to the active pose state each
     tick, with all-fours crawling returning the forward movement target.
+12. Provider influence gating (for example disabling arm IK when provider influence is 0) must not interfere with
+    pose-state detection. The pose-state machine observes final IK target transforms after provider processing;
+    if a provider deactivates an arm, the pose-state machine sees the resulting rest or fallback transform.
 
 ## In Scope
 
@@ -81,10 +87,12 @@ permission outputs that gate player movement in non-standing poses.
 | AC-36 | The pose-state-machine exposes locomotion state targets. | Technical |
 | AC-37 | AllFours crawling sub-state returns forward movement target. | Technical |
 | AC-38 | The pose-state-machine delegates to the active pose state each tick. | Technical |
+| AC-39 | Pose-state observes resolved transforms after provider processing. | Technical |
+| AC-40 | Provider gating does not interfere with pose detection; uses rest/fallback transforms. | Technical |
 
 ## References
 
-- [Player VRIK System](../index.md)
+- [VRIK System](../index.md)
 - [IK-001: Reusable Neck-Spine CCDIK Setup](../001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](../002-arm-shoulder-ik/index.md)
 - [IK-003: Leg And Feet IK System](../003-leg-feet-ik/index.md)

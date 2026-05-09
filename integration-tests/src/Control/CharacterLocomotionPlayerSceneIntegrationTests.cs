@@ -166,10 +166,10 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         Node sceneRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected mirror-room scene to become current scene.");
 
-        _ = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull("Female"), exactMatch: false);
-        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Female/PlayerController"), exactMatch: false);
-        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Female/Locomotion"), exactMatch: false);
-        _ = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull("Female/AnimationTree"), exactMatch: false);
+        _ = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull("Actors/Player"), exactMatch: false);
+        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/PlayerController"), exactMatch: false);
+        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/Locomotion"), exactMatch: false);
+        _ = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull("Actors/Player/AnimationTree"), exactMatch: false);
 
         Script locomotionScript = LoadScript(CharacterLocomotionScriptPath);
         Assert.Equal(CharacterLocomotionScriptPath, locomotionScript.ResourcePath);

@@ -122,6 +122,8 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
         try
         {
+            InvokeEnsureFollowers(fixture.PlayerVRIK);
+
             IKTargetBodyFollower headFollower = GetPrivateField<IKTargetBodyFollower>(fixture.PlayerVRIK, "_headFollower");
             IKTargetAnimatableFollower rightHandFollower = GetPrivateField<IKTargetAnimatableFollower>(fixture.PlayerVRIK, "_rightHandFollower");
             IKTargetAnimatableFollower leftHandFollower = GetPrivateField<IKTargetAnimatableFollower>(fixture.PlayerVRIK, "_leftHandFollower");
@@ -332,8 +334,9 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
     private static T GetPrivateField<T>(PlayerVRIK playerVRIK, string fieldName)
     {
-        FieldInfo field = typeof(PlayerVRIK).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-                          ?? throw new InvalidOperationException($"PlayerVRIK field '{fieldName}' was not found.");
+        FieldInfo field = GetNonPublicInstanceField(playerVRIK.GetType(), fieldName)
+                          ?? throw new InvalidOperationException(
+                              $"{playerVRIK.GetType().Name} field '{fieldName}' was not found in the inheritance chain.");
 
         return Assert.IsType<T>(field.GetValue(playerVRIK));
     }
@@ -491,22 +494,61 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
     private static void InvokeOnBeginStage(PlayerVRIK playerVRIK, double delta)
     {
-        MethodInfo method = typeof(PlayerVRIK).GetMethod(
-                                "OnBeginStage",
-                                BindingFlags.Instance | BindingFlags.NonPublic)
-                            ?? throw new InvalidOperationException("PlayerVRIK.OnBeginStage was not found.");
+        MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "OnBeginStage")
+                            ?? throw new InvalidOperationException(
+                                $"{playerVRIK.GetType().Name}.OnBeginStage was not found in the inheritance chain.");
 
         _ = method.Invoke(playerVRIK, [delta]);
     }
 
     private static void InvokeUpdatePhysicalFollowers(PlayerVRIK playerVRIK, double delta)
     {
-        MethodInfo method = typeof(PlayerVRIK).GetMethod(
-                                "UpdatePhysicalFollowers",
-                                BindingFlags.Instance | BindingFlags.NonPublic)
-                            ?? throw new InvalidOperationException("PlayerVRIK.UpdatePhysicalFollowers was not found.");
+        MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "UpdatePhysicalFollowers")
+                            ?? throw new InvalidOperationException(
+                                $"{playerVRIK.GetType().Name}.UpdatePhysicalFollowers was not found in the inheritance chain.");
 
         _ = method.Invoke(playerVRIK, [delta]);
+    }
+
+    private static void InvokeEnsureFollowers(PlayerVRIK playerVRIK)
+    {
+        MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "EnsureFollowers")
+                            ?? throw new InvalidOperationException(
+                                $"{playerVRIK.GetType().Name}.EnsureFollowers was not found in the inheritance chain.");
+
+        _ = method.Invoke(playerVRIK, null);
+    }
+
+    private static FieldInfo? GetNonPublicInstanceField(Type type, string fieldName)
+    {
+        for (Type? current = type; current is not null; current = current.BaseType)
+        {
+            FieldInfo? field = current.GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            if (field is not null)
+            {
+                return field;
+            }
+        }
+
+        return null;
+    }
+
+    private static MethodInfo? GetNonPublicInstanceMethod(Type type, string methodName)
+    {
+        for (Type? current = type; current is not null; current = current.BaseType)
+        {
+            MethodInfo? method = current.GetMethod(
+                methodName,
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            if (method is not null)
+            {
+                return method;
+            }
+        }
+
+        return null;
     }
 
     private static void InvokeRigPhysicsSync(DynamicPhysicalRig rig)

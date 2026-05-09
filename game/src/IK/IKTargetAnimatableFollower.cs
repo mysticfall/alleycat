@@ -146,9 +146,10 @@ public sealed class IKTargetAnimatableFollower(AnimatableBody3D body, Func<Trans
         Transform3D targetTransform = targetTransformSource();
         Vector3 displacement = targetTransform.Origin - body.GlobalPosition;
         float snapDistanceSquared = SnapDistance * SnapDistance;
-        if (displacement.LengthSquared() <= snapDistanceSquared && !body.TestMove(body.GlobalTransform, displacement))
+        bool snapped = displacement.LengthSquared() <= snapDistanceSquared && !body.TestMove(body.GlobalTransform, displacement);
+        if (snapped)
         {
-            body.GlobalPosition = targetTransform.Origin;
+            SetWorldTransform(body, targetTransform);
             _velocity = Vector3.Zero;
         }
         else
@@ -168,14 +169,29 @@ public sealed class IKTargetAnimatableFollower(AnimatableBody3D body, Func<Trans
             MoveWithCollisionSlide(_velocity * deltaSeconds);
         }
 
-        body.GlobalBasis = IKTargetBodyFollowerMath.ComputeFollowBasis(
-            body.GlobalBasis,
-            targetTransform.Basis,
-            deltaSeconds,
-            RotationResponsiveness,
-            RotationSnapAngleRadians);
+        if (!snapped)
+        {
+            body.GlobalBasis = IKTargetBodyFollowerMath.ComputeFollowBasis(
+                body.GlobalBasis,
+                targetTransform.Basis,
+                deltaSeconds,
+                RotationResponsiveness,
+                RotationSnapAngleRadians);
+        }
 
         _dynamicBodyInteraction.Update(targetTransform, delta);
+    }
+
+    private static void SetWorldTransform(Node3D node, Transform3D worldTransform)
+    {
+        Transform3D orthonormalWorldTransform = new(worldTransform.Basis.Orthonormalized(), worldTransform.Origin);
+        node.Transform = node.GetParent() is Node3D parent
+            ? parent.GlobalTransform.AffineInverse() * orthonormalWorldTransform
+            : orthonormalWorldTransform;
+        if (node.IsInsideTree())
+        {
+            node.ForceUpdateTransform();
+        }
     }
 
     private void MoveWithCollisionSlide(Vector3 motion)

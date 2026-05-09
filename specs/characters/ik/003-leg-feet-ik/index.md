@@ -28,6 +28,10 @@ IK-002 naming, design, and test conventions.
 3. Knee bend direction must remain visually coherent and deterministic as
    feet rotate, transitioning smoothly between animation-derived poses and
    foot-orientation-derived fallback.
+4. Provider-driven foot targets must coexist with FootTargetSyncController
+   without conflict; provider takes precedence when assigned.
+5. Provider influence of 0 on a foot must deactivate the corresponding leg IK
+   modifier.
 
 ## Technical Requirements
 
@@ -70,6 +74,21 @@ IK-002 naming, design, and test conventions.
     half-length plus margin: `max(MinimumPoleOffset, (RestLegLength * 0.5) +
     RestLegHalfPoleOffsetMargin)`. This floor applies unconditionally and is
     not compression-gated.
+11. **Provider-driven foot targets**: Foot IK targets may be driven by
+    `IKTargetStateProvider` in the same manner as hand targets. When a foot
+    provider is assigned and has non-zero influence, the provider-derived foot
+    target takes precedence over animation-synchronised targets.
+12. **Provider coexistence contract**: `FootTargetSyncController` runs first
+     to synchronise animation foot targets. A dedicated `CharacterIKFootProviderStage`
+     then evaluates the foot provider contract; when a provider is assigned and
+     has non-zero influence, it overrides the animation-synced target. When no
+     foot provider is assigned or influence is 0, the animation-synced target
+     from the sync stage is preserved. This allows NPC characters to use
+     animation-driven foot targets while player characters can override with
+     provider-driven targets.
+13. **Provider influence gating**: When the corresponding `IKTargetStateProvider`
+    reports desired influence of 0, the leg `TwoBoneIK3D` for that side must be
+    deactivated.
 
 ## In Scope
 
@@ -92,6 +111,9 @@ IK-002 naming, design, and test conventions.
   derived floor.
 - A reusable leg-feet IK scene (`reference_female_base.tscn`) and a lower-body
   photobooth verification workflow aligned to IK-002 structure.
+- Provider-driven foot target support via `IKTargetStateProvider`, coexisting
+  with `FootTargetSyncController` without conflict.
+- Provider influence gating that deactivates leg IK when influence is 0.
 
 ## Out Of Scope
 
@@ -184,6 +206,22 @@ pages.
   `max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)`
   as a minimum floor. This floor applies in all leg states and is not
   compression-gated. *(Leg-Feet IK Contract)*
+
+- **AC-15** — Provider-driven foot targets take precedence over animation-synchronised
+  targets when a foot `IKTargetStateProvider` is assigned with non-zero influence.
+  *(Provider Coexistence Contract)*
+
+- **AC-16** — When no foot provider is assigned or influence is 0,
+  `FootTargetSyncController` continues to provide animation-derived foot targets
+  without conflict. *(Provider Coexistence Contract)*
+
+- **AC-17** — Provider influence of 0 on a foot deactivates the corresponding leg
+  `TwoBoneIK3D` modifier. *(Provider Gating Contract)*
+
+- **AC-18** — Foot provider coexistence runs `FootTargetSyncController` first to
+  synchronise animation foot targets, then evaluates the provider contract; a
+  non-zero provider overrides the synced target while zero or absent provider
+  preserves the animation fallback. *(Provider Coexistence Contract)*
 
 ## References
 

@@ -7,7 +7,7 @@ title: IK Implementation Notes
 
 ## Parent Specification
 
-Child guidance under [IK: Player VRIK System](index.md).
+Child guidance under [IK: VRIK System](index.md).
 
 ## TwoBoneIK3D Configuration
 
@@ -41,7 +41,22 @@ Child guidance under [IK: Player VRIK System](index.md).
   `BoneAttachment3D` harness that applies hips override position directly, without
   animation driving the same transform.
 
-## Player XR To IK Runtime Bridge
+## Character IK Architecture
+
+### General Character IK Class
+
+- A reusable concrete `CharacterIK` class supports NPC characters and any non-XR-driven
+  humanoid IK without implying VR-specific input.
+- Operates independently of input source; accepts `IKTargetStateProvider` for limb targets.
+- Provides the core IK modifier orchestration without XR-specific logic.
+- Modifier influence wiring uses per-limb modifier groups only; each group includes the direct
+  solver and any side-effect modifiers for that body part or side.
+
+### Player XR Integration Layer
+
+- `PlayerVRIK` extends `CharacterIK` with player-specific XR integration.
+- Exposes optional fallback provider properties for head, hands, and feet.
+- Falls back gracefully when XR is unavailable.
 
 ### Startup Binding Contract
 
@@ -68,45 +83,103 @@ Child guidance under [IK: Player VRIK System](index.md).
 - If either height is near zero, calibration is skipped and the current XR world
   scale is retained.
 
-### Target State Provider Contract
+## IKTargetStateProvider Architecture
 
-**Player-Visible Behaviour:**
+### General Provider Contract
 
-- Hand IK target bodies follow XR controller transforms by default when bound.
-- Scene-authored or runtime systems may redirect a hand follow target without modifying
-  the `Body/Hands/IHand` hierarchy.
+**User Requirements:**
+
+1. Head, hands, feet, and other limbs must all support provider-driven target and
+   influence control in the same manner.
+2. All IK modifiers controlled directly or indirectly by character IK must be tied to
+   corresponding provider influence.
 
 **Technical Contract:**
 
-- `IKTargetStateProvider` is a Godot `Node` global class so provider nodes can be
-  assigned through exported `PlayerVRIK` inspector properties.
-- Providers always return an `IKTargetState` containing an explicit world-space
-  target transform and desired influence for the corresponding IK modifier.
-- `PlayerVRIK` exposes nullable per-hand provider properties. When a provider is
-  assigned, the hand target body follows the provider state; otherwise the XR
-  controller `HandPositionNode` remains the fallback source when bound.
-- If neither a provider nor an XR fallback source is available, `PlayerVRIK` may
-  use a private safe legacy/unbound fallback value. This fallback is internal to
-  `PlayerVRIK`; it is not a provider state concept and must not treat world
-  origin as a meaningful hand target.
-- When the corresponding `TwoBoneIK3D` modifier reference is available, `PlayerVRIK`
-  applies provider/fallback desired influence to that modifier.
-- **No normal fallback uses the hand IK target body as its own follow source.**
-  Such self-follow creates no-op behaviour and breaks VR physical limiting semantics.
+1. `IKTargetStateProvider` is a Godot `Node` global class so provider nodes can be
+   assigned through exported character IK inspector properties.
+2. Providers always return an `IKTargetState` containing an explicit world-space
+   target transform and desired influence for the corresponding IK modifier.
+3. The provider abstraction applies uniformly to: head, left hand, right hand, left
+   foot, right foot, and any additional limbs configured in the character IK setup.
+4. When provider desired influence is 0, the corresponding IK modifier and all
+   side-effect modifiers must be deactivated.
+5. Each limb side has a separate provider slot (for example left hand vs right hand).
+
+### Provider Influence Gating
+
+- Provider influence gates the corresponding IK modifier and its side effects.
+- Example: right hand provider desired influence of 0 deactivates the right arm
+  `TwoBoneIK3D`, right shoulder correction modifier, and any other right-hand-side
+  modifiers.
+- Influence propagation is deterministic and follows the modifier dependency graph.
+
+### XR Fallback Provider
+
+**User Requirements:**
+
+1. XR hand-controller fallback must behave identically to the default case when no
+   custom provider is assigned.
+
+**Technical Contract:**
+
+1. XR hand-controller fallback behaviour moves into an `IKTargetStateProvider` subclass.
+2. `XRControllerTargetProvider` extends `IKTargetStateProvider` and derives target
+   transform from XR controller state.
+3. `PlayerVRIK` exposes optional fallback provider properties (for example
+   `LeftHandFallbackProvider`, `RightHandFallbackProvider`, `HeadFallbackProvider`).
+4. `XRControllerTargetProvider` exposes a `LimbSide` property and resolves the corresponding
+   XR controller hand-position node internally during player binding.
+5. The `player.tscn` scene wires fallback providers to the appropriate character IK properties
+   and assigns each provider side explicitly.
+6. Generic fallback-provider selection is owned by `CharacterIK`; `PlayerVRIK` only binds
+   player XR runtime abstractions into XR fallback providers.
+7. When no provider is assigned, the fallback provider is used if available; otherwise
+   the character IK uses a safe idle state.
+8. **No normal fallback uses the target body as its own follow source.** Such self-follow
+   creates no-op behaviour and breaks VR physical limiting semantics.
+
+### Provider Property Mapping
+
+| Limb | Provider Property | IK Modifier Target |
+|------|-------------------|-------------------|
+| Head | `HeadTargetProvider` | Neck-Spine IK (IK-001) |
+| Left Hand | `LeftHandIKTargetStateProvider` | Left Arm TwoBoneIK3D + shoulder correction (IK-002) |
+| Right Hand | `RightHandIKTargetStateProvider` | Right Arm TwoBoneIK3D + shoulder correction (IK-002) |
+| Left Foot | `LeftFootTargetProvider` | Left Leg TwoBoneIK3D (IK-003) |
+| Right Foot | `RightFootTargetProvider` | Right Leg TwoBoneIK3D (IK-003) |
 
 ### Validation Expectations
 
-- **Default XR fallback:** With no provider assigned, hand targets follow XR
-  controller `HandPositionNode` transforms via the standard XR binding pipeline.
-- **Provider override:** When a provider is assigned to a hand property,
-  `PlayerVRIK` must read the returned `IKTargetState` and drive the hand target
-  body to the provider's world-space transform.
-- **Influence application:** When the corresponding `TwoBoneIK3D` modifier
-  reference exists on the affected limb, `PlayerVRIK` applies the desired
-  influence from the provider state (or fallback XR state) to that modifier.
-- **No self-follow:** Confirm that the hand target body never uses itself as a
-  follow source when providers are absent; the XR controller fallback must be
-  the final source in all normal cases.
+- **Provider override:** When a provider is assigned to any limb property, the VRIK
+  must read the returned `IKTargetState` and drive the target body to the provider's
+  world-space transform.
+- **Influence gating:** When provider desired influence is 0, all corresponding side
+  effects must be disabled.
+- **XR fallback:** With fallback provider wired in `player.tscn`, the system behaves as
+  if the XR controller is the source when no custom provider overrides it.
+- **Scene wiring:** `player.tscn` must populate per-limb modifier groups so provider
+  influence gates direct solvers and side-effect modifiers without duplicate per-limb exports.
+- **Side resolution:** XR fallback providers must prove left/right controller selection from
+  their own `LimbSide` setting rather than a manually assigned source node.
+- **No self-follow:** Confirm that target bodies never use themselves as follow sources;
+  the fallback provider must be the final source in all normal cases.
+
+## Leg And Foot Provider Coexistence
+
+- IK-003 defines a `FootTargetSyncController` that synchronises foot targets from
+  animated foot transforms before each IK solve cycle.
+- Provider-driven foot targets coexist with `FootTargetSyncController` through a
+  staged pipeline:
+  - **Stage 1**: `FootTargetSyncController` runs first to synchronise animation
+    foot targets from animated foot transforms.
+  - **Stage 2**: `CharacterIKFootProviderStage` evaluates the foot provider contract;
+    when a provider is assigned and has non-zero influence, it overrides the
+    animation-synced target.
+  - **Stage 3**: When no foot provider is assigned or influence is 0, the
+    animation-synced target from Stage 1 is preserved.
+- This allows NPC characters to use animation-driven foot targets while player
+  characters can override with provider-driven targets.
 
 ## References
 
@@ -115,7 +188,10 @@ Child guidance under [IK: Player VRIK System](index.md).
 - @specs/characters/ik/002-arm-shoulder-ik/index.md
 - @specs/characters/ik/003-leg-feet-ik/index.md
 - @specs/xr/001-xr-manager/index.md
+- @game/src/IK/CharacterIK.cs
 - @game/src/IK/PlayerVRIK.cs
 - @game/src/IK/PlayerVRIKStartupBinder.cs
+- @game/src/IK/IKTargetStateProvider.cs
+- @game/src/IK/XRControllerTargetProvider.cs
 - Godot 4.6 documentation —
   [TwoBoneIK3D](https://docs.godotengine.org/en/stable/classes/class_twoboneik3d.html)

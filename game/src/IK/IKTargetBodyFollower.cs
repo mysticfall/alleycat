@@ -103,9 +103,8 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D>
         float snapDistanceSquared = SnapDistance * SnapDistance;
         if (displacement.LengthSquared() <= snapDistanceSquared)
         {
-            body.GlobalPosition = targetTransform.Origin;
+            SetWorldTransform(body, targetTransform);
             body.Velocity = Vector3.Zero;
-            body.GlobalBasis = targetTransform.Basis.Orthonormalized();
             return;
         }
 
@@ -119,6 +118,18 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D>
 
         _ = body.MoveAndSlide();
         body.GlobalBasis = targetTransform.Basis.Orthonormalized();
+    }
+
+    private static void SetWorldTransform(Node3D node, Transform3D worldTransform)
+    {
+        Transform3D orthonormalWorldTransform = new(worldTransform.Basis.Orthonormalized(), worldTransform.Origin);
+        node.Transform = node.GetParent() is Node3D parent
+            ? parent.GlobalTransform.AffineInverse() * orthonormalWorldTransform
+            : orthonormalWorldTransform;
+        if (node.IsInsideTree())
+        {
+            node.ForceUpdateTransform();
+        }
     }
 
     private void FollowDamped(float deltaSeconds, Transform3D targetTransform)

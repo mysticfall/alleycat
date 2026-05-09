@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using AlleyCat.Common;
 using AlleyCat.IK.Pose;
 using AlleyCat.UI;
 using AlleyCat.XR;
@@ -12,287 +11,13 @@ namespace AlleyCat.IK;
 /// Runtime bridge that drives player IK targets from XR tracking data.
 /// </summary>
 [GlobalClass]
-public partial class PlayerVRIK : Node3D
+public partial class PlayerVRIK : CharacterIK
 {
     private const float HeightEpsilon = 1e-4f;
     private static readonly StringName _rightHandBoneName = new("RightHand");
     private static readonly StringName _leftHandBoneName = new("LeftHand");
     private static readonly StringName _rightLowerArmBoneName = new("RightLowerArm");
     private static readonly StringName _leftLowerArmBoneName = new("LeftLowerArm");
-
-    private Marker3D? _viewpoint;
-    private CharacterBody3D? _headIKTarget;
-    private Node3D? _headIKSolveTarget;
-    private AnimatableBody3D? _rightHandIKTarget;
-    private AnimatableBody3D? _leftHandIKTarget;
-    private Node3D? _rightFootIKTarget;
-    private Node3D? _leftFootIKTarget;
-    private TwoBoneIK3D? _rightHandIKModifier;
-    private TwoBoneIK3D? _leftHandIKModifier;
-    private Skeleton3D? _skeleton;
-
-    private IKTargetBodyFollower? _headFollower;
-    private IKTargetAnimatableFollower? _leftHandFollower;
-    private IKTargetAnimatableFollower? _rightHandFollower;
-    /// <summary>
-    /// Avatar viewpoint marker representing eye-centre in avatar space.
-    /// </summary>
-    [Export]
-    public Marker3D? Viewpoint
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Head IK target body.
-    /// </summary>
-    [Export]
-    public CharacterBody3D? HeadIKTarget
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Virtual head target consumed by downstream IK after hip-limit application.
-    /// </summary>
-    [Export]
-    public Node3D? HeadIKSolveTarget
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Right-hand IK target body.
-    /// </summary>
-    [Export]
-    public AnimatableBody3D? RightHandIKTarget
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Left-hand IK target body.
-    /// </summary>
-    [Export]
-    public AnimatableBody3D? LeftHandIKTarget
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Right-foot IK target node.
-    /// </summary>
-    [Export]
-    public Node3D? RightFootIKTarget
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Left-foot IK target node.
-    /// </summary>
-    [Export]
-    public Node3D? LeftFootIKTarget
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Optional scene-wireable provider that overrides the right-hand XR controller target and IK influence.
-    /// </summary>
-    [Export]
-    public IKTargetStateProvider? RightHandIKTargetStateProvider
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Optional scene-wireable provider that overrides the left-hand XR controller target and IK influence.
-    /// </summary>
-    [Export]
-    public IKTargetStateProvider? LeftHandIKTargetStateProvider
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Right-hand IK modifier whose influence is driven by the right-hand target-state provider when assigned.
-    /// </summary>
-    [Export]
-    public TwoBoneIK3D? RightHandIKModifier
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Left-hand IK modifier whose influence is driven by the left-hand target-state provider when assigned.
-    /// </summary>
-    [Export]
-    public TwoBoneIK3D? LeftHandIKModifier
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Skeleton driven by IK modifiers.
-    /// </summary>
-    [Export]
-    public Skeleton3D? Skeleton
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Maximum follow speed for the head target body.
-    /// </summary>
-    [Export]
-    public float HeadTargetMaximumSpeed
-    {
-        get;
-        set;
-    } = 32.0f;
-
-    /// <summary>
-    /// Maximum follow speed for each hand target body.
-    /// </summary>
-    [Export]
-    public float HandTargetMaximumSpeed
-    {
-        get;
-        set;
-    } = 28.0f;
-
-    /// <summary>
-    /// Position-error gain for hand follower translation while using the current body-based hand targets.
-    /// </summary>
-    [Export]
-    public float HandTargetPositionResponsiveness
-    {
-        get;
-        set;
-    } = 14.0f;
-
-    /// <summary>
-    /// Maximum hand follower acceleration while using the current body-based hand targets.
-    /// </summary>
-    [Export]
-    public float HandTargetMaximumAcceleration
-    {
-        get;
-        set;
-    } = 48.0f;
-
-    /// <summary>
-    /// Distance within which hand followers progressively ease into their final settle movement.
-    /// </summary>
-    [Export]
-    public float HandTargetSettleDistance
-    {
-        get;
-        set;
-    } = 0.03f;
-
-    /// <summary>
-    /// Rotation-error gain for hand follower orientation smoothing.
-    /// </summary>
-    [Export]
-    public float HandTargetRotationResponsiveness
-    {
-        get;
-        set;
-    } = 24.0f;
-
-    /// <summary>
-    /// Collision mask queried for explicit hand-only interaction with dynamic rigid bodies.
-    /// </summary>
-    [Export]
-    public uint HandDynamicInteractionCollisionMask
-    {
-        get;
-        set;
-    } = 2;
-
-    /// <summary>
-    /// Minimum approach speed before a hand impact impulse may fire.
-    /// </summary>
-    [Export]
-    public float HandDynamicImpactApproachSpeedThreshold
-    {
-        get;
-        set;
-    } = HandDynamicBodyInteractionController.DefaultImpactApproachSpeedThreshold;
-
-    /// <summary>
-    /// Impact impulse gain applied per metre-per-second of hand approach speed.
-    /// </summary>
-    [Export]
-    public float HandDynamicImpactImpulsePerSpeed
-    {
-        get;
-        set;
-    } = HandDynamicBodyInteractionController.DefaultImpactImpulsePerSpeed;
-
-    /// <summary>
-    /// Maximum impact impulse magnitude applied by the hand interaction channel.
-    /// </summary>
-    [Export]
-    public float HandDynamicImpactImpulseCap
-    {
-        get;
-        set;
-    } = HandDynamicBodyInteractionController.DefaultImpactImpulseCap;
-
-    /// <summary>
-    /// Minimum pressing speed before the sustained hand push channel may fire.
-    /// </summary>
-    [Export]
-    public float HandDynamicSustainedPushSpeedThreshold
-    {
-        get;
-        set;
-    } = HandDynamicBodyInteractionController.DefaultSustainedPushSpeedThreshold;
-
-    /// <summary>
-    /// Sustained push-force gain applied per metre-per-second of hand pressing speed.
-    /// </summary>
-    [Export]
-    public float HandDynamicSustainedForcePerSpeed
-    {
-        get;
-        set;
-    } = HandDynamicBodyInteractionController.DefaultSustainedForcePerSpeed;
-
-    /// <summary>
-    /// Maximum sustained push-force magnitude applied by the hand interaction channel.
-    /// </summary>
-    [Export]
-    public float HandDynamicSustainedForceCap
-    {
-        get;
-        set;
-    } = HandDynamicBodyInteractionController.DefaultSustainedForceCap;
-
-    /// <summary>
-    /// When true, enables IK processing. When false, skips all IK target updates.
-    /// </summary>
-    [Export]
-    public bool Active
-    {
-        get;
-        set;
-    } = true;
 
     /// <summary>
     /// When enabled, shows per-side hip clamp residuals in the debug overlay during play tests.
@@ -358,15 +83,6 @@ public partial class PlayerVRIK : Node3D
     } = new("Hips");
 
     /// <summary>
-    /// Resolved head-bone index for compensation calculations.
-    /// </summary>
-    public int HeadBoneIndex
-    {
-        get;
-        private set;
-    } = -1;
-
-    /// <summary>
     /// Resolved hip-bone index supplied to the pose-state context. <c>-1</c> when unresolved.
     /// </summary>
     public int HipBoneIndex
@@ -375,24 +91,10 @@ public partial class PlayerVRIK : Node3D
         private set;
     } = -1;
 
-    /// <summary>
-    /// Number of physics-timed follower update ticks executed since startup.
-    /// </summary>
-    public ulong PhysicsFollowerTickCount
-    {
-        get;
-        private set;
-    }
-
     private IXROrigin? _origin;
     private IXRCamera? _camera;
-    private IXRHandController? _rightHandController;
-    private IXRHandController? _leftHandController;
-
     private bool _isBound;
     private bool _isDrivingDebugOverlay;
-    private Transform3D _viewpointLocalTransform = Transform3D.Identity;
-    private Transform3D _viewpointLocalInverseTransform = Transform3D.Identity;
     private float _worldScale = 1.0f;
     private Vector3 _mostRecentOriginCompensationDelta = Vector3.Zero;
 
@@ -403,25 +105,67 @@ public partial class PlayerVRIK : Node3D
     public override void _Ready()
     {
         base._Ready();
-        EnsureResolvedNodes();
         ConfigurePlayerBodyCollisionExceptions();
         ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
-        EnsureFollowers();
-        SetPhysicsProcess(true);
-
-        InsertStageModifiers();
     }
 
     /// <inheritdoc />
-    public override void _PhysicsProcess(double delta)
+    protected override bool CanProcessProviderTargets => _isBound;
+
+    /// <inheritdoc />
+    protected override bool CanProcessPhysicalFollowers => _isBound;
+
+    /// <inheritdoc />
+    protected override void BeforeProviderTargetProcessing()
     {
-        if (delta <= 0d)
+        if (_origin is IXROrigin origin)
+        {
+            origin.OriginNode.GlobalTransform = GlobalTransform;
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void AfterProviderTargetProcessing(Skeleton3D skeleton, double delta)
+    {
+        PoseStateMachine? stateMachine = PoseStateMachine;
+        if (stateMachine is null || !stateMachine.Active)
+        {
+            ClearHipDebugMessage();
+            return;
+        }
+
+        PoseStateContext context = BuildPoseStateContext(skeleton, delta);
+        PoseStateMachineTickResult tickResult = stateMachine.Tick(context);
+        UpdateHipDebugMessage(tickResult.Context, tickResult);
+    }
+
+    /// <inheritdoc />
+    protected override void AfterEndStage(Skeleton3D skeleton, double delta)
+    {
+        if (_origin is null || _camera is null)
         {
             return;
         }
 
-        UpdatePhysicalFollowers(delta);
+        Transform3D compensatedOriginTransform = ComputeCompensatedOriginTransform(
+            skeleton,
+            _camera.CameraNode,
+            _origin.OriginNode);
+
+        _origin.OriginNode.GlobalTransform = compensatedOriginTransform;
     }
+
+    /// <inheritdoc />
+    protected override Transform3D GetDefaultHeadTargetTransform()
+        => _camera is null
+            ? ResolvedHeadIKTarget?.GlobalTransform ?? Transform3D.Identity
+            : _camera.CameraNode.GlobalTransform * ViewpointLocalInverseTransform;
+
+    /// <inheritdoc />
+    // HipBoneIndex may remain -1 when the skeleton does not expose a hips bone; consumers
+    // (for example HipReconciliationModifier) already guard for the unresolved case.
+    protected override void EnsureSubclassResolvedNodes(Skeleton3D skeleton)
+        => HipBoneIndex = skeleton.FindBone(HipBoneName);
 
     /// <summary>
     /// Binds XR runtime abstractions once and calibrates world scale.
@@ -449,11 +193,8 @@ public partial class PlayerVRIK : Node3D
 
         _origin = origin;
         _camera = camera;
-        _rightHandController = rightHandController;
-        _leftHandController = leftHandController;
-
         EnsureResolvedNodes();
-        EnsureFollowers();
+        BindXRHandFallbackProviders(rightHandController, leftHandController);
         ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
 
         CalibrateWorldScaleOnce();
@@ -463,29 +204,6 @@ public partial class PlayerVRIK : Node3D
 
     private void ConfigureGeneratedTargetProxyCollisionExceptionsDeferred()
         => _ = CallDeferred(nameof(ConfigureGeneratedTargetProxyCollisionExceptions));
-
-    private void InsertStageModifiers()
-    {
-        Skeleton3D skeleton = GetResolvedSkeleton();
-
-        StageModifier beginModifier = new()
-        {
-            Name = "VRIKBeginStage",
-            Callback = OnBeginStage,
-        };
-
-        StageModifier endModifier = new()
-        {
-            Name = "VRIKEndStage",
-            Callback = OnEndStage,
-        };
-
-        skeleton.AddChild(beginModifier);
-        skeleton.MoveChild(beginModifier, 0);
-
-        skeleton.AddChild(endModifier);
-        skeleton.MoveChild(endModifier, skeleton.GetChildCount() - 1);
-    }
 
     private void CalibrateWorldScaleOnce()
     {
@@ -497,7 +215,7 @@ public partial class PlayerVRIK : Node3D
         Skeleton3D skeleton = GetResolvedSkeleton();
 
         Transform3D headBoneRest = skeleton.GetBoneGlobalRest(HeadBoneIndex);
-        Transform3D restViewpoint = headBoneRest * _viewpointLocalTransform;
+        Transform3D restViewpoint = headBoneRest * ViewpointLocalTransform;
 
         float avatarRestViewpointHeight = Mathf.Abs(restViewpoint.Origin.Y);
         float xrCameraHeight = Mathf.Abs(originNode.ToLocal(camera.CameraNode.GlobalPosition).Y);
@@ -521,79 +239,6 @@ public partial class PlayerVRIK : Node3D
         _worldScale = calibratedScale;
     }
 
-    private void OnBeginStage(double delta)
-    {
-        ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
-
-        if (!Active || !_isBound)
-        {
-            ClearHipDebugMessage();
-            return;
-        }
-
-        IXROrigin? origin = _origin;
-        PoseStateMachine? stateMachine = PoseStateMachine;
-
-        if (origin is null || _headFollower is null || _rightHandFollower is null || _leftHandFollower is null || !_isBound)
-        {
-            ClearHipDebugMessage();
-            return;
-        }
-
-        origin.OriginNode.GlobalTransform = GlobalTransform;
-        _headFollower.Follow(delta);
-
-        ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
-
-        if (stateMachine is null || !stateMachine.Active)
-        {
-            ClearHipDebugMessage();
-            return;
-        }
-
-        Skeleton3D skeleton = GetResolvedSkeleton();
-        PoseStateContext context = BuildPoseStateContext(skeleton, delta);
-        PoseStateMachineTickResult tickResult = stateMachine.Tick(context);
-        UpdateHipDebugMessage(tickResult.Context, tickResult);
-    }
-
-    private void UpdatePhysicalFollowers(double delta)
-    {
-        if (!Active || !_isBound)
-        {
-            return;
-        }
-
-        IXROrigin? origin = _origin;
-        if (origin is null || _rightHandFollower is null || _leftHandFollower is null)
-        {
-            return;
-        }
-
-        origin.OriginNode.GlobalTransform = GlobalTransform;
-        PhysicsFollowerTickCount += 1;
-
-        _rightHandFollower.Follow(delta);
-        _leftHandFollower.Follow(delta);
-    }
-
-    private void OnEndStage(double delta)
-    {
-        if (!Active || !_isBound || _origin is null || _camera is null)
-        {
-            return;
-        }
-
-        Skeleton3D skeleton = GetResolvedSkeleton();
-
-        Transform3D compensatedOriginTransform = ComputeCompensatedOriginTransform(
-            skeleton,
-            _camera.CameraNode,
-            _origin.OriginNode);
-
-        _origin.OriginNode.GlobalTransform = compensatedOriginTransform;
-    }
-
     /// <summary>
     /// Solves the compensated XR origin transform that aligns the current physical head target
     /// to the virtual head pose while preserving the physical-head local offset under the prior
@@ -604,68 +249,23 @@ public partial class PlayerVRIK : Node3D
         Camera3D camera,
         Node3D origin)
     {
-        Transform3D physicalHeadPose = camera.GlobalTransform * _viewpointLocalInverseTransform;
+        Transform3D physicalHeadPose = camera.GlobalTransform * ViewpointLocalInverseTransform;
         Transform3D virtualHeadPose = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(HeadBoneIndex);
         Transform3D localPose = origin.GlobalTransform.Inverse() * physicalHeadPose;
 
         return virtualHeadPose * localPose.Inverse();
     }
 
-    private Transform3D BuildHeadTargetTransform()
-    {
-        IXRCamera? camera = _camera;
-
-        return camera is null
-            ? _headIKTarget?.GlobalTransform ?? Transform3D.Identity
-            : camera.CameraNode.GlobalTransform * _viewpointLocalInverseTransform;
-    }
-
-    private void ApplyHeadSolveTargetTransform(Transform3D? limitedHeadTargetTransform)
-    {
-        Node3D? headIKSolveTarget = _headIKSolveTarget;
-        CharacterBody3D? headIKTarget = _headIKTarget;
-        if (headIKSolveTarget is null || headIKTarget is null)
+    private void BindXRHandFallbackProviders(
+        IXRHandController rightHandController,
+        IXRHandController leftHandController)
+        => ConfigureFallbackProviders(provider =>
         {
-            return;
-        }
-
-        headIKSolveTarget.GlobalTransform = limitedHeadTargetTransform ?? headIKTarget.GlobalTransform;
-    }
-
-    private Transform3D BuildRightHandTargetTransform()
-    {
-        IKTargetState state = BuildHandTargetState(
-            RightHandIKTargetStateProvider,
-            _rightHandController?.HandPositionNode);
-        ApplyHandIKInfluence(_rightHandIKModifier, state);
-        return state.WorldTransform;
-    }
-
-    private Transform3D BuildLeftHandTargetTransform()
-    {
-        IKTargetState state = BuildHandTargetState(
-            LeftHandIKTargetStateProvider,
-            _leftHandController?.HandPositionNode);
-        ApplyHandIKInfluence(_leftHandIKModifier, state);
-        return state.WorldTransform;
-    }
-
-    private static IKTargetState BuildHandTargetState(IKTargetStateProvider? provider, Node3D? xrFallbackSource)
-        => provider is not null
-            ? provider.GetTargetState()
-            : xrFallbackSource is not null && IsInstanceValid(xrFallbackSource)
-            ? new IKTargetState(xrFallbackSource.GlobalTransform)
-            : new IKTargetState(Transform3D.Identity);
-
-    private static void ApplyHandIKInfluence(TwoBoneIK3D? modifier, IKTargetState state)
-    {
-        if (modifier is null || !IsInstanceValid(modifier))
-        {
-            return;
-        }
-
-        modifier.Influence = Mathf.Clamp(state.DesiredInfluence, 0.0f, 1.0f);
-    }
+            if (provider is XRControllerTargetProvider xrProvider)
+            {
+                xrProvider.Bind(rightHandController, leftHandController);
+            }
+        });
 
     private static bool TryCalibrateWorldScale(
         float avatarRestViewpointHeight,
@@ -876,71 +476,20 @@ public partial class PlayerVRIK : Node3D
     private static string FormatFloat(float value)
         => value.ToString("F3", CultureInfo.InvariantCulture);
 
-    private sealed partial class StageModifier : SkeletonModifier3D
-    {
-        public Action<double>? Callback
-        {
-            get;
-            set;
-        }
-
-        public override void _ProcessModificationWithDelta(double delta)
-            => Callback?.Invoke(delta);
-    }
-
-    private Skeleton3D GetResolvedSkeleton()
-        => _skeleton ?? throw new InvalidOperationException("PlayerVRIK skeleton not resolved before use.");
-
-    private void EnsureResolvedNodes()
-    {
-        if (_skeleton is not null)
-        {
-            return;
-        }
-
-        _viewpoint = Viewpoint ?? this.RequireNode<Marker3D>("Female_export/GeneralSkeleton/Head/Viewpoint");
-        _headIKTarget = HeadIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/Head");
-        _headIKSolveTarget = HeadIKSolveTarget ?? this.RequireNode<Node3D>("IKTargets/HeadSolve");
-        _rightHandIKTarget = RightHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/RightHand");
-        _leftHandIKTarget = LeftHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/LeftHand");
-        _rightFootIKTarget = RightFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/RightFoot");
-        _leftFootIKTarget = LeftFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/LeftFoot");
-        _skeleton = Skeleton ?? this.RequireNode<Skeleton3D>("Female_export/GeneralSkeleton");
-        _rightHandIKModifier = RightHandIKModifier
-                               ?? GetNodeOrNull<TwoBoneIK3D>(
-                                   "Female_export/GeneralSkeleton/RightArmTwoBoneIKController");
-        _leftHandIKModifier = LeftHandIKModifier
-                              ?? GetNodeOrNull<TwoBoneIK3D>(
-                                  "Female_export/GeneralSkeleton/LeftArmTwoBoneIKController");
-
-        HeadBoneIndex = _skeleton.FindBone("Head");
-        if (HeadBoneIndex < 0)
-        {
-            throw new InvalidOperationException($"Unable to resolve Head bone on skeleton '{_skeleton.Name}'.");
-        }
-
-        HipBoneIndex = _skeleton.FindBone(HipBoneName);
-        // HipBoneIndex may remain -1 when the skeleton does not expose a hips bone; consumers
-        // (for example HipReconciliationModifier) already guard for the unresolved case.
-
-        _viewpointLocalTransform = _viewpoint.Transform;
-        _viewpointLocalInverseTransform = _viewpointLocalTransform.Inverse();
-    }
-
     private PoseStateContext BuildPoseStateContext(Skeleton3D skeleton, double delta)
     {
         // Head target rest in world space: head-bone global rest multiplied by the viewpoint
         // marker's local transform inside the head bone. Matches the calibration reference used
         // by CalibrateWorldScaleOnce.
         Transform3D headBoneRest = skeleton.GetBoneGlobalRest(HeadBoneIndex);
-        Transform3D headTargetRestTransform = skeleton.GlobalTransform * headBoneRest * _viewpointLocalTransform;
+        Transform3D headTargetRestTransform = skeleton.GlobalTransform * headBoneRest * ViewpointLocalTransform;
 
         // Current IK target transforms in world space.
-        Transform3D headTargetTransform = _headIKTarget?.GlobalTransform ?? Transform3D.Identity;
-        Transform3D rightHandTargetTransform = _rightHandIKTarget?.GlobalTransform ?? Transform3D.Identity;
-        Transform3D leftHandTargetTransform = _leftHandIKTarget?.GlobalTransform ?? Transform3D.Identity;
-        Transform3D rightFootTargetTransform = _rightFootIKTarget?.GlobalTransform ?? Transform3D.Identity;
-        Transform3D leftFootTargetTransform = _leftFootIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D headTargetTransform = ResolvedHeadIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D rightHandTargetTransform = ResolvedRightHandIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D leftHandTargetTransform = ResolvedLeftHandIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D rightFootTargetTransform = ResolvedRightFootIKTarget?.GlobalTransform ?? Transform3D.Identity;
+        Transform3D leftFootTargetTransform = ResolvedLeftFootIKTarget?.GlobalTransform ?? Transform3D.Identity;
 
         _poseContextBuilder.HeadTargetTransform = headTargetTransform;
         _poseContextBuilder.HeadTargetRestTransform = headTargetRestTransform;
@@ -959,61 +508,6 @@ public partial class PlayerVRIK : Node3D
         return _poseContextBuilder.Build();
     }
 
-    private void EnsureFollowers()
-    {
-        if (_headFollower is not null && _rightHandFollower is not null && _leftHandFollower is not null)
-        {
-            return;
-        }
-
-        CharacterBody3D headTarget = _headIKTarget
-                                     ?? throw new InvalidOperationException(
-                                         "PlayerVRIK head target not resolved before follower setup.");
-        AnimatableBody3D rightHandTarget = _rightHandIKTarget
-                                           ?? throw new InvalidOperationException(
-                                               "PlayerVRIK right-hand target not resolved before follower setup.");
-        AnimatableBody3D leftHandTarget = _leftHandIKTarget
-                                           ?? throw new InvalidOperationException(
-                                               "PlayerVRIK left-hand target not resolved before follower setup.");
-
-        _headFollower = new IKTargetBodyFollower(headTarget, BuildHeadTargetTransform)
-        {
-            MaximumSpeed = HeadTargetMaximumSpeed,
-        };
-
-        _rightHandFollower = new IKTargetAnimatableFollower(rightHandTarget, BuildRightHandTargetTransform)
-        {
-            MaximumSpeed = HandTargetMaximumSpeed,
-            PositionResponsiveness = HandTargetPositionResponsiveness,
-            MaximumAcceleration = HandTargetMaximumAcceleration,
-            SnapDistance = HandTargetSettleDistance,
-            RotationResponsiveness = HandTargetRotationResponsiveness,
-            DynamicBodyInteractionCollisionMask = HandDynamicInteractionCollisionMask,
-            DynamicImpactApproachSpeedThreshold = HandDynamicImpactApproachSpeedThreshold,
-            DynamicImpactImpulsePerSpeed = HandDynamicImpactImpulsePerSpeed,
-            DynamicImpactImpulseCap = HandDynamicImpactImpulseCap,
-            DynamicSustainedPushSpeedThreshold = HandDynamicSustainedPushSpeedThreshold,
-            DynamicSustainedForcePerSpeed = HandDynamicSustainedForcePerSpeed,
-            DynamicSustainedForceCap = HandDynamicSustainedForceCap,
-        };
-
-        _leftHandFollower = new IKTargetAnimatableFollower(leftHandTarget, BuildLeftHandTargetTransform)
-        {
-            MaximumSpeed = HandTargetMaximumSpeed,
-            PositionResponsiveness = HandTargetPositionResponsiveness,
-            MaximumAcceleration = HandTargetMaximumAcceleration,
-            SnapDistance = HandTargetSettleDistance,
-            RotationResponsiveness = HandTargetRotationResponsiveness,
-            DynamicBodyInteractionCollisionMask = HandDynamicInteractionCollisionMask,
-            DynamicImpactApproachSpeedThreshold = HandDynamicImpactApproachSpeedThreshold,
-            DynamicImpactImpulsePerSpeed = HandDynamicImpactImpulsePerSpeed,
-            DynamicImpactImpulseCap = HandDynamicImpactImpulseCap,
-            DynamicSustainedPushSpeedThreshold = HandDynamicSustainedPushSpeedThreshold,
-            DynamicSustainedForcePerSpeed = HandDynamicSustainedForcePerSpeed,
-            DynamicSustainedForceCap = HandDynamicSustainedForceCap,
-        };
-    }
-
     private void ConfigurePlayerBodyCollisionExceptions()
     {
         if (GetParent() is not CharacterBody3D playerBody)
@@ -1023,11 +517,11 @@ public partial class PlayerVRIK : Node3D
 
         // TODO: This self-collision suppression is a temporary workaround for the current IK target rig.
         // PlayerVRIK may not be the right long-term owner once collision responsibilities are separated cleanly.
-        AddBidirectionalCollisionException(playerBody, _headIKTarget);
-        AddBidirectionalCollisionException(playerBody, _rightHandIKTarget);
-        AddBidirectionalCollisionException(playerBody, _leftHandIKTarget);
-        AddBidirectionalCollisionException(playerBody, _rightFootIKTarget as PhysicsBody3D);
-        AddBidirectionalCollisionException(playerBody, _leftFootIKTarget as PhysicsBody3D);
+        AddBidirectionalCollisionException(playerBody, ResolvedHeadIKTarget);
+        AddBidirectionalCollisionException(playerBody, ResolvedRightHandIKTarget);
+        AddBidirectionalCollisionException(playerBody, ResolvedLeftHandIKTarget);
+        AddBidirectionalCollisionException(playerBody, ResolvedRightFootIKTarget as PhysicsBody3D);
+        AddBidirectionalCollisionException(playerBody, ResolvedLeftFootIKTarget as PhysicsBody3D);
     }
 
     private void ConfigureGeneratedTargetProxyCollisionExceptions()
@@ -1044,8 +538,8 @@ public partial class PlayerVRIK : Node3D
             return;
         }
 
-        AddGeneratedHandProxyCollisionExceptions(_rightHandIKTarget, rig, _rightHandBoneName, _rightLowerArmBoneName);
-        AddGeneratedHandProxyCollisionExceptions(_leftHandIKTarget, rig, _leftHandBoneName, _leftLowerArmBoneName);
+        AddGeneratedHandProxyCollisionExceptions(ResolvedRightHandIKTarget, rig, _rightHandBoneName, _rightLowerArmBoneName);
+        AddGeneratedHandProxyCollisionExceptions(ResolvedLeftHandIKTarget, rig, _leftHandBoneName, _leftLowerArmBoneName);
     }
 
     private DynamicPhysicalRig? FindGeneratedPhysicalRig()
