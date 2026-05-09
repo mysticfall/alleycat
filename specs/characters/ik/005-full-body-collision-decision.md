@@ -118,10 +118,10 @@ through explicit force-transfer channels.
 ## References
 
 - [IK-004: VRIK Pose State Machine And Hip Reconciliation](004-vrik-pose-state-machine/index.md)
-- [DynamicPhysicalRig Implementation](../../../game/src/IK/DynamicPhysicalRig.cs)
-- [HandDynamicBodyInteractionController Implementation](../../../game/src/IK/HandDynamicBodyInteractionController.cs)
-- [IKTargetAnimatableFollower Implementation](../../../game/src/IK/IKTargetAnimatableFollower.cs)
-- [PlayerVRIK Implementation](../../../game/src/IK/PlayerVRIK.cs)
-- [DynamicPhysicalRig Integration Tests](../../../integration-tests/src/IK/DynamicPhysicalRigIntegrationTests.cs)
+- [DynamicPhysicalRig Implementation](@game/src/Body/DynamicPhysicalRig.cs)
+- [HandDynamicBodyInteractionController Implementation](@game/src/IK/HandDynamicBodyInteractionController.cs)
+- [IKTargetAnimatableFollower Implementation](@game/src/IK/IKTargetAnimatableFollower.cs)
+- [PlayerVRIK Implementation](@game/src/IK/PlayerVRIK.cs)
+- [DynamicPhysicalRig Integration Tests](../../../integration-tests/src/Body/DynamicPhysicalRigIntegrationTests.cs)
 - [HandDynamicBodyInteraction Integration Tests](../../../integration-tests/src/IK/HandDynamicBodyInteractionControllerIntegrationTests.cs)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)

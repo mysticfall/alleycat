@@ -1,4 +1,5 @@
 using System.Reflection;
+using AlleyCat.Body;
 using AlleyCat.IK;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
@@ -6,7 +7,7 @@ using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
-namespace AlleyCat.IntegrationTests.IK;
+namespace AlleyCat.IntegrationTests.Body;
 
 /// <summary>
 /// Integration coverage for physics-timed IK target following and generated proxy synchronisation.

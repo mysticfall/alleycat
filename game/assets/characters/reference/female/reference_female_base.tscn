@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://e765iqdvmnjd"]
 
 [ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_yqj8o"]
-[ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/IK/DynamicPhysicalRig.cs" id="3_2a5tg"]
+[ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Body/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" path="res://assets/characters/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
 [ext_resource type="PackedScene" path="res://assets/characters/reference/female/colliders.tscn" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_5hhxm"]

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.IK;
+namespace AlleyCat.Body;
 
 /// <summary>
 /// Builds a bone-attached proxy collision rig from a source authoring scene.
@@ -95,7 +95,7 @@ public partial class DynamicPhysicalRig : Node
     /// <summary>
     /// Collision layer applied to generated proxy bodies.
     /// </summary>
-    [Export]
+    [Export(PropertyHint.Layers3DPhysics)]
     public uint ProxyCollisionLayer
     {
         get;
@@ -105,7 +105,7 @@ public partial class DynamicPhysicalRig : Node
     /// <summary>
     /// Collision mask applied to generated proxy bodies.
     /// </summary>
-    [Export]
+    [Export(PropertyHint.Layers3DPhysics)]
     public uint ProxyCollisionMask
     {
         get;
