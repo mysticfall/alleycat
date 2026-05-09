@@ -1,18 +1,14 @@
 [gd_scene format=3 uid="uid://c1rexm45hq1rf"]
 
-[ext_resource type="PackedScene" uid="uid://e765iqdvmnjd" path="res://assets/characters/reference/female/reference_female_ik.tscn" id="1_edvvb"]
-[ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/IK/DynamicPhysicalRig.cs" id="3_2a5tg"]
-[ext_resource type="PackedScene" path="res://assets/characters/reference/female/colliders.tscn" id="4_2a5tg"]
+[ext_resource type="PackedScene" uid="uid://e765iqdvmnjd" path="res://assets/characters/reference/female/reference_female_base.tscn" id="1_edvvb"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
 [ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/ik/vrik.tscn" id="7_2a5tg"]
 [ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
-[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_2a5tg"]
-[ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="9_ctrlloco"]
 [ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
 
-[node name="Player" unique_id=1792987446 instance=ExtResource("1_edvvb")]
+[node name="Player" unique_id=1792987446 groups=["Player"] instance=ExtResource("1_edvvb")]
 
-[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(2076791994) index="0" unique_id=254595317]
+[node name="GeneralSkeleton" parent="Female_export" parent_id_path=PackedInt32Array(325578303) index="0" unique_id=247339352]
 bones/1/position = Vector3(0, 0.8389602, 0.022851786)
 bones/1/rotation = Quaternion(0, 0, 0, 1)
 bones/2/rotation = Quaternion(0, 0, 0, 1)
@@ -89,12 +85,7 @@ script = ExtResource("5_hipmod")
 StateMachine = NodePath("../../../VRIK/PoseStateMachine")
 metadata/_custom_type_script = "uid://bfa76a86uhk1m"
 
-[node name="DynamicPhysicalRig" type="Node" parent="Female_export/GeneralSkeleton" index="26" unique_id=966532134]
-script = ExtResource("3_2a5tg")
-SourceScene = ExtResource("4_2a5tg")
-metadata/_custom_type_script = "uid://c7d4aa5yqpf4u"
-
-[node name="Head" parent="Female_export/GeneralSkeleton" index="27" unique_id=694402195]
+[node name="Head" parent="Female_export/GeneralSkeleton" index="26" unique_id=694402195]
 transform = Transform3D(0.99999994, 5.820766e-11, -1.1641532e-10, 0, 1, 1.1920929e-07, 5.820766e-11, -8.940697e-08, 1, 4.092726e-12, 1.4670644, 0.036714755)
 
 [node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "Skeleton") instance=ExtResource("7_2a5tg")]
@@ -128,21 +119,13 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15
 [node name="LeftFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="9" unique_id=1292107592]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.15998398, 0.0683572, -0.027253283)
 
-[node name="AnimationTree" parent="." index="5" unique_id=527893103 instance=ExtResource("8_2a5tg")]
-root_motion_track = NodePath("%GeneralSkeleton:Root")
-
-[node name="Locomotion" type="Node" parent="." index="6" unique_id=668991861 node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference", "PermissionSourceNodes")]
-script = ExtResource("9_ctrlloco")
-TargetCharacterBodyNode = NodePath("..")
-AnimationTree = NodePath("../AnimationTree")
-RootMotionReference = NodePath("../Female_export")
-AnimationBlendParameter = &"parameters/States/Walking/blend_position"
+[node name="Locomotion" parent="." index="6" unique_id=668991861 node_paths=PackedStringArray("PermissionSourceNodes")]
 PermissionSourceNodes = [NodePath("../VRIK/PoseStateMachine")]
-metadata/_custom_type_script = "uid://cjt48dl58j31y"
 
-[node name="PlayerController" type="Node" parent="." index="7" unique_id=1206579480 node_paths=PackedStringArray("LocomotionNode")]
+[node name="PlayerController" type="Node" parent="." index="7" unique_id=500632269 node_paths=PackedStringArray("LocomotionNode")]
 script = ExtResource("10_ctrlplayer")
 LocomotionNode = NodePath("../Locomotion")
+metadata/_custom_type_script = "uid://2whl41iq7k4b"
 
 [node name="OpenAITranscriber" type="Node" parent="." index="8" unique_id=1267890585]
 script = ExtResource("7_j7l2f")

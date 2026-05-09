@@ -90,7 +90,7 @@ IK-002 naming, design, and test conventions.
   on current animation state.
 - Unconditional knee pole minimum-offset safeguarding using a rest-leg-length
   derived floor.
-- A reusable leg-feet IK scene (`reference_female_ik.tscn`) and a lower-body
+- A reusable leg-feet IK scene (`reference_female_base.tscn`) and a lower-body
   photobooth verification workflow aligned to IK-002 structure.
 
 ## Out Of Scope
@@ -151,10 +151,10 @@ pages.
   per-side instances). *(Leg-Feet IK Contract)*
 
 - **AC-08** — Reusable IK scene at
-  `@game/assets/characters/reference/female/reference_female_ik.tscn` containing
+  `@game/assets/characters/reference/female/reference_female_base.tscn` containing
   `LegIKController` (left/right), `TwoBoneIK3D` (left/right), and leg target
   nodes (`IKTargets/LeftFoot`, `IKTargets/RightFoot`). Consuming scene
-  `@game/assets/characters/reference/player.tscn` inherits this scene and wires
+  `@game/assets/characters/reference/player.tscn` inherits base scene and wires
   foot targets for runtime solving. *(This Page)*
 
 - **AC-09** — A photobooth verification scene exists under `@game/tests/` and
@@ -188,7 +188,7 @@ pages.
 ## References
 
 - @game/assets/characters/reference/female/reference_female.tscn
-- @game/assets/characters/reference/female/reference_female_ik.tscn
+- @game/assets/characters/reference/female/reference_female_base.tscn
 - @game/assets/characters/reference/player.tscn
 - @game/assets/testing/photobooth/templates/lower_body_5_cams.tscn
 - @specs/characters/ik/002-arm-shoulder-ik/index.md

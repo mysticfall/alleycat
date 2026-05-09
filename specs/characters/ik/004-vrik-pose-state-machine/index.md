@@ -96,5 +96,5 @@ permission outputs that gate player movement in non-standing poses.
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
 - @game/assets/characters/ik/vrik.tscn
 - @game/assets/characters/reference/female/animations/animation_tree_player.tscn
-- @game/assets/characters/reference/female/reference_female_ik.tscn
+- @game/assets/characters/reference/female/reference_female_base.tscn
 - @game/assets/characters/reference/player.tscn

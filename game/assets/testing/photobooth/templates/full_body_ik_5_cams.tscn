@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://iljwxhb7keyb"]
 
 [ext_resource type="PackedScene" uid="uid://6b8las20aee4" path="res://assets/testing/photobooth/photobooth.tscn" id="1_ll8ad"]
-[ext_resource type="PackedScene" uid="uid://yo3x41aa1t8a" path="res://assets/characters/reference/female/reference_female_ik.tscn" id="2_k8sgr"]
+[ext_resource type="PackedScene" uid="uid://e765iqdvmnjd" path="res://assets/characters/reference/female/reference_female_base.tscn" id="2_k8sgr"]
 [ext_resource type="PackedScene" uid="uid://utn2mx2dm0vl" path="res://assets/testing/photobooth/camera_rig.tscn" id="3_sjvy5"]
 
 [node name="Photobooth" unique_id=406188165 instance=ExtResource("1_ll8ad")]

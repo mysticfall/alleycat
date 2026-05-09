@@ -46,7 +46,9 @@ respects pose-based permission gating.
    - Returns zero planar velocity when movement is not allowed.
    - Aggregates permission sources separately for movement vs rotation.
 
-3. Add `CharacterLocomotion` as child of root node in `player.tscn`.
+3. `CharacterLocomotion` lives in shared base scene (`reference_female_base.tscn`)
+   with root-level AnimationTree, DynamicPhysicalRig, and TurnMode.Smooth default.
+   Player scene adds VRIK, pose-state permission wiring, and PlayerController.
 
 ### Permission Source API
 
@@ -128,13 +130,14 @@ respects pose-based permission gating.
 8. Pose-state delegated locomotion animation-state override supported.
 9. Velocity derives from animation root motion output in root-motion states.
 10. Zero planar velocity returned when movement not allowed.
-11. Implementation added to `player.tscn`.
+11. `CharacterLocomotion` present in `reference_female_base.tscn` with TurnMode.Smooth;
+    player scene adds pose-state permission wiring.
 12. Control scheme: left stick movement, right stick rotation.
 13. Permission source API implemented and documented.
 14. Permission sources wired via exported node references.
 15. Movement gated based on aggregated permission state.
 16. Rotation gated based on aggregated permission state.
-17. Pose-state-machine wired as permission source in `player.tscn`.
+17. Pose-state-machine wired as permission source in player scene.
 18. User requirements verifiable through acceptance testing.
 19. Technical requirements verifiable through code review.
 

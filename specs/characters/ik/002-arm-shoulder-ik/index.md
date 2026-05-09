@@ -118,7 +118,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 ## References
 
 - @game/assets/characters/reference/female/reference_female.tscn
-- @game/assets/characters/reference/female/reference_female_ik.tscn
+- @game/assets/characters/reference/female/reference_female_base.tscn
 - @game/assets/characters/reference/player.tscn
 - @specs/characters/ik/001-neck-spine-ik/index.md
 - @specs/testing/002-visual-verification-scope/index.md
