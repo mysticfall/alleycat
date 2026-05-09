@@ -357,7 +357,7 @@ public partial class DynamicPhysicalRig : Node
     {
         BoneAttachment3D attachment = new()
         {
-            Name = $"GeneratedCollider_{targetBoneName}_{GeneratedProxyCount:D2}",
+            Name = $"Collider_{targetBoneName}_{GeneratedProxyCount:D2}",
             BoneName = targetBoneName,
             BoneIdx = targetBoneIndex,
         };
