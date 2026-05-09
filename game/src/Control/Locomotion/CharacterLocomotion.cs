@@ -89,7 +89,7 @@ public partial class CharacterLocomotion : LocomotionBase
     {
         get;
         set;
-    } = TurnMode.Snap;
+    } = TurnMode.Smooth;
 
     /// <summary>
     /// Rotation speed multiplier.
