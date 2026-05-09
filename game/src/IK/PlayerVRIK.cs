@@ -27,12 +27,13 @@ public partial class PlayerVRIK : Node3D
     private AnimatableBody3D? _leftHandIKTarget;
     private Node3D? _rightFootIKTarget;
     private Node3D? _leftFootIKTarget;
+    private TwoBoneIK3D? _rightHandIKModifier;
+    private TwoBoneIK3D? _leftHandIKModifier;
     private Skeleton3D? _skeleton;
 
     private IKTargetBodyFollower? _headFollower;
     private IKTargetAnimatableFollower? _leftHandFollower;
     private IKTargetAnimatableFollower? _rightHandFollower;
-
     /// <summary>
     /// Avatar viewpoint marker representing eye-centre in avatar space.
     /// </summary>
@@ -98,6 +99,46 @@ public partial class PlayerVRIK : Node3D
     /// </summary>
     [Export]
     public Node3D? LeftFootIKTarget
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Optional scene-wireable provider that overrides the right-hand XR controller target and IK influence.
+    /// </summary>
+    [Export]
+    public IKTargetStateProvider? RightHandIKTargetStateProvider
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Optional scene-wireable provider that overrides the left-hand XR controller target and IK influence.
+    /// </summary>
+    [Export]
+    public IKTargetStateProvider? LeftHandIKTargetStateProvider
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Right-hand IK modifier whose influence is driven by the right-hand target-state provider when assigned.
+    /// </summary>
+    [Export]
+    public TwoBoneIK3D? RightHandIKModifier
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Left-hand IK modifier whose influence is driven by the left-hand target-state provider when assigned.
+    /// </summary>
+    [Export]
+    public TwoBoneIK3D? LeftHandIKModifier
     {
         get;
         set;
@@ -592,14 +633,39 @@ public partial class PlayerVRIK : Node3D
     }
 
     private Transform3D BuildRightHandTargetTransform()
-        => _rightHandController?.HandPositionNode.GlobalTransform
-           ?? _rightHandIKTarget?.GlobalTransform
-           ?? Transform3D.Identity;
+    {
+        IKTargetState state = BuildHandTargetState(
+            RightHandIKTargetStateProvider,
+            _rightHandController?.HandPositionNode);
+        ApplyHandIKInfluence(_rightHandIKModifier, state);
+        return state.WorldTransform;
+    }
 
     private Transform3D BuildLeftHandTargetTransform()
-        => _leftHandController?.HandPositionNode.GlobalTransform
-           ?? _leftHandIKTarget?.GlobalTransform
-           ?? Transform3D.Identity;
+    {
+        IKTargetState state = BuildHandTargetState(
+            LeftHandIKTargetStateProvider,
+            _leftHandController?.HandPositionNode);
+        ApplyHandIKInfluence(_leftHandIKModifier, state);
+        return state.WorldTransform;
+    }
+
+    private static IKTargetState BuildHandTargetState(IKTargetStateProvider? provider, Node3D? xrFallbackSource)
+        => provider is not null
+            ? provider.GetTargetState()
+            : xrFallbackSource is not null && IsInstanceValid(xrFallbackSource)
+            ? new IKTargetState(xrFallbackSource.GlobalTransform)
+            : new IKTargetState(Transform3D.Identity);
+
+    private static void ApplyHandIKInfluence(TwoBoneIK3D? modifier, IKTargetState state)
+    {
+        if (modifier is null || !IsInstanceValid(modifier))
+        {
+            return;
+        }
+
+        modifier.Influence = Mathf.Clamp(state.DesiredInfluence, 0.0f, 1.0f);
+    }
 
     private static bool TryCalibrateWorldScale(
         float avatarRestViewpointHeight,
@@ -840,6 +906,12 @@ public partial class PlayerVRIK : Node3D
         _rightFootIKTarget = RightFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/RightFoot");
         _leftFootIKTarget = LeftFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/LeftFoot");
         _skeleton = Skeleton ?? this.RequireNode<Skeleton3D>("Female_export/GeneralSkeleton");
+        _rightHandIKModifier = RightHandIKModifier
+                               ?? GetNodeOrNull<TwoBoneIK3D>(
+                                   "Female_export/GeneralSkeleton/RightArmTwoBoneIKController");
+        _leftHandIKModifier = LeftHandIKModifier
+                              ?? GetNodeOrNull<TwoBoneIK3D>(
+                                  "Female_export/GeneralSkeleton/LeftArmTwoBoneIKController");
 
         HeadBoneIndex = _skeleton.FindBone("Head");
         if (HeadBoneIndex < 0)
@@ -901,8 +973,8 @@ public partial class PlayerVRIK : Node3D
                                            ?? throw new InvalidOperationException(
                                                "PlayerVRIK right-hand target not resolved before follower setup.");
         AnimatableBody3D leftHandTarget = _leftHandIKTarget
-                                          ?? throw new InvalidOperationException(
-                                              "PlayerVRIK left-hand target not resolved before follower setup.");
+                                           ?? throw new InvalidOperationException(
+                                               "PlayerVRIK left-hand target not resolved before follower setup.");
 
         _headFollower = new IKTargetBodyFollower(headTarget, BuildHeadTargetTransform)
         {

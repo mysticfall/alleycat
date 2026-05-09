@@ -68,6 +68,46 @@ Child guidance under [IK: Player VRIK System](index.md).
 - If either height is near zero, calibration is skipped and the current XR world
   scale is retained.
 
+### Target State Provider Contract
+
+**Player-Visible Behaviour:**
+
+- Hand IK target bodies follow XR controller transforms by default when bound.
+- Scene-authored or runtime systems may redirect a hand follow target without modifying
+  the `Body/Hands/IHand` hierarchy.
+
+**Technical Contract:**
+
+- `IKTargetStateProvider` is a Godot `Node` global class so provider nodes can be
+  assigned through exported `PlayerVRIK` inspector properties.
+- Providers always return an `IKTargetState` containing an explicit world-space
+  target transform and desired influence for the corresponding IK modifier.
+- `PlayerVRIK` exposes nullable per-hand provider properties. When a provider is
+  assigned, the hand target body follows the provider state; otherwise the XR
+  controller `HandPositionNode` remains the fallback source when bound.
+- If neither a provider nor an XR fallback source is available, `PlayerVRIK` may
+  use a private safe legacy/unbound fallback value. This fallback is internal to
+  `PlayerVRIK`; it is not a provider state concept and must not treat world
+  origin as a meaningful hand target.
+- When the corresponding `TwoBoneIK3D` modifier reference is available, `PlayerVRIK`
+  applies provider/fallback desired influence to that modifier.
+- **No normal fallback uses the hand IK target body as its own follow source.**
+  Such self-follow creates no-op behaviour and breaks VR physical limiting semantics.
+
+### Validation Expectations
+
+- **Default XR fallback:** With no provider assigned, hand targets follow XR
+  controller `HandPositionNode` transforms via the standard XR binding pipeline.
+- **Provider override:** When a provider is assigned to a hand property,
+  `PlayerVRIK` must read the returned `IKTargetState` and drive the hand target
+  body to the provider's world-space transform.
+- **Influence application:** When the corresponding `TwoBoneIK3D` modifier
+  reference exists on the affected limb, `PlayerVRIK` applies the desired
+  influence from the provider state (or fallback XR state) to that modifier.
+- **No self-follow:** Confirm that the hand target body never uses itself as a
+  follow source when providers are absent; the XR controller fallback must be
+  the final source in all normal cases.
+
 ## References
 
 - @specs/characters/000-character-skeleton/index.md

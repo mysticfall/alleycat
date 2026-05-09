@@ -172,6 +172,105 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
+    /// Verifies hand IK target bodies follow XR controller hand nodes rather than their own current transforms.
+    /// </summary>
+    [Fact]
+    public async Task PlayerVRIKHandFollowTargets_WhenBound_UseControllerHandNodes()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+
+            Transform3D rightFollowTarget = InvokeBuildHandTargetTransform(fixture.PlayerVRIK, "BuildRightHandTargetTransform");
+            Transform3D leftFollowTarget = InvokeBuildHandTargetTransform(fixture.PlayerVRIK, "BuildLeftHandTargetTransform");
+
+            AssertTransformApproximately(fixture.RightHandController.HandPositionNode.GlobalTransform, rightFollowTarget);
+            AssertTransformApproximately(fixture.LeftHandController.HandPositionNode.GlobalTransform, leftFollowTarget);
+            Assert.Null(fixture.PlayerVRIK.RightHandIKTargetStateProvider);
+            Assert.Null(fixture.PlayerVRIK.LeftHandIKTargetStateProvider);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a scene-wired provider overrides the XR controller target and drives modifier influence.
+    /// </summary>
+    [Fact]
+    public async Task PlayerVRIKHandFollowTargets_WhenProviderAssigned_UseProviderTargetAndInfluence()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+        TestIKTargetStateProvider provider = new()
+        {
+            Name = "RightHandProvider",
+            TargetState = new IKTargetState(
+                new Transform3D(Basis.Identity, new Vector3(1.2f, 0.9f, -0.8f)),
+                0.42f),
+        };
+
+        fixture.Root.AddChild(provider);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+
+            fixture.PlayerVRIK.RightHandIKTargetStateProvider = provider;
+
+            Transform3D providerFollowTarget = InvokeBuildHandTargetTransform(
+                fixture.PlayerVRIK,
+                "BuildRightHandTargetTransform");
+
+            AssertTransformApproximately(provider.TargetState.WorldTransform, providerFollowTarget);
+            Assert.Equal(0.42f, fixture.RightHandIKModifier.Influence);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies unavailable controller sources use the legacy unbound fallback, not the hand IK target bodies themselves.
+    /// </summary>
+    [Fact]
+    public async Task PlayerVRIKHandFollowTargets_WhenUnbound_ReturnLegacyFallbackInsteadOfTargetBodies()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            Transform3D rightFollowTarget = InvokeBuildHandTargetTransform(fixture.PlayerVRIK, "BuildRightHandTargetTransform");
+            Transform3D leftFollowTarget = InvokeBuildHandTargetTransform(fixture.PlayerVRIK, "BuildLeftHandTargetTransform");
+
+            Assert.Equal(Transform3D.Identity, rightFollowTarget);
+            Assert.Equal(Transform3D.Identity, leftFollowTarget);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies end-stage origin compensation still aligns the physical and virtual head poses
     /// when the virtual head pose has diverged from the physical camera.
     /// </summary>
@@ -298,6 +397,20 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         skeleton.SetBoneRest(headBoneIndex, new Transform3D(Basis.Identity, new Vector3(0.0f, 1.55f, 0.0f)));
         skeleton.SetBonePosePosition(headBoneIndex, new Vector3(0.0f, -0.15f, 0.0f));
 
+        TwoBoneIK3D rightHandIKModifier = new()
+        {
+            Name = "RightArmTwoBoneIKController",
+            Influence = 1.0f,
+        };
+        skeleton.AddChild(rightHandIKModifier);
+
+        TwoBoneIK3D leftHandIKModifier = new()
+        {
+            Name = "LeftArmTwoBoneIKController",
+            Influence = 1.0f,
+        };
+        skeleton.AddChild(leftHandIKModifier);
+
         Node3D headAttachment = new()
         {
             Name = "Head",
@@ -332,6 +445,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         AnimatableBody3D rightHandIKTarget = new()
         {
             Name = "RightHand",
+            Position = new Vector3(4.0f, 4.0f, 4.0f),
             SyncToPhysics = false,
         };
         ikTargets.AddChild(rightHandIKTarget);
@@ -339,6 +453,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         AnimatableBody3D leftHandIKTarget = new()
         {
             Name = "LeftHand",
+            Position = new Vector3(-4.0f, -4.0f, -4.0f),
             SyncToPhysics = false,
         };
         ikTargets.AddChild(leftHandIKTarget);
@@ -351,6 +466,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             HeadIKSolveTarget = headIKSolveTarget,
             RightHandIKTarget = rightHandIKTarget,
             LeftHandIKTarget = leftHandIKTarget,
+            RightHandIKModifier = rightHandIKModifier,
+            LeftHandIKModifier = leftHandIKModifier,
             Skeleton = skeleton,
         };
         player.AddChild(playerVRIK);
@@ -377,6 +494,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         Node3D rightHandPosition = new()
         {
             Name = "RightHandPosition",
+            Position = new Vector3(0.3f, 1.1f, -0.4f),
         };
         rightControllerNode.AddChild(rightHandPosition);
 
@@ -389,6 +507,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         Node3D leftHandPosition = new()
         {
             Name = "LeftHandPosition",
+            Position = new Vector3(-0.35f, 1.05f, -0.45f),
         };
         leftControllerNode.AddChild(leftHandPosition);
 
@@ -406,6 +525,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             headBoneIndex,
             headIKTarget,
             headIKSolveTarget,
+            rightHandIKTarget,
+            leftHandIKTarget,
+            rightHandIKModifier,
+            leftHandIKModifier,
             origin,
             camera,
             rightHandController,
@@ -422,6 +545,17 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         _ = method.Invoke(playerVRIK, [delta]);
     }
 
+    private static Transform3D InvokeBuildHandTargetTransform(PlayerVRIK playerVRIK, string methodName)
+    {
+        MethodInfo method = typeof(PlayerVRIK).GetMethod(
+                                methodName,
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException($"PlayerVRIK.{methodName} was not found.");
+
+        return (Transform3D)(method.Invoke(playerVRIK, [])
+                             ?? throw new InvalidOperationException($"PlayerVRIK.{methodName} returned null."));
+    }
+
     private sealed class VrikFixture(
         Node3D root,
         PlayerVRIK playerVRIK,
@@ -429,6 +563,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         int headBoneIndex,
         CharacterBody3D headIKTarget,
         Node3D headIKSolveTarget,
+        AnimatableBody3D rightHandIKTarget,
+        AnimatableBody3D leftHandIKTarget,
+        TwoBoneIK3D rightHandIKModifier,
+        TwoBoneIK3D leftHandIKModifier,
         TestXROrigin origin,
         TestXRCamera camera,
         TestXRHandController rightHandController,
@@ -445,6 +583,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         public CharacterBody3D HeadIKTarget { get; } = headIKTarget;
 
         public Node3D HeadIKSolveTarget { get; } = headIKSolveTarget;
+
+        public AnimatableBody3D RightHandIKTarget { get; } = rightHandIKTarget;
+
+        public AnimatableBody3D LeftHandIKTarget { get; } = leftHandIKTarget;
+
+        public TwoBoneIK3D RightHandIKModifier { get; } = rightHandIKModifier;
+
+        public TwoBoneIK3D LeftHandIKModifier { get; } = leftHandIKModifier;
 
         public TestXROrigin Origin { get; } = origin;
 
@@ -539,6 +685,18 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             BindCallCount++;
             return true;
         }
+    }
+
+    private sealed partial class TestIKTargetStateProvider : IKTargetStateProvider
+    {
+        public IKTargetState TargetState
+        {
+            get;
+            init;
+        }
+
+        public override IKTargetState GetTargetState()
+            => TargetState;
     }
 
     private sealed partial class TestXROrigin(float worldScale) : Node3D, IXROrigin
