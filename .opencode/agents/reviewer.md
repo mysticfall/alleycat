@@ -54,6 +54,7 @@ When visual verification screenshots exist as verification artefacts:
 - [ ] Signal connections and disconnections are safe; no leaked subscriptions.
 - [ ] Scene/node ownership is clear, with minimal justified autoload/global state.
 - [ ] Exported properties/resources/scene refs are serialisation-safe and editor-friendly.
+- [ ] When a node class has many exported properties, related properties are grouped using `[ExportGroup]` for editor clarity.
 - [ ] Per-frame and VR-critical paths avoid blocking work and avoidable allocations.
 - [ ] Automated integration test evidence uses headless execution (or equivalent enforced mechanism such as
   `[Headless]`) to avoid manual UI/OpenXR intervention.

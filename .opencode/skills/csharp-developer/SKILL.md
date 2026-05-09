@@ -168,6 +168,25 @@ public partial class MyResource : Resource { }
 - In per-frame hot paths (such as `_ProcessModificationWithDelta`), avoid per-frame allocations and repeated node-path
   resolution. Reuse buffers and cached references.
 
+## Editor Property Grouping
+
+When a node class has many exported properties, use the `[ExportGroup]` attribute to group related properties
+into collapsible sections in the Godot inspector. This improves discoverability and reduces scroll distance for
+complex components.
+
+Place each `[ExportGroup]` attribute on its own line immediately above the first `[Export]` property of that group:
+
+```csharp
+[ExportGroup("Targets")]
+[Export] public Node3D? TargetNode { get; set; }
+
+[ExportGroup("Settings")]
+[Export] public float Speed { get; set; }
+```
+
+Use short, descriptive group names that reflect the logical role of the properties inside (for example `"Targets"`,
+`"Settings"`, `"Debug"`). A class with fewer than five exported properties generally does not need grouping.
+
 ## Namespaces and Project Mapping
 
 - Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in
