@@ -1,4 +1,3 @@
-using AlleyCat.Body;
 using AlleyCat.IK.Anchors;
 using Godot;
 
