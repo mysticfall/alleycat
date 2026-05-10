@@ -108,14 +108,18 @@ For visual-spec tasks:
 - map skill outcomes to planner classes (`READY`→`accepted`, `FOLLOW-UP REQUIRED`→`follow-up`,
   `ESCALATE`→`escalated`),
 - record gate outcome explicitly in progress updates.
+- treat a coder-reported visual `READY` as **review-pending** when final handoff depends on screenshot
+  interpretation. To avoid planner context overload, pass the screenshot artefact paths and expected visual cues to the
+  `reviewer` and require independent visual evidence review before final user handoff.
 
 **Do not mark visual-verification TODOs as complete when:**
 
 - The coder reports that screenshot capture failed (for example due to `--headless` mode or renderer errors).
   Classify as `follow-up` and redelegate with the correct run command.
 - Screenshots were generated but not visually inspected. File existence is not evidence of visual correctness.
-  Before accepting, confirm that the coder or you have inspected representative images (using the `read` tool to
-  load them) and verified expected behaviour per scenario.
+  Before final handoff, confirm that the coder has reported representative image inspection and that the `reviewer`
+  independently inspected the key artefacts with the `read` tool. The planner may inspect images directly only when a
+  reviewer pass is unavailable or when resolving an escalation.
 - If user feedback contradicts an earlier visual `accepted` decision (for example “pose is anatomically impossible”),
   immediately re-open the gate as `follow-up`, invalidate the prior acceptance, and require new objective assertions
   plus fresh visual evidence before proceeding.

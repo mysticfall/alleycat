@@ -36,10 +36,14 @@ For visual-spec tasks, use `godot-visual-verification` skill and validate compli
 When visual verification screenshots exist as verification artefacts:
 
 - [ ] Runner was executed **without `--headless`** (headless mode produces blank/failed captures).
-- [ ] Functional screenshot review was completed (using the `read` tool to inspect screenshots) — file existence alone
-  is
-  not sufficient.
+- [ ] You independently loaded representative screenshots with the `read` tool. Do not rely on the coder's reported
+  visual interpretation, even when the coder says the visual gate is `READY`.
 - [ ] Screenshots for distinct scenarios (for example different poses) produce visually distinct results.
+- [ ] Key scenario pairs are compared directly, especially neutral vs changed states and left/right, up/down, open/closed,
+  or success/failure pairs. If a pair expected to differ appears identical or only ambiguously different, treat the visual
+  gate as not proven.
+- [ ] Scenario names match what is visible. For example, a “look right” screenshot must visibly show the expected rightward
+  cue rather than just a matching parameter value.
 - [ ] Camera/marker framing was verified before feature-level captures.
 - [ ] C# integration tests validate the same behaviour with non-visual assertions.
 - [ ] Non-visual assertions include at least one objective anomaly guard for known failure modes (for example IK poles
@@ -76,6 +80,19 @@ Return findings grouped by severity:
 Treat missing functional screenshot inspection for visual-spec tasks as a blocking review gap unless the evidence is
 explicitly unavailable and escalated. Treat user-reported visual contradictions after a prior pass as a mandatory
 re-open of the gate.
+
+When screenshots are central to acceptance, include a concise visual evidence review in **Verified checks** or
+**Blocking issues**:
+
+- image paths inspected;
+- expected visible cue for each key image or pair;
+- observed visible cue;
+- confidence (`clear`, `ambiguous`, or `not visible`);
+- pass/fail decision.
+
+Parameter assertions, scene-node checks, or successful screenshot generation do not prove visual correctness. If the
+rendered cue is ambiguous, tiny, occluded, or contradicted by the image, return `Handoff Decision: Not Ready` unless the
+issue is explicitly escalated for user judgement.
 
 For each issue include:
 

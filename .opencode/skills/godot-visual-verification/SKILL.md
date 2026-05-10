@@ -121,6 +121,27 @@ godot-mono -d -s --xr-mode off --path game "tests/<feature>/<test_name>.gd" -- -
 - `FOLLOW-UP REQUIRED` → classify as `follow-up` and redelegate with narrowed criteria.
 - `ESCALATE` → classify as `escalated` and request user decision.
 
+For final handoff, a primary agent should pass visual artefact paths and expected cues to the `reviewer` rather than
+re-inspecting every image itself. The reviewer is responsible for independent screenshot inspection and must not rely on
+the coder's visual interpretation alone.
+
+### Required Visual Inspection Tables
+
+Visual gate reports must include structured observations, not only a prose claim that screenshots look correct.
+
+For individual scenarios, include:
+
+| Image | Expected Visible Cue | Observed Visible Cue | Confidence | Pass/Fail |
+| ----- | -------------------- | -------------------- | ---------- | --------- |
+
+For scenario comparisons where distinctness matters, include:
+
+| Pair | Expected Difference | Observed Difference | Distinct? |
+| ---- | ------------------- | ------------------- | --------- |
+
+Use `clear`, `ambiguous`, or `not visible` for confidence. Any `ambiguous`, `not visible`, or `Distinct? = no` result
+must make the gate `FOLLOW-UP REQUIRED` unless the uncertainty is escalated to the user.
+
 ## Image Analysis Rules
 
 ### Never Fabricate Visual Observations
@@ -133,14 +154,13 @@ result is unclear, escalate to the user and explain that the visual result canno
 
 When using the `read` tool to analyse screenshots:
 
-1. **Ask simple, objective questions about what is visible.** For example: "Is the left elbow pointing upward or
-   downward?" or "Are the hands above or below the shoulders?" Avoid prompts that rely on external context such as
-   "natural" poses or animation terminology the tool is unlikely to know.
-2. **Break complex checks into multiple yes/no or either/or questions.** Collect the answers and decide yourself whether
-   the pose meets expectations.
-3. **Use multiple camera angles whenever available.** Ask the same question for front, side, and top views to confirm
-   the result.
-4. **If responses conflict or remain non-committal, escalate to the user** instead of guessing which answer is right.
+1. **Use simple, objective visible cues.** For example: "left pupil is closer to the outer eye corner than neutral" or
+   "hand is above shoulder height". Avoid relying only on terms like "natural" or "correct".
+2. **Break complex checks into yes/no or either/or observations** and record the result in the required table.
+3. **Compare expected-different images side by side in the conversation context.** If two scenarios look nearly identical,
+   treat that as a failure even when runtime parameters or assertions passed.
+4. **Use multiple camera angles whenever available.** Apply the same cue across front, side, and top views when relevant.
+5. **If observations conflict or remain non-committal, escalate to the user** instead of guessing which answer is right.
 
 ### Escalation Protocol
 
