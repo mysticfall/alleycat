@@ -17,6 +17,8 @@
 ## Body
 
 - [BODY-001: Hands](body/001-hands/index.md)
+- [BODY-002: Character Physical Response System](body/002-character-physical-response/index.md)
+  - [BODY-003: Full-Body Collision Decision](body/003-full-body-collision-decision/index.md)
 
 ## Characters
 
