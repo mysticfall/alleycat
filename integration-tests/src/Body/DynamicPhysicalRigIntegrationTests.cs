@@ -193,6 +193,194 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
+    /// Verifies finger proxies are discovered from target skeleton bones and use generated capsule primitives.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_FingerBones_GeneratePrimitiveCapsuleProxiesWithoutSourceDescriptors()
+    {
+        Skeleton3D skeleton = CreateFingerSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithBoneAttachments(
+                ("Hips", null),
+                ("LeftHand", null),
+                ("RightHand", null))),
+        };
+        skeleton.AddChild(rig);
+
+        ForceBuildGeneratedRig(rig);
+
+        AnimatableBody3D leftIndex = FindGeneratedProxyBody(rig, "LeftIndexProximal");
+        AnimatableBody3D leftIndexTip = FindGeneratedProxyBody(rig, "LeftIndexDistal");
+        AnimatableBody3D leftMiddle = FindGeneratedProxyBody(rig, "LeftMiddleProximal");
+        AnimatableBody3D rightIndex = FindGeneratedProxyBody(rig, "RightIndexProximal");
+        CollisionShape3D leftIndexShape = Assert.IsAssignableFrom<CollisionShape3D>(leftIndex.GetChild(0));
+        CollisionShape3D leftIndexTipShape = Assert.IsAssignableFrom<CollisionShape3D>(leftIndexTip.GetChild(0));
+        CollisionShape3D leftMiddleShape = Assert.IsAssignableFrom<CollisionShape3D>(leftMiddle.GetChild(0));
+        CapsuleShape3D capsule = Assert.IsAssignableFrom<CapsuleShape3D>(leftIndexShape.Shape);
+        CapsuleShape3D terminalCapsule = Assert.IsAssignableFrom<CapsuleShape3D>(leftIndexTipShape.Shape);
+        CapsuleShape3D siblingInferredCapsule = Assert.IsAssignableFrom<CapsuleShape3D>(leftMiddleShape.Shape);
+        Vector3 leftIndexSegmentOffset = ResolveRestOffsetToChild(skeleton, "LeftIndexProximal", "LeftIndexDistal");
+        float leftIndexRestLength = leftIndexSegmentOffset.Length();
+        Vector3 leftIndexDirection = leftIndexSegmentOffset.Normalized();
+        float capsuleCentreProjection = leftIndex.Transform.Origin.Dot(leftIndexDirection);
+        float capsuleStartProjection = capsuleCentreProjection - (capsule.Height * 0.5f);
+        float capsuleEndProjection = capsuleCentreProjection + (capsule.Height * 0.5f);
+        float terminalSegmentLength = leftIndexRestLength;
+        Vector3 terminalDirection = leftIndexSegmentOffset.Normalized();
+        float terminalCentreProjection = leftIndexTip.Transform.Origin.Dot(terminalDirection);
+        float terminalStartProjection = terminalCentreProjection - (terminalCapsule.Height * 0.5f);
+        float terminalEndProjection = terminalCentreProjection + (terminalCapsule.Height * 0.5f);
+
+        Assert.Equal(4, rig.GeneratedFingerProxyCount);
+        Assert.Equal(7, rig.GeneratedProxyCount);
+        Assert.Equal(2, rig.AdjacentBoneExceptionPairCount);
+        Assert.Equal(7, rig.FingerSideExceptionPairCount);
+        _ = Assert.Single(rig.GetGeneratedProxyBodiesForBone("LeftIndexProximal"));
+        Assert.NotSame(capsule, terminalCapsule);
+        Assert.True(capsule.Height >= capsule.Radius * 2.0f, "Finger capsule radius must remain valid for its height.");
+        Assert.InRange(capsule.Height, leftIndexRestLength - PositionToleranceMetres, leftIndexRestLength + PositionToleranceMetres);
+        Assert.InRange(capsuleCentreProjection, (leftIndexRestLength * 0.5f) - PositionToleranceMetres, (leftIndexRestLength * 0.5f) + PositionToleranceMetres);
+        Assert.InRange(capsuleStartProjection, -PositionToleranceMetres, PositionToleranceMetres);
+        Assert.InRange(capsuleEndProjection, leftIndexRestLength - PositionToleranceMetres, leftIndexRestLength + PositionToleranceMetres);
+        Assert.True(terminalCapsule.Height >= terminalCapsule.Radius * 2.0f, "Terminal finger capsule radius must remain valid for its height.");
+        Assert.InRange(terminalCapsule.Height, terminalSegmentLength - PositionToleranceMetres, terminalSegmentLength + PositionToleranceMetres);
+        Assert.InRange(terminalCentreProjection, (terminalSegmentLength * 0.5f) - PositionToleranceMetres, (terminalSegmentLength * 0.5f) + PositionToleranceMetres);
+        Assert.InRange(terminalStartProjection, -PositionToleranceMetres, PositionToleranceMetres);
+        Assert.InRange(terminalEndProjection, terminalSegmentLength - PositionToleranceMetres, terminalSegmentLength + PositionToleranceMetres);
+        Assert.InRange(siblingInferredCapsule.Height, leftIndexRestLength - PositionToleranceMetres, leftIndexRestLength + PositionToleranceMetres);
+        AssertBodyHasCollisionException(leftIndex, FindGeneratedProxyBody(rig, "LeftHand"));
+        AssertBodyHasCollisionException(leftIndex, leftIndexTip);
+        AssertBodyHasCollisionException(leftIndex, leftMiddle);
+        AssertBodyDoesNotHaveCollisionException(leftIndex, FindGeneratedProxyBody(rig, "RightHand"));
+        AssertBodyDoesNotHaveCollisionException(leftIndex, rightIndex);
+    }
+
+    /// <summary>
+    /// Verifies generated finger bodies ignore same-rig same-side hand/finger proxies without suppressing arm/body collisions.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_FingerSelfCollisionExceptions_IgnoreSameSideHandAndFingersOnlyWithinRig()
+    {
+        DynamicPhysicalRig rig = CreateBuiltFingerArmRig("FirstArmSkeleton");
+        DynamicPhysicalRig secondRig = CreateBuiltFingerArmRig("SecondArmSkeleton");
+
+        AnimatableBody3D leftIndex = FindGeneratedProxyBody(rig, "LeftIndexProximal");
+        AnimatableBody3D leftHand = FindGeneratedProxyBody(rig, "LeftHand");
+        AnimatableBody3D leftLowerArm = FindGeneratedProxyBody(rig, "LeftLowerArm");
+        AnimatableBody3D leftWrist = FindGeneratedProxyBody(rig, "LeftWrist");
+        AnimatableBody3D leftPalm = FindGeneratedProxyBody(rig, "LeftPalm");
+        AnimatableBody3D leftMetacarpal = FindGeneratedProxyBody(rig, "LeftMetacarpal");
+        AnimatableBody3D leftUpperArm = FindGeneratedProxyBody(rig, "LeftUpperArm");
+        AnimatableBody3D leftShoulder = FindGeneratedProxyBody(rig, "LeftShoulder");
+        AnimatableBody3D head = FindGeneratedProxyBody(rig, "Head");
+        AnimatableBody3D hips = FindGeneratedProxyBody(rig, "Hips");
+        AnimatableBody3D rightUpperArm = FindGeneratedProxyBody(rig, "RightUpperArm");
+        AnimatableBody3D rightLowerArm = FindGeneratedProxyBody(rig, "RightLowerArm");
+        AnimatableBody3D rightHand = FindGeneratedProxyBody(rig, "RightHand");
+        AnimatableBody3D rightIndex = FindGeneratedProxyBody(rig, "RightIndexProximal");
+        AnimatableBody3D secondHead = FindGeneratedProxyBody(secondRig, "Head");
+        AnimatableBody3D secondLeftHand = FindGeneratedProxyBody(secondRig, "LeftHand");
+        AnimatableBody3D secondLeftLowerArm = FindGeneratedProxyBody(secondRig, "LeftLowerArm");
+        AnimatableBody3D secondLeftUpperArm = FindGeneratedProxyBody(secondRig, "LeftUpperArm");
+        AnimatableBody3D secondLeftShoulder = FindGeneratedProxyBody(secondRig, "LeftShoulder");
+        AnimatableBody3D secondLeftIndex = FindGeneratedProxyBody(secondRig, "LeftIndexProximal");
+        AnimatableBody3D secondRightHand = FindGeneratedProxyBody(secondRig, "RightHand");
+        AnimatableBody3D secondRightUpperArm = FindGeneratedProxyBody(secondRig, "RightUpperArm");
+        AnimatableBody3D secondRightLowerArm = FindGeneratedProxyBody(secondRig, "RightLowerArm");
+        AnimatableBody3D secondRightIndex = FindGeneratedProxyBody(secondRig, "RightIndexProximal");
+
+        AssertBodiesHaveMutualCollisionExceptionButLayerReachable(leftIndex, leftHand);
+        AssertBodiesAreCollisionReachable(leftIndex, leftLowerArm);
+        AssertBodiesAreCollisionReachable(leftIndex, leftWrist);
+        AssertBodiesAreCollisionReachable(leftIndex, leftPalm);
+        AssertBodiesAreCollisionReachable(leftIndex, leftMetacarpal);
+        AssertBodiesAreCollisionReachable(leftIndex, leftUpperArm);
+        AssertBodiesAreCollisionReachable(leftIndex, leftShoulder);
+        AssertBodiesAreCollisionReachable(leftIndex, hips);
+        AssertBodiesAreCollisionReachable(leftIndex, head);
+        AssertBodiesAreCollisionReachable(leftIndex, rightUpperArm);
+        AssertBodiesAreCollisionReachable(leftIndex, rightLowerArm);
+        AssertBodiesAreCollisionReachable(leftIndex, rightHand);
+        AssertBodiesAreCollisionReachable(leftIndex, rightIndex);
+        AssertBodiesAreCollisionReachable(leftIndex, secondHead);
+        AssertBodiesAreCollisionReachable(leftIndex, secondLeftHand);
+        AssertBodiesAreCollisionReachable(leftIndex, secondLeftLowerArm);
+        AssertBodiesAreCollisionReachable(leftIndex, secondLeftUpperArm);
+        AssertBodiesAreCollisionReachable(leftIndex, secondLeftShoulder);
+        AssertBodiesAreCollisionReachable(leftIndex, secondLeftIndex);
+        AssertBodiesAreCollisionReachable(leftIndex, secondRightHand);
+        AssertBodiesAreCollisionReachable(leftIndex, secondRightUpperArm);
+        AssertBodiesAreCollisionReachable(leftIndex, secondRightLowerArm);
+        AssertBodiesAreCollisionReachable(leftIndex, secondRightIndex);
+    }
+
+    /// <summary>
+    /// Verifies source-authored finger descriptors are not duplicated and are replaced with generated primitive finger geometry.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_DuplicateSourceFingerDescriptors_UseSingleGeneratedPrimitiveProxy()
+    {
+        Skeleton3D skeleton = CreateFingerSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithBoneAttachments(
+                ("Hips", null),
+                ("LeftHand", null),
+                ("LeftIndexProximal", "LeftIndexProximalPrimaryAttachment"),
+                ("LeftIndexProximal", "LeftIndexProximalDuplicateAttachment"))),
+        };
+        skeleton.AddChild(rig);
+
+        ForceBuildGeneratedRig(rig);
+
+        IReadOnlyList<PhysicsBody3D> leftIndexBodies = rig.GetGeneratedProxyBodiesForBone("LeftIndexProximal");
+        AnimatableBody3D leftIndex = Assert.IsAssignableFrom<AnimatableBody3D>(Assert.Single(leftIndexBodies));
+        CollisionShape3D leftIndexShape = Assert.IsAssignableFrom<CollisionShape3D>(leftIndex.GetChild(0));
+
+        CapsuleShape3D sourceFingerCapsule = Assert.IsType<CapsuleShape3D>(leftIndexShape.Shape, exactMatch: false);
+        Assert.True(sourceFingerCapsule.Height >= sourceFingerCapsule.Radius * 2.0f, "Source-backed finger proxies should also use valid generated capsule geometry.");
+        Assert.Equal(4, rig.GeneratedFingerProxyCount);
+        Assert.Equal(6, rig.GeneratedProxyCount);
+    }
+
+    /// <summary>
+    /// Verifies same-side hand/finger exceptions are scoped to each generated rig instance.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_FingerSideCollisionExceptions_DoNotCrossRigInstances()
+    {
+        DynamicPhysicalRig firstRig = CreateBuiltFingerRig("FirstSkeleton");
+        DynamicPhysicalRig secondRig = CreateBuiltFingerRig("SecondSkeleton");
+
+        AnimatableBody3D firstLeftIndex = FindGeneratedProxyBody(firstRig, "LeftIndexProximal");
+        AnimatableBody3D firstLeftMiddle = FindGeneratedProxyBody(firstRig, "LeftMiddleProximal");
+        AnimatableBody3D firstLeftHand = FindGeneratedProxyBody(firstRig, "LeftHand");
+        AnimatableBody3D secondLeftIndex = FindGeneratedProxyBody(secondRig, "LeftIndexProximal");
+        AnimatableBody3D secondLeftMiddle = FindGeneratedProxyBody(secondRig, "LeftMiddleProximal");
+        AnimatableBody3D secondLeftHand = FindGeneratedProxyBody(secondRig, "LeftHand");
+
+        AssertBodyHasCollisionException(firstLeftIndex, firstLeftHand);
+        AssertBodyHasCollisionException(firstLeftIndex, firstLeftMiddle);
+        AssertBodyHasCollisionException(secondLeftIndex, secondLeftHand);
+        AssertBodyHasCollisionException(secondLeftIndex, secondLeftMiddle);
+        AssertBodyDoesNotHaveCollisionException(firstLeftIndex, secondLeftHand);
+        AssertBodyDoesNotHaveCollisionException(firstLeftIndex, secondLeftIndex);
+        AssertBodyDoesNotHaveCollisionException(firstLeftIndex, secondLeftMiddle);
+        AssertBodyDoesNotHaveCollisionException(secondLeftIndex, firstLeftHand);
+        AssertBodyDoesNotHaveCollisionException(secondLeftIndex, firstLeftIndex);
+        AssertBodyDoesNotHaveCollisionException(secondLeftIndex, firstLeftMiddle);
+    }
+
+    /// <summary>
     /// Verifies manual sync moves generated top-level proxy bodies with generated attachments after pose changes.
     /// </summary>
     [Headless]
@@ -501,6 +689,32 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
+    /// Verifies live hand targets also ignore their own generated finger proxies so startup hand followers do not push against their own fingers.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HandTargets_IgnoreOwnGeneratedFingerProxiesBidirectionally()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree, createSkeleton: CreateRuntimeFingerSkeleton);
+
+        try
+        {
+            AnimatableBody3D rightHand = fixture.RightHandTarget;
+            AnimatableBody3D rightIndex = FindGeneratedProxyBody(fixture.Rig, "RightIndexProximal");
+            AnimatableBody3D leftIndex = FindGeneratedProxyBody(fixture.Rig, "LeftIndexProximal");
+
+            AssertBodiesHaveMutualCollisionException(rightHand, rightIndex);
+            AssertBodiesAreCollisionReachable(rightHand, leftIndex);
+            AssertCollisionLayersCanInteract(rightHand, rightIndex);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies the live right-hand body preserves generated-proxy and external-body collision eligibility.
     /// </summary>
     [Headless]
@@ -739,6 +953,25 @@ public sealed class DynamicPhysicalRigIntegrationTests
     {
         Godot.Collections.Array<PhysicsBody3D> exceptions = source.GetCollisionExceptions();
         Assert.Contains(exceptions, body => ReferenceEquals(body, expected));
+    }
+
+    private static void AssertBodiesHaveMutualCollisionException(PhysicsBody3D first, PhysicsBody3D second)
+    {
+        AssertBodyHasCollisionException(first, second);
+        AssertBodyHasCollisionException(second, first);
+    }
+
+    private static void AssertBodiesHaveMutualCollisionExceptionButLayerReachable(PhysicsBody3D first, PhysicsBody3D second)
+    {
+        AssertBodiesHaveMutualCollisionException(first, second);
+        AssertCollisionLayersCanInteract(first, second);
+    }
+
+    private static void AssertBodiesAreCollisionReachable(PhysicsBody3D first, PhysicsBody3D second)
+    {
+        AssertBodyDoesNotHaveCollisionException(first, second);
+        AssertBodyDoesNotHaveCollisionException(second, first);
+        AssertCollisionLayersCanInteract(first, second);
     }
 
     private static void AssertBodyDoesNotHaveCollisionException(PhysicsBody3D source, PhysicsBody3D other)
@@ -1076,13 +1309,22 @@ public sealed class DynamicPhysicalRigIntegrationTests
         _ = method.Invoke(playerVRIK, [delta]);
     }
 
-    private static void InvokeEnsureFollowers(PlayerVRIK playerVRIK)
+    private static void InvokeEnsureFollowers(object playerVRIK)
     {
         MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "EnsureFollowers")
                             ?? throw new InvalidOperationException(
                                 $"{playerVRIK.GetType().Name}.EnsureFollowers was not found in the inheritance chain.");
 
         _ = method.Invoke(playerVRIK, null);
+    }
+
+    private static void InvokeNonPublicInstanceMethod(object target, string methodName)
+    {
+        MethodInfo method = GetNonPublicInstanceMethod(target.GetType(), methodName)
+                            ?? throw new InvalidOperationException(
+                                $"{target.GetType().Name}.{methodName} was not found in the inheritance chain.");
+
+        InvokeReflectedMethod(method, target, null);
     }
 
     private static FieldInfo? GetNonPublicInstanceField(Type type, string fieldName)
@@ -1207,6 +1449,53 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
         Assert.Equal(Error.Ok, packResult);
         return sourceScene;
+    }
+
+    private static DynamicPhysicalRig CreateBuiltFingerRig(string skeletonName)
+    {
+        Skeleton3D skeleton = CreateFingerSkeleton();
+        skeleton.Name = skeletonName;
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithBoneAttachments(
+                ("Hips", null),
+                ("LeftHand", null),
+                ("RightHand", null))),
+        };
+        skeleton.AddChild(rig);
+
+        ForceBuildGeneratedRig(rig);
+        return rig;
+    }
+
+    private static DynamicPhysicalRig CreateBuiltFingerArmRig(string skeletonName)
+    {
+        Skeleton3D skeleton = CreateFingerArmSkeleton();
+        skeleton.Name = skeletonName;
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithBoneAttachments(
+                ("Hips", null),
+                ("Head", null),
+                ("LeftShoulder", null),
+                ("LeftUpperArm", null),
+                ("LeftLowerArm", null),
+                ("LeftWrist", null),
+                ("LeftHand", null),
+                ("LeftPalm", null),
+                ("LeftMetacarpal", null),
+                ("RightUpperArm", null),
+                ("RightLowerArm", null),
+                ("RightHand", null))),
+        };
+        skeleton.AddChild(rig);
+
+        ForceBuildGeneratedRig(rig);
+        return rig;
     }
 
     private static PackedScene CreatePackedSourceSceneWithShapeResource(string boneName, string shapeName, Shape3D shapeResource)
@@ -1420,6 +1709,129 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return skeleton;
     }
 
+    private static Skeleton3D CreateRuntimeFingerSkeleton()
+    {
+        Skeleton3D skeleton = new()
+        {
+            Name = "GeneralSkeleton",
+        };
+
+        List<(string Name, string? Parent, Vector3 LocalPosition)> boneDefinitions = [.. RuntimeFixture.BoneDefinitions];
+        boneDefinitions.Add(("RightIndexProximal", "RightHand", new Vector3(0.02f, 0.0f, 0.05f)));
+        boneDefinitions.Add(("RightIndexDistal", "RightIndexProximal", new Vector3(0.0f, 0.0f, 0.04f)));
+        boneDefinitions.Add(("LeftIndexProximal", "LeftHand", new Vector3(-0.02f, 0.0f, 0.05f)));
+        boneDefinitions.Add(("LeftIndexDistal", "LeftIndexProximal", new Vector3(0.0f, 0.0f, 0.04f)));
+
+        AddBonesToSkeleton(skeleton, boneDefinitions);
+        return skeleton;
+    }
+
+    private static Skeleton3D CreateFingerSkeleton()
+    {
+        Skeleton3D skeleton = new()
+        {
+            Name = "GeneralSkeleton",
+        };
+
+        (string Name, string? Parent, Vector3 LocalPosition)[] boneDefinitions =
+        [
+            ("Hips", null, Vector3.Zero),
+            ("LeftHand", "Hips", new Vector3(-0.35f, 1.0f, 0.0f)),
+            ("RightHand", "Hips", new Vector3(0.35f, 1.0f, 0.0f)),
+            ("LeftIndexProximal", "LeftHand", new Vector3(-0.02f, 0.0f, 0.05f)),
+            ("LeftIndexDistal", "LeftIndexProximal", new Vector3(0.0f, 0.0f, 0.04f)),
+            ("LeftMiddleProximal", "LeftHand", new Vector3(0.0f, 0.0f, 0.055f)),
+            ("RightIndexProximal", "RightHand", new Vector3(0.02f, 0.0f, 0.05f)),
+            ("RightToes", "Hips", new Vector3(0.12f, -0.9f, 0.15f)),
+        ];
+        Dictionary<string, int> boneIndices = [];
+
+        foreach ((string name, _, _) in boneDefinitions)
+        {
+            boneIndices[name] = skeleton.AddBone(name);
+        }
+
+        foreach ((string name, string? parent, Vector3 localPosition) in boneDefinitions)
+        {
+            int boneIndex = boneIndices[name];
+            skeleton.SetBoneRest(boneIndex, new Transform3D(Basis.Identity, localPosition));
+
+            if (parent is not null)
+            {
+                skeleton.SetBoneParent(boneIndex, boneIndices[parent]);
+            }
+        }
+
+        return skeleton;
+    }
+
+    private static Skeleton3D CreateFingerArmSkeleton()
+    {
+        Skeleton3D skeleton = new()
+        {
+            Name = "GeneralSkeleton",
+        };
+
+        (string Name, string? Parent, Vector3 LocalPosition)[] boneDefinitions =
+        [
+            ("Hips", null, Vector3.Zero),
+            ("Neck", "Hips", new Vector3(0.0f, 0.92f, 0.0f)),
+            ("Head", "Neck", new Vector3(0.0f, 0.15f, 0.0f)),
+            ("LeftShoulder", "Hips", new Vector3(-0.15f, 0.95f, 0.0f)),
+            ("LeftUpperArm", "LeftShoulder", new Vector3(-0.18f, -0.02f, 0.0f)),
+            ("LeftLowerArm", "LeftUpperArm", new Vector3(-0.18f, -0.03f, 0.0f)),
+            ("LeftWrist", "LeftLowerArm", new Vector3(-0.07f, -0.01f, 0.0f)),
+            ("LeftHand", "LeftWrist", new Vector3(-0.04f, -0.01f, 0.0f)),
+            ("LeftPalm", "LeftHand", new Vector3(-0.01f, 0.0f, 0.02f)),
+            ("LeftMetacarpal", "LeftPalm", new Vector3(-0.01f, 0.0f, 0.02f)),
+            ("RightShoulder", "Hips", new Vector3(0.15f, 0.95f, 0.0f)),
+            ("RightUpperArm", "RightShoulder", new Vector3(0.18f, -0.02f, 0.0f)),
+            ("RightLowerArm", "RightUpperArm", new Vector3(0.18f, -0.03f, 0.0f)),
+            ("RightHand", "RightLowerArm", new Vector3(0.11f, -0.02f, 0.0f)),
+            ("LeftIndexProximal", "LeftHand", new Vector3(-0.02f, 0.0f, 0.05f)),
+            ("LeftIndexDistal", "LeftIndexProximal", new Vector3(0.0f, 0.0f, 0.04f)),
+            ("LeftMiddleProximal", "LeftHand", new Vector3(0.0f, 0.0f, 0.055f)),
+            ("RightIndexProximal", "RightHand", new Vector3(0.02f, 0.0f, 0.05f)),
+        ];
+
+        AddBonesToSkeleton(skeleton, boneDefinitions);
+        return skeleton;
+    }
+
+    private static void AddBonesToSkeleton(
+        Skeleton3D skeleton,
+        IReadOnlyList<(string Name, string? Parent, Vector3 LocalPosition)> boneDefinitions)
+    {
+        Dictionary<string, int> boneIndices = [];
+
+        foreach ((string name, _, _) in boneDefinitions)
+        {
+            boneIndices[name] = skeleton.AddBone(name);
+        }
+
+        foreach ((string name, string? parent, Vector3 localPosition) in boneDefinitions)
+        {
+            int boneIndex = boneIndices[name];
+            skeleton.SetBoneRest(boneIndex, new Transform3D(Basis.Identity, localPosition));
+
+            if (parent is not null)
+            {
+                skeleton.SetBoneParent(boneIndex, boneIndices[parent]);
+            }
+        }
+    }
+
+    private static Vector3 ResolveRestOffsetToChild(Skeleton3D skeleton, string parentBoneName, string childBoneName)
+    {
+        int parentBoneIndex = skeleton.FindBone(parentBoneName);
+        int childBoneIndex = skeleton.FindBone(childBoneName);
+        Assert.True(parentBoneIndex >= 0, $"Expected skeleton to contain bone '{parentBoneName}'.");
+        Assert.True(childBoneIndex >= 0, $"Expected skeleton to contain bone '{childBoneName}'.");
+
+        Transform3D parentRest = skeleton.GetBoneGlobalRest(parentBoneIndex);
+        return parentRest.AffineInverse() * skeleton.GetBoneGlobalRest(childBoneIndex).Origin;
+    }
+
     private sealed class RuntimeFixture(
         Node3D root,
         CharacterBody3D player,
@@ -1474,7 +1886,10 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
         public Node3D RightHandPosition { get; } = rightHandPosition;
 
-        public static async Task<RuntimeFixture> CreateAsync(SceneTree sceneTree, Action<PlayerVRIK>? configurePlayerVRIK = null)
+        public static async Task<RuntimeFixture> CreateAsync(
+            SceneTree sceneTree,
+            Action<PlayerVRIK>? configurePlayerVRIK = null,
+            Func<Skeleton3D>? createSkeleton = null)
         {
             Node3D root = new()
             {
@@ -1487,7 +1902,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
             };
             root.AddChild(player);
 
-            Skeleton3D skeleton = CreateSkeleton();
+            Skeleton3D skeleton = createSkeleton?.Invoke() ?? CreateSkeleton();
             player.AddChild(skeleton);
 
             BoneAttachment3D headAttachment = new()

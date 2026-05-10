@@ -574,11 +574,15 @@ public partial class PlayerVRIK : CharacterIK
 
         AddCollisionExceptionsForGeneratedBone(handTarget, rig, handBoneName);
         AddCollisionExceptionsForGeneratedBone(handTarget, rig, lowerArmBoneName);
+        AddCollisionExceptionsForGeneratedBodies(handTarget, rig.GetGeneratedFingerProxyBodiesForHand(handBoneName));
     }
 
     private static void AddCollisionExceptionsForGeneratedBone(PhysicsBody3D handTarget, DynamicPhysicalRig rig, StringName boneName)
+        => AddCollisionExceptionsForGeneratedBodies(handTarget, rig.GetGeneratedProxyBodiesForBone(boneName));
+
+    private static void AddCollisionExceptionsForGeneratedBodies(PhysicsBody3D handTarget, IReadOnlyList<PhysicsBody3D> proxyBodies)
     {
-        foreach (PhysicsBody3D proxyBody in rig.GetGeneratedProxyBodiesForBone(boneName))
+        foreach (PhysicsBody3D proxyBody in proxyBodies)
         {
             AddBidirectionalCollisionException(handTarget, proxyBody);
         }

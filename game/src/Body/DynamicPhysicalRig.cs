@@ -11,9 +11,14 @@ public partial class DynamicPhysicalRig : Node
 {
     private const string GeneratedNodeMetaKey = "alleycat_generated_physical_rig";
     private const string GeneratedOwnerPathMetaKey = "alleycat_generated_physical_rig_owner_path";
+    private const float FallbackFingerSegmentLength = 0.025f;
+    private const float MinimumFingerCapsuleLength = 0.018f;
+    private const float MinimumFingerCapsuleRadius = 0.0075f;
+    private const float MaximumFingerCapsuleRadius = 0.018f;
 
     private bool _regenerationQueued;
     private readonly Dictionary<StringName, List<PhysicsBody3D>> _generatedBodiesByBoneName = [];
+    private readonly Dictionary<FingerSide, List<PhysicsBody3D>> _generatedFingerBodiesBySide = [];
     private readonly List<ProxyBinding> _proxyBindings = [];
 
     /// <summary>
@@ -110,7 +115,7 @@ public partial class DynamicPhysicalRig : Node
     {
         get;
         set;
-    } = 11;
+    } = 15;
 
     /// <summary>
     /// Number of proxy bodies generated during the most recent build.
@@ -125,6 +130,24 @@ public partial class DynamicPhysicalRig : Node
     /// Number of adjacent body-pair collision exceptions applied during the most recent build.
     /// </summary>
     public int AdjacentBoneExceptionPairCount
+    {
+        get;
+        private set;
+    }
+
+    /// <summary>
+    /// Number of generated finger proxy bodies added from target skeleton rest data during the most recent build.
+    /// </summary>
+    public int GeneratedFingerProxyCount
+    {
+        get;
+        private set;
+    }
+
+    /// <summary>
+    /// Number of same-side finger self-filter collision exception pairs applied during the most recent build.
+    /// </summary>
+    public int FingerSideExceptionPairCount
     {
         get;
         private set;
@@ -153,6 +176,14 @@ public partial class DynamicPhysicalRig : Node
     /// </summary>
     public IReadOnlyList<PhysicsBody3D> GetGeneratedProxyBodiesForBone(StringName boneName)
         => _generatedBodiesByBoneName.TryGetValue(boneName, out List<PhysicsBody3D>? bodies)
+            ? bodies
+            : [];
+
+    /// <summary>
+    /// Returns generated finger proxy bodies belonging to the same side as the requested hand bone.
+    /// </summary>
+    public IReadOnlyList<PhysicsBody3D> GetGeneratedFingerProxyBodiesForHand(StringName handBoneName)
+        => TryResolveFingerSide(handBoneName.ToString(), out FingerSide side) && _generatedFingerBodiesBySide.TryGetValue(side, out List<PhysicsBody3D>? bodies)
             ? bodies
             : [];
 
@@ -221,6 +252,7 @@ public partial class DynamicPhysicalRig : Node
             IReadOnlyList<BodyColliderShapeDescriptor> sourceShapeDescriptors = colliderProfile.QueryShapeDescriptors();
 
             Dictionary<int, List<PhysicsBody3D>> generatedBodiesByBone = [];
+            Dictionary<int, List<PhysicsBody3D>> nonFingerGeneratedBodiesByBone = [];
             Node? persistedOwner = ResolveGeneratedOwner();
 
             foreach (BodyColliderShapeDescriptor sourceShapeDescriptor in sourceShapeDescriptors)
@@ -230,11 +262,20 @@ public partial class DynamicPhysicalRig : Node
                     continue;
                 }
 
+                bool isFingerBone = IsFingerBone(skeleton, targetBoneIndex, out FingerSide fingerSide);
+                if (isFingerBone && generatedBodiesByBone.ContainsKey(targetBoneIndex))
+                {
+                    continue;
+                }
+
                 BoneAttachment3D attachment = CreateAttachment(sourceShapeDescriptor.SourceIdentifier, targetBoneName, targetBoneIndex);
                 skeleton.AddChild(attachment);
                 AssignOwnerIfNeeded(attachment, persistedOwner);
 
-                Transform3D localProxyTransform = sourceShapeDescriptor.LocalTransform;
+                FingerProxyGeometry fingerGeometry = isFingerBone
+                    ? BuildFingerProxyGeometry(skeleton, targetBoneIndex)
+                    : default;
+                Transform3D localProxyTransform = isFingerBone ? fingerGeometry.LocalTransform : sourceShapeDescriptor.LocalTransform;
 
                 AnimatableBody3D proxyBody = CreateProxyBody(localProxyTransform);
                 proxyBody.CollisionLayer = ProxyCollisionLayer;
@@ -246,7 +287,9 @@ public partial class DynamicPhysicalRig : Node
                 proxyBody.TopLevel = true;
                 _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, localProxyTransform));
 
-                CollisionShape3D proxyShape = CreateProxyShape(sourceShapeDescriptor);
+                CollisionShape3D proxyShape = isFingerBone
+                    ? CreateFingerProxyShape(fingerGeometry)
+                    : CreateProxyShape(sourceShapeDescriptor);
                 TagGeneratedNode(proxyShape, sourceShapeDescriptor.SourceShapeName);
                 proxyBody.AddChild(proxyShape);
                 AssignOwnerIfNeeded(proxyShape, persistedOwner);
@@ -258,11 +301,39 @@ public partial class DynamicPhysicalRig : Node
                 }
 
                 bodies.Add(proxyBody);
+                if (isFingerBone)
+                {
+                    if (!_generatedFingerBodiesBySide.TryGetValue(fingerSide, out List<PhysicsBody3D>? fingerBodies))
+                    {
+                        fingerBodies = [];
+                        _generatedFingerBodiesBySide[fingerSide] = fingerBodies;
+                    }
+
+                    fingerBodies.Add(proxyBody);
+                    GeneratedFingerProxyCount += 1;
+                }
+                else
+                {
+                    if (!nonFingerGeneratedBodiesByBone.TryGetValue(targetBoneIndex, out List<PhysicsBody3D>? nonFingerBodies))
+                    {
+                        nonFingerBodies = [];
+                        nonFingerGeneratedBodiesByBone[targetBoneIndex] = nonFingerBodies;
+                    }
+
+                    nonFingerBodies.Add(proxyBody);
+                }
                 AddGeneratedBodyForBone(targetBoneName, proxyBody);
                 GeneratedProxyCount += 1;
             }
 
-            ApplyAdjacentBoneCollisionExceptions(skeleton, generatedBodiesByBone);
+            GenerateFingerProxyBodies(
+                skeleton,
+                generatedBodiesByBone,
+                _generatedFingerBodiesBySide,
+                persistedOwner);
+
+            ApplyAdjacentBoneCollisionExceptions(skeleton, nonFingerGeneratedBodiesByBone);
+            ApplyFingerSelfCollisionExceptions(skeleton, generatedBodiesByBone, _generatedFingerBodiesBySide);
 
             if (GeneratedProxyCount == 0)
             {
@@ -321,9 +392,12 @@ public partial class DynamicPhysicalRig : Node
 
         GeneratedProxyCount = 0;
         AdjacentBoneExceptionPairCount = 0;
+        GeneratedFingerProxyCount = 0;
+        FingerSideExceptionPairCount = 0;
         SkippedSourceShapeCount = 0;
         PhysicsProxySyncTickCount = 0;
         _generatedBodiesByBoneName.Clear();
+        _generatedFingerBodiesBySide.Clear();
         _proxyBindings.Clear();
     }
 
@@ -414,6 +488,68 @@ public partial class DynamicPhysicalRig : Node
         return proxyShape;
     }
 
+    private static CollisionShape3D CreateFingerProxyShape(FingerProxyGeometry geometry)
+        => new()
+        {
+            Name = "GeneratedFingerCapsule",
+            Shape = new CapsuleShape3D
+            {
+                Radius = geometry.Radius,
+                Height = geometry.Height,
+            },
+            Disabled = false,
+            Transform = Transform3D.Identity,
+        };
+
+    private void GenerateFingerProxyBodies(
+        Skeleton3D skeleton,
+        Dictionary<int, List<PhysicsBody3D>> generatedBodiesByBone,
+        Dictionary<FingerSide, List<PhysicsBody3D>> generatedFingerBodiesBySide,
+        Node? persistedOwner)
+    {
+        int boneCount = skeleton.GetBoneCount();
+        for (int boneIndex = 0; boneIndex < boneCount; boneIndex += 1)
+        {
+            if (generatedBodiesByBone.ContainsKey(boneIndex) || !IsFingerBone(skeleton, boneIndex, out FingerSide side))
+            {
+                continue;
+            }
+
+            string boneName = skeleton.GetBoneName(boneIndex).ToString();
+            FingerProxyGeometry geometry = BuildFingerProxyGeometry(skeleton, boneIndex);
+            BoneAttachment3D attachment = CreateAttachment($"GeneratedFinger:{boneName}", boneName, boneIndex);
+            skeleton.AddChild(attachment);
+            AssignOwnerIfNeeded(attachment, persistedOwner);
+
+            AnimatableBody3D proxyBody = CreateProxyBody(geometry.LocalTransform);
+            proxyBody.CollisionLayer = ProxyCollisionLayer;
+            proxyBody.CollisionMask = ProxyCollisionMask;
+            TagGeneratedNode(proxyBody, $"GeneratedFinger:{boneName}");
+            attachment.AddChild(proxyBody);
+            AssignOwnerIfNeeded(proxyBody, persistedOwner);
+            proxyBody.Transform = geometry.LocalTransform;
+            proxyBody.TopLevel = true;
+            _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, geometry.LocalTransform));
+
+            CollisionShape3D proxyShape = CreateFingerProxyShape(geometry);
+            TagGeneratedNode(proxyShape, $"GeneratedFingerShape:{boneName}");
+            proxyBody.AddChild(proxyShape);
+            AssignOwnerIfNeeded(proxyShape, persistedOwner);
+
+            generatedBodiesByBone[boneIndex] = [proxyBody];
+            if (!generatedFingerBodiesBySide.TryGetValue(side, out List<PhysicsBody3D>? fingerBodies))
+            {
+                fingerBodies = [];
+                generatedFingerBodiesBySide[side] = fingerBodies;
+            }
+
+            fingerBodies.Add(proxyBody);
+            AddGeneratedBodyForBone(boneName, proxyBody);
+            GeneratedProxyCount += 1;
+            GeneratedFingerProxyCount += 1;
+        }
+    }
+
     private void ApplyAdjacentBoneCollisionExceptions(
         Skeleton3D skeleton,
         IReadOnlyDictionary<int, List<PhysicsBody3D>> generatedBodiesByBone)
@@ -435,6 +571,281 @@ public partial class DynamicPhysicalRig : Node
                 }
             }
         }
+    }
+
+    private void ApplyFingerSelfCollisionExceptions(
+        Skeleton3D skeleton,
+        IReadOnlyDictionary<int, List<PhysicsBody3D>> generatedBodiesByBone,
+        IReadOnlyDictionary<FingerSide, List<PhysicsBody3D>> generatedFingerBodiesBySide)
+    {
+        foreach ((FingerSide side, List<PhysicsBody3D> fingerBodies) in generatedFingerBodiesBySide)
+        {
+            List<PhysicsBody3D> sameSideLimbBodies = [];
+            int boneCount = skeleton.GetBoneCount();
+            for (int boneIndex = 0; boneIndex < boneCount; boneIndex += 1)
+            {
+                if (!IsSameSideFingerSelfCollisionBone(skeleton.GetBoneName(boneIndex).ToString(), side) ||
+                    !generatedBodiesByBone.TryGetValue(boneIndex, out List<PhysicsBody3D>? limbBodies))
+                {
+                    continue;
+                }
+
+                sameSideLimbBodies.AddRange(limbBodies);
+            }
+
+            foreach (PhysicsBody3D fingerBody in fingerBodies)
+            {
+                foreach (PhysicsBody3D limbBody in sameSideLimbBodies)
+                {
+                    AddBidirectionalCollisionException(fingerBody, limbBody);
+                    FingerSideExceptionPairCount += 1;
+                }
+            }
+
+            for (int sourceIndex = 0; sourceIndex < fingerBodies.Count; sourceIndex += 1)
+            {
+                for (int otherIndex = sourceIndex + 1; otherIndex < fingerBodies.Count; otherIndex += 1)
+                {
+                    AddBidirectionalCollisionException(fingerBodies[sourceIndex], fingerBodies[otherIndex]);
+                    FingerSideExceptionPairCount += 1;
+                }
+            }
+        }
+    }
+
+    private static FingerProxyGeometry BuildFingerProxyGeometry(Skeleton3D skeleton, int boneIndex)
+    {
+        Transform3D boneRest = skeleton.GetBoneGlobalRest(boneIndex);
+        Vector3 localEndOffset = ResolveFingerLocalEndOffset(skeleton, boneIndex, boneRest);
+        float measuredLength = Mathf.Max(localEndOffset.Length(), MinimumFingerCapsuleLength);
+        Vector3 direction = localEndOffset.LengthSquared() > 0.000001f ? localEndOffset.Normalized() : Vector3.Up;
+        float height = measuredLength;
+        float radius = Mathf.Clamp(measuredLength * 0.18f, MinimumFingerCapsuleRadius, MaximumFingerCapsuleRadius);
+        radius = Mathf.Min(radius, (height * 0.5f) - 0.001f);
+        Basis basis = BuildBasisWithLocalY(direction);
+
+        return new FingerProxyGeometry(
+            new Transform3D(basis, direction * (height * 0.5f)),
+            radius,
+            height);
+    }
+
+    private static Vector3 ResolveFingerLocalEndOffset(Skeleton3D skeleton, int boneIndex, Transform3D boneRest)
+    {
+        if (TryGetPrimaryFingerChildRestOffset(skeleton, boneIndex, boneRest, out Vector3 childOffset))
+        {
+            return childOffset;
+        }
+
+        int parentBoneIndex = skeleton.GetBoneParent(boneIndex);
+        if (parentBoneIndex >= 0)
+        {
+            Transform3D parentRest = skeleton.GetBoneGlobalRest(parentBoneIndex);
+            Vector3 skeletonLocalDirection = boneRest.Origin - parentRest.Origin;
+            if (skeletonLocalDirection.LengthSquared() > 0.000001f)
+            {
+                float inferredLength = TryMeasureSiblingFingerSegmentLength(skeleton, boneIndex, parentBoneIndex, out float siblingLength)
+                    ? siblingLength
+                    : skeletonLocalDirection.Length();
+                inferredLength = Mathf.Max(inferredLength, MinimumFingerCapsuleLength);
+                Vector3 skeletonLocalEnd = boneRest.Origin + (skeletonLocalDirection.Normalized() * inferredLength);
+                return boneRest.AffineInverse() * skeletonLocalEnd;
+            }
+        }
+
+        return Vector3.Up * FallbackFingerSegmentLength;
+    }
+
+    private static bool TryGetPrimaryFingerChildRestOffset(
+        Skeleton3D skeleton,
+        int boneIndex,
+        Transform3D boneRest,
+        out Vector3 childOffset)
+    {
+        childOffset = Vector3.Zero;
+        float closestDistanceSquared = float.PositiveInfinity;
+        int boneCount = skeleton.GetBoneCount();
+
+        for (int childIndex = 0; childIndex < boneCount; childIndex += 1)
+        {
+            if (skeleton.GetBoneParent(childIndex) != boneIndex || !IsFingerBone(skeleton, childIndex, out _))
+            {
+                continue;
+            }
+
+            Vector3 candidateOffset = boneRest.AffineInverse() * skeleton.GetBoneGlobalRest(childIndex).Origin;
+            float distanceSquared = candidateOffset.LengthSquared();
+            if (distanceSquared <= 0.000001f || distanceSquared >= closestDistanceSquared)
+            {
+                continue;
+            }
+
+            childOffset = candidateOffset;
+            closestDistanceSquared = distanceSquared;
+        }
+
+        return closestDistanceSquared < float.PositiveInfinity;
+    }
+
+    private static bool TryMeasureSiblingFingerSegmentLength(
+        Skeleton3D skeleton,
+        int boneIndex,
+        int parentBoneIndex,
+        out float length)
+    {
+        length = 0.0f;
+        int measuredSiblingCount = 0;
+        int boneCount = skeleton.GetBoneCount();
+
+        for (int siblingIndex = 0; siblingIndex < boneCount; siblingIndex += 1)
+        {
+            if (siblingIndex == boneIndex ||
+                skeleton.GetBoneParent(siblingIndex) != parentBoneIndex ||
+                !IsFingerBone(skeleton, siblingIndex, out _))
+            {
+                continue;
+            }
+
+            Transform3D siblingRest = skeleton.GetBoneGlobalRest(siblingIndex);
+            if (!TryGetPrimaryFingerChildRestOffset(skeleton, siblingIndex, siblingRest, out Vector3 siblingChildOffset))
+            {
+                continue;
+            }
+
+            length += siblingChildOffset.Length();
+            measuredSiblingCount += 1;
+        }
+
+        if (measuredSiblingCount == 0)
+        {
+            return false;
+        }
+
+        length /= measuredSiblingCount;
+        return length > 0.000001f;
+    }
+
+    private static Basis BuildBasisWithLocalY(Vector3 localY)
+    {
+        Vector3 y = localY.Normalized();
+        Vector3 fallback = Mathf.Abs(y.Dot(Vector3.Forward)) < 0.95f ? Vector3.Forward : Vector3.Right;
+        Vector3 x = fallback.Cross(y).Normalized();
+        Vector3 z = x.Cross(y).Normalized();
+        return new Basis(x, y, z);
+    }
+
+    private static bool IsFingerBone(Skeleton3D skeleton, int boneIndex, out FingerSide side)
+    {
+        string boneName = skeleton.GetBoneName(boneIndex).ToString();
+        if (!TryResolveFingerSide(boneName, out side) || !ContainsFingerToken(boneName) || ContainsToeToken(boneName))
+        {
+            side = FingerSide.None;
+            return false;
+        }
+
+        return HasSameSideHandAncestor(skeleton, boneIndex, side);
+    }
+
+    private static bool HasSameSideHandAncestor(Skeleton3D skeleton, int boneIndex, FingerSide side)
+    {
+        for (int ancestorIndex = skeleton.GetBoneParent(boneIndex); ancestorIndex >= 0; ancestorIndex = skeleton.GetBoneParent(ancestorIndex))
+        {
+            string ancestorName = skeleton.GetBoneName(ancestorIndex).ToString();
+            if (IsHandBone(ancestorName, side))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsHandBone(string boneName, FingerSide side)
+        => TryResolveFingerSide(boneName, out FingerSide resolvedSide) &&
+           resolvedSide == side &&
+           ContainsToken(boneName, "hand") &&
+           !ContainsFingerToken(boneName) &&
+           !ContainsToeToken(boneName);
+
+    private static bool IsSameSideFingerSelfCollisionBone(string boneName, FingerSide side)
+        => TryResolveFingerSide(boneName, out FingerSide resolvedSide) &&
+           resolvedSide == side &&
+           IsFingerSelfCollisionLimbToken(boneName) &&
+           !ContainsFingerToken(boneName) &&
+           !ContainsToeToken(boneName);
+
+    private static bool IsFingerSelfCollisionLimbToken(string boneName)
+        => ContainsToken(boneName, "hand");
+
+    private static bool ContainsFingerToken(string boneName)
+        => ContainsToken(boneName, "thumb") ||
+           ContainsToken(boneName, "index") ||
+           ContainsToken(boneName, "middle") ||
+           ContainsToken(boneName, "ring") ||
+           ContainsToken(boneName, "pinky") ||
+           ContainsToken(boneName, "little");
+
+    private static bool ContainsToeToken(string boneName)
+        => ContainsToken(boneName, "toe") || ContainsToken(boneName, "toes");
+
+    private static bool ContainsToken(string boneName, string token)
+        => boneName.Contains(token, StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryResolveFingerSide(string boneName, out FingerSide side)
+    {
+        if (boneName.Contains("left", StringComparison.OrdinalIgnoreCase))
+        {
+            side = FingerSide.Left;
+            return true;
+        }
+
+        if (boneName.Contains("right", StringComparison.OrdinalIgnoreCase))
+        {
+            side = FingerSide.Right;
+            return true;
+        }
+
+        if (HasCompactSideMarker(boneName, 'L'))
+        {
+            side = FingerSide.Left;
+            return true;
+        }
+
+        if (HasCompactSideMarker(boneName, 'R'))
+        {
+            side = FingerSide.Right;
+            return true;
+        }
+
+        side = FingerSide.None;
+        return false;
+    }
+
+    private static bool HasCompactSideMarker(string boneName, char sideMarker)
+    {
+        if ((sideMarker == 'L' && boneName.StartsWith("little", StringComparison.OrdinalIgnoreCase)) ||
+            (sideMarker == 'R' && boneName.StartsWith("ring", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        for (int index = 0; index < boneName.Length; index += 1)
+        {
+            if (char.ToUpperInvariant(boneName[index]) != sideMarker)
+            {
+                continue;
+            }
+
+            bool hasPreviousBoundary = index == 0 || !char.IsLetterOrDigit(boneName[index - 1]);
+            bool hasNextBoundary = index == boneName.Length - 1 || !char.IsLetterOrDigit(boneName[index + 1]);
+            bool startsCamelToken = index == 0 && index + 1 < boneName.Length && char.IsUpper(boneName[index + 1]);
+            if (hasPreviousBoundary || hasNextBoundary || startsCamelToken)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool TryResolveTargetBone(
@@ -500,5 +911,17 @@ public partial class DynamicPhysicalRig : Node
         BoneAttachment3D Attachment,
         AnimatableBody3D ProxyBody,
         Transform3D LocalProxyTransform);
+
+    private readonly record struct FingerProxyGeometry(
+        Transform3D LocalTransform,
+        float Radius,
+        float Height);
+
+    private enum FingerSide
+    {
+        None,
+        Left,
+        Right,
+    }
 
 }
