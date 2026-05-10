@@ -1,3 +1,4 @@
+using AlleyCat.Body;
 using AlleyCat.IK;
 using AlleyCat.TestFramework;
 using Godot;
@@ -161,6 +162,86 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies profile-backed query shapes preserve force transfer when the hand target has no direct primitive shape.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task Update_ProfileBackedShapeOnShapelessHand_AppliesForce()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        IReadOnlyList<HandDynamicInteractionShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
+            sceneTree,
+            follower =>
+            {
+                follower.DynamicImpactApproachSpeedThreshold = 0.05f;
+                follower.DynamicImpactImpulsePerSpeed = 10.0f;
+                follower.DynamicImpactImpulseCap = 0.50f;
+                follower.DynamicSustainedForcePerSpeed = 0.0f;
+                follower.DynamicSustainedForceCap = 0.0f;
+            },
+            addDirectHandShape: false,
+            profileShapes);
+
+        try
+        {
+            CollisionShape3D generatedShape = Assert.Single(GetGeneratedMovementCollisionShapes(fixture.HandBody));
+            Assert.True(ReferenceEquals(profileShapes[0].Shape, generatedShape.Shape));
+            AssertTransformApproximately(profileShapes[0].Transform, generatedShape.Transform, 0.001f);
+
+            await fixture.PrimeAsync(new Vector3(0.12f, 0.0f, 0.0f));
+
+            await fixture.UpdateAsync(new Vector3(0.20f, 0.0f, 0.0f));
+
+            Assert.InRange(fixture.DynamicBody.LinearVelocity.X, 0.40f, 0.60f);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies profile-backed runtime movement shapes let a shapeless hand target collide with obstacles.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task Follow_ProfileBackedShapeOnShapelessHand_CollidesDuringMovement()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        IReadOnlyList<HandDynamicInteractionShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
+            sceneTree,
+            addDirectHandShape: false,
+            profileShapes: profileShapes);
+
+        try
+        {
+            StaticBody3D obstacle = CreateStaticObstacle(RuntimeFixture.ToWorldPositionForTest(new Vector3(0.20f, 0.0f, 0.0f)));
+            fixture.Root.AddChild(obstacle);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+
+            CollisionShape3D generatedShape = Assert.Single(GetGeneratedMovementCollisionShapes(fixture.HandBody));
+            Assert.Equal(1, fixture.Follower.GeneratedMovementCollisionShapeCount);
+            Assert.True(ReferenceEquals(profileShapes[0].Shape, generatedShape.Shape));
+            AssertTransformApproximately(profileShapes[0].Transform, generatedShape.Transform, 0.001f);
+            Assert.True(
+                fixture.HandBody.TestMove(fixture.HandBody.GlobalTransform, new Vector3(0.28f, 0.0f, 0.0f)),
+                "Profile-backed runtime hand movement shapes should participate in TestMove queries.");
+
+            KinematicCollision3D? collision = fixture.HandBody.MoveAndCollide(new Vector3(0.28f, 0.0f, 0.0f));
+            Assert.NotNull(collision);
+            Assert.True(
+                fixture.HandBody.GlobalPosition.X < obstacle.GlobalPosition.X - 0.03f,
+                "MoveAndCollide should stop the hand before it passes through the obstacle.");
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
     private static void AssertVectorNearZero(Vector3 vector, float tolerance)
     {
         Assert.InRange(Mathf.Abs(vector.X), 0.0f, tolerance);
@@ -180,7 +261,11 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
         public TargetPoseSource TargetPoseSource { get; } = targetPoseSource;
 
-        public static async Task<RuntimeFixture> CreateAsync(SceneTree sceneTree, Action<IKTargetAnimatableFollower>? configureFollower = null)
+        public static async Task<RuntimeFixture> CreateAsync(
+            SceneTree sceneTree,
+            Action<IKTargetAnimatableFollower>? configureFollower = null,
+            bool addDirectHandShape = true,
+            IReadOnlyList<HandDynamicInteractionShape>? profileShapes = null)
         {
             Node3D root = new()
             {
@@ -196,11 +281,14 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
                 CollisionMask = 5,
                 GlobalPosition = _fixtureOrigin,
             };
-            handBody.AddChild(new CollisionShape3D
+            if (addDirectHandShape)
             {
-                Name = "CollisionShape3D",
-                Shape = new BoxShape3D { Size = _boxSize },
-            });
+                handBody.AddChild(new CollisionShape3D
+                {
+                    Name = "CollisionShape3D",
+                    Shape = new BoxShape3D { Size = _boxSize },
+                });
+            }
 
             RigidBody3D dynamicBody = new()
             {
@@ -231,7 +319,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
             TargetPoseSource targetPoseSource = new();
 
-            IKTargetAnimatableFollower follower = new(handBody, targetPoseSource.GetTransform)
+            IKTargetAnimatableFollower follower = new(handBody, targetPoseSource.GetTransform, profileShapes)
             {
                 MaximumSpeed = 100.0f,
                 MaximumAcceleration = 400.0f,
@@ -298,6 +386,53 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
         private static Vector3 ToWorldPosition(Vector3 localPosition)
             => _fixtureOrigin + localPosition;
+
+        public static Vector3 ToWorldPositionForTest(Vector3 localPosition)
+            => ToWorldPosition(localPosition);
+    }
+
+    private static IEnumerable<CollisionShape3D> GetGeneratedMovementCollisionShapes(Node handBody)
+    {
+        foreach (Node child in handBody.GetChildren())
+        {
+            if (child is CollisionShape3D collisionShape
+                && collisionShape.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey))
+            {
+                yield return collisionShape;
+            }
+        }
+    }
+
+    private static StaticBody3D CreateStaticObstacle(Vector3 position)
+    {
+        StaticBody3D obstacle = new()
+        {
+            Name = "StaticObstacle",
+            CollisionLayer = 4,
+            CollisionMask = 8,
+            GlobalPosition = position,
+        };
+        obstacle.AddChild(new CollisionShape3D
+        {
+            Name = "CollisionShape3D",
+            Shape = new BoxShape3D { Size = _boxSize },
+        });
+        return obstacle;
+    }
+
+    private static void AssertTransformApproximately(Transform3D expected, Transform3D actual, float tolerance)
+    {
+        AssertVectorApproximately(expected.Origin, actual.Origin, tolerance);
+        AssertVectorApproximately(expected.Basis.X, actual.Basis.X, tolerance);
+        AssertVectorApproximately(expected.Basis.Y, actual.Basis.Y, tolerance);
+        AssertVectorApproximately(expected.Basis.Z, actual.Basis.Z, tolerance);
+    }
+
+    private static void AssertVectorApproximately(Vector3 expected, Vector3 actual, float tolerance)
+    {
+        Assert.InRange(Mathf.Abs(expected.X - actual.X), 0.0f, tolerance);
+        Assert.InRange(Mathf.Abs(expected.Y - actual.Y), 0.0f, tolerance);
+        Assert.InRange(Mathf.Abs(expected.Z - actual.Z), 0.0f, tolerance);
     }
 
     private sealed class TargetPoseSource
@@ -306,5 +441,59 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
         public Transform3D GetTransform()
             => Transform;
+    }
+
+    private static IReadOnlyList<HandDynamicInteractionShape> CreateProfileBackedHandShapes(StringName boneName)
+    {
+        BodyColliderProfile profile = new()
+        {
+            SourceScene = CreatePackedHandProfileSourceScene(boneName),
+        };
+        IReadOnlyList<BodyColliderShapeDescriptor> descriptors = profile.QueryShapeDescriptorsForBone(boneName);
+        var shapes = new HandDynamicInteractionShape[descriptors.Count];
+
+        for (int index = 0; index < descriptors.Count; index += 1)
+        {
+            BodyColliderShapeDescriptor descriptor = descriptors[index];
+            shapes[index] = new HandDynamicInteractionShape(descriptor.Shape, descriptor.LocalTransform, descriptor.Disabled);
+        }
+
+        return shapes;
+    }
+
+    private static PackedScene CreatePackedHandProfileSourceScene(StringName boneName)
+    {
+        Node root = new()
+        {
+            Name = "CollidersRoot",
+        };
+        BoneAttachment3D attachment = new()
+        {
+            Name = "HandAttachment",
+            BoneName = boneName,
+        };
+        AnimatableBody3D sourceBody = new()
+        {
+            Name = "HandSourceBody",
+        };
+        CollisionShape3D sourceShape = new()
+        {
+            Name = "ProfileHandShape",
+            Shape = new BoxShape3D { Size = _boxSize },
+        };
+
+        root.AddChild(attachment);
+        attachment.Owner = root;
+        attachment.AddChild(sourceBody);
+        sourceBody.Owner = root;
+        sourceBody.AddChild(sourceShape);
+        sourceShape.Owner = root;
+
+        PackedScene sourceScene = new();
+        Error packResult = sourceScene.Pack(root);
+        root.Free();
+
+        Assert.Equal(Error.Ok, packResult);
+        return sourceScene;
     }
 }

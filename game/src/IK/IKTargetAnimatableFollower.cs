@@ -5,13 +5,27 @@ namespace AlleyCat.IK;
 /// <summary>
 /// Drives hand IK target <see cref="AnimatableBody3D"/> nodes using collision-aware kinematic motion.
 /// </summary>
-public sealed class IKTargetAnimatableFollower(AnimatableBody3D body, Func<Transform3D> targetTransformSource)
+public sealed class IKTargetAnimatableFollower(
+    AnimatableBody3D body,
+    Func<Transform3D> targetTransformSource,
+    IReadOnlyList<HandDynamicInteractionShape>? dynamicInteractionShapes = null)
 {
     private const float DeltaEpsilon = 1e-6f;
     private const int MaximumSlideIterations = 3;
 
+    /// <summary>
+    /// Metadata marker applied to runtime hand movement collision shapes generated from profile descriptors.
+    /// </summary>
+    public const string GeneratedMovementCollisionShapeMetaKey = "alleycat_generated_hand_movement_collision_shape";
+
     private Vector3 _velocity = Vector3.Zero;
-    private readonly HandDynamicBodyInteractionController _dynamicBodyInteraction = new(body);
+
+    /// <summary>
+    /// Number of runtime movement-collision shapes generated from profile descriptors for this follower.
+    /// </summary>
+    public int GeneratedMovementCollisionShapeCount { get; } = EnsureProfileMovementCollisionShapes(body, dynamicInteractionShapes);
+
+    private readonly HandDynamicBodyInteractionController _dynamicBodyInteraction = new(body, dynamicInteractionShapes);
 
     /// <summary>
     /// Maximum translation speed in metres per second.
@@ -192,6 +206,52 @@ public sealed class IKTargetAnimatableFollower(AnimatableBody3D body, Func<Trans
         {
             node.ForceUpdateTransform();
         }
+    }
+
+    private static int EnsureProfileMovementCollisionShapes(
+        AnimatableBody3D handBody,
+        IReadOnlyList<HandDynamicInteractionShape>? profileShapes)
+    {
+        if (profileShapes is null || profileShapes.Count == 0 || HasEnabledCollisionShape(handBody))
+        {
+            return 0;
+        }
+
+        int generatedShapeCount = 0;
+        for (int index = 0; index < profileShapes.Count; index += 1)
+        {
+            HandDynamicInteractionShape profileShape = profileShapes[index];
+            if (profileShape.Disabled)
+            {
+                continue;
+            }
+
+            CollisionShape3D movementShape = new()
+            {
+                Name = $"GeneratedHandMovementCollisionShape_{index:D2}",
+                Shape = profileShape.Shape,
+                Disabled = profileShape.Disabled,
+                Transform = profileShape.Transform,
+            };
+            movementShape.SetMeta(GeneratedMovementCollisionShapeMetaKey, true);
+            handBody.AddChild(movementShape);
+            generatedShapeCount += 1;
+        }
+
+        return generatedShapeCount;
+    }
+
+    private static bool HasEnabledCollisionShape(AnimatableBody3D handBody)
+    {
+        foreach (Node child in handBody.GetChildren())
+        {
+            if (child is CollisionShape3D { Disabled: false, Shape: not null })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void MoveWithCollisionSlide(Vector3 motion)

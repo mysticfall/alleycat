@@ -584,6 +584,41 @@ public partial class PlayerVRIK : CharacterIK
         }
     }
 
+    /// <inheritdoc />
+    protected override IReadOnlyList<HandDynamicInteractionShape> ResolveRightHandDynamicInteractionShapes()
+        => ResolveHandDynamicInteractionShapes(_rightHandBoneName);
+
+    /// <inheritdoc />
+    protected override IReadOnlyList<HandDynamicInteractionShape> ResolveLeftHandDynamicInteractionShapes()
+        => ResolveHandDynamicInteractionShapes(_leftHandBoneName);
+
+    private IReadOnlyList<HandDynamicInteractionShape> ResolveHandDynamicInteractionShapes(StringName handBoneName)
+    {
+        BodyColliderProfile? colliderProfile = FindGeneratedPhysicalRig()?.ColliderProfile;
+        if (colliderProfile is null)
+        {
+            return [];
+        }
+
+        IReadOnlyList<BodyColliderShapeDescriptor> descriptors = colliderProfile.QueryShapeDescriptorsForBone(handBoneName);
+        if (descriptors.Count == 0)
+        {
+            return [];
+        }
+
+        var queryShapes = new HandDynamicInteractionShape[descriptors.Count];
+        for (int index = 0; index < descriptors.Count; index += 1)
+        {
+            BodyColliderShapeDescriptor descriptor = descriptors[index];
+            queryShapes[index] = new HandDynamicInteractionShape(
+                descriptor.Shape,
+                descriptor.LocalTransform,
+                descriptor.Disabled);
+        }
+
+        return queryShapes;
+    }
+
     private static void AddBidirectionalCollisionException(PhysicsBody3D source, PhysicsBody3D? other)
     {
         if (other is null || source == other)

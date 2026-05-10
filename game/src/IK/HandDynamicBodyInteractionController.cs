@@ -5,11 +5,14 @@ namespace AlleyCat.IK;
 /// <summary>
 /// Applies explicit capped hand interaction forces to overlapping dynamic rigid bodies.
 /// </summary>
-public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBody)
+public sealed class HandDynamicBodyInteractionController(
+    AnimatableBody3D handBody,
+    IReadOnlyList<HandDynamicInteractionShape>? profileQueryShapes = null)
 {
     private const float Epsilon = 1e-5f;
     private const float QueryMargin = 0.001f;
     private const int MaximumContactsPerShape = 8;
+    // TODO: Profile and generated movement shapes may duplicate query sources; consider deduplicating.
 
     /// <summary>
     /// Default minimum approach speed before the impact channel may fire.
@@ -55,8 +58,8 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
     /// Initialises explicit dynamic-body interaction handling for a hand follower body.
     /// </summary>
     private readonly AnimatableBody3D _handBody = handBody;
-    private readonly CollisionShape3D[] _collisionShapes = CollectCollisionShapes(handBody);
-    private readonly ShapeCast3D[] _shapeCasts = CreateQueryShapeCasts(handBody, CollectCollisionShapes(handBody));
+    private readonly QueryShapeSource[] _queryShapeSources = CollectQueryShapeSources(handBody, profileQueryShapes);
+    private readonly ShapeCast3D[] _shapeCasts = CreateQueryShapeCasts(handBody, CollectQueryShapeSources(handBody, profileQueryShapes));
 
     /// <summary>
     /// Collision mask queried for explicit hand-to-dynamic-body interaction.
@@ -101,7 +104,7 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
         float deltaSeconds = (float)delta;
         Vector3 targetVelocity = BuildTargetVelocity(targetTransform.Origin, deltaSeconds);
 
-        if (deltaSeconds <= Epsilon || CollisionMask == 0 || _collisionShapes.Length == 0 || !_handBody.IsInsideTree())
+        if (deltaSeconds <= Epsilon || CollisionMask == 0 || _queryShapeSources.Length == 0 || !_handBody.IsInsideTree())
         {
             _contacts.Clear();
             return;
@@ -166,7 +169,7 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
     {
         Dictionary<ulong, ActiveContact> activeContacts = [];
 
-        for (int shapeIndex = 0; shapeIndex < _collisionShapes.Length; shapeIndex += 1)
+        for (int shapeIndex = 0; shapeIndex < _queryShapeSources.Length; shapeIndex += 1)
         {
             foreach (QueryContact contact in QueryContactsForShape(shapeIndex))
             {
@@ -185,8 +188,7 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
 
     private IEnumerable<QueryContact> QueryContactsForShape(int shapeIndex)
     {
-        CollisionShape3D collisionShape = _collisionShapes[shapeIndex];
-        if (!GodotObject.IsInstanceValid(collisionShape) || collisionShape.Disabled || collisionShape.Shape is null)
+        if (!_queryShapeSources[shapeIndex].TryResolve(out Shape3D? shape, out Transform3D transform))
         {
             yield break;
         }
@@ -198,8 +200,8 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
         }
 
         shapeCast.CollisionMask = CollisionMask;
-        shapeCast.Shape = collisionShape.Shape;
-        shapeCast.Transform = collisionShape.Transform;
+        shapeCast.Shape = shape;
+        shapeCast.Transform = transform;
         shapeCast.Margin = QueryMargin;
         shapeCast.TargetPosition = Vector3.Zero;
         shapeCast.ForceShapecastUpdate();
@@ -309,28 +311,37 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
         }
     }
 
-    private static CollisionShape3D[] CollectCollisionShapes(AnimatableBody3D handBody)
+    private static QueryShapeSource[] CollectQueryShapeSources(
+        AnimatableBody3D handBody,
+        IReadOnlyList<HandDynamicInteractionShape>? profileQueryShapes)
     {
-        List<CollisionShape3D> collisionShapes = [];
+        List<QueryShapeSource> queryShapeSources = [];
 
         foreach (Node child in handBody.GetChildren())
         {
             if (child is CollisionShape3D collisionShape)
             {
-                collisionShapes.Add(collisionShape);
+                queryShapeSources.Add(new QueryShapeSource(collisionShape));
             }
         }
 
-        return [.. collisionShapes];
+        if (profileQueryShapes is not null)
+        {
+            foreach (HandDynamicInteractionShape queryShape in profileQueryShapes)
+            {
+                queryShapeSources.Add(new QueryShapeSource(queryShape));
+            }
+        }
+
+        return [.. queryShapeSources];
     }
 
-    private static ShapeCast3D[] CreateQueryShapeCasts(AnimatableBody3D handBody, IReadOnlyList<CollisionShape3D> collisionShapes)
+    private static ShapeCast3D[] CreateQueryShapeCasts(AnimatableBody3D handBody, IReadOnlyList<QueryShapeSource> queryShapeSources)
     {
         List<ShapeCast3D> shapeCasts = [];
 
-        for (int shapeIndex = 0; shapeIndex < collisionShapes.Count; shapeIndex += 1)
+        for (int shapeIndex = 0; shapeIndex < queryShapeSources.Count; shapeIndex += 1)
         {
-            CollisionShape3D collisionShape = collisionShapes[shapeIndex];
             ShapeCast3D shapeCast = new()
             {
                 Name = $"DynamicInteractionShapeCast_{shapeIndex}",
@@ -339,8 +350,6 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
                 CollideWithAreas = false,
                 CollideWithBodies = true,
                 TargetPosition = Vector3.Zero,
-                Shape = collisionShape.Shape,
-                Transform = collisionShape.Transform,
             };
 
             handBody.AddChild(shapeCast);
@@ -351,6 +360,40 @@ public sealed class HandDynamicBodyInteractionController(AnimatableBody3D handBo
     }
 
     private readonly record struct ContactState(bool IsTouching);
+
+    private readonly struct QueryShapeSource
+    {
+        private readonly CollisionShape3D? _collisionShape;
+        private readonly HandDynamicInteractionShape _queryShape;
+
+        public QueryShapeSource(CollisionShape3D collisionShape)
+        {
+            _collisionShape = collisionShape;
+            _queryShape = default;
+        }
+
+        public QueryShapeSource(HandDynamicInteractionShape queryShape)
+        {
+            _collisionShape = null;
+            _queryShape = queryShape;
+        }
+
+        public bool TryResolve(out Shape3D? shape, out Transform3D transform)
+        {
+            if (_collisionShape is not null)
+            {
+                shape = GodotObject.IsInstanceValid(_collisionShape) && !_collisionShape.Disabled
+                    ? _collisionShape.Shape
+                    : null;
+                transform = _collisionShape.Transform;
+                return shape is not null;
+            }
+
+            shape = _queryShape.Disabled ? null : _queryShape.Shape;
+            transform = _queryShape.Transform;
+            return shape is not null;
+        }
+    }
 
     private readonly record struct QueryContact(RigidBody3D Body, Vector3 Normal);
 

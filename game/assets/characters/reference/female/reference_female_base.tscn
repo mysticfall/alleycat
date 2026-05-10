@@ -3,23 +3,13 @@
 [ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_yqj8o"]
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Body/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
-[ext_resource type="PackedScene" uid="uid://cmarvdvtcmw4a" path="res://assets/characters/reference/female/colliders.tscn" id="4_2a5tg"]
+[ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_5hhxm"]
 [ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="5_vhysq"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="6_65br6"]
 [ext_resource type="Script" uid="uid://bortwjgmky2ik" path="res://src/IK/FootTargetSyncController.cs" id="7_56k28"]
 [ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_2a5tg"]
 [ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="9_ctrlloco"]
-
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_u7ew7"]
-radius = 0.12
-height = 0.24
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_u7ew7"]
-size = Vector3(0.0579834, 0.1413269, 0.03186035)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_nn3w6"]
-size = Vector3(0.087249756, 0.19615173, 0.03186035)
 
 [node name="Female" unique_id=1792987446 groups=["Actors"] instance=ExtResource("1_yqj8o")]
 
@@ -337,7 +327,7 @@ transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0
 
 [node name="DynamicPhysicalRig" type="Node" parent="Female_export/GeneralSkeleton" index="26" unique_id=966532134]
 script = ExtResource("3_2a5tg")
-SourceScene = ExtResource("4_2a5tg")
+ColliderProfile = ExtResource("4_2a5tg")
 metadata/_custom_type_script = "uid://c7d4aa5yqpf4u"
 
 [node name="IKTargets" type="Node3D" parent="." index="1" unique_id=546537465]
@@ -345,10 +335,6 @@ metadata/_custom_type_script = "uid://c7d4aa5yqpf4u"
 [node name="Head" type="CharacterBody3D" parent="IKTargets" index="0" unique_id=423770543]
 transform = Transform3D(-0.99999994, 0, -8.742277e-08, 0, 1, 0, 8.742277e-08, 0, -0.99999994, -3.2787548e-09, 1.4763433, -0.037504584)
 motion_mode = 1
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="IKTargets/Head" index="0" unique_id=1582370589]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02673018, 0.028144896)
-shape = SubResource("CapsuleShape3D_u7ew7")
 
 [node name="HeadSolve" type="Marker3D" parent="IKTargets" index="1" unique_id=366596223]
 transform = Transform3D(-0.99999994, 0, -8.742277e-08, 0, 1, 0, 8.742277e-08, 0, -0.99999994, -3.2787548e-09, 1.4763433, -0.037504584)
@@ -364,18 +350,10 @@ transform = Transform3D(-4.3711385e-08, 0.99999994, -4.371139e-08, 0, -4.3711385
 collision_layer = 8
 collision_mask = 5
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="IKTargets/RightHand" index="0" unique_id=1459863273]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6567192e-14, 0.085626364, -5.3127646e-21)
-shape = SubResource("BoxShape3D_u7ew7")
-
 [node name="LeftHand" type="AnimatableBody3D" parent="IKTargets" index="5" unique_id=2075201392]
 transform = Transform3D(-4.371139e-08, -1, 4.371139e-08, 0, -4.371139e-08, -1, 1, -4.371139e-08, 1.9106855e-15, -0.581, 1.244, 0)
 collision_layer = 8
 collision_mask = 5
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="IKTargets/LeftHand" index="0" unique_id=2042692921]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6567192e-14, 0.085626364, -5.3127646e-21)
-shape = SubResource("BoxShape3D_u7ew7")
 
 [node name="RightKnee" type="Marker3D" parent="IKTargets" index="6" unique_id=1677817895]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.3547206, -0.03242159, -0.5452722)
@@ -387,17 +365,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2935601, -0.031820357, -0.
 transform = Transform3D(0.9294925, 0.07859205, 0.36037064, 0.112960726, -0.990743, -0.075288154, 0.35111758, 0.110687494, -0.929766, 0.11441658, 0.11261231, -0.12045271)
 motion_mode = 1
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="IKTargets/RightFoot" index="0" unique_id=1587314189]
-transform = Transform3D(0.9999935, 0, 0, 0, 1, -1.030287e-13, 0, 3.872458e-13, 0.9999935, 0.0074920356, 0.058213953, 0)
-shape = SubResource("BoxShape3D_nn3w6")
-
 [node name="LeftFoot" type="CharacterBody3D" parent="IKTargets" index="9" unique_id=1292107592]
 transform = Transform3D(0.8556509, -0.008890384, -0.51747704, -0.12296803, -0.9747132, -0.18658248, -0.5027329, 0.2232826, -0.8351075, -0.14128281, 0.10624613, -0.13607566)
 motion_mode = 1
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="IKTargets/LeftFoot" index="0" unique_id=1444748466]
-transform = Transform3D(0.9999966, 0, 0, 0, 1, -5.3290705e-14, 0, 2.0250468e-13, 0.9999966, 0, 0.085626364, 0)
-shape = SubResource("BoxShape3D_nn3w6")
 
 [node name="AnimationTree" parent="." index="4" unique_id=527893103 instance=ExtResource("8_2a5tg")]
 root_motion_track = NodePath("%GeneralSkeleton:Root")

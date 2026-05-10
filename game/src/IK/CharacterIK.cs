@@ -875,7 +875,10 @@ public partial class CharacterIK : Node3D
             MaximumSpeed = HeadTargetMaximumSpeed,
         };
 
-        _rightHandFollower = new IKTargetAnimatableFollower(rightHandTarget, BuildRightHandTargetTransform)
+        _rightHandFollower = new IKTargetAnimatableFollower(
+            rightHandTarget,
+            BuildRightHandTargetTransform,
+            ResolveRightHandDynamicInteractionShapes())
         {
             MaximumSpeed = HandTargetMaximumSpeed,
             PositionResponsiveness = HandTargetPositionResponsiveness,
@@ -891,7 +894,10 @@ public partial class CharacterIK : Node3D
             DynamicSustainedForceCap = HandDynamicSustainedForceCap,
         };
 
-        _leftHandFollower = new IKTargetAnimatableFollower(leftHandTarget, BuildLeftHandTargetTransform)
+        _leftHandFollower = new IKTargetAnimatableFollower(
+            leftHandTarget,
+            BuildLeftHandTargetTransform,
+            ResolveLeftHandDynamicInteractionShapes())
         {
             MaximumSpeed = HandTargetMaximumSpeed,
             PositionResponsiveness = HandTargetPositionResponsiveness,
@@ -907,6 +913,18 @@ public partial class CharacterIK : Node3D
             DynamicSustainedForceCap = HandDynamicSustainedForceCap,
         };
     }
+
+    /// <summary>
+    /// Returns profile-backed query shapes for right-hand dynamic body interaction.
+    /// </summary>
+    protected virtual IReadOnlyList<HandDynamicInteractionShape> ResolveRightHandDynamicInteractionShapes()
+        => [];
+
+    /// <summary>
+    /// Returns profile-backed query shapes for left-hand dynamic body interaction.
+    /// </summary>
+    protected virtual IReadOnlyList<HandDynamicInteractionShape> ResolveLeftHandDynamicInteractionShapes()
+        => [];
 
     private sealed partial class StageModifier : SkeletonModifier3D
     {

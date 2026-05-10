@@ -15,6 +15,9 @@ namespace AlleyCat.IntegrationTests.Body;
 public sealed class DynamicPhysicalRigIntegrationTests
 {
     private const string CollidersScenePath = "res://assets/characters/reference/female/colliders.tscn";
+    private const string ColliderProfilePath = "res://assets/characters/reference/female/body_collider_profile.tres";
+    private const string ColliderProfileUID = "uid://dpisik0mj8f6a";
+    private const string ReferenceFemaleBaseScenePath = "res://assets/characters/reference/female/reference_female_base.tscn";
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const float PositionToleranceMetres = 0.001f;
 
@@ -30,7 +33,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
         try
         {
-            int sourceShapeCount = CountSourceShapes(fixture.Rig.SourceScene);
+            int sourceShapeCount = CountSourceShapes(fixture.Rig.ColliderProfile?.SourceScene);
             int generatedBodyCount = CountGeneratedProxyBodies(fixture.Rig);
 
             Assert.Equal(sourceShapeCount, fixture.Rig.GeneratedProxyCount);
@@ -60,7 +63,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
             const string rotatedBoneName = "LeftHand";
             AnimatableBody3D handProxy = FindGeneratedProxyBody(fixture.Rig, rotatedBoneName);
             BoneAttachment3D handAttachment = FindGeneratedAttachment(fixture.Rig.TargetSkeleton!, rotatedBoneName);
-            Transform3D expectedProxyLocalTransform = ResolveExpectedProxyLocalTransform(fixture.Rig.SourceScene, rotatedBoneName);
+            Transform3D expectedProxyLocalTransform = ResolveExpectedProxyLocalTransform(fixture.Rig.ColliderProfile?.SourceScene, rotatedBoneName);
             CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(handProxy.GetChild(0));
             Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(handAttachment);
             Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(handProxy);
@@ -72,12 +75,121 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(fixture.Rig.ProxyCollisionLayer, handProxy.CollisionLayer);
             Assert.Equal(fixture.Rig.ProxyCollisionMask, handProxy.CollisionMask);
 
-            AssertProxyShapeDataPreservedWithIdentityTransform(fixture.Rig.SourceScene, handProxy, rotatedBoneName);
+            AssertProxyShapeDataPreservedWithIdentityTransform(fixture.Rig.ColliderProfile?.SourceScene, handProxy, rotatedBoneName);
         }
         finally
         {
             await fixture.DisposeAsync(sceneTree);
         }
+    }
+
+    /// <summary>
+    /// Verifies collider profiles expose reusable, non-duplicated shape descriptors by bone.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void BodyColliderProfile_QueryShapeDescriptors_ExposesOriginalShapeResourceAndFiltersByBone()
+    {
+        BoxShape3D sourceShapeResource = new()
+        {
+            Size = new Vector3(0.2f, 0.3f, 0.4f),
+        };
+        BodyColliderProfile colliderProfile = new()
+        {
+            SourceScene = CreatePackedSourceSceneWithShapeResource("Hips", "AuthoredShape", sourceShapeResource),
+        };
+
+        IReadOnlyList<BodyColliderShapeDescriptor> descriptors = colliderProfile.QueryShapeDescriptors();
+        IReadOnlyList<BodyColliderShapeDescriptor> hipDescriptors = colliderProfile.QueryShapeDescriptorsForBone("Hips");
+
+        BodyColliderShapeDescriptor descriptor = Assert.Single(descriptors);
+        BodyColliderShapeDescriptor hipDescriptor = Assert.Single(hipDescriptors);
+        Assert.Equal("AuthoredShape", descriptor.SourceShapeName);
+        Assert.Equal("Hips", descriptor.SourceBoneName);
+        Assert.Equal("Hips", descriptor.SourceIdentifier);
+        Assert.Equal("SourceBody", descriptor.SourcePhysicsBodyName);
+        Assert.True(ReferenceEquals(sourceShapeResource, descriptor.Shape), "Collider profile descriptors should expose the original Shape3D resource without duplicating it.");
+        Assert.True(ReferenceEquals(sourceShapeResource, hipDescriptor.Shape), "Bone-filtered descriptors should expose the original Shape3D resource without duplicating it.");
+        AssertTransformApproximately(Transform3D.Identity, descriptor.LocalTransform, PositionToleranceMetres);
+    }
+
+    /// <summary>
+    /// Verifies the asset-backed collider profile references the canonical collider source and can query representative bones.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void BodyColliderProfile_AssetResource_LoadsByPathAndUIDAndQueriesReferenceColliders()
+    {
+        Resource profileResource = LoadResource(ColliderProfilePath);
+        Resource profileResourceByUID = LoadResource(ColliderProfileUID);
+        PackedScene sourceScene = ReadResourceProperty<PackedScene>(profileResource, "SourceScene");
+        BodyColliderProfile queryProfile = new()
+        {
+            SourceScene = sourceScene,
+        };
+
+        IReadOnlyList<BodyColliderShapeDescriptor> descriptors = queryProfile.QueryShapeDescriptors();
+
+        Assert.Equal(ColliderProfilePath, profileResource.ResourcePath);
+        Assert.Equal(ColliderProfilePath, profileResourceByUID.ResourcePath);
+        Assert.Equal(CollidersScenePath, sourceScene.ResourcePath);
+        Assert.Equal(CountSourceShapes(sourceScene), descriptors.Count);
+        Assert.Contains(descriptors, descriptor => descriptor.SourceBoneName == "Hips");
+        Assert.Contains(descriptors, descriptor => descriptor.SourceBoneName == "LeftHand");
+        Assert.Contains(descriptors, descriptor => descriptor.SourceBoneName == "breast_r");
+    }
+
+    /// <summary>
+    /// Verifies the real reference female scene uses the shared collider profile.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void ReferenceFemaleBase_DynamicPhysicalRig_UsesSharedColliderProfile()
+    {
+        PackedScene referenceScene = LoadPackedScene(ReferenceFemaleBaseScenePath);
+        Node sceneRoot = referenceScene.Instantiate();
+
+        try
+        {
+            Node rig = Assert.IsType<Node>(
+                sceneRoot.GetNodeOrNull("Female_export/GeneralSkeleton/DynamicPhysicalRig"),
+                exactMatch: false);
+            Resource colliderProfile = ReadResourceProperty<Resource>(rig, nameof(DynamicPhysicalRig.ColliderProfile));
+            PackedScene profileSourceScene = ReadResourceProperty<PackedScene>(colliderProfile, "SourceScene");
+
+            Assert.Equal(ColliderProfilePath, colliderProfile.ResourcePath);
+            Assert.Equal(CollidersScenePath, profileSourceScene.ResourcePath);
+            AssertNoDirectCollisionShape(sceneRoot, "IKTargets/Head");
+            AssertNoDirectCollisionShape(sceneRoot, "IKTargets/RightHand");
+            AssertNoDirectCollisionShape(sceneRoot, "IKTargets/LeftHand");
+            AssertNoDirectCollisionShape(sceneRoot, "IKTargets/RightFoot");
+            AssertNoDirectCollisionShape(sceneRoot, "IKTargets/LeftFoot");
+        }
+        finally
+        {
+            sceneRoot.Free();
+        }
+    }
+
+    /// <summary>
+    /// Verifies DynamicPhysicalRig fails clearly when the required collider profile is missing.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_MissingColliderProfile_FailsFast()
+    {
+        Skeleton3D skeleton = CreateSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+        };
+        skeleton.AddChild(rig);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => ForceBuildGeneratedRig(rig));
+
+        Assert.Contains("collider profile", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, rig.GeneratedProxyCount);
     }
 
     /// <summary>
@@ -252,6 +364,12 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, rightHandFollower.DynamicSustainedPushSpeedThreshold);
             Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, rightHandFollower.DynamicSustainedForcePerSpeed);
             Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, rightHandFollower.DynamicSustainedForceCap);
+            Assert.True(
+                CountDynamicInteractionQueryShapes(rightHandFollower) > 0,
+                "Right-hand follower should receive profile-backed dynamic-interaction query shapes.");
+            Assert.True(
+                rightHandFollower.GeneratedMovementCollisionShapeCount > 0,
+                "Right-hand follower should generate profile-backed movement collision shapes for MoveAndCollide/TestMove.");
 
             Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumSpeed, leftHandFollower.MaximumSpeed);
             Assert.Equal(fixture.PlayerVRIK.HandTargetPositionResponsiveness, leftHandFollower.PositionResponsiveness);
@@ -265,6 +383,12 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, leftHandFollower.DynamicSustainedPushSpeedThreshold);
             Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, leftHandFollower.DynamicSustainedForcePerSpeed);
             Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, leftHandFollower.DynamicSustainedForceCap);
+            Assert.True(
+                CountDynamicInteractionQueryShapes(leftHandFollower) > 0,
+                "Left-hand follower should receive profile-backed dynamic-interaction query shapes.");
+            Assert.True(
+                leftHandFollower.GeneratedMovementCollisionShapeCount > 0,
+                "Left-hand follower should generate profile-backed movement collision shapes for MoveAndCollide/TestMove.");
         }
         finally
         {
@@ -273,19 +397,23 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies only authored hand targets keep the hand collision contract for the current subphase.
+    /// Verifies hand targets no longer require direct primitive target shapes.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerVRIK_HandTargets_RetainHandCollisionLayers()
+    public async Task PlayerVRIK_HandTargets_DoNotRequireDirectPrimitiveShapes()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
 
         try
         {
-            AssertCollisionLayerContract(fixture.RightHandTarget, 8, 5);
-            AssertCollisionLayerContract(fixture.LeftHandTarget, 8, 5);
+            InvokeEnsureFollowers(fixture.PlayerVRIK);
+
+            AssertNoDirectCollisionShape(fixture.RightHandTarget);
+            AssertNoDirectCollisionShape(fixture.LeftHandTarget);
+            Assert.True(CountGeneratedMovementCollisionShapes(fixture.RightHandTarget) > 0);
+            Assert.True(CountGeneratedMovementCollisionShapes(fixture.LeftHandTarget) > 0);
         }
         finally
         {
@@ -294,18 +422,18 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the deferred head baseline keeps its pre-hand-rewrite collision contract.
+    /// Verifies the deferred head target no longer requires a direct primitive target shape.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerVRIK_HeadTarget_RetainsDeferredBaselineCollisionLayers()
+    public async Task PlayerVRIK_HeadTarget_DoesNotRequireDirectPrimitiveShape()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
 
         try
         {
-            AssertCollisionLayerContract(fixture.HeadTarget, 1, 1);
+            AssertNoDirectCollisionShape(fixture.HeadTarget);
         }
         finally
         {
@@ -445,7 +573,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             Name = "DynamicPhysicalRig",
             TargetSkeleton = skeleton,
-            SourceScene = CreatePackedSourceSceneWithBoneAttachments(("Hips", null), ("UnmappedBone", null)),
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithBoneAttachments(("Hips", null), ("UnmappedBone", null))),
         };
         skeleton.AddChild(rig);
 
@@ -471,7 +599,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             Name = "DynamicPhysicalRig",
             TargetSkeleton = skeleton,
-            SourceScene = CreatePackedSourceSceneWithMissingShapeResource(),
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithMissingShapeResource()),
         };
         skeleton.AddChild(rig);
 
@@ -495,7 +623,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             Name = "DynamicPhysicalRig",
             TargetSkeleton = skeleton,
-            SourceScene = CreatePackedSourceSceneWithNestedBoneAttachment("Chest", "Hips", "DifferentIntermediateName", "DifferentPhysicsBodyName"),
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithNestedBoneAttachment("Chest", "Hips", "DifferentIntermediateName", "DifferentPhysicsBodyName")),
         };
         skeleton.AddChild(rig);
 
@@ -521,7 +649,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             Name = "DynamicPhysicalRig",
             TargetSkeleton = skeleton,
-            SourceScene = CreatePackedSourceSceneWithoutBoneAttachment(),
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithoutBoneAttachment()),
         };
         skeleton.AddChild(rig);
 
@@ -541,7 +669,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             Name = "DynamicPhysicalRig",
             TargetSkeleton = skeleton,
-            SourceScene = CreatePackedSourceSceneWithBoneAttachments(("Hips", null), ("", "BlankAttachment")),
+            ColliderProfile = CreateColliderProfile(CreatePackedSourceSceneWithBoneAttachments(("Hips", null), ("", "BlankAttachment"))),
         };
         skeleton.AddChild(rig);
 
@@ -553,10 +681,36 @@ public sealed class DynamicPhysicalRigIntegrationTests
         Assert.Equal(1, CountGeneratedProxyBodies(rig));
     }
 
-    private static void AssertCollisionLayerContract(PhysicsBody3D body, uint expectedLayer, uint expectedMask)
+    private static void AssertNoDirectCollisionShape(Node root, string targetPath)
     {
-        Assert.Equal(expectedLayer, body.CollisionLayer);
-        Assert.Equal(expectedMask, body.CollisionMask);
+        Node target = root.GetNodeOrNull(targetPath)
+                      ?? throw new Xunit.Sdk.XunitException($"Expected target node '{targetPath}' to exist.");
+        AssertNoDirectCollisionShape(target);
+    }
+
+    private static void AssertNoDirectCollisionShape(Node target)
+    {
+        foreach (Node child in target.GetChildren())
+        {
+            Assert.False(
+                child is CollisionShape3D && !child.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey),
+                $"Expected '{target.GetPath()}' to rely on BodyColliderProfile data rather than direct primitive authored CollisionShape3D child '{child.Name}'.");
+        }
+    }
+
+    private static int CountGeneratedMovementCollisionShapes(Node target)
+    {
+        int count = 0;
+        foreach (Node child in target.GetChildren())
+        {
+            if (child is CollisionShape3D
+                && child.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey))
+            {
+                count += 1;
+            }
+        }
+
+        return count;
     }
 
     private static T GetPrivateField<T>(PlayerVRIK playerVRIK, string fieldName)
@@ -566,6 +720,19 @@ public sealed class DynamicPhysicalRigIntegrationTests
                               $"{playerVRIK.GetType().Name} field '{fieldName}' was not found in the inheritance chain.");
 
         return Assert.IsType<T>(field.GetValue(playerVRIK));
+    }
+
+    private static int CountDynamicInteractionQueryShapes(IKTargetAnimatableFollower follower)
+    {
+        FieldInfo controllerField = GetNonPublicInstanceField(typeof(IKTargetAnimatableFollower), "_dynamicBodyInteraction")
+                                    ?? throw new InvalidOperationException("IKTargetAnimatableFollower._dynamicBodyInteraction was not found.");
+        object controller = controllerField.GetValue(follower)
+                            ?? throw new Xunit.Sdk.XunitException("Expected hand follower to have a dynamic interaction controller.");
+        FieldInfo queryShapeSourcesField = GetNonPublicInstanceField(controller.GetType(), "_queryShapeSources")
+                                           ?? throw new InvalidOperationException(
+                                               "HandDynamicBodyInteractionController._queryShapeSources was not found.");
+        Array queryShapeSources = Assert.IsAssignableFrom<Array>(queryShapeSourcesField.GetValue(controller));
+        return queryShapeSources.Length;
     }
 
     private static void AssertBodyHasCollisionException(PhysicsBody3D source, PhysicsBody3D expected)
@@ -614,7 +781,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     private static void AssertProxyShapeDataPreservedWithIdentityTransform(PackedScene? sourceScene, AnimatableBody3D proxyBody, string boneName)
     {
         Node sourceRoot = sourceScene?.Instantiate()
-                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+                          ?? throw new Xunit.Sdk.XunitException("BodyColliderProfile source scene should be configured.");
 
         try
         {
@@ -624,7 +791,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(sourceShape.Name, proxyShape.Name);
             Assert.Equal(sourceShape.Disabled, proxyShape.Disabled);
             Assert.IsType(sourceShape.Shape.GetType(), proxyShape.Shape);
-            Assert.False(ReferenceEquals(sourceShape.Shape, proxyShape.Shape));
             AssertTransformApproximately(Transform3D.Identity, proxyShape.Transform, PositionToleranceMetres);
         }
         finally
@@ -661,7 +827,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     private static Transform3D ResolveExpectedProxyLocalTransform(PackedScene? sourceScene, string boneName)
     {
         Node sourceRoot = sourceScene?.Instantiate()
-                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+                          ?? throw new Xunit.Sdk.XunitException("BodyColliderProfile source scene should be configured.");
 
         try
         {
@@ -683,7 +849,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     private static Transform3D ResolveSourceShapeSkeletonTransform(PackedScene? sourceScene, string boneName)
     {
         Node sourceRoot = sourceScene?.Instantiate()
-                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+                          ?? throw new Xunit.Sdk.XunitException("BodyColliderProfile source scene should be configured.");
 
         try
         {
@@ -841,10 +1007,29 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return count;
     }
 
+    private static Resource LoadResource(string resourcePath)
+        => ResourceLoader.Load<Resource>(resourcePath)
+           ?? throw new Xunit.Sdk.XunitException($"Expected resource '{resourcePath}' to load.");
+
+    private static BodyColliderProfile CreateColliderProfile(PackedScene sourceScene)
+        => new()
+        {
+            SourceScene = sourceScene,
+        };
+
+    private static TResource ReadResourceProperty<TResource>(GodotObject owner, string propertyName)
+        where TResource : Resource
+    {
+        Variant propertyValue = owner.Get(propertyName);
+        Assert.Equal(Variant.Type.Object, propertyValue.VariantType);
+
+        return Assert.IsType<TResource>(propertyValue.AsGodotObject(), exactMatch: false);
+    }
+
     private static int CountSourceShapes(PackedScene? sourceScene)
     {
         Node sourceRoot = sourceScene?.Instantiate()
-                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+                          ?? throw new Xunit.Sdk.XunitException("BodyColliderProfile source scene should be configured.");
 
         try
         {
@@ -1015,6 +1200,42 @@ public sealed class DynamicPhysicalRigIntegrationTests
             sourceBody.AddChild(sourceShape);
             sourceShape.Owner = root;
         }
+
+        PackedScene sourceScene = new();
+        Error packResult = sourceScene.Pack(root);
+        root.Free();
+
+        Assert.Equal(Error.Ok, packResult);
+        return sourceScene;
+    }
+
+    private static PackedScene CreatePackedSourceSceneWithShapeResource(string boneName, string shapeName, Shape3D shapeResource)
+    {
+        Node root = new()
+        {
+            Name = "CollidersRoot",
+        };
+        BoneAttachment3D sourceBoneAttachment = new()
+        {
+            Name = $"{boneName}Attachment",
+            BoneName = boneName,
+        };
+        AnimatableBody3D sourceBody = new()
+        {
+            Name = "SourceBody",
+        };
+        CollisionShape3D sourceShape = new()
+        {
+            Name = shapeName,
+            Shape = shapeResource,
+        };
+
+        root.AddChild(sourceBoneAttachment);
+        sourceBoneAttachment.Owner = root;
+        sourceBoneAttachment.AddChild(sourceBody);
+        sourceBody.Owner = root;
+        sourceBody.AddChild(sourceShape);
+        sourceShape.Owner = root;
 
         PackedScene sourceScene = new();
         Error packResult = sourceScene.Pack(root);
@@ -1288,7 +1509,10 @@ public sealed class DynamicPhysicalRigIntegrationTests
             {
                 Name = "DynamicPhysicalRig",
                 TargetSkeleton = skeleton,
-                SourceScene = LoadPackedScene(CollidersScenePath),
+                ColliderProfile = new BodyColliderProfile
+                {
+                    SourceScene = LoadPackedScene(CollidersScenePath),
+                },
                 GenerateInEditor = true,
             };
             skeleton.AddChild(rig);
@@ -1299,9 +1523,9 @@ public sealed class DynamicPhysicalRigIntegrationTests
             };
             player.AddChild(ikTargets);
 
-            CharacterBody3D headTarget = CreateCharacterIkTargetBody("Head", new Vector3(0.0f, 1.62f, 0.05f), 1, 1, new CapsuleShape3D { Radius = 0.08f, Height = 0.18f });
-            AnimatableBody3D rightHandTarget = CreateAnimatableIkTargetBody("RightHand", new Vector3(0.72f, 1.28f, 0.02f), 8, 5, new BoxShape3D { Size = new Vector3(0.10f, 0.18f, 0.10f) });
-            AnimatableBody3D leftHandTarget = CreateAnimatableIkTargetBody("LeftHand", new Vector3(-0.72f, 1.28f, 0.02f), 8, 5, new BoxShape3D { Size = new Vector3(0.10f, 0.18f, 0.10f) });
+            CharacterBody3D headTarget = CreateCharacterIkTargetBody("Head", new Vector3(0.0f, 1.62f, 0.05f), 1, 1, shape: null);
+            AnimatableBody3D rightHandTarget = CreateAnimatableIkTargetBody("RightHand", new Vector3(0.72f, 1.28f, 0.02f), 8, 5, shape: null);
+            AnimatableBody3D leftHandTarget = CreateAnimatableIkTargetBody("LeftHand", new Vector3(-0.72f, 1.28f, 0.02f), 8, 5, shape: null);
             Node3D headSolveTarget = new Marker3D { Name = "HeadSolve", TopLevel = true, GlobalTransform = headTarget.GlobalTransform };
 
             ikTargets.AddChild(headTarget);
@@ -1387,7 +1611,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
             }
         }
 
-        private static CharacterBody3D CreateCharacterIkTargetBody(string name, Vector3 position, uint collisionLayer, uint collisionMask, Shape3D shape)
+        private static CharacterBody3D CreateCharacterIkTargetBody(string name, Vector3 position, uint collisionLayer, uint collisionMask, Shape3D? shape)
         {
             CharacterBody3D body = new()
             {
@@ -1399,6 +1623,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 GlobalPosition = position,
             };
 
+            if (shape is null)
+            {
+                return body;
+            }
+
             CollisionShape3D collisionShape = new()
             {
                 Name = "CollisionShape3D",
@@ -1409,7 +1638,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
             return body;
         }
 
-        private static AnimatableBody3D CreateAnimatableIkTargetBody(string name, Vector3 position, uint collisionLayer, uint collisionMask, Shape3D shape)
+        private static AnimatableBody3D CreateAnimatableIkTargetBody(string name, Vector3 position, uint collisionLayer, uint collisionMask, Shape3D? shape)
         {
             AnimatableBody3D body = new()
             {
@@ -1420,6 +1649,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 CollisionMask = collisionMask,
                 GlobalPosition = position,
             };
+
+            if (shape is null)
+            {
+                return body;
+            }
 
             CollisionShape3D collisionShape = new()
             {
