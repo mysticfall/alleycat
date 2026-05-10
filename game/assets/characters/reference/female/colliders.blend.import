@@ -37,7 +37,15 @@ import_script/path=""
 materials/extract=0
 materials/extract_format=0
 materials/extract_path=""
-_subresources={}
+_subresources={
+"nodes": {
+"PATH:Ragdoll/Skeleton3D": {
+"retarget/bone_map": Resource("uid://db42k2j8v05ku", "res://assets/characters/reference/skeleton_profiles/bone_map_makehuman.tres"),
+"retarget/rest_fixer/fix_silhouette/enable": true,
+"retarget/rest_fixer/fix_silhouette/filter": [&"Head", &"Neck", &"UpperChest", &"Chest", &"Spine", &"Hips", &"RightThumbMetacarpal", &"RightThumbProximal", &"RightThumbDistal", &"RightIndexProximal", &"RightIndexIntermediate", &"RightIndexDistal", &"RightMiddleProximal", &"RightMiddleIntermediate", &"RightMiddleDistal", &"RightRingProximal", &"RightRingIntermediate", &"RightRingDistal", &"RightLittleProximal", &"RightLittleIntermediate", &"RightLittleDistal", &"LeftThumbMetacarpal", &"LeftThumbProximal", &"LeftThumbDistal", &"LeftIndexProximal", &"LeftIndexIntermediate", &"LeftIndexDistal", &"LeftMiddleProximal", &"LeftMiddleIntermediate", &"LeftMiddleDistal", &"LeftRingProximal", &"LeftRingIntermediate", &"LeftRingDistal", &"LeftLittleProximal", &"LeftLittleIntermediate", &"LeftLittleDistal", &"RightFoot", &"LeftFoot"]
+}
+}
+}
 blender/nodes/visible=0
 blender/nodes/active_collection_only=false
 blender/nodes/punctual_lights=true
