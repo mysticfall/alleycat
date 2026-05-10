@@ -415,14 +415,10 @@ public partial class DynamicPhysicalRig : Node
 
     private static CollisionShape3D CreateProxyShape(CollisionShape3D sourceShape)
     {
-        Shape3D sourceShapeResource = sourceShape.Shape
-                                     ?? throw new InvalidOperationException(
-                                         $"Source collision shape '{sourceShape.Name}' requires a {nameof(Shape3D)} resource.");
-
         CollisionShape3D proxyShape = new()
         {
             Name = sourceShape.Name,
-            Shape = (Shape3D)sourceShapeResource.Duplicate(true),
+            Shape = sourceShape.Shape,
             Disabled = sourceShape.Disabled,
             Transform = Transform3D.Identity,
         };
