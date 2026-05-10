@@ -10,19 +10,20 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.Body;
 
 /// <summary>
-/// Integration coverage for physics-timed IK target following and generated proxy synchronisation.
+/// Integration coverage for physics-timed IK target following and generated proxy collision rigging.
 /// </summary>
 public sealed class DynamicPhysicalRigIntegrationTests
 {
     private const string CollidersScenePath = "res://assets/characters/reference/female/colliders.tscn";
+    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const float PositionToleranceMetres = 0.001f;
 
     /// <summary>
-    /// Verifies runtime setup keeps follower and proxy synchronisation on physics processing and preserves proxy count.
+    /// Verifies runtime setup builds the generated proxy count and enables manual physics synchronisation.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task DynamicPhysicalRig_RuntimeSetup_EnablesPhysicsProcessingAndBuildsExpectedProxyCount()
+    public async Task DynamicPhysicalRig_RuntimeSetup_BuildsExpectedProxyCountWithManualPhysicsSync()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
@@ -35,6 +36,8 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(sourceShapeCount, fixture.Rig.GeneratedProxyCount);
             Assert.Equal(sourceShapeCount, generatedBodyCount);
             Assert.Equal(0, fixture.Rig.SkippedSourceShapeCount);
+            Assert.True(fixture.Rig.IsPhysicsProcessing(), "Generated top-level proxy bodies require the rig's manual physics sync loop.");
+            Assert.True(fixture.Rig.PhysicsProxySyncTickCount > 0, "Generated proxy bodies should be synchronised immediately and on physics ticks.");
         }
         finally
         {
@@ -43,35 +46,138 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies generated proxy bodies use the explicit physics-sync path and track skeleton-root motion.
+    /// Verifies generated proxy bodies preserve the authored source collider pose while following target bone attachments.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task DynamicPhysicalRig_ProxyBodies_ArePhysicsSynchronisedAndTrackSkeletonMotion()
+    public async Task DynamicPhysicalRig_ProxyBodies_PreserveAuthoredSourceShapePoseUnderTargetAttachment()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
 
         try
         {
-            AnimatableBody3D chestProxy = FindGeneratedProxyBody(fixture.Rig, "Chest");
-            ulong initialSyncTickCount = fixture.Rig.PhysicsProxySyncTickCount;
-            Transform3D expectedTransform = BuildExpectedProxyTransform(fixture.Rig.SourceScene, fixture.Rig.TargetSkeleton!, "Chest");
+            const string rotatedBoneName = "LeftHand";
+            AnimatableBody3D handProxy = FindGeneratedProxyBody(fixture.Rig, rotatedBoneName);
+            BoneAttachment3D handAttachment = FindGeneratedAttachment(fixture.Rig.TargetSkeleton!, rotatedBoneName);
+            Transform3D expectedProxyLocalTransform = ResolveExpectedProxyLocalTransform(fixture.Rig.SourceScene, rotatedBoneName);
+            CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(handProxy.GetChild(0));
+            Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(handAttachment);
+            Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(handProxy);
 
-            Assert.True(chestProxy.TopLevel, "Generated proxies should be top-level so physics sync is driven explicitly from world space.");
-            Assert.True(chestProxy.SyncToPhysics, "Generated proxies should use AnimatableBody3D physics synchronisation.");
-            Assert.Equal(fixture.Rig.ProxyCollisionLayer, chestProxy.CollisionLayer);
-            Assert.Equal(fixture.Rig.ProxyCollisionMask, chestProxy.CollisionMask);
+            Assert.True(handProxy.TopLevel, "Generated proxies should be top-level because manual sync writes global transforms.");
+            AssertTransformApproximately(expectedProxyLocalTransform, attachmentGlobalTransform.AffineInverse() * proxyGlobalTransform, PositionToleranceMetres);
+            AssertTransformApproximately(Transform3D.Identity, proxyShape.Transform, PositionToleranceMetres);
+            Assert.False(handProxy.SyncToPhysics, "Generated proxies are manually synchronised during the rig physics tick.");
+            Assert.Equal(fixture.Rig.ProxyCollisionLayer, handProxy.CollisionLayer);
+            Assert.Equal(fixture.Rig.ProxyCollisionMask, handProxy.CollisionMask);
 
-            InvokeRigPhysicsSync(fixture.Rig);
-
-            Assert.True(fixture.Rig.PhysicsProxySyncTickCount > initialSyncTickCount, "Explicit proxy physics sync should record a runtime tick.");
-            AssertVectorApproximately(expectedTransform.Origin, chestProxy.GlobalPosition, PositionToleranceMetres);
+            AssertProxyShapeDataPreservedWithIdentityTransform(fixture.Rig.SourceScene, handProxy, rotatedBoneName);
         }
         finally
         {
             await fixture.DisposeAsync(sceneTree);
         }
+    }
+
+    /// <summary>
+    /// Verifies manual sync moves generated top-level proxy bodies with generated attachments after pose changes.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_SyncProxyBodiesToPhysics_FollowsGeneratedAttachmentPose()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            const string boneName = "LeftHand";
+            AnimatableBody3D handProxy = FindGeneratedProxyBody(fixture.Rig, boneName);
+            BoneAttachment3D handAttachment = FindGeneratedAttachment(fixture.Rig.TargetSkeleton!, boneName);
+            Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(handAttachment);
+            Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(handProxy);
+            Transform3D localProxyTransform = attachmentGlobalTransform.AffineInverse() * proxyGlobalTransform;
+            Transform3D restProxyGlobalTransform = proxyGlobalTransform;
+            Transform3D movedAttachmentTransform = new(
+                Basis.FromEuler(new Vector3(0.0f, 0.31f, -0.17f)) * attachmentGlobalTransform.Basis,
+                attachmentGlobalTransform.Origin + new Vector3(0.17f, 0.11f, -0.09f));
+            ulong initialSyncTickCount = fixture.Rig.PhysicsProxySyncTickCount;
+
+            handAttachment.Transform = movedAttachmentTransform;
+            AssertTransformApproximately(restProxyGlobalTransform, ResolveNodeGlobalTransform(handProxy), PositionToleranceMetres);
+
+            fixture.Rig.SyncProxyBodiesToPhysics();
+
+            Assert.True(fixture.Rig.PhysicsProxySyncTickCount > initialSyncTickCount);
+            AssertTransformApproximately(movedAttachmentTransform * localProxyTransform, ResolveNodeGlobalTransform(handProxy), PositionToleranceMetres);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the mirror-room NPC generated proxies follow the NPC skeleton pose overrides at runtime.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_MirrorRoomFemale_ProxiesFollowNpcPoseOverrides()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(MirrorRoomScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 4);
+        await WaitForPhysicsFramesAsync(sceneTree, 4);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected mirror-room scene to become current scene.");
+        Node rig = Assert.IsType<Node>(
+            sceneRoot.GetNodeOrNull("Actors/Female/Female_export/GeneralSkeleton/DynamicPhysicalRig"),
+            exactMatch: false);
+        Skeleton3D skeleton = Assert.IsAssignableFrom<Skeleton3D>(rig.GetParent());
+
+        Assert.True(ReadProperty<int>(rig, nameof(DynamicPhysicalRig.GeneratedProxyCount)) > 0, "Mirror-room NPC rig should generate runtime proxy bodies.");
+        Assert.True(rig.IsPhysicsProcessing(), "Mirror-room NPC rig should keep the manual physics sync loop enabled.");
+
+        const string boneName = "LeftHand";
+        int boneIndex = skeleton.FindBone(boneName);
+        Assert.True(boneIndex >= 0, $"Expected NPC skeleton to contain bone '{boneName}'.");
+        AnimatableBody3D proxy = FindGeneratedProxyBody(skeleton, boneName);
+        BoneAttachment3D attachment = FindGeneratedAttachment(skeleton, boneName);
+        Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(attachment);
+        Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(proxy);
+        Transform3D localProxyTransform = ResolveExpectedProxyLocalTransform(
+            LoadPackedScene(CollidersScenePath),
+            boneName);
+        Transform3D expectedAttachmentGlobalTransform = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(boneIndex);
+        Transform3D restAttachmentGlobalTransform = skeleton.GlobalTransform * skeleton.GetBoneGlobalRest(boneIndex);
+
+        AssertTransformApproximately(expectedAttachmentGlobalTransform, attachmentGlobalTransform, PositionToleranceMetres);
+        AssertTransformApproximately(
+            attachmentGlobalTransform * localProxyTransform,
+            proxyGlobalTransform,
+            PositionToleranceMetres);
+        Assert.True(
+            attachmentGlobalTransform.Origin.DistanceTo(restAttachmentGlobalTransform.Origin) > 0.01f,
+            "Mirror-room NPC attachment should reflect the overridden runtime pose rather than the imported rest pose.");
+
+        Quaternion initialRotation = skeleton.GetBonePoseRotation(boneIndex);
+        skeleton.SetBonePoseRotation(boneIndex, (new Quaternion(Vector3.Up, 0.25f) * initialRotation).Normalized());
+        await WaitForFramesAsync(sceneTree, 1);
+        await WaitForPhysicsFramesAsync(sceneTree, 1);
+
+        InvokeMethod(rig, nameof(DynamicPhysicalRig.SyncProxyBodiesToPhysics));
+
+        Transform3D movedAttachmentGlobalTransform = ResolveNodeGlobalTransform(attachment);
+        AssertTransformApproximately(
+            movedAttachmentGlobalTransform * localProxyTransform,
+            ResolveNodeGlobalTransform(proxy),
+            PositionToleranceMetres);
     }
 
     /// <summary>
@@ -303,28 +409,148 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies direct-name source markers fail fast instead of silently skipping unresolved proxy shapes.
+    /// Verifies reference breast colliders resolve directly through their source BoneAttachment3D bone names.
     /// </summary>
     [Headless]
     [Fact]
-    public void DynamicPhysicalRig_InvalidDirectNameMarker_FailsFastAndClearsPartialRig()
+    public async Task DynamicPhysicalRig_ReferenceBreastColliders_ResolveThroughBoneAttachmentBoneName()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            AnimatableBody3D rightBreastProxy = FindGeneratedProxyBody(fixture.Rig, "breast_r");
+            AnimatableBody3D leftBreastProxy = FindGeneratedProxyBody(fixture.Rig, "breast_l");
+
+            Assert.Equal("breast_r", rightBreastProxy.GetMeta("alleycat_generated_physical_rig_source").AsString());
+            Assert.Equal("breast_l", leftBreastProxy.GetMeta("alleycat_generated_physical_rig_source").AsString());
+            Assert.Equal(0, fixture.Rig.SkippedSourceShapeCount);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies unresolved source BoneAttachment3D bone names skip only that shape while valid shapes still generate.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_UnresolvedSourceBoneName_SkipsShapeAndKeepsValidGeneratedProxy()
     {
         Skeleton3D skeleton = CreateSkeleton();
         DynamicPhysicalRig rig = new()
         {
             Name = "DynamicPhysicalRig",
             TargetSkeleton = skeleton,
-            SourceScene = CreatePackedSourceSceneWithUnresolvedMarker(),
+            SourceScene = CreatePackedSourceSceneWithBoneAttachments(("Hips", null), ("UnmappedBone", null)),
+        };
+        skeleton.AddChild(rig);
+
+        ForceBuildGeneratedRig(rig);
+
+        AnimatableBody3D hipsProxy = FindGeneratedProxyBody(rig, "Hips");
+        BoneAttachment3D hipsAttachment = Assert.IsType<BoneAttachment3D>(hipsProxy.GetParent());
+        Assert.Equal("Hips", hipsAttachment.BoneName);
+        Assert.Equal(1, rig.SkippedSourceShapeCount);
+        Assert.Equal(1, rig.GeneratedProxyCount);
+        Assert.Equal(1, CountGeneratedProxyBodies(rig));
+    }
+
+    /// <summary>
+    /// Verifies source CollisionShape3D nodes without a Shape3D resource fail fast and clear any partially generated rig.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_MissingSourceShapeResource_FailsFastAndClearsPartialGeneratedRig()
+    {
+        Skeleton3D skeleton = CreateSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            SourceScene = CreatePackedSourceSceneWithMissingShapeResource(),
         };
         skeleton.AddChild(rig);
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => ForceBuildGeneratedRig(rig));
 
-        Assert.Contains("UnmappedBone", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("direct-name contract", exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(1, rig.SkippedSourceShapeCount);
+        Assert.Contains(nameof(Shape3D), exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, rig.SkippedSourceShapeCount);
         Assert.Equal(0, rig.GeneratedProxyCount);
         Assert.Equal(0, CountGeneratedProxyBodies(rig));
+    }
+
+    /// <summary>
+    /// Verifies the closest source BoneAttachment3D BoneName is used when intermediate node names differ.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_ClosestSourceBoneAttachmentBoneName_ResolvesTargetBone()
+    {
+        Skeleton3D skeleton = CreateSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            SourceScene = CreatePackedSourceSceneWithNestedBoneAttachment("Chest", "Hips", "DifferentIntermediateName", "DifferentPhysicsBodyName"),
+        };
+        skeleton.AddChild(rig);
+
+        ForceBuildGeneratedRig(rig);
+
+        AnimatableBody3D hipsProxy = FindGeneratedProxyBody(rig, "Hips");
+        BoneAttachment3D hipsAttachment = Assert.IsType<BoneAttachment3D>(hipsProxy.GetParent());
+        Assert.Equal("Hips", hipsAttachment.BoneName);
+        Assert.Equal("Hips", hipsProxy.GetMeta("alleycat_generated_physical_rig_source").AsString());
+        Assert.Equal(1, rig.GeneratedProxyCount);
+        Assert.Equal(0, rig.SkippedSourceShapeCount);
+    }
+
+    /// <summary>
+    /// Verifies source shapes without a BoneAttachment3D ancestor fail fast as required setup errors.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_MissingSourceBoneAttachment_FailsFast()
+    {
+        Skeleton3D skeleton = CreateSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            SourceScene = CreatePackedSourceSceneWithoutBoneAttachment(),
+        };
+        skeleton.AddChild(rig);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => ForceBuildGeneratedRig(rig));
+        Assert.Contains(nameof(BoneAttachment3D), exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies empty source BoneAttachment3D BoneName values skip only that shape while valid shapes still generate.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRig_EmptySourceBoneName_SkipsShapeAndKeepsValidGeneratedProxy()
+    {
+        Skeleton3D skeleton = CreateSkeleton();
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            SourceScene = CreatePackedSourceSceneWithBoneAttachments(("Hips", null), ("", "BlankAttachment")),
+        };
+        skeleton.AddChild(rig);
+
+        ForceBuildGeneratedRig(rig);
+
+        _ = FindGeneratedProxyBody(rig, "Hips");
+        Assert.Equal(1, rig.SkippedSourceShapeCount);
+        Assert.Equal(1, rig.GeneratedProxyCount);
+        Assert.Equal(1, CountGeneratedProxyBodies(rig));
     }
 
     private static void AssertCollisionLayerContract(PhysicsBody3D body, uint expectedLayer, uint expectedMask)
@@ -385,22 +611,142 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return obstacle;
     }
 
-    private static Transform3D BuildExpectedProxyTransform(PackedScene? sourceScene, Skeleton3D skeleton, string boneName)
+    private static void AssertProxyShapeDataPreservedWithIdentityTransform(PackedScene? sourceScene, AnimatableBody3D proxyBody, string boneName)
     {
         Node sourceRoot = sourceScene?.Instantiate()
                           ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
 
         try
         {
-            Node3D sourceBone = Assert.IsType<Node3D>(sourceRoot.GetNodeOrNull(boneName), exactMatch: false);
-            PhysicsBody3D sourceBody = Assert.IsAssignableFrom<PhysicsBody3D>(sourceBone.GetChild(0));
-            BoneAttachment3D attachment = Assert.IsType<BoneAttachment3D>(FindGeneratedAttachment(skeleton, boneName), exactMatch: false);
-            return attachment.GlobalTransform * sourceBody.Transform;
+            CollisionShape3D sourceShape = FindSourceShapeForProfileBone(sourceRoot, boneName);
+            CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(proxyBody.GetChild(0));
+
+            Assert.Equal(sourceShape.Name, proxyShape.Name);
+            Assert.Equal(sourceShape.Disabled, proxyShape.Disabled);
+            Assert.IsType(sourceShape.Shape.GetType(), proxyShape.Shape);
+            Assert.False(ReferenceEquals(sourceShape.Shape, proxyShape.Shape));
+            AssertTransformApproximately(Transform3D.Identity, proxyShape.Transform, PositionToleranceMetres);
         }
         finally
         {
             sourceRoot.Free();
         }
+    }
+
+    private static CollisionShape3D FindSourceShapeForProfileBone(Node sourceRoot, string profileBoneName)
+    {
+        Stack<Node> pending = new([sourceRoot]);
+
+        while (pending.Count > 0)
+        {
+            Node current = pending.Pop();
+            if (current is CollisionShape3D shape)
+            {
+                BoneAttachment3D? sourceAttachment = FindClosestBoneAttachmentAncestor(shape);
+                if (sourceAttachment is not null && sourceAttachment.BoneName == profileBoneName)
+                {
+                    return shape;
+                }
+            }
+
+            foreach (Node child in current.GetChildren())
+            {
+                pending.Push(child);
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected source shape for mapped profile bone '{profileBoneName}'.");
+    }
+
+    private static Transform3D ResolveExpectedProxyLocalTransform(PackedScene? sourceScene, string boneName)
+    {
+        Node sourceRoot = sourceScene?.Instantiate()
+                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+
+        try
+        {
+            CollisionShape3D sourceShape = FindSourceShapeForProfileBone(sourceRoot, boneName);
+            BoneAttachment3D sourceAttachment = FindClosestBoneAttachmentAncestor(sourceShape)
+                                                ?? throw new Xunit.Sdk.XunitException(
+                                                    $"Expected source shape '{sourceShape.Name}' to have a BoneAttachment3D ancestor.");
+            Node? sourceFrameRoot = FindAncestor<Skeleton3D>(sourceAttachment) ?? sourceAttachment.GetParent();
+            Transform3D sourceAttachmentSkeletonTransform = ComposeTransformRelativeToAncestor(sourceAttachment, sourceFrameRoot);
+            Transform3D sourceShapeSkeletonTransform = ComposeTransformRelativeToAncestor(sourceShape, sourceFrameRoot);
+            return sourceAttachmentSkeletonTransform.AffineInverse() * sourceShapeSkeletonTransform;
+        }
+        finally
+        {
+            sourceRoot.Free();
+        }
+    }
+
+    private static Transform3D ResolveSourceShapeSkeletonTransform(PackedScene? sourceScene, string boneName)
+    {
+        Node sourceRoot = sourceScene?.Instantiate()
+                          ?? throw new Xunit.Sdk.XunitException("DynamicPhysicalRig source scene should be configured.");
+
+        try
+        {
+            CollisionShape3D sourceShape = FindSourceShapeForProfileBone(sourceRoot, boneName);
+            BoneAttachment3D sourceAttachment = FindClosestBoneAttachmentAncestor(sourceShape)
+                                                ?? throw new Xunit.Sdk.XunitException(
+                                                    $"Expected source shape '{sourceShape.Name}' to have a BoneAttachment3D ancestor.");
+            Node? sourceFrameRoot = FindAncestor<Skeleton3D>(sourceAttachment) ?? sourceAttachment.GetParent();
+            return ComposeTransformRelativeToAncestor(sourceShape, sourceFrameRoot);
+        }
+        finally
+        {
+            sourceRoot.Free();
+        }
+    }
+
+    private static Transform3D ComposeTransformRelativeToAncestor(Node3D node, Node? ancestor)
+    {
+        Transform3D transform = node.Transform;
+
+        for (Node? current = node.GetParent(); current is not null && current != ancestor; current = current.GetParent())
+        {
+            if (current is Node3D current3D)
+            {
+                transform = current3D.Transform * transform;
+            }
+        }
+
+        return transform;
+    }
+
+    private static T? FindAncestor<T>(Node start)
+        where T : Node
+    {
+        for (Node? current = start.GetParent(); current is not null; current = current.GetParent())
+        {
+            if (current is T ancestor)
+            {
+                return ancestor;
+            }
+        }
+
+        return null;
+    }
+
+    private static Transform3D ResolveNodeGlobalTransform(Node3D node)
+        => node.TopLevel
+            ? node.Transform
+            : node.GetParent() is Node3D parent
+                ? parent.GlobalTransform * node.Transform
+                : node.GlobalTransform;
+
+    private static BoneAttachment3D? FindClosestBoneAttachmentAncestor(Node start)
+    {
+        for (Node? current = start.GetParent(); current is not null; current = current.GetParent())
+        {
+            if (current is BoneAttachment3D attachment)
+            {
+                return attachment;
+            }
+        }
+
+        return null;
     }
 
     private static BoneAttachment3D FindGeneratedAttachment(Skeleton3D skeleton, string boneName)
@@ -434,6 +780,40 @@ public sealed class DynamicPhysicalRigIntegrationTests
         }
 
         throw new Xunit.Sdk.XunitException($"Expected generated proxy body for source bone '{sourceBoneName}'.");
+    }
+
+    private static AnimatableBody3D FindGeneratedProxyBody(Skeleton3D skeleton, string sourceBoneName)
+    {
+        foreach (Node child in skeleton.GetChildren())
+        {
+            if (child is not BoneAttachment3D attachment || attachment.BoneName != sourceBoneName)
+            {
+                continue;
+            }
+
+            if (attachment.GetNodeOrNull("ProxyBody") is not AnimatableBody3D proxyBody)
+            {
+                continue;
+            }
+
+            return proxyBody;
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected generated proxy body for source bone '{sourceBoneName}'.");
+    }
+
+    private static T ReadProperty<T>(object target, string propertyName)
+    {
+        object? value = target.GetType().GetProperty(propertyName)?.GetValue(target)
+            ?? throw new Xunit.Sdk.XunitException($"Expected '{target.GetType().Name}' to expose property '{propertyName}'.");
+        return Assert.IsType<T>(value, exactMatch: false);
+    }
+
+    private static void InvokeMethod(object target, string methodName)
+    {
+        MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public)
+                            ?? throw new Xunit.Sdk.XunitException($"Expected '{target.GetType().Name}' to expose method '{methodName}'.");
+        InvokeReflectedMethod(method, target, null);
     }
 
     private static int CountGeneratedProxyBodies(DynamicPhysicalRig rig)
@@ -552,16 +932,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return null;
     }
 
-    private static void InvokeRigPhysicsSync(DynamicPhysicalRig rig)
-    {
-        MethodInfo method = typeof(DynamicPhysicalRig).GetMethod(
-                                "SyncProxyBodiesToPhysics",
-                                BindingFlags.Instance | BindingFlags.NonPublic)
-                            ?? throw new InvalidOperationException("DynamicPhysicalRig.SyncProxyBodiesToPhysics was not found.");
-
-        _ = method.Invoke(rig, null);
-    }
-
     private static void ForceBuildGeneratedRig(DynamicPhysicalRig rig)
     {
         MethodInfo clearMethod = typeof(DynamicPhysicalRig).GetMethod(
@@ -610,15 +980,170 @@ public sealed class DynamicPhysicalRigIntegrationTests
         Assert.InRange(actual.Z, expected.Z - epsilon, expected.Z + epsilon);
     }
 
-    private static PackedScene CreatePackedSourceSceneWithUnresolvedMarker()
+    private static PackedScene CreatePackedSourceSceneWithBoneAttachments(params (string BoneName, string? AttachmentName)[] sourceAttachments)
     {
-        Node3D root = new()
+        Node root = new()
         {
-            Name = "InvalidCollidersRoot",
+            Name = "CollidersRoot",
         };
-        Node3D sourceBoneMarker = new()
+
+        for (int index = 0; index < sourceAttachments.Length; index += 1)
         {
-            Name = "UnmappedBone",
+            (string boneName, string? attachmentName) = sourceAttachments[index];
+            BoneAttachment3D sourceBoneAttachment = new()
+            {
+                Name = attachmentName ?? $"{boneName}Attachment",
+                BoneName = boneName,
+            };
+            AnimatableBody3D sourceBody = new()
+            {
+                Name = $"SourceBody{index}",
+            };
+            CollisionShape3D sourceShape = new()
+            {
+                Name = $"SourceShape{index}",
+                Shape = new BoxShape3D
+                {
+                    Size = new Vector3(0.1f, 0.1f, 0.1f),
+                },
+            };
+
+            root.AddChild(sourceBoneAttachment);
+            sourceBoneAttachment.Owner = root;
+            sourceBoneAttachment.AddChild(sourceBody);
+            sourceBody.Owner = root;
+            sourceBody.AddChild(sourceShape);
+            sourceShape.Owner = root;
+        }
+
+        PackedScene sourceScene = new();
+        Error packResult = sourceScene.Pack(root);
+        root.Free();
+
+        Assert.Equal(Error.Ok, packResult);
+        return sourceScene;
+    }
+
+    private static PackedScene CreatePackedSourceSceneWithNestedBoneAttachment(
+        string outerAttachmentBoneName,
+        string innerAttachmentBoneName,
+        string intermediateNodeName,
+        string physicsBodyName)
+    {
+        Node root = new()
+        {
+            Name = "CollidersRoot",
+        };
+        BoneAttachment3D outerAttachment = new()
+        {
+            Name = "OuterAttachment",
+            BoneName = outerAttachmentBoneName,
+        };
+        Node intermediate = new()
+        {
+            Name = intermediateNodeName,
+        };
+        BoneAttachment3D innerAttachment = new()
+        {
+            Name = "InnerAttachment",
+            BoneName = innerAttachmentBoneName,
+        };
+        AnimatableBody3D sourceBody = new()
+        {
+            Name = physicsBodyName,
+        };
+        CollisionShape3D sourceShape = new()
+        {
+            Name = "SourceShape",
+            Shape = new BoxShape3D
+            {
+                Size = new Vector3(0.1f, 0.1f, 0.1f),
+            },
+        };
+
+        root.AddChild(outerAttachment);
+        outerAttachment.Owner = root;
+        outerAttachment.AddChild(intermediate);
+        intermediate.Owner = root;
+        intermediate.AddChild(innerAttachment);
+        innerAttachment.Owner = root;
+        innerAttachment.AddChild(sourceBody);
+        sourceBody.Owner = root;
+        sourceBody.AddChild(sourceShape);
+        sourceShape.Owner = root;
+
+        PackedScene sourceScene = new();
+        Error packResult = sourceScene.Pack(root);
+        root.Free();
+
+        Assert.Equal(Error.Ok, packResult);
+        return sourceScene;
+    }
+
+    private static PackedScene CreatePackedSourceSceneWithMissingShapeResource()
+    {
+        Node root = new()
+        {
+            Name = "CollidersRoot",
+        };
+        BoneAttachment3D validAttachment = new()
+        {
+            Name = "HipsAttachment",
+            BoneName = "Hips",
+        };
+        AnimatableBody3D validSourceBody = new()
+        {
+            Name = "ValidSourceBody",
+        };
+        CollisionShape3D validSourceShape = new()
+        {
+            Name = "ValidSourceShape",
+            Shape = new BoxShape3D
+            {
+                Size = new Vector3(0.1f, 0.1f, 0.1f),
+            },
+        };
+        BoneAttachment3D invalidAttachment = new()
+        {
+            Name = "ChestAttachment",
+            BoneName = "Chest",
+        };
+        AnimatableBody3D invalidSourceBody = new()
+        {
+            Name = "InvalidSourceBody",
+        };
+        CollisionShape3D invalidSourceShape = new()
+        {
+            Name = "MissingShapeResource",
+            Shape = null,
+        };
+
+        root.AddChild(invalidAttachment);
+        invalidAttachment.Owner = root;
+        invalidAttachment.AddChild(invalidSourceBody);
+        invalidSourceBody.Owner = root;
+        invalidSourceBody.AddChild(invalidSourceShape);
+        invalidSourceShape.Owner = root;
+        root.AddChild(validAttachment);
+        validAttachment.Owner = root;
+        validAttachment.AddChild(validSourceBody);
+        validSourceBody.Owner = root;
+        validSourceBody.AddChild(validSourceShape);
+        validSourceShape.Owner = root;
+
+        PackedScene sourceScene = new();
+        Error packResult = sourceScene.Pack(root);
+        root.Free();
+
+        Assert.Equal(Error.Ok, packResult);
+        return sourceScene;
+    }
+
+    private static PackedScene CreatePackedSourceSceneWithoutBoneAttachment()
+    {
+        Node root = new()
+        {
+            Name = "CollidersRoot",
         };
         AnimatableBody3D sourceBody = new()
         {
@@ -633,9 +1158,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
             },
         };
 
-        root.AddChild(sourceBoneMarker);
-        sourceBoneMarker.Owner = root;
-        sourceBoneMarker.AddChild(sourceBody);
+        root.AddChild(sourceBody);
         sourceBody.Owner = root;
         sourceBody.AddChild(sourceShape);
         sourceShape.Owner = root;

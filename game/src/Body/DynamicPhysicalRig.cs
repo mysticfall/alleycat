@@ -13,8 +13,8 @@ public partial class DynamicPhysicalRig : Node
     private const string GeneratedOwnerPathMetaKey = "alleycat_generated_physical_rig_owner_path";
 
     private bool _regenerationQueued;
-    private readonly List<ProxyBinding> _proxyBindings = [];
     private readonly Dictionary<StringName, List<PhysicsBody3D>> _generatedBodiesByBoneName = [];
+    private readonly List<ProxyBinding> _proxyBindings = [];
 
     /// <summary>
     /// Source authoring scene that contains the collider shapes to duplicate.
@@ -131,7 +131,7 @@ public partial class DynamicPhysicalRig : Node
     }
 
     /// <summary>
-    /// Number of unresolved source shapes encountered during the most recent build attempt before the rig failed fast.
+    /// Number of unresolved source shapes skipped during the most recent build attempt.
     /// </summary>
     public int SkippedSourceShapeCount
     {
@@ -140,7 +140,7 @@ public partial class DynamicPhysicalRig : Node
     }
 
     /// <summary>
-    /// Number of physics-frame proxy synchronisation ticks executed since startup.
+    /// Number of manual generated-proxy synchronisation passes run since the latest clear.
     /// </summary>
     public ulong PhysicsProxySyncTickCount
     {
@@ -160,18 +160,14 @@ public partial class DynamicPhysicalRig : Node
     public override void _Ready()
     {
         base._Ready();
-        SetPhysicsProcess(true);
+        SetPhysicsProcess(_proxyBindings.Count > 0);
         QueueRigRefresh();
     }
 
     /// <inheritdoc />
     public override void _PhysicsProcess(double delta)
     {
-        if (delta <= 0d || _proxyBindings.Count == 0)
-        {
-            return;
-        }
-
+        base._PhysicsProcess(delta);
         SyncProxyBodiesToPhysics();
     }
 
@@ -218,8 +214,8 @@ public partial class DynamicPhysicalRig : Node
     {
         Skeleton3D skeleton = ResolveTargetSkeleton();
         PackedScene sourceScene = SourceScene
-                                  ?? throw new InvalidOperationException(
-                                      $"{nameof(DynamicPhysicalRig)} '{Name}' requires a configured source scene.");
+                                   ?? throw new InvalidOperationException(
+                                       $"{nameof(DynamicPhysicalRig)} '{Name}' requires a configured source scene.");
 
         Node sourceRoot = sourceScene.Instantiate();
         try
@@ -238,25 +234,34 @@ public partial class DynamicPhysicalRig : Node
 
                 foreach (CollisionShape3D sourceShape in sourceShapes)
                 {
-                    Node3D sourceBoneMarker = FindExactNode3DAncestor(sourceShape);
-                    PhysicsBody3D sourceBody = FindPhysicsBodyAncestor(sourceShape);
-                    Shape3D duplicatedShape = DuplicateShape(sourceShape);
+                    BoneAttachment3D sourceBoneAttachment = ResolveSourceBoneAttachment(sourceShape);
+                    _ = FindPhysicsBodyAncestor(sourceShape);
 
-                    string targetBoneName = ResolveTargetBoneName(sourceBoneMarker);
-                    int targetBoneIndex = ResolveTargetBoneIndex(skeleton, sourceShape, sourceBoneMarker, targetBoneName);
+                    if (!TryResolveTargetBone(skeleton, sourceShape, sourceBoneAttachment, out string targetBoneName, out int targetBoneIndex))
+                    {
+                        continue;
+                    }
 
-                    BoneAttachment3D attachment = CreateAttachment(sourceBoneMarker.Name, targetBoneName, targetBoneIndex);
+                    string sourceIdentifier = ResolveSourceIdentifier(sourceBoneAttachment);
+                    BoneAttachment3D attachment = CreateAttachment(sourceIdentifier, targetBoneName, targetBoneIndex);
                     skeleton.AddChild(attachment);
                     AssignOwnerIfNeeded(attachment, persistedOwner);
 
-                    AnimatableBody3D proxyBody = CreateProxyBody(sourceBody);
+                    Transform3D sourceShapeSkeletonTransform = ResolveSourceShapeSkeletonTransform(sourceShape, sourceBoneAttachment);
+                    Transform3D sourceAttachmentSkeletonTransform = ResolveSourceAttachmentSkeletonTransform(sourceBoneAttachment);
+                    Transform3D localProxyTransform = sourceAttachmentSkeletonTransform.AffineInverse() * sourceShapeSkeletonTransform;
+
+                    AnimatableBody3D proxyBody = CreateProxyBody(localProxyTransform);
                     proxyBody.CollisionLayer = ProxyCollisionLayer;
                     proxyBody.CollisionMask = ProxyCollisionMask;
-                    TagGeneratedNode(proxyBody, sourceBoneMarker.Name);
+                    TagGeneratedNode(proxyBody, sourceIdentifier);
                     attachment.AddChild(proxyBody);
                     AssignOwnerIfNeeded(proxyBody, persistedOwner);
+                    proxyBody.Transform = localProxyTransform;
+                    proxyBody.TopLevel = true;
+                    _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, localProxyTransform));
 
-                    CollisionShape3D proxyShape = CreateProxyShape(sourceShape, duplicatedShape);
+                    CollisionShape3D proxyShape = CreateProxyShape(sourceShape);
                     TagGeneratedNode(proxyShape, sourceShape.Name);
                     proxyBody.AddChild(proxyShape);
                     AssignOwnerIfNeeded(proxyShape, persistedOwner);
@@ -269,18 +274,19 @@ public partial class DynamicPhysicalRig : Node
 
                     bodies.Add(proxyBody);
                     AddGeneratedBodyForBone(targetBoneName, proxyBody);
-                    _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, sourceBody.Transform));
                     GeneratedProxyCount += 1;
                 }
 
                 ApplyAdjacentBoneCollisionExceptions(skeleton, generatedBodiesByBone);
-                SyncProxyBodiesToPhysics();
 
                 if (GeneratedProxyCount == 0)
                 {
                     throw new InvalidOperationException(
                         $"{nameof(DynamicPhysicalRig)} '{Name}' could not generate any proxy bodies from '{sourceScene.ResourcePath}'.");
                 }
+
+                SyncProxyBodiesToPhysics();
+                SetPhysicsProcess(_proxyBindings.Count > 0);
             }
             catch
             {
@@ -305,6 +311,7 @@ public partial class DynamicPhysicalRig : Node
 
     private void ClearGeneratedRig()
     {
+        SetPhysicsProcess(false);
         Skeleton3D skeleton = ResolveTargetSkeleton();
         List<Node> generatedChildren = [];
 
@@ -327,9 +334,37 @@ public partial class DynamicPhysicalRig : Node
         GeneratedProxyCount = 0;
         AdjacentBoneExceptionPairCount = 0;
         SkippedSourceShapeCount = 0;
-        _proxyBindings.Clear();
+        PhysicsProxySyncTickCount = 0;
         _generatedBodiesByBoneName.Clear();
+        _proxyBindings.Clear();
     }
+
+    /// <summary>
+    /// Manually synchronises generated top-level proxy bodies to their generated bone attachments.
+    /// </summary>
+    public void SyncProxyBodiesToPhysics()
+    {
+        if (_proxyBindings.Count == 0)
+        {
+            return;
+        }
+
+        foreach (ProxyBinding binding in _proxyBindings)
+        {
+            Transform3D globalProxyTransform = ResolveNodeGlobalTransform(binding.Attachment) * binding.LocalProxyTransform;
+            binding.ProxyBody.GlobalTransform = globalProxyTransform;
+            binding.ProxyBody.Transform = globalProxyTransform;
+            if (binding.ProxyBody.IsInsideTree())
+            {
+                binding.ProxyBody.ForceUpdateTransform();
+            }
+        }
+
+        PhysicsProxySyncTickCount += 1;
+    }
+
+    private static Transform3D ResolveNodeGlobalTransform(Node3D node)
+        => node.GetParent() is Node3D parent ? parent.GlobalTransform * node.Transform : node.GlobalTransform;
 
     private void AddGeneratedBodyForBone(StringName boneName, PhysicsBody3D body)
     {
@@ -366,50 +401,74 @@ public partial class DynamicPhysicalRig : Node
         return attachment;
     }
 
-    private static AnimatableBody3D CreateProxyBody(PhysicsBody3D sourceBody)
+    private static AnimatableBody3D CreateProxyBody(Transform3D localProxyTransform)
     {
         AnimatableBody3D proxyBody = new()
         {
             Name = "ProxyBody",
-            Transform = sourceBody.Transform,
-            TopLevel = true,
-            SyncToPhysics = true,
+            Transform = localProxyTransform,
+            SyncToPhysics = false,
         };
 
         return proxyBody;
     }
 
-    private void SyncProxyBodiesToPhysics()
+    private static CollisionShape3D CreateProxyShape(CollisionShape3D sourceShape)
     {
-        if (_proxyBindings.Count == 0)
-        {
-            return;
-        }
+        Shape3D sourceShapeResource = sourceShape.Shape
+                                     ?? throw new InvalidOperationException(
+                                         $"Source collision shape '{sourceShape.Name}' requires a {nameof(Shape3D)} resource.");
 
-        PhysicsProxySyncTickCount += 1;
-
-        foreach (ProxyBinding binding in _proxyBindings)
-        {
-            if (!IsInstanceValid(binding.Attachment) || !IsInstanceValid(binding.ProxyBody))
-            {
-                continue;
-            }
-
-            binding.ProxyBody.GlobalTransform = binding.Attachment.GlobalTransform * binding.LocalBodyTransform;
-        }
-    }
-
-    private static CollisionShape3D CreateProxyShape(CollisionShape3D sourceShape, Shape3D duplicatedShape)
-    {
         CollisionShape3D proxyShape = new()
         {
             Name = sourceShape.Name,
-            Shape = duplicatedShape,
+            Shape = (Shape3D)sourceShapeResource.Duplicate(true),
             Disabled = sourceShape.Disabled,
-            Transform = sourceShape.Transform,
+            Transform = Transform3D.Identity,
         };
 
         return proxyShape;
+    }
+
+    private static Transform3D ResolveSourceShapeSkeletonTransform(CollisionShape3D sourceShape, BoneAttachment3D sourceBoneAttachment)
+    {
+        Node? sourceFrameRoot = FindAncestor<Skeleton3D>(sourceBoneAttachment) ?? sourceBoneAttachment.GetParent();
+        return ComposeTransformRelativeToAncestor(sourceShape, sourceFrameRoot);
+    }
+
+    private static Transform3D ResolveSourceAttachmentSkeletonTransform(BoneAttachment3D sourceBoneAttachment)
+    {
+        Node? sourceFrameRoot = FindAncestor<Skeleton3D>(sourceBoneAttachment) ?? sourceBoneAttachment.GetParent();
+        return ComposeTransformRelativeToAncestor(sourceBoneAttachment, sourceFrameRoot);
+    }
+
+    private static Transform3D ComposeTransformRelativeToAncestor(Node3D node, Node? ancestor)
+    {
+        Transform3D transform = node.Transform;
+
+        for (Node? current = node.GetParent(); current is not null && current != ancestor; current = current.GetParent())
+        {
+            if (current is Node3D current3D)
+            {
+                transform = current3D.Transform * transform;
+            }
+        }
+
+        return transform;
+    }
+
+    private static T? FindAncestor<T>(Node start)
+        where T : Node
+    {
+        for (Node? current = start.GetParent(); current is not null; current = current.GetParent())
+        {
+            if (current is T ancestor)
+            {
+                return ancestor;
+            }
+        }
+
+        return null;
     }
 
     private void ApplyAdjacentBoneCollisionExceptions(
@@ -435,26 +494,26 @@ public partial class DynamicPhysicalRig : Node
         }
     }
 
-    private static string ResolveTargetBoneName(Node3D sourceBoneMarker)
-        => sourceBoneMarker.Name;
-
-    private int ResolveTargetBoneIndex(
+    private bool TryResolveTargetBone(
         Skeleton3D skeleton,
         CollisionShape3D sourceShape,
-        Node3D sourceBoneMarker,
-        string targetBoneName)
+        BoneAttachment3D sourceBoneAttachment,
+        out string targetBoneName,
+        out int targetBoneIndex)
     {
-        int targetBoneIndex = skeleton.FindBone(targetBoneName);
+        targetBoneName = sourceBoneAttachment.BoneName.ToString();
+        targetBoneIndex = string.IsNullOrWhiteSpace(targetBoneName) ? -1 : skeleton.FindBone(targetBoneName);
         if (targetBoneIndex >= 0)
         {
-            return targetBoneIndex;
+            return true;
         }
 
         SkippedSourceShapeCount += 1;
-        throw new InvalidOperationException(
-            $"{nameof(DynamicPhysicalRig)} '{Name}' could not resolve source shape '{sourceShape.Name}' because nearest exact " +
-            $"{nameof(Node3D)} marker '{sourceBoneMarker.Name}' does not match any bone on skeleton '{skeleton.Name}'. " +
-            "The direct-name contract requires every source marker name to resolve exactly.");
+        string sourceIdentifier = ResolveSourceIdentifier(sourceBoneAttachment);
+        GD.PushWarning(
+            $"{nameof(DynamicPhysicalRig)} '{Name}' skipped source shape '{sourceShape.Name}' from source bone attachment " +
+            $"'{sourceIdentifier}' because BoneName '{targetBoneName}' did not resolve to a bone on skeleton '{skeleton.Name}'.");
+        return false;
     }
 
     private static List<CollisionShape3D> CollectSourceShapes(Node root)
@@ -479,18 +538,25 @@ public partial class DynamicPhysicalRig : Node
         return shapes;
     }
 
-    private static Node3D FindExactNode3DAncestor(Node start)
+    private BoneAttachment3D ResolveSourceBoneAttachment(CollisionShape3D sourceShape)
     {
-        for (Node? current = start.GetParent(); current is not null; current = current.GetParent())
+        for (Node? current = sourceShape.GetParent(); current is not null; current = current.GetParent())
         {
-            if (current.GetType() == typeof(Node3D))
+            if (current is BoneAttachment3D sourceBoneAttachment)
             {
-                return (Node3D)current;
+                return sourceBoneAttachment;
             }
         }
 
         throw new InvalidOperationException(
-            $"Unable to find an exact {nameof(Node3D)} ancestor for source shape '{start.Name}'.");
+            $"{nameof(DynamicPhysicalRig)} '{Name}' could not resolve source shape '{sourceShape.Name}' because it does not " +
+            $"have a {nameof(BoneAttachment3D)} ancestor with the source bone name.");
+    }
+
+    private static string ResolveSourceIdentifier(BoneAttachment3D sourceBoneAttachment)
+    {
+        string sourceBoneName = sourceBoneAttachment.BoneName.ToString();
+        return string.IsNullOrWhiteSpace(sourceBoneName) ? sourceBoneAttachment.Name : sourceBoneName;
     }
 
     private static PhysicsBody3D FindPhysicsBodyAncestor(Node start)
@@ -505,15 +571,6 @@ public partial class DynamicPhysicalRig : Node
 
         throw new InvalidOperationException(
             $"Unable to find a {nameof(PhysicsBody3D)} ancestor for source shape '{start.Name}'.");
-    }
-
-    private static Shape3D DuplicateShape(CollisionShape3D sourceShape)
-    {
-        Shape3D source = sourceShape.Shape
-                         ?? throw new InvalidOperationException(
-                             $"Source shape '{sourceShape.Name}' does not reference a {nameof(Shape3D)} resource.");
-
-        return (Shape3D)source.Duplicate();
     }
 
     private void TagGeneratedNode(Node node, string sourceIdentifier)
@@ -555,5 +612,9 @@ public partial class DynamicPhysicalRig : Node
         other.AddCollisionExceptionWith(source);
     }
 
-    private sealed record ProxyBinding(BoneAttachment3D Attachment, AnimatableBody3D ProxyBody, Transform3D LocalBodyTransform);
+    private readonly record struct ProxyBinding(
+        BoneAttachment3D Attachment,
+        AnimatableBody3D ProxyBody,
+        Transform3D LocalProxyTransform);
+
 }
