@@ -240,6 +240,15 @@ public sealed class DynamicPhysicalRigIntegrationTests
         Assert.Equal(2, rig.AdjacentBoneExceptionPairCount);
         Assert.Equal(7, rig.FingerSideExceptionPairCount);
         _ = Assert.Single(rig.GetGeneratedProxyBodiesForBone("LeftIndexProximal"));
+        Assert.Equal(3, rig.GetGeneratedFingerProxyCollisionShapesForHand("LeftHand").Count);
+        _ = Assert.Single(rig.GetGeneratedFingerProxyCollisionShapesForHand("RightHand"));
+        Assert.All(
+            rig.GetGeneratedFingerProxyCollisionShapesForHand("LeftHand"),
+            shape =>
+            {
+                Assert.NotNull(shape.Shape);
+                Assert.True(GodotObject.IsInstanceValid(shape.SourceShape));
+            });
         Assert.NotSame(capsule, terminalCapsule);
         Assert.True(capsule.Height >= capsule.Radius * 2.0f, "Finger capsule radius must remain valid for its height.");
         Assert.InRange(capsule.Height, leftIndexRestLength - PositionToleranceMetres, leftIndexRestLength + PositionToleranceMetres);
@@ -715,6 +724,49 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
+    /// Verifies generated finger proxy shapes are mirrored under the live hand target before hand followers move.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIK_HandTargetFollowers_SynchroniseFingerCollisionShapesBeforeMovement()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree, createSkeleton: CreateRuntimeFingerSkeleton);
+
+        try
+        {
+            IReadOnlyList<GeneratedProxyCollisionShape> sourceShapes = fixture.Rig.GetGeneratedFingerProxyCollisionShapesForHand("RightHand");
+            int proximalSourceIndex = ResolveSourceShapeIndex(sourceShapes, "RightIndexProximal");
+            GeneratedProxyCollisionShape proximalSource = sourceShapes[proximalSourceIndex];
+            BoneAttachment3D proximalAttachment = FindGeneratedAttachment(fixture.Rig.TargetSkeleton!, "RightIndexProximal");
+            Transform3D movedAttachmentTransform = new(
+                Basis.FromEuler(new Vector3(0.0f, 0.23f, 0.11f)) * proximalAttachment.Transform.Basis,
+                proximalAttachment.Transform.Origin + new Vector3(0.03f, 0.01f, 0.02f));
+            ulong initialProxySyncTickCount = fixture.Rig.PhysicsProxySyncTickCount;
+
+            proximalAttachment.Transform = movedAttachmentTransform;
+
+            InvokeUpdatePhysicalFollowers(fixture.PlayerVRIK, 1.0d / 60.0d);
+
+            IReadOnlyList<CollisionShape3D> mirroredShapes = GetGeneratedFingerMovementCollisionShapes(fixture.RightHandTarget, "Right");
+            CollisionShape3D mirroredShape = mirroredShapes[proximalSourceIndex];
+            Transform3D expectedMirrorTransform = ResolveNodeGlobalTransform(fixture.RightHandTarget).AffineInverse()
+                                                  * ResolveNodeGlobalTransform(proximalSource.SourceShape);
+
+            Assert.True(
+                fixture.Rig.PhysicsProxySyncTickCount > initialProxySyncTickCount,
+                "CharacterIK hand-follower cycle should synchronise DynamicPhysicalRig proxies before hand target movement.");
+            Assert.Equal(sourceShapes.Count, mirroredShapes.Count);
+            Assert.True(ReferenceEquals(proximalSource.Shape, mirroredShape.Shape));
+            AssertTransformApproximately(expectedMirrorTransform, mirroredShape.Transform, PositionToleranceMetres);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies the live right-hand body preserves generated-proxy and external-body collision eligibility.
     /// </summary>
     [Headless]
@@ -925,6 +977,51 @@ public sealed class DynamicPhysicalRigIntegrationTests
         }
 
         return count;
+    }
+
+    private static IReadOnlyList<CollisionShape3D> GetGeneratedFingerMovementCollisionShapes(Node target, string sideName)
+    {
+        List<CollisionShape3D> shapes = [];
+        foreach (Node child in target.GetChildren())
+        {
+            if (child is CollisionShape3D collisionShape
+                && child.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey)
+                && child.Name.ToString().StartsWith($"Generated{sideName}FingerMovementCollisionShape_", StringComparison.Ordinal))
+            {
+                shapes.Add(collisionShape);
+            }
+        }
+
+        return shapes;
+    }
+
+    private static int ResolveSourceShapeIndex(IReadOnlyList<GeneratedProxyCollisionShape> sourceShapes, string boneName)
+    {
+        for (int index = 0; index < sourceShapes.Count; index += 1)
+        {
+            if (TryResolveSourceBoneName(sourceShapes[index].SourceShape, out string sourceBoneName)
+                && sourceBoneName == boneName)
+            {
+                return index;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected generated source shape for bone '{boneName}'.");
+    }
+
+    private static bool TryResolveSourceBoneName(Node sourceShape, out string boneName)
+    {
+        for (Node? current = sourceShape.GetParent(); current is not null; current = current.GetParent())
+        {
+            if (current is BoneAttachment3D attachment)
+            {
+                boneName = attachment.BoneName;
+                return true;
+            }
+        }
+
+        boneName = string.Empty;
+        return false;
     }
 
     private static T GetPrivateField<T>(PlayerVRIK playerVRIK, string fieldName)
@@ -1956,7 +2053,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 HeadIKSolveTarget = headSolveTarget,
                 RightHandIKTarget = rightHandTarget,
                 LeftHandIKTarget = leftHandTarget,
-                Skeleton = skeleton,
+                PhysicalRig = rig,
             };
             configurePlayerVRIK?.Invoke(playerVRIK);
             player.AddChild(playerVRIK);

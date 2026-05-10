@@ -1,3 +1,4 @@
+using AlleyCat.Body;
 using AlleyCat.Common;
 using Godot;
 
@@ -88,10 +89,11 @@ public partial class CharacterIK : Node3D
     }
 
     /// <summary>
-    /// Skeleton driven by IK modifiers.
+    /// Physical rig that owns the skeleton driven by IK modifiers and generated body proxy collision integration.
     /// </summary>
+    [ExportGroup("Rig Dependencies")]
     [Export]
-    public Skeleton3D? Skeleton
+    public DynamicPhysicalRig? PhysicalRig
     {
         get; set;
     }
@@ -457,6 +459,13 @@ public partial class CharacterIK : Node3D
     }
 
     /// <summary>
+    /// Runs immediately before physics-timed hand target followers move their bodies.
+    /// </summary>
+    protected virtual void BeforeHandTargetFollowers()
+    {
+    }
+
+    /// <summary>
     /// Returns the head target used when no explicit or fallback head provider is configured.
     /// </summary>
     protected virtual Transform3D GetDefaultHeadTargetTransform()
@@ -476,7 +485,7 @@ public partial class CharacterIK : Node3D
         => _skeleton ?? throw new InvalidOperationException($"{GetType().Name} skeleton not resolved before use.");
 
     /// <summary>
-    /// Resolves exported or convention-based target, modifier, and skeleton nodes.
+    /// Resolves exported or convention-based target, modifier, and physical-rig-owned skeleton nodes.
     /// </summary>
     protected void EnsureResolvedNodes()
     {
@@ -492,7 +501,7 @@ public partial class CharacterIK : Node3D
         ResolvedLeftHandIKTarget = LeftHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/LeftHand");
         ResolvedRightFootIKTarget = RightFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/RightFoot");
         ResolvedLeftFootIKTarget = LeftFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/LeftFoot");
-        _skeleton = Skeleton ?? this.RequireNode<Skeleton3D>("Female_export/GeneralSkeleton");
+        _skeleton = ResolveDrivenSkeleton();
         EnsureDefaultModifierGroups(_skeleton);
         EnsureSubclassResolvedNodes(_skeleton);
 
@@ -504,6 +513,19 @@ public partial class CharacterIK : Node3D
 
         _viewpointLocalTransform = ResolvedViewpoint.Transform;
         ViewpointLocalInverseTransform = _viewpointLocalTransform.Inverse();
+    }
+
+    private Skeleton3D ResolveDrivenSkeleton()
+    {
+        DynamicPhysicalRig physicalRig = PhysicalRig
+                                         ?? this.RequireNode<DynamicPhysicalRig>(
+                                             "Female_export/GeneralSkeleton/DynamicPhysicalRig");
+
+        return physicalRig.TargetSkeleton
+            ?? (physicalRig.GetParent() is Skeleton3D parentSkeleton
+            ? parentSkeleton
+            : throw new InvalidOperationException(
+                $"{GetType().Name} '{Name}' requires {nameof(PhysicalRig)} '{physicalRig.Name}' to have either an explicit {nameof(DynamicPhysicalRig.TargetSkeleton)} or a parent {nameof(Skeleton3D)}."));
     }
 
     /// <summary>
@@ -710,6 +732,7 @@ public partial class CharacterIK : Node3D
         }
 
         BeforeProviderTargetProcessing();
+        BeforeHandTargetFollowers();
         PhysicsFollowerTickCount += 1;
         UpdateRightHandPhysicalFollower(delta);
         UpdateLeftHandPhysicalFollower(delta);

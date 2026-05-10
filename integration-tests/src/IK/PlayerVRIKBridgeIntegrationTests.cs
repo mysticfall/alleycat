@@ -14,6 +14,54 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed partial class PlayerVRIKBridgeIntegrationTests
 {
+    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string FemaleReferenceNPCScenePath = "res://assets/characters/reference/female_reference_npc.tscn";
+    private const string PlayerVRIKScriptPath = "res://src/IK/PlayerVRIK.cs";
+    private const string CharacterIKScriptPath = "res://src/IK/CharacterIK.cs";
+    private const string DynamicPhysicalRigScriptPath = "res://src/Body/DynamicPhysicalRig.cs";
+    private static NodePath ExpectedPlayerPhysicalRigPath => new("../Female_export/GeneralSkeleton/DynamicPhysicalRig");
+    private static NodePath ExpectedFemaleReferenceNPCPhysicalRigPath => new("../Female_export/GeneralSkeleton/DynamicPhysicalRig");
+
+    /// <summary>
+    /// Verifies the actual player scene explicitly wires PlayerVRIK to the generated physical rig dependency.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void PlayerScene_PlayerVRIKPhysicalRig_ResolvesToGeneratedDynamicPhysicalRig()
+    {
+        using Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+
+        Node playerVRIK = player.GetNode<Node>("VRIK");
+        Node physicalRig = player.GetNode<Node>("Female_export/GeneralSkeleton/DynamicPhysicalRig");
+        GodotObject configuredPhysicalRig = playerVRIK.Get("PhysicalRig").AsGodotObject()
+            ?? throw new Xunit.Sdk.XunitException("Expected player VRIK PhysicalRig to resolve to a node.");
+
+        Assert.Equal(physicalRig.GetInstanceId(), configuredPhysicalRig.GetInstanceId());
+        Assert.Equal(ExpectedPlayerPhysicalRigPath, playerVRIK.GetPathTo(physicalRig));
+        Assert.Equal(PlayerVRIKScriptPath, AssertNodeScriptPath(playerVRIK));
+        Assert.Equal(DynamicPhysicalRigScriptPath, AssertNodeScriptPath(physicalRig));
+    }
+
+    /// <summary>
+    /// Verifies the female reference NPC scene explicitly wires CharacterIK to the generated physical rig dependency.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void FemaleReferenceNPCScene_CharacterIKPhysicalRig_ResolvesToGeneratedDynamicPhysicalRig()
+    {
+        using Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+
+        Node characterIK = npc.GetNode<Node>("CharacterIK");
+        Node physicalRig = npc.GetNode<Node>("Female_export/GeneralSkeleton/DynamicPhysicalRig");
+        GodotObject configuredPhysicalRig = characterIK.Get("PhysicalRig").AsGodotObject()
+            ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK PhysicalRig to resolve to a node.");
+
+        Assert.Equal(physicalRig.GetInstanceId(), configuredPhysicalRig.GetInstanceId());
+        Assert.Equal(ExpectedFemaleReferenceNPCPhysicalRigPath, characterIK.GetPathTo(physicalRig));
+        Assert.Equal(CharacterIKScriptPath, AssertNodeScriptPath(characterIK));
+        Assert.Equal(DynamicPhysicalRigScriptPath, AssertNodeScriptPath(physicalRig));
+    }
+
     /// <summary>
     /// Verifies startup binder does not attempt VRIK binding after XR initialisation failure.
     /// </summary>
@@ -1392,6 +1440,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         skeleton.SetBoneRest(headBoneIndex, new Transform3D(Basis.Identity, new Vector3(0.0f, 1.55f, 0.0f)));
         skeleton.SetBonePosePosition(headBoneIndex, new Vector3(0.0f, -0.15f, 0.0f));
 
+        AlleyCat.Body.DynamicPhysicalRig physicalRig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            Enabled = false,
+        };
+        skeleton.AddChild(physicalRig);
+
         SkeletonModifier3D playerHeadModifier = new()
         {
             Name = "HeadModifier",
@@ -1522,7 +1577,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             LeftHandModifierGroup = [leftHandIKModifier],
             RightFootModifierGroup = [rightFootModifier],
             LeftFootModifierGroup = [leftFootModifier],
-            Skeleton = skeleton,
+            PhysicalRig = physicalRig,
             HeadTargetMaximumSpeed = 1000.0f,
         };
         player.AddChild(playerVRIK);
@@ -1675,6 +1730,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         skeleton.SetBoneRest(rightFootBoneIndex, new Transform3D(Basis.Identity, new Vector3(0.15f, 0.05f, 0.02f)));
         skeleton.SetBonePosePosition(rightFootBoneIndex, new Vector3(0.05f, 0.02f, 0.01f));
 
+        AlleyCat.Body.DynamicPhysicalRig physicalRig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            Enabled = false,
+        };
+        skeleton.AddChild(physicalRig);
+
         SkeletonModifier3D headModifier = new()
         {
             Name = "HeadModifier",
@@ -1806,7 +1868,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             RightHandIKTarget = rightHandIKTarget,
             LeftHandIKTarget = leftHandIKTarget,
             RightFootIKTarget = rightFootIKTarget,
-            Skeleton = skeleton,
+            PhysicalRig = physicalRig,
             HeadModifierGroup = [headModifier],
             RightHandModifierGroup = [rightHandModifier],
             LeftHandModifierGroup = [leftHandModifier],
@@ -2168,6 +2230,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             AssertCollisionShapesDisabled(child, expectedDisabled);
         }
+    }
+
+    private static string AssertNodeScriptPath(Node node)
+    {
+        Script script = Assert.IsType<Script>(node.GetScript().AsGodotObject(), exactMatch: false);
+        return script.ResourcePath;
     }
 
     private sealed partial class TestXRManager : XRManager

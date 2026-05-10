@@ -102,6 +102,8 @@ public partial class PlayerVRIK : CharacterIK
     private float _worldScale = 1.0f;
     private Vector3 _mostRecentOriginCompensationDelta = Vector3.Zero;
 
+    private readonly FingerCollisionShapeMirror _rightFingerCollisionShapeMirror = new("Right");
+    private readonly FingerCollisionShapeMirror _leftFingerCollisionShapeMirror = new("Left");
     private readonly PoseStateContextBuilder _poseContextBuilder = new();
     private readonly StringBuilder _debugMessageBuilder = new();
 
@@ -126,6 +128,20 @@ public partial class PlayerVRIK : CharacterIK
         {
             origin.OriginNode.GlobalTransform = GlobalTransform;
         }
+    }
+
+    /// <inheritdoc />
+    protected override void BeforeHandTargetFollowers()
+    {
+        DynamicPhysicalRig? rig = ResolveConfiguredPhysicalRig();
+        if (rig is null)
+        {
+            return;
+        }
+
+        rig.SyncProxyBodiesToPhysics();
+        _rightFingerCollisionShapeMirror.Sync(rig, _rightHandBoneName, ResolvedRightHandIKTarget);
+        _leftFingerCollisionShapeMirror.Sync(rig, _leftHandBoneName, ResolvedLeftHandIKTarget);
     }
 
     /// <inheritdoc />
@@ -560,8 +576,13 @@ public partial class PlayerVRIK : CharacterIK
 
     private void ConfigureGeneratedTargetProxyCollisionExceptions()
     {
-        DynamicPhysicalRig? rig = FindGeneratedPhysicalRig();
+        DynamicPhysicalRig? rig = ResolveConfiguredPhysicalRig();
         if (rig is null)
+        {
+            return;
+        }
+
+        if (!rig.Enabled)
         {
             return;
         }
@@ -576,20 +597,8 @@ public partial class PlayerVRIK : CharacterIK
         AddGeneratedHandProxyCollisionExceptions(ResolvedLeftHandIKTarget, rig, _leftHandBoneName, _leftLowerArmBoneName);
     }
 
-    private DynamicPhysicalRig? FindGeneratedPhysicalRig()
-    {
-        Skeleton3D skeleton = GetResolvedSkeleton();
-
-        foreach (Node child in skeleton.GetChildren())
-        {
-            if (child is DynamicPhysicalRig rig)
-            {
-                return rig;
-            }
-        }
-
-        return null;
-    }
+    private DynamicPhysicalRig? ResolveConfiguredPhysicalRig()
+        => PhysicalRig is not null && IsInstanceValid(PhysicalRig) ? PhysicalRig : null;
 
     private static void AddGeneratedHandProxyCollisionExceptions(
         AnimatableBody3D? handTarget,
@@ -628,7 +637,7 @@ public partial class PlayerVRIK : CharacterIK
 
     private IReadOnlyList<HandDynamicInteractionShape> ResolveHandDynamicInteractionShapes(StringName handBoneName)
     {
-        BodyColliderProfile? colliderProfile = FindGeneratedPhysicalRig()?.ColliderProfile;
+        BodyColliderProfile? colliderProfile = ResolveConfiguredPhysicalRig()?.ColliderProfile;
         if (colliderProfile is null)
         {
             return [];
@@ -663,4 +672,124 @@ public partial class PlayerVRIK : CharacterIK
         source.AddCollisionExceptionWith(other);
         other.AddCollisionExceptionWith(source);
     }
+
+    private sealed class FingerCollisionShapeMirror(string sideName)
+    {
+        private readonly List<MirroredFingerCollisionShape> _mirroredShapes = [];
+        private DynamicPhysicalRig? _mirroredRig;
+        private int _mirroredGeneratedProxyCount;
+
+        public void Sync(DynamicPhysicalRig rig, StringName handBoneName, AnimatableBody3D? handTarget)
+        {
+            if (handTarget is null || !IsInstanceValid(handTarget))
+            {
+                Clear();
+                return;
+            }
+
+            if (NeedsRebuild(rig))
+            {
+                IReadOnlyList<GeneratedProxyCollisionShape> sourceShapes = rig.GetGeneratedFingerProxyCollisionShapesForHand(handBoneName);
+                if (sourceShapes.Count == 0)
+                {
+                    Clear();
+                    return;
+                }
+
+                Rebuild(rig, handTarget, sourceShapes);
+            }
+
+            SyncTransforms(handTarget);
+        }
+
+        private bool NeedsRebuild(DynamicPhysicalRig rig)
+            => _mirroredShapes.Count == 0
+               || !ReferenceEquals(_mirroredRig, rig)
+               || _mirroredGeneratedProxyCount != rig.GeneratedProxyCount
+               || !HasValidMirrors();
+
+        private bool HasValidMirrors()
+        {
+            foreach (MirroredFingerCollisionShape mirroredShape in _mirroredShapes)
+            {
+                if (!IsInstanceValid(mirroredShape.SourceShape)
+                    || !IsInstanceValid(mirroredShape.MirrorShape))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void Rebuild(DynamicPhysicalRig rig, AnimatableBody3D handTarget, IReadOnlyList<GeneratedProxyCollisionShape> sourceShapes)
+        {
+            Clear();
+
+            for (int index = 0; index < sourceShapes.Count; index += 1)
+            {
+                GeneratedProxyCollisionShape sourceShape = sourceShapes[index];
+                CollisionShape3D mirrorShape = new()
+                {
+                    Name = $"Generated{sideName}FingerMovementCollisionShape_{index:D2}",
+                    Shape = sourceShape.Shape,
+                    Disabled = sourceShape.Disabled,
+                };
+                mirrorShape.SetMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey, true);
+                handTarget.AddChild(mirrorShape);
+                _mirroredShapes.Add(new MirroredFingerCollisionShape(sourceShape.SourceShape, mirrorShape));
+            }
+
+            _mirroredRig = rig;
+            _mirroredGeneratedProxyCount = rig.GeneratedProxyCount;
+        }
+
+        private void SyncTransforms(AnimatableBody3D handTarget)
+        {
+            Transform3D handWorldInverse = ResolveNodeGlobalTransform(handTarget).AffineInverse();
+
+            foreach (MirroredFingerCollisionShape mirroredShape in _mirroredShapes)
+            {
+                if (!IsInstanceValid(mirroredShape.SourceShape) || !IsInstanceValid(mirroredShape.MirrorShape))
+                {
+                    continue;
+                }
+
+                mirroredShape.MirrorShape.Disabled = mirroredShape.SourceShape.Disabled;
+                mirroredShape.MirrorShape.Transform = handWorldInverse * ResolveNodeGlobalTransform(mirroredShape.SourceShape);
+                if (mirroredShape.MirrorShape.IsInsideTree())
+                {
+                    mirroredShape.MirrorShape.ForceUpdateTransform();
+                }
+            }
+
+            if (handTarget.IsInsideTree())
+            {
+                handTarget.ForceUpdateTransform();
+            }
+        }
+
+        private void Clear()
+        {
+            foreach (MirroredFingerCollisionShape mirroredShape in _mirroredShapes)
+            {
+                if (IsInstanceValid(mirroredShape.MirrorShape))
+                {
+                    mirroredShape.MirrorShape.QueueFree();
+                }
+            }
+
+            _mirroredShapes.Clear();
+            _mirroredRig = null;
+            _mirroredGeneratedProxyCount = 0;
+        }
+
+    }
+
+    private readonly record struct MirroredFingerCollisionShape(
+        CollisionShape3D SourceShape,
+        CollisionShape3D MirrorShape);
+
+    private static Transform3D ResolveNodeGlobalTransform(Node3D node)
+        => node.GetParent() is Node3D parent ? parent.GlobalTransform * node.Transform : node.GlobalTransform;
 }

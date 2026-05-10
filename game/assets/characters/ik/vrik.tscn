@@ -11,13 +11,12 @@
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/kneeling_to_all_fours_transition.tres" id="11_63w8f"]
 [ext_resource type="Resource" path="res://assets/characters/ik/pose/all_fours_to_standing_transition.tres" id="12_rc7x7"]
 
-[node name="VRIK" type="Node3D" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "RightHandIKTarget", "LeftHandIKTarget", "Skeleton", "PoseStateMachine")]
+[node name="VRIK" type="Node3D" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "RightHandIKTarget", "LeftHandIKTarget", "PoseStateMachine")]
 script = ExtResource("1_rv273")
 Viewpoint = NodePath("")
 HeadIKTarget = NodePath("")
 RightHandIKTarget = NodePath("")
 LeftHandIKTarget = NodePath("")
-Skeleton = NodePath("")
 PoseStateMachine = NodePath("PoseStateMachine")
 metadata/_custom_type_script = "uid://dvtvdxo5ew24i"
 

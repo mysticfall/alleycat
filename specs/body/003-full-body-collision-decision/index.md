@@ -119,23 +119,45 @@ through explicit force-transfer channels.
     shall add instance-local, bidirectional exceptions against their own
     generated hand, lower-arm, and same-side finger proxies so target movement
     does not push against proxy geometry for the same tracked hand.
-14. Hand-to-dynamic-body interaction shall use explicit capped channels through
+14. `CharacterIK` shall expose an optional exported `PhysicalRig` property of
+     type `DynamicPhysicalRig?` to explicitly declare the body rig dependency.
+     IK consumers shall resolve the driven skeleton through this configured
+     `PhysicalRig`, preferring `DynamicPhysicalRig.TargetSkeleton` and otherwise
+     using the rig's parent `Skeleton3D`; `CharacterIK` shall not expose a
+     separate exported skeleton dependency. When configured, the IK consumer uses
+     this explicit `PhysicalRig` reference for generated body proxy collision
+     integration instead of per-frame skeleton child discovery. Generated finger
+     proxy collision shapes from the configured
+     `PhysicalRig` shall be exposed via `GetGeneratedFingerProxyCollisionShapesForHand(StringName)`
+     for hand-specific queries and mirrored under each hand IK target node in
+     `PlayerVRIK` so hand-follower movement collides against the same finger proxies
+     that body animation uses.
+15. `CharacterIK.UpdatePhysicalFollowers()` shall invoke a pre-hand-follower
+    hook before each hand follower's `Follow()` call, ensuring mirrored finger
+    proxy collision shapes are synchronised to the current rig state before
+    hand movement and collision detection occur. This ordering contract guarantees
+    hand-follower collision operates against up-to-date finger proxy geometry.
+16. Coupling direction remains IK → Body only. `DynamicPhysicalRig` shall not
+    reference or depend on any IK nodes, components, or state. Body collision
+    shape data flows to IK through the public API; IK remains the consumer,
+    Body remains the independent provider.
+17. Hand-to-dynamic-body interaction shall use explicit capped channels through
     `HandDynamicBodyInteractionController`. When hand targets have no direct
     primitive collision-shape children, the controller shall use query shapes
     derived from the shared collider profile hand descriptors:
-    - Impact channel: capped impulse when contact begins during sufficiently
-      fast approach.
-    - Sustained channel: capped continuous force while contact persists and
-      the user continues pressing.
-15. Dynamic bodies eligible for explicit hand interaction must have collision
+     - Impact channel: capped impulse when contact begins during sufficiently
+       fast approach.
+     - Sustained channel: capped continuous force while contact persists and
+       the user continues pressing.
+18. Dynamic bodies eligible for explicit hand interaction must have collision
     layer 2 and belong to group `hand_dynamic_interaction_body`.
-16. The hand interaction controller shall be configurable with strength-style
+19. The hand interaction controller shall be configurable with strength-style
     parameters (thresholds, gains, and caps) rather than prop-specific rules.
-17. Automated test coverage shall verify rig generation, hand follower setup,
+20. Automated test coverage shall verify rig generation, hand follower setup,
     collision-layer contract, and explicit hand-to-dynamic-body force transfer.
-18. Collision responses shall not override or conflict with physics-based
+21. Collision responses shall not override or conflict with physics-based
     head/hand target driving.
-19. Runtime hand-target movement collision shapes generated for IK shall reuse
+22. Runtime hand-target movement collision shapes generated for IK shall reuse
     descriptor `Shape3D` resources and descriptor local transforms. They are
     runtime/generated nodes, not authored primitive target shapes, and dependency
     direction remains IK → shared body collider profile/resource with no BODY → IK
@@ -159,10 +181,11 @@ through explicit force-transfer channels.
 - Configurable strength parameters for both interaction channels.
 - Collision-layer contract for generated proxies and dynamic interaction bodies.
 - Manual runtime sync of top-level proxy bodies to animated/posed bones.
-- IK consumers (e.g. `PlayerVRIK`) consuming `BodyColliderProfile` hand descriptors
-   for profile-backed query and runtime movement collision shapes, with dependency
-   direction IK → shared profile and no BODY → IK coupling. IK-owned visible hand
-   blocking belongs to the IK subsystem rather than to generated body proxies.
+- IK consumers (e.g. `PlayerVRIK`) consuming an explicit `CharacterIK.PhysicalRig`
+   reference for generated body proxy collision integration, with no per-frame
+   skeleton child discovery. Dependency direction remains IK → shared profile and
+   no BODY → IK coupling. IK-owned visible hand blocking belongs to the IK subsystem
+   rather than to generated body proxies.
 - Automated verification of core contracts.
 
 ## Out Of Scope
@@ -261,6 +284,25 @@ through explicit force-transfer channels.
      profile-backed movement collision shapes that reuse descriptor `Shape3D`
      resources/transforms and make `TestMove`/`MoveAndCollide` collide with
      body/proxy obstacles rather than passing through.
+28. Tests verify `DynamicPhysicalRig.GetGeneratedFingerProxyCollisionShapesForHand`
+     returns the generated finger proxy collision shapes for the specified hand,
+     enabling IK consumers to query body-owned finger proxy geometry.
+29. Tests verify mirrored finger proxy collision shapes exist under each hand IK
+     target node in `PlayerVRIK`, and hand-follower movement collides against the
+     same finger proxies that body animation uses.
+30. Tests verify `CharacterIK.UpdatePhysicalFollowers()` invokes the pre-hand-follower
+     hook before each `_[Left|Right]HandFollower.Follow()` call, confirming mirrored
+     finger shapes are synchronised before hand movement and collision detection.
+31. Code review confirms `DynamicPhysicalRig` contains no references to IK nodes,
+     components, or state, preserving the IK → Body coupling direction.
+32. Tests verify that scenes requiring generated proxy collision integration
+     (e.g. `game/assets/characters/reference/female_reference_npc.tscn` and
+     `game/assets/characters/reference/player.tscn`) wire an explicit
+     `PhysicalRig` path on their `CharacterIK` node without serialising a
+     separate `Skeleton` path.
+33. Tests verify that `PlayerVRIK` uses the configured `PhysicalRig` reference for
+     finger mirroring, generated target proxy collision exceptions, and hand dynamic
+     interaction shape resolution, with no per-frame skeleton child scanning.
 
 ## References
 

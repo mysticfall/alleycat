@@ -66,7 +66,7 @@ bones/54/rotation = Quaternion(0.00014009021, 0.9999999, 0.00053766376, 5.786565
 [node name="Head" parent="Female_export/GeneralSkeleton" index="25" unique_id=694402195]
 transform = Transform3D(1, 6.519258e-09, -1.1641532e-09, -2.910383e-09, 1, 8.940697e-08, 4.656613e-10, -8.940697e-08, 1, 9.365671e-05, 1.4618735, 0.03623806)
 
-[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "Skeleton", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
+[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
 script = ExtResource("2_charik")
 Viewpoint = NodePath("../Female_export/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
@@ -75,7 +75,7 @@ RightHandIKTarget = NodePath("../IKTargets/RightHand")
 LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
 RightFootIKTarget = NodePath("../IKTargets/RightFoot")
 LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
-Skeleton = NodePath("../Female_export/GeneralSkeleton")
+PhysicalRig = NodePath("../Female_export/GeneralSkeleton/DynamicPhysicalRig")
 HeadModifierGroup = [NodePath("../Female_export/GeneralSkeleton/NeckSpineIK"), NodePath("../Female_export/GeneralSkeleton/HeadCopyRotation"), NodePath("../Female_export/GeneralSkeleton/NeckTwistDisperser")]
 RightHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/RightArmIKController"), NodePath("../Female_export/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/RightHandCopyRotation")]
 LeftHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/LeftArmIKController"), NodePath("../Female_export/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/LeftHandCopyRotation")]
