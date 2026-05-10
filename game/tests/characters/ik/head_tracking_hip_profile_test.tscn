@@ -106,7 +106,12 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15
 [node name="LeftFoot" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="8" unique_id=1292107592]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.15998398, 0.0683572, -0.027253283)
 
-[node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="2" unique_id=1445432941 instance=ExtResource("6_animation_tree")]
+[node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="4" unique_id=527893103 instance=ExtResource("6_animation_tree")]
+active = true
+
+[node name="Locomotion" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="5" unique_id=668991861]
+process_mode = 4
+IdleAnimationStateName = &"StandingCrouching"
 
 [node name="PoseStateMachine" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=294740885]
 

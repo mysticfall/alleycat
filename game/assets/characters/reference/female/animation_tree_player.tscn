@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://djeh2d5hkxyoj"]
-[ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/reference/female/pose_state_machine_tree.tres" id="1_12ur4"]
+[ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/reference/female/animation_tree_root_player.tres" id="1_12ur4"]
 [node name="AnimationTree" type="AnimationTree" unique_id=478477833]
+active = true
 tree_root = ExtResource("1_12ur4")
 anim_player = NodePath("../AnimationPlayer")
 parameters/RightHandBlend/blend_amount = 0.0

@@ -1,0 +1,72 @@
+[gd_resource type="AnimationNodeBlendTree" format=3 uid="uid://c485owf86etdu"]
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_left_hand"]
+filter_enabled = true
+filters = ["%GeneralSkeleton:LeftIndexDistal", "%GeneralSkeleton:LeftIndexIntermediate", "%GeneralSkeleton:LeftIndexProximal", "%GeneralSkeleton:LeftLittleDistal", "%GeneralSkeleton:LeftLittleIntermediate", "%GeneralSkeleton:LeftLittleProximal", "%GeneralSkeleton:LeftMiddleDistal", "%GeneralSkeleton:LeftMiddleIntermediate", "%GeneralSkeleton:LeftMiddleProximal", "%GeneralSkeleton:LeftRingDistal", "%GeneralSkeleton:LeftRingIntermediate", "%GeneralSkeleton:LeftRingProximal", "%GeneralSkeleton:LeftThumbDistal", "%GeneralSkeleton:LeftThumbMetacarpal", "%GeneralSkeleton:LeftThumbProximal"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_left_reset"]
+animation = &"Reset"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_right_hand"]
+filter_enabled = true
+filters = ["%GeneralSkeleton:RightIndexDistal", "%GeneralSkeleton:RightIndexIntermediate", "%GeneralSkeleton:RightIndexProximal", "%GeneralSkeleton:RightLittleDistal", "%GeneralSkeleton:RightLittleIntermediate", "%GeneralSkeleton:RightLittleProximal", "%GeneralSkeleton:RightMiddleDistal", "%GeneralSkeleton:RightMiddleIntermediate", "%GeneralSkeleton:RightMiddleProximal", "%GeneralSkeleton:RightRingDistal", "%GeneralSkeleton:RightRingIntermediate", "%GeneralSkeleton:RightRingProximal", "%GeneralSkeleton:RightThumbDistal", "%GeneralSkeleton:RightThumbMetacarpal", "%GeneralSkeleton:RightThumbProximal"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_right_reset"]
+animation = &"Reset"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_idle"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_idle"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_forward"]
+animation = &"Walk Forward"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_left"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_right"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_locomotion"]
+blend_point_0/node = SubResource("AnimationNodeAnimation_walk_idle")
+blend_point_0/pos = Vector2(0, 0)
+blend_point_1/node = SubResource("AnimationNodeAnimation_walk_forward")
+blend_point_1/pos = Vector2(0, 1)
+blend_point_2/node = SubResource("AnimationNodeAnimation_walk_left")
+blend_point_2/pos = Vector2(-1, 0)
+blend_point_3/node = SubResource("AnimationNodeAnimation_walk_right")
+blend_point_3/pos = Vector2(1, 0)
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_start_idle"]
+advance_mode = 2
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_idle_walk"]
+xfade_time = 0.5
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_walk_idle"]
+xfade_time = 0.5
+
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_locomotion"]
+states/Idle/node = SubResource("AnimationNodeAnimation_idle")
+states/Idle/position = Vector2(360, 100)
+states/Walking/node = SubResource("AnimationNodeBlendSpace2D_locomotion")
+states/Walking/position = Vector2(360, -33)
+transitions = ["Start", "Idle", SubResource("AnimationNodeStateMachineTransition_start_idle"), "Idle", "Walking", SubResource("AnimationNodeStateMachineTransition_idle_walk"), "Walking", "Idle", SubResource("AnimationNodeStateMachineTransition_walk_idle")]
+
+[resource]
+resource_name = "NPC Animation Tree Root"
+graph_offset = Vector2(-797.818, -208.875)
+nodes/output/position = Vector2(320, -140)
+nodes/RightHandBlend/node = SubResource("AnimationNodeBlend2_right_hand")
+nodes/RightHandBlend/position = Vector2(100, -160)
+nodes/LeftHandPose/node = SubResource("AnimationNodeAnimation_left_reset")
+nodes/LeftHandPose/position = Vector2(-300, -20)
+nodes/LeftHandBlend/node = SubResource("AnimationNodeBlend2_left_hand")
+nodes/LeftHandBlend/position = Vector2(-120, -170)
+nodes/RightHandPose/node = SubResource("AnimationNodeAnimation_right_reset")
+nodes/RightHandPose/position = Vector2(-80, 120)
+nodes/States/node = SubResource("AnimationNodeStateMachine_locomotion")
+nodes/States/position = Vector2(-620, -140)
+node_connections = [&"output", 0, &"RightHandBlend", &"RightHandBlend", 0, &"LeftHandBlend", &"RightHandBlend", 1, &"RightHandPose", &"LeftHandBlend", 0, &"States", &"LeftHandBlend", 1, &"LeftHandPose"]

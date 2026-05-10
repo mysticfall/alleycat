@@ -11,13 +11,15 @@ namespace AlleyCat.IntegrationTests.Body.Hands;
 /// </summary>
 public sealed class HandPoseBlendTreeIntegrationTests
 {
-    private const string PoseStateMachineTreePath = "res://assets/characters/reference/female/pose_state_machine_tree.tres";
+    private const string PoseStateMachineTreePath = "res://assets/characters/reference/female/animation_tree_root_player.tres";
+    private const string NpcAnimationTreeRootPath = "res://assets/characters/reference/female/animation_tree_root_npc.tres";
     private const string AnimationTreeScenePath = "res://assets/characters/reference/female/animation_tree_player.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string StandingPoseStatePath = "res://assets/characters/ik/pose/standing_pose_state.tres";
     private const string ResetAnimationPath = "res://assets/characters/reference/female/animations/Reset.tres";
     private const string GrabBallAnimationPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
     private const string PoseStateMachineTreeUID = "uid://bge48ng374i85";
+    private const string NpcAnimationTreeRootUID = "uid://c485owf86etdu";
     private const string AnimationTreeSceneUID = "uid://djeh2d5hkxyoj";
 
     /// <summary>
@@ -45,6 +47,35 @@ public sealed class HandPoseBlendTreeIntegrationTests
     }
 
     /// <summary>
+    /// Verifies the NPC-safe animation root keeps locomotion generic while exposing hand-pose overlays.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void ReferenceFemaleNpcTree_ProvidesHandBlendsWithoutPlayerPoseStates()
+    {
+        AnimationNodeBlendTree root = Assert.IsType<AnimationNodeBlendTree>(
+            ResourceLoader.Load(NpcAnimationTreeRootPath),
+            exactMatch: false);
+        string contents = Godot.FileAccess.GetFileAsString(NpcAnimationTreeRootPath);
+
+        Assert.Contains("states/Idle/node", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("StandingCrouching", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimeSeek", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("seek_request", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllFours", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("VRIK", contents, StringComparison.Ordinal);
+
+        _ = Assert.IsType<AnimationNodeStateMachine>(root.GetNode(HandPoseAnimationTreePaths.UpstreamNode), exactMatch: false);
+        AssertHandBlendFilters(root, LimbSide.Left, HandPoseAnimationTreePaths.LeftHandBlendNode);
+        AssertHandBlendFilters(root, LimbSide.Right, HandPoseAnimationTreePaths.RightHandBlendNode);
+        AssertConnection(root, HandPoseAnimationTreePaths.LeftHandBlendNode, 0, HandPoseAnimationTreePaths.UpstreamNode);
+        AssertConnection(root, HandPoseAnimationTreePaths.LeftHandBlendNode, 1, HandPoseAnimationTreePaths.LeftHandPoseNode);
+        AssertConnection(root, HandPoseAnimationTreePaths.RightHandBlendNode, 0, HandPoseAnimationTreePaths.LeftHandBlendNode);
+        AssertConnection(root, HandPoseAnimationTreePaths.RightHandBlendNode, 1, HandPoseAnimationTreePaths.RightHandPoseNode);
+        AssertConnection(root, "output", 0, HandPoseAnimationTreePaths.RightHandBlendNode);
+    }
+
+    /// <summary>
     /// Verifies shipped resources only use the wrapped States parameter paths.
     /// </summary>
     [Headless]
@@ -54,6 +85,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         string[] paths =
         [
             PoseStateMachineTreePath,
+            NpcAnimationTreeRootPath,
             AnimationTreeScenePath,
             PlayerScenePath,
             StandingPoseStatePath,
@@ -124,7 +156,11 @@ public sealed class HandPoseBlendTreeIntegrationTests
     [Fact]
     public void ReferenceFemaleAnimationResources_RetainStableUIDsAndReloadByUID()
     {
+        Assert.Equal(ResourceUid.TextToId(PoseStateMachineTreeUID), ResourceLoader.GetResourceUid(PoseStateMachineTreePath));
+        Assert.Equal(ResourceUid.TextToId(NpcAnimationTreeRootUID), ResourceLoader.GetResourceUid(NpcAnimationTreeRootPath));
+
         _ = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(PoseStateMachineTreeUID), exactMatch: false);
+        _ = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(NpcAnimationTreeRootUID), exactMatch: false);
         _ = Assert.IsType<PackedScene>(ResourceLoader.Load(AnimationTreeSceneUID), exactMatch: false);
     }
 

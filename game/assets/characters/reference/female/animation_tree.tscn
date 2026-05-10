@@ -1,0 +1,12 @@
+[gd_scene uid="uid://degycvmqbvjx1" format=3]
+
+[ext_resource type="AnimationNodeBlendTree" uid="uid://c485owf86etdu" path="res://assets/characters/reference/female/animation_tree_root_npc.tres" id="1_ibtlu"]
+
+[node name="AnimationTree" type="AnimationTree" unique_id=2098590596]
+active = true
+root_motion_track = NodePath("%GeneralSkeleton:Root")
+tree_root = ExtResource("1_ibtlu")
+anim_player = NodePath("../AnimationPlayer")
+parameters/RightHandBlend/blend_amount = 0.0
+parameters/LeftHandBlend/blend_amount = 0.0
+parameters/States/Walking/blend_position = Vector2(0, 0)

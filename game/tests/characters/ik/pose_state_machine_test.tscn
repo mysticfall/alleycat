@@ -15,8 +15,12 @@
 
 [node name="Photobooth" instance=ExtResource("1_eh1w4")]
 
-[node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="2" instance=ExtResource("8_qmk8b")]
+[node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="4" unique_id=527893103 instance=ExtResource("8_qmk8b")]
 active = true
+
+[node name="Locomotion" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="5" unique_id=668991861]
+process_mode = 4
+IdleAnimationStateName = &"StandingCrouching"
 
 [node name="PoseStateMachineDriver" type="Node3D" parent="." node_paths=PackedStringArray("AnimationTree", "Skeleton")]
 script = ExtResource("9_5v7n4")

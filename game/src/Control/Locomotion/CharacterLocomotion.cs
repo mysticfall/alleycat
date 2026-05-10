@@ -12,10 +12,9 @@ public partial class CharacterLocomotion : LocomotionBase
 {
     private static readonly StringName _playbackParameter = HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter();
     private static readonly StringName _legacyRootPlaybackParameter = new("parameters/playback");
+    private static readonly StringName _stateMachineStartNodeName = new("Start");
     private static readonly StringName _walkingAnimationStateName = new("Walking");
-    private static readonly StringName _standingAnimationStateName = new("StandingCrouching");
-    private static readonly LocomotionStateTarget _defaultLocomotionStateTarget =
-        new(_standingAnimationStateName, _walkingAnimationStateName);
+    private static readonly StringName _standingAnimationStateName = new("Idle");
 
     private CharacterBody3D? TargetCharacterBodyResolved
     {
@@ -80,6 +79,16 @@ public partial class CharacterLocomotion : LocomotionBase
         get;
         set;
     } = new();
+
+    /// <summary>
+    /// Default idle state used when no pose-specific locomotion animation source is active.
+    /// </summary>
+    [Export]
+    public StringName IdleAnimationStateName
+    {
+        get;
+        set;
+    } = _standingAnimationStateName;
 
     /// <summary>
     /// Locomotion turn mode.
@@ -344,6 +353,15 @@ public partial class CharacterLocomotion : LocomotionBase
 
         StringName currentNode = playback.GetCurrentNode();
         bool hasMovementInput = !locomotionBlendInput.IsZeroApprox();
+        StringName targetNode = hasMovementInput
+            ? locomotionStateTarget.MovementStateName
+            : locomotionStateTarget.IdleStateName;
+
+        if (currentNode == _stateMachineStartNodeName)
+        {
+            playback.Start(targetNode, reset: true);
+            return;
+        }
 
         if (currentNode == locomotionStateTarget.IdleStateName && hasMovementInput)
         {
@@ -361,7 +379,7 @@ public partial class CharacterLocomotion : LocomotionBase
         LocomotionStateTarget locomotionStateTarget,
         out StringName rootMotionStateName)
     {
-        rootMotionStateName = locomotionStateTarget == _defaultLocomotionStateTarget
+        rootMotionStateName = locomotionStateTarget == GetDefaultLocomotionStateTarget()
             ? RootMotionAnimationStateName
             : locomotionStateTarget.MovementStateName;
 
@@ -375,7 +393,10 @@ public partial class CharacterLocomotion : LocomotionBase
     }
 
     private LocomotionStateTarget ResolveLocomotionStateTarget()
-        => GetLocomotionStateTarget() ?? _defaultLocomotionStateTarget;
+        => GetLocomotionStateTarget() ?? GetDefaultLocomotionStateTarget();
+
+    private LocomotionStateTarget GetDefaultLocomotionStateTarget()
+        => new(IdleAnimationStateName, _walkingAnimationStateName);
 
     private AnimationNodeStateMachinePlayback? ResolvePlayback()
     {

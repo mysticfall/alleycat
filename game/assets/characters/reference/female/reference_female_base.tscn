@@ -8,7 +8,7 @@
 [ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="5_vhysq"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="6_65br6"]
 [ext_resource type="Script" uid="uid://bortwjgmky2ik" path="res://src/IK/FootTargetSyncController.cs" id="7_56k28"]
-[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="8_2a5tg"]
+[ext_resource type="PackedScene" uid="uid://degycvmqbvjx1" path="res://assets/characters/reference/female/animation_tree.tscn" id="8_2a5tg"]
 [ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="9_ctrlloco"]
 
 [node name="Female" unique_id=1792987446 groups=["Actors"] instance=ExtResource("1_yqj8o")]

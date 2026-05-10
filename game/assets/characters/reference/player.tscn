@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
 [ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
 [ext_resource type="Script" uid="uid://b4sqrh01qb30h" path="res://src/IK/XRControllerTargetProvider.cs" id="11_xrctl"]
+[ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/reference/female/animation_tree_root_player.tres" id="13_pose_tree"]
 
 [node name="Player" unique_id=1792987446 groups=["Player"] instance=ExtResource("1_edvvb")]
 
@@ -89,6 +90,10 @@ metadata/_custom_type_script = "uid://bfa76a86uhk1m"
 [node name="Head" parent="Female_export/GeneralSkeleton" index="26" unique_id=694402195]
 transform = Transform3D(0.99999994, 5.820766e-11, -1.1641532e-10, 0, 1, 1.1920929e-07, 5.820766e-11, -8.940697e-08, 1, 4.092726e-12, 1.4670644, 0.036714755)
 
+[node name="AnimationTree" parent="." index="4" unique_id=527893103]
+active = true
+tree_root = ExtResource("13_pose_tree")
+
 [node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("RightHandFallbackProvider", "LeftHandFallbackProvider", "Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "Skeleton", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup") instance=ExtResource("7_2a5tg")]
 RightHandFallbackProvider = NodePath("RightHandFallbackProvider")
 LeftHandFallbackProvider = NodePath("LeftHandFallbackProvider")
@@ -139,6 +144,7 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.1
 
 [node name="Locomotion" parent="." index="6" unique_id=668991861 node_paths=PackedStringArray("PermissionSourceNodes")]
 PermissionSourceNodes = [NodePath("../VRIK/PoseStateMachine")]
+IdleAnimationStateName = &"StandingCrouching"
 
 [node name="PlayerController" type="Node" parent="." index="7" unique_id=500632269 node_paths=PackedStringArray("LocomotionNode")]
 script = ExtResource("10_ctrlplayer")

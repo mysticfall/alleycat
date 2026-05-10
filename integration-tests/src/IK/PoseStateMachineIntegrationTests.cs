@@ -35,7 +35,7 @@ public sealed class PoseStateMachineIntegrationTests
     private const string KneelingPoseStateResourcePath = "res://assets/characters/ik/pose/kneeling_pose_state.tres";
     private const string StandingToKneelingTransitionResourcePath = "res://assets/characters/ik/pose/standing_to_kneeling_transition.tres";
     private const string KneelingToStandingTransitionResourcePath = "res://assets/characters/ik/pose/kneeling_to_standing_transition.tres";
-    private const string PoseStateMachineTreeResourcePath = "res://assets/characters/reference/female/pose_state_machine_tree.tres";
+    private const string PoseStateMachineTreeResourcePath = "res://assets/characters/reference/female/animation_tree_root_player.tres";
     private static readonly StringName _standingCrouchingSeekParameter =
         new("parameters/States/StandingCrouching/TimeSeek/seek_request");
 

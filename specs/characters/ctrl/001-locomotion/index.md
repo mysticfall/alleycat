@@ -83,10 +83,11 @@ respects pose-based permission gating.
 ### Configurable Parameters
 
 11. Support configurable:
-    - Rotation speed multiplier
-    - Snap turn angle increment
-    - Snap turn cooldown duration
-    - Smooth turn sensitivity
+     - Rotation speed multiplier
+     - Snap turn angle increment
+     - Snap turn cooldown duration
+     - Smooth turn sensitivity
+     - IdleAnimationStateName (string, default "Idle")
 
 ### Locomotion Animation-State Override
 
@@ -95,6 +96,14 @@ respects pose-based permission gating.
 14. `CharacterLocomotion` queries `ILocomotionAnimationSource` providers.
 15. Standing pose family preserves default fallback behaviour.
 16. AllFours Crawling sub-state returns target pair `(AllFours, AllFoursForward)`.
+
+### Idle State Configuration
+
+17. `CharacterLocomotion` exports `IdleAnimationStateName` (string), defaulting to "Idle".
+18. Initial state machine transition Start->IdleAnimationStateName occurs automatically on ready.
+19. Generic NPC/base animation roots use Idle as the default idle state.
+20. Player rigs configured with pose-state IK graphs may override `IdleAnimationStateName`
+    to "StandingCrouching" to match their player-specific animation root.
 
 ## In Scope
 
@@ -105,7 +114,7 @@ respects pose-based permission gating.
 - Pose-based locomotion permission gating
 - Scene-authored permission source wiring
 - Animation blend parameter wiring
-- StandingCrouching to Walking state transitions
+- Idle to Walking state transitions
 
 ## Out Of Scope
 
@@ -126,7 +135,7 @@ respects pose-based permission gating.
 5. Root motion consumed when top-level state is Walking or active override.
 6. Animation blend parameter wired to the active state-machine path, currently
    `parameters/States/Walking/blend_position` on the reference character.
-7. Transitions between StandingCrouching and Walking work based on input.
+7. Transitions between Idle and Walking work based on input.
 8. Pose-state delegated locomotion animation-state override supported.
 9. Velocity derives from animation root motion output in root-motion states.
 10. Zero planar velocity returned when movement not allowed.
@@ -140,6 +149,10 @@ respects pose-based permission gating.
 17. Pose-state-machine wired as permission source in player scene.
 18. User requirements verifiable through acceptance testing.
 19. Technical requirements verifiable through code review.
+20. IdleAnimationStateName config defaults to "Idle".
+21. Initial Start->IdleAnimationStateName transition occurs automatically.
+22. Player rigs may override IdleAnimationStateName to "StandingCrouching".
+23. Generic NPC animation roots use Idle state without player-only state names.
 
 ## References
 

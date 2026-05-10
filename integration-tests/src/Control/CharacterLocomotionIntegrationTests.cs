@@ -13,6 +13,12 @@ namespace AlleyCat.IntegrationTests.Control;
 public sealed partial class CharacterLocomotionIntegrationTests
 {
     private const float Tolerance = 1e-4f;
+    private const string ReferenceFemaleBaseScenePath = "res://assets/characters/reference/female/reference_female_base.tscn";
+    private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/female_reference_npc.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
+    private const string PlayerAnimationTreeRootUID = "uid://bge48ng374i85";
+    private const string NpcAnimationTreeRootUID = "uid://c485owf86etdu";
 
     /// <summary>
     /// Verifies the component enables its own physics processing during ready.
@@ -56,6 +62,96 @@ public sealed partial class CharacterLocomotionIntegrationTests
         {
             await DestroyRigAsync(sceneTree, rig);
         }
+    }
+
+    /// <summary>
+    /// Verifies locomotion leaves the AnimationTree start sentinel and enters the configured idle state.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_StartSentinel_StartsConfiguredIdleState()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        AnimationTree animationTree = CreateLocomotionAnimationTree();
+        LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: animationTree);
+
+        try
+        {
+            Assert.Equal("Start", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+
+            rig.Locomotion._PhysicsProcess(0.016d);
+            animationTree.Advance(0.0);
+
+            Assert.Equal("Idle", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies player-specific trees can keep their standing/crouching idle state while generic NPC trees use Idle.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_CustomIdleState_StartsAndTravelsToWalking()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        AnimationTree animationTree = CreatePlayerLocomotionAnimationTree();
+        CharacterLocomotion locomotion = new()
+        {
+            IdleAnimationStateName = new StringName("StandingCrouching"),
+        };
+        LocomotionTestRig rig = await CreateRigAsync(
+            sceneTree,
+            animationTree: animationTree,
+            locomotion: locomotion);
+
+        try
+        {
+            rig.Locomotion._PhysicsProcess(0.016d);
+            animationTree.Advance(0.0);
+
+            Assert.Equal("StandingCrouching", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+
+            rig.Locomotion.Move(new Vector2(0f, 1f));
+            rig.Locomotion._PhysicsProcess(0.016d);
+            animationTree.Advance(0.0);
+
+            Assert.Equal("Walking", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies shipped character scenes expose one active animation tree per actor with the expected start state.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_ReferenceScenes_WireAnimationTreesForRuntimePlayback()
+    {
+        await AssertReferenceSceneAnimationTreesAsync(
+            ReferenceFemaleBaseScenePath,
+            [new ExpectedAnimationTree(NpcAnimationTreeRootUID, "Idle")]);
+
+        await AssertReferenceSceneAnimationTreesAsync(
+            ReferenceFemaleNpcScenePath,
+            [new ExpectedAnimationTree(NpcAnimationTreeRootUID, "Idle")]);
+
+        await AssertReferenceSceneAnimationTreesAsync(
+            PlayerScenePath,
+            [new ExpectedAnimationTree(PlayerAnimationTreeRootUID, "StandingCrouching")]);
+
+        await AssertReferenceSceneAnimationTreesAsync(
+            MirrorRoomScenePath,
+            [
+                new ExpectedAnimationTree(PlayerAnimationTreeRootUID, "StandingCrouching"),
+                new ExpectedAnimationTree(NpcAnimationTreeRootUID, "Idle"),
+            ]);
     }
 
     /// <summary>
@@ -419,7 +515,7 @@ public sealed partial class CharacterLocomotionIntegrationTests
 
         try
         {
-            StartPlayback(rig.AnimationTree, "StandingCrouching");
+            StartPlayback(rig.AnimationTree, "Idle");
             locomotion.Move(new Vector2(0f, 1f));
 
             locomotion._PhysicsProcess(0.016d);
@@ -633,14 +729,14 @@ public sealed partial class CharacterLocomotionIntegrationTests
     private static AnimationTree CreateLocomotionAnimationTree()
     {
         AnimationNodeStateMachine stateMachine = new();
-        stateMachine.AddNode("StandingCrouching", new AnimationNodeAnimation(), Vector2.Zero);
+        stateMachine.AddNode("Idle", new AnimationNodeAnimation(), Vector2.Zero);
         stateMachine.AddNode("Walking", new AnimationNodeAnimation(), Vector2.Right * 200f);
         stateMachine.AddNode("AllFours", new AnimationNodeAnimation(), Vector2.Up * 200f);
         stateMachine.AddNode("AllFoursForward", new AnimationNodeAnimation(), new Vector2(200f, -200f));
-        stateMachine.AddTransition("Start", "StandingCrouching", new AnimationNodeStateMachineTransition());
+        stateMachine.AddTransition("Start", "Idle", new AnimationNodeStateMachineTransition());
         stateMachine.AddTransition("Start", "AllFours", new AnimationNodeStateMachineTransition());
-        stateMachine.AddTransition("StandingCrouching", "Walking", new AnimationNodeStateMachineTransition());
-        stateMachine.AddTransition("Walking", "StandingCrouching", new AnimationNodeStateMachineTransition());
+        stateMachine.AddTransition("Idle", "Walking", new AnimationNodeStateMachineTransition());
+        stateMachine.AddTransition("Walking", "Idle", new AnimationNodeStateMachineTransition());
         stateMachine.AddTransition("AllFours", "AllFoursForward", new AnimationNodeStateMachineTransition());
         stateMachine.AddTransition("AllFoursForward", "AllFours", new AnimationNodeStateMachineTransition());
 
@@ -648,6 +744,27 @@ public sealed partial class CharacterLocomotionIntegrationTests
         {
             Name = "AnimationTree",
             TreeRoot = stateMachine,
+            Active = true,
+        };
+    }
+
+    private static AnimationTree CreatePlayerLocomotionAnimationTree()
+    {
+        AnimationNodeStateMachine stateMachine = new();
+        stateMachine.AddNode("StandingCrouching", new AnimationNodeAnimation(), Vector2.Zero);
+        stateMachine.AddNode("Walking", new AnimationNodeAnimation(), Vector2.Right * 200f);
+        stateMachine.AddTransition("Start", "StandingCrouching", new AnimationNodeStateMachineTransition());
+        stateMachine.AddTransition("StandingCrouching", "Walking", new AnimationNodeStateMachineTransition());
+        stateMachine.AddTransition("Walking", "StandingCrouching", new AnimationNodeStateMachineTransition());
+
+        AnimationNodeBlendTree root = new();
+        root.AddNode("States", stateMachine, Vector2.Zero);
+        root.ConnectNode("output", 0, "States");
+
+        return new AnimationTree
+        {
+            Name = "AnimationTree",
+            TreeRoot = root,
             Active = true,
         };
     }
@@ -660,9 +777,92 @@ public sealed partial class CharacterLocomotionIntegrationTests
     }
 
     private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
-        // Compatibility fixture: these tests intentionally build a simple state-machine-only tree.
-        => animationTree.Get("parameters/playback").As<AnimationNodeStateMachinePlayback>()
+        => animationTree.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>()
+           // Compatibility fixture: most tests intentionally build a simple state-machine-only tree.
+           ?? animationTree.Get("parameters/playback").As<AnimationNodeStateMachinePlayback>()
            ?? throw new Xunit.Sdk.XunitException("Expected AnimationTree playback to be available.");
+
+    private static async Task AssertReferenceSceneAnimationTreesAsync(
+        string scenePath,
+        IReadOnlyList<ExpectedAnimationTree> expectedTrees)
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PackedScene packedScene = Assert.IsType<PackedScene>(ResourceLoader.Load(scenePath), exactMatch: false);
+        Node root = packedScene.Instantiate();
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 3);
+
+            List<AnimationTree> animationTrees = [];
+            CollectAnimationTrees(root, animationTrees);
+
+            foreach (ExpectedAnimationTree expectedTree in expectedTrees)
+            {
+                AnimationTree animationTree = animationTrees.FirstOrDefault(tree => GetTreeRootUID(tree) == expectedTree.TreeRootUID)
+                    ?? throw new Xunit.Sdk.XunitException($"Expected an AnimationTree with root UID {expectedTree.TreeRootUID} in {scenePath}.");
+
+                Assert.True(animationTree.Active, $"Expected {scenePath} AnimationTree {expectedTree.TreeRootUID} to be active.");
+                Assert.NotEqual(Variant.Type.Nil, animationTree.Get("parameters/States/Walking/blend_position").VariantType);
+
+                AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(
+                    Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false).GetNode("States"),
+                    exactMatch: false);
+                Assert.NotNull(stateMachine.GetNode(expectedTree.ExpectedIdleState));
+                AssertStateTransition(stateMachine, "Start", expectedTree.ExpectedIdleState);
+
+                AnimationNodeStateMachinePlayback playback = ResolvePlayback(animationTree);
+                string currentState = playback.GetCurrentNode().ToString();
+                Assert.True(
+                    currentState == "Start" || currentState == expectedTree.ExpectedIdleState,
+                    $"Expected playback to be waiting at Start or running {expectedTree.ExpectedIdleState}; got {currentState}.");
+            }
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
+
+    private static void CollectAnimationTrees(Node node, List<AnimationTree> animationTrees)
+    {
+        if (node is AnimationTree animationTree)
+        {
+            animationTrees.Add(animationTree);
+        }
+
+        foreach (Node child in node.GetChildren())
+        {
+            CollectAnimationTrees(child, animationTrees);
+        }
+    }
+
+    private static string GetTreeRootUID(AnimationTree animationTree)
+    {
+        AnimationRootNode treeRoot = animationTree.TreeRoot
+            ?? throw new Xunit.Sdk.XunitException($"AnimationTree {animationTree.GetPath()} has no tree root.");
+        long resourceUID = ResourceLoader.GetResourceUid(treeRoot.ResourcePath);
+        return ResourceUid.IdToText(resourceUID);
+    }
+
+    private static void AssertStateTransition(AnimationNodeStateMachine stateMachine, string from, string to)
+    {
+        Godot.Collections.Array transitions = stateMachine.Get("transitions").AsGodotArray();
+        for (int index = 0; index < transitions.Count; index += 3)
+        {
+            if (transitions[index].AsStringName() == new StringName(from)
+                && transitions[index + 1].AsStringName() == new StringName(to))
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected state transition {from} -> {to}.");
+    }
+
+    private sealed record ExpectedAnimationTree(string TreeRootUID, string ExpectedIdleState);
 
     private sealed partial class RootMotionCharacterLocomotion : CharacterLocomotion
     {

@@ -89,6 +89,7 @@ blend_point_3/node = SubResource("AnimationNodeAnimation_vy3sd")
 blend_point_3/pos = Vector2(1, 0)
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_qm8uk"]
+advance_mode = 2
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_el121"]
 xfade_time = 0.5
@@ -154,7 +155,7 @@ transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMach
 graph_offset = Vector2(117.36719, -106.94318)
 
 [resource]
-resource_name = "Pose State Machine With Hand Poses"
+resource_name = "Player Animation Tree Root"
 graph_offset = Vector2(-609.3466, -166.31314)
 nodes/output/position = Vector2(320, -140)
 nodes/RightHandBlend/node = SubResource("AnimationNodeBlend2_c3l26")
