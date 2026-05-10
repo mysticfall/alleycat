@@ -1,0 +1,5 @@
+[gd_scene format=3 uid="uid://d3temy6xsk1um"]
+
+[ext_resource type="PackedScene" uid="uid://yvm5bo58su3h" path="res://tests/characters/ik/head_tracking_hip_profile_test.tscn" id="1_base"]
+
+[node name="Photobooth" instance=ExtResource("1_base")]

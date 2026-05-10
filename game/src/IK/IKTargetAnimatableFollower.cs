@@ -7,7 +7,7 @@ namespace AlleyCat.IK;
 /// </summary>
 public sealed class IKTargetAnimatableFollower(
     AnimatableBody3D body,
-    Func<Transform3D> targetTransformSource,
+    Func<IKTargetFollowState> targetStateSource,
     IReadOnlyList<HandDynamicInteractionShape>? dynamicInteractionShapes = null)
 {
     private const float DeltaEpsilon = 1e-6f;
@@ -80,6 +80,17 @@ public sealed class IKTargetAnimatableFollower(
         get;
         set;
     } = 0.03f;
+
+    /// <summary>
+    /// Creates an animatable follower that always treats the supplied target transform as active.
+    /// </summary>
+    public IKTargetAnimatableFollower(
+        AnimatableBody3D body,
+        Func<Transform3D> targetTransformSource,
+        IReadOnlyList<HandDynamicInteractionShape>? dynamicInteractionShapes = null)
+        : this(body, () => new IKTargetFollowState(targetTransformSource(), active: true), dynamicInteractionShapes)
+    {
+    }
 
     /// <summary>
     /// Collision mask queried for explicit dynamic rigid-body hand interaction.
@@ -155,9 +166,16 @@ public sealed class IKTargetAnimatableFollower(
             return;
         }
 
+        IKTargetFollowState targetState = targetStateSource();
+        if (!targetState.Active)
+        {
+            _velocity = Vector3.Zero;
+            return;
+        }
+
         body.SyncToPhysics = false;
 
-        Transform3D targetTransform = targetTransformSource();
+        Transform3D targetTransform = targetState.WorldTransform;
         Vector3 displacement = targetTransform.Origin - body.GlobalPosition;
         float snapDistanceSquared = SnapDistance * SnapDistance;
         bool snapped = displacement.LengthSquared() <= snapDistanceSquared && !body.TestMove(body.GlobalTransform, displacement);

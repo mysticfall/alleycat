@@ -140,6 +140,7 @@ public partial class PlayerVRIK : CharacterIK
 
         PoseStateContext context = BuildPoseStateContext(skeleton, delta);
         PoseStateMachineTickResult tickResult = stateMachine.Tick(context);
+        ApplyHeadSolveTargetTransform(tickResult.LimitedHeadTargetTransform);
         UpdateHipDebugMessage(tickResult.Context, tickResult);
     }
 
@@ -175,11 +176,7 @@ public partial class PlayerVRIK : CharacterIK
     /// Binds XR runtime abstractions once and calibrates world scale.
     /// </summary>
     public virtual bool TryBind(IXRRuntime runtime)
-        => TryBind(
-            runtime.Origin,
-            runtime.Camera,
-            runtime.RightHandController,
-            runtime.LeftHandController);
+        => TryBind(runtime, runtime.Origin, runtime.Camera);
 
     /// <summary>
     /// Binds XR abstractions once and calibrates world scale.
@@ -189,6 +186,9 @@ public partial class PlayerVRIK : CharacterIK
         IXRCamera camera,
         IXRHandController rightHandController,
         IXRHandController leftHandController)
+        => TryBind(new BoundXRRuntime(origin, camera, rightHandController, leftHandController), origin, camera);
+
+    private bool TryBind(IXRRuntime runtime, IXROrigin origin, IXRCamera camera)
     {
         if (_isBound)
         {
@@ -198,7 +198,7 @@ public partial class PlayerVRIK : CharacterIK
         _origin = origin;
         _camera = camera;
         EnsureResolvedNodes();
-        BindXRHandFallbackProviders(rightHandController, leftHandController);
+        BindXRFallbackProviders(runtime);
         ConfigureGeneratedTargetProxyCollisionExceptionsDeferred();
 
         CalibrateWorldScaleOnce();
@@ -260,16 +260,46 @@ public partial class PlayerVRIK : CharacterIK
         return virtualHeadPose * localPose.Inverse();
     }
 
-    private void BindXRHandFallbackProviders(
-        IXRHandController rightHandController,
-        IXRHandController leftHandController)
+    private void BindXRFallbackProviders(IXRRuntime runtime)
         => ConfigureFallbackProviders(provider =>
         {
-            if (provider is XRControllerTargetProvider xrProvider)
+            if (provider is IXRRuntimeBoundTargetProvider runtimeBoundProvider)
             {
-                xrProvider.Bind(rightHandController, leftHandController);
+                _ = runtimeBoundProvider.TryBind(runtime);
             }
         });
+
+    private sealed class BoundXRRuntime(
+        IXROrigin origin,
+        IXRCamera camera,
+        IXRHandController rightHandController,
+        IXRHandController leftHandController) : IXRRuntime
+    {
+        public IXROrigin Origin => origin;
+
+        public IXRCamera Camera => camera;
+
+        public IXRHandController RightHandController => rightHandController;
+
+        public IXRHandController LeftHandController => leftHandController;
+
+        public event Action? PoseRecentered
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
+        public bool Initialise(SubViewport viewport, int maximumRefreshRate)
+        {
+            _ = viewport;
+            _ = maximumRefreshRate;
+            return true;
+        }
+    }
 
     private static bool TryCalibrateWorldScale(
         float avatarRestViewpointHeight,

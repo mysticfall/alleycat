@@ -236,6 +236,20 @@ public partial class PoseStateMachineMarkerDriver : Node3D
     public PoseStateMachine GetDrivenStateMachine() => _stateMachine;
 
     /// <summary>
+    /// Returns the latest hip target emitted by the internally driven state machine.
+    /// </summary>
+    public Vector3 GetLatestHipLocalPosition()
+        => _stateMachine.TryGetLatestHipLocalPosition(out Vector3 hipLocalPosition)
+            ? hipLocalPosition
+            : Vector3.Zero;
+
+    /// <summary>
+    /// Returns whether the internally driven state machine has emitted a hip target.
+    /// </summary>
+    public bool HasLatestHipLocalPosition()
+        => _stateMachine.TryGetLatestHipLocalPosition(out _);
+
+    /// <summary>
     /// Returns whether an AnimationTree is currently bound to the internal state machine.
     /// </summary>
     public bool IsAnimationTreeBound() => _stateMachine.AnimationTree is not null;

@@ -57,7 +57,6 @@ transitions = ["Start", "Idle", SubResource("AnimationNodeStateMachineTransition
 
 [resource]
 resource_name = "NPC Animation Tree Root"
-graph_offset = Vector2(-797.818, -208.875)
 nodes/output/position = Vector2(320, -140)
 nodes/RightHandBlend/node = SubResource("AnimationNodeBlend2_right_hand")
 nodes/RightHandBlend/position = Vector2(100, -160)

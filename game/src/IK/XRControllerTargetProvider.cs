@@ -7,7 +7,7 @@ namespace AlleyCat.IK;
 /// IK target provider that follows the hand-position node for one XR controller side.
 /// </summary>
 [GlobalClass]
-public partial class XRControllerTargetProvider : IKTargetStateProvider
+public partial class XRControllerTargetProvider : IKTargetStateProvider, IXRRuntimeBoundTargetProvider
 {
     /// <summary>
     /// Limb side used to select the corresponding XR controller during runtime binding.
@@ -34,13 +34,15 @@ public partial class XRControllerTargetProvider : IKTargetStateProvider
     [Export(PropertyHint.Range, "0,1,0.01")]
     public float DesiredInfluence { get; set; } = 1.0f;
 
-    /// <summary>
-    /// Binds this provider to the hand-position node for its configured side.
-    /// </summary>
-    public void Bind(IXRHandController rightHandController, IXRHandController leftHandController)
-        => ResolvedSourceNode = Side == LimbSide.Right
-            ? rightHandController.HandPositionNode
-            : leftHandController.HandPositionNode;
+    /// <inheritdoc />
+    public bool TryBind(IXRRuntime runtime)
+    {
+        ResolvedSourceNode = Side == LimbSide.Right
+            ? runtime.RightHandController.HandPositionNode
+            : runtime.LeftHandController.HandPositionNode;
+
+        return ResolvedSourceNode is not null && IsInstanceValid(ResolvedSourceNode);
+    }
 
     /// <inheritdoc />
     public override IKTargetState GetTargetState()

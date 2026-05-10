@@ -5,7 +5,7 @@ namespace AlleyCat.IK;
 /// <summary>
 /// Drives IK target <see cref="CharacterBody3D"/> nodes using velocity + <see cref="CharacterBody3D.MoveAndSlide"/>.
 /// </summary>
-public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D> targetTransformSource)
+public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFollowState> targetStateSource)
 {
     private const float DeltaEpsilon = 1e-6f;
     private const float DefaultRotationSnapAngleRadians = 0.01f;
@@ -76,6 +76,14 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D>
     } = 0.0025f;
 
     /// <summary>
+    /// Creates a body follower that always treats the supplied target transform as active.
+    /// </summary>
+    public IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D> targetTransformSource)
+        : this(body, () => new IKTargetFollowState(targetTransformSource(), active: true))
+    {
+    }
+
+    /// <summary>
     /// Moves the configured body towards its configured transform source.
     /// </summary>
     public void Follow(double delta)
@@ -86,7 +94,14 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D>
             return;
         }
 
-        Transform3D targetTransform = targetTransformSource();
+        IKTargetFollowState targetState = targetStateSource();
+        if (!targetState.Active)
+        {
+            body.Velocity = Vector3.Zero;
+            return;
+        }
+
+        Transform3D targetTransform = targetState.WorldTransform;
 
         if (!UseDampedFollow)
         {
@@ -117,12 +132,13 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D>
                 : desiredVelocity;
 
         _ = body.MoveAndSlide();
-        body.GlobalBasis = targetTransform.Basis.Orthonormalized();
+        SetWorldTransform(body, new Transform3D(targetTransform.Basis, body.GlobalPosition));
     }
 
     private static void SetWorldTransform(Node3D node, Transform3D worldTransform)
     {
         Transform3D orthonormalWorldTransform = new(worldTransform.Basis.Orthonormalized(), worldTransform.Origin);
+        node.GlobalTransform = orthonormalWorldTransform;
         node.Transform = node.GetParent() is Node3D parent
             ? parent.GlobalTransform.AffineInverse() * orthonormalWorldTransform
             : orthonormalWorldTransform;
@@ -148,12 +164,13 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D>
             MaximumAcceleration);
 
         _ = body.MoveAndSlide();
-        body.GlobalBasis = IKTargetBodyFollowerMath.ComputeFollowBasis(
+        Basis followBasis = IKTargetBodyFollowerMath.ComputeFollowBasis(
             body.GlobalBasis,
             targetTransform.Basis,
             deltaSeconds,
             RotationResponsiveness,
             RotationSnapAngleRadians);
+        SetWorldTransform(body, new Transform3D(followBasis, body.GlobalPosition));
     }
 }
 

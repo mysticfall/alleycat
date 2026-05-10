@@ -1,5 +1,6 @@
 using System.Reflection;
 using AlleyCat.IK;
+using AlleyCat.IK.Pose;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
 using Godot;
@@ -156,6 +157,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
+            fixture.PlayerVRIK._Ready();
             bool bound = fixture.PlayerVRIK.TryBind(
                 fixture.Origin,
                 fixture.Camera,
@@ -183,6 +185,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
+            fixture.PlayerVRIK._Ready();
             bool bound = fixture.PlayerVRIK.TryBind(
                 fixture.Origin,
                 fixture.Camera,
@@ -283,12 +286,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             fixture.PlayerVRIK.RightHandIKTargetStateProvider = provider;
 
-            Transform3D fallbackTarget = fixture.RightHandController.HandPositionNode.GlobalTransform;
+            Transform3D currentTarget = fixture.RightHandIKTarget.GlobalTransform;
             Transform3D resolvedTarget = InvokeBuildHandTargetTransform(
                 fixture.PlayerVRIK,
                 "BuildRightHandTargetTransform");
 
-            AssertTransformApproximately(fallbackTarget, resolvedTarget);
+            AssertTransformApproximately(currentTarget, resolvedTarget);
             Assert.NotEqual(provider.TargetState.WorldTransform.Origin, resolvedTarget.Origin);
             Assert.All(fixture.PlayerVRIK.RightHandModifierGroup, modifier =>
             {
@@ -297,6 +300,209 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             });
             Assert.False(fixture.RightHandIKModifier.Active);
             Assert.Equal(0.0f, fixture.RightHandIKModifier.Influence);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies bound player head IK does not implicitly follow the camera when no explicit provider or fallback is assigned.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKHeadFollow_WhenNoProviderAndCameraDefaultDiffers_DoesNotMoveTargetAndDisablesTarget()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            fixture.PlayerVRIK._Ready();
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+            fixture.PlayerVRIK.HeadTargetProvider = null;
+            fixture.PlayerVRIK.HeadFallbackProvider = null;
+            fixture.HeadIKTarget.Position = new Vector3(-0.4f, 1.1f, 0.25f);
+            fixture.Camera.CameraNode.Position = new Vector3(0.6f, 1.8f, -0.7f);
+            await WaitForNextFrameAsync(sceneTree);
+            Transform3D initialTarget = fixture.HeadIKTarget.GlobalTransform;
+            Transform3D cameraDefault = fixture.Camera.CameraNode.GlobalTransform * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+
+            await ProcessBeginStageFramesAsync(sceneTree, fixture.PlayerVRIK, 2);
+
+            Assert.NotEqual(cameraDefault.Origin, initialTarget.Origin);
+            AssertTransformApproximately(initialTarget, fixture.HeadIKTarget.GlobalTransform);
+            AssertTargetDisabled(fixture.HeadIKTarget);
+            AssertTargetDisabled(fixture.HeadIKSolveTarget);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the bound XR head fallback actively drives player head IK from the camera-derived head pose.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKHeadFollowTargets_WhenBound_UsesXRCameraProvider()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+
+            fixture.HeadIKTarget.GlobalTransform = new Transform3D(
+                Basis.Identity.Rotated(Vector3.Up, 0.3f),
+                new Vector3(-0.6f, 0.9f, 0.4f));
+            fixture.HeadIKSolveTarget.GlobalTransform = Transform3D.Identity;
+            fixture.Origin.GlobalTransform = Transform3D.Identity;
+            fixture.Camera.CameraNode.Transform = new Transform3D(
+                Basis.Identity.Rotated(Vector3.Right, -0.22f).Rotated(Vector3.Forward, 0.14f),
+                new Vector3(0.25f, 1.7f, -0.35f));
+            fixture.Camera.CameraNode.ForceUpdateTransform();
+            await WaitForNextFrameAsync(sceneTree);
+
+            Transform3D expectedHeadPose = fixture.Camera.CameraNode.GlobalTransform
+                                           * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+            IKTargetState fallbackState = fixture.HeadFallbackProvider.GetTargetState();
+
+            Assert.Equal(1.0f, fallbackState.DesiredInfluence);
+            AssertTransformApproximately(expectedHeadPose, fallbackState.WorldTransform);
+            Assert.NotEqual(expectedHeadPose.Origin, fixture.HeadIKTarget.GlobalPosition);
+
+            await ProcessBeginStageFramesAsync(sceneTree, fixture.PlayerVRIK, 2);
+
+            Transform3D expectedFollowPose = fixture.Camera.CameraNode.GlobalTransform
+                                            * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+            Transform3D resolvedHeadPose = InvokeBuildHeadTargetTransform(fixture.PlayerVRIK);
+            fixture.HeadIKSolveTarget.Transform = fixture.HeadIKTarget.Transform;
+
+            Assert.True(fixture.HeadModifier.Active);
+            Assert.Equal(1.0f, fixture.HeadModifier.Influence);
+            AssertTargetProcessEnabled(fixture.HeadIKTarget);
+            AssertTargetProcessEnabled(fixture.HeadIKSolveTarget);
+            AssertTransformApproximately(expectedFollowPose, resolvedHeadPose);
+            AssertTransformApproximately(expectedFollowPose, fixture.HeadIKTarget.Transform);
+            AssertTransformApproximately(expectedFollowPose, fixture.HeadIKSolveTarget.Transform);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies pure headset tilt is consumed by the active XR head fallback without drifting the compensated XR origin.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKOriginCompensation_WhenXRHeadTiltsWithFallback_KeepsOriginStable()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+
+            Transform3D unchangedHeadTarget = new(
+                Basis.Identity.Rotated(Vector3.Up, 0.4f),
+                new Vector3(-0.35f, 1.05f, 0.3f));
+            fixture.HeadIKTarget.GlobalTransform = unchangedHeadTarget;
+            fixture.HeadIKSolveTarget.GlobalTransform = unchangedHeadTarget;
+            fixture.Origin.GlobalTransform = Transform3D.Identity;
+            fixture.Camera.CameraNode.Transform = new Transform3D(
+                Basis.Identity.Rotated(Vector3.Right, -0.31f).Rotated(Vector3.Forward, 0.27f),
+                new Vector3(0.0f, 1.6f, 0.0f));
+            fixture.Camera.CameraNode.ForceUpdateTransform();
+            await WaitForNextFrameAsync(sceneTree);
+
+            Transform3D expectedHeadPose = fixture.Camera.CameraNode.GlobalTransform
+                                           * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+            Assert.NotEqual(unchangedHeadTarget.Origin, expectedHeadPose.Origin);
+
+            await ProcessBeginStageFramesAsync(sceneTree, fixture.PlayerVRIK, 2);
+
+            Transform3D expectedFollowPose = fixture.Camera.CameraNode.GlobalTransform
+                                            * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+            Transform3D resolvedHeadPose = InvokeBuildHeadTargetTransform(fixture.PlayerVRIK);
+            fixture.HeadIKSolveTarget.Transform = fixture.HeadIKTarget.Transform;
+
+            AssertTransformApproximately(expectedFollowPose, resolvedHeadPose);
+            AssertTransformApproximately(expectedFollowPose, fixture.HeadIKTarget.Transform);
+            AssertTransformApproximately(expectedFollowPose, fixture.HeadIKSolveTarget.Transform);
+
+            SetHeadBoneGlobalPose(fixture.Skeleton, fixture.HeadBoneIndex, expectedFollowPose);
+            Transform3D originBeforeCompensation = fixture.Origin.GlobalTransform;
+
+            InvokeOnEndStage(fixture.PlayerVRIK, 1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+
+            AssertTransformApproximately(originBeforeCompensation, fixture.Origin.GlobalTransform, 1e-5f);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a zero-influence head provider disables head IK without moving the physical head target.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKHeadProvider_WhenZeroInfluence_DoesNotMoveTargetAndDisablesTarget()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "ZeroInfluenceHeadProviderFixture");
+        TestIKTargetStateProvider provider = new()
+        {
+            Name = "HeadZeroInfluenceProvider",
+            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(2.0f, 2.0f, 2.0f)), 0.0f),
+        };
+        fixture.Root.AddChild(provider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.HeadTargetProvider = provider;
+
+        try
+        {
+            fixture.HeadIKTarget.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(0.1f, 0.2f, 0.3f));
+            Transform3D initialTarget = fixture.HeadIKTarget.GlobalTransform;
+
+            InvokeOnBeginStage(fixture.VRIK, 1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+
+            AssertTransformApproximately(initialTarget, fixture.HeadIKTarget.GlobalTransform);
+            Assert.NotEqual(provider.TargetState.WorldTransform.Origin, fixture.HeadIKTarget.GlobalPosition);
+            Assert.False(fixture.HeadModifier.Active);
+            Assert.Equal(0.0f, fixture.HeadModifier.Influence);
+            AssertTargetDisabled(fixture.HeadIKTarget);
+            AssertTargetDisabled(fixture.HeadIKSolveTarget);
         }
         finally
         {
@@ -331,11 +537,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         {
             Transform3D restTarget = fixture.RightHandIKTarget.Transform;
             fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
 
             AssertTransformApproximately(restTarget, fixture.RightHandIKTarget.Transform);
             Assert.NotEqual(provider.TargetState.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
             Assert.False(fixture.RightHandModifier.Active);
             Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
+            AssertTargetDisabled(fixture.RightHandIKTarget);
         }
         finally
         {
@@ -409,11 +617,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         {
             Transform3D restTarget = fixture.RightHandIKTarget.Transform;
             fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
 
             AssertTransformApproximately(restTarget, fixture.RightHandIKTarget.Transform);
             Assert.NotEqual(fallbackProvider.TargetState.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
             Assert.False(fixture.RightHandModifier.Active);
             Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
+            AssertTargetDisabled(fixture.RightHandIKTarget);
         }
         finally
         {
@@ -422,10 +632,143 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies unavailable controller sources preserve authored hand IK target bodies and modifier state.
+    /// Verifies a CharacterIK fixture with no provider or fallback disables authored-active head and hand IK.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKTargets_WhenNoProvidersOrFallbacks_DisablesModifiersAndTargets()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "NoProviderTargetDisableFixture");
+
+        try
+        {
+            InvokeOnBeginStage(fixture.VRIK, 1.0d / 60.0d);
+            InvokeOnFootProviderStage(fixture.VRIK, 1.0d / 60.0d);
+            fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.False(fixture.HeadModifier.Active);
+            Assert.Equal(0.0f, fixture.HeadModifier.Influence);
+            Assert.False(fixture.RightHandModifier.Active);
+            Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
+            Assert.False(fixture.LeftHandModifier.Active);
+            Assert.Equal(0.0f, fixture.LeftHandModifier.Influence);
+            Assert.False(fixture.RightFootModifier.Active);
+            Assert.Equal(0.0f, fixture.RightFootModifier.Influence);
+            AssertTargetDisabled(fixture.HeadIKTarget);
+            AssertTargetDisabled(fixture.HeadIKSolveTarget);
+            AssertTargetDisabled(fixture.RightHandIKTarget);
+            AssertTargetDisabled(fixture.LeftHandIKTarget);
+            AssertTargetDisabled(fixture.RightFootIKTarget);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies zero provider influence disables the controlled modifier group and target body.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKTargets_WhenProviderReturnsZeroInfluence_DisablesModifiersAndTargets()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "ZeroProviderTargetDisableFixture");
+        TestIKTargetStateProvider headProvider = new()
+        {
+            Name = "HeadZeroProvider",
+            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(0.0f, 1.7f, -0.2f)), 0.0f),
+        };
+        TestIKTargetStateProvider handProvider = new()
+        {
+            Name = "RightHandZeroProvider",
+            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(0.45f, 1.1f, -0.3f)), 0.0f),
+        };
+        fixture.Root.AddChild(headProvider);
+        fixture.Root.AddChild(handProvider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.HeadTargetProvider = headProvider;
+        fixture.VRIK.RightHandIKTargetStateProvider = handProvider;
+
+        try
+        {
+            InvokeOnBeginStage(fixture.VRIK, 1.0d / 60.0d);
+            fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.False(fixture.HeadModifier.Active);
+            Assert.Equal(0.0f, fixture.HeadModifier.Influence);
+            Assert.False(fixture.RightHandModifier.Active);
+            Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
+            AssertTargetDisabled(fixture.HeadIKTarget);
+            AssertTargetDisabled(fixture.HeadIKSolveTarget);
+            AssertTargetDisabled(fixture.RightHandIKTarget);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies target and modifier state returns to its authored values when provider influence becomes positive again.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKTargets_WhenInfluenceTransitionsPositive_RestoresModifiersAndTargets()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "InfluenceRestoreFixture");
+        Transform3D positiveTargetTransform = new(Basis.Identity, new Vector3(0.65f, 1.05f, -0.45f));
+        TestIKTargetStateProvider handProvider = new()
+        {
+            Name = "RightHandTransitionProvider",
+            TargetState = new IKTargetState(positiveTargetTransform, 0.0f),
+        };
+        fixture.Root.AddChild(handProvider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.RightHandIKTargetStateProvider = handProvider;
+
+        try
+        {
+            fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.False(fixture.RightHandModifier.Active);
+            Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
+            AssertTargetDisabled(fixture.RightHandIKTarget);
+
+            handProvider.TargetState = new IKTargetState(positiveTargetTransform, 1.0f);
+            Transform3D resolvedTarget = InvokeBuildHandTargetTransform(fixture.VRIK, "BuildRightHandTargetTransform");
+            fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.True(fixture.RightHandModifier.Active);
+            Assert.Equal(1.0f, fixture.RightHandModifier.Influence);
+            AssertTargetEnabled(fixture.RightHandIKTarget, 16u, 32u);
+            AssertTransformApproximately(positiveTargetTransform, resolvedTarget);
+            AssertTransformApproximately(positiveTargetTransform, fixture.RightHandIKTarget.Transform);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies unavailable controller sources disable authored hand IK target bodies and modifier state.
     /// </summary>
     [Fact]
-    public async Task PlayerVRIKHandFollowTargets_WhenUnbound_PreserveTargetBodiesAndModifierState()
+    public async Task PlayerVRIKHandFollowTargets_WhenUnbound_DisablesTargetBodiesAndModifierState()
     {
         SceneTree sceneTree = GetSceneTree();
         VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
@@ -454,10 +797,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             AssertTransformApproximately(authoredRightTarget, rightFollowTarget);
             AssertTransformApproximately(authoredLeftTarget, leftFollowTarget);
-            Assert.True(fixture.RightHandIKModifier.Active);
-            Assert.Equal(0.73f, fixture.RightHandIKModifier.Influence);
-            Assert.True(fixture.LeftHandIKModifier.Active);
-            Assert.Equal(0.64f, fixture.LeftHandIKModifier.Influence);
+            Assert.False(fixture.RightHandIKModifier.Active);
+            Assert.Equal(0.0f, fixture.RightHandIKModifier.Influence);
+            Assert.False(fixture.LeftHandIKModifier.Active);
+            Assert.Equal(0.0f, fixture.LeftHandIKModifier.Influence);
+            Assert.Equal(Node.ProcessModeEnum.Disabled, fixture.RightHandIKTarget.ProcessMode);
+            Assert.Equal(Node.ProcessModeEnum.Disabled, fixture.LeftHandIKTarget.ProcessMode);
         }
         finally
         {
@@ -564,6 +909,273 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
+    /// Verifies the IK-004 limited head target returned by the pose-state tick is applied to the downstream solve target.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKBeginStage_WhenPoseStateLimitsHead_AppliesLimitedSolveTarget()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            Transform3D limitedHeadTarget = new(
+                Basis.Identity.Rotated(Vector3.Up, 0.35f),
+                new Vector3(0.12f, 1.35f, -0.08f));
+            TestPoseState poseState = new()
+            {
+                Id = new StringName("Standing"),
+                HipTickResult = new HipReconciliationTickResult
+                {
+                    AppliedHipLocalPosition = new Vector3(0.0f, 0.85f, 0.0f),
+                    LimitedHeadTargetTransform = limitedHeadTarget,
+                },
+            };
+            PoseStateMachine stateMachine = CreatePoseStateMachine(poseState);
+            fixture.PlayerVRIK.AddChild(stateMachine);
+
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+            fixture.PlayerVRIK.PoseStateMachine = stateMachine;
+            Assert.True(fixture.PlayerVRIK.HipBoneIndex >= 0, "Expected fixture hips bone to be resolved.");
+
+            fixture.Camera.CameraNode.Transform = new Transform3D(
+                Basis.Identity.Rotated(Vector3.Right, -0.18f),
+                new Vector3(0.75f, 2.15f, -0.55f));
+            await WaitForNextFrameAsync(sceneTree);
+
+            Transform3D fullPhysicalHeadTarget = fixture.Camera.CameraNode.GlobalTransform
+                                                 * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+            Assert.NotEqual(fullPhysicalHeadTarget.Origin, limitedHeadTarget.Origin);
+
+            fixture.HeadIKTarget.Transform = fullPhysicalHeadTarget;
+            PoseStateMachineTickResult directTick = stateMachine.Tick(new PoseStateContext());
+            Transform3D directLimitedTarget = Assert.IsType<Transform3D>(directTick.LimitedHeadTargetTransform);
+            AssertTransformApproximately(limitedHeadTarget, directLimitedTarget);
+            InvokeApplyHeadSolveTargetTransform(fixture.PlayerVRIK, directLimitedTarget);
+
+            AssertTransformApproximately(limitedHeadTarget, fixture.HeadIKSolveTarget.Transform);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies lateral headset movement contributes to the IK-004 hip reconciliation target.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKBeginStage_WhenHeadMovesLaterally_ProducesHipLateralResponse()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            PoseState poseState = new TestPoseState
+            {
+                Id = new StringName("Standing"),
+                HipReconciliation = new HeadTrackingHipProfile
+                {
+                    LateralPositionWeight = 0.5f,
+                    VerticalPositionWeight = 1.0f,
+                    ForwardPositionWeight = 0.5f,
+                    RotationCompensationWeight = 0.0f,
+                },
+            };
+            PoseStateMachine stateMachine = CreatePoseStateMachine(poseState);
+            fixture.PlayerVRIK.AddChild(stateMachine);
+
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+            fixture.PlayerVRIK.PoseStateMachine = stateMachine;
+
+            float restHipX = fixture.Skeleton.GetBoneGlobalRest(fixture.PlayerVRIK.HipBoneIndex).Origin.X;
+            fixture.Camera.CameraNode.Transform = new Transform3D(Basis.Identity, new Vector3(0.5f, 1.6f, 0.0f));
+            await WaitForNextFrameAsync(sceneTree);
+
+            Transform3D headRestTransform = fixture.Skeleton.GlobalTransform
+                                           * fixture.Skeleton.GetBoneGlobalRest(fixture.HeadBoneIndex)
+                                           * fixture.PlayerVRIK.Viewpoint!.Transform;
+            PoseStateContext context = new()
+            {
+                Skeleton = fixture.Skeleton,
+                HipBoneIndex = fixture.PlayerVRIK.HipBoneIndex,
+                HeadBoneIndex = fixture.HeadBoneIndex,
+                HeadTargetRestTransform = headRestTransform,
+                HeadTargetTransform = new Transform3D(Basis.Identity, headRestTransform.Origin + new Vector3(0.5f, 0.0f, 0.0f)),
+                Delta = 1.0d / 60.0d,
+            };
+            _ = stateMachine.Tick(context);
+
+            Vector3 hipLocalPosition = InvokeLatestHipLocalPosition(stateMachine);
+
+            Assert.True(
+                hipLocalPosition.X > restHipX + 0.05f,
+                $"Expected positive lateral hip response from rightward headset movement, got {hipLocalPosition.X:F3} from rest {restHipX:F3}.");
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies player VRIK keeps animation-owned foot targets and leg modifiers active through foot fallback providers.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKFootTargets_WhenOnlyAnimationFallbackProviders_KeepAnimationSynchronizedTargetsActive()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+            fixture.RightFootIKTarget.Transform = new Transform3D(Basis.Identity, new Vector3(0.18f, 0.05f, -0.08f));
+            fixture.LeftFootIKTarget.Transform = new Transform3D(Basis.Identity, new Vector3(-0.18f, 0.05f, -0.08f));
+            Transform3D initialRightFoot = fixture.RightFootIKTarget.Transform;
+            Transform3D initialLeftFoot = fixture.LeftFootIKTarget.Transform;
+
+            InvokeOnFootProviderStage(fixture.PlayerVRIK, 1.0d / 60.0d);
+
+            AssertTransformApproximately(initialRightFoot, fixture.RightFootIKTarget.Transform);
+            AssertTransformApproximately(initialLeftFoot, fixture.LeftFootIKTarget.Transform);
+            Assert.True(fixture.RightFootModifier.Active);
+            Assert.Equal(1.0f, fixture.RightFootModifier.Influence);
+            Assert.True(fixture.LeftFootModifier.Active);
+            Assert.Equal(1.0f, fixture.LeftFootModifier.Influence);
+            AssertTargetProcessEnabled(fixture.RightFootIKTarget);
+            AssertTargetProcessEnabled(fixture.LeftFootIKTarget);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies explicit zero-influence player foot providers still disable leg IK despite the no-provider opt-in.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKFootTargets_WhenProviderInfluenceIsZero_DisablesFootTargetAndModifier()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+        TestIKTargetStateProvider provider = new()
+        {
+            Name = "RightFootZeroProvider",
+            TargetState = new IKTargetState(
+                new Transform3D(Basis.Identity, new Vector3(3.0f, 3.0f, 3.0f)),
+                0.0f),
+        };
+        fixture.Root.AddChild(provider);
+
+        try
+        {
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+            fixture.PlayerVRIK.RightFootTargetProvider = provider;
+            Transform3D initialRightFoot = fixture.RightFootIKTarget.Transform;
+
+            InvokeOnFootProviderStage(fixture.PlayerVRIK, 1.0d / 60.0d);
+
+            AssertTransformApproximately(initialRightFoot, fixture.RightFootIKTarget.Transform);
+            Assert.False(fixture.RightFootModifier.Active);
+            Assert.Equal(0.0f, fixture.RightFootModifier.Influence);
+            AssertTargetDisabled(fixture.RightFootIKTarget);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies crouch-like head descent does not lift animation-owned player foot targets.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerVRIKCrouch_WhenHeadDescends_DoesNotRaiseFootTargets()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
+
+        try
+        {
+            PoseState poseState = new TestPoseState
+            {
+                Id = new StringName("Standing"),
+                HipReconciliation = new HeadTrackingHipProfile
+                {
+                    RotationCompensationWeight = 0.0f,
+                },
+            };
+            PoseStateMachine stateMachine = CreatePoseStateMachine(poseState);
+            fixture.PlayerVRIK.AddChild(stateMachine);
+
+            bool bound = fixture.PlayerVRIK.TryBind(
+                fixture.Origin,
+                fixture.Camera,
+                fixture.RightHandController,
+                fixture.LeftHandController);
+
+            Assert.True(bound);
+            fixture.PlayerVRIK.PoseStateMachine = stateMachine;
+
+            fixture.RightFootIKTarget.Transform = new Transform3D(Basis.Identity, new Vector3(0.18f, 0.05f, -0.08f));
+            fixture.LeftFootIKTarget.Transform = new Transform3D(Basis.Identity, new Vector3(-0.18f, 0.05f, -0.08f));
+            float initialRightFootY = fixture.RightFootIKTarget.GlobalPosition.Y;
+            float initialLeftFootY = fixture.LeftFootIKTarget.GlobalPosition.Y;
+            float restHipY = fixture.Skeleton.GetBoneGlobalRest(fixture.PlayerVRIK.HipBoneIndex).Origin.Y;
+
+            fixture.Camera.CameraNode.Transform = new Transform3D(Basis.Identity, new Vector3(0.0f, 1.15f, 0.0f));
+            await WaitForNextFrameAsync(sceneTree);
+
+            fixture.HeadIKTarget.Transform = fixture.Camera.CameraNode.GlobalTransform
+                                            * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
+            fixture.HeadIKTarget.ForceUpdateTransform();
+            InvokeAfterProviderTargetProcessing(fixture.PlayerVRIK, fixture.Skeleton, 1.0d / 60.0d);
+            InvokeOnFootProviderStage(fixture.PlayerVRIK, 1.0d / 60.0d);
+            Vector3 hipLocalPosition = InvokeLatestHipLocalPosition(stateMachine);
+
+            Assert.InRange(fixture.RightFootIKTarget.GlobalPosition.Y, initialRightFootY - 1e-4f, initialRightFootY + 1e-4f);
+            Assert.InRange(fixture.LeftFootIKTarget.GlobalPosition.Y, initialLeftFootY - 1e-4f, initialLeftFootY + 1e-4f);
+            Assert.True(hipLocalPosition.Y < restHipY - 0.1f, "Crouch head descent should lower the reconciled hip target.");
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies non-player VRIK applies configured provider targets without any XR binding.
     /// </summary>
     [Headless]
@@ -634,11 +1246,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             provider.TargetState = new IKTargetState(provider.TargetState.WorldTransform, 0.0f);
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
 
             AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.HeadIKTarget.Transform);
             AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.HeadIKSolveTarget.Transform);
             Assert.False(fixture.HeadModifier.Active);
             Assert.Equal(0.0f, fixture.HeadModifier.Influence);
+            AssertTargetDisabled(fixture.HeadIKTarget);
+            AssertTargetDisabled(fixture.HeadIKSolveTarget);
         }
         finally
         {
@@ -736,6 +1351,9 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             AssertVectorApproximately(Vector3.Zero, fixture.RightFootIKTarget.GlobalPosition);
             Assert.True(fixture.FootSyncController.Active);
             Assert.Equal(1.0f, fixture.FootSyncController.Influence);
+            Assert.False(fixture.RightFootModifier.Active);
+            Assert.Equal(0.0f, fixture.RightFootModifier.Influence);
+            AssertTargetDisabled(fixture.RightFootIKTarget);
         }
         finally
         {
@@ -769,8 +1387,18 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         femaleExport.AddChild(skeleton);
 
         int headBoneIndex = skeleton.AddBone("Head");
+        int hipsBoneIndex = skeleton.AddBone("Hips");
+        skeleton.SetBoneRest(hipsBoneIndex, new Transform3D(Basis.Identity, new Vector3(0.0f, 0.85f, 0.0f)));
         skeleton.SetBoneRest(headBoneIndex, new Transform3D(Basis.Identity, new Vector3(0.0f, 1.55f, 0.0f)));
         skeleton.SetBonePosePosition(headBoneIndex, new Vector3(0.0f, -0.15f, 0.0f));
+
+        SkeletonModifier3D playerHeadModifier = new()
+        {
+            Name = "HeadModifier",
+            Influence = 1.0f,
+            Active = true,
+        };
+        skeleton.AddChild(playerHeadModifier);
 
         SkeletonModifier3D rightArmIKController = new()
         {
@@ -793,6 +1421,22 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Influence = 1.0f,
         };
         skeleton.AddChild(leftHandIKModifier);
+
+        SkeletonModifier3D rightFootModifier = new()
+        {
+            Name = "RightLegIKController",
+            Influence = 1.0f,
+            Active = true,
+        };
+        skeleton.AddChild(rightFootModifier);
+
+        SkeletonModifier3D leftFootModifier = new()
+        {
+            Name = "LeftLegIKController",
+            Influence = 1.0f,
+            Active = true,
+        };
+        skeleton.AddChild(leftFootModifier);
 
         SkeletonModifier3D rightHandCopyRotation = new()
         {
@@ -849,6 +1493,20 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         };
         ikTargets.AddChild(leftHandIKTarget);
 
+        Node3D rightFootIKTarget = new()
+        {
+            Name = "RightFoot",
+            Position = new Vector3(0.18f, 0.05f, -0.08f),
+        };
+        ikTargets.AddChild(rightFootIKTarget);
+
+        Node3D leftFootIKTarget = new()
+        {
+            Name = "LeftFoot",
+            Position = new Vector3(-0.18f, 0.05f, -0.08f),
+        };
+        ikTargets.AddChild(leftFootIKTarget);
+
         PlayerVRIK playerVRIK = new()
         {
             Name = "VRIK",
@@ -857,9 +1515,15 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             HeadIKSolveTarget = headIKSolveTarget,
             RightHandIKTarget = rightHandIKTarget,
             LeftHandIKTarget = leftHandIKTarget,
+            RightFootIKTarget = rightFootIKTarget,
+            LeftFootIKTarget = leftFootIKTarget,
+            HeadModifierGroup = [playerHeadModifier],
             RightHandModifierGroup = [rightArmIKController, rightHandIKModifier, rightHandCopyRotation],
             LeftHandModifierGroup = [leftHandIKModifier],
+            RightFootModifierGroup = [rightFootModifier],
+            LeftFootModifierGroup = [leftFootModifier],
             Skeleton = skeleton,
+            HeadTargetMaximumSpeed = 1000.0f,
         };
         player.AddChild(playerVRIK);
 
@@ -906,6 +1570,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         TestXRHandController rightHandController = new(rightControllerNode, rightHandPosition);
         TestXRHandController leftHandController = new(leftControllerNode, leftHandPosition);
 
+        XRHeadTargetProvider headFallbackProvider = new()
+        {
+            Name = "HeadFallbackProvider",
+            Viewpoint = viewpoint,
+        };
+        playerVRIK.AddChild(headFallbackProvider);
+        playerVRIK.HeadFallbackProvider = headFallbackProvider;
+
         XRControllerTargetProvider rightHandFallbackProvider = new()
         {
             Name = "RightHandFallbackProvider",
@@ -922,8 +1594,30 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         playerVRIK.AddChild(leftHandFallbackProvider);
         playerVRIK.LeftHandFallbackProvider = leftHandFallbackProvider;
 
+        AnimationSynchronizedFootTargetProvider rightFootFallbackProvider = new()
+        {
+            Name = "RightFootFallbackProvider",
+            FootTarget = rightFootIKTarget,
+        };
+        playerVRIK.AddChild(rightFootFallbackProvider);
+        playerVRIK.RightFootFallbackProvider = rightFootFallbackProvider;
+
+        AnimationSynchronizedFootTargetProvider leftFootFallbackProvider = new()
+        {
+            Name = "LeftFootFallbackProvider",
+            FootTarget = leftFootIKTarget,
+        };
+        playerVRIK.AddChild(leftFootFallbackProvider);
+        playerVRIK.LeftFootFallbackProvider = leftFootFallbackProvider;
+
         sceneTree.Root.AddChild(root);
         await WaitForFramesAsync(sceneTree, 2);
+
+        if (skeleton.GetNodeOrNull("CharacterIKBeginStage") is null)
+        {
+            playerVRIK._Ready();
+            await WaitForNextFrameAsync(sceneTree);
+        }
 
         return new VrikFixture(
             root,
@@ -934,8 +1628,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             headIKSolveTarget,
             rightHandIKTarget,
             leftHandIKTarget,
+            rightFootIKTarget,
+            leftFootIKTarget,
+            playerHeadModifier,
             rightHandIKModifier,
             leftHandIKModifier,
+            rightFootModifier,
+            leftFootModifier,
+            headFallbackProvider,
             rightHandFallbackProvider,
             leftHandFallbackProvider,
             origin,
@@ -999,6 +1699,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         };
         skeleton.AddChild(rightHandModifier);
 
+        SkeletonModifier3D leftHandModifier = new()
+        {
+            Name = "LeftHandModifier",
+            Active = true,
+            Influence = 1.0f,
+        };
+        skeleton.AddChild(leftHandModifier);
+
         Node3D headAttachment = new()
         {
             Name = "Head",
@@ -1020,8 +1728,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         CharacterBody3D headIKTarget = new()
         {
             Name = "Head",
+            CollisionLayer = 4u,
+            CollisionMask = 8u,
         };
         ikTargets.AddChild(headIKTarget);
+        CollisionShape3D headCollisionShape = new()
+        {
+            Name = "HeadCollisionShape",
+            Shape = new SphereShape3D(),
+        };
+        headIKTarget.AddChild(headCollisionShape);
 
         Node3D headIKSolveTarget = new()
         {
@@ -1032,16 +1748,32 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         AnimatableBody3D rightHandIKTarget = new()
         {
             Name = "RightHand",
+            CollisionLayer = 16u,
+            CollisionMask = 32u,
             SyncToPhysics = false,
         };
         ikTargets.AddChild(rightHandIKTarget);
+        CollisionShape3D rightHandCollisionShape = new()
+        {
+            Name = "RightHandCollisionShape",
+            Shape = new SphereShape3D(),
+        };
+        rightHandIKTarget.AddChild(rightHandCollisionShape);
 
         AnimatableBody3D leftHandIKTarget = new()
         {
             Name = "LeftHand",
+            CollisionLayer = 64u,
+            CollisionMask = 128u,
             SyncToPhysics = false,
         };
         ikTargets.AddChild(leftHandIKTarget);
+        CollisionShape3D leftHandCollisionShape = new()
+        {
+            Name = "LeftHandCollisionShape",
+            Shape = new SphereShape3D(),
+        };
+        leftHandIKTarget.AddChild(leftHandCollisionShape);
 
         Node3D rightFootIKTarget = new()
         {
@@ -1077,6 +1809,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Skeleton = skeleton,
             HeadModifierGroup = [headModifier],
             RightHandModifierGroup = [rightHandModifier],
+            LeftHandModifierGroup = [leftHandModifier],
             RightFootModifierGroup = [rightFootModifier, footSyncController],
             HeadTargetMaximumSpeed = 1000.0f,
             HandTargetMaximumSpeed = 1000.0f,
@@ -1110,9 +1843,11 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             headIKTarget,
             headIKSolveTarget,
             rightHandIKTarget,
+            leftHandIKTarget,
             rightFootIKTarget,
             headModifier,
             rightHandModifier,
+            leftHandModifier,
             rightFootModifier,
             footSyncController,
             vrikBeginStage,
@@ -1129,6 +1864,92 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         _ = method.Invoke(characterIK, [delta]);
     }
 
+    private static void InvokeOnFootProviderStage(CharacterIK characterIK, double delta)
+    {
+        MethodInfo method = typeof(CharacterIK).GetMethod(
+                                "OnFootProviderStage",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException("CharacterIK.OnFootProviderStage was not found.");
+
+        _ = method.Invoke(characterIK, [delta]);
+    }
+
+    private static void InvokeAfterProviderTargetProcessing(PlayerVRIK playerVRIK, Skeleton3D skeleton, double delta)
+    {
+        MethodInfo method = typeof(PlayerVRIK).GetMethod(
+                                "AfterProviderTargetProcessing",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException(
+                                "PlayerVRIK.AfterProviderTargetProcessing was not found.");
+
+        _ = method.Invoke(playerVRIK, [skeleton, delta]);
+    }
+
+    private static void InvokeApplyHeadSolveTargetTransform(CharacterIK characterIK, Transform3D limitedHeadTarget)
+    {
+        MethodInfo method = typeof(CharacterIK).GetMethod(
+                                "ApplyHeadSolveTargetTransform",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException(
+                                "CharacterIK.ApplyHeadSolveTargetTransform was not found.");
+
+        _ = method.Invoke(characterIK, [limitedHeadTarget]);
+    }
+
+    private static PoseStateMachine CreatePoseStateMachine(PoseState poseState)
+    {
+        PoseStateMachine stateMachine = new()
+        {
+            Name = "PoseStateMachine",
+            States = [poseState],
+            InitialStateId = poseState.Id,
+            Active = true,
+        };
+        stateMachine.EnsureInitialStateResolved();
+        return stateMachine;
+    }
+
+    private static Vector3 InvokeLatestHipLocalPosition(PoseStateMachine stateMachine)
+    {
+        MethodInfo method = typeof(PoseStateMachine).GetMethod(
+                                "TryGetLatestHipLocalPosition",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException(
+                                "PoseStateMachine.TryGetLatestHipLocalPosition was not found.");
+        object?[] arguments = [Vector3.Zero];
+        bool resolved = (bool)(method.Invoke(stateMachine, arguments)
+                               ?? throw new InvalidOperationException(
+                                   "PoseStateMachine.TryGetLatestHipLocalPosition returned null."));
+        Assert.True(resolved, "Expected pose state machine to resolve a hip local position.");
+        return (Vector3)arguments[0]!;
+    }
+
+    private static async Task ProcessBeginStageFramesAsync(SceneTree sceneTree, CharacterIK characterIK, int frameCount)
+    {
+        for (int i = 0; i < frameCount; i++)
+        {
+            InvokeOnBeginStage(characterIK, 1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    private static void InvokeOnEndStage(CharacterIK characterIK, double delta)
+    {
+        MethodInfo method = typeof(CharacterIK).GetMethod(
+                                "OnEndStage",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException("CharacterIK.OnEndStage was not found.");
+
+        _ = method.Invoke(characterIK, [delta]);
+    }
+
+    private static void SetHeadBoneGlobalPose(Skeleton3D skeleton, int boneIndex, Transform3D worldTransform)
+    {
+        Transform3D skeletonLocalTransform = skeleton.GlobalTransform.AffineInverse() * worldTransform;
+        Transform3D restTransform = skeleton.GetBoneGlobalRest(boneIndex);
+        skeleton.SetBonePose(boneIndex, restTransform.AffineInverse() * skeletonLocalTransform);
+    }
+
     private static Transform3D InvokeBuildHandTargetTransform(CharacterIK characterIK, string methodName)
     {
         MethodInfo method = typeof(CharacterIK).GetMethod(
@@ -1140,6 +1961,17 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
                              ?? throw new InvalidOperationException($"CharacterIK.{methodName} returned null."));
     }
 
+    private static Transform3D InvokeBuildHeadTargetTransform(CharacterIK characterIK)
+    {
+        MethodInfo method = typeof(CharacterIK).GetMethod(
+                                "BuildHeadTargetTransform",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException("CharacterIK.BuildHeadTargetTransform was not found.");
+
+        return (Transform3D)(method.Invoke(characterIK, [])
+                             ?? throw new InvalidOperationException("CharacterIK.BuildHeadTargetTransform returned null."));
+    }
+
     private sealed class VrikFixture(
         Node3D root,
         PlayerVRIK playerVRIK,
@@ -1149,8 +1981,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         Node3D headIKSolveTarget,
         AnimatableBody3D rightHandIKTarget,
         AnimatableBody3D leftHandIKTarget,
+        Node3D rightFootIKTarget,
+        Node3D leftFootIKTarget,
+        SkeletonModifier3D headModifier,
         TwoBoneIK3D rightHandIKModifier,
         TwoBoneIK3D leftHandIKModifier,
+        SkeletonModifier3D rightFootModifier,
+        SkeletonModifier3D leftFootModifier,
+        XRHeadTargetProvider headFallbackProvider,
         XRControllerTargetProvider rightHandFallbackProvider,
         XRControllerTargetProvider leftHandFallbackProvider,
         TestXROrigin origin,
@@ -1174,9 +2012,21 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         public AnimatableBody3D LeftHandIKTarget { get; } = leftHandIKTarget;
 
+        public Node3D RightFootIKTarget { get; } = rightFootIKTarget;
+
+        public Node3D LeftFootIKTarget { get; } = leftFootIKTarget;
+
+        public SkeletonModifier3D HeadModifier { get; } = headModifier;
+
         public TwoBoneIK3D RightHandIKModifier { get; } = rightHandIKModifier;
 
         public TwoBoneIK3D LeftHandIKModifier { get; } = leftHandIKModifier;
+
+        public SkeletonModifier3D RightFootModifier { get; } = rightFootModifier;
+
+        public SkeletonModifier3D LeftFootModifier { get; } = leftFootModifier;
+
+        public XRHeadTargetProvider HeadFallbackProvider { get; } = headFallbackProvider;
 
         public XRControllerTargetProvider RightHandFallbackProvider { get; } = rightHandFallbackProvider;
 
@@ -1208,9 +2058,11 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         CharacterBody3D headIKTarget,
         Node3D headIKSolveTarget,
         AnimatableBody3D rightHandIKTarget,
+        AnimatableBody3D leftHandIKTarget,
         Node3D rightFootIKTarget,
         SkeletonModifier3D headModifier,
         SkeletonModifier3D rightHandModifier,
+        SkeletonModifier3D leftHandModifier,
         SkeletonModifier3D rightFootModifier,
         FootTargetSyncController footSyncController,
         SkeletonModifier3D vrikBeginStage,
@@ -1231,11 +2083,15 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         public AnimatableBody3D RightHandIKTarget { get; } = rightHandIKTarget;
 
+        public AnimatableBody3D LeftHandIKTarget { get; } = leftHandIKTarget;
+
         public Node3D RightFootIKTarget { get; } = rightFootIKTarget;
 
         public SkeletonModifier3D HeadModifier { get; } = headModifier;
 
         public SkeletonModifier3D RightHandModifier { get; } = rightHandModifier;
+
+        public SkeletonModifier3D LeftHandModifier { get; } = leftHandModifier;
 
         public SkeletonModifier3D RightFootModifier { get; } = rightFootModifier;
 
@@ -1273,6 +2129,45 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         Assert.InRange(actual.X, expected.X - epsilon, expected.X + epsilon);
         Assert.InRange(actual.Y, expected.Y - epsilon, expected.Y + epsilon);
         Assert.InRange(actual.Z, expected.Z - epsilon, expected.Z + epsilon);
+    }
+
+    private static void AssertTargetDisabled(Node3D target)
+    {
+        Assert.Equal(Node.ProcessModeEnum.Disabled, target.ProcessMode);
+        if (target is CollisionObject3D collisionObject)
+        {
+            Assert.Equal(0u, collisionObject.CollisionLayer);
+            Assert.Equal(0u, collisionObject.CollisionMask);
+        }
+
+        AssertCollisionShapesDisabled(target, expectedDisabled: true);
+    }
+
+    private static void AssertTargetEnabled(Node3D target, uint expectedCollisionLayer, uint expectedCollisionMask)
+    {
+        Assert.Equal(Node.ProcessModeEnum.Inherit, target.ProcessMode);
+        CollisionObject3D collisionObject = Assert.IsAssignableFrom<CollisionObject3D>(target);
+        Assert.Equal(expectedCollisionLayer, collisionObject.CollisionLayer);
+        Assert.Equal(expectedCollisionMask, collisionObject.CollisionMask);
+        AssertCollisionShapesDisabled(target, expectedDisabled: false);
+    }
+
+    private static void AssertTargetProcessEnabled(Node3D target)
+        => Assert.Equal(Node.ProcessModeEnum.Inherit, target.ProcessMode);
+
+    private static void AssertCollisionShapesDisabled(Node node, bool expectedDisabled)
+    {
+        int childCount = node.GetChildCount();
+        for (int i = 0; i < childCount; i++)
+        {
+            Node child = node.GetChild(i);
+            if (child is CollisionShape3D collisionShape)
+            {
+                Assert.Equal(expectedDisabled, collisionShape.Disabled);
+            }
+
+            AssertCollisionShapesDisabled(child, expectedDisabled);
+        }
     }
 
     private sealed partial class TestXRManager : XRManager
@@ -1342,6 +2237,18 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         public override IKTargetState GetTargetState()
             => TargetState;
+    }
+
+    private sealed partial class TestPoseState : PoseState
+    {
+        public HipReconciliationTickResult? HipTickResult
+        {
+            get;
+            set;
+        }
+
+        public override HipReconciliationTickResult? ResolveHipReconciliation(PoseStateContext context)
+            => HipTickResult ?? base.ResolveHipReconciliation(context);
     }
 
     private sealed partial class FootTargetConsumer : SkeletonModifier3D

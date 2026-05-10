@@ -29,7 +29,9 @@ IK-002 naming, design, and test conventions.
    feet rotate, transitioning smoothly between animation-derived poses and
    foot-orientation-derived fallback.
 4. Provider-driven foot targets must coexist with FootTargetSyncController
-   without conflict; provider takes precedence when assigned.
+   without conflict; explicit providers take precedence when assigned, while
+   player fallback providers preserve animation-synchronised feet when no
+   explicit foot provider is active.
 5. Provider influence of 0 on a foot must deactivate the corresponding leg IK
    modifier.
 
@@ -81,11 +83,13 @@ IK-002 naming, design, and test conventions.
 12. **Provider coexistence contract**: `FootTargetSyncController` runs first
      to synchronise animation foot targets. A dedicated `CharacterIKFootProviderStage`
      then evaluates the foot provider contract; when a provider is assigned and
-     has non-zero influence, it overrides the animation-synced target. When no
-     foot provider is assigned or influence is 0, the animation-synced target
-     from the sync stage is preserved. This allows NPC characters to use
-     animation-driven foot targets while player characters can override with
-     provider-driven targets.
+     has non-zero influence, it overrides the animation-synced target. Player
+     scenes preserve animation-synchronised target ownership by wiring explicit
+     animation-synchronised foot fallback providers that report active influence
+     without taking transform ownership. Generic/NPC `CharacterIK` instances
+     with no provider or fallback provider disable foot target gates and leg
+     modifiers by default. Provider influence 0 always disables the
+     corresponding target gate and leg modifier.
 13. **Provider influence gating**: When the corresponding `IKTargetStateProvider`
     reports desired influence of 0, the leg `TwoBoneIK3D` for that side must be
     deactivated.
@@ -211,17 +215,19 @@ pages.
   targets when a foot `IKTargetStateProvider` is assigned with non-zero influence.
   *(Provider Coexistence Contract)*
 
-- **AC-16** — When no foot provider is assigned or influence is 0,
-  `FootTargetSyncController` continues to provide animation-derived foot targets
-  without conflict. *(Provider Coexistence Contract)*
+- **AC-16** — Player scenes keep animation-synchronised foot targets active by
+  wiring explicit animation-synchronised foot fallback providers; generic/NPC
+  `CharacterIK` with no provider or fallback provider keeps foot IK disabled by
+  default. *(Provider Coexistence Contract)*
 
 - **AC-17** — Provider influence of 0 on a foot deactivates the corresponding leg
   `TwoBoneIK3D` modifier. *(Provider Gating Contract)*
 
 - **AC-18** — Foot provider coexistence runs `FootTargetSyncController` first to
   synchronise animation foot targets, then evaluates the provider contract; a
-  non-zero provider overrides the synced target while zero or absent provider
-  preserves the animation fallback. *(Provider Coexistence Contract)*
+  non-zero explicit provider overrides the synced target, an animation-synchronised
+  fallback provider preserves the synced target without rewriting it, and zero
+  influence disables the gated foot target. *(Provider Coexistence Contract)*
 
 ## References
 
