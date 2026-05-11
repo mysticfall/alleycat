@@ -1,4 +1,5 @@
 using AlleyCat.Body;
+using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.TestFramework;
 using Godot;
@@ -43,7 +44,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         AssertConnection(root, HandPoseAnimationTreePaths.LeftHandBlendNode, 1, HandPoseAnimationTreePaths.LeftHandPoseNode);
         AssertConnection(root, HandPoseAnimationTreePaths.RightHandBlendNode, 0, HandPoseAnimationTreePaths.LeftHandBlendNode);
         AssertConnection(root, HandPoseAnimationTreePaths.RightHandBlendNode, 1, HandPoseAnimationTreePaths.RightHandPoseNode);
-        AssertConnection(root, "output", 0, HandPoseAnimationTreePaths.RightHandBlendNode);
+        AssertConnection(root, EyesAnimationTreePaths.HorizontalLookBlendNode, 0, HandPoseAnimationTreePaths.RightHandBlendNode);
     }
 
     /// <summary>
@@ -60,8 +61,10 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
         Assert.Contains("states/Idle/node", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("StandingCrouching", contents, StringComparison.Ordinal);
-        Assert.DoesNotContain("TimeSeek", contents, StringComparison.Ordinal);
-        Assert.DoesNotContain("seek_request", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("AnimationNodeTimeSeek_kcdmd", contents, StringComparison.Ordinal);
+        Assert.DoesNotContain("AnimationNodeTimeSeek_phcyr", contents, StringComparison.Ordinal);
+        Assert.Contains(EyesAnimationTreePaths.HorizontalLookSeekNode, contents, StringComparison.Ordinal);
+        Assert.Contains(EyesAnimationTreePaths.VerticalLookSeekNode, contents, StringComparison.Ordinal);
         Assert.DoesNotContain("AllFours", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("VRIK", contents, StringComparison.Ordinal);
 
@@ -72,7 +75,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         AssertConnection(root, HandPoseAnimationTreePaths.LeftHandBlendNode, 1, HandPoseAnimationTreePaths.LeftHandPoseNode);
         AssertConnection(root, HandPoseAnimationTreePaths.RightHandBlendNode, 0, HandPoseAnimationTreePaths.LeftHandBlendNode);
         AssertConnection(root, HandPoseAnimationTreePaths.RightHandBlendNode, 1, HandPoseAnimationTreePaths.RightHandPoseNode);
-        AssertConnection(root, "output", 0, HandPoseAnimationTreePaths.RightHandBlendNode);
+        AssertConnection(root, EyesAnimationTreePaths.HorizontalLookBlendNode, 0, HandPoseAnimationTreePaths.RightHandBlendNode);
     }
 
     /// <summary>

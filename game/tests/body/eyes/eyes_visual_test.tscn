@@ -1,0 +1,5 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://dsoyrofkocge2" path="res://assets/testing/photobooth/templates/face_cam.tscn" id="1_face"]
+
+[node name="EyesVisualTest" instance=ExtResource("1_face")]

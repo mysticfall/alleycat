@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dp3fxu1uko3n7"]
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
+[ext_resource type="AnimationLibrary" uid="uid://xjgp5mvaystq" path="res://assets/characters/reference/female/animations/eyes/eyes.tres" id="2_ei3al"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
 radius = 0.1
@@ -80,4 +81,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 shape = SubResource("SphereShape3D_osxwe")
 
 [node name="AnimationPlayer" parent="." index="2" unique_id=1564663098]
+root_node = NodePath("../Female_export")
 root_motion_track = NodePath("%GeneralSkeleton:Root")
+libraries/eyes = ExtResource("2_ei3al")

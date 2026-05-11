@@ -1,0 +1,12 @@
+[gd_resource type="AnimationLibrary" format=3 uid="uid://xjgp5mvaystq"]
+
+[ext_resource type="Animation" uid="uid://0y55m0dolc6g" path="res://assets/characters/reference/female/animations/eyes/eyes_blink.tres" id="1_527jc"]
+[ext_resource type="Animation" uid="uid://d31f3kjrpm4di" path="res://assets/characters/reference/female/animations/eyes/eyes_right_left.tres" id="2_rk22g"]
+[ext_resource type="Animation" uid="uid://ciblirq446ggj" path="res://assets/characters/reference/female/animations/eyes/eyes_up_down.tres" id="3_ncbgh"]
+
+[resource]
+_data = {
+&"Eyes Blink": ExtResource("1_527jc"),
+&"Eyes Right Left": ExtResource("2_rk22g"),
+&"Eyes Up Down": ExtResource("3_ncbgh")
+}

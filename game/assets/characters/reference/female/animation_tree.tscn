@@ -9,4 +9,6 @@ tree_root = ExtResource("1_ibtlu")
 anim_player = NodePath("../AnimationPlayer")
 parameters/RightHandBlend/blend_amount = 0.0
 parameters/LeftHandBlend/blend_amount = 0.0
+parameters/EyesVerticalLookBlend/blend_amount = 1.0
+parameters/EyesHorizontalLookBlend/blend_amount = 1.0
 parameters/States/Walking/blend_position = Vector2(0, 0)

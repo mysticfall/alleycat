@@ -1,5 +1,32 @@
 [gd_resource type="AnimationNodeBlendTree" format=3 uid="uid://c485owf86etdu"]
 
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_eyes_blink"]
+animation = &"eyes/Eyes Blink"
+
+[sub_resource type="AnimationNodeOneShot" id="AnimationNodeOneShot_eyes_blink"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Female_body_export:eyeBlinkLeft", "GeneralSkeleton/Female_body_export:eyeBlinkRight", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkRight"]
+
+[sub_resource type="AnimationNodeTimeScale" id="AnimationNodeTimeScale_8verw"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_eyes_horizontal"]
+animation = &"eyes/Eyes Right Left"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_eyes_horizontal"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Female_body_export:eyeLookInLeft", "GeneralSkeleton/Female_body_export:eyeLookInRight", "GeneralSkeleton/Female_body_export:eyeLookOutLeft", "GeneralSkeleton/Female_body_export:eyeLookOutRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookInLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookInRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookOutLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookOutRight", "GeneralSkeleton/Female_high-poly_export:eyeLookInLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookInRight", "GeneralSkeleton/Female_high-poly_export:eyeLookOutLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookOutRight"]
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_eyes_horizontal"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_eyes_vertical"]
+animation = &"eyes/Eyes Up Down"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_eyes_vertical"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Female_body_export:eyeLookDownLeft", "GeneralSkeleton/Female_body_export:eyeLookDownRight", "GeneralSkeleton/Female_body_export:eyeLookUpLeft", "GeneralSkeleton/Female_body_export:eyeLookUpRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookDownLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookDownRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookUpLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookUpRight", "GeneralSkeleton/Female_high-poly_export:eyeLookDownLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookDownRight", "GeneralSkeleton/Female_high-poly_export:eyeLookUpLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookUpRight"]
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_eyes_vertical"]
+
 [sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_left_hand"]
 filter_enabled = true
 filters = ["%GeneralSkeleton:LeftIndexDistal", "%GeneralSkeleton:LeftIndexIntermediate", "%GeneralSkeleton:LeftIndexProximal", "%GeneralSkeleton:LeftLittleDistal", "%GeneralSkeleton:LeftLittleIntermediate", "%GeneralSkeleton:LeftLittleProximal", "%GeneralSkeleton:LeftMiddleDistal", "%GeneralSkeleton:LeftMiddleIntermediate", "%GeneralSkeleton:LeftMiddleProximal", "%GeneralSkeleton:LeftRingDistal", "%GeneralSkeleton:LeftRingIntermediate", "%GeneralSkeleton:LeftRingProximal", "%GeneralSkeleton:LeftThumbDistal", "%GeneralSkeleton:LeftThumbMetacarpal", "%GeneralSkeleton:LeftThumbProximal"]
@@ -57,7 +84,25 @@ transitions = ["Start", "Idle", SubResource("AnimationNodeStateMachineTransition
 
 [resource]
 resource_name = "NPC Animation Tree Root"
-nodes/output/position = Vector2(320, -140)
+nodes/output/position = Vector2(640, -120)
+nodes/EyesBlinkOneShot/node = SubResource("AnimationNodeOneShot_eyes_blink")
+nodes/EyesBlinkOneShot/position = Vector2(280, 340)
+nodes/EyesBlinkAnimation/node = SubResource("AnimationNodeAnimation_eyes_blink")
+nodes/EyesBlinkAnimation/position = Vector2(-80, 360)
+nodes/States/node = SubResource("AnimationNodeStateMachine_locomotion")
+nodes/States/position = Vector2(-620, -140)
+nodes/EyesVerticalLookBlend/node = SubResource("AnimationNodeBlend2_eyes_vertical")
+nodes/EyesVerticalLookBlend/position = Vector2(220, -380)
+nodes/EyesVerticalLookAnimation/node = SubResource("AnimationNodeAnimation_eyes_vertical")
+nodes/EyesVerticalLookAnimation/position = Vector2(-300, 300)
+nodes/EyesVerticalLookSeek/node = SubResource("AnimationNodeTimeSeek_eyes_vertical")
+nodes/EyesVerticalLookSeek/position = Vector2(-40, 220)
+nodes/EyesHorizontalLookBlend/node = SubResource("AnimationNodeBlend2_eyes_horizontal")
+nodes/EyesHorizontalLookBlend/position = Vector2(-100, -440)
+nodes/EyesHorizontalLookAnimation/node = SubResource("AnimationNodeAnimation_eyes_horizontal")
+nodes/EyesHorizontalLookAnimation/position = Vector2(-640, 280)
+nodes/EyesHorizontalLookSeek/node = SubResource("AnimationNodeTimeSeek_eyes_horizontal")
+nodes/EyesHorizontalLookSeek/position = Vector2(-400, 200)
 nodes/RightHandBlend/node = SubResource("AnimationNodeBlend2_right_hand")
 nodes/RightHandBlend/position = Vector2(100, -160)
 nodes/LeftHandPose/node = SubResource("AnimationNodeAnimation_left_reset")
@@ -66,6 +111,6 @@ nodes/LeftHandBlend/node = SubResource("AnimationNodeBlend2_left_hand")
 nodes/LeftHandBlend/position = Vector2(-120, -170)
 nodes/RightHandPose/node = SubResource("AnimationNodeAnimation_right_reset")
 nodes/RightHandPose/position = Vector2(-80, 120)
-nodes/States/node = SubResource("AnimationNodeStateMachine_locomotion")
-nodes/States/position = Vector2(-620, -140)
-node_connections = [&"output", 0, &"RightHandBlend", &"RightHandBlend", 0, &"LeftHandBlend", &"RightHandBlend", 1, &"RightHandPose", &"LeftHandBlend", 0, &"States", &"LeftHandBlend", 1, &"LeftHandPose"]
+nodes/EyesBlinkTimeScale/node = SubResource("AnimationNodeTimeScale_8verw")
+nodes/EyesBlinkTimeScale/position = Vector2(80, 320)
+node_connections = [&"output", 0, &"EyesBlinkOneShot", &"EyesBlinkOneShot", 0, &"EyesVerticalLookBlend", &"EyesBlinkOneShot", 1, &"EyesBlinkTimeScale", &"EyesVerticalLookBlend", 0, &"EyesHorizontalLookBlend", &"EyesVerticalLookBlend", 1, &"EyesVerticalLookSeek", &"EyesVerticalLookSeek", 0, &"EyesVerticalLookAnimation", &"EyesHorizontalLookBlend", 0, &"RightHandBlend", &"EyesHorizontalLookBlend", 1, &"EyesHorizontalLookSeek", &"EyesHorizontalLookSeek", 0, &"EyesHorizontalLookAnimation", &"RightHandBlend", 0, &"LeftHandBlend", &"RightHandBlend", 1, &"RightHandPose", &"LeftHandBlend", 0, &"States", &"LeftHandBlend", 1, &"LeftHandPose", &"EyesBlinkTimeScale", 0, &"EyesBlinkAnimation"]
