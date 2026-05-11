@@ -19,10 +19,10 @@ The project provides several reusable photobooth base scenes:
 | Scene                                                                        | Purpose                                                                                                                         |
 |------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
 | `@game/assets/testing/photobooth/photobooth.tscn`                            | Generic base scene — inherit this when creating new reusable photobooth setups.                                                 |
-| `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn`  | Full-body character verification with 5 cameras (front, back, left, right, top). Use as default for character IK/pose features. |
-| `@game/assets/characters/reference/female/photobooth/upper_body_5_cams.tscn` | Upper-body character verification with 5 cameras. Use for features focused on arm/hand poses or torso positioning.              |
-| `@game/assets/characters/reference/female/photobooth/lower_body_5_cams.tscn` | Lower-body character verification with 5 cameras. Use for leg/foot pose or walking gait validation.                             |
-| `@game/assets/characters/reference/female/photobooth/face_cam.tscn`          | Single close-up camera for facial expression or eye-tracking verification.                                                      |
+| `@game/assets/testing/photobooth/templates/full_body_5_cams.tscn`  | Full-body character verification with 5 cameras (front, back, left, right, top). Use as default for character IK/pose features. |
+| `@game/assets/testing/photobooth/templates/upper_body_5_cams.tscn` | Upper-body character verification with 5 cameras. Use for features focused on arm/hand poses or torso positioning.              |
+| `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn` | Lower-body character verification with 5 cameras. Use for leg/foot pose or walking gait validation.                             |
+| `@game/assets/testing/photobooth/templates/face_cam.tscn`                    | Single close-up camera for facial expression or eye-tracking verification.                                                      |
 
 Use the most specific scene that matches your verification needs. If none fits, inherit the generic base and create a
 new reusable setup under `@game/assets/`.
@@ -32,7 +32,7 @@ new reusable setup under `@game/assets/`.
 1. **Create A Test Scene (Photobooth)**
     - Create a photobooth scene under `@game/tests/<feature>/` by inheriting an existing base scene.
     - Prefer reusable inherited bases first (for example
-      `@game/assets/characters/reference/female/photobooth/full_body_5_cams.tscn`).
+      `@game/assets/testing/photobooth/templates/full_body_5_cams.tscn`).
     - For character IK/pose features, use `full_body_5_cams.tscn` as the default base unless the spec says otherwise.
     - If no suitable base exists, inherit `@game/assets/testing/photobooth/photobooth.tscn`, add the required
       cameras/markers, and save reusable setups under `@game/assets/`.
