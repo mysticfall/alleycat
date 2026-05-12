@@ -64,7 +64,7 @@ reusable character IK for NPCs and player-specific XR integration.
 
 ### Player XR Integration Layer
 - Attaches to `CharacterIK` as a complementary provider layer.
-- Exposes fallback provider properties for XR hand-controller binding.
+- Exposes fallback provider properties for XR hand-controller target providers.
 - Falls back gracefully when XR is unavailable.
 
 ### Provider Architecture

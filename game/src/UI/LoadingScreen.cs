@@ -1,6 +1,7 @@
 using AlleyCat.Common;
 using AlleyCat.XR;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 using Array = Godot.Collections.Array;
 using UIControl = Godot.Control;
 
@@ -34,12 +35,6 @@ public partial class LoadingScreen : UIControl
     /// </summary>
     [Export]
     public string RecenterInstructionMessage { get; set; } = "Stand up straight and recentre your headset to continue.";
-
-    /// <summary>
-    /// Path to the XR manager that provides the pose-recenter signal.
-    /// </summary>
-    [Export]
-    public NodePath XRManagerPath { get; set; } = new("../..");
 
     /// <summary>
     /// Emitted when scene loading finishes and the scene has been changed successfully.
@@ -220,13 +215,13 @@ public partial class LoadingScreen : UIControl
     }
 
     private XRManager ResolveXRManager()
-        => _xrManager ??= this.RequireNode<XRManager>(XRManagerPath);
+        => _xrManager ??= Game.Instance.GetRequiredService<XRManager>();
 
     private void DisconnectFromPoseRecentered()
     {
-        if (_xrManager is not null)
+        if (_xrManager is XRManager xrManager)
         {
-            _xrManager.PoseRecentered -= OnPoseRecentered;
+            xrManager.PoseRecentered -= OnPoseRecentered;
         }
     }
 

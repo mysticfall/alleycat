@@ -2,6 +2,7 @@ using AlleyCat.Body;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AlleyCat.Speech.Transcription;
 
@@ -149,13 +150,6 @@ public abstract partial class Transcriber : Node
         _microphonePlayer = CreateMicrophonePlayer();
         _maxDurationTimer = CreateMaxDurationTimer();
 
-        if (_xrManager is null)
-        {
-            GD.PushWarning($"{nameof(Transcriber)} could not find an {nameof(XRManager)} in the current scene tree.");
-            SetProcess(false);
-            return;
-        }
-
         _xrManager.Initialised += OnXRInitialised;
 
         if (_xrManager.InitialisationAttempted)
@@ -181,9 +175,9 @@ public abstract partial class Transcriber : Node
     /// <inheritdoc />
     public override void _ExitTree()
     {
-        if (_xrManager is not null)
+        if (_xrManager is XRManager xrManager)
         {
-            _xrManager.Initialised -= OnXRInitialised;
+            xrManager.Initialised -= OnXRInitialised;
         }
 
         StopRecordingInternal();
@@ -201,18 +195,8 @@ public abstract partial class Transcriber : Node
         }
     }
 
-    private XRManager? ResolveXRManager()
-    {
-        foreach (Node node in GetTree().Root.FindChildren(pattern: "*", type: string.Empty, recursive: true, owned: false))
-        {
-            if (node is XRManager manager)
-            {
-                return manager;
-            }
-        }
-
-        return null;
-    }
+    private static XRManager ResolveXRManager()
+        => Game.Instance.GetRequiredService<XRManager>();
 
     private AudioEffectRecord EnsureRecordEffect()
     {

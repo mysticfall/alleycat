@@ -95,7 +95,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
 
-        Node root = new()
+        Game root = new()
         {
             Name = "BinderFailureFixture",
         };
@@ -126,12 +126,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         root.AddChild(playerNode);
         playerNode.AddChild(playerVRIK);
 
+        root._EnterTree();
         sceneTree.Root.AddChild(root);
 
         try
         {
             await WaitForFramesAsync(sceneTree, 2);
-            binder.XRManagerPath = xrManager.GetPath();
             if (!binder.ReadyCalled)
             {
                 binder._Ready();
@@ -158,7 +158,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
 
-        Node root = new()
+        Game root = new()
         {
             Name = "BinderLateSubscriptionFixture",
         };
@@ -188,6 +188,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         root.AddChild(playerNode);
         playerNode.AddChild(playerVRIK);
 
+        root._EnterTree();
         sceneTree.Root.AddChild(root);
 
         try
@@ -198,7 +199,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             Assert.True(xrManager.InitialisationAttempted);
             Assert.True(xrManager.InitialisationSucceeded);
-            binder.XRManagerPath = xrManager.GetPath();
             root.AddChild(binder);
             await WaitForNextFrameAsync(sceneTree);
             if (!binder.ReadyCalled)
@@ -231,11 +231,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             fixture.PlayerVRIK._Ready();
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
             Assert.True(float.IsFinite(fixture.Origin.WorldScale));
@@ -259,11 +255,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             fixture.PlayerVRIK._Ready();
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
 
@@ -305,11 +297,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
 
@@ -349,11 +337,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
 
@@ -393,11 +377,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             fixture.PlayerVRIK._Ready();
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
             fixture.PlayerVRIK.HeadTargetProvider = null;
@@ -433,11 +413,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
 
@@ -493,11 +469,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
 
@@ -895,11 +867,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
 
@@ -935,11 +903,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
 
@@ -1008,11 +972,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             PoseStateMachine stateMachine = CreatePoseStateMachine(poseState);
             fixture.PlayerVRIK.AddChild(stateMachine);
 
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
             fixture.PlayerVRIK.PoseStateMachine = stateMachine;
@@ -1067,11 +1027,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             PoseStateMachine stateMachine = CreatePoseStateMachine(poseState);
             fixture.PlayerVRIK.AddChild(stateMachine);
 
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
             fixture.PlayerVRIK.PoseStateMachine = stateMachine;
@@ -1118,11 +1074,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
             fixture.RightFootIKTarget.Transform = new Transform3D(Basis.Identity, new Vector3(0.18f, 0.05f, -0.08f));
@@ -1167,11 +1119,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
             fixture.PlayerVRIK.RightFootTargetProvider = provider;
@@ -1213,11 +1161,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             PoseStateMachine stateMachine = CreatePoseStateMachine(poseState);
             fixture.PlayerVRIK.AddChild(stateMachine);
 
-            bool bound = fixture.PlayerVRIK.TryBind(
-                fixture.Origin,
-                fixture.Camera,
-                fixture.RightHandController,
-                fixture.LeftHandController);
+            bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
             fixture.PlayerVRIK.PoseStateMachine = stateMachine;
@@ -1436,10 +1380,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
     private static async Task<VrikFixture> CreateVrikFixtureAsync(SceneTree sceneTree, float xrCameraHeight, float initialWorldScale)
     {
-        Node3D root = new()
+        TestGame root = new()
         {
             Name = "PlayerVrikFixture",
         };
+
+        TestXRManager xrManager = new()
+        {
+            Name = "RenamedXRManagerService",
+        };
+        root.AddChild(xrManager);
 
         Node3D player = new()
         {
@@ -1649,6 +1599,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         TestXRCamera camera = new(cameraNode);
         TestXRHandController rightHandController = new(rightControllerNode, rightHandPosition);
         TestXRHandController leftHandController = new(leftControllerNode, leftHandPosition);
+        xrManager.SetRuntime(new TestXRRuntime(origin, camera, rightHandController, leftHandController));
 
         XRHeadTargetProvider headFallbackProvider = new()
         {
@@ -1690,6 +1641,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         playerVRIK.AddChild(leftFootFallbackProvider);
         playerVRIK.LeftFootFallbackProvider = leftFootFallbackProvider;
 
+        root._EnterTree();
         sceneTree.Root.AddChild(root);
         await WaitForFramesAsync(sceneTree, 2);
 
@@ -2060,7 +2012,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     private sealed class VrikFixture(
-        Node3D root,
+        Node root,
         PlayerVRIK playerVRIK,
         Skeleton3D skeleton,
         int headBoneIndex,
@@ -2083,7 +2035,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         TestXRHandController rightHandController,
         TestXRHandController leftHandController)
     {
-        public Node3D Root { get; } = root;
+        public Node Root { get; } = root;
 
         public PlayerVRIK PlayerVRIK { get; } = playerVRIK;
 
@@ -2275,6 +2227,48 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             InitialisationSucceeded = succeeded;
             _ = EmitSignal("Initialised", succeeded);
         }
+
+        public void SetRuntime(IXRRuntime runtime)
+            => Runtime = runtime;
+    }
+
+    private sealed partial class TestGame : Game
+    {
+        public override void _Ready()
+        {
+        }
+    }
+
+    private sealed class TestXRRuntime(
+        IXROrigin origin,
+        IXRCamera camera,
+        IXRHandController rightHandController,
+        IXRHandController leftHandController) : IXRRuntime
+    {
+        public IXROrigin Origin => origin;
+
+        public IXRCamera Camera => camera;
+
+        public IXRHandController RightHandController => rightHandController;
+
+        public IXRHandController LeftHandController => leftHandController;
+
+        public event Action? PoseRecentered
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
+        public bool Initialise(SubViewport viewport, int maximumRefreshRate)
+        {
+            _ = viewport;
+            _ = maximumRefreshRate;
+            return true;
+        }
     }
 
     private sealed partial class TestPlayerVRIKStartupBinder : PlayerVRIKStartupBinder
@@ -2313,7 +2307,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         {
         }
 
-        public override bool TryBind(IXRRuntime runtime)
+        public override bool BindToXRServices()
         {
             BindCallCount++;
             return true;

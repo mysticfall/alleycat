@@ -461,7 +461,7 @@ public sealed partial class TranscriberIntegrationTests
 
     private static async Task<RuntimeSpeechFixture> CreateRuntimeSpeechFixtureAsync(SceneTree sceneTree, Transcriber transcriber)
     {
-        Node global = new()
+        Game global = new()
         {
             Name = "Global",
         };
@@ -499,6 +499,7 @@ public sealed partial class TranscriberIntegrationTests
         global.AddChild(xrManager);
 
         global.AddChild(transcriber);
+        global._EnterTree();
         sceneTree.Root.AddChild(global);
         await WaitForFramesAsync(sceneTree, 3);
 

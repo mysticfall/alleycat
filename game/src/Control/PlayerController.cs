@@ -4,6 +4,7 @@ using AlleyCat.Common;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.XR;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AlleyCat.Control;
 
@@ -74,13 +75,6 @@ public partial class PlayerController : Node
         _hands = ResolveHands();
         _xrManager = ResolveXRManager();
 
-        if (_xrManager is null)
-        {
-            GD.PushWarning($"{nameof(PlayerController)} could not find an {nameof(XRManager)} in the current scene tree.");
-            SetProcess(false);
-            return;
-        }
-
         _xrManager.Initialised += OnXRInitialised;
 
         if (_xrManager.InitialisationAttempted)
@@ -136,18 +130,8 @@ public partial class PlayerController : Node
                 $"Node '{locomotionNode.GetPath()}' must implement {nameof(ILocomotion)}.");
     }
 
-    private XRManager? ResolveXRManager()
-    {
-        foreach (Node node in GetTree().Root.FindChildren(pattern: "*", type: nameof(XRManager), recursive: true, owned: false))
-        {
-            if (node is XRManager manager)
-            {
-                return manager;
-            }
-        }
-
-        return null;
-    }
+    private static XRManager ResolveXRManager()
+        => Game.Instance.GetRequiredService<XRManager>();
 
     private IHasHands? ResolveHands()
     {

@@ -1,6 +1,7 @@
 using AlleyCat.Common;
 using AlleyCat.Testing;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AlleyCat.XR;
 
@@ -8,7 +9,7 @@ namespace AlleyCat.XR;
 /// Manages XR startup and exposes XR-node abstractions for runtime and tests.
 /// </summary>
 [GlobalClass]
-public partial class XRManager : Node
+public partial class XRManager : Node, IServiceRegistrar
 {
     private static readonly Dictionary<ulong, (bool Attempted, bool Succeeded)> _initialisationStates = [];
 
@@ -45,7 +46,11 @@ public partial class XRManager : Node
     /// <summary>
     /// Active XR runtime instance.
     /// </summary>
-    public IXRRuntime Runtime { get; private set; } = null!;
+    public IXRRuntime Runtime { get; protected internal set; } = null!;
+
+    /// <inheritdoc />
+    public void RegisterServices(IServiceCollection services)
+        => services.AddSingleton(this);
 
     /// <summary>
     /// Whether XR initialisation has been attempted.

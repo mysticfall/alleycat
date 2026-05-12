@@ -167,7 +167,6 @@ public sealed class LoadingScreenIntegrationTests
         LoadingScreen loadingScreen = new()
         {
             Name = "LoadingScreen",
-            XRManagerPath = new NodePath("../.."),
         };
 
         VBoxContainer centerContent = new()
@@ -190,11 +189,18 @@ public sealed class LoadingScreenIntegrationTests
         loadingScreen.AddChild(centerContent);
 
         subViewport.AddChild(loadingScreen);
+        Game game = new()
+        {
+            Name = "Game",
+        };
+
         xrManager.AddChild(subViewport);
-        sceneTree.Root.AddChild(xrManager);
+        game.AddChild(xrManager);
+        game._EnterTree();
+        sceneTree.Root.AddChild(game);
         await WaitForFramesAsync(sceneTree, 2);
 
-        return new RuntimeLoadingScreenFixture(xrManager, loadingScreen, loadingProgressBar, loadingMessage);
+        return new RuntimeLoadingScreenFixture(game, xrManager, loadingScreen, loadingProgressBar, loadingMessage);
     }
 
     private static async Task WaitForLoadToReachRecenterStateAsync(SceneTree sceneTree, RuntimeLoadingScreenFixture fixture)
@@ -210,16 +216,17 @@ public sealed class LoadingScreenIntegrationTests
 
     private static async Task DestroyFixtureAsync(SceneTree sceneTree, RuntimeLoadingScreenFixture fixture)
     {
-        if (!GodotObject.IsInstanceValid(fixture.XRManager) || !fixture.XRManager.IsInsideTree())
+        if (!GodotObject.IsInstanceValid(fixture.Game) || !fixture.Game.IsInsideTree())
         {
             return;
         }
 
-        fixture.XRManager.QueueFree();
+        fixture.Game.QueueFree();
         await WaitForNextFrameAsync(sceneTree);
     }
 
     private sealed record RuntimeLoadingScreenFixture(
+        Game Game,
         XRManager XRManager,
         LoadingScreen LoadingScreen,
         ProgressBar LoadingProgressBar,

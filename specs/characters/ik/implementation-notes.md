@@ -77,7 +77,8 @@ Child guidance under [IK: VRIK System](index.md).
 
 ### World-Scale Calibration Contract
 
-- `PlayerVRIK` performs one-time world-scale calibration on bind.
+- `PlayerVRIK` performs one-time world-scale calibration when it binds to XR origin and
+  camera services.
 - Calibration uses the ratio between avatar rest viewpoint-local head height and XR
   camera local head height.
 - If either height is near zero, calibration is skipped and the current XR world
@@ -129,14 +130,19 @@ Child guidance under [IK: VRIK System](index.md).
 3. `PlayerVRIK` exposes optional fallback provider properties (for example
    `LeftHandFallbackProvider`, `RightHandFallbackProvider`, `HeadFallbackProvider`).
 4. `XRControllerTargetProvider` exposes a `LimbSide` property and resolves the corresponding
-   XR controller hand-position node internally during player binding.
+   XR controller hand-position node through XR services instead of receiving controller nodes
+   from `PlayerVRIK`.
 5. The `player.tscn` scene wires fallback providers to the appropriate character IK properties
    and assigns each provider side explicitly.
-6. Generic fallback-provider selection is owned by `CharacterIK`; `PlayerVRIK` only binds
-   player XR runtime abstractions into XR fallback providers.
-7. When no provider is assigned, the fallback provider is used if available; otherwise
+6. Generic fallback-provider selection is owned by `CharacterIK`; `PlayerVRIK` does not
+   distribute XR runtime or `XRManager` to XR fallback providers.
+7. **XR target providers resolve required XR services themselves** via the global service
+   resolution (see [CORE-004: Global Service Resolution](../../core/004-global-service-resolution/index.md)).
+   For example, `XRControllerTargetProvider` resolves `XRManager` via
+   `Game.Instance.GetService<XRManager>()` rather than receiving it as a constructor argument.
+8. When no provider is assigned, the fallback provider is used if available; otherwise
    the character IK uses a safe idle state.
-8. **No normal fallback uses the target body as its own follow source.** Such self-follow
+9. **No normal fallback uses the target body as its own follow source.** Such self-follow
    creates no-op behaviour and breaks VR physical limiting semantics.
 
 ### Provider Property Mapping
@@ -187,6 +193,7 @@ Child guidance under [IK: VRIK System](index.md).
 - @specs/characters/ik/001-neck-spine-ik/index.md
 - @specs/characters/ik/002-arm-shoulder-ik/index.md
 - @specs/characters/ik/003-leg-feet-ik/index.md
+- @specs/core/004-global-service-resolution/index.md
 - @specs/xr/001-xr-manager/index.md
 - @game/src/IK/CharacterIK.cs
 - @game/src/IK/PlayerVRIK.cs

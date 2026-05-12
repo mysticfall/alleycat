@@ -7,7 +7,7 @@ namespace AlleyCat.IK;
 /// IK target provider that follows the hand-position node for one XR controller side.
 /// </summary>
 [GlobalClass]
-public partial class XRControllerTargetProvider : IKTargetStateProvider, IXRRuntimeBoundTargetProvider
+public partial class XRControllerTargetProvider : IKTargetStateProvider
 {
     /// <summary>
     /// Limb side used to select the corresponding XR controller during runtime binding.
@@ -34,9 +34,20 @@ public partial class XRControllerTargetProvider : IKTargetStateProvider, IXRRunt
     [Export(PropertyHint.Range, "0,1,0.01")]
     public float DesiredInfluence { get; set; } = 1.0f;
 
-    /// <inheritdoc />
-    public bool TryBind(IXRRuntime runtime)
+    private bool TryResolveSourceNode()
     {
+        if (ResolvedSourceNode is not null && IsInstanceValid(ResolvedSourceNode))
+        {
+            return true;
+        }
+
+        IXRRuntime? runtime = ResolveXRRuntime();
+        if (runtime is null)
+        {
+            ResolvedSourceNode = null;
+            return false;
+        }
+
         ResolvedSourceNode = Side == LimbSide.Right
             ? runtime.RightHandController.HandPositionNode
             : runtime.LeftHandController.HandPositionNode;
@@ -46,7 +57,23 @@ public partial class XRControllerTargetProvider : IKTargetStateProvider, IXRRunt
 
     /// <inheritdoc />
     public override IKTargetState GetTargetState()
-        => ResolvedSourceNode is not null && IsInstanceValid(ResolvedSourceNode)
+    {
+        _ = TryResolveSourceNode();
+        return ResolvedSourceNode is not null && IsInstanceValid(ResolvedSourceNode)
             ? new IKTargetState(ResolvedSourceNode.GlobalTransform, DesiredInfluence)
             : new IKTargetState(Transform3D.Identity, 0.0f);
+    }
+
+    private static IXRRuntime? ResolveXRRuntime()
+    {
+        try
+        {
+            XRManager? xrManager = Game.Instance.GetService<XRManager>();
+            return xrManager?.Runtime;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
 }

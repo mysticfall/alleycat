@@ -1,7 +1,9 @@
 using System.Reflection;
 using AlleyCat.Testing;
 using AlleyCat.UI;
+using AlleyCat.XR;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
@@ -220,6 +222,85 @@ public sealed partial class GameStartupIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies the global game node exposes the scene-owned XR manager through service resolution.
+    /// </summary>
+    [Fact]
+    public async Task GameEnterTree_RegistersSceneXRManagerAsGlobalService()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        StartupFixture fixture = await CreateStartupFixtureAsync(sceneTree);
+
+        try
+        {
+            Assert.Same(fixture.Game, Game.Instance);
+            _ = Assert.IsAssignableFrom<IServiceProvider>(fixture.Game);
+
+            XRManager resolvedXRManager = Game.Instance.GetRequiredService<XRManager>();
+
+            Assert.Same(fixture.XRManager, resolvedXRManager);
+            Assert.Same(fixture.XRManager, Game.Instance.GetService<XRManager>());
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, fixture);
+        }
+    }
+
+    /// <summary>
+    /// Verifies service registrar discovery is recursive, tree-ordered, and not coupled to an XR child node name.
+    /// </summary>
+    [Fact]
+    public async Task GameEnterTree_DiscoversSceneServiceRegistrarsRecursively_AndResolvesRenamedXRManager()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TestGame game = new()
+        {
+            Name = "RegistrarDiscoveryFixture",
+        };
+
+        TestServiceRegistrar firstRegistrar = new("first")
+        {
+            Name = "FirstRegistrar",
+        };
+        Node serviceContainer = new()
+        {
+            Name = "SceneServices",
+        };
+        TestXRManager renamedXRManager = new()
+        {
+            Name = "PlayerRuntimeService",
+        };
+        TestServiceRegistrar nestedRegistrar = new("nested")
+        {
+            Name = "NestedRegistrar",
+        };
+
+        game.AddChild(firstRegistrar);
+        game.AddChild(serviceContainer);
+        serviceContainer.AddChild(renamedXRManager);
+        serviceContainer.AddChild(nestedRegistrar);
+
+        game._EnterTree();
+        sceneTree.Root.AddChild(game);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(renamedXRManager, Game.Instance.GetRequiredService<XRManager>());
+            Assert.Equal(["first", "nested"], Game.Instance.GetRequiredService<RegistrarDiscoveryLog>().Entries);
+        }
+        finally
+        {
+            if (GodotObject.IsInstanceValid(game) && game.IsInsideTree())
+            {
+                game.QueueFree();
+                await WaitForNextFrameAsync(sceneTree);
+            }
+        }
+    }
+
     private static bool ReadBooleanProperty(object instance, string propertyName)
         => Assert.IsType<bool>(ReadPropertyValue(instance, propertyName));
 
@@ -239,7 +320,7 @@ public sealed partial class GameStartupIntegrationTests
             StartScenePath = StartScenePath,
         };
 
-        Node xr = new()
+        TestXRManager xr = new()
         {
             Name = "XR",
         };
@@ -265,10 +346,11 @@ public sealed partial class GameStartupIntegrationTests
         xr.AddChild(subViewport);
         game.AddChild(xr);
 
+        game._EnterTree();
         sceneTree.Root.AddChild(game);
         await WaitForFramesAsync(sceneTree, 2);
 
-        return new StartupFixture(game, splashScreen, loadingScreen);
+        return new StartupFixture(game, xr, splashScreen, loadingScreen);
     }
 
     private static async Task DestroyFixtureAsync(SceneTree sceneTree, StartupFixture fixture)
@@ -299,6 +381,7 @@ public sealed partial class GameStartupIntegrationTests
 
     private sealed record StartupFixture(
         TestGame Game,
+        TestXRManager XRManager,
         TestSplashScreen SplashScreen,
         TestLoadingScreen LoadingScreen);
 
@@ -308,6 +391,38 @@ public sealed partial class GameStartupIntegrationTests
 
         protected override void QuitGame(int exitCode)
             => QuitRequests.Add(exitCode);
+    }
+
+    private sealed partial class TestXRManager : XRManager
+    {
+        public override void _Ready()
+        {
+        }
+    }
+
+    private sealed class RegistrarDiscoveryLog
+    {
+        public List<string> Entries { get; } = [];
+    }
+
+    private sealed partial class TestServiceRegistrar(string entry) : Node, IServiceRegistrar
+    {
+        public void RegisterServices(IServiceCollection services)
+        {
+            ServiceDescriptor? descriptor = services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(RegistrarDiscoveryLog));
+            RegistrarDiscoveryLog log;
+            if (descriptor?.ImplementationInstance is RegistrarDiscoveryLog existingLog)
+            {
+                log = existingLog;
+            }
+            else
+            {
+                log = new RegistrarDiscoveryLog();
+                _ = services.AddSingleton(log);
+            }
+
+            log.Entries.Add(entry);
+        }
     }
 
     private sealed partial class TestSplashScreen : SplashScreen

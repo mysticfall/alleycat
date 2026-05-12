@@ -2102,11 +2102,9 @@ public sealed class DynamicPhysicalRigIntegrationTests
             rightHandPosition.GlobalTransform = rightHandTarget.GlobalTransform;
             leftHandPosition.GlobalTransform = leftHandTarget.GlobalTransform;
 
-            bool bound = playerVRIK.TryBind(
+            bool bound = playerVRIK.BindToXRRuntime(
                 new TestXROrigin(originNode),
-                new TestXRCamera(cameraNode),
-                new TestXRHandController(rightControllerNode, rightHandPosition),
-                new TestXRHandController(leftControllerNode, leftHandPosition));
+                new TestXRCamera(cameraNode));
 
             Assert.True(bound);
             await WaitForPhysicsFramesAsync(sceneTree, 4);
@@ -2190,54 +2188,4 @@ public sealed class DynamicPhysicalRigIntegrationTests
         public Camera3D CameraNode => cameraNode;
     }
 
-    private sealed class TestXRHandController(Node3D controllerNode, Node3D handPositionNode) : IXRHandController
-    {
-        public event Action<string>? ActionButtonPressed
-        {
-            add
-            {
-            }
-
-            remove
-            {
-            }
-        }
-
-        public event Action<string>? ActionButtonReleased
-        {
-            add
-            {
-            }
-
-            remove
-            {
-            }
-        }
-
-        public event Action<string, float>? ActionFloatInputChanged
-        {
-            add
-            {
-            }
-
-            remove
-            {
-            }
-        }
-
-        public event Action<string, Vector2>? ActionVector2InputChanged
-        {
-            add
-            {
-            }
-
-            remove
-            {
-            }
-        }
-
-        public Node3D ControllerNode => controllerNode;
-
-        public Node3D HandPositionNode => handPositionNode;
-    }
 }

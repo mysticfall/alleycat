@@ -1,6 +1,6 @@
-using AlleyCat.Common;
 using AlleyCat.XR;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AlleyCat.IK;
 
@@ -10,16 +10,6 @@ namespace AlleyCat.IK;
 [GlobalClass]
 public partial class PlayerVRIKStartupBinder : Node
 {
-    /// <summary>
-    /// Path to the global XRManager node.
-    /// </summary>
-    [Export]
-    public NodePath XRManagerPath
-    {
-        get;
-        set;
-    } = new();
-
     /// <summary>
     /// When true, enables binding processing. When false, skips binding.
     /// </summary>
@@ -43,9 +33,7 @@ public partial class PlayerVRIKStartupBinder : Node
             return;
         }
 
-        _xrManager = XRManagerPath.IsEmpty
-            ? this.RequireNode<XRManager>("../XR")
-            : this.RequireNode<XRManager>(XRManagerPath);
+        _xrManager = Game.Instance.GetRequiredService<XRManager>();
 
         _xrManager.Initialised += OnXRInitialised;
 
@@ -63,7 +51,7 @@ public partial class PlayerVRIKStartupBinder : Node
 
         if (_xrInitialised)
         {
-            _bindCompleted = TryBindResolvedPlayerVRIK();
+            _bindCompleted = BindResolvedPlayerVRIK();
         }
 
         SetProcess(!_bindCompleted);
@@ -72,9 +60,9 @@ public partial class PlayerVRIKStartupBinder : Node
     /// <inheritdoc />
     public override void _ExitTree()
     {
-        if (_xrManager is not null)
+        if (_xrManager is XRManager xrManager)
         {
-            _xrManager.Initialised -= OnXRInitialised;
+            xrManager.Initialised -= OnXRInitialised;
         }
     }
 
@@ -99,7 +87,7 @@ public partial class PlayerVRIKStartupBinder : Node
             return;
         }
 
-        _bindCompleted = TryBindResolvedPlayerVRIK();
+        _bindCompleted = BindResolvedPlayerVRIK();
 
         if (_bindCompleted)
         {
@@ -125,7 +113,7 @@ public partial class PlayerVRIKStartupBinder : Node
         return null;
     }
 
-    private bool TryBindResolvedPlayerVRIK()
+    private bool BindResolvedPlayerVRIK()
     {
         if (_xrManager is null)
         {
@@ -133,7 +121,7 @@ public partial class PlayerVRIKStartupBinder : Node
         }
 
         PlayerVRIK? vrik = ResolvePlayerVRIK();
-        return vrik is not null && vrik.TryBind(_xrManager.Runtime);
+        return vrik is not null && vrik.BindToXRServices();
     }
 
     private void OnXRInitialised(bool succeeded)

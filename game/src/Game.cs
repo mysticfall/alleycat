@@ -3,6 +3,7 @@ using AlleyCat.Testing;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AlleyCat;
 
@@ -10,8 +11,12 @@ namespace AlleyCat;
 /// Represents the main entry point for the game logic in the AlleyCat namespace.
 /// </summary>
 [GlobalClass]
-public partial class Game : Node
+public partial class Game : Node, IServiceProvider
 {
+    private static Game? _instance;
+
+    private readonly ServiceCollection _services = [];
+
     /// <summary>
     /// Scene path loaded after splash and XR startup complete.
     /// </summary>
@@ -28,21 +33,105 @@ public partial class Game : Node
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private XRManager? _xrManager;
+    private ServiceProvider? _serviceProvider;
     private SubViewport? _uiRoot;
     private SplashScreen? _splashScreen;
     private LoadingScreen? _loadingScreen;
     private Callable? _loadCompletedCallable;
+    private bool _isSubscribedToXRInitialised;
+
+    /// <summary>
+    /// Gets the active game singleton for global service resolution.
+    /// </summary>
+    public static Game Instance => _instance
+        ?? throw new InvalidOperationException("Game singleton is not available.");
 
     /// <inheritdoc />
     public override void _EnterTree()
     {
-        if (RuntimeContext.ShouldBypassGlobalStartup(GetTree()))
+        SetInstance();
+        if (_serviceProvider is null)
+        {
+            RegisterServices(_services);
+            RegisterSceneOwnedServices(_services);
+            BuildServiceProvider();
+            _xrManager = _serviceProvider!.GetRequiredService<XRManager>();
+        }
+
+        SceneTree? tree = GetTree();
+        if (tree is not null && RuntimeContext.ShouldBypassGlobalStartup(tree))
         {
             return;
         }
 
-        _xrManager = this.RequireNode<XRManager>("XR");
-        _xrManager.Initialised += OnXRInitialised;
+        if (!_isSubscribedToXRInitialised)
+        {
+            _xrManager!.Initialised += OnXRInitialised;
+            _isSubscribedToXRInitialised = true;
+        }
+    }
+
+    /// <summary>
+    /// Builds the service provider after startup registrations are complete.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the provider has already been built.</exception>
+    public void BuildServiceProvider()
+    {
+        if (_serviceProvider is not null)
+        {
+            throw new InvalidOperationException("Game service provider has already been built.");
+        }
+
+        _serviceProvider = _services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Resolves a registered service by type.
+    /// </summary>
+    /// <param name="serviceType">Service type to resolve.</param>
+    /// <returns>The resolved service instance, or <c>null</c> when the service is not registered.</returns>
+    public object? GetService(Type serviceType)
+        => _serviceProvider is not null
+            ? _serviceProvider.GetService(serviceType)
+            : throw new InvalidOperationException("Game service provider has not been built.");
+
+    /// <summary>
+    /// Resolves a registered service by generic type.
+    /// </summary>
+    /// <typeparam name="T">Service type to resolve.</typeparam>
+    /// <returns>The resolved service instance, or <c>null</c> when the service is not registered.</returns>
+    public T? GetService<T>() => (T?)GetService(typeof(T));
+
+    /// <summary>
+    /// Registers startup services before the service provider is built.
+    /// </summary>
+    /// <param name="services">Service collection to populate.</param>
+    protected virtual void RegisterServices(IServiceCollection services) => _ = services;
+
+    private void RegisterSceneOwnedServices(IServiceCollection services)
+    {
+        foreach (IServiceRegistrar registrar in DiscoverServiceRegistrars(this))
+        {
+            registrar.RegisterServices(services);
+        }
+    }
+
+    private static IEnumerable<IServiceRegistrar> DiscoverServiceRegistrars(Node root)
+    {
+        int childCount = root.GetChildCount();
+        for (int i = 0; i < childCount; i++)
+        {
+            Node child = root.GetChild(i);
+            if (child is IServiceRegistrar registrar)
+            {
+                yield return registrar;
+            }
+
+            foreach (IServiceRegistrar descendantRegistrar in DiscoverServiceRegistrars(child))
+            {
+                yield return descendantRegistrar;
+            }
+        }
     }
 
     /// <summary>
@@ -80,11 +169,32 @@ public partial class Game : Node
     /// <inheritdoc />
     public override void _ExitTree()
     {
-        if (_xrManager is not null)
+        if (_xrManager is XRManager xrManager && _isSubscribedToXRInitialised)
         {
-            _xrManager.Initialised -= OnXRInitialised;
-            _xrManager = null;
+            xrManager.Initialised -= OnXRInitialised;
+            _isSubscribedToXRInitialised = false;
         }
+
+        _xrManager = null;
+
+        if (ReferenceEquals(_instance, this))
+        {
+            _instance = null;
+        }
+
+        _serviceProvider?.Dispose();
+        _serviceProvider = null;
+        _services.Clear();
+    }
+
+    private void SetInstance()
+    {
+        if (_instance is not null && !ReferenceEquals(_instance, this))
+        {
+            throw new InvalidOperationException("Only one Game instance can be active at a time.");
+        }
+
+        _instance = this;
     }
 
     private async Task RunStartupFlowAsync()
