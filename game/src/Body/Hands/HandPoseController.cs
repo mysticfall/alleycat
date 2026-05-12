@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Godot;
 
 namespace AlleyCat.Body.Hands;
@@ -7,8 +8,22 @@ namespace AlleyCat.Body.Hands;
 /// </summary>
 public sealed class HandPoseController
 {
+    private static readonly ConditionalWeakTable<AnimationTree, HandPoseController> _controllersByTree = [];
+
     private readonly HandChannel _left = new(LimbSide.Left);
     private readonly HandChannel _right = new(LimbSide.Right);
+
+    /// <summary>
+    /// Gets the shared hand-pose controller for an animation tree.
+    /// </summary>
+    /// <remarks>
+    /// The left and right hand behaviours in the character scene share a single <see cref="AnimationTree"/>. Reusing one
+    /// controller preserves both channel states and prevents the later hand node from resetting the earlier hand's blend.
+    /// </remarks>
+    public static HandPoseController GetOrCreate(AnimationTree animationTree)
+        => _controllersByTree.GetValue(
+            animationTree ?? throw new ArgumentNullException(nameof(animationTree)),
+            static tree => new HandPoseController(tree));
 
     /// <summary>
     /// Initialises a controller bound to the supplied animation tree.
@@ -35,18 +50,18 @@ public sealed class HandPoseController
     public float TransitionDuration { get; set; } = 0.2f;
 
     /// <summary>
-    /// Gets or sets the target left hand pose resource; <see langword="null"/> clears the override.
+    /// Gets or sets the target left hand pose animation; <see langword="null"/> clears the override.
     /// </summary>
-    public Resource? LeftHandPose
+    public Animation? LeftHandPose
     {
         get => _left.TargetPose;
         set => SetHandPose(LimbSide.Left, value, immediate: false);
     }
 
     /// <summary>
-    /// Gets or sets the target right hand pose resource; <see langword="null"/> clears the override.
+    /// Gets or sets the target right hand pose animation; <see langword="null"/> clears the override.
     /// </summary>
-    public Resource? RightHandPose
+    public Animation? RightHandPose
     {
         get => _right.TargetPose;
         set => SetHandPose(LimbSide.Right, value, immediate: false);
@@ -73,17 +88,17 @@ public sealed class HandPoseController
     /// <summary>
     /// Gets the currently applied left hand pose after transition state has settled.
     /// </summary>
-    public Resource? CurrentLeftHandPose => _left.CurrentPose;
+    public Animation? CurrentLeftHandPose => _left.CurrentPose;
 
     /// <summary>
     /// Gets the currently applied right hand pose after transition state has settled.
     /// </summary>
-    public Resource? CurrentRightHandPose => _right.CurrentPose;
+    public Animation? CurrentRightHandPose => _right.CurrentPose;
 
     /// <summary>
     /// Sets or clears a hand pose, optionally overriding the weight and bypassing smoothing.
     /// </summary>
-    public void SetHandPose(LimbSide side, Resource? pose, float? weight = null, bool immediate = false)
+    public void SetHandPose(LimbSide side, Animation? pose, float? weight = null, bool immediate = false)
     {
         HandChannel channel = GetChannel(side);
         channel.TargetPose = pose;
@@ -141,6 +156,15 @@ public sealed class HandPoseController
         UpdateChannel(_right, delta);
     }
 
+    /// <summary>
+    /// Advances smooth transition state for only the requested hand side.
+    /// </summary>
+    public void Update(LimbSide side, double deltaSeconds)
+    {
+        float delta = (float)Math.Max(0.0, deltaSeconds);
+        UpdateChannel(GetChannel(side), delta);
+    }
+
     private void SetHandPoseWeight(LimbSide side, float value)
     {
         HandChannel channel = GetChannel(side);
@@ -186,10 +210,12 @@ public sealed class HandPoseController
 
     private void WriteChannel(HandChannel channel) => AnimationTree.Set(HandPoseAnimationTreePaths.GetHandBlendParameter(channel.Side), channel.CurrentBlend);
 
-    private void ApplyPoseNode(HandChannel channel, Resource? pose)
+    private void ApplyPoseNode(HandChannel channel, Animation? pose)
     {
         AnimationNodeAnimation poseNode = ResolvePoseNode(channel.Side);
-        poseNode.Animation = ResolveAnimationName(pose);
+        StringName animationName = ResolveAnimationName(pose);
+        EnsureAnimationAvailable(animationName, pose);
+        poseNode.Animation = animationName;
     }
 
     private AnimationNodeAnimation ResolvePoseNode(LimbSide side)
@@ -203,7 +229,41 @@ public sealed class HandPoseController
     private static float ResolveTargetBlend(HandChannel channel)
         => channel.TargetPose is null ? 0f : channel.TargetWeight;
 
-    private static StringName ResolveAnimationName(Resource? pose)
+    private void EnsureAnimationAvailable(StringName animationName, Animation? pose)
+    {
+        if (pose is null)
+        {
+            return;
+        }
+
+        AnimationPlayer? player = ResolveAnimationPlayer();
+        if (player is null || player.HasAnimation(animationName))
+        {
+            return;
+        }
+
+        StringName libraryName = new(string.Empty);
+        AnimationLibrary library = player.HasAnimationLibrary(libraryName)
+            ? player.GetAnimationLibrary(libraryName)
+            : new AnimationLibrary();
+
+        if (!player.HasAnimationLibrary(libraryName))
+        {
+            _ = player.AddAnimationLibrary(libraryName, library);
+        }
+
+        _ = library.AddAnimation(animationName, pose);
+    }
+
+    private AnimationPlayer? ResolveAnimationPlayer()
+    {
+        NodePath animPlayerPath = AnimationTree.AnimPlayer;
+        return animPlayerPath.IsEmpty
+            ? null
+            : AnimationTree.GetNodeOrNull<AnimationPlayer>(animPlayerPath);
+    }
+
+    private static StringName ResolveAnimationName(Animation? pose)
     {
         return pose is null
             ? new StringName(HandPoseAnimationTreePaths.ResetAnimationName)
@@ -218,17 +278,17 @@ public sealed class HandPoseController
     {
         public LimbSide Side { get; } = side;
 
-        public Resource? TargetPose
+        public Animation? TargetPose
         {
             get; set;
         }
 
-        public Resource? CurrentPose
+        public Animation? CurrentPose
         {
             get; set;
         }
 
-        public Resource? PendingPose
+        public Animation? PendingPose
         {
             get; set;
         }

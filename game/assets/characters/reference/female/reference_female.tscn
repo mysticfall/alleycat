@@ -8,10 +8,10 @@ radius = 0.1
 
 [node name="Female" unique_id=263578101 instance=ExtResource("1_5molt")]
 
-[node name="Female_export" parent="." index="0" unique_id=325578303]
+[node name="Female_export" parent="." index="0" unique_id=973242638]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="GeneralSkeleton" parent="Female_export" index="0" unique_id=247339352]
+[node name="GeneralSkeleton" parent="Female_export" index="0" unique_id=111354195]
 bones/1/position = Vector3(0, 0.8389602, 0.022851828)
 bones/1/rotation = Quaternion(-2.9802322e-08, 0, 0, 1)
 bones/2/rotation = Quaternion(-2.9802322e-08, 0, 0, 1)
@@ -76,11 +76,21 @@ bone_idx = 46
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.032278657, 0.0937431)
 
+[node name="RightHand" type="BoneAttachment3D" parent="Female_export/GeneralSkeleton" index="10" unique_id=190350548]
+transform = Transform3D(0.8850008, -0.46467716, -0.029130071, 0.03788188, 0.13422425, -0.990227, 0.4640457, 0.875248, 0.1363914, -0.15211736, 0.037800312, 0.8748765)
+bone_name = "RightHand"
+bone_idx = 29
+
+[node name="LeftHand" type="BoneAttachment3D" parent="Female_export/GeneralSkeleton" index="11" unique_id=792521653]
+transform = Transform3D(0.98049486, 0.19413461, 0.030685276, 0.0052477717, 0.13020831, -0.9914726, -0.19647457, 0.9722946, 0.12664968, 0.1477892, 0.04072591, 0.8651524)
+bone_name = "LeftHand"
+bone_idx = 10
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." index="1" unique_id=385661659]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 shape = SubResource("SphereShape3D_osxwe")
 
-[node name="AnimationPlayer" parent="." index="2" unique_id=1564663098]
+[node name="AnimationPlayer" parent="." index="2" unique_id=1172062412]
 root_node = NodePath("../Female_export")
 root_motion_track = NodePath("%GeneralSkeleton:Root")
 libraries/eyes = ExtResource("2_ei3al")

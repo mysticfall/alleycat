@@ -1,3 +1,5 @@
+using AlleyCat.Body;
+using AlleyCat.Body.Hands;
 using AlleyCat.Common;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.XR;
@@ -15,6 +17,7 @@ public partial class PlayerController : Node
     private IXRHandController? _leftHandController;
     private IXRHandController? _rightHandController;
     private ILocomotion? _locomotion;
+    private IHasHands? _hands;
     private bool _xrInitialised;
     private bool _isBound;
 
@@ -28,6 +31,21 @@ public partial class PlayerController : Node
         get;
         set;
     }
+
+    /// <summary>
+    /// Optional node implementing <see cref="IHasHands" /> for hand grab routing.
+    /// </summary>
+    [Export]
+    public Node? HandHolderNode
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// XR button action used to trigger hand grab and release.
+    /// </summary>
+    [Export]
+    public StringName GrabActionName { get; set; } = new("grip_click");
 
     /// <summary>
     /// XR vector2 action consumed from the left controller.
@@ -53,6 +71,7 @@ public partial class PlayerController : Node
     public override void _Ready()
     {
         _locomotion = ResolveLocomotion();
+        _hands = ResolveHands();
         _xrManager = ResolveXRManager();
 
         if (_xrManager is null)
@@ -130,6 +149,12 @@ public partial class PlayerController : Node
         return null;
     }
 
+    private IHasHands? ResolveHands()
+    {
+        Node? handHolderNode = HandHolderNode ?? GetParent()?.GetNodeOrNull<Node>("Hands");
+        return handHolderNode as IHasHands;
+    }
+
     private bool TryBindControllers()
     {
         XRManager? xrManager = _xrManager;
@@ -145,6 +170,10 @@ public partial class PlayerController : Node
 
         _leftHandController.ActionVector2InputChanged += OnLeftControllerVector2Changed;
         _rightHandController.ActionVector2InputChanged += OnRightControllerVector2Changed;
+        _leftHandController.ActionButtonPressed += OnLeftControllerButtonPressed;
+        _leftHandController.ActionButtonReleased += OnLeftControllerButtonReleased;
+        _rightHandController.ActionButtonPressed += OnRightControllerButtonPressed;
+        _rightHandController.ActionButtonReleased += OnRightControllerButtonReleased;
         _isBound = true;
         SetProcess(false);
         return true;
@@ -155,12 +184,16 @@ public partial class PlayerController : Node
         if (_leftHandController is IXRHandController leftHandController)
         {
             leftHandController.ActionVector2InputChanged -= OnLeftControllerVector2Changed;
+            leftHandController.ActionButtonPressed -= OnLeftControllerButtonPressed;
+            leftHandController.ActionButtonReleased -= OnLeftControllerButtonReleased;
             _leftHandController = null;
         }
 
         if (_rightHandController is IXRHandController rightHandController)
         {
             rightHandController.ActionVector2InputChanged -= OnRightControllerVector2Changed;
+            rightHandController.ActionButtonPressed -= OnRightControllerButtonPressed;
+            rightHandController.ActionButtonReleased -= OnRightControllerButtonReleased;
             _rightHandController = null;
         }
 
@@ -202,6 +235,28 @@ public partial class PlayerController : Node
         if (actionName == RotationActionName)
         {
             UpdateRotationInput(value);
+        }
+    }
+
+    private void OnLeftControllerButtonPressed(string actionName) => HandleGrabButtonPressed(LimbSide.Left, actionName);
+
+    private void OnLeftControllerButtonReleased(string actionName) => HandleGrabButtonReleased(LimbSide.Left, actionName);
+    private void OnRightControllerButtonPressed(string actionName) => HandleGrabButtonPressed(LimbSide.Right, actionName);
+    private void OnRightControllerButtonReleased(string actionName) => HandleGrabButtonReleased(LimbSide.Right, actionName);
+
+    private void HandleGrabButtonPressed(LimbSide side, string actionName)
+    {
+        if (actionName == GrabActionName && _hands?.TryGetHand(side, out IHand? hand) == true)
+        {
+            _ = hand?.Grab();
+        }
+    }
+
+    private void HandleGrabButtonReleased(LimbSide side, string actionName)
+    {
+        if (actionName == GrabActionName && _hands?.TryGetHand(side, out IHand? hand) == true)
+        {
+            hand?.Release();
         }
     }
 

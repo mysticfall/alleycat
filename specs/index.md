@@ -26,6 +26,7 @@
 - [CHAR-000: Character Skeleton Profile](characters/000-character-skeleton/index.md)
 - [CTRL: Player Character Control System](characters/ctrl/index.md)
   - [CTRL-001: Locomotion](characters/ctrl/001-locomotion/index.md)
+  - [CTRL-002: Hand Grab Input](characters/ctrl/002-hand-grab-input/index.md)
 - [IK: VRIK System](characters/ik/index.md)
   - [IK Implementation Notes](characters/ik/implementation-notes.md)
   - [IK-001: Reusable Neck-Spine CCDIK Setup](characters/ik/001-neck-spine-ik/index.md)
@@ -54,6 +55,7 @@
 
 - [INTR-001: Grabbable Interface](interaction/001-grabbable/index.md)
   - [INTR-001-A: Spherical Grab Point](interaction/001-grabbable/spherical-grab-point.md)
+- [INTR-002: Hand Grab Execution](interaction/002-hand-grab-execution/index.md)
 
 ## Speech
 

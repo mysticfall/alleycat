@@ -10,6 +10,14 @@ namespace AlleyCat.Interaction;
 public interface IGrabbable : IComponentHolder
 {
     /// <summary>
+    /// Gets whether this grabbable follows the hand or constrains the hand while held.
+    /// </summary>
+    GrabbableMobility Mobility
+    {
+        get;
+    }
+
+    /// <summary>
     /// Queries owned grab-point components in deterministic holder order and returns the closest eligible candidate.
     /// </summary>
     /// <param name="handSide">The hand side performing the query.</param>

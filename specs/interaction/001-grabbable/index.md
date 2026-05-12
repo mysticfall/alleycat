@@ -46,9 +46,11 @@ Provide a reusable grabbable interface that:
      — evaluates reach, angle, and state; returns `GrabPointCandidate`
      if eligible, or `null` if this grab point cannot be used.
 3. Define immutable `GrabPointCandidate` record containing:
-   - Source `IGrabPoint` component reference (for ownership verification).
-   - Hand target `Transform3D`.
-   - Animation resource (e.g., grab animation clip reference).
+     - Source `IGrabPoint` component reference (for ownership verification).
+     - Hand target `Transform3D`.
+     - Animation resource (e.g., grab animation clip reference).
+     - Query hand side and hand transform used for execution-time freshness validation.
+     - Query-time grab-point transform used to reject moved/stale candidates before commitment.
 4. `IGrabbable` exposes
    `GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)`
    using the same argument order and nullable-return semantics as
@@ -74,6 +76,14 @@ Provide a reusable grabbable interface that:
     as a tie-breaker when two or more eligible candidates are equally close.
 11. Execution validation must verify the selected component/result is still
     owned/valid and object/point state has not changed since query.
+12. Define `GrabbableMobility` enum in `AlleyCat.Interaction` with two values:
+    - `Movable = 0` — object can be carried and moved freely by the hand.
+    - `Immovable = 1` — object is a fixed prop; hand must stay constrained to
+      the grab point while holding.
+13. `IGrabbable` exposes a `GrabbableMobility Mobility { get; }` property.
+    - `Movable` indicates the object can be picked up and will follow the hand.
+    - `Immovable` indicates the object is fixed in place; the hand must remain
+      constrained to the grab point throughout the hold.
 
 ## In Scope
 
@@ -89,17 +99,22 @@ Provide a reusable grabbable interface that:
 
 - [INTR-001-A: Spherical Grab Point](spherical-grab-point.md) — centre-origin
   grab point approachable from any direction.
+- [INTR-002: Hand Grab Execution](../002-hand-grab-execution/index.md) — hand discovery,
+  grab execution, release, and IK integration.
 
 ## Out Of Scope
 
-- Grab mechanics (how the object behaves when held).
-- Release mechanics (how the object is released).
 - Physics constraints while held.
 - Multi-hand grab (multiple characters grabbing the same object).
 - Network replication.
-- Animation blending.
+- Animation blending beyond grab-point animation resource.
 - Throwable extensions.
 - Inventory integration.
+- Grab execution behaviour differences between movable and immobile grabbables
+  (covered by INTR-002).
+
+Note: Grab execution (hand discovery, candidate selection, parenting, IK integration,
+hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-hand-grab-execution/index.md).
 
 ## Acceptance Criteria
 
@@ -124,9 +139,12 @@ Provide a reusable grabbable interface that:
 |    |                   | all queried, with the closest eligible candidate selected. |
 | 9  | Technical         | Equal-distance eligible candidates keep holder |
 |    |                   | order as the deterministic tie-breaker. |
-| 10 | User              | Characters discover grabbable objects and receive |
+| 10 | Technical         | `GrabbableMobility` enum exists with `Movable` and |
+|    |                   | `Immovable` values. |
+| 11 | Technical         | `IGrabbable` exposes `GrabbableMobility Mobility` property. |
+| 12 | User              | Characters discover grabbable objects and receive |
 |    |                   | deterministic completion or graceful rejection. |
-| 11 | User              | Multiple grab options resolve deterministically |
+| 13 | User              | Multiple grab options resolve deterministically |
 |    |                   | to the closest eligible target, with stable ties. |
 
 ## References

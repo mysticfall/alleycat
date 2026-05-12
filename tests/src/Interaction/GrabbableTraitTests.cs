@@ -90,7 +90,13 @@ public sealed class GrabbableTraitTests
     {
         var source = new FakeGrabPoint("source", [], CreateCandidate);
 
-        var candidate = new GrabPointCandidate(source, Transform3D.Identity, NullAnimationForPlainUnitTestHost());
+        var candidate = new GrabPointCandidate(
+            source,
+            Transform3D.Identity,
+            NullAnimationForPlainUnitTestHost(),
+            LimbSide.Left,
+            Transform3D.Identity,
+            Transform3D.Identity);
 
         Assert.Same(source, candidate.Source);
         Assert.Null(candidate.Animation);
@@ -104,13 +110,22 @@ public sealed class GrabbableTraitTests
     {
         Assert.True(typeof(IComponentHolder).IsAssignableFrom(typeof(IGrabbable)));
         Assert.True(typeof(IComponent).IsAssignableFrom(typeof(IGrabPoint)));
+        Assert.Equal(0, (int)GrabbableMobility.Movable);
+        Assert.Equal(1, (int)GrabbableMobility.Immovable);
+        Assert.NotNull(typeof(IGrabbable).GetProperty(nameof(IGrabbable.Mobility)));
     }
 
     private static GrabPointCandidate CreateCandidate(IGrabPoint source) =>
         CreateCandidate(source, Vector3.Zero);
 
     private static GrabPointCandidate CreateCandidate(IGrabPoint source, Vector3 handTargetOrigin) =>
-        new(source, TransformAt(handTargetOrigin), NullAnimationForPlainUnitTestHost());
+        new(
+            source,
+            TransformAt(handTargetOrigin),
+            NullAnimationForPlainUnitTestHost(),
+            LimbSide.Left,
+            Transform3D.Identity,
+            Transform3D.Identity);
 
     private static Transform3D TransformAt(Vector3 origin) => new(Basis.Identity, origin);
 
@@ -124,6 +139,8 @@ public sealed class GrabbableTraitTests
     private sealed class FakeGrabbable(params IComponent[] components) : IGrabbable
     {
         public IReadOnlyList<IComponent> Components { get; } = components;
+
+        public GrabbableMobility Mobility => GrabbableMobility.Movable;
 
         public bool Grab(GrabPointCandidate grabPoint) => Components.Contains(grabPoint.Source);
     }

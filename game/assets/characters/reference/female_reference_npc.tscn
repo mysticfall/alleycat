@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://e765iqdvmnjd" path="res://assets/characters/reference/female/reference_female_base.tscn" id="1_vf6rf"]
 [ext_resource type="Script" uid="uid://bxb7ysth4n1du" path="res://src/IK/CharacterIK.cs" id="2_charik"]
+[ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="3_mgn5w"]
 
 [node name="Female" unique_id=1792987446 instance=ExtResource("1_vf6rf")]
 
@@ -66,7 +67,13 @@ bones/54/rotation = Quaternion(0.00014009021, 0.9999999, 0.00053766376, 5.786565
 [node name="Head" parent="Female_export/GeneralSkeleton" index="25" unique_id=694402195]
 transform = Transform3D(1, 6.519258e-09, -1.1641532e-09, -2.910383e-09, 1, 8.940697e-08, 4.656613e-10, -8.940697e-08, 1, 9.365671e-05, 1.4618735, 0.03623806)
 
-[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
+[node name="RightHand" parent="Female_export/GeneralSkeleton" index="26" unique_id=190350548]
+transform = Transform3D(-7.4505806e-08, -0.9999999, -5.9604645e-08, 2.9802322e-08, -2.9802322e-08, -0.9999999, 1.0000001, 8.940697e-08, 5.9604645e-08, -0.32626462, 0.85097647, 0.46534353)
+
+[node name="LeftHand" parent="Female_export/GeneralSkeleton" index="27" unique_id=792521653]
+transform = Transform3D(2.9802322e-08, 1.0000001, -2.9802322e-07, -1.0430813e-07, -1.4901161e-07, -0.99999976, -1, -2.9802322e-08, 2.2351742e-07, 0.32475096, 0.84746826, 0.46630734)
+
+[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetStateProvider", "LeftHandIKTargetStateProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
 script = ExtResource("2_charik")
 Viewpoint = NodePath("../Female_export/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
@@ -80,8 +87,18 @@ HeadModifierGroup = [NodePath("../Female_export/GeneralSkeleton/NeckSpineIK"), N
 RightHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/RightArmIKController"), NodePath("../Female_export/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/RightHandCopyRotation")]
 LeftHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/LeftArmIKController"), NodePath("../Female_export/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/LeftHandCopyRotation")]
 RightFootModifierGroup = [NodePath("../Female_export/GeneralSkeleton/RightLegIKController"), NodePath("../Female_export/GeneralSkeleton/RightLegTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/CopyRightFootRotation")]
+RightHandIKTargetStateProvider = NodePath("RightHandGrabProvider")
+LeftHandIKTargetStateProvider = NodePath("LeftHandGrabProvider")
 LeftFootModifierGroup = [NodePath("../Female_export/GeneralSkeleton/LeftLegIKController"), NodePath("../Female_export/GeneralSkeleton/LeftLegTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/CopyLeftFootRotation")]
 metadata/_custom_type_script = "uid://bxb7ysth4n1du"
+
+[node name="RightHandGrabProvider" type="Node" parent="CharacterIK" index="0" unique_id=1328401061]
+script = ExtResource("3_mgn5w")
+metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
+
+[node name="LeftHandGrabProvider" type="Node" parent="CharacterIK" index="1" unique_id=609771955]
+script = ExtResource("3_mgn5w")
+metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 
 [node name="RightElbow" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="2" unique_id=1389246902]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.343701, 1.2495346, 0.19744627)
@@ -100,3 +117,9 @@ transform = Transform3D(0.97271734, 0.23198482, 0.0020064737, -0.0013589171, -0.
 
 [node name="LeftFoot" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="9" unique_id=1292107592]
 transform = Transform3D(0.98056644, -0.19617996, -0.0017133591, 0.0013050615, -0.0022104906, 0.9999968, -0.1961831, -0.9805654, -0.0019115063, -0.03519832, 0.06535348, -0.02797736)
+
+[node name="RightHand" parent="Hands" parent_id_path=PackedInt32Array(2126650831) index="0" unique_id=122437311 node_paths=PackedStringArray("GrabTargetProvider")]
+GrabTargetProvider = NodePath("../../CharacterIK/RightHandGrabProvider")
+
+[node name="LeftHand" parent="Hands" parent_id_path=PackedInt32Array(2126650831) index="1" unique_id=1448579806 node_paths=PackedStringArray("GrabTargetProvider")]
+GrabTargetProvider = NodePath("../../CharacterIK/LeftHandGrabProvider")

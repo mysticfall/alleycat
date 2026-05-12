@@ -63,6 +63,31 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
+    /// Verifies the female reference NPC CharacterIK consumes the same staged hand grab providers as the hand behaviours.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void FemaleReferenceNPCScene_CharacterIKHandTargetProviders_ResolveToHandGrabProviders()
+    {
+        using Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+
+        Node characterIK = npc.GetNode<Node>("CharacterIK");
+        Node rightProvider = npc.GetNode<Node>("CharacterIK/RightHandGrabProvider");
+        Node leftProvider = npc.GetNode<Node>("CharacterIK/LeftHandGrabProvider");
+        GodotObject configuredRightProvider = characterIK.Get("RightHandIKTargetStateProvider").AsGodotObject()
+            ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK right hand provider to resolve to a node.");
+        GodotObject configuredLeftProvider = characterIK.Get("LeftHandIKTargetStateProvider").AsGodotObject()
+            ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK left hand provider to resolve to a node.");
+
+        Assert.Equal(rightProvider.GetInstanceId(), configuredRightProvider.GetInstanceId());
+        Assert.Equal(leftProvider.GetInstanceId(), configuredLeftProvider.GetInstanceId());
+        Assert.Equal(new NodePath("RightHandGrabProvider"), characterIK.GetPathTo(rightProvider));
+        Assert.Equal(new NodePath("LeftHandGrabProvider"), characterIK.GetPathTo(leftProvider));
+        Assert.Equal(typeof(HandGrabTargetProvider).FullName, configuredRightProvider.GetType().FullName);
+        Assert.Equal(typeof(HandGrabTargetProvider).FullName, configuredLeftProvider.GetType().FullName);
+    }
+
+    /// <summary>
     /// Verifies startup binder does not attempt VRIK binding after XR initialisation failure.
     /// </summary>
     [Fact]

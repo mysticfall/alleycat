@@ -47,6 +47,7 @@ boundaries across character control sub-specifications.
 ## Child Specifications
 
 - [CTRL-001: Locomotion](001-locomotion/index.md)
+- [CTRL-002: Hand Grab Input](002-hand-grab-input/index.md)
 
 ## Runtime Integration Boundary
 

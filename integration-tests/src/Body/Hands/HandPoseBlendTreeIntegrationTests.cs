@@ -1,6 +1,7 @@
 using AlleyCat.Body;
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -112,8 +113,8 @@ public sealed class HandPoseBlendTreeIntegrationTests
     [Fact]
     public void HandPoseController_UsesResetFallbackAndSmoothlyTransitionsBlendAmount()
     {
-        Resource reset = ResourceLoader.Load(ResetAnimationPath);
-        Resource grabBall = ResourceLoader.Load(GrabBallAnimationPath);
+        Animation reset = Assert.IsType<Animation>(ResourceLoader.Load(ResetAnimationPath), exactMatch: false);
+        Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
         Assert.NotNull(reset);
         Assert.NotNull(grabBall);
 
@@ -145,11 +146,136 @@ public sealed class HandPoseBlendTreeIntegrationTests
         Assert.InRange(weightedHalfwayBlend, 0.18f, 0.22f);
         controller.Update(0.1);
         Assert.InRange(tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle(), 0.39f, 0.41f);
+        Assert.Same(grabBall, controller.CurrentRightHandPose);
 
         controller.ClearHandPose(LimbSide.Left, immediate: true);
 
         Assert.Null(controller.CurrentLeftHandPose);
         Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle());
+    }
+
+    /// <summary>
+    /// Verifies the player scene animation setup can register and use the ball grab hand-pose animation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void PlayerScene_HandPoseControllerCanUseGrabBallAnimation()
+    {
+        PackedScene scene = ResourceLoader.Load<PackedScene>(PlayerScenePath);
+        Node root = scene.Instantiate();
+
+        try
+        {
+            AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
+            AnimationPlayer player = root.GetNode<AnimationPlayer>("AnimationPlayer");
+            Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
+
+            tree.Active = false;
+            HandPoseController controller = new(tree);
+            controller.SetHandPose(LimbSide.Right, grabBall, weight: 1f, immediate: true);
+
+            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
+            AnimationNodeAnimation rightPoseNode = Assert.IsType<AnimationNodeAnimation>(
+                rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(LimbSide.Right)),
+                exactMatch: false);
+
+            Assert.True(player.HasAnimation(new StringName("Grab-ball-40")));
+            Assert.Equal(new StringName("Grab-ball-40"), rightPoseNode.Animation);
+        }
+        finally
+        {
+            root.Free();
+        }
+    }
+
+    /// <summary>
+    /// Verifies the reference player tree applies the grab pose to effective finger bone output for both hands.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerScene_GrabBallPoseEffectivelyMovesEachHandsOwnFingerBones()
+    {
+        await AssertGrabPoseMovesFingerBoneAsync(LimbSide.Left, "LeftIndexProximal");
+        await AssertGrabPoseMovesFingerBoneAsync(LimbSide.Right, "RightIndexProximal");
+    }
+
+    /// <summary>
+    /// Verifies per-hand behaviours sharing one AnimationTree do not reset the opposite hand channel during processing.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerScene_RightHandBehaviourKeepsGrabBlendAfterLeftHandProcessesSharedTree()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PackedScene scene = ResourceLoader.Load<PackedScene>(PlayerScenePath);
+        Node root = scene.Instantiate();
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            root.GetNode<Node>("Hands").QueueFree();
+            AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
+            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
+            HandPoseBehaviour rightHand = new()
+            {
+                Name = "RegressionRightHand",
+                AnimationTree = tree,
+                Side = LimbSide.Right,
+            };
+            HandPoseBehaviour leftHand = new()
+            {
+                Name = "RegressionLeftHand",
+                AnimationTree = tree,
+                Side = LimbSide.Left,
+            };
+            Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
+
+            root.AddChild(rightHand);
+            root.AddChild(leftHand);
+            rightHand._Ready();
+            leftHand._Ready();
+
+            ResolvePlayback(tree).Start(new StringName("StandingCrouching"), true);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            tree.Advance(1.0 / 60.0);
+
+            rightHand.SetPose(grabBall, weight: 1f, immediate: true);
+            tree.Advance(1.0 / 60.0);
+            await TestUtils.WaitForFramesAsync(sceneTree, 3);
+
+            float rightBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle();
+            float leftBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle();
+            AnimationNodeAnimation rightPoseNode = Assert.IsType<AnimationNodeAnimation>(
+                rootTree.GetNode(HandPoseAnimationTreePaths.RightHandPoseNode),
+                exactMatch: false);
+
+            Assert.InRange(rightBlend, 0.99f, 1.0f);
+            Assert.Equal(0f, leftBlend);
+            Assert.Equal(new StringName("Grab-ball-40"), rightPoseNode.Animation);
+
+            rightHand.ClearPose(immediate: true);
+            tree.Advance(1.0 / 60.0);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            leftHand.SetPose(grabBall, weight: 1f, immediate: true);
+            tree.Advance(1.0 / 60.0);
+            await TestUtils.WaitForFramesAsync(sceneTree, 3);
+
+            leftBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle();
+            rightBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle();
+            AnimationNodeAnimation leftPoseNode = Assert.IsType<AnimationNodeAnimation>(
+                rootTree.GetNode(HandPoseAnimationTreePaths.LeftHandPoseNode),
+                exactMatch: false);
+
+            Assert.InRange(leftBlend, 0.99f, 1.0f);
+            Assert.Equal(0f, rightBlend);
+            Assert.Equal(new StringName("Grab-ball-40"), leftPoseNode.Animation);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
     }
 
     /// <summary>
@@ -203,6 +329,49 @@ public sealed class HandPoseBlendTreeIntegrationTests
         throw new Xunit.Sdk.XunitException(
             $"Expected connection {inputNode}[{inputIndex}] <- {outputNode} in {tree.ResourceName}.");
     }
+
+    private static async Task AssertGrabPoseMovesFingerBoneAsync(LimbSide side, string fingerBoneName)
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PackedScene scene = ResourceLoader.Load<PackedScene>(PlayerScenePath);
+        Node root = scene.Instantiate();
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            AnimationPlayer player = root.GetNode<AnimationPlayer>("AnimationPlayer");
+            Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female_export/GeneralSkeleton");
+            int fingerBoneIndex = skeleton.FindBone(fingerBoneName);
+            Assert.True(fingerBoneIndex >= 0, $"Expected skeleton to contain {fingerBoneName}.");
+
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            player.Play(new StringName(HandPoseAnimationTreePaths.ResetAnimationName));
+            player.Advance(1.0 / 60.0);
+            Basis beforePose = skeleton.GetBonePose(fingerBoneIndex).Basis;
+
+            player.Play(new StringName("Grab-ball-40"));
+            player.Advance(1.0 / 60.0);
+            await TestUtils.WaitForFramesAsync(sceneTree, 3);
+
+            Basis afterPose = skeleton.GetBonePose(fingerBoneIndex).Basis;
+            float poseDelta = BasisDelta(beforePose, afterPose);
+            Assert.True(
+                poseDelta > 0.001f,
+                $"Expected {side} grab pose to visibly affect {fingerBoneName}; observed basis delta {poseDelta:0.######}.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    private static float BasisDelta(Basis before, Basis after)
+        => before.X.DistanceTo(after.X) + before.Y.DistanceTo(after.Y) + before.Z.DistanceTo(after.Z);
+
+    private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
+        => animationTree.Get(HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter()).As<AnimationNodeStateMachinePlayback>()
+           ?? throw new InvalidOperationException("AnimationTree is missing the hand-pose upstream state machine playback.");
 
     private static int CountNodesNamed(AnimationNodeBlendTree tree, string nodeName)
     {

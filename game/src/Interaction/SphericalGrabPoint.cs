@@ -49,6 +49,25 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
     [Export]
     public Animation? GrabAnimation { get; set; } = null;
 
+    /// <summary>
+    /// Gets or sets the authored position offset from the hand attachment to this grab point once the object is held.
+    /// </summary>
+    /// <remarks>
+    /// Authors can determine this by temporarily placing the object as desired under the hand bone and copying this
+    /// grab point's local position relative to that hand bone.
+    /// </remarks>
+    [Export]
+    public Vector3 GrabPointPositionOffsetFromHand { get; set; } = Vector3.Zero;
+
+    /// <summary>
+    /// Gets or sets the authored Euler rotation offset from the hand attachment to this grab point once held, in radians.
+    /// </summary>
+    /// <remarks>
+    /// The rotation is combined with the approach rotation so spherical grabs do not force a canonical hand orientation.
+    /// </remarks>
+    [Export]
+    public Vector3 GrabPointRotationOffsetFromHand { get; set; } = Vector3.Zero;
+
     /// <inheritdoc />
     public GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)
     {
@@ -77,8 +96,20 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
             return null;
         }
 
-        var handTarget = new Transform3D(handTransform.Basis, centre);
+        Transform3D grabPointOffsetFromHand = GrabPointCandidate.ComposeGrabPointOffsetFromHand(
+            GrabPointPositionOffsetFromHand,
+            GrabPointRotationOffsetFromHand);
+        Transform3D approachHandAtCentre = new(handTransform.Basis.Orthonormalized(), centre);
+        Transform3D handTarget = approachHandAtCentre * grabPointOffsetFromHand.AffineInverse();
 
-        return new GrabPointCandidate(this, handTarget, GrabAnimation);
+        return new GrabPointCandidate(
+            this,
+            handTarget,
+            GrabAnimation,
+            handSide,
+            handTransform,
+            GlobalTransform,
+            GrabPointPositionOffsetFromHand,
+            GrabPointRotationOffsetFromHand);
     }
 }

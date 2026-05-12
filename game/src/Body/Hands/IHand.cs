@@ -1,10 +1,10 @@
 using AlleyCat.Component;
-using Godot;
+using AlleyCat.Interaction;
 
 namespace AlleyCat.Body.Hands;
 
 /// <summary>
-/// Component capability representing one hand that can expose and control a pose override.
+/// Component capability representing one hand's grab lifecycle.
 /// </summary>
 public interface IHand : IComponent
 {
@@ -17,38 +17,21 @@ public interface IHand : IComponent
     }
 
     /// <summary>
-    /// Gets or sets the target pose resource; <see langword="null" /> clears the override.
+    /// Gets the object currently held by this hand, or <see langword="null" /> when empty.
     /// </summary>
-    Resource? Pose
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Gets or sets the clamped rest-to-pose blend weight.
-    /// </summary>
-    float PoseWeight
-    {
-        get;
-        set;
-    }
-
-    /// <summary>
-    /// Gets the currently applied pose after transition state has settled.
-    /// </summary>
-    Resource? CurrentPose
+    IGrabbable? CurrentGrabbed
     {
         get;
     }
 
     /// <summary>
-    /// Sets or clears the pose, optionally overriding the weight and bypassing smoothing.
+    /// Attempts to discover and grab a nearby object.
     /// </summary>
-    void SetPose(Resource? pose, float? weight = null, bool immediate = false);
+    /// <returns>The grabbed object, or <see langword="null" /> when no valid object can be grabbed.</returns>
+    IGrabbable? Grab();
 
     /// <summary>
-    /// Clears the current pose override.
+    /// Releases the currently held object, if any.
     /// </summary>
-    void ClearPose(bool immediate = false);
+    void Release();
 }

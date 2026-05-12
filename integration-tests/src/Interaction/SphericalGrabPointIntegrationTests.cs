@@ -185,6 +185,39 @@ public sealed class SphericalGrabPointIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies authored offsets shift the IK target while preserving the hand's approach rotation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void GetGrabPoint_WithAuthoredOffset_PreservesApproachRotation()
+    {
+        using var animation = new Animation();
+        SphericalGrabPoint grabPoint = CreateGrabPoint(animation);
+        Transform3D hand = CreateHandTransform(new Vector3(0.05f, 0.0f, 0.0f), Vector3.Left);
+        Transform3D offset = new(Basis.FromEuler(new Vector3(0.0f, 0.3f, 0.0f)), new Vector3(0.0f, -0.04f, 0.0f));
+
+        try
+        {
+            grabPoint.GrabPointPositionOffsetFromHand = offset.Origin;
+            grabPoint.GrabPointRotationOffsetFromHand = offset.Basis.GetEuler();
+
+            GrabPointCandidate? candidate = grabPoint.GetGrabPoint(LimbSide.Left, hand);
+
+            Assert.NotNull(candidate);
+            Assert.Equal(offset.Origin, candidate.GrabPointPositionOffsetFromHand);
+            AssertBasisApproximatelyEqual(offset.Basis, Basis.FromEuler(candidate.GrabPointRotationOffsetFromHand));
+            AssertBasisApproximatelyEqual(hand.Basis, (candidate.HandTarget * candidate.GrabPointOffsetFromHand).Basis);
+            Assert.True(
+                (candidate.HandTarget * candidate.GrabPointOffsetFromHand).Origin.DistanceTo(grabPoint.GlobalPosition) <= PositionToleranceMetres,
+                "Expected the authored offset to put the grab point at the spherical centre.");
+        }
+        finally
+        {
+            grabPoint.Free();
+        }
+    }
+
     private static SphericalGrabPoint CreateGrabPoint(Animation animation) =>
         new()
         {
