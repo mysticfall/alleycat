@@ -1,4 +1,4 @@
-using AlleyCat.Component;
+using AlleyCat.Core;
 
 namespace AlleyCat.Body.Hands;
 

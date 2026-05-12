@@ -1,5 +1,5 @@
-using AlleyCat.Component;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Core;
 using Godot;
 using Xunit;
 

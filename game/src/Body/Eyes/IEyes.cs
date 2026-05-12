@@ -1,4 +1,4 @@
-using AlleyCat.Component;
+using AlleyCat.Core;
 using Godot;
 
 namespace AlleyCat.Body.Eyes;

@@ -1,4 +1,4 @@
-using AlleyCat.Configuration;
+using AlleyCat.Core;
 using AlleyCat.Speech.Transcription;
 using Godot;
 using OpenAI.Audio;

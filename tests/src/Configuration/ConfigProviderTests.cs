@@ -1,4 +1,4 @@
-using AlleyCat.Configuration;
+using AlleyCat.Core;
 using Godot;
 using Xunit;
 

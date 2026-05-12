@@ -26,7 +26,7 @@ The project defaults file must remain the source of truth for available configur
 
 ## Technical Requirements
 
-1. A configuration helper class must be defined in `@game/src/Configuration/ConfigProvider.cs`.
+1. A configuration helper class must be defined in `@game/src/Core/ConfigProvider.cs`.
 2. The API must load base configuration from `res://AlleyCat.cfg`.
 3. The API must load override configuration from `user://AlleyCat.cfg` if it exists.
 4. Merge semantics must apply per-section and per-key overlay.
@@ -118,7 +118,7 @@ and technical requirement (merge implementation) layers.
 
 ### Implementation
 
-- `@game/src/Configuration/ConfigProvider.cs` - Configuration helper class
+- `@game/src/Core/ConfigProvider.cs` - Configuration helper class
 
 ### Related Specs
 

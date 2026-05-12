@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace AlleyCat;
+namespace AlleyCat.Core;
 
 /// <summary>
 /// Registers services owned by a scene node before the global game service provider is built.

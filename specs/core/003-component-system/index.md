@@ -39,7 +39,7 @@ interfaces per component, and deterministic query ordering.
 
 ## Technical Requirements
 
-1. A new C# namespace `AlleyCat.Component` must be created for all component
+1. A new C# namespace `AlleyCat.Core` must be created for all component
    system types.
 2. An `IComponent` marker interface must be defined as the root interface for
    all components.
@@ -109,7 +109,7 @@ interfaces per component, and deterministic query ordering.
 
 ## References
 
-- `@game/src/Component/` — New namespace directory for component system types
+- `@game/src/Core/` — New namespace directory for component system types
 - `@game/src/Common/NodeExtensions.cs` — Reference for extension method style
 - [CORE-001: Global Scene](../001-global-scene/index.md)
 - [CORE-002: Configuration API](../002-configuration-api/index.md)

@@ -1,5 +1,5 @@
 using AlleyCat.Body.Eyes;
-using AlleyCat.Component;
+using AlleyCat.Core;
 using Godot;
 using Xunit;
 

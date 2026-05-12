@@ -1,4 +1,4 @@
-namespace AlleyCat.Component;
+namespace AlleyCat.Core;
 
 /// <summary>
 /// Represents a reusable capability object that can be attached to a holder and discovered through the component query

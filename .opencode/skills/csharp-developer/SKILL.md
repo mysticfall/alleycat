@@ -71,12 +71,12 @@ Label3D label = this.RequireNode<Label3D>("Label3D");
 
 ## Component and Trait Pattern
 
-For reusable gameplay behaviour, follow [CORE-003: Component/Trait System](@specs/003-component-system/index.md):
+For reusable gameplay behaviour, follow [CORE-003: Component/Trait System](@specs/core/003-component-system/index.md):
 
-- **Components** implementing reusable capability should implement `IComponent` (defined in `AlleyCat.Component`).
+- **Components** implementing reusable capability should implement `IComponent` (defined in `AlleyCat.Core`).
 - **Holders** (entities owning components) should implement `IComponentHolder` with an explicit/cached list of components,
   providing deterministic iteration order.
-- Query components using extension methods on `IComponentHolder` (bring into scope with `using AlleyCat.Component;`):
+- Query components using extension methods on `IComponentHolder` (bring into scope with `using AlleyCat.Core;`):
   - `RequireComponent<T>` — returns the single matching component or throws `InvalidOperationException` with clear holder/type information.
   - `TryGetComponent<T>(out T? component)` — returns `true` when exactly one match is found.
   - `GetComponents<T>()` — returns all matching components in deterministic order.
@@ -84,7 +84,7 @@ For reusable gameplay behaviour, follow [CORE-003: Component/Trait System](@spec
 These follow the same fail-fast pattern as `RequireNode`:
 
 ```csharp
-using AlleyCat.Component;
+using AlleyCat.Core;
 
 // Fail-fast: throws if missing or multiple matches
 ILocomotion locomotion = holder.RequireComponent<ILocomotion>();

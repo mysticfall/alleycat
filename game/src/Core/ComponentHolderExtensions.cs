@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Component;
+namespace AlleyCat.Core;
 
 /// <summary>
 /// Extension methods for querying components from an <see cref="IComponentHolder"/>.

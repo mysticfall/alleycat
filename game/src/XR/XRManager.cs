@@ -1,4 +1,5 @@
 using AlleyCat.Common;
+using AlleyCat.Core;
 using AlleyCat.Testing;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;

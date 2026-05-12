@@ -1,4 +1,4 @@
-using AlleyCat.Configuration;
+using AlleyCat.Core;
 using AlleyCat.Speech.Generation;
 using OpenAI.Audio;
 using Xunit;

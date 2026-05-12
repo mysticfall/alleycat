@@ -1,7 +1,7 @@
 using System.ClientModel;
 using System.Globalization;
 using System.Text;
-using AlleyCat.Configuration;
+using AlleyCat.Core;
 using AlleyCat.UI;
 using Godot;
 using OpenAI;

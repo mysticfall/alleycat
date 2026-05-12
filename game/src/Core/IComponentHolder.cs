@@ -1,4 +1,4 @@
-namespace AlleyCat.Component;
+namespace AlleyCat.Core;
 
 /// <summary>
 /// Represents an object that owns or aggregates components so callers can query its composed capabilities through a

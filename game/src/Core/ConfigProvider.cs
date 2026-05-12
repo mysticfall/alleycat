@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Configuration;
+namespace AlleyCat.Core;
 
 /// <summary>
 /// Provides string-based configuration access with optional user override merging.
