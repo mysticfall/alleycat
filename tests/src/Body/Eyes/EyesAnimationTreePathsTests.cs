@@ -40,30 +40,30 @@ public sealed class EyesAnimationTreePathsTests
     public void EyeBlendShapeFilterPaths_AreSeparatedByLookAxisAndBlink()
     {
         Assert.Contains(
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeLookInRight");
+            "GeneralSkeleton/Female_body_export:eyeLookInRight",
+            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPathStrings());
         Assert.DoesNotContain(
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeLookUpRight");
+            "GeneralSkeleton/Female_body_export:eyeLookUpRight",
+            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPathStrings());
         Assert.DoesNotContain(
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeBlinkLeft");
+            "GeneralSkeleton/Female_body_export:eyeBlinkLeft",
+            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPathStrings());
 
         Assert.Contains(
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeLookUpRight");
+            "GeneralSkeleton/Female_body_export:eyeLookUpRight",
+            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPathStrings());
         Assert.DoesNotContain(
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeLookOutRight");
+            "GeneralSkeleton/Female_body_export:eyeLookOutRight",
+            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPathStrings());
         Assert.DoesNotContain(
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeBlinkLeft");
+            "GeneralSkeleton/Female_body_export:eyeBlinkLeft",
+            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPathStrings());
 
         Assert.Contains(
-            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeBlinkLeft");
+            "GeneralSkeleton/Female_body_export:eyeBlinkLeft",
+            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPathStrings());
         Assert.DoesNotContain(
-            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPaths(),
-            path => path.ToString() == "GeneralSkeleton/Female_body_export:eyeLookInRight");
+            "GeneralSkeleton/Female_body_export:eyeLookInRight",
+            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPathStrings());
     }
 }

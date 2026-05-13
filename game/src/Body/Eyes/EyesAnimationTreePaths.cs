@@ -113,6 +113,15 @@ public static class EyesAnimationTreePaths
         "GeneralSkeleton/Female_body_export:eyeBlinkRight",
     ];
 
+    private static readonly IReadOnlyList<string> _horizontalLookBlendShapeFilterPathStrings =
+        Array.AsReadOnly(_horizontalLookBlendShapeFilterPaths);
+
+    private static readonly IReadOnlyList<string> _verticalLookBlendShapeFilterPathStrings =
+        Array.AsReadOnly(_verticalLookBlendShapeFilterPaths);
+
+    private static readonly IReadOnlyList<string> _blinkBlendShapeFilterPathStrings =
+        Array.AsReadOnly(_blinkBlendShapeFilterPaths);
+
     /// <summary>
     /// Gets the horizontal look seek parameter path.
     /// </summary>
@@ -186,16 +195,34 @@ public static class EyesAnimationTreePaths
         => ToNodePaths(_horizontalLookBlendShapeFilterPaths);
 
     /// <summary>
+    /// Gets the exact horizontal look blend-shape filter path strings used by the reference eye partial blend.
+    /// </summary>
+    public static IReadOnlyList<string> GetHorizontalLookBlendShapeFilterPathStrings()
+        => _horizontalLookBlendShapeFilterPathStrings;
+
+    /// <summary>
     /// Gets the exact vertical look blend-shape filter paths used by the reference eye partial blend.
     /// </summary>
     public static IReadOnlyList<NodePath> GetVerticalLookBlendShapeFilterPaths()
         => ToNodePaths(_verticalLookBlendShapeFilterPaths);
 
     /// <summary>
+    /// Gets the exact vertical look blend-shape filter path strings used by the reference eye partial blend.
+    /// </summary>
+    public static IReadOnlyList<string> GetVerticalLookBlendShapeFilterPathStrings()
+        => _verticalLookBlendShapeFilterPathStrings;
+
+    /// <summary>
     /// Gets the exact blink blend-shape filter paths used by the reference eye partial blend.
     /// </summary>
     public static IReadOnlyList<NodePath> GetBlinkBlendShapeFilterPaths()
         => ToNodePaths(_blinkBlendShapeFilterPaths);
+
+    /// <summary>
+    /// Gets the exact blink blend-shape filter path strings used by the reference eye partial blend.
+    /// </summary>
+    public static IReadOnlyList<string> GetBlinkBlendShapeFilterPathStrings()
+        => _blinkBlendShapeFilterPathStrings;
 
     /// <summary>
     /// Returns whether a filter path belongs to the configured eye blend-shape set.
