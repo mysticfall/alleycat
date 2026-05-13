@@ -20,5 +20,17 @@
         ".gdshader"
       ]
     }
+  },
+  "mcp": {
+    "blender": {
+      "type": "local",
+      "command": [
+        "uv",
+        "--directory",
+        "{env:BLENDER_MCP_HOME}",
+        "run",
+        "blender-mcp"
+      ]
+    }
   }
 }
