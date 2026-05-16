@@ -137,10 +137,6 @@ transform = Transform3D(0.96796334, 0.18217628, 0.17279716, 0.0051651895, -0.702
 [node name="LeftFoot" parent="Actors/Player/IKTargets" parent_id_path=PackedInt32Array(1792987446, 546537465) index="9" unique_id=1292107592]
 transform = Transform3D(0.976607, -0.14520685, -0.15859908, -0.0049166065, -0.7524469, 0.65863466, -0.21497563, -0.6424475, -0.73555887, -0.057184365, 0.17122903, -0.11968585)
 
-[node name="AnimationTree" parent="Actors/Player" index="5" unique_id=527893103]
-parameters/States/AllFoursTransitioning/TimeSeek/seek_request = -1.0
-parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0
-
 [node name="Female" parent="Actors" unique_id=781997941 instance=ExtResource("3_ui8dj")]
 transform = Transform3D(-0.7993387, 0, -0.6008807, 0, 1, 0, 0.6008807, 0, -0.7993387, -1.324, 0, -0.868)
 
