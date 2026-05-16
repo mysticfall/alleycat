@@ -238,7 +238,7 @@ Provide a grab execution system that:
 47. Define a test ball asset:
     - RigidBody3D with sphere mesh, radius 4cm (0.04m).
     - `SphericalGrabPoint` component at centre.
-    - Authored in `test_ball_grabbable.tscn` for photobooth verification.
+    - Authored in `test_ball.tscn` for photobooth verification.
 48. The scene must remain discoverable and grabbable; physics is suspended on grab and
     restored on release.
 
@@ -258,7 +258,7 @@ Provide a grab execution system that:
 - Release with subsystem state restoration.
 - Throw momentum: velocity estimation from hand/attachment motion and transfer
   to Movable physical grabbables on release.
-- Test ball asset (RigidBody3D + SphericalGrabPoint) in `test_ball_grabbable.tscn`.
+- Test ball asset (RigidBody3D + SphericalGrabPoint) in `test_ball.tscn`.
 
 ## Out Of Scope
 
@@ -312,7 +312,7 @@ Provide a grab execution system that:
 |    |                   | physical objects such as RigidBody3D. |
 | 18 | Technical         | `Release()` restores all subsystems and is idempotent. |
 | 19 | Technical         | Test ball exists as RigidBody3D with 4cm radius and centre |
-|    |                   | SphericalGrabPoint in `test_ball_grabbable.tscn`. |
+|    |                   | SphericalGrabPoint in `test_ball.tscn`. |
 | 20 | Technical         | Authoring workflow uses manual positioning and reads relative |
 |    |                   | position and rotation (Euler) from hand bone. |
 | 21 | Technical         | Grab-point animation resource is validated as Godot `Animation` |

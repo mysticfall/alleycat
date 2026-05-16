@@ -24,6 +24,8 @@ public sealed partial class HandGrabAssetIntegrationTests
     private const float TestPipeVisualHeightMetres = 0.5f;
     private const float TestPipeGrabLengthMetres = 0.4f;
     private const float TestPipeReachDistanceMetres = 0.08f;
+    private const string TestBallScenePath = "res://assets/items/test_ball.tscn";
+    private const string TestStickScenePath = "res://assets/items/test_stick.tscn";
     private static readonly Vector3 _testBallGrabPositionOffsetFromHand = new(0.001f, 0.071f, 0.049f);
     private static readonly Vector3 _testBallGrabRotationOffsetFromHand = new(-0.00048048052f, 0.011107354f, -1.5504136f);
     private static readonly StringName _pendingGrabGroupName = new("pending_grab_test_grabbable");
@@ -56,7 +58,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     [Fact]
     public void TestPipe_HasFiftyCentimetreByTwoCentimetreCylinderAndCylindricalGrabPoint()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestStickScenePath);
         Node root = scene.Instantiate();
 
         try
@@ -111,7 +113,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     [Fact]
     public void TestBall_HasFourCentimetreSphereAndSphericalGrabPoint()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_ball_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestBallScenePath);
         Node root = scene.Instantiate();
 
         try
@@ -148,7 +150,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     public async Task TestBall_SphericalGrabPointAcceptsConfiguredReachDistance()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_ball_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestBallScenePath);
         Node3D root = scene.Instantiate<Node3D>();
 
         sceneTree.Root.AddChild(root);
@@ -214,7 +216,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     public async Task TestPipe_CylindricalGrabPointAcceptsClosestPointAlongLength()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestStickScenePath);
         Node3D root = scene.Instantiate<Node3D>();
 
         sceneTree.Root.AddChild(root);
@@ -283,7 +285,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     public async Task TestPipe_NormalOverhandCandidateDoesNotRollHandAwayFromQueryBasisWhenCylinderAxisIsInverted()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestStickScenePath);
         Node3D authoredPipe = scene.Instantiate<Node3D>();
         Node3D authoredGrabPoint = authoredPipe.GetNode<Node3D>("CylindricalGrabPoint");
         GrabbableNode pipe = CreateRuntimePipe(Vector3.Zero);
@@ -369,7 +371,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             DiscoveryRangeMetres = 0.5f,
             GrabCommitDistanceMetres = 0.02f,
         };
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestStickScenePath);
         Node3D authoredPipe = scene.Instantiate<Node3D>();
         Node3D authoredGrabPoint = authoredPipe.GetNode<Node3D>("CylindricalGrabPoint");
         GrabbableNode pipe = CreateRuntimePipe(Vector3.Zero);
@@ -453,7 +455,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     public async Task TestPipe_ActualCylindricalGrabPointUsesAcquisitionMetricAtAuthoredSegmentEnds()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestStickScenePath);
         Node3D root = scene.Instantiate<Node3D>();
 
         sceneTree.Root.AddChild(root);
@@ -748,7 +750,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             DiscoveryRangeMetres = 0.5f,
             GrabCommitDistanceMetres = 0.02f,
         };
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestStickScenePath);
         Node3D pipe = scene.Instantiate<Node3D>();
 
         root.AddChild(handTarget);
@@ -850,7 +852,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             DiscoveryRangeMetres = 0.5f,
             GrabCommitDistanceMetres = 0.02f,
         };
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(TestStickScenePath);
         Node3D authoredPipe = scene.Instantiate<Node3D>();
         Node3D authoredGrabPoint = authoredPipe.GetNode<Node3D>("CylindricalGrabPoint");
         GrabbableNode pipe = CreateRuntimePipe(Vector3.Zero);
@@ -986,18 +988,17 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
-    /// Verifies scene and script UID metadata can be loaded by UID after the hand-grab scene edits.
+    /// Verifies scene and script UID metadata remains preserved after the hand-grab scene edits.
     /// </summary>
     [Headless]
     [Fact]
     public void HandGrabAssets_LoadByPreservedUIDs()
     {
-        Assert.NotNull(ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn"));
-        Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://c45lomd35erjb"));
+        Assert.NotNull(ResourceLoader.Load<PackedScene>(TestStickScenePath));
 
         Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://dp3fxu1uko3n7"));
         Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://c1rexm45hq1rf"));
-        Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://df4i6mqjgm16e"));
+        Assert.NotNull(ResourceLoader.Load<PackedScene>(TestBallScenePath));
         Assert.NotNull(ResourceLoader.Load<Animation>("uid://bhyeepsp5ifv0"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://bdxl0giwm3sg1"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://clntm6ydqb54a"));

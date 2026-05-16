@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://df4i6mqjgm16e"]
 
-[ext_resource type="Script" uid="uid://d0aaosrbv6dgv" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="1_rigid"]
-[ext_resource type="Script" uid="uid://cbwik5eyyjmn5" path="res://src/Interaction/SphericalGrabPoint.cs" id="2_c7mwf"]
-[ext_resource type="Animation" uid="uid://bq1sa88ojude2" path="res://assets/characters/reference/female/animations/Grab-ball-40.tres" id="3_haxrv"]
+[ext_resource type="Script" uid="uid://d0aaosrbv6dgv" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="1_yi3ml"]
+[ext_resource type="Script" uid="uid://cbwik5eyyjmn5" path="res://src/Interaction/SphericalGrabPoint.cs" id="2_bsubu"]
+[ext_resource type="Animation" uid="uid://bq1sa88ojude2" path="res://assets/characters/reference/female/animations/Grab-ball-40.tres" id="3_egj15"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_tnaik"]
 bounce = 0.5
@@ -19,9 +19,9 @@ height = 0.08
 [sub_resource type="SphereShape3D" id="SphereShape3D_34qun"]
 radius = 0.04
 
-[node name="TestBallGrabbable" type="RigidBody3D" unique_id=440488605 groups=["grabbable"]]
+[node name="Ball" type="RigidBody3D" unique_id=440488605 groups=["grabbable"]]
 physics_material_override = SubResource("PhysicsMaterial_tnaik")
-script = ExtResource("1_rigid")
+script = ExtResource("1_yi3ml")
 metadata/_custom_type_script = "uid://d0aaosrbv6dgv"
 
 [node name="Mesh" type="MeshInstance3D" parent="." unique_id=2065785654]
@@ -31,10 +31,10 @@ mesh = SubResource("SphereMesh_wyewm")
 shape = SubResource("SphereShape3D_34qun")
 
 [node name="SphericalGrabPoint" type="Marker3D" parent="." unique_id=473434587]
-script = ExtResource("2_c7mwf")
+script = ExtResource("2_bsubu")
 ReachDistanceMetres = 0.12
 PalmFacingMinimumDot = -1.0
-GrabAnimation = ExtResource("3_haxrv")
+GrabAnimation = ExtResource("3_egj15")
 GrabPointPositionOffsetFromHand = Vector3(0.001, 0.071, 0.049)
 GrabPointRotationOffsetFromHand = Vector3(-0.00048048052, 0.011107354, -1.5504136)
 metadata/_custom_type_script = "uid://cbwik5eyyjmn5"

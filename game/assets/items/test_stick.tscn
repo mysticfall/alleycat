@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://c45lomd35erjb"]
 
-[ext_resource type="Script" uid="uid://d0aaosrbv6dgv" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="1_5o22g"]
-[ext_resource type="Script" uid="uid://cfbkq153qba1t" path="res://src/Interaction/CylindricalGrabPoint.cs" id="2_oao0k"]
-[ext_resource type="Animation" uid="uid://bhyeepsp5ifv0" path="res://assets/characters/reference/female/animations/Grab-pipe-10.tres" id="3_0f6u5"]
+[ext_resource type="Script" uid="uid://d0aaosrbv6dgv" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="1_px86d"]
+[ext_resource type="Script" uid="uid://cfbkq153qba1t" path="res://src/Interaction/CylindricalGrabPoint.cs" id="2_tkeyf"]
+[ext_resource type="Animation" uid="uid://bhyeepsp5ifv0" path="res://assets/characters/reference/female/animations/Grab-pipe-10.tres" id="3_lqbx0"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pnfld"]
 albedo_color = Color(0.9, 0.72, 0.45, 1)
@@ -18,8 +18,8 @@ height = 0.5
 height = 0.5
 radius = 0.01
 
-[node name="TestPipeGrabbable" type="RigidBody3D" unique_id=362015970 groups=["grabbable"]]
-script = ExtResource("1_5o22g")
+[node name="Stick" type="RigidBody3D" unique_id=362015970 groups=["grabbable"]]
+script = ExtResource("1_px86d")
 metadata/_custom_type_script = "uid://d0aaosrbv6dgv"
 
 [node name="Mesh" type="MeshInstance3D" parent="." unique_id=90286787]
@@ -29,11 +29,10 @@ mesh = SubResource("CylinderMesh_3p46e")
 shape = SubResource("CylinderShape3D_paqko")
 
 [node name="CylindricalGrabPoint" type="Marker3D" parent="." unique_id=1512140250]
-script = ExtResource("2_oao0k")
-LengthMetres = 0.4
+script = ExtResource("2_tkeyf")
 SnapDistanceMetres = 0.08
 PalmFacingMinimumDot = -1.0
-GrabAnimation = ExtResource("3_0f6u5")
+GrabAnimation = ExtResource("3_lqbx0")
 GrabPointPositionOffsetFromHand = Vector3(0.0026352, 0.0673249, 0.0298438)
 GrabPointRotationOffsetFromHand = Vector3(-0.00048048052, 0.011107354, -1.5504136)
 metadata/_custom_type_script = "uid://cfbkq153qba1t"
