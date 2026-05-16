@@ -143,9 +143,12 @@ Provide a reusable hand component system that:
     finger bones are affected by pose animations. This is by design, not an
     oversight.
 16. While holding a Movable grabbable, collision exceptions are added between
-    the held body and the grabbing hand's target, finger colliders, hand
-    collider, and lower-arm proxy collider to prevent erratic motion.
+     the held body and the grabbing hand's target, finger colliders, hand
+     collider, and lower-arm proxy collider to prevent erratic motion.
 17. Collision exceptions are removed and physics state is restored on release.
+18. Hand component exposes `HeldCollisionTarget: CollisionObject3D` property for
+     collision proxy attachment; detailed collision proxy implementation is
+     specified in INTR-002 (Hand Grab Execution).
 
 ## In Scope
 
@@ -236,6 +239,9 @@ Provide a reusable hand component system that:
 | 29 | Technical         | Collision exceptions are added between held movable body and same-side |
 |    |                   | hand target, finger colliders, hand collider, and lower-arm proxy; |
 |    |                   | exceptions are removed on release. |
+| 30 | Technical         | Hand exposes `HeldCollisionTarget: CollisionObject3D` property for |
+|    |                   | collision proxy attachment; collision proxy implementation is |
+|    |                   | covered in INTR-002. |
 
 ## References
 

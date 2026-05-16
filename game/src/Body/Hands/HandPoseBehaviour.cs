@@ -19,6 +19,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
 
     private HandPoseController? _controller;
     private GrabAttachmentState? _attachmentState;
+    private HeldCollisionProxyState? _heldCollisionProxyState;
     private PendingGrabState? _pendingGrabState;
     private readonly ReleaseVelocityTracker _releaseVelocityTracker = new();
     private readonly List<CollisionExceptionPair> _heldMovableCollisionExceptions = [];
@@ -94,6 +95,15 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     /// </summary>
     [Export]
     public BoneAttachment3D? HandBoneAttachment
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Optional collision object that receives temporary held-item collision shape proxies while movable items are held.
+    /// </summary>
+    [Export]
+    public CollisionObject3D? HeldCollisionTarget
     {
         get; set;
     }
@@ -298,6 +308,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     {
         _controller?.Update(Side, delta);
         TryCommitPendingGrab();
+        UpdateHeldCollisionProxies();
         UpdateHeldReleaseVelocity(delta);
     }
 
@@ -406,6 +417,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         _pendingGrabState = null;
         _releaseVelocityTracker.Reset();
         ClearHeldMovableCollisionExceptions();
+        ClearHeldCollisionProxies();
         RestoreGrabbedNodeParent();
         ClearPose();
         GrabTargetProvider?.ReleaseGrabTarget();
@@ -517,6 +529,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         try
         {
             AttachGrabbedNode(grabbedNode, pending.Candidate);
+            CreateHeldCollisionProxies(grabbedNode);
             AddHeldMovableCollisionExceptions(grabbedNode);
             _releaseVelocityTracker.Reset(grabbedNode.GlobalPosition);
             ApplyGrabPoseWithDiagnostics(pending.Candidate.Animation);
@@ -527,6 +540,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         catch
         {
             ClearHeldMovableCollisionExceptions();
+            ClearHeldCollisionProxies();
             RestoreGrabbedNodeParent();
             pending.Grabbable.ReleaseIfSupported();
             _pendingGrabState = null;
@@ -578,7 +592,108 @@ public sealed partial class HandPoseBehaviour : Node, IHand
             AddHeldMovableCollisionException(heldBody, otherBody);
         }
 
+        if (HeldCollisionTarget is PhysicsBody3D heldCollisionBody && IsInstanceValid(heldCollisionBody))
+        {
+            foreach (PhysicsBody3D otherBody in EnumerateHeldMovableSelfCollisionBodies())
+            {
+                AddHeldMovableCollisionException(heldCollisionBody, otherBody);
+            }
+        }
+
         EmitGrabDebug($"Grab collision exceptions: movable={heldBody.Name}, pairs={_heldMovableCollisionExceptions.Count}.");
+    }
+
+    private void CreateHeldCollisionProxies(Node3D grabbedNode)
+    {
+        ClearHeldCollisionProxies();
+
+        if (HeldCollisionTarget is null || !IsInstanceValid(HeldCollisionTarget))
+        {
+            return;
+        }
+
+        List<HeldCollisionProxyShapeState> proxyShapes = [];
+        foreach (CollisionShape3D originalShape in EnumerateDescendantCollisionShapes(grabbedNode))
+        {
+            if (originalShape.Disabled || originalShape.Shape is null)
+            {
+                continue;
+            }
+
+            CollisionShape3D proxyShape = new()
+            {
+                Name = $"{originalShape.Name}HeldProxy",
+                Shape = (Shape3D)originalShape.Shape.Duplicate(),
+                Disabled = false,
+            };
+            HeldCollisionTarget.AddChild(proxyShape);
+            proxyShape.Transform = HeldCollisionTarget.GlobalTransform.AffineInverse() * originalShape.GlobalTransform;
+            originalShape.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
+            proxyShapes.Add(new HeldCollisionProxyShapeState(originalShape, proxyShape, originalShape.Disabled));
+        }
+
+        if (proxyShapes.Count > 0)
+        {
+            _heldCollisionProxyState = new HeldCollisionProxyState(HeldCollisionTarget, proxyShapes);
+        }
+    }
+
+    private void UpdateHeldCollisionProxies()
+    {
+        if (_heldCollisionProxyState is not HeldCollisionProxyState state || !IsInstanceValid(state.Target))
+        {
+            ClearHeldCollisionProxies();
+            return;
+        }
+
+        foreach (HeldCollisionProxyShapeState proxyShape in state.Shapes)
+        {
+            if (!IsInstanceValid(proxyShape.OriginalShape) || !IsInstanceValid(proxyShape.ProxyShape))
+            {
+                continue;
+            }
+
+            proxyShape.ProxyShape.Transform = state.Target.GlobalTransform.AffineInverse() * proxyShape.OriginalShape.GlobalTransform;
+        }
+    }
+
+    private void ClearHeldCollisionProxies()
+    {
+        if (_heldCollisionProxyState is not HeldCollisionProxyState state)
+        {
+            return;
+        }
+
+        foreach (HeldCollisionProxyShapeState proxyShape in state.Shapes)
+        {
+            if (IsInstanceValid(proxyShape.OriginalShape))
+            {
+                proxyShape.OriginalShape.SetDeferred(CollisionShape3D.PropertyName.Disabled, proxyShape.WasDisabled);
+            }
+
+            if (IsInstanceValid(proxyShape.ProxyShape))
+            {
+                proxyShape.ProxyShape.QueueFree();
+            }
+        }
+
+        _heldCollisionProxyState = null;
+    }
+
+    private static IEnumerable<CollisionShape3D> EnumerateDescendantCollisionShapes(Node node)
+    {
+        foreach (Node child in node.GetChildren())
+        {
+            if (child is CollisionShape3D collisionShape)
+            {
+                yield return collisionShape;
+            }
+
+            foreach (CollisionShape3D descendant in EnumerateDescendantCollisionShapes(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private IEnumerable<PhysicsBody3D> EnumerateHeldMovableSelfCollisionBodies()
@@ -823,6 +938,15 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     }
 
     private sealed record GrabAttachmentState(Node3D Node, Node? PreviousParent, int PreviousIndex);
+
+    private sealed record HeldCollisionProxyState(
+        CollisionObject3D Target,
+        IReadOnlyList<HeldCollisionProxyShapeState> Shapes);
+
+    private sealed record HeldCollisionProxyShapeState(
+        CollisionShape3D OriginalShape,
+        CollisionShape3D ProxyShape,
+        bool WasDisabled);
 
     private readonly record struct CollisionExceptionPair(PhysicsBody3D HeldBody, PhysicsBody3D OtherBody);
 

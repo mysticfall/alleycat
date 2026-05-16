@@ -405,17 +405,19 @@ metadata/_custom_type_script = "uid://cjt48dl58j31y"
 script = ExtResource("11_jgvmf")
 metadata/_custom_type_script = "uid://clntm6ydqb54a"
 
-[node name="RightHand" type="Node" parent="Hands" index="0" unique_id=122437311 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment")]
+[node name="RightHand" type="Node" parent="Hands" index="0" unique_id=122437311 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget")]
 script = ExtResource("12_kqwe4")
 AnimationTree = NodePath("../../AnimationTree")
 Side = 1
 HandTargetNode = NodePath("../../IKTargets/RightHand")
 HandBoneAttachment = NodePath("../../Female_export/GeneralSkeleton/RightHand")
+HeldCollisionTarget = NodePath("../../IKTargets/RightHand")
 metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"
 
-[node name="LeftHand" type="Node" parent="Hands" index="1" unique_id=1448579806 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment")]
+[node name="LeftHand" type="Node" parent="Hands" index="1" unique_id=1448579806 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget")]
 script = ExtResource("12_kqwe4")
 AnimationTree = NodePath("../../AnimationTree")
 HandTargetNode = NodePath("../../IKTargets/LeftHand")
 HandBoneAttachment = NodePath("../../Female_export/GeneralSkeleton/LeftHand")
+HeldCollisionTarget = NodePath("../../IKTargets/LeftHand")
 metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"

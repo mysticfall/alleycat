@@ -550,6 +550,8 @@ public sealed partial class HandGrabAssetIntegrationTests
 
             Assert.Equal(typeof(HandPoseBehaviour).FullName, rightHand.GetType().FullName);
             Assert.Equal(typeof(HandPoseBehaviour).FullName, leftHand.GetType().FullName);
+            Assert.Same(root.GetNode("Actors/Player/IKTargets/RightHand"), rightHand.Get("HeldCollisionTarget").AsGodotObject());
+            Assert.Same(root.GetNode("Actors/Player/IKTargets/LeftHand"), leftHand.Get("HeldCollisionTarget").AsGodotObject());
             Assert.False(rightHand.Get("DebugGrabOutput").AsBool());
             Assert.False(leftHand.Get("DebugGrabOutput").AsBool());
         }
@@ -1301,6 +1303,133 @@ public sealed partial class HandGrabAssetIntegrationTests
             AssertBodiesDoNotHaveCollisionException(ball, rightHandProxy);
             AssertBodiesDoNotHaveCollisionException(ball, rightLowerArmProxy);
             AssertBodiesDoNotHaveCollisionException(ball, rightFingerProxy);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies movable held rigid bodies proxy enabled collision shapes under the configured hand collision target until release.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovableRigidBodyCommit_ProxiesHeldCollisionShapesUntilRelease()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "HeldCollisionProxyRoot"
+        };
+        AnimatableBody3D handTarget = new()
+        {
+            Name = "HandCollisionTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            HeldCollisionTarget = handTarget,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.3f,
+            GrabCommitDistanceMetres = 0.02f,
+        };
+        GrabbableRigidBody3D ball = CreateRuntimeRigidMutableGrabbable(Vector3.Zero);
+        CollisionShape3D enabledShape = new()
+        {
+            Name = "EnabledHeldShape",
+            Shape = new SphereShape3D { Radius = 0.04f },
+            Transform = new Transform3D(new Basis(Vector3.Up, 0.35f), new Vector3(0.02f, 0.03f, -0.01f)),
+        };
+        Node3D nestedCollisionRoot = new()
+        {
+            Name = "NestedCollisionRoot",
+            Transform = new Transform3D(new Basis(Vector3.Right, -0.2f), new Vector3(-0.04f, 0.01f, 0.03f)),
+        };
+        CollisionShape3D nestedEnabledShape = new()
+        {
+            Name = "NestedEnabledHeldShape",
+            Shape = new BoxShape3D { Size = new Vector3(0.03f, 0.02f, 0.01f) },
+            Transform = new Transform3D(new Basis(Vector3.Forward, 0.25f), new Vector3(0.01f, -0.02f, 0.04f)),
+        };
+        CollisionShape3D disabledShape = new()
+        {
+            Name = "DisabledHeldShape",
+            Shape = new SphereShape3D { Radius = 0.02f },
+            Disabled = true,
+        };
+        ball.AddChild(enabledShape);
+        ball.AddChild(nestedCollisionRoot);
+        nestedCollisionRoot.AddChild(nestedEnabledShape);
+        ball.AddChild(disabledShape);
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(hand);
+        root.AddChild(ball);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        ball.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            ball.GlobalPosition = Vector3.Zero;
+            handTarget.GlobalTransform = new Transform3D(Basis.Identity, Vector3.Zero);
+            ball.RefreshComponents();
+            GrabPointCandidate? candidate = ((IGrabbable)ball).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform);
+            Assert.NotNull(candidate);
+
+            _ = hand.Grab();
+            handTarget.GlobalTransform = candidate.HandTarget;
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(ball, hand.CurrentGrabbed);
+            CollisionShape3D enabledProxy = handTarget.GetNode<CollisionShape3D>("EnabledHeldShapeHeldProxy");
+            CollisionShape3D nestedProxy = handTarget.GetNode<CollisionShape3D>("NestedEnabledHeldShapeHeldProxy");
+            Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("DisabledHeldShapeHeldProxy"));
+            Assert.NotSame(enabledShape.Shape, enabledProxy.Shape);
+            Assert.NotSame(nestedEnabledShape.Shape, nestedProxy.Shape);
+            Assert.False(enabledProxy.Disabled);
+            Assert.False(nestedProxy.Disabled);
+            Assert.True(enabledShape.Disabled);
+            Assert.True(nestedEnabledShape.Disabled);
+            Assert.True(disabledShape.Disabled);
+            AssertTransformApproximatelyEqual(
+                handTarget.GlobalTransform.AffineInverse() * enabledShape.GlobalTransform,
+                enabledProxy.Transform,
+                PositionToleranceMetres);
+            AssertTransformApproximatelyEqual(
+                handTarget.GlobalTransform.AffineInverse() * nestedEnabledShape.GlobalTransform,
+                nestedProxy.Transform,
+                PositionToleranceMetres);
+
+            ball.GlobalTransform = new Transform3D(new Basis(Vector3.Up, 0.5f), new Vector3(0.15f, 0.02f, -0.03f));
+            handTarget.GlobalTransform = new Transform3D(new Basis(Vector3.Right, 0.2f), new Vector3(0.02f, 0.01f, 0.04f));
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            AssertTransformApproximatelyEqual(
+                handTarget.GlobalTransform.AffineInverse() * enabledShape.GlobalTransform,
+                enabledProxy.Transform,
+                PositionToleranceMetres);
+            AssertTransformApproximatelyEqual(
+                handTarget.GlobalTransform.AffineInverse() * nestedEnabledShape.GlobalTransform,
+                nestedProxy.Transform,
+                PositionToleranceMetres);
+
+            hand.Release();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("EnabledHeldShapeHeldProxy"));
+            Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("NestedEnabledHeldShapeHeldProxy"));
+            Assert.False(enabledShape.Disabled);
+            Assert.False(nestedEnabledShape.Disabled);
+            Assert.True(disabledShape.Disabled);
         }
         finally
         {
