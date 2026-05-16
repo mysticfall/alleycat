@@ -47,7 +47,7 @@ Child guidance under [IK: VRIK System](index.md).
 
 - A reusable concrete `CharacterIK` class supports NPC characters and any non-XR-driven
   humanoid IK without implying VR-specific input.
-- Operates independently of input source; accepts `IKTargetStateProvider` for limb targets.
+- Operates independently of input source; accepts `IKTargetIntentProvider` for limb targets.
 - Provides the core IK modifier orchestration without XR-specific logic.
 - Modifier influence wiring uses per-limb modifier groups only; each group includes the direct
   solver and any side-effect modifiers for that body part or side.
@@ -84,7 +84,7 @@ Child guidance under [IK: VRIK System](index.md).
 - If either height is near zero, calibration is skipped and the current XR world
   scale is retained.
 
-## IKTargetStateProvider Architecture
+## IKTargetIntentProvider Architecture
 
 ### General Provider Contract
 
@@ -97,9 +97,9 @@ Child guidance under [IK: VRIK System](index.md).
 
 **Technical Contract:**
 
-1. `IKTargetStateProvider` is a Godot `Node` global class so provider nodes can be
+1. `IKTargetIntentProvider` is a Godot `Node` global class so provider nodes can be
    assigned through exported character IK inspector properties.
-2. Providers always return an `IKTargetState` containing an explicit world-space
+2. Providers always return an `IKTargetIntent` containing an explicit world-space
    target transform and desired influence for the corresponding IK modifier.
 3. The provider abstraction applies uniformly to: head, left hand, right hand, left
    foot, right foot, and any additional limbs configured in the character IK setup.
@@ -124,11 +124,11 @@ Child guidance under [IK: VRIK System](index.md).
 
 **Technical Contract:**
 
-1. XR hand-controller fallback behaviour moves into an `IKTargetStateProvider` subclass.
-2. `XRControllerTargetProvider` extends `IKTargetStateProvider` and derives target
+1. XR hand-controller fallback behaviour moves into an `IKTargetIntentProvider` subclass.
+2. `XRControllerTargetProvider` extends `IKTargetIntentProvider` and derives target
    transform from XR controller state.
-3. `PlayerVRIK` exposes optional fallback provider properties (for example
-   `LeftHandFallbackProvider`, `RightHandFallbackProvider`, `HeadFallbackProvider`).
+3. `PlayerVRIK` exposes optional fallback intent provider properties (for example
+   `LeftHandFallbackIntentProvider`, `RightHandFallbackIntentProvider`, `HeadFallbackIntentProvider`).
 4. `XRControllerTargetProvider` exposes a `LimbSide` property and resolves the corresponding
    XR controller hand-position node through XR services instead of receiving controller nodes
    from `PlayerVRIK`.
@@ -149,16 +149,16 @@ Child guidance under [IK: VRIK System](index.md).
 
 | Limb | Provider Property | IK Modifier Target |
 |------|-------------------|-------------------|
-| Head | `HeadTargetProvider` | Neck-Spine IK (IK-001) |
-| Left Hand | `LeftHandIKTargetStateProvider` | Left Arm TwoBoneIK3D + shoulder correction (IK-002) |
-| Right Hand | `RightHandIKTargetStateProvider` | Right Arm TwoBoneIK3D + shoulder correction (IK-002) |
-| Left Foot | `LeftFootTargetProvider` | Left Leg TwoBoneIK3D (IK-003) |
-| Right Foot | `RightFootTargetProvider` | Right Leg TwoBoneIK3D (IK-003) |
+| Head | `HeadTargetIntentProvider` | Neck-Spine IK (IK-001) |
+| Left Hand | `LeftHandIKTargetIntentProvider` | Left Arm TwoBoneIK3D + shoulder correction (IK-002) |
+| Right Hand | `RightHandIKTargetIntentProvider` | Right Arm TwoBoneIK3D + shoulder correction (IK-002) |
+| Left Foot | `LeftFootTargetIntentProvider` | Left Leg TwoBoneIK3D (IK-003) |
+| Right Foot | `RightFootTargetIntentProvider` | Right Leg TwoBoneIK3D (IK-003) |
 
 ### Validation Expectations
 
 - **Provider override:** When a provider is assigned to any limb property, the VRIK
-  must read the returned `IKTargetState` and drive the target body to the provider's
+  must read the returned `IKTargetIntent` and drive the target body to the provider's
   world-space transform.
 - **Influence gating:** When provider desired influence is 0, all corresponding side
   effects must be disabled.
@@ -198,7 +198,7 @@ Child guidance under [IK: VRIK System](index.md).
 - @game/src/IK/CharacterIK.cs
 - @game/src/IK/PlayerVRIK.cs
 - @game/src/IK/PlayerVRIKStartupBinder.cs
-- @game/src/IK/IKTargetStateProvider.cs
+- @game/src/IK/IKTargetIntentProvider.cs
 - @game/src/IK/XRControllerTargetProvider.cs
 - Godot 4.6 documentation —
   [TwoBoneIK3D](https://docs.godotengine.org/en/stable/classes/class_twoboneik3d.html)

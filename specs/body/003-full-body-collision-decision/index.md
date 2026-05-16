@@ -110,7 +110,7 @@ through explicit force-transfer channels.
 12. Collision layers shall be configured consistently for generated proxy bodies.
     Same-side exclusions shall be expressed through instance-local collision
     exceptions, not by using collision masks for semantic body-part filtering.
-13. Hand followers shall remain `AnimatableBody3D` nodes driven from
+13. Hand actuators shall remain `AnimatableBody3D` nodes driven from
     `PlayerVRIK._PhysicsProcess`; they must tolerate targets that have no direct
     primitive collision-shape children. When authored primitive hand-target
     shapes are absent, IK shall generate runtime `CollisionShape3D` children on
@@ -130,13 +130,13 @@ through explicit force-transfer channels.
      proxy collision shapes from the configured
      `PhysicalRig` shall be exposed via `GetGeneratedFingerProxyCollisionShapesForHand(StringName)`
      for hand-specific queries and mirrored under each hand IK target node in
-     `PlayerVRIK` so hand-follower movement collides against the same finger proxies
+     `PlayerVRIK` so hand-actuator movement collides against the same finger proxies
      that body animation uses.
-15. `CharacterIK.UpdatePhysicalFollowers()` shall invoke a pre-hand-follower
-    hook before each hand follower's `Follow()` call, ensuring mirrored finger
+15. `CharacterIK.UpdatePhysicalActuators()` shall invoke a pre-hand-actuator
+    hook before each hand actuator's `Actuate(...)` call, ensuring mirrored finger
     proxy collision shapes are synchronised to the current rig state before
     hand movement and collision detection occur. This ordering contract guarantees
-    hand-follower collision operates against up-to-date finger proxy geometry.
+    hand-actuator collision operates against up-to-date finger proxy geometry.
 16. Coupling direction remains IK → Body only. `DynamicPhysicalRig` shall not
     reference or depend on any IK nodes, components, or state. Body collision
     shape data flows to IK through the public API; IK remains the consumer,
@@ -153,7 +153,7 @@ through explicit force-transfer channels.
     layer 2 and belong to group `hand_dynamic_interaction_body`.
 19. The hand interaction controller shall be configurable with strength-style
     parameters (thresholds, gains, and caps) rather than prop-specific rules.
-20. Automated test coverage shall verify rig generation, hand follower setup,
+20. Automated test coverage shall verify rig generation, hand actuator setup,
     collision-layer contract, and explicit hand-to-dynamic-body force transfer.
 21. Collision responses shall not override or conflict with physics-based
     head/hand target driving.
@@ -173,7 +173,7 @@ through explicit force-transfer channels.
    including same-side hand and finger proxies while leaving unrelated body
    proxies collision-eligible.
 - Primitive-free IK target nodes for head, hand, and foot targets.
-- Hand followers as `AnimatableBody3D` nodes that tolerate missing direct target
+- Hand actuators as `AnimatableBody3D` nodes that tolerate missing direct target
   shapes and receive runtime profile-backed movement collision shapes where
   needed.
 - Explicit capped impact and sustained push interaction with dynamic rigid
@@ -265,7 +265,7 @@ through explicit force-transfer channels.
 20. Collision layers are correctly configured for generated proxies:
      generated proxy bodies use the configured layer and mask, and same-side
      filtering is represented by instance-local exceptions.
-21. Hand followers use `AnimatableBody3D` with physics-timed position updates
+21. Hand actuators use `AnimatableBody3D` with physics-timed position updates
     from `PlayerVRIK._PhysicsProcess`, preserving target driving, tolerating
     the absence of direct primitive authored target shapes, and ignoring their
     own generated same-side finger proxies through bidirectional instance-local
@@ -278,7 +278,7 @@ through explicit force-transfer channels.
 24. Impact and sustained channels are governed by configurable parameters.
 25. Head collision remains out of scope; no requirement mandates head collision
     response that could conflict with head target driving.
-26. Automated tests verify the core contracts for rig generation, hand follower
+26. Automated tests verify the core contracts for rig generation, hand actuator
      setup, collision layers, and explicit force transfer.
 27. Automated tests verify that a shapeless authored hand target gains runtime
      profile-backed movement collision shapes that reuse descriptor `Shape3D`
@@ -288,10 +288,10 @@ through explicit force-transfer channels.
      returns the generated finger proxy collision shapes for the specified hand,
      enabling IK consumers to query body-owned finger proxy geometry.
 29. Tests verify mirrored finger proxy collision shapes exist under each hand IK
-     target node in `PlayerVRIK`, and hand-follower movement collides against the
+     target node in `PlayerVRIK`, and hand-actuator movement collides against the
      same finger proxies that body animation uses.
-30. Tests verify `CharacterIK.UpdatePhysicalFollowers()` invokes the pre-hand-follower
-     hook before each `_[Left|Right]HandFollower.Follow()` call, confirming mirrored
+30. Tests verify `CharacterIK.UpdatePhysicalActuators()` invokes the pre-hand-actuator
+     hook before each `_[Left|Right]HandActuator.Actuate(...)` call, confirming mirrored
      finger shapes are synchronised before hand movement and collision detection.
 31. Code review confirms `DynamicPhysicalRig` contains no references to IK nodes,
      components, or state, preserving the IK → Body coupling direction.
@@ -311,7 +311,7 @@ through explicit force-transfer channels.
 - [DynamicPhysicalRig Implementation](@game/src/Body/DynamicPhysicalRig.cs)
 - [BodyColliderProfile Implementation](@game/src/Body/BodyColliderProfile.cs)
 - [HandDynamicBodyInteractionController Implementation](@game/src/IK/HandDynamicBodyInteractionController.cs)
-- [IKTargetAnimatableFollower Implementation](@game/src/IK/IKTargetAnimatableFollower.cs)
+- [IKTargetAnimatableActuator Implementation](@game/src/IK/IKTargetAnimatableActuator.cs)
 - [PlayerVRIK Implementation](@game/src/IK/PlayerVRIK.cs)
 - [DynamicPhysicalRig Integration Tests](@integration-tests/src/Body/DynamicPhysicalRigIntegrationTests.cs)
 - [Hand Tests](@integration-tests/src/IK/HandDynamicBodyInteractionControllerIntegrationTests.cs)

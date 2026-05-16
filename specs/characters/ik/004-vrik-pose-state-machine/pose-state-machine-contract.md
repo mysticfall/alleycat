@@ -123,7 +123,7 @@ gating for non-standing poses.
       and computes pending hip translation
     - `HipReconciliationModifier` (`SkeletonModifier3D`) that applies
       pending hip translation inside the skeleton modifier pipeline
-14. `Tick` must run once per frame after follower updates
+14. `Tick` must run once per frame after target actuator updates
     and before downstream consumers read the pending hip translation.
 15. Hip reconciliation executes inside a `SkeletonModifier3D`
     pass after the animation player.

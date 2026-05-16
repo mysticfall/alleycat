@@ -5,9 +5,9 @@ using Xunit;
 namespace AlleyCat.Tests.IK;
 
 /// <summary>
-/// Unit coverage for damped IK target follower motion helpers.
+/// Unit coverage for damped IK target actuator motion helpers.
 /// </summary>
-public sealed class IKTargetBodyFollowerMathTests
+public sealed class IKTargetBodyActuatorMathTests
 {
     private const float Epsilon = 1e-4f;
 
@@ -19,7 +19,7 @@ public sealed class IKTargetBodyFollowerMathTests
     {
         Vector3 displacement = new(0.01f, 0.0f, 0.0f);
 
-        Vector3 desiredVelocity = IKTargetBodyFollowerMath.ComputeDesiredVelocity(
+        Vector3 desiredVelocity = IKTargetBodyActuatorMath.ComputeDesiredVelocity(
             displacement,
             maximumSpeed: 28.0f,
             positionResponsiveness: 14.0f,
@@ -36,7 +36,7 @@ public sealed class IKTargetBodyFollowerMathTests
     [Fact]
     public void ComputeFollowVelocity_RespectsMaximumAccelerationPerStep()
     {
-        Vector3 nextVelocity = IKTargetBodyFollowerMath.ComputeFollowVelocity(
+        Vector3 nextVelocity = IKTargetBodyActuatorMath.ComputeFollowVelocity(
             currentVelocity: Vector3.Zero,
             desiredVelocity: new Vector3(10.0f, 0.0f, 0.0f),
             deltaSeconds: 0.1f,
@@ -51,7 +51,7 @@ public sealed class IKTargetBodyFollowerMathTests
     [Fact]
     public void ComputeDesiredVelocity_ZeroDisplacement_ReturnsZero()
     {
-        Vector3 desiredVelocity = IKTargetBodyFollowerMath.ComputeDesiredVelocity(
+        Vector3 desiredVelocity = IKTargetBodyActuatorMath.ComputeDesiredVelocity(
             Vector3.Zero,
             maximumSpeed: 28.0f,
             positionResponsiveness: 14.0f,
@@ -69,7 +69,7 @@ public sealed class IKTargetBodyFollowerMathTests
         Basis current = Basis.Identity;
         Basis target = new(new Quaternion(Vector3.Up, Mathf.DegToRad(90.0f)));
 
-        Basis smoothed = IKTargetBodyFollowerMath.ComputeFollowBasis(
+        Basis smoothed = IKTargetBodyActuatorMath.ComputeFollowBasis(
             current,
             target,
             deltaSeconds: 1.0f / 60.0f,
@@ -92,7 +92,7 @@ public sealed class IKTargetBodyFollowerMathTests
         Basis current = Basis.Identity;
         Basis target = new(new Quaternion(Vector3.Up, 0.005f));
 
-        Basis result = IKTargetBodyFollowerMath.ComputeFollowBasis(
+        Basis result = IKTargetBodyActuatorMath.ComputeFollowBasis(
             current,
             target,
             deltaSeconds: 1.0f / 60.0f,

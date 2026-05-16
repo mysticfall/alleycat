@@ -6,7 +6,7 @@ namespace AlleyCat.IK;
 /// Scene-wireable provider for a world-space IK target transform and matching modifier influence.
 /// </summary>
 [GlobalClass]
-public abstract partial class IKTargetStateProvider : Node
+public abstract partial class IKTargetIntentProvider : Node
 {
     /// <summary>
     /// Whether <see cref="CharacterIK" /> should apply this provider's transform to the target node.
@@ -14,8 +14,8 @@ public abstract partial class IKTargetStateProvider : Node
     public virtual bool ShouldApplyTargetTransform => true;
 
     /// <summary>
-    /// Gets the current world-space IK target state.
+    /// Gets the current world-space IK target intent.
     /// </summary>
     /// <returns>The target transform and desired modifier influence for this frame.</returns>
-    public abstract IKTargetState GetTargetState();
+    public abstract IKTargetIntent GetTargetIntent();
 }

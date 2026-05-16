@@ -36,7 +36,7 @@ permission outputs that gate player movement in non-standing poses.
 2. Pose states and transitions must be implemented as Godot `Resource` definitions with customisable properties.
 3. Runtime state selection must use head and hand IK-target transforms plus internal or animation-derived values only.
    - **Provider influence distinction**: Pose-state inputs are separate from provider influence. IK-target transforms
-     used for pose detection are the downstream result of provider processing, not the raw provider state itself.
+     used for pose detection are the downstream result of provider processing, not the raw provider intent itself.
      The pose-state machine observes the resolved target transforms after provider influence has been applied.
 4. Collision-derived or locomotion-system-derived inputs must not be required for IK-004 delivery.
 5. Calibration must use viewpoint-node semantics and body-proportion signals without standing-only head-rest.

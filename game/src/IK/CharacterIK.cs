@@ -12,9 +12,12 @@ public partial class CharacterIK : Node3D
 {
     private Skeleton3D? _skeleton;
 
-    private IKTargetBodyFollower? _headFollower;
-    private IKTargetAnimatableFollower? _leftHandFollower;
-    private IKTargetAnimatableFollower? _rightHandFollower;
+    private IKTargetBodyActuator? _headActuator;
+    private IKTargetAnimatableActuator? _leftHandActuator;
+    private IKTargetAnimatableActuator? _rightHandActuator;
+    private IKTargetPipeline? _headTargetPipeline;
+    private IKTargetPipeline? _leftHandTargetPipeline;
+    private IKTargetPipeline? _rightHandTargetPipeline;
 
     private IKTargetActivityGate? _headTargetActivityGate;
     private IKTargetActivityGate? _rightHandTargetActivityGate;
@@ -23,7 +26,6 @@ public partial class CharacterIK : Node3D
     private IKTargetActivityGate? _leftFootTargetActivityGate;
 
     private Transform3D _viewpointLocalTransform = Transform3D.Identity;
-
     /// <summary>
     /// Avatar viewpoint marker representing eye-centre in avatar space.
     /// </summary>
@@ -103,7 +105,7 @@ public partial class CharacterIK : Node3D
     /// </summary>
     [ExportGroup("Providers")]
     [Export]
-    public IKTargetStateProvider? HeadTargetProvider
+    public IKTargetIntentProvider? HeadTargetIntentProvider
     {
         get; set;
     }
@@ -112,16 +114,26 @@ public partial class CharacterIK : Node3D
     /// Provider driving the right-hand target and right arm modifier influence.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? RightHandIKTargetStateProvider
+    public IKTargetIntentProvider? RightHandIKTargetIntentProvider
     {
         get; set;
     }
 
     /// <summary>
+    /// Optional contributors applied to the right-hand source intent before physical actuation.
+    /// </summary>
+    public IIKTargetContributor[] RightHandIKTargetContributors { get; set; } = [];
+
+    /// <summary>
+    /// Optional contributors applied to the left-hand source intent before physical actuation.
+    /// </summary>
+    public IIKTargetContributor[] LeftHandIKTargetContributors { get; set; } = [];
+
+    /// <summary>
     /// Provider driving the left-hand target and left arm modifier influence.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? LeftHandIKTargetStateProvider
+    public IKTargetIntentProvider? LeftHandIKTargetIntentProvider
     {
         get; set;
     }
@@ -130,7 +142,7 @@ public partial class CharacterIK : Node3D
     /// Provider driving the right-foot target and right leg modifier influence.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? RightFootTargetProvider
+    public IKTargetIntentProvider? RightFootTargetIntentProvider
     {
         get; set;
     }
@@ -139,7 +151,7 @@ public partial class CharacterIK : Node3D
     /// Provider driving the left-foot target and left leg modifier influence.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? LeftFootTargetProvider
+    public IKTargetIntentProvider? LeftFootTargetIntentProvider
     {
         get; set;
     }
@@ -149,7 +161,7 @@ public partial class CharacterIK : Node3D
     /// </summary>
     [ExportGroup("Fallbacks")]
     [Export]
-    public IKTargetStateProvider? HeadFallbackProvider
+    public IKTargetIntentProvider? HeadFallbackIntentProvider
     {
         get; set;
     }
@@ -158,7 +170,7 @@ public partial class CharacterIK : Node3D
     /// Optional fallback provider for the right hand when no explicit right-hand provider is assigned.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? RightHandFallbackProvider
+    public IKTargetIntentProvider? RightHandFallbackIntentProvider
     {
         get; set;
     }
@@ -167,7 +179,7 @@ public partial class CharacterIK : Node3D
     /// Optional fallback provider for the left hand when no explicit left-hand provider is assigned.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? LeftHandFallbackProvider
+    public IKTargetIntentProvider? LeftHandFallbackIntentProvider
     {
         get; set;
     }
@@ -176,7 +188,7 @@ public partial class CharacterIK : Node3D
     /// Optional fallback provider for the right foot when no explicit right-foot provider is assigned.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? RightFootFallbackProvider
+    public IKTargetIntentProvider? RightFootFallbackIntentProvider
     {
         get; set;
     }
@@ -185,7 +197,7 @@ public partial class CharacterIK : Node3D
     /// Optional fallback provider for the left foot when no explicit left-foot provider is assigned.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? LeftFootFallbackProvider
+    public IKTargetIntentProvider? LeftFootFallbackIntentProvider
     {
         get; set;
     }
@@ -236,25 +248,25 @@ public partial class CharacterIK : Node3D
     public float HandTargetMaximumSpeed { get; set; } = 28.0f;
 
     /// <summary>
-    /// Position-error gain for hand follower translation while using body-based hand targets.
+    /// Position-error gain for hand actuator translation while using body-based hand targets.
     /// </summary>
     [Export]
     public float HandTargetPositionResponsiveness { get; set; } = 14.0f;
 
     /// <summary>
-    /// Maximum hand follower acceleration while using body-based hand targets.
+    /// Maximum hand actuator acceleration while using body-based hand targets.
     /// </summary>
     [Export]
     public float HandTargetMaximumAcceleration { get; set; } = 48.0f;
 
     /// <summary>
-    /// Distance within which hand followers progressively ease into their final settle movement.
+    /// Distance within which hand actuators progressively ease into their final settle movement.
     /// </summary>
     [Export]
     public float HandTargetSettleDistance { get; set; } = 0.03f;
 
     /// <summary>
-    /// Rotation-error gain for hand follower orientation smoothing.
+    /// Rotation-error gain for hand actuator orientation smoothing.
     /// </summary>
     [Export]
     public float HandTargetRotationResponsiveness { get; set; } = 24.0f;
@@ -339,12 +351,48 @@ public partial class CharacterIK : Node3D
     public int HeadBoneIndex { get; private set; } = -1;
 
     /// <summary>
-    /// Number of physics-timed follower update ticks executed since startup.
+    /// Number of physics-timed actuator update ticks executed since startup.
     /// </summary>
-    public ulong PhysicsFollowerTickCount
+    public ulong PhysicsActuatorTickCount
     {
         get; private set;
     }
+
+    /// <summary>
+    /// Last debug snapshot for the right-hand target pipeline.
+    /// </summary>
+    public IKTargetPipelineResult RightHandTargetPipelineDebugState
+    {
+        get; private set;
+    } = new(
+        Transform3D.Identity,
+        Transform3D.Identity,
+        Transform3D.Identity,
+        IKTargetPipelineFeedback.FromTargets(Transform3D.Identity, Transform3D.Identity, "Inactive"));
+
+    /// <summary>
+    /// Last debug snapshot for the left-hand target pipeline.
+    /// </summary>
+    public IKTargetPipelineResult LeftHandTargetPipelineDebugState
+    {
+        get; private set;
+    } = new(
+        Transform3D.Identity,
+        Transform3D.Identity,
+        Transform3D.Identity,
+        IKTargetPipelineFeedback.FromTargets(Transform3D.Identity, Transform3D.Identity, "Inactive"));
+
+    /// <summary>
+    /// Last debug snapshot for the head target pipeline.
+    /// </summary>
+    public IKTargetPipelineResult HeadTargetPipelineDebugState
+    {
+        get; private set;
+    } = new(
+        Transform3D.Identity,
+        Transform3D.Identity,
+        Transform3D.Identity,
+        IKTargetPipelineFeedback.FromTargets(Transform3D.Identity, Transform3D.Identity, "Inactive"));
 
     /// <summary>
     /// Viewpoint marker resolved from exports or scene structure.
@@ -411,7 +459,7 @@ public partial class CharacterIK : Node3D
         base._Ready();
         EnsureResolvedNodes();
         EnsureTargetActivityGates();
-        EnsureFollowers();
+        EnsureActuators();
         SetPhysicsProcess(true);
         InsertStageModifiers();
     }
@@ -424,7 +472,7 @@ public partial class CharacterIK : Node3D
             return;
         }
 
-        UpdatePhysicalFollowers(delta);
+        UpdatePhysicalActuators(delta);
     }
 
     /// <summary>
@@ -433,19 +481,19 @@ public partial class CharacterIK : Node3D
     protected virtual bool CanProcessProviderTargets => true;
 
     /// <summary>
-    /// Determines whether physics-timed hand target followers should run.
+    /// Determines whether physics-timed hand target actuators should run.
     /// </summary>
-    protected virtual bool CanProcessPhysicalFollowers => CanProcessProviderTargets;
+    protected virtual bool CanProcessPhysicalActuators => CanProcessProviderTargets;
 
     /// <summary>
-    /// Runs before provider target followers are updated.
+    /// Runs before provider target pipelines are updated.
     /// </summary>
     protected virtual void BeforeProviderTargetProcessing()
     {
     }
 
     /// <summary>
-    /// Runs after provider target followers are updated in the begin stage.
+    /// Runs after provider target pipelines are updated in the begin stage.
     /// </summary>
     protected virtual void AfterProviderTargetProcessing(Skeleton3D skeleton, double delta)
     {
@@ -459,9 +507,9 @@ public partial class CharacterIK : Node3D
     }
 
     /// <summary>
-    /// Runs immediately before physics-timed hand target followers move their bodies.
+    /// Runs immediately before physics-timed hand target actuators move their bodies.
     /// </summary>
-    protected virtual void BeforeHandTargetFollowers()
+    protected virtual void BeforeHandTargetActuators()
     {
     }
 
@@ -531,18 +579,18 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Applies runtime binding to all configured fallback providers.
     /// </summary>
-    protected void ConfigureFallbackProviders(Action<IKTargetStateProvider> configureProvider)
+    protected void ConfigureFallbackProviders(Action<IKTargetIntentProvider> configureProvider)
     {
-        ConfigureFallbackProvider(HeadFallbackProvider, configureProvider);
-        ConfigureFallbackProvider(RightHandFallbackProvider, configureProvider);
-        ConfigureFallbackProvider(LeftHandFallbackProvider, configureProvider);
-        ConfigureFallbackProvider(RightFootFallbackProvider, configureProvider);
-        ConfigureFallbackProvider(LeftFootFallbackProvider, configureProvider);
+        ConfigureFallbackProvider(HeadFallbackIntentProvider, configureProvider);
+        ConfigureFallbackProvider(RightHandFallbackIntentProvider, configureProvider);
+        ConfigureFallbackProvider(LeftHandFallbackIntentProvider, configureProvider);
+        ConfigureFallbackProvider(RightFootFallbackIntentProvider, configureProvider);
+        ConfigureFallbackProvider(LeftFootFallbackIntentProvider, configureProvider);
     }
 
     private static void ConfigureFallbackProvider(
-        IKTargetStateProvider? fallbackProvider,
-        Action<IKTargetStateProvider> configureProvider)
+        IKTargetIntentProvider? fallbackProvider,
+        Action<IKTargetIntentProvider> configureProvider)
     {
         if (fallbackProvider is not null && IsInstanceValid(fallbackProvider))
         {
@@ -571,24 +619,20 @@ public partial class CharacterIK : Node3D
 
     private IKTargetFollowState BuildHeadTargetFollowState()
     {
-        if (HeadTargetProvider is not null || HeadFallbackProvider is not null)
+        if (HeadTargetIntentProvider is not null || HeadFallbackIntentProvider is not null)
         {
-            IKTargetState state = ResolveTargetState(
-                HeadTargetProvider,
-                HeadFallbackProvider,
+            IKTargetIntent intent = ResolveTargetIntent(
+                HeadTargetIntentProvider,
+                HeadFallbackIntentProvider,
                 ResolvedHeadIKTarget?.GlobalTransform ?? Transform3D.Identity);
-            float influence = ApplyModifierInfluence(state, null, HeadModifierGroup);
+            float influence = ApplyModifierInfluence(intent, null, HeadModifierGroup);
             bool active = influence > 0.0f;
             _headTargetActivityGate?.Apply(active);
-            if (active && ResolvedHeadIKTarget is not null)
-            {
-                SetWorldTransform(ResolvedHeadIKTarget, state.WorldTransform);
-            }
-
-            return new IKTargetFollowState(state.WorldTransform, active);
+            Transform3D currentTargetTransform = ResolvedHeadIKTarget?.GlobalTransform ?? Transform3D.Identity;
+            return new IKTargetFollowState(active ? intent.WorldTransform : currentTargetTransform, active);
         }
 
-        _ = ApplyModifierInfluence(new IKTargetState(GetDefaultHeadTargetTransform(), 0.0f), null, HeadModifierGroup);
+        _ = ApplyModifierInfluence(new IKTargetIntent(GetDefaultHeadTargetTransform(), 0.0f), null, HeadModifierGroup);
         _headTargetActivityGate?.Apply(active: false);
         return new IKTargetFollowState(GetDefaultHeadTargetTransform(), active: false);
     }
@@ -599,8 +643,8 @@ public partial class CharacterIK : Node3D
     protected Transform3D BuildRightHandTargetTransform()
     {
         return BuildHandTargetTransform(
-            RightHandIKTargetStateProvider,
-            RightHandFallbackProvider,
+            RightHandIKTargetIntentProvider,
+            RightHandFallbackIntentProvider,
             ResolvedRightHandIKTarget,
             RightHandModifierGroup);
     }
@@ -611,40 +655,38 @@ public partial class CharacterIK : Node3D
     protected Transform3D BuildLeftHandTargetTransform()
     {
         return BuildHandTargetTransform(
-            LeftHandIKTargetStateProvider,
-            LeftHandFallbackProvider,
+            LeftHandIKTargetIntentProvider,
+            LeftHandFallbackIntentProvider,
             ResolvedLeftHandIKTarget,
             LeftHandModifierGroup);
     }
 
     private Transform3D BuildHandTargetTransform(
-        IKTargetStateProvider? provider,
-        IKTargetStateProvider? fallbackProvider,
+        IKTargetIntentProvider? provider,
+        IKTargetIntentProvider? fallbackProvider,
         AnimatableBody3D? target,
         SkeletonModifier3D[] modifierGroup)
         => BuildHandTargetFollowState(provider, fallbackProvider, target, modifierGroup).WorldTransform;
 
     private IKTargetFollowState BuildRightHandTargetFollowState()
-    {
-        return BuildHandTargetFollowState(
-            RightHandIKTargetStateProvider,
-            RightHandFallbackProvider,
+        => BuildHandTargetFollowState(
+            RightHandIKTargetIntentProvider,
+            RightHandFallbackIntentProvider,
             ResolvedRightHandIKTarget,
             RightHandModifierGroup);
-    }
 
     private IKTargetFollowState BuildLeftHandTargetFollowState()
     {
         return BuildHandTargetFollowState(
-            LeftHandIKTargetStateProvider,
-            LeftHandFallbackProvider,
+            LeftHandIKTargetIntentProvider,
+            LeftHandFallbackIntentProvider,
             ResolvedLeftHandIKTarget,
             LeftHandModifierGroup);
     }
 
     private IKTargetFollowState BuildHandTargetFollowState(
-        IKTargetStateProvider? provider,
-        IKTargetStateProvider? fallbackProvider,
+        IKTargetIntentProvider? provider,
+        IKTargetIntentProvider? fallbackProvider,
         AnimatableBody3D? target,
         SkeletonModifier3D[] modifierGroup)
     {
@@ -652,27 +694,27 @@ public partial class CharacterIK : Node3D
         IKTargetActivityGate? targetActivityGate = ResolveHandTargetActivityGate(target);
         if (provider is null && fallbackProvider is null)
         {
-            _ = ApplyModifierInfluence(new IKTargetState(currentTargetTransform, 0.0f), modifierGroup);
+            _ = ApplyModifierInfluence(new IKTargetIntent(currentTargetTransform, 0.0f), modifierGroup);
             targetActivityGate?.Apply(active: false);
             return new IKTargetFollowState(currentTargetTransform, active: false);
         }
 
         if (provider is not null && IsInstanceValid(provider))
         {
-            IKTargetState providerState = provider.GetTargetState();
-            float influence = ApplyModifierInfluence(providerState, modifierGroup);
+            IKTargetIntent providerIntent = provider.GetTargetIntent();
+            float influence = ApplyModifierInfluence(providerIntent, modifierGroup);
             bool active = influence > 0.0f;
             targetActivityGate?.Apply(active);
-            return new IKTargetFollowState(active ? providerState.WorldTransform : currentTargetTransform, active);
+            return new IKTargetFollowState(active ? providerIntent.WorldTransform : currentTargetTransform, active);
         }
 
         if (fallbackProvider is not null && IsInstanceValid(fallbackProvider))
         {
-            IKTargetState fallbackState = fallbackProvider.GetTargetState();
-            float influence = ApplyModifierInfluence(fallbackState, modifierGroup);
+            IKTargetIntent fallbackIntent = fallbackProvider.GetTargetIntent();
+            float influence = ApplyModifierInfluence(fallbackIntent, modifierGroup);
             bool active = influence > 0.0f;
             targetActivityGate?.Apply(active);
-            return new IKTargetFollowState(active ? fallbackState.WorldTransform : currentTargetTransform, active);
+            return new IKTargetFollowState(active ? fallbackIntent.WorldTransform : currentTargetTransform, active);
         }
 
         targetActivityGate?.Apply(active: false);
@@ -698,7 +740,7 @@ public partial class CharacterIK : Node3D
         }
 
         BeforeProviderTargetProcessing();
-        _headFollower?.Follow(delta);
+        HeadTargetPipelineDebugState = _headTargetPipeline?.Run(delta) ?? HeadTargetPipelineDebugState;
         ApplyHeadSolveTargetTransform(limitedHeadTargetTransform: null);
         AfterProviderTargetProcessing(GetResolvedSkeleton(), delta);
     }
@@ -724,40 +766,18 @@ public partial class CharacterIK : Node3D
         AfterEndStage(GetResolvedSkeleton(), delta);
     }
 
-    private void UpdatePhysicalFollowers(double delta)
+    private void UpdatePhysicalActuators(double delta)
     {
-        if (!Active || !CanProcessPhysicalFollowers)
+        if (!Active || !CanProcessPhysicalActuators)
         {
             return;
         }
 
         BeforeProviderTargetProcessing();
-        BeforeHandTargetFollowers();
-        PhysicsFollowerTickCount += 1;
-        UpdateRightHandPhysicalFollower(delta);
-        UpdateLeftHandPhysicalFollower(delta);
-    }
-
-    private void UpdateRightHandPhysicalFollower(double delta)
-    {
-        if (RightHandIKTargetStateProvider is null && RightHandFallbackProvider is null)
-        {
-            _ = BuildRightHandTargetTransform();
-            return;
-        }
-
-        _rightHandFollower?.Follow(delta);
-    }
-
-    private void UpdateLeftHandPhysicalFollower(double delta)
-    {
-        if (LeftHandIKTargetStateProvider is null && LeftHandFallbackProvider is null)
-        {
-            _ = BuildLeftHandTargetTransform();
-            return;
-        }
-
-        _leftHandFollower?.Follow(delta);
+        BeforeHandTargetActuators();
+        PhysicsActuatorTickCount += 1;
+        RightHandTargetPipelineDebugState = _rightHandTargetPipeline?.Run(delta) ?? RightHandTargetPipelineDebugState;
+        LeftHandTargetPipelineDebugState = _leftHandTargetPipeline?.Run(delta) ?? LeftHandTargetPipelineDebugState;
     }
 
     private void InsertStageModifiers()
@@ -803,14 +823,14 @@ public partial class CharacterIK : Node3D
     private void ApplyFootTargetProviders()
     {
         ApplyFootTargetProvider(
-            RightFootTargetProvider,
-            RightFootFallbackProvider,
+            RightFootTargetIntentProvider,
+            RightFootFallbackIntentProvider,
             SelectValidTarget(ResolvedRightFootIKTarget, RightFootIKTarget),
             RightFootModifierGroup,
             _rightFootTargetActivityGate);
         ApplyFootTargetProvider(
-            LeftFootTargetProvider,
-            LeftFootFallbackProvider,
+            LeftFootTargetIntentProvider,
+            LeftFootFallbackIntentProvider,
             SelectValidTarget(ResolvedLeftFootIKTarget, LeftFootIKTarget),
             LeftFootModifierGroup,
             _leftFootTargetActivityGate);
@@ -820,8 +840,8 @@ public partial class CharacterIK : Node3D
         => resolvedTarget is not null && IsInstanceValid(resolvedTarget) ? resolvedTarget : exportedTarget;
 
     private static void ApplyFootTargetProvider(
-        IKTargetStateProvider? provider,
-        IKTargetStateProvider? fallbackProvider,
+        IKTargetIntentProvider? provider,
+        IKTargetIntentProvider? fallbackProvider,
         Node3D? target,
         SkeletonModifier3D[] modifierGroup,
         IKTargetActivityGate? targetActivityGate)
@@ -829,26 +849,26 @@ public partial class CharacterIK : Node3D
         if (provider is null && fallbackProvider is null)
         {
             _ = ApplyFootModifierInfluence(
-                new IKTargetState(target?.GlobalTransform ?? Transform3D.Identity, 0.0f),
+                new IKTargetIntent(target?.GlobalTransform ?? Transform3D.Identity, 0.0f),
                 modifierGroup);
             targetActivityGate?.Apply(active: false);
             return;
         }
 
-        IKTargetStateProvider? effectiveProvider = SelectEffectiveProvider(provider, fallbackProvider);
-        IKTargetState state = effectiveProvider?.GetTargetState()
-                              ?? new IKTargetState(target?.GlobalTransform ?? Transform3D.Identity, 0.0f);
-        float influence = ApplyFootModifierInfluence(state, modifierGroup);
+        IKTargetIntentProvider? effectiveProvider = SelectEffectiveProvider(provider, fallbackProvider);
+        IKTargetIntent intent = effectiveProvider?.GetTargetIntent()
+                              ?? new IKTargetIntent(target?.GlobalTransform ?? Transform3D.Identity, 0.0f);
+        float influence = ApplyFootModifierInfluence(intent, modifierGroup);
         targetActivityGate?.Apply(influence > 0.0f);
         if (target is not null && influence > 0.0f && effectiveProvider?.ShouldApplyTargetTransform == true)
         {
-            SetWorldTransform(target, state.WorldTransform);
+            SetWorldTransform(target, intent.WorldTransform);
         }
     }
 
-    private static IKTargetStateProvider? SelectEffectiveProvider(
-        IKTargetStateProvider? provider,
-        IKTargetStateProvider? fallbackProvider)
+    private static IKTargetIntentProvider? SelectEffectiveProvider(
+        IKTargetIntentProvider? provider,
+        IKTargetIntentProvider? fallbackProvider)
         => provider is not null && IsInstanceValid(provider)
             ? provider
             : fallbackProvider is not null && IsInstanceValid(fallbackProvider)
@@ -871,9 +891,9 @@ public partial class CharacterIK : Node3D
     private static Transform3D GetWorldTransform(Node3D node)
         => node.GetParent() is Node3D parent ? parent.GlobalTransform * node.Transform : node.GlobalTransform;
 
-    private static float ApplyFootModifierInfluence(IKTargetState state, SkeletonModifier3D[] modifierGroup)
+    private static float ApplyFootModifierInfluence(IKTargetIntent intent, SkeletonModifier3D[] modifierGroup)
     {
-        float influence = Mathf.Clamp(state.DesiredInfluence, 0.0f, 1.0f);
+        float influence = Mathf.Clamp(intent.DesiredInfluence, 0.0f, 1.0f);
         bool active = influence > 0.0f;
 
         foreach (SkeletonModifier3D modifier in modifierGroup)
@@ -1050,31 +1070,33 @@ public partial class CharacterIK : Node3D
         }
     }
 
-    private void EnsureFollowers()
+    private void EnsureActuators()
     {
-        if (_headFollower is not null && _rightHandFollower is not null && _leftHandFollower is not null)
+        if (_headActuator is not null && _rightHandActuator is not null && _leftHandActuator is not null)
         {
             return;
         }
 
         CharacterBody3D headTarget = ResolvedHeadIKTarget
                                      ?? throw new InvalidOperationException(
-                                         $"{GetType().Name} head target not resolved before follower setup.");
+                                          $"{GetType().Name} head target not resolved before actuator setup.");
         AnimatableBody3D rightHandTarget = ResolvedRightHandIKTarget
                                            ?? throw new InvalidOperationException(
-                                               $"{GetType().Name} right-hand target not resolved before follower setup.");
+                                                $"{GetType().Name} right-hand target not resolved before actuator setup.");
         AnimatableBody3D leftHandTarget = ResolvedLeftHandIKTarget
                                           ?? throw new InvalidOperationException(
-                                              $"{GetType().Name} left-hand target not resolved before follower setup.");
+                                               $"{GetType().Name} left-hand target not resolved before actuator setup.");
 
-        _headFollower = new IKTargetBodyFollower(headTarget, BuildHeadTargetFollowState)
+        _headActuator = new IKTargetBodyActuator(headTarget)
         {
             MaximumSpeed = HeadTargetMaximumSpeed,
+            SnapDistance = float.MaxValue,
         };
 
-        _rightHandFollower = new IKTargetAnimatableFollower(
+        _headTargetPipeline = new IKTargetPipeline(BuildHeadTargetFollowState, [], _headActuator);
+
+        _rightHandActuator = new IKTargetAnimatableActuator(
             rightHandTarget,
-            BuildRightHandTargetFollowState,
             ResolveRightHandDynamicInteractionShapes())
         {
             MaximumSpeed = HandTargetMaximumSpeed,
@@ -1091,9 +1113,13 @@ public partial class CharacterIK : Node3D
             DynamicSustainedForceCap = HandDynamicSustainedForceCap,
         };
 
-        _leftHandFollower = new IKTargetAnimatableFollower(
+        _rightHandTargetPipeline = new IKTargetPipeline(
+            BuildRightHandTargetFollowState,
+            () => RightHandIKTargetContributors,
+            _rightHandActuator);
+
+        _leftHandActuator = new IKTargetAnimatableActuator(
             leftHandTarget,
-            BuildLeftHandTargetFollowState,
             ResolveLeftHandDynamicInteractionShapes())
         {
             MaximumSpeed = HandTargetMaximumSpeed,
@@ -1109,6 +1135,11 @@ public partial class CharacterIK : Node3D
             DynamicSustainedForcePerSpeed = HandDynamicSustainedForcePerSpeed,
             DynamicSustainedForceCap = HandDynamicSustainedForceCap,
         };
+
+        _leftHandTargetPipeline = new IKTargetPipeline(
+            BuildLeftHandTargetFollowState,
+            () => LeftHandIKTargetContributors,
+            _leftHandActuator);
     }
 
     /// <summary>
@@ -1147,26 +1178,26 @@ public partial class CharacterIK : Node3D
     }
 
     /// <summary>
-    /// Resolves a target state using explicit provider, fallback provider, and finally a safe transform.
+    /// Resolves a target intent using explicit provider, fallback provider, and finally a safe transform.
     /// </summary>
-    protected static IKTargetState ResolveTargetState(
-        IKTargetStateProvider? provider,
-        IKTargetStateProvider? fallbackProvider,
+    protected static IKTargetIntent ResolveTargetIntent(
+        IKTargetIntentProvider? provider,
+        IKTargetIntentProvider? fallbackProvider,
         Transform3D safeFallbackTransform)
     {
         return provider is not null && IsInstanceValid(provider)
-            ? provider.GetTargetState()
+            ? provider.GetTargetIntent()
             : fallbackProvider is not null && IsInstanceValid(fallbackProvider)
-            ? fallbackProvider.GetTargetState()
-            : new IKTargetState(safeFallbackTransform, 0.0f);
+            ? fallbackProvider.GetTargetIntent()
+            : new IKTargetIntent(safeFallbackTransform, 0.0f);
     }
 
     /// <summary>
     /// Applies provider influence to all direct and side-effect modifiers for a limb.
     /// </summary>
-    protected static float ApplyModifierInfluence(IKTargetState state, params SkeletonModifier3D?[] modifiers)
+    protected static float ApplyModifierInfluence(IKTargetIntent intent, params SkeletonModifier3D?[] modifiers)
     {
-        float influence = Mathf.Clamp(state.DesiredInfluence, 0.0f, 1.0f);
+        float influence = Mathf.Clamp(intent.DesiredInfluence, 0.0f, 1.0f);
         bool active = influence > 0.0f;
 
         foreach (SkeletonModifier3D? modifier in modifiers)
@@ -1180,9 +1211,9 @@ public partial class CharacterIK : Node3D
     /// <summary>
     /// Applies provider influence to all direct and side-effect modifiers for a limb.
     /// </summary>
-    protected static float ApplyModifierInfluence(IKTargetState state, SkeletonModifier3D? primaryModifier, SkeletonModifier3D[] modifierGroup)
+    protected static float ApplyModifierInfluence(IKTargetIntent intent, SkeletonModifier3D? primaryModifier, SkeletonModifier3D[] modifierGroup)
     {
-        float influence = Mathf.Clamp(state.DesiredInfluence, 0.0f, 1.0f);
+        float influence = Mathf.Clamp(intent.DesiredInfluence, 0.0f, 1.0f);
         bool active = influence > 0.0f;
 
         ApplyModifierInfluence(primaryModifier, influence, active);

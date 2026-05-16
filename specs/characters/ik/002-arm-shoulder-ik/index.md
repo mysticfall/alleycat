@@ -49,10 +49,10 @@ setups.
 12. All pose-independent calculations must derive body-local basis each frame from skeleton landmarks using Hips to
     Neck for up, LeftShoulder to RightShoulder orthonormalised against up for right, and the cross product of right
     and up for forward.
-13. **Provider influence gating**: When the corresponding `IKTargetStateProvider` reports desired influence of 0,
+13. **Provider influence gating**: When the corresponding `IKTargetIntentProvider` reports desired influence of 0,
     the arm `TwoBoneIK3D` and all shoulder correction modifiers for that side must be deactivated.
 14. Provider influence propagates to both the arm solver and the shoulder correction path as a coupled contract.
-15. Arm and shoulder IK must accept target transforms from `IKTargetStateProvider` in the same manner as the hand
+15. Arm and shoulder IK must accept target transforms from `IKTargetIntentProvider` in the same manner as the hand
     target body, via the provider contract defined in [IK Implementation Notes](../implementation-notes.md).
 
 ## In Scope
@@ -68,7 +68,7 @@ setups.
   baseline.
 - Consistent behaviour regardless of character body pose.
 - A standalone reusable IK scene for reuse in character scenes.
-- Provider-driven target and influence support for hands via IKTargetStateProvider.
+- Provider-driven target and influence support for hands via IKTargetIntentProvider.
 - Provider influence gating that deactivates arm and shoulder modifiers when influence is 0.
 
 ## Out Of Scope
@@ -123,7 +123,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-30 | Photobooth validates behaviour with resource-driven anchors. | Arm IK Contract |
 | AC-31 | C# tests validate resource loading, completeness, and symmetry. | Arm IK Contract |
 | AC-32 | Provider influence of 0 deactivates arm TwoBoneIK3D and shoulder correction for that side. | Provider Gating |
-| AC-33 | Provider target transforms drive hand target bodies via IKTargetStateProvider contract. | Provider Gating |
+| AC-33 | Provider target transforms drive hand target bodies via IKTargetIntentProvider contract. | Provider Gating |
 | AC-34 | Influence gating propagates to all side-effect modifiers on the same side. | Provider Gating Contract |
 
 ## References

@@ -505,20 +505,20 @@ public sealed class DynamicPhysicalRigIntegrationTests
             AnimatableBody3D rightHand = fixture.RightHandTarget;
             Transform3D initialHeadTransform = head.GlobalTransform;
             Transform3D initialTransform = rightHand.GlobalTransform;
-            ulong initialPhysicsTickCount = fixture.PlayerVRIK.PhysicsFollowerTickCount;
+            ulong initialPhysicsTickCount = fixture.PlayerVRIK.PhysicsActuatorTickCount;
             Transform3D movedControllerTransform = new(initialTransform.Basis, initialTransform.Origin + new Vector3(0.08f, 0.0f, 0.0f));
             fixture.RightHandPosition.GlobalTransform = movedControllerTransform;
 
             InvokeOnBeginStage(fixture.PlayerVRIK, 1.0d / 60.0d);
             AssertTransformApproximately(initialTransform, rightHand.GlobalTransform, PositionToleranceMetres);
-            Assert.Equal(initialPhysicsTickCount, fixture.PlayerVRIK.PhysicsFollowerTickCount);
+            Assert.Equal(initialPhysicsTickCount, fixture.PlayerVRIK.PhysicsActuatorTickCount);
 
-            InvokeUpdatePhysicalFollowers(fixture.PlayerVRIK, 1.0d / 60.0d);
+            InvokeUpdatePhysicalActuators(fixture.PlayerVRIK, 1.0d / 60.0d);
 
             AssertTransformApproximately(initialHeadTransform, head.GlobalTransform, PositionToleranceMetres);
             Assert.True(
-                fixture.PlayerVRIK.PhysicsFollowerTickCount > initialPhysicsTickCount,
-                "Follower ticks should now be recorded only from the physics-timed path.");
+                fixture.PlayerVRIK.PhysicsActuatorTickCount > initialPhysicsTickCount,
+                "Physics actuator ticks should now be recorded only from the physics-timed path.");
         }
         finally
         {
@@ -527,65 +527,65 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the AnimatableBody3D collision-follower rewrite remains hand-only for the current subphase.
+    /// Verifies the AnimatableBody3D collision-actuator rewrite remains hand-only for the current subphase.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerVRIK_HandFollowers_UseAnimatableCollisionFollower_WhileHeadRemainsBaseline()
+    public async Task PlayerVRIK_HandActuators_UseAnimatableCollisionActuator_WhileHeadRemainsBaseline()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
 
         try
         {
-            InvokeEnsureFollowers(fixture.PlayerVRIK);
+            InvokeEnsureActuators(fixture.PlayerVRIK);
 
-            IKTargetBodyFollower headFollower = GetPrivateField<IKTargetBodyFollower>(fixture.PlayerVRIK, "_headFollower");
-            IKTargetAnimatableFollower rightHandFollower = GetPrivateField<IKTargetAnimatableFollower>(fixture.PlayerVRIK, "_rightHandFollower");
-            IKTargetAnimatableFollower leftHandFollower = GetPrivateField<IKTargetAnimatableFollower>(fixture.PlayerVRIK, "_leftHandFollower");
+            IKTargetBodyActuator headActuator = GetPrivateField<IKTargetBodyActuator>(fixture.PlayerVRIK, "_headActuator");
+            IKTargetAnimatableActuator rightHandActuator = GetPrivateField<IKTargetAnimatableActuator>(fixture.PlayerVRIK, "_rightHandActuator");
+            IKTargetAnimatableActuator leftHandActuator = GetPrivateField<IKTargetAnimatableActuator>(fixture.PlayerVRIK, "_leftHandActuator");
 
-            Assert.False(headFollower.UseDampedFollow);
+            Assert.False(headActuator.UseDampedFollow);
 
             _ = Assert.IsType<AnimatableBody3D>(fixture.RightHandTarget);
             _ = Assert.IsType<AnimatableBody3D>(fixture.LeftHandTarget);
 
-            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumSpeed, rightHandFollower.MaximumSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetPositionResponsiveness, rightHandFollower.PositionResponsiveness);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, rightHandFollower.MaximumAcceleration);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, rightHandFollower.SnapDistance);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, rightHandFollower.RotationResponsiveness);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, rightHandFollower.DynamicBodyInteractionCollisionMask);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, rightHandFollower.DynamicImpactApproachSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, rightHandFollower.DynamicImpactImpulsePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, rightHandFollower.DynamicImpactImpulseCap);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, rightHandFollower.DynamicSustainedPushSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, rightHandFollower.DynamicSustainedForcePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, rightHandFollower.DynamicSustainedForceCap);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumSpeed, rightHandActuator.MaximumSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetPositionResponsiveness, rightHandActuator.PositionResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, rightHandActuator.MaximumAcceleration);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, rightHandActuator.SnapDistance);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, rightHandActuator.RotationResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, rightHandActuator.DynamicBodyInteractionCollisionMask);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, rightHandActuator.DynamicImpactApproachSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, rightHandActuator.DynamicImpactImpulsePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, rightHandActuator.DynamicImpactImpulseCap);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, rightHandActuator.DynamicSustainedPushSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, rightHandActuator.DynamicSustainedForcePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, rightHandActuator.DynamicSustainedForceCap);
             Assert.True(
-                CountDynamicInteractionQueryShapes(rightHandFollower) > 0,
-                "Right-hand follower should receive profile-backed dynamic-interaction query shapes.");
+                CountDynamicInteractionQueryShapes(rightHandActuator) > 0,
+                "Right-hand actuator should receive profile-backed dynamic-interaction query shapes.");
             Assert.True(
-                rightHandFollower.GeneratedMovementCollisionShapeCount > 0,
-                "Right-hand follower should generate profile-backed movement collision shapes for MoveAndCollide/TestMove.");
+                rightHandActuator.GeneratedMovementCollisionShapeCount > 0,
+                "Right-hand actuator should generate profile-backed movement collision shapes for MoveAndCollide/TestMove.");
 
-            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumSpeed, leftHandFollower.MaximumSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetPositionResponsiveness, leftHandFollower.PositionResponsiveness);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, leftHandFollower.MaximumAcceleration);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, leftHandFollower.SnapDistance);
-            Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, leftHandFollower.RotationResponsiveness);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, leftHandFollower.DynamicBodyInteractionCollisionMask);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, leftHandFollower.DynamicImpactApproachSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, leftHandFollower.DynamicImpactImpulsePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, leftHandFollower.DynamicImpactImpulseCap);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, leftHandFollower.DynamicSustainedPushSpeedThreshold);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, leftHandFollower.DynamicSustainedForcePerSpeed);
-            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, leftHandFollower.DynamicSustainedForceCap);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumSpeed, leftHandActuator.MaximumSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetPositionResponsiveness, leftHandActuator.PositionResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetMaximumAcceleration, leftHandActuator.MaximumAcceleration);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetSettleDistance, leftHandActuator.SnapDistance);
+            Assert.Equal(fixture.PlayerVRIK.HandTargetRotationResponsiveness, leftHandActuator.RotationResponsiveness);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicInteractionCollisionMask, leftHandActuator.DynamicBodyInteractionCollisionMask);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactApproachSpeedThreshold, leftHandActuator.DynamicImpactApproachSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulsePerSpeed, leftHandActuator.DynamicImpactImpulsePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicImpactImpulseCap, leftHandActuator.DynamicImpactImpulseCap);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedPushSpeedThreshold, leftHandActuator.DynamicSustainedPushSpeedThreshold);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForcePerSpeed, leftHandActuator.DynamicSustainedForcePerSpeed);
+            Assert.Equal(fixture.PlayerVRIK.HandDynamicSustainedForceCap, leftHandActuator.DynamicSustainedForceCap);
             Assert.True(
-                CountDynamicInteractionQueryShapes(leftHandFollower) > 0,
-                "Left-hand follower should receive profile-backed dynamic-interaction query shapes.");
+                CountDynamicInteractionQueryShapes(leftHandActuator) > 0,
+                "Left-hand actuator should receive profile-backed dynamic-interaction query shapes.");
             Assert.True(
-                leftHandFollower.GeneratedMovementCollisionShapeCount > 0,
-                "Left-hand follower should generate profile-backed movement collision shapes for MoveAndCollide/TestMove.");
+                leftHandActuator.GeneratedMovementCollisionShapeCount > 0,
+                "Left-hand actuator should generate profile-backed movement collision shapes for MoveAndCollide/TestMove.");
         }
         finally
         {
@@ -605,7 +605,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
         try
         {
-            InvokeEnsureFollowers(fixture.PlayerVRIK);
+            InvokeEnsureActuators(fixture.PlayerVRIK);
 
             AssertNoDirectCollisionShape(fixture.RightHandTarget);
             AssertNoDirectCollisionShape(fixture.LeftHandTarget);
@@ -698,7 +698,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies live hand targets also ignore their own generated finger proxies so startup hand followers do not push against their own fingers.
+    /// Verifies live hand targets also ignore their own generated finger proxies so startup hand actuators do not push against their own fingers.
     /// </summary>
     [Headless]
     [Fact]
@@ -724,11 +724,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies generated finger proxy shapes are mirrored under the live hand target before hand followers move.
+    /// Verifies generated finger proxy shapes are mirrored under the live hand target before hand actuators move.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task PlayerVRIK_HandTargetFollowers_SynchroniseFingerCollisionShapesBeforeMovement()
+    public async Task PlayerVRIK_HandTargetActuators_SynchroniseFingerCollisionShapesBeforeMovement()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree, createSkeleton: CreateRuntimeFingerSkeleton);
@@ -746,7 +746,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
             proximalAttachment.Transform = movedAttachmentTransform;
 
-            InvokeUpdatePhysicalFollowers(fixture.PlayerVRIK, 1.0d / 60.0d);
+            InvokeUpdatePhysicalActuators(fixture.PlayerVRIK, 1.0d / 60.0d);
 
             IReadOnlyList<CollisionShape3D> mirroredShapes = GetGeneratedFingerMovementCollisionShapes(fixture.RightHandTarget, "Right");
             CollisionShape3D mirroredShape = mirroredShapes[proximalSourceIndex];
@@ -755,7 +755,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
             Assert.True(
                 fixture.Rig.PhysicsProxySyncTickCount > initialProxySyncTickCount,
-                "CharacterIK hand-follower cycle should synchronise DynamicPhysicalRig proxies before hand target movement.");
+                "CharacterIK hand actuator cycle should synchronise DynamicPhysicalRig proxies before hand target movement.");
             Assert.Equal(sourceShapes.Count, mirroredShapes.Count);
             Assert.True(ReferenceEquals(proximalSource.Shape, mirroredShape.Shape));
             AssertTransformApproximately(expectedMirrorTransform, mirroredShape.Transform, PositionToleranceMetres);
@@ -959,7 +959,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         foreach (Node child in target.GetChildren())
         {
             Assert.False(
-                child is CollisionShape3D && !child.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey),
+                child is CollisionShape3D && !child.HasMeta(IKTargetAnimatableActuator.GeneratedMovementCollisionShapeMetaKey),
                 $"Expected '{target.GetPath()}' to rely on BodyColliderProfile data rather than direct primitive authored CollisionShape3D child '{child.Name}'.");
         }
     }
@@ -970,7 +970,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         foreach (Node child in target.GetChildren())
         {
             if (child is CollisionShape3D
-                && child.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey))
+                && child.HasMeta(IKTargetAnimatableActuator.GeneratedMovementCollisionShapeMetaKey))
             {
                 count += 1;
             }
@@ -985,7 +985,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         foreach (Node child in target.GetChildren())
         {
             if (child is CollisionShape3D collisionShape
-                && child.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey)
+                && child.HasMeta(IKTargetAnimatableActuator.GeneratedMovementCollisionShapeMetaKey)
                 && child.Name.ToString().StartsWith($"Generated{sideName}FingerMovementCollisionShape_", StringComparison.Ordinal))
             {
                 shapes.Add(collisionShape);
@@ -1033,12 +1033,12 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return Assert.IsType<T>(field.GetValue(playerVRIK));
     }
 
-    private static int CountDynamicInteractionQueryShapes(IKTargetAnimatableFollower follower)
+    private static int CountDynamicInteractionQueryShapes(IKTargetAnimatableActuator actuator)
     {
-        FieldInfo controllerField = GetNonPublicInstanceField(typeof(IKTargetAnimatableFollower), "_dynamicBodyInteraction")
-                                    ?? throw new InvalidOperationException("IKTargetAnimatableFollower._dynamicBodyInteraction was not found.");
-        object controller = controllerField.GetValue(follower)
-                            ?? throw new Xunit.Sdk.XunitException("Expected hand follower to have a dynamic interaction controller.");
+        FieldInfo controllerField = GetNonPublicInstanceField(typeof(IKTargetAnimatableActuator), "_dynamicBodyInteraction")
+                                    ?? throw new InvalidOperationException("IKTargetAnimatableActuator._dynamicBodyInteraction was not found.");
+        object controller = controllerField.GetValue(actuator)
+                            ?? throw new Xunit.Sdk.XunitException("Expected hand actuator to have a dynamic interaction controller.");
         FieldInfo queryShapeSourcesField = GetNonPublicInstanceField(controller.GetType(), "_queryShapeSources")
                                            ?? throw new InvalidOperationException(
                                                "HandDynamicBodyInteractionController._queryShapeSources was not found.");
@@ -1397,20 +1397,20 @@ public sealed class DynamicPhysicalRigIntegrationTests
         _ = method.Invoke(playerVRIK, [delta]);
     }
 
-    private static void InvokeUpdatePhysicalFollowers(PlayerVRIK playerVRIK, double delta)
+    private static void InvokeUpdatePhysicalActuators(PlayerVRIK playerVRIK, double delta)
     {
-        MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "UpdatePhysicalFollowers")
+        MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "UpdatePhysicalActuators")
                             ?? throw new InvalidOperationException(
-                                $"{playerVRIK.GetType().Name}.UpdatePhysicalFollowers was not found in the inheritance chain.");
+                                $"{playerVRIK.GetType().Name}.UpdatePhysicalActuators was not found in the inheritance chain.");
 
         _ = method.Invoke(playerVRIK, [delta]);
     }
 
-    private static void InvokeEnsureFollowers(object playerVRIK)
+    private static void InvokeEnsureActuators(object playerVRIK)
     {
-        MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "EnsureFollowers")
+        MethodInfo method = GetNonPublicInstanceMethod(playerVRIK.GetType(), "EnsureActuators")
                             ?? throw new InvalidOperationException(
-                                $"{playerVRIK.GetType().Name}.EnsureFollowers was not found in the inheritance chain.");
+                                $"{playerVRIK.GetType().Name}.EnsureActuators was not found in the inheritance chain.");
 
         _ = method.Invoke(playerVRIK, null);
     }

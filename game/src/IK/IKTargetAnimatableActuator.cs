@@ -5,10 +5,10 @@ namespace AlleyCat.IK;
 /// <summary>
 /// Drives hand IK target <see cref="AnimatableBody3D"/> nodes using collision-aware kinematic motion.
 /// </summary>
-public sealed class IKTargetAnimatableFollower(
+public sealed class IKTargetAnimatableActuator(
     AnimatableBody3D body,
-    Func<IKTargetFollowState> targetStateSource,
     IReadOnlyList<HandDynamicInteractionShape>? dynamicInteractionShapes = null)
+    : IIKTargetActuator
 {
     private const float DeltaEpsilon = 1e-6f;
     private const int MaximumSlideIterations = 3;
@@ -19,9 +19,10 @@ public sealed class IKTargetAnimatableFollower(
     public const string GeneratedMovementCollisionShapeMetaKey = "alleycat_generated_hand_movement_collision_shape";
 
     private Vector3 _velocity = Vector3.Zero;
+    private IKTargetActuationResult _lastActuation = IKTargetActuationResult.Inactive(body.GlobalTransform, "NotRun");
 
     /// <summary>
-    /// Number of runtime movement-collision shapes generated from profile descriptors for this follower.
+    /// Number of runtime movement-collision shapes generated from profile descriptors for this actuator.
     /// </summary>
     public int GeneratedMovementCollisionShapeCount { get; } = EnsureProfileMovementCollisionShapes(body, dynamicInteractionShapes);
 
@@ -55,7 +56,7 @@ public sealed class IKTargetAnimatableFollower(
     } = 48.0f;
 
     /// <summary>
-    /// Rotation-error gain used to ease the follower basis towards the target basis.
+    /// Rotation-error gain used to ease the actuator basis towards the target basis.
     /// </summary>
     public float RotationResponsiveness
     {
@@ -64,7 +65,7 @@ public sealed class IKTargetAnimatableFollower(
     } = 24.0f;
 
     /// <summary>
-    /// Angular threshold below which the follower snaps directly to the target basis.
+    /// Angular threshold below which the actuator snaps directly to the target basis.
     /// </summary>
     public float RotationSnapAngleRadians
     {
@@ -73,24 +74,13 @@ public sealed class IKTargetAnimatableFollower(
     } = 0.01f;
 
     /// <summary>
-    /// Distance within which the follower may snap directly to an unobstructed target pose.
+    /// Distance within which the actuator may snap directly to an unobstructed target pose.
     /// </summary>
     public float SnapDistance
     {
         get;
         set;
     } = 0.03f;
-
-    /// <summary>
-    /// Creates an animatable follower that always treats the supplied target transform as active.
-    /// </summary>
-    public IKTargetAnimatableFollower(
-        AnimatableBody3D body,
-        Func<Transform3D> targetTransformSource,
-        IReadOnlyList<HandDynamicInteractionShape>? dynamicInteractionShapes = null)
-        : this(body, () => new IKTargetFollowState(targetTransformSource(), active: true), dynamicInteractionShapes)
-    {
-    }
 
     /// <summary>
     /// Collision mask queried for explicit dynamic rigid-body hand interaction.
@@ -155,30 +145,40 @@ public sealed class IKTargetAnimatableFollower(
         set => _dynamicBodyInteraction.SustainedForceCap = value;
     }
 
-    /// <summary>
-    /// Moves the configured body towards its configured transform source.
-    /// </summary>
-    public void Follow(double delta)
+    /// <inheritdoc />
+    public IKTargetActuationResult Actuate(IKTargetPipelineRequest request, double delta)
+    {
+        ApplyActuation(request, delta);
+        return _lastActuation;
+    }
+
+    private void ApplyActuation(IKTargetPipelineRequest request, double delta)
     {
         float deltaSeconds = (float)delta;
         if (deltaSeconds <= DeltaEpsilon)
         {
+            _lastActuation = IKTargetActuationResult.Inactive(body.GlobalTransform, "InvalidDelta");
             return;
         }
 
-        IKTargetFollowState targetState = targetStateSource();
+        IKTargetFollowState targetState = request.RequestedFollowState;
+        Transform3D targetTransform = targetState.WorldTransform;
         if (!targetState.Active)
         {
             _velocity = Vector3.Zero;
+            _lastActuation = new IKTargetActuationResult(
+                targetTransform,
+                body.GlobalTransform,
+                IKTargetPipelineFeedback.FromTargets(targetTransform, body.GlobalTransform, "Inactive"));
             return;
         }
 
         body.SyncToPhysics = false;
 
-        Transform3D targetTransform = targetState.WorldTransform;
         Vector3 displacement = targetTransform.Origin - body.GlobalPosition;
         float snapDistanceSquared = SnapDistance * SnapDistance;
         bool snapped = displacement.LengthSquared() <= snapDistanceSquared && !body.TestMove(body.GlobalTransform, displacement);
+        bool collided = false;
         if (snapped)
         {
             SetWorldTransform(body, targetTransform);
@@ -186,24 +186,24 @@ public sealed class IKTargetAnimatableFollower(
         }
         else
         {
-            Vector3 desiredVelocity = IKTargetBodyFollowerMath.ComputeDesiredVelocity(
+            Vector3 desiredVelocity = IKTargetBodyActuatorMath.ComputeDesiredVelocity(
                 displacement,
                 MaximumSpeed,
                 PositionResponsiveness,
                 SnapDistance);
 
-            _velocity = IKTargetBodyFollowerMath.ComputeFollowVelocity(
+            _velocity = IKTargetBodyActuatorMath.ComputeFollowVelocity(
                 _velocity,
                 desiredVelocity,
                 deltaSeconds,
                 MaximumAcceleration);
 
-            MoveWithCollisionSlide(_velocity * deltaSeconds);
+            collided = MoveWithCollisionSlide(_velocity * deltaSeconds);
         }
 
         if (!snapped)
         {
-            body.GlobalBasis = IKTargetBodyFollowerMath.ComputeFollowBasis(
+            body.GlobalBasis = IKTargetBodyActuatorMath.ComputeFollowBasis(
                 body.GlobalBasis,
                 targetTransform.Basis,
                 deltaSeconds,
@@ -212,6 +212,14 @@ public sealed class IKTargetAnimatableFollower(
         }
 
         _dynamicBodyInteraction.Update(targetTransform, delta);
+        Transform3D realisedTarget = body.GlobalTransform;
+        _lastActuation = new IKTargetActuationResult(
+            targetTransform,
+            realisedTarget,
+            IKTargetPipelineFeedback.FromTargets(
+                targetTransform,
+                realisedTarget,
+                collided ? "Collision" : "None"));
     }
 
     private static void SetWorldTransform(Node3D node, Transform3D worldTransform)
@@ -272,28 +280,32 @@ public sealed class IKTargetAnimatableFollower(
         return false;
     }
 
-    private void MoveWithCollisionSlide(Vector3 motion)
+    private bool MoveWithCollisionSlide(Vector3 motion)
     {
         Vector3 remainingMotion = motion;
+        bool collided = false;
 
         for (int iteration = 0; iteration < MaximumSlideIterations; iteration += 1)
         {
             if (remainingMotion.LengthSquared() <= DeltaEpsilon * DeltaEpsilon)
             {
-                return;
+                return collided;
             }
 
             KinematicCollision3D? collision = body.MoveAndCollide(remainingMotion);
             if (collision is null)
             {
-                return;
+                return collided;
             }
 
+            collided = true;
             Vector3 collisionNormal = collision.GetNormal();
             _velocity = _velocity.Slide(collisionNormal);
 
             Vector3 remainder = collision.GetRemainder();
             remainingMotion = remainder.Slide(collisionNormal);
         }
+
+        return collided;
     }
 }

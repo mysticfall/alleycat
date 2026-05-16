@@ -120,7 +120,7 @@ public partial class PlayerVRIK : CharacterIK
     protected override bool CanProcessProviderTargets => _isBound;
 
     /// <inheritdoc />
-    protected override bool CanProcessPhysicalFollowers => _isBound;
+    protected override bool CanProcessPhysicalActuators => _isBound;
 
     /// <inheritdoc />
     protected override void BeforeProviderTargetProcessing()
@@ -132,7 +132,7 @@ public partial class PlayerVRIK : CharacterIK
     }
 
     /// <inheritdoc />
-    protected override void BeforeHandTargetFollowers()
+    protected override void BeforeHandTargetActuators()
     {
         DynamicPhysicalRig? rig = ResolveConfiguredPhysicalRig();
         if (rig is null)
@@ -691,7 +691,7 @@ public partial class PlayerVRIK : CharacterIK
                     Shape = sourceShape.Shape,
                     Disabled = sourceShape.Disabled,
                 };
-                mirrorShape.SetMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey, true);
+                mirrorShape.SetMeta(IKTargetAnimatableActuator.GeneratedMovementCollisionShapeMetaKey, true);
                 handTarget.AddChild(mirrorShape);
                 _mirroredShapes.Add(new MirroredFingerCollisionShape(sourceShape.SourceShape, mirrorShape));
             }

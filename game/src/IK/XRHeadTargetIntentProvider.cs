@@ -4,10 +4,10 @@ using Godot;
 namespace AlleyCat.IK;
 
 /// <summary>
-/// IK target provider that follows the XR camera as the player head target.
+/// IK target intent provider that follows the XR camera as the player head target.
 /// </summary>
 [GlobalClass]
-public partial class XRHeadTargetProvider : IKTargetStateProvider
+public partial class XRHeadTargetIntentProvider : IKTargetIntentProvider
 {
     private IXRCamera? _camera;
     private Transform3D _viewpointLocalInverseTransform = Transform3D.Identity;
@@ -51,13 +51,13 @@ public partial class XRHeadTargetProvider : IKTargetStateProvider
     }
 
     /// <inheritdoc />
-    public override IKTargetState GetTargetState()
+    public override IKTargetIntent GetTargetIntent()
     {
         _ = TryResolveCamera();
         Camera3D? cameraNode = _camera?.CameraNode;
         return cameraNode is not null && IsInstanceValid(cameraNode)
-            ? new IKTargetState(cameraNode.GlobalTransform * _viewpointLocalInverseTransform, 1.0f)
-            : new IKTargetState(Transform3D.Identity, 0.0f);
+            ? new IKTargetIntent(cameraNode.GlobalTransform * _viewpointLocalInverseTransform, 1.0f)
+            : new IKTargetIntent(Transform3D.Identity, 0.0f);
     }
 
     private static IXRRuntime? ResolveXRRuntime()

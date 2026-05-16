@@ -55,7 +55,7 @@ public sealed class HandDynamicBodyInteractionController(
     private bool _hasPreviousTargetOrigin;
 
     /// <summary>
-    /// Initialises explicit dynamic-body interaction handling for a hand follower body.
+    /// Initialises explicit dynamic-body interaction handling for a hand actuator body.
     /// </summary>
     private readonly AnimatableBody3D _handBody = handBody;
     private readonly QueryShapeSource[] _queryShapeSources = CollectQueryShapeSources(handBody, profileQueryShapes);

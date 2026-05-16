@@ -6,26 +6,26 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
-/// Integration coverage for scene-wireable IK target-state providers.
+/// Integration coverage for scene-wireable IK target intent providers.
 /// </summary>
-public sealed partial class IKTargetStateProviderIntegrationTests
+public sealed partial class IKTargetIntentProviderIntegrationTests
 {
     /// <summary>
     /// Verifies the provider API always returns a world-space transform and desired influence.
     /// </summary>
     [Fact]
-    public async Task TargetStateProvider_WhenAddedToScene_ReturnsTransformAndInfluence()
+    public async Task TargetIntentProvider_WhenAddedToScene_ReturnsTransformAndInfluence()
     {
         SceneTree sceneTree = GetSceneTree();
         Node3D root = new()
         {
-            Name = "IKTargetStateProviderFixture",
+            Name = "IKTargetIntentProviderFixture",
         };
 
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "Provider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(1.0f, 2.0f, -3.0f)),
                 0.35f),
         };
@@ -37,10 +37,10 @@ public sealed partial class IKTargetStateProviderIntegrationTests
         {
             await WaitForNextFrameAsync(sceneTree);
 
-            IKTargetState state = provider.GetTargetState();
+            IKTargetIntent intent = provider.GetTargetIntent();
 
-            AssertVectorApproximately(new Vector3(1.0f, 2.0f, -3.0f), state.WorldTransform.Origin);
-            Assert.Equal(0.35f, state.DesiredInfluence);
+            AssertVectorApproximately(new Vector3(1.0f, 2.0f, -3.0f), intent.WorldTransform.Origin);
+            Assert.Equal(0.35f, intent.DesiredInfluence);
         }
         finally
         {
@@ -50,17 +50,17 @@ public sealed partial class IKTargetStateProviderIntegrationTests
     }
 
     /// <summary>
-    /// Verifies target states constructed from only a world transform request full IK influence.
+    /// Verifies target intents constructed from only a world transform request full IK influence.
     /// </summary>
     [Fact]
-    public void IKTargetState_WhenConstructedWithTransformOnly_DefaultsToFullInfluence()
+    public void IKTargetIntent_WhenConstructedWithTransformOnly_DefaultsToFullInfluence()
     {
         Transform3D worldTransform = new(Basis.Identity, new Vector3(-0.5f, 1.25f, 0.75f));
 
-        IKTargetState state = new(worldTransform);
+        IKTargetIntent intent = new(worldTransform);
 
-        Assert.Equal(worldTransform, state.WorldTransform);
-        Assert.Equal(1.0f, state.DesiredInfluence);
+        Assert.Equal(worldTransform, intent.WorldTransform);
+        Assert.Equal(1.0f, intent.DesiredInfluence);
     }
 
     private static void AssertVectorApproximately(Vector3 expected, Vector3 actual, float epsilon = 1e-4f)
@@ -70,15 +70,15 @@ public sealed partial class IKTargetStateProviderIntegrationTests
         Assert.InRange(actual.Z, expected.Z - epsilon, expected.Z + epsilon);
     }
 
-    private sealed partial class TestIKTargetStateProvider : IKTargetStateProvider
+    private sealed partial class TestIKTargetIntentProvider : IKTargetIntentProvider
     {
-        public IKTargetState TargetState
+        public IKTargetIntent TargetIntent
         {
             get;
             init;
         }
 
-        public override IKTargetState GetTargetState()
-            => TargetState;
+        public override IKTargetIntent GetTargetIntent()
+            => TargetIntent;
     }
 }

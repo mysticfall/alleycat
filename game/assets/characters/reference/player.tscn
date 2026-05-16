@@ -6,7 +6,7 @@
 [ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
 [ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
 [ext_resource type="Script" uid="uid://b4sqrh01qb30h" path="res://src/IK/XRControllerTargetProvider.cs" id="11_xrctl"]
-[ext_resource type="Script" uid="uid://bs7wqkhs0vmpi" path="res://src/IK/XRHeadTargetProvider.cs" id="12_xrhead"]
+[ext_resource type="Script" uid="uid://bs7wqkhs0vmpi" path="res://src/IK/XRHeadTargetIntentProvider.cs" id="12_xrhead"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/reference/female/animation_tree_root_player.tres" id="13_pose_tree"]
 [ext_resource type="Script" uid="uid://cycxrw4g6pnl6" path="res://src/IK/AnimationSynchronizedFootTargetProvider.cs" id="14_footfb"]
 [ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="34_704ic"]
@@ -99,7 +99,7 @@ transform = Transform3D(-2.0861626e-07, -1, 2.9802322e-08, -8.940697e-08, -8.940
 [node name="LeftHand" parent="Female_export/GeneralSkeleton" index="28" unique_id=792521653]
 transform = Transform3D(8.940697e-08, 1.0000001, 1.4901161e-08, 8.940697e-08, -7.4505806e-08, -1.0000001, -1.0000002, 1.4901161e-07, -5.9604645e-08, 0.45380068, 1.1289735, 0.005342588)
 
-[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetStateProvider", "LeftHandIKTargetStateProvider", "HeadFallbackProvider", "RightHandFallbackProvider", "LeftHandFallbackProvider", "RightFootFallbackProvider", "LeftFootFallbackProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup") instance=ExtResource("7_2a5tg")]
+[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadFallbackIntentProvider", "RightHandFallbackIntentProvider", "LeftHandFallbackIntentProvider", "RightFootFallbackIntentProvider", "LeftFootFallbackIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup") instance=ExtResource("7_2a5tg")]
 Viewpoint = NodePath("../Female_export/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
 HeadIKSolveTarget = NodePath("../IKTargets/HeadSolve")
@@ -108,13 +108,13 @@ LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
 RightFootIKTarget = NodePath("../IKTargets/RightFoot")
 LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
 PhysicalRig = NodePath("../Female_export/GeneralSkeleton/DynamicPhysicalRig")
-RightHandIKTargetStateProvider = NodePath("RightHandGrabProvider")
-LeftHandIKTargetStateProvider = NodePath("LeftHandGrabProvider")
-HeadFallbackProvider = NodePath("HeadFallbackProvider")
-RightHandFallbackProvider = NodePath("RightHandFallbackProvider")
-LeftHandFallbackProvider = NodePath("LeftHandFallbackProvider")
-RightFootFallbackProvider = NodePath("RightFootFallbackProvider")
-LeftFootFallbackProvider = NodePath("LeftFootFallbackProvider")
+RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
+LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
+HeadFallbackIntentProvider = NodePath("HeadFallbackIntentProvider")
+RightHandFallbackIntentProvider = NodePath("RightHandFallbackIntentProvider")
+LeftHandFallbackIntentProvider = NodePath("LeftHandFallbackIntentProvider")
+RightFootFallbackIntentProvider = NodePath("RightFootFallbackIntentProvider")
+LeftFootFallbackIntentProvider = NodePath("LeftFootFallbackIntentProvider")
 HeadModifierGroup = [NodePath("../Female_export/GeneralSkeleton/NeckSpineIK"), NodePath("../Female_export/GeneralSkeleton/HeadCopyRotation"), NodePath("../Female_export/GeneralSkeleton/NeckTwistDisperser")]
 RightHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/RightArmIKController"), NodePath("../Female_export/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/RightHandCopyRotation")]
 LeftHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/LeftArmIKController"), NodePath("../Female_export/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/LeftHandCopyRotation")]
@@ -124,38 +124,38 @@ LeftFootModifierGroup = [NodePath("../Female_export/GeneralSkeleton/LeftLegIKCon
 [node name="PoseStateMachine" parent="VRIK" index="0" unique_id=1387079067 node_paths=PackedStringArray("AnimationTree")]
 AnimationTree = NodePath("../../AnimationTree")
 
-[node name="HeadFallbackProvider" type="Node" parent="VRIK" index="1" unique_id=1786683400 node_paths=PackedStringArray("Viewpoint")]
+[node name="HeadFallbackIntentProvider" type="Node" parent="VRIK" index="1" unique_id=1786683400 node_paths=PackedStringArray("Viewpoint")]
 script = ExtResource("12_xrhead")
 Viewpoint = NodePath("../../Female_export/GeneralSkeleton/Head/Viewpoint")
 metadata/_custom_type_script = "uid://bs7wqkhs0vmpi"
 
-[node name="RightHandFallbackProvider" type="Node" parent="VRIK" index="2" unique_id=547249746]
+[node name="RightHandFallbackIntentProvider" type="Node" parent="VRIK" index="2" unique_id=547249746]
 script = ExtResource("11_xrctl")
 metadata/_custom_type_script = "uid://b4sqrh01qb30h"
 
-[node name="LeftHandFallbackProvider" type="Node" parent="VRIK" index="3" unique_id=2091540058]
+[node name="LeftHandFallbackIntentProvider" type="Node" parent="VRIK" index="3" unique_id=2091540058]
 script = ExtResource("11_xrctl")
 Side = 0
 metadata/_custom_type_script = "uid://b4sqrh01qb30h"
 
-[node name="RightFootFallbackProvider" type="Node" parent="VRIK" index="4" unique_id=281121727 node_paths=PackedStringArray("FootTarget")]
+[node name="RightFootFallbackIntentProvider" type="Node" parent="VRIK" index="4" unique_id=281121727 node_paths=PackedStringArray("FootTarget")]
 script = ExtResource("14_footfb")
 FootTarget = NodePath("../../IKTargets/RightFoot")
 metadata/_custom_type_script = "uid://cycxrw4g6pnl6"
 
-[node name="LeftFootFallbackProvider" type="Node" parent="VRIK" index="5" unique_id=53288521 node_paths=PackedStringArray("FootTarget")]
+[node name="LeftFootFallbackIntentProvider" type="Node" parent="VRIK" index="5" unique_id=53288521 node_paths=PackedStringArray("FootTarget")]
 script = ExtResource("14_footfb")
 FootTarget = NodePath("../../IKTargets/LeftFoot")
 metadata/_custom_type_script = "uid://cycxrw4g6pnl6"
 
 [node name="RightHandGrabProvider" type="Node" parent="VRIK" index="6" unique_id=1567802820 node_paths=PackedStringArray("DefaultProvider")]
 script = ExtResource("34_704ic")
-DefaultProvider = NodePath("../RightHandFallbackProvider")
+DefaultProvider = NodePath("../RightHandFallbackIntentProvider")
 metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 
 [node name="LeftHandGrabProvider" type="Node" parent="VRIK" index="7" unique_id=524151125 node_paths=PackedStringArray("DefaultProvider")]
 script = ExtResource("34_704ic")
-DefaultProvider = NodePath("../LeftHandFallbackProvider")
+DefaultProvider = NodePath("../LeftHandFallbackIntentProvider")
 metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 
 [node name="RightElbow" parent="IKTargets" parent_id_path=PackedInt32Array(546537465) index="2" unique_id=1389246902]

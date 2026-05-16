@@ -7,7 +7,7 @@ namespace AlleyCat.IK;
 /// IK target provider that follows the hand-position node for one XR controller side.
 /// </summary>
 [GlobalClass]
-public partial class XRControllerTargetProvider : IKTargetStateProvider
+public partial class XRControllerTargetProvider : IKTargetIntentProvider
 {
     /// <summary>
     /// Limb side used to select the corresponding XR controller during runtime binding.
@@ -56,12 +56,12 @@ public partial class XRControllerTargetProvider : IKTargetStateProvider
     }
 
     /// <inheritdoc />
-    public override IKTargetState GetTargetState()
+    public override IKTargetIntent GetTargetIntent()
     {
         _ = TryResolveSourceNode();
         return ResolvedSourceNode is not null && IsInstanceValid(ResolvedSourceNode)
-            ? new IKTargetState(ResolvedSourceNode.GlobalTransform, DesiredInfluence)
-            : new IKTargetState(Transform3D.Identity, 0.0f);
+            ? new IKTargetIntent(ResolvedSourceNode.GlobalTransform, DesiredInfluence)
+            : new IKTargetIntent(Transform3D.Identity, 0.0f);
     }
 
     private static IXRRuntime? ResolveXRRuntime()

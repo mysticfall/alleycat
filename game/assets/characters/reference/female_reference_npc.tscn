@@ -73,7 +73,7 @@ transform = Transform3D(-7.4505806e-08, -0.9999999, -5.9604645e-08, 2.9802322e-0
 [node name="LeftHand" parent="Female_export/GeneralSkeleton" index="27" unique_id=792521653]
 transform = Transform3D(2.9802322e-08, 1.0000001, -2.9802322e-07, -1.0430813e-07, -1.4901161e-07, -0.99999976, -1, -2.9802322e-08, 2.2351742e-07, 0.32475096, 0.84746826, 0.46630734)
 
-[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetStateProvider", "LeftHandIKTargetStateProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
+[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
 script = ExtResource("2_charik")
 Viewpoint = NodePath("../Female_export/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
@@ -87,8 +87,8 @@ HeadModifierGroup = [NodePath("../Female_export/GeneralSkeleton/NeckSpineIK"), N
 RightHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/RightArmIKController"), NodePath("../Female_export/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/RightHandCopyRotation")]
 LeftHandModifierGroup = [NodePath("../Female_export/GeneralSkeleton/LeftArmIKController"), NodePath("../Female_export/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/LeftHandCopyRotation")]
 RightFootModifierGroup = [NodePath("../Female_export/GeneralSkeleton/RightLegIKController"), NodePath("../Female_export/GeneralSkeleton/RightLegTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/CopyRightFootRotation")]
-RightHandIKTargetStateProvider = NodePath("RightHandGrabProvider")
-LeftHandIKTargetStateProvider = NodePath("LeftHandGrabProvider")
+RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
+LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
 LeftFootModifierGroup = [NodePath("../Female_export/GeneralSkeleton/LeftLegIKController"), NodePath("../Female_export/GeneralSkeleton/LeftLegTwoBoneIKController"), NodePath("../Female_export/GeneralSkeleton/CopyLeftFootRotation")]
 metadata/_custom_type_script = "uid://bxb7ysth4n1du"
 

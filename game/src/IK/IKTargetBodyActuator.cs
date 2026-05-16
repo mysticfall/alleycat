@@ -5,7 +5,7 @@ namespace AlleyCat.IK;
 /// <summary>
 /// Drives IK target <see cref="CharacterBody3D"/> nodes using velocity + <see cref="CharacterBody3D.MoveAndSlide"/>.
 /// </summary>
-public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFollowState> targetStateSource)
+public sealed class IKTargetBodyActuator(CharacterBody3D body) : IIKTargetActuator
 {
     private const float DeltaEpsilon = 1e-6f;
     private const float DefaultRotationSnapAngleRadians = 0.01f;
@@ -48,7 +48,7 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFoll
     } = 4096.0f;
 
     /// <summary>
-    /// Rotation-error gain used to ease the follower basis towards the target basis.
+    /// Rotation-error gain used to ease the actuator basis towards the target basis.
     /// </summary>
     public float RotationResponsiveness
     {
@@ -57,7 +57,7 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFoll
     } = 1000.0f;
 
     /// <summary>
-    /// Angular threshold below which the follower snaps directly to the target basis.
+    /// Angular threshold below which the actuator snaps directly to the target basis.
     /// </summary>
     public float RotationSnapAngleRadians
     {
@@ -66,7 +66,7 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFoll
     } = DefaultRotationSnapAngleRadians;
 
     /// <summary>
-    /// Distance below which the follower switches to a fine physics-driven settle step instead of a higher-speed catch-up
+    /// Distance below which the actuator switches to a fine physics-driven settle step instead of a higher-speed catch-up
     /// move.
     /// </summary>
     public float SnapDistance
@@ -75,44 +75,32 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFoll
         set;
     } = 0.0025f;
 
-    /// <summary>
-    /// Creates a body follower that always treats the supplied target transform as active.
-    /// </summary>
-    public IKTargetBodyFollower(CharacterBody3D body, Func<Transform3D> targetTransformSource)
-        : this(body, () => new IKTargetFollowState(targetTransformSource(), active: true))
-    {
-    }
-
-    /// <summary>
-    /// Moves the configured body towards its configured transform source.
-    /// </summary>
-    public void Follow(double delta)
+    /// <inheritdoc />
+    public IKTargetActuationResult Actuate(IKTargetPipelineRequest request, double delta)
     {
         float deltaSeconds = (float)delta;
         if (deltaSeconds <= DeltaEpsilon)
         {
-            return;
+            return IKTargetActuationResult.Inactive(body.GlobalTransform, "InvalidDelta");
         }
 
-        IKTargetFollowState targetState = targetStateSource();
+        IKTargetFollowState targetState = request.RequestedFollowState;
+        Transform3D targetTransform = targetState.WorldTransform;
         if (!targetState.Active)
         {
             body.Velocity = Vector3.Zero;
-            return;
+            return new IKTargetActuationResult(
+                targetTransform,
+                body.GlobalTransform,
+                IKTargetPipelineFeedback.FromTargets(targetTransform, body.GlobalTransform, "Inactive"));
         }
 
-        Transform3D targetTransform = targetState.WorldTransform;
-
-        if (!UseDampedFollow)
-        {
-            FollowBaseline(deltaSeconds, targetTransform);
-            return;
-        }
-
-        FollowDamped(deltaSeconds, targetTransform);
+        return UseDampedFollow
+            ? FollowDamped(deltaSeconds, targetTransform)
+            : FollowBaseline(deltaSeconds, targetTransform);
     }
 
-    private void FollowBaseline(float deltaSeconds, Transform3D targetTransform)
+    private IKTargetActuationResult FollowBaseline(float deltaSeconds, Transform3D targetTransform)
     {
         Vector3 displacement = targetTransform.Origin - body.GlobalPosition;
         float snapDistanceSquared = SnapDistance * SnapDistance;
@@ -120,7 +108,7 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFoll
         {
             SetWorldTransform(body, targetTransform);
             body.Velocity = Vector3.Zero;
-            return;
+            return new IKTargetActuationResult(targetTransform, body.GlobalTransform, IKTargetPipelineFeedback.None);
         }
 
         Vector3 desiredVelocity = displacement / deltaSeconds;
@@ -133,6 +121,10 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFoll
 
         _ = body.MoveAndSlide();
         SetWorldTransform(body, new Transform3D(targetTransform.Basis, body.GlobalPosition));
+        return new IKTargetActuationResult(
+            targetTransform,
+            body.GlobalTransform,
+            IKTargetPipelineFeedback.FromTargets(targetTransform, body.GlobalTransform, "None"));
     }
 
     private static void SetWorldTransform(Node3D node, Transform3D worldTransform)
@@ -148,36 +140,40 @@ public sealed class IKTargetBodyFollower(CharacterBody3D body, Func<IKTargetFoll
         }
     }
 
-    private void FollowDamped(float deltaSeconds, Transform3D targetTransform)
+    private IKTargetActuationResult FollowDamped(float deltaSeconds, Transform3D targetTransform)
     {
         Vector3 displacement = targetTransform.Origin - body.GlobalPosition;
-        Vector3 desiredVelocity = IKTargetBodyFollowerMath.ComputeDesiredVelocity(
+        Vector3 desiredVelocity = IKTargetBodyActuatorMath.ComputeDesiredVelocity(
             displacement,
             MaximumSpeed,
             PositionResponsiveness,
             SnapDistance);
 
-        body.Velocity = IKTargetBodyFollowerMath.ComputeFollowVelocity(
+        body.Velocity = IKTargetBodyActuatorMath.ComputeFollowVelocity(
             body.Velocity,
             desiredVelocity,
             deltaSeconds,
             MaximumAcceleration);
 
         _ = body.MoveAndSlide();
-        Basis followBasis = IKTargetBodyFollowerMath.ComputeFollowBasis(
+        Basis followBasis = IKTargetBodyActuatorMath.ComputeFollowBasis(
             body.GlobalBasis,
             targetTransform.Basis,
             deltaSeconds,
             RotationResponsiveness,
             RotationSnapAngleRadians);
         SetWorldTransform(body, new Transform3D(followBasis, body.GlobalPosition));
+        return new IKTargetActuationResult(
+            targetTransform,
+            body.GlobalTransform,
+            IKTargetPipelineFeedback.FromTargets(targetTransform, body.GlobalTransform, "None"));
     }
 }
 
 /// <summary>
-/// Shared math helpers for damped IK-target follower motion.
+/// Shared math helpers for damped IK-target actuator motion.
 /// </summary>
-public static class IKTargetBodyFollowerMath
+public static class IKTargetBodyActuatorMath
 {
     private const float Epsilon = 1e-6f;
 
@@ -240,7 +236,7 @@ public static class IKTargetBodyFollowerMath
     }
 
     /// <summary>
-    /// Smooths follower rotation towards the target basis while preserving orthonormality.
+    /// Smooths actuator rotation towards the target basis while preserving orthonormality.
     /// </summary>
     public static Basis ComputeFollowBasis(
         Basis currentBasis,

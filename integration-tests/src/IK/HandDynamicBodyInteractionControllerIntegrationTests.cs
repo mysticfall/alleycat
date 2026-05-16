@@ -99,13 +99,13 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
             sceneTree,
-            follower =>
+            actuator =>
             {
-                follower.DynamicImpactApproachSpeedThreshold = 0.05f;
-                follower.DynamicImpactImpulsePerSpeed = 10.0f;
-                follower.DynamicImpactImpulseCap = 0.50f;
-                follower.DynamicSustainedForcePerSpeed = 0.0f;
-                follower.DynamicSustainedForceCap = 0.0f;
+                actuator.DynamicImpactApproachSpeedThreshold = 0.05f;
+                actuator.DynamicImpactImpulsePerSpeed = 10.0f;
+                actuator.DynamicImpactImpulseCap = 0.50f;
+                actuator.DynamicSustainedForcePerSpeed = 0.0f;
+                actuator.DynamicSustainedForceCap = 0.0f;
             });
 
         try
@@ -134,13 +134,13 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
             sceneTree,
-            follower =>
+            actuator =>
             {
-                follower.DynamicImpactImpulsePerSpeed = 0.0f;
-                follower.DynamicImpactImpulseCap = 0.0f;
-                follower.DynamicSustainedPushSpeedThreshold = 0.01f;
-                follower.DynamicSustainedForcePerSpeed = 1000.0f;
-                follower.DynamicSustainedForceCap = 6.0f;
+                actuator.DynamicImpactImpulsePerSpeed = 0.0f;
+                actuator.DynamicImpactImpulseCap = 0.0f;
+                actuator.DynamicSustainedPushSpeedThreshold = 0.01f;
+                actuator.DynamicSustainedForcePerSpeed = 1000.0f;
+                actuator.DynamicSustainedForceCap = 6.0f;
             });
 
         try
@@ -173,13 +173,13 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         IReadOnlyList<HandDynamicInteractionShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
             sceneTree,
-            follower =>
+            actuator =>
             {
-                follower.DynamicImpactApproachSpeedThreshold = 0.05f;
-                follower.DynamicImpactImpulsePerSpeed = 10.0f;
-                follower.DynamicImpactImpulseCap = 0.50f;
-                follower.DynamicSustainedForcePerSpeed = 0.0f;
-                follower.DynamicSustainedForceCap = 0.0f;
+                actuator.DynamicImpactApproachSpeedThreshold = 0.05f;
+                actuator.DynamicImpactImpulsePerSpeed = 10.0f;
+                actuator.DynamicImpactImpulseCap = 0.50f;
+                actuator.DynamicSustainedForcePerSpeed = 0.0f;
+                actuator.DynamicSustainedForceCap = 0.0f;
             },
             addDirectHandShape: false,
             profileShapes);
@@ -207,7 +207,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task Follow_ProfileBackedShapeOnShapelessHand_CollidesDuringMovement()
+    public async Task Actuate_ProfileBackedShapeOnShapelessHand_CollidesDuringMovement()
     {
         SceneTree sceneTree = GetSceneTree();
         IReadOnlyList<HandDynamicInteractionShape> profileShapes = CreateProfileBackedHandShapes("RightHand");
@@ -223,7 +223,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
             await WaitForPhysicsFramesAsync(sceneTree, 2);
 
             CollisionShape3D generatedShape = Assert.Single(GetGeneratedMovementCollisionShapes(fixture.HandBody));
-            Assert.Equal(1, fixture.Follower.GeneratedMovementCollisionShapeCount);
+            Assert.Equal(1, fixture.Actuator.GeneratedMovementCollisionShapeCount);
             Assert.True(ReferenceEquals(profileShapes[0].Shape, generatedShape.Shape));
             AssertTransformApproximately(profileShapes[0].Transform, generatedShape.Transform, 0.001f);
             Assert.True(
@@ -249,7 +249,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         Assert.InRange(Mathf.Abs(vector.Z), 0.0f, tolerance);
     }
 
-    private sealed class RuntimeFixture(Node3D root, AnimatableBody3D handBody, RigidBody3D dynamicBody, IKTargetAnimatableFollower follower, TargetPoseSource targetPoseSource)
+    private sealed class RuntimeFixture(Node3D root, AnimatableBody3D handBody, RigidBody3D dynamicBody, IKTargetAnimatableActuator actuator, TargetPoseSource targetPoseSource)
     {
         public Node3D Root { get; } = root;
 
@@ -257,13 +257,13 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
         public RigidBody3D DynamicBody { get; } = dynamicBody;
 
-        public IKTargetAnimatableFollower Follower { get; } = follower;
+        public IKTargetAnimatableActuator Actuator { get; } = actuator;
 
         public TargetPoseSource TargetPoseSource { get; } = targetPoseSource;
 
         public static async Task<RuntimeFixture> CreateAsync(
             SceneTree sceneTree,
-            Action<IKTargetAnimatableFollower>? configureFollower = null,
+            Action<IKTargetAnimatableActuator>? configureActuator = null,
             bool addDirectHandShape = true,
             IReadOnlyList<HandDynamicInteractionShape>? profileShapes = null)
         {
@@ -319,7 +319,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
             TargetPoseSource targetPoseSource = new();
 
-            IKTargetAnimatableFollower follower = new(handBody, targetPoseSource.GetTransform, profileShapes)
+            IKTargetAnimatableActuator actuator = new(handBody, profileShapes)
             {
                 MaximumSpeed = 100.0f,
                 MaximumAcceleration = 400.0f,
@@ -334,20 +334,20 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
                 DynamicSustainedForcePerSpeed = 100.0f,
                 DynamicSustainedForceCap = 2.0f,
             };
-            configureFollower?.Invoke(follower);
+            configureActuator?.Invoke(actuator);
 
             dynamicBody.LinearVelocity = Vector3.Zero;
             dynamicBody.AngularVelocity = Vector3.Zero;
             dynamicBody.Sleeping = false;
 
-            return new RuntimeFixture(root, handBody, dynamicBody, follower, targetPoseSource);
+            return new RuntimeFixture(root, handBody, dynamicBody, actuator, targetPoseSource);
         }
 
         public async Task PrimeAsync(Vector3 handPosition)
         {
             SetHandPose(handPosition);
             TargetPoseSource.Transform = HandBody.GlobalTransform;
-            Follower.Follow(PhysicsStepSeconds);
+            ActuateTarget();
             await WaitForPhysicsFramesAsync(GetSceneTree(), 1);
             ResetDynamicBodyMotion();
             await WaitForPhysicsFramesAsync(GetSceneTree(), 1);
@@ -356,8 +356,14 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         public async Task UpdateAsync(Vector3 handPosition)
         {
             TargetPoseSource.Transform = new Transform3D(Basis.Identity, ToWorldPosition(handPosition));
-            Follower.Follow(PhysicsStepSeconds);
+            ActuateTarget();
             await WaitForPhysicsFramesAsync(GetSceneTree(), 1);
+        }
+
+        private void ActuateTarget()
+        {
+            IKTargetFollowState followState = new(TargetPoseSource.Transform, active: true);
+            _ = Actuator.Actuate(new IKTargetPipelineRequest(followState, followState), PhysicsStepSeconds);
         }
 
         public async Task DisposeAsync(SceneTree sceneTree)
@@ -396,7 +402,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         foreach (Node child in handBody.GetChildren())
         {
             if (child is CollisionShape3D collisionShape
-                && collisionShape.HasMeta(IKTargetAnimatableFollower.GeneratedMovementCollisionShapeMetaKey))
+                && collisionShape.HasMeta(IKTargetAnimatableActuator.GeneratedMovementCollisionShapeMetaKey))
             {
                 yield return collisionShape;
             }

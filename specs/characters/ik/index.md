@@ -21,13 +21,13 @@ reusable character IK for NPCs and player-specific XR integration.
 
 1. The IK system must provide a reusable base architecture supporting any humanoid character.
 2. Player-specific XR integration must attach to the base as a complementary layer.
-3. IKTargetStateProvider must be extensible to all limbs in the same manner as hands.
+3. IKTargetIntentProvider must be extensible to all limbs in the same manner as hands.
 4. Provider influence must gate corresponding IK modifiers including indirect side effects.
 
 ## In Scope
 
 - Reusable full-body humanoid IK system for any humanoid character.
-- IKTargetStateProvider architecture covering head, hands, feet, and extensible to other limbs.
+- IKTargetIntentProvider architecture covering head, hands, feet, and extensible to other limbs.
 - Player-specific XR-to-IK bridging for head and hand target driving.
 - Runtime XR-to-IK bridging for head and hand target driving.
 - Baseline support using headset and two controllers.
@@ -60,7 +60,7 @@ reusable character IK for NPCs and player-specific XR integration.
 ### General Character IK Layer
 - Reusable `CharacterIK` component applicable to any humanoid character.
 - Operates independently of input source.
-- Accepts IKTargetStateProvider for all configurable limbs.
+- Accepts IKTargetIntentProvider for all configurable limbs.
 
 ### Player XR Integration Layer
 - Attaches to `CharacterIK` as a complementary provider layer.
@@ -68,7 +68,7 @@ reusable character IK for NPCs and player-specific XR integration.
 - Falls back gracefully when XR is unavailable.
 
 ### Provider Architecture
-- IKTargetStateProvider is a general abstraction for any limb.
+- IKTargetIntentProvider is a general abstraction for any limb.
 - Provider influence gates corresponding IK modifiers and side effects.
 - Fallback providers are implemented as provider subclasses.
 

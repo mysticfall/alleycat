@@ -74,9 +74,9 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         Node characterIK = npc.GetNode<Node>("CharacterIK");
         Node rightProvider = npc.GetNode<Node>("CharacterIK/RightHandGrabProvider");
         Node leftProvider = npc.GetNode<Node>("CharacterIK/LeftHandGrabProvider");
-        GodotObject configuredRightProvider = characterIK.Get("RightHandIKTargetStateProvider").AsGodotObject()
+        GodotObject configuredRightProvider = characterIK.Get("RightHandIKTargetIntentProvider").AsGodotObject()
             ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK right hand provider to resolve to a node.");
-        GodotObject configuredLeftProvider = characterIK.Get("LeftHandIKTargetStateProvider").AsGodotObject()
+        GodotObject configuredLeftProvider = characterIK.Get("LeftHandIKTargetIntentProvider").AsGodotObject()
             ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK left hand provider to resolve to a node.");
 
         Assert.Equal(rightProvider.GetInstanceId(), configuredRightProvider.GetInstanceId());
@@ -264,12 +264,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             AssertTransformApproximately(fixture.RightHandController.HandPositionNode.GlobalTransform, rightFollowTarget);
             AssertTransformApproximately(fixture.LeftHandController.HandPositionNode.GlobalTransform, leftFollowTarget);
-            Assert.Null(fixture.PlayerVRIK.RightHandIKTargetStateProvider);
-            Assert.Null(fixture.PlayerVRIK.LeftHandIKTargetStateProvider);
-            Assert.Equal(LimbSide.Right, fixture.RightHandFallbackProvider.Side);
-            Assert.Equal(LimbSide.Left, fixture.LeftHandFallbackProvider.Side);
-            Assert.Same(fixture.RightHandController.HandPositionNode, fixture.RightHandFallbackProvider.ResolvedSourceNode);
-            Assert.Same(fixture.LeftHandController.HandPositionNode, fixture.LeftHandFallbackProvider.ResolvedSourceNode);
+            Assert.Null(fixture.PlayerVRIK.RightHandIKTargetIntentProvider);
+            Assert.Null(fixture.PlayerVRIK.LeftHandIKTargetIntentProvider);
+            Assert.Equal(LimbSide.Right, fixture.RightHandFallbackIntentProvider.Side);
+            Assert.Equal(LimbSide.Left, fixture.LeftHandFallbackIntentProvider.Side);
+            Assert.Same(fixture.RightHandController.HandPositionNode, fixture.RightHandFallbackIntentProvider.ResolvedSourceNode);
+            Assert.Same(fixture.LeftHandController.HandPositionNode, fixture.LeftHandFallbackIntentProvider.ResolvedSourceNode);
         }
         finally
         {
@@ -285,10 +285,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "RightHandProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(1.2f, 0.9f, -0.8f)),
                 0.42f),
         };
@@ -301,13 +301,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             Assert.True(bound);
 
-            fixture.PlayerVRIK.RightHandIKTargetStateProvider = provider;
+            fixture.PlayerVRIK.RightHandIKTargetIntentProvider = provider;
 
             Transform3D providerFollowTarget = InvokeBuildHandTargetTransform(
                 fixture.PlayerVRIK,
                 "BuildRightHandTargetTransform");
 
-            AssertTransformApproximately(provider.TargetState.WorldTransform, providerFollowTarget);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, providerFollowTarget);
             Assert.Equal(0.42f, fixture.RightHandIKModifier.Influence);
             Assert.True(fixture.RightHandIKModifier.Active);
         }
@@ -325,10 +325,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "RightHandZeroInfluenceProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(1.2f, 0.9f, -0.8f)),
                 0.0f),
         };
@@ -341,7 +341,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             Assert.True(bound);
 
-            fixture.PlayerVRIK.RightHandIKTargetStateProvider = provider;
+            fixture.PlayerVRIK.RightHandIKTargetIntentProvider = provider;
 
             Transform3D currentTarget = fixture.RightHandIKTarget.GlobalTransform;
             Transform3D resolvedTarget = InvokeBuildHandTargetTransform(
@@ -349,7 +349,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
                 "BuildRightHandTargetTransform");
 
             AssertTransformApproximately(currentTarget, resolvedTarget);
-            Assert.NotEqual(provider.TargetState.WorldTransform.Origin, resolvedTarget.Origin);
+            Assert.NotEqual(provider.TargetIntent.WorldTransform.Origin, resolvedTarget.Origin);
             Assert.All(fixture.PlayerVRIK.RightHandModifierGroup, modifier =>
             {
                 Assert.False(modifier.Active);
@@ -380,8 +380,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
-            fixture.PlayerVRIK.HeadTargetProvider = null;
-            fixture.PlayerVRIK.HeadFallbackProvider = null;
+            fixture.PlayerVRIK.HeadTargetIntentProvider = null;
+            fixture.PlayerVRIK.HeadFallbackIntentProvider = null;
             fixture.HeadIKTarget.Position = new Vector3(-0.4f, 1.1f, 0.25f);
             fixture.Camera.CameraNode.Position = new Vector3(0.6f, 1.8f, -0.7f);
             await WaitForNextFrameAsync(sceneTree);
@@ -430,10 +430,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
             Transform3D expectedHeadPose = fixture.Camera.CameraNode.GlobalTransform
                                            * fixture.PlayerVRIK.Viewpoint!.Transform.Inverse();
-            IKTargetState fallbackState = fixture.HeadFallbackProvider.GetTargetState();
+            IKTargetIntent fallbackIntent = fixture.HeadFallbackIntentProvider.GetTargetIntent();
 
-            Assert.Equal(1.0f, fallbackState.DesiredInfluence);
-            AssertTransformApproximately(expectedHeadPose, fallbackState.WorldTransform);
+            Assert.Equal(1.0f, fallbackIntent.DesiredInfluence);
+            AssertTransformApproximately(expectedHeadPose, fallbackIntent.WorldTransform);
             Assert.NotEqual(expectedHeadPose.Origin, fixture.HeadIKTarget.GlobalPosition);
 
             await ProcessBeginStageFramesAsync(sceneTree, fixture.PlayerVRIK, 2);
@@ -525,14 +525,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
             sceneTree,
             "ZeroInfluenceHeadProviderFixture");
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "HeadZeroInfluenceProvider",
-            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(2.0f, 2.0f, 2.0f)), 0.0f),
+            TargetIntent = new IKTargetIntent(new Transform3D(Basis.Identity, new Vector3(2.0f, 2.0f, 2.0f)), 0.0f),
         };
         fixture.Root.AddChild(provider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.HeadTargetProvider = provider;
+        fixture.VRIK.HeadTargetIntentProvider = provider;
 
         try
         {
@@ -543,7 +543,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             await WaitForNextFrameAsync(sceneTree);
 
             AssertTransformApproximately(initialTarget, fixture.HeadIKTarget.GlobalTransform);
-            Assert.NotEqual(provider.TargetState.WorldTransform.Origin, fixture.HeadIKTarget.GlobalPosition);
+            Assert.NotEqual(provider.TargetIntent.WorldTransform.Origin, fixture.HeadIKTarget.GlobalPosition);
             Assert.False(fixture.HeadModifier.Active);
             Assert.Equal(0.0f, fixture.HeadModifier.Influence);
             AssertTargetDisabled(fixture.HeadIKTarget);
@@ -567,16 +567,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
             sceneTree,
             "ZeroInfluenceHandProviderFixture");
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "RightHandZeroInfluenceProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(2.0f, 2.0f, 2.0f)),
                 0.0f),
         };
         fixture.Root.AddChild(provider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.RightHandIKTargetStateProvider = provider;
+        fixture.VRIK.RightHandIKTargetIntentProvider = provider;
 
         try
         {
@@ -585,7 +585,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             await WaitForNextFrameAsync(sceneTree);
 
             AssertTransformApproximately(restTarget, fixture.RightHandIKTarget.Transform);
-            Assert.NotEqual(provider.TargetState.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
+            Assert.NotEqual(provider.TargetIntent.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
             Assert.False(fixture.RightHandModifier.Active);
             Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
             AssertTargetDisabled(fixture.RightHandIKTarget);
@@ -597,7 +597,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies resolving a hand provider only returns the desired follow pose and leaves collision-aware movement to the physics follower.
+    /// Verifies resolving a hand provider only returns the desired follow pose and leaves collision-aware movement to the physics actuator.
     /// </summary>
     [Headless]
     [Fact]
@@ -607,27 +607,256 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
             sceneTree,
             "PositiveInfluenceHandProviderFixture");
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "RightHandPositiveInfluenceProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(2.0f, 2.0f, 2.0f)),
                 1.0f),
         };
         fixture.Root.AddChild(provider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.RightHandIKTargetStateProvider = provider;
+        fixture.VRIK.RightHandIKTargetIntentProvider = provider;
 
         try
         {
             Transform3D authoredTarget = fixture.RightHandIKTarget.Transform;
             Transform3D resolvedTarget = InvokeBuildHandTargetTransform(fixture.VRIK, "BuildRightHandTargetTransform");
 
-            AssertTransformApproximately(provider.TargetState.WorldTransform, resolvedTarget);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, resolvedTarget);
             AssertTransformApproximately(authoredTarget, fixture.RightHandIKTarget.Transform);
-            Assert.NotEqual(provider.TargetState.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
+            Assert.NotEqual(provider.TargetIntent.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
             Assert.True(fixture.RightHandModifier.Active);
             Assert.Equal(1.0f, fixture.RightHandModifier.Influence);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the BODY-005 right-hand target pipeline preserves provider intent through the actual CharacterIK
+    /// physics actuator path when no constraining contributors are configured.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKRightHandPipeline_WhenNoContributors_PreservesProviderIntentAndActuatorOutput()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "RightHandPipelineNoContributorFixture");
+        TestIKTargetIntentProvider provider = new()
+        {
+            Name = "RightHandPipelineProvider",
+            TargetIntent = new IKTargetIntent(
+                new Transform3D(Basis.Identity.Rotated(Vector3.Up, 0.25f), new Vector3(0.22f, 0.14f, -0.31f)),
+                1.0f),
+        };
+        fixture.Root.AddChild(provider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.RightHandIKTargetIntentProvider = provider;
+        fixture.VRIK.RightHandIKTargetContributors = [];
+
+        try
+        {
+            CharacterIKRightHandPipelineObservation observation = await RunRightHandPipelineActuatorComparisonAsync(
+                sceneTree,
+                fixture,
+                provider.TargetIntent.WorldTransform);
+
+            AssertRightHandPipelinePreservesProviderIntent(fixture.VRIK, provider.TargetIntent.WorldTransform);
+            AssertTransformApproximately(observation.ExpectedRealisedTarget, fixture.RightHandIKTarget.GlobalTransform);
+            AssertTransformApproximately(
+                observation.ExpectedRealisedTarget,
+                fixture.VRIK.RightHandTargetPipelineDebugState.RealisedTarget);
+            Assert.Equal(observation.ExpectedFeedback.Reason, fixture.VRIK.RightHandTargetPipelineDebugState.Feedback.Reason);
+            Assert.Equal(1UL, fixture.VRIK.PhysicsActuatorTickCount);
+            AssertTargetEnabled(fixture.RightHandIKTarget, 16u, 32u);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the BODY-005 left-hand target pipeline preserves provider intent through the actual CharacterIK
+    /// physics actuator path when no constraining contributors are configured.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKLeftHandPipeline_WhenNoContributors_PreservesProviderIntentAndActuatorOutput()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "LeftHandPipelineNoContributorFixture");
+        TestIKTargetIntentProvider provider = new()
+        {
+            Name = "LeftHandPipelineProvider",
+            TargetIntent = new IKTargetIntent(
+                new Transform3D(Basis.Identity.Rotated(Vector3.Up, -0.2f), new Vector3(-0.24f, 0.13f, -0.28f)),
+                1.0f),
+        };
+        fixture.Root.AddChild(provider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.LeftHandIKTargetIntentProvider = provider;
+        fixture.VRIK.LeftHandIKTargetContributors = [];
+
+        try
+        {
+            CharacterIKRightHandPipelineObservation observation = await RunLeftHandPipelineActuatorComparisonAsync(
+                sceneTree,
+                fixture,
+                provider.TargetIntent.WorldTransform);
+
+            AssertLeftHandPipelinePreservesProviderIntent(fixture.VRIK, provider.TargetIntent.WorldTransform);
+            AssertTransformApproximately(observation.ExpectedRealisedTarget, fixture.LeftHandIKTarget.GlobalTransform);
+            AssertTransformApproximately(
+                observation.ExpectedRealisedTarget,
+                fixture.VRIK.LeftHandTargetPipelineDebugState.RealisedTarget);
+            Assert.Equal(observation.ExpectedFeedback.Reason, fixture.VRIK.LeftHandTargetPipelineDebugState.Feedback.Reason);
+            Assert.Equal(1UL, fixture.VRIK.PhysicsActuatorTickCount);
+            AssertTargetEnabled(fixture.LeftHandIKTarget, 64u, 128u);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the head target path publishes a pipeline debug result while preserving head solve target output.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKHeadPipeline_WhenProviderConfigured_PublishesDebugStateAndSolveTarget()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "HeadPipelineFixture");
+        TestIKTargetIntentProvider provider = new()
+        {
+            Name = "HeadPipelineProvider",
+            TargetIntent = new IKTargetIntent(
+                new Transform3D(Basis.Identity.Rotated(Vector3.Up, 0.15f), new Vector3(0.02f, 1.71f, -0.08f)),
+                1.0f),
+        };
+        fixture.Root.AddChild(provider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.HeadTargetIntentProvider = provider;
+
+        try
+        {
+            InvokeOnBeginStage(fixture.VRIK, 1.0d / 60.0d);
+            await WaitForNextFrameAsync(sceneTree);
+
+            IKTargetPipelineResult debugState = fixture.VRIK.HeadTargetPipelineDebugState;
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, debugState.SourceTarget);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, debugState.RequestedTarget);
+            AssertTransformApproximately(fixture.HeadIKTarget.GlobalTransform, debugState.RealisedTarget);
+            AssertTransformApproximately(fixture.HeadIKTarget.GlobalTransform, fixture.HeadIKSolveTarget.GlobalTransform);
+            Assert.True(fixture.HeadModifier.Active);
+            Assert.Equal(1.0f, fixture.HeadModifier.Influence);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a no-op contributor is behaviourally identical to the no-contributor CharacterIK right-hand path.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKRightHandPipeline_WhenNoOpContributorConfigured_MatchesNoContributorOutput()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Transform3D sourceTarget = new(Basis.Identity, new Vector3(0.18f, 0.12f, -0.27f));
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "RightHandPipelineNoOpContributorFixture");
+        TestIKTargetIntentProvider provider = new()
+        {
+            Name = "RightHandPipelineProvider",
+            TargetIntent = new IKTargetIntent(sourceTarget, 1.0f),
+        };
+        fixture.Root.AddChild(provider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.RightHandIKTargetIntentProvider = provider;
+
+        try
+        {
+            CharacterIKRightHandPipelineObservation noContributorObservation = await RunRightHandPipelineActuatorComparisonAsync(
+                sceneTree,
+                fixture,
+                sourceTarget,
+                []);
+            CharacterIKRightHandPipelineObservation noOpContributorObservation = await RunRightHandPipelineActuatorComparisonAsync(
+                sceneTree,
+                fixture,
+                sourceTarget,
+                [new NoOpIKTargetContributor()]);
+
+            AssertTransformApproximately(noContributorObservation.SourceTarget, noOpContributorObservation.SourceTarget);
+            AssertTransformApproximately(noContributorObservation.RequestedTarget, noOpContributorObservation.RequestedTarget);
+            AssertTransformApproximately(noContributorObservation.RealisedTarget, noOpContributorObservation.RealisedTarget);
+            AssertTransformApproximately(noContributorObservation.ExpectedRealisedTarget, noOpContributorObservation.ExpectedRealisedTarget);
+            Assert.Equal(noContributorObservation.Feedback.Reason, noOpContributorObservation.Feedback.Reason);
+            Assert.Equal(noContributorObservation.ExpectedFeedback.Reason, noOpContributorObservation.ExpectedFeedback.Reason);
+            AssertRightHandPipelinePreservesProviderIntent(fixture.VRIK, sourceTarget);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a no-op contributor is behaviourally identical to the no-contributor CharacterIK left-hand path.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKLeftHandPipeline_WhenNoOpContributorConfigured_MatchesNoContributorOutput()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Transform3D sourceTarget = new(Basis.Identity, new Vector3(-0.19f, 0.11f, -0.26f));
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "LeftHandPipelineNoOpContributorFixture");
+        TestIKTargetIntentProvider provider = new()
+        {
+            Name = "LeftHandPipelineProvider",
+            TargetIntent = new IKTargetIntent(sourceTarget, 1.0f),
+        };
+        fixture.Root.AddChild(provider);
+        await WaitForNextFrameAsync(sceneTree);
+        fixture.VRIK.LeftHandIKTargetIntentProvider = provider;
+
+        try
+        {
+            CharacterIKRightHandPipelineObservation noContributorObservation = await RunLeftHandPipelineActuatorComparisonAsync(
+                sceneTree,
+                fixture,
+                sourceTarget,
+                []);
+            fixture.VRIK.LeftHandIKTargetContributors = [new NoOpIKTargetContributor()];
+            CharacterIKRightHandPipelineObservation noOpContributorObservation = await RunLeftHandPipelineActuatorComparisonAsync(
+                sceneTree,
+                fixture,
+                sourceTarget);
+
+            AssertTransformApproximately(noContributorObservation.SourceTarget, noOpContributorObservation.SourceTarget);
+            AssertTransformApproximately(noContributorObservation.RequestedTarget, noOpContributorObservation.RequestedTarget);
+            AssertTransformApproximately(noContributorObservation.RealisedTarget, noOpContributorObservation.RealisedTarget);
+            AssertTransformApproximately(noContributorObservation.ExpectedRealisedTarget, noOpContributorObservation.ExpectedRealisedTarget);
+            Assert.Equal(noContributorObservation.Feedback.Reason, noOpContributorObservation.Feedback.Reason);
+            Assert.Equal(noContributorObservation.ExpectedFeedback.Reason, noOpContributorObservation.ExpectedFeedback.Reason);
+            AssertLeftHandPipelinePreservesProviderIntent(fixture.VRIK, sourceTarget);
         }
         finally
         {
@@ -647,16 +876,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
             sceneTree,
             "ZeroInfluenceHandFallbackProviderFixture");
-        TestIKTargetStateProvider fallbackProvider = new()
+        TestIKTargetIntentProvider fallbackProvider = new()
         {
             Name = "RightHandZeroInfluenceFallbackProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(2.0f, 2.0f, 2.0f)),
                 0.0f),
         };
         fixture.Root.AddChild(fallbackProvider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.RightHandFallbackProvider = fallbackProvider;
+        fixture.VRIK.RightHandFallbackIntentProvider = fallbackProvider;
 
         try
         {
@@ -665,7 +894,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             await WaitForNextFrameAsync(sceneTree);
 
             AssertTransformApproximately(restTarget, fixture.RightHandIKTarget.Transform);
-            Assert.NotEqual(fallbackProvider.TargetState.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
+            Assert.NotEqual(fallbackProvider.TargetIntent.WorldTransform.Origin, fixture.RightHandIKTarget.GlobalPosition);
             Assert.False(fixture.RightHandModifier.Active);
             Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
             AssertTargetDisabled(fixture.RightHandIKTarget);
@@ -726,21 +955,21 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
             sceneTree,
             "ZeroProviderTargetDisableFixture");
-        TestIKTargetStateProvider headProvider = new()
+        TestIKTargetIntentProvider headProvider = new()
         {
             Name = "HeadZeroProvider",
-            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(0.0f, 1.7f, -0.2f)), 0.0f),
+            TargetIntent = new IKTargetIntent(new Transform3D(Basis.Identity, new Vector3(0.0f, 1.7f, -0.2f)), 0.0f),
         };
-        TestIKTargetStateProvider handProvider = new()
+        TestIKTargetIntentProvider handProvider = new()
         {
             Name = "RightHandZeroProvider",
-            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(0.45f, 1.1f, -0.3f)), 0.0f),
+            TargetIntent = new IKTargetIntent(new Transform3D(Basis.Identity, new Vector3(0.45f, 1.1f, -0.3f)), 0.0f),
         };
         fixture.Root.AddChild(headProvider);
         fixture.Root.AddChild(handProvider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.HeadTargetProvider = headProvider;
-        fixture.VRIK.RightHandIKTargetStateProvider = handProvider;
+        fixture.VRIK.HeadTargetIntentProvider = headProvider;
+        fixture.VRIK.RightHandIKTargetIntentProvider = handProvider;
 
         try
         {
@@ -774,14 +1003,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             sceneTree,
             "InfluenceRestoreFixture");
         Transform3D positiveTargetTransform = new(Basis.Identity, new Vector3(0.65f, 1.05f, -0.45f));
-        TestIKTargetStateProvider handProvider = new()
+        TestIKTargetIntentProvider handProvider = new()
         {
             Name = "RightHandTransitionProvider",
-            TargetState = new IKTargetState(positiveTargetTransform, 0.0f),
+            TargetIntent = new IKTargetIntent(positiveTargetTransform, 0.0f),
         };
         fixture.Root.AddChild(handProvider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.RightHandIKTargetStateProvider = handProvider;
+        fixture.VRIK.RightHandIKTargetIntentProvider = handProvider;
 
         try
         {
@@ -792,7 +1021,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Assert.Equal(0.0f, fixture.RightHandModifier.Influence);
             AssertTargetDisabled(fixture.RightHandIKTarget);
 
-            handProvider.TargetState = new IKTargetState(positiveTargetTransform, 1.0f);
+            handProvider.TargetIntent = new IKTargetIntent(positiveTargetTransform, 1.0f);
             Transform3D resolvedTarget = InvokeBuildHandTargetTransform(fixture.VRIK, "BuildRightHandTargetTransform");
             fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
             await WaitForNextFrameAsync(sceneTree);
@@ -821,8 +1050,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         try
         {
             fixture.PlayerVRIK._Ready();
-            fixture.PlayerVRIK.RightHandFallbackProvider = null;
-            fixture.PlayerVRIK.LeftHandFallbackProvider = null;
+            fixture.PlayerVRIK.RightHandFallbackIntentProvider = null;
+            fixture.PlayerVRIK.LeftHandFallbackIntentProvider = null;
             fixture.RightHandIKTarget.Transform = new Transform3D(
                 Basis.Identity.Rotated(Vector3.Up, 0.35f),
                 new Vector3(1.1f, 0.8f, -0.4f));
@@ -1108,10 +1337,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         VrikFixture fixture = await CreateVrikFixtureAsync(sceneTree, xrCameraHeight: 1.6f, initialWorldScale: 1.0f);
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "RightFootZeroProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(3.0f, 3.0f, 3.0f)),
                 0.0f),
         };
@@ -1122,7 +1351,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
-            fixture.PlayerVRIK.RightFootTargetProvider = provider;
+            fixture.PlayerVRIK.RightFootTargetIntentProvider = provider;
             Transform3D initialRightFoot = fixture.RightFootIKTarget.Transform;
 
             InvokeOnFootProviderStage(fixture.PlayerVRIK, 1.0d / 60.0d);
@@ -1201,16 +1430,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(sceneTree, "CharacterIKFixture");
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "RightHandProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(0.25f, 0.1f, -0.35f)),
                 1.0f),
         };
         fixture.Root.AddChild(provider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.RightHandIKTargetStateProvider = provider;
+        fixture.VRIK.RightHandIKTargetIntentProvider = provider;
 
         try
         {
@@ -1218,10 +1447,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             fixture.RightHandIKTarget.GlobalTransform = Transform3D.Identity;
             fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
 
-            AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.RightHandIKTarget.Transform);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.RightHandIKTarget.Transform);
             Assert.True(fixture.RightHandModifier.Active);
             Assert.Equal(1.0f, fixture.RightHandModifier.Influence);
-            Assert.Equal(1UL, fixture.VRIK.PhysicsFollowerTickCount);
+            Assert.Equal(1UL, fixture.VRIK.PhysicsActuatorTickCount);
         }
         finally
         {
@@ -1238,16 +1467,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(sceneTree, "HeadProviderFixture");
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "HeadProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(0.001f, 0.001f, 0.001f)),
                 0.37f),
         };
         fixture.Root.AddChild(provider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.HeadTargetProvider = provider;
+        fixture.VRIK.HeadTargetIntentProvider = provider;
 
         try
         {
@@ -1255,18 +1484,18 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             fixture.HeadIKTarget.GlobalTransform = Transform3D.Identity;
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
 
-            AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.HeadIKTarget.Transform);
-            AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.HeadIKSolveTarget.Transform);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.HeadIKTarget.Transform);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.HeadIKSolveTarget.Transform);
             AssertTransformApproximately(fixture.HeadIKTarget.GlobalTransform, fixture.HeadIKSolveTarget.GlobalTransform);
             Assert.True(fixture.HeadModifier.Active);
             Assert.Equal(0.37f, fixture.HeadModifier.Influence);
 
-            provider.TargetState = new IKTargetState(provider.TargetState.WorldTransform, 0.0f);
+            provider.TargetIntent = new IKTargetIntent(provider.TargetIntent.WorldTransform, 0.0f);
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
             await WaitForNextFrameAsync(sceneTree);
 
-            AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.HeadIKTarget.Transform);
-            AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.HeadIKSolveTarget.Transform);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.HeadIKTarget.Transform);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.HeadIKSolveTarget.Transform);
             Assert.False(fixture.HeadModifier.Active);
             Assert.Equal(0.0f, fixture.HeadModifier.Influence);
             AssertTargetDisabled(fixture.HeadIKTarget);
@@ -1287,16 +1516,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         SceneTree sceneTree = GetSceneTree();
         CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(sceneTree, "FootProviderFixture");
-        TestIKTargetStateProvider provider = new()
+        TestIKTargetIntentProvider provider = new()
         {
             Name = "RightFootProvider",
-            TargetState = new IKTargetState(
+            TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(0.4f, 0.2f, -0.25f)),
                 0.58f),
         };
         fixture.Root.AddChild(provider);
         await WaitForNextFrameAsync(sceneTree);
-        fixture.VRIK.RightFootTargetProvider = provider;
+        fixture.VRIK.RightFootTargetIntentProvider = provider;
         fixture.VRIK.RightFootIKTarget = fixture.RightFootIKTarget;
         fixture.FootSyncController.Active = true;
         FootTargetConsumer consumer = new()
@@ -1322,13 +1551,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Assert.Equal(0.58f, fixture.RightFootModifier.Influence);
             Assert.True(fixture.FootSyncController.Active);
             Assert.Equal(1.0f, fixture.FootSyncController.Influence);
-            AssertTransformApproximately(provider.TargetState.WorldTransform, fixture.RightFootIKTarget.Transform);
-            AssertTransformApproximately(provider.TargetState.WorldTransform, consumer.ConsumedLocalTransform);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.RightFootIKTarget.Transform);
+            AssertTransformApproximately(provider.TargetIntent.WorldTransform, consumer.ConsumedLocalTransform);
 
-            provider.TargetState = new IKTargetState(
+            provider.TargetIntent = new IKTargetIntent(
                 new Transform3D(Basis.Identity, new Vector3(2.0f, 2.0f, 2.0f)),
                 0.0f);
-            fixture.RightFootIKTarget.GlobalTransform = provider.TargetState.WorldTransform;
+            fixture.RightFootIKTarget.GlobalTransform = provider.TargetIntent.WorldTransform;
             fixture.FootSyncController._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
@@ -1601,45 +1830,45 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         TestXRHandController leftHandController = new(leftControllerNode, leftHandPosition);
         xrManager.SetRuntime(new TestXRRuntime(origin, camera, rightHandController, leftHandController));
 
-        XRHeadTargetProvider headFallbackProvider = new()
+        XRHeadTargetIntentProvider headFallbackIntentProvider = new()
         {
-            Name = "HeadFallbackProvider",
+            Name = "HeadFallbackIntentProvider",
             Viewpoint = viewpoint,
         };
-        playerVRIK.AddChild(headFallbackProvider);
-        playerVRIK.HeadFallbackProvider = headFallbackProvider;
+        playerVRIK.AddChild(headFallbackIntentProvider);
+        playerVRIK.HeadFallbackIntentProvider = headFallbackIntentProvider;
 
-        XRControllerTargetProvider rightHandFallbackProvider = new()
+        XRControllerTargetProvider rightHandFallbackIntentProvider = new()
         {
-            Name = "RightHandFallbackProvider",
+            Name = "RightHandFallbackIntentProvider",
             Side = LimbSide.Right,
         };
-        playerVRIK.AddChild(rightHandFallbackProvider);
-        playerVRIK.RightHandFallbackProvider = rightHandFallbackProvider;
+        playerVRIK.AddChild(rightHandFallbackIntentProvider);
+        playerVRIK.RightHandFallbackIntentProvider = rightHandFallbackIntentProvider;
 
-        XRControllerTargetProvider leftHandFallbackProvider = new()
+        XRControllerTargetProvider leftHandFallbackIntentProvider = new()
         {
-            Name = "LeftHandFallbackProvider",
+            Name = "LeftHandFallbackIntentProvider",
             Side = LimbSide.Left,
         };
-        playerVRIK.AddChild(leftHandFallbackProvider);
-        playerVRIK.LeftHandFallbackProvider = leftHandFallbackProvider;
+        playerVRIK.AddChild(leftHandFallbackIntentProvider);
+        playerVRIK.LeftHandFallbackIntentProvider = leftHandFallbackIntentProvider;
 
-        AnimationSynchronizedFootTargetProvider rightFootFallbackProvider = new()
+        AnimationSynchronizedFootTargetProvider rightFootFallbackIntentProvider = new()
         {
-            Name = "RightFootFallbackProvider",
+            Name = "RightFootFallbackIntentProvider",
             FootTarget = rightFootIKTarget,
         };
-        playerVRIK.AddChild(rightFootFallbackProvider);
-        playerVRIK.RightFootFallbackProvider = rightFootFallbackProvider;
+        playerVRIK.AddChild(rightFootFallbackIntentProvider);
+        playerVRIK.RightFootFallbackIntentProvider = rightFootFallbackIntentProvider;
 
-        AnimationSynchronizedFootTargetProvider leftFootFallbackProvider = new()
+        AnimationSynchronizedFootTargetProvider leftFootFallbackIntentProvider = new()
         {
-            Name = "LeftFootFallbackProvider",
+            Name = "LeftFootFallbackIntentProvider",
             FootTarget = leftFootIKTarget,
         };
-        playerVRIK.AddChild(leftFootFallbackProvider);
-        playerVRIK.LeftFootFallbackProvider = leftFootFallbackProvider;
+        playerVRIK.AddChild(leftFootFallbackIntentProvider);
+        playerVRIK.LeftFootFallbackIntentProvider = leftFootFallbackIntentProvider;
 
         root._EnterTree();
         sceneTree.Root.AddChild(root);
@@ -1667,9 +1896,9 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             leftHandIKModifier,
             rightFootModifier,
             leftFootModifier,
-            headFallbackProvider,
-            rightHandFallbackProvider,
-            leftHandFallbackProvider,
+            headFallbackIntentProvider,
+            rightHandFallbackIntentProvider,
+            leftHandFallbackIntentProvider,
             origin,
             camera,
             rightHandController,
@@ -1913,6 +2142,156 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         _ = method.Invoke(characterIK, [delta]);
     }
 
+    private static void InvokeUpdatePhysicalActuators(CharacterIK characterIK, double delta)
+    {
+        MethodInfo method = typeof(CharacterIK).GetMethod(
+                                "UpdatePhysicalActuators",
+                                BindingFlags.Instance | BindingFlags.NonPublic)
+                            ?? throw new InvalidOperationException(
+                                "CharacterIK.UpdatePhysicalActuators was not found.");
+
+        _ = method.Invoke(characterIK, [delta]);
+    }
+
+    private static async Task<CharacterIKRightHandPipelineObservation> RunRightHandPipelineActuatorComparisonAsync(
+        SceneTree sceneTree,
+        CharacterIKFixture<CharacterIK> fixture,
+        Transform3D sourceTarget)
+        => await RunRightHandPipelineActuatorComparisonAsync(sceneTree, fixture, sourceTarget, fixture.VRIK.RightHandIKTargetContributors);
+
+    private static async Task<CharacterIKRightHandPipelineObservation> RunRightHandPipelineActuatorComparisonAsync(
+        SceneTree sceneTree,
+        CharacterIKFixture<CharacterIK> fixture,
+        Transform3D sourceTarget,
+        IIKTargetContributor[] contributors)
+    {
+        fixture.VRIK.RightHandIKTargetContributors = contributors;
+        Transform3D startingTransform = new(Basis.Identity.Rotated(Vector3.Forward, 0.09f), new Vector3(-0.04f, 0.03f, 0.02f));
+        fixture.RightHandIKTarget.GlobalTransform = startingTransform;
+
+        AnimatableBody3D expectedActuatorBody = new()
+        {
+            Name = "ExpectedRightHandActuatorBody",
+            CollisionLayer = fixture.RightHandIKTarget.CollisionLayer,
+            CollisionMask = fixture.RightHandIKTarget.CollisionMask,
+            SyncToPhysics = false,
+            GlobalTransform = startingTransform,
+        };
+        fixture.Root.AddChild(expectedActuatorBody);
+        await WaitForNextFrameAsync(sceneTree);
+        expectedActuatorBody.GlobalTransform = startingTransform;
+
+        IKTargetAnimatableActuator expectedActuator = new(
+            expectedActuatorBody)
+        {
+            MaximumSpeed = fixture.VRIK.HandTargetMaximumSpeed,
+            PositionResponsiveness = fixture.VRIK.HandTargetPositionResponsiveness,
+            MaximumAcceleration = fixture.VRIK.HandTargetMaximumAcceleration,
+            SnapDistance = fixture.VRIK.HandTargetSettleDistance,
+            RotationResponsiveness = fixture.VRIK.HandTargetRotationResponsiveness,
+            DynamicBodyInteractionCollisionMask = fixture.VRIK.HandDynamicInteractionCollisionMask,
+            DynamicImpactApproachSpeedThreshold = fixture.VRIK.HandDynamicImpactApproachSpeedThreshold,
+            DynamicImpactImpulsePerSpeed = fixture.VRIK.HandDynamicImpactImpulsePerSpeed,
+            DynamicImpactImpulseCap = fixture.VRIK.HandDynamicImpactImpulseCap,
+            DynamicSustainedPushSpeedThreshold = fixture.VRIK.HandDynamicSustainedPushSpeedThreshold,
+            DynamicSustainedForcePerSpeed = fixture.VRIK.HandDynamicSustainedForcePerSpeed,
+            DynamicSustainedForceCap = fixture.VRIK.HandDynamicSustainedForceCap,
+        };
+
+        IKTargetFollowState expectedFollowState = new(sourceTarget, active: true);
+        IKTargetActuationResult expectedActuation = expectedActuator.Actuate(
+            new IKTargetPipelineRequest(expectedFollowState, expectedFollowState),
+            1.0d / 60.0d);
+
+        InvokeUpdatePhysicalActuators(fixture.VRIK, 1.0d / 60.0d);
+        await WaitForNextFrameAsync(sceneTree);
+
+        IKTargetPipelineResult pipelineResult = fixture.VRIK.RightHandTargetPipelineDebugState;
+        return new CharacterIKRightHandPipelineObservation(
+            pipelineResult.SourceTarget,
+            pipelineResult.RequestedTarget,
+            pipelineResult.RealisedTarget,
+            pipelineResult.Feedback,
+            expectedActuation.RealisedTarget,
+            expectedActuation.Feedback);
+    }
+
+    private static async Task<CharacterIKRightHandPipelineObservation> RunLeftHandPipelineActuatorComparisonAsync(
+        SceneTree sceneTree,
+        CharacterIKFixture<CharacterIK> fixture,
+        Transform3D sourceTarget)
+        => await RunLeftHandPipelineActuatorComparisonAsync(sceneTree, fixture, sourceTarget, fixture.VRIK.LeftHandIKTargetContributors);
+
+    private static async Task<CharacterIKRightHandPipelineObservation> RunLeftHandPipelineActuatorComparisonAsync(
+        SceneTree sceneTree,
+        CharacterIKFixture<CharacterIK> fixture,
+        Transform3D sourceTarget,
+        IIKTargetContributor[] contributors)
+    {
+        fixture.VRIK.LeftHandIKTargetContributors = contributors;
+        Transform3D startingTransform = new(Basis.Identity.Rotated(Vector3.Forward, -0.08f), new Vector3(0.05f, 0.04f, 0.01f));
+        fixture.LeftHandIKTarget.GlobalTransform = startingTransform;
+
+        AnimatableBody3D expectedActuatorBody = new()
+        {
+            Name = "ExpectedLeftHandActuatorBody",
+            CollisionLayer = fixture.LeftHandIKTarget.CollisionLayer,
+            CollisionMask = fixture.LeftHandIKTarget.CollisionMask,
+            SyncToPhysics = false,
+            GlobalTransform = startingTransform,
+        };
+        fixture.Root.AddChild(expectedActuatorBody);
+        await WaitForNextFrameAsync(sceneTree);
+        expectedActuatorBody.GlobalTransform = startingTransform;
+
+        IKTargetAnimatableActuator expectedActuator = new(expectedActuatorBody)
+        {
+            MaximumSpeed = fixture.VRIK.HandTargetMaximumSpeed,
+            PositionResponsiveness = fixture.VRIK.HandTargetPositionResponsiveness,
+            MaximumAcceleration = fixture.VRIK.HandTargetMaximumAcceleration,
+            SnapDistance = fixture.VRIK.HandTargetSettleDistance,
+            RotationResponsiveness = fixture.VRIK.HandTargetRotationResponsiveness,
+            DynamicBodyInteractionCollisionMask = fixture.VRIK.HandDynamicInteractionCollisionMask,
+            DynamicImpactApproachSpeedThreshold = fixture.VRIK.HandDynamicImpactApproachSpeedThreshold,
+            DynamicImpactImpulsePerSpeed = fixture.VRIK.HandDynamicImpactImpulsePerSpeed,
+            DynamicImpactImpulseCap = fixture.VRIK.HandDynamicImpactImpulseCap,
+            DynamicSustainedPushSpeedThreshold = fixture.VRIK.HandDynamicSustainedPushSpeedThreshold,
+            DynamicSustainedForcePerSpeed = fixture.VRIK.HandDynamicSustainedForcePerSpeed,
+            DynamicSustainedForceCap = fixture.VRIK.HandDynamicSustainedForceCap,
+        };
+
+        IKTargetFollowState expectedFollowState = new(sourceTarget, active: true);
+        IKTargetActuationResult expectedActuation = expectedActuator.Actuate(
+            new IKTargetPipelineRequest(expectedFollowState, expectedFollowState),
+            1.0d / 60.0d);
+
+        InvokeUpdatePhysicalActuators(fixture.VRIK, 1.0d / 60.0d);
+        await WaitForNextFrameAsync(sceneTree);
+
+        IKTargetPipelineResult pipelineResult = fixture.VRIK.LeftHandTargetPipelineDebugState;
+        return new CharacterIKRightHandPipelineObservation(
+            pipelineResult.SourceTarget,
+            pipelineResult.RequestedTarget,
+            pipelineResult.RealisedTarget,
+            pipelineResult.Feedback,
+            expectedActuation.RealisedTarget,
+            expectedActuation.Feedback);
+    }
+
+    private static void AssertRightHandPipelinePreservesProviderIntent(CharacterIK characterIK, Transform3D sourceTarget)
+    {
+        IKTargetPipelineResult debugState = characterIK.RightHandTargetPipelineDebugState;
+        AssertTransformApproximately(sourceTarget, debugState.SourceTarget);
+        AssertTransformApproximately(sourceTarget, debugState.RequestedTarget);
+    }
+
+    private static void AssertLeftHandPipelinePreservesProviderIntent(CharacterIK characterIK, Transform3D sourceTarget)
+    {
+        IKTargetPipelineResult debugState = characterIK.LeftHandTargetPipelineDebugState;
+        AssertTransformApproximately(sourceTarget, debugState.SourceTarget);
+        AssertTransformApproximately(sourceTarget, debugState.RequestedTarget);
+    }
+
     private static void InvokeAfterProviderTargetProcessing(PlayerVRIK playerVRIK, Skeleton3D skeleton, double delta)
     {
         MethodInfo method = typeof(PlayerVRIK).GetMethod(
@@ -2027,9 +2406,9 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         TwoBoneIK3D leftHandIKModifier,
         SkeletonModifier3D rightFootModifier,
         SkeletonModifier3D leftFootModifier,
-        XRHeadTargetProvider headFallbackProvider,
-        XRControllerTargetProvider rightHandFallbackProvider,
-        XRControllerTargetProvider leftHandFallbackProvider,
+        XRHeadTargetIntentProvider headFallbackIntentProvider,
+        XRControllerTargetProvider rightHandFallbackIntentProvider,
+        XRControllerTargetProvider leftHandFallbackIntentProvider,
         TestXROrigin origin,
         TestXRCamera camera,
         TestXRHandController rightHandController,
@@ -2065,11 +2444,11 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         public SkeletonModifier3D LeftFootModifier { get; } = leftFootModifier;
 
-        public XRHeadTargetProvider HeadFallbackProvider { get; } = headFallbackProvider;
+        public XRHeadTargetIntentProvider HeadFallbackIntentProvider { get; } = headFallbackIntentProvider;
 
-        public XRControllerTargetProvider RightHandFallbackProvider { get; } = rightHandFallbackProvider;
+        public XRControllerTargetProvider RightHandFallbackIntentProvider { get; } = rightHandFallbackIntentProvider;
 
-        public XRControllerTargetProvider LeftHandFallbackProvider { get; } = leftHandFallbackProvider;
+        public XRControllerTargetProvider LeftHandFallbackIntentProvider { get; } = leftHandFallbackIntentProvider;
 
         public TestXROrigin Origin { get; } = origin;
 
@@ -2149,6 +2528,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             }
         }
     }
+
+    private readonly record struct CharacterIKRightHandPipelineObservation(
+        Transform3D SourceTarget,
+        Transform3D RequestedTarget,
+        Transform3D RealisedTarget,
+        IKTargetPipelineFeedback Feedback,
+        Transform3D ExpectedRealisedTarget,
+        IKTargetPipelineFeedback ExpectedFeedback);
 
     private static void AssertTransformApproximately(Transform3D expected, Transform3D actual, float epsilon = 1e-4f)
     {
@@ -2314,16 +2701,16 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         }
     }
 
-    private sealed partial class TestIKTargetStateProvider : IKTargetStateProvider
+    private sealed partial class TestIKTargetIntentProvider : IKTargetIntentProvider
     {
-        public IKTargetState TargetState
+        public IKTargetIntent TargetIntent
         {
             get;
             set;
         }
 
-        public override IKTargetState GetTargetState()
-            => TargetState;
+        public override IKTargetIntent GetTargetIntent()
+            => TargetIntent;
     }
 
     private sealed partial class TestPoseState : PoseState

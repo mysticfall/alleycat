@@ -77,7 +77,7 @@ IK-002 naming, design, and test conventions.
     RestLegHalfPoleOffsetMargin)`. This floor applies unconditionally and is
     not compression-gated.
 11. **Provider-driven foot targets**: Foot IK targets may be driven by
-    `IKTargetStateProvider` in the same manner as hand targets. When a foot
+    `IKTargetIntentProvider` in the same manner as hand targets. When a foot
     provider is assigned and has non-zero influence, the provider-derived foot
     target takes precedence over animation-synchronised targets.
 12. **Provider coexistence contract**: `FootTargetSyncController` runs first
@@ -90,7 +90,7 @@ IK-002 naming, design, and test conventions.
      with no provider or fallback provider disable foot target gates and leg
      modifiers by default. Provider influence 0 always disables the
      corresponding target gate and leg modifier.
-13. **Provider influence gating**: When the corresponding `IKTargetStateProvider`
+13. **Provider influence gating**: When the corresponding `IKTargetIntentProvider`
     reports desired influence of 0, the leg `TwoBoneIK3D` for that side must be
     deactivated.
 
@@ -115,7 +115,7 @@ IK-002 naming, design, and test conventions.
   derived floor.
 - A reusable leg-feet IK scene (`reference_female_base.tscn`) and a lower-body
   photobooth verification workflow aligned to IK-002 structure.
-- Provider-driven foot target support via `IKTargetStateProvider`, coexisting
+- Provider-driven foot target support via `IKTargetIntentProvider`, coexisting
   with `FootTargetSyncController` without conflict.
 - Provider influence gating that deactivates leg IK when influence is 0.
 
@@ -212,7 +212,7 @@ pages.
   compression-gated. *(Leg-Feet IK Contract)*
 
 - **AC-15** — Provider-driven foot targets take precedence over animation-synchronised
-  targets when a foot `IKTargetStateProvider` is assigned with non-zero influence.
+  targets when a foot `IKTargetIntentProvider` is assigned with non-zero influence.
   *(Provider Coexistence Contract)*
 
 - **AC-16** — Player scenes keep animation-synchronised foot targets active by

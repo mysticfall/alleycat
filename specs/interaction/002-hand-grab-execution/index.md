@@ -93,7 +93,7 @@ Provide a grab execution system that:
 
 9. On candidate selection, hand records the selected candidate and enters `Approaching` state.
 10. Hand forwards the candidate's `HandTarget` (including grab-point rotation) to
-    `IKTargetStateProvider` for smooth interpolation.
+    `IKTargetIntentProvider` for smooth interpolation.
 11. The item does not move during approach; only the hand IK target moves.
 12. Hand monitors IK settling using an implementation-defined threshold (e.g., position
     within 2mm and angular delta below 5° for 2 consecutive frames).
@@ -257,7 +257,7 @@ Provide a grab execution system that:
 51. `Release()` must restore all involved subsystems:
      - Unparent grabbed object from BoneAttachment3D.
      - Clear hand pose via `HandPoseController.ClearHandPose()`.
-     - Restore IK target to default via `IKTargetStateProvider`.
+     - Restore IK target to default via `IKTargetIntentProvider`.
      - Remove collision proxy shapes from `HeldCollisionTarget`.
      - Restore original item collision shapes to prior disabled state.
      - Remove collision exceptions added during hold.
@@ -267,11 +267,11 @@ Provide a grab execution system that:
 
 ### Testing Asset
 
-47. Define a test ball asset:
+53. Define a test ball asset:
     - RigidBody3D with sphere mesh, radius 4cm (0.04m).
     - `SphericalGrabPoint` component at centre.
     - Authored in `test_ball.tscn` for photobooth verification.
-48. The scene must remain discoverable and grabbable; physics is suspended on grab and
+54. The scene must remain discoverable and grabbable; physics is suspended on grab and
     restored on release.
 
 ## In Scope
@@ -283,7 +283,7 @@ Provide a grab execution system that:
   `Immovable` keeps override active to constrain hand to grab point).
 - Authored `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand` per grab point.
 - Authoring workflow for offsets by manual positioning on character hand.
-- IK integration via IKTargetStateProvider.
+- IK integration via IKTargetIntentProvider.
 - Object parenting via BoneAttachment3D.
 - Hand pose from grab point animation (left and right).
 - Physics state suspension on grab and restoration on release.

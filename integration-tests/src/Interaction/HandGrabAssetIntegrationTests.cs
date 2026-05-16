@@ -8,8 +8,8 @@ using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 using HandGrabTargetProvider = AlleyCat.IK.HandGrabTargetProvider;
-using IKTargetState = AlleyCat.IK.IKTargetState;
-using IKTargetStateProvider = AlleyCat.IK.IKTargetStateProvider;
+using IKTargetIntent = AlleyCat.IK.IKTargetIntent;
+using IKTargetIntentProvider = AlleyCat.IK.IKTargetIntentProvider;
 
 namespace AlleyCat.IntegrationTests.Interaction;
 
@@ -1033,10 +1033,10 @@ public sealed partial class HandGrabAssetIntegrationTests
         {
             Name = "GrabProvider"
         };
-        StaticIKTargetStateProvider defaultProvider = new()
+        StaticIKTargetIntentProvider defaultProvider = new()
         {
             Name = "DefaultProvider",
-            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(1.0f, 0.0f, 0.0f)), 0.25f),
+            TargetIntent = new IKTargetIntent(new Transform3D(Basis.Identity, new Vector3(1.0f, 0.0f, 0.0f)), 0.25f),
         };
         provider.DefaultProvider = defaultProvider;
         HandPoseBehaviour hand = new()
@@ -1117,10 +1117,10 @@ public sealed partial class HandGrabAssetIntegrationTests
             Name = "AnimationPlayer"
         };
         AnimationTree animationTree = CreateHandPoseAnimationTree();
-        StaticIKTargetStateProvider defaultProvider = new()
+        StaticIKTargetIntentProvider defaultProvider = new()
         {
             Name = "DefaultProvider",
-            TargetState = new IKTargetState(new Transform3D(Basis.Identity, new Vector3(1.0f, 0.0f, 0.0f)), 0.25f),
+            TargetIntent = new IKTargetIntent(new Transform3D(Basis.Identity, new Vector3(1.0f, 0.0f, 0.0f)), 0.25f),
         };
         provider.DefaultProvider = defaultProvider;
         HandPoseBehaviour hand = new()
@@ -1178,11 +1178,11 @@ public sealed partial class HandGrabAssetIntegrationTests
 
             Assert.Same(ball, hand.CurrentGrabbed);
             Assert.False(provider.IsGrabOverrideActive);
-            IKTargetState providerState = provider.GetTargetState();
-            Assert.Equal(defaultProvider.TargetState.DesiredInfluence, providerState.DesiredInfluence);
+            IKTargetIntent providerIntent = provider.GetTargetIntent();
+            Assert.Equal(defaultProvider.TargetIntent.DesiredInfluence, providerIntent.DesiredInfluence);
             Assert.True(
-                providerState.WorldTransform.Origin.DistanceTo(defaultProvider.TargetState.WorldTransform.Origin) <= PositionToleranceMetres,
-                $"Expected movable commit to clear directly to default target {defaultProvider.TargetState.WorldTransform.Origin}, observed {providerState.WorldTransform.Origin}.");
+                providerIntent.WorldTransform.Origin.DistanceTo(defaultProvider.TargetIntent.WorldTransform.Origin) <= PositionToleranceMetres,
+                $"Expected movable commit to clear directly to default target {defaultProvider.TargetIntent.WorldTransform.Origin}, observed {providerIntent.WorldTransform.Origin}.");
             Assert.True(ball.GetParent() == handAttachment);
             Assert.Same(grabPose, hand.CurrentPose);
             Assert.True(animationPlayer.HasAnimation(new StringName(grabPose.ResourceName)));
@@ -2125,10 +2125,10 @@ public sealed partial class HandGrabAssetIntegrationTests
         }
     }
 
-    private sealed partial class StaticIKTargetStateProvider : IKTargetStateProvider
+    private sealed partial class StaticIKTargetIntentProvider : IKTargetIntentProvider
     {
-        public IKTargetState TargetState { get; set; } = new(Transform3D.Identity, 0.0f);
+        public IKTargetIntent TargetIntent { get; set; } = new(Transform3D.Identity, 0.0f);
 
-        public override IKTargetState GetTargetState() => TargetState;
+        public override IKTargetIntent GetTargetIntent() => TargetIntent;
     }
 }

@@ -6,7 +6,7 @@ namespace AlleyCat.IK;
 /// IK target provider that can temporarily override a default hand target while retaining smooth provider-driven motion.
 /// </summary>
 [GlobalClass]
-public sealed partial class HandGrabTargetProvider : IKTargetStateProvider
+public sealed partial class HandGrabTargetProvider : IKTargetIntentProvider
 {
     private const float MinimumDeltaSeconds = 0.000001f;
     private Transform3D _currentTransform = Transform3D.Identity;
@@ -18,7 +18,7 @@ public sealed partial class HandGrabTargetProvider : IKTargetStateProvider
     /// Provider used when no grab override is active, usually the side's XR controller provider.
     /// </summary>
     [Export]
-    public IKTargetStateProvider? DefaultProvider
+    public IKTargetIntentProvider? DefaultProvider
     {
         get; set;
     }
@@ -79,8 +79,8 @@ public sealed partial class HandGrabTargetProvider : IKTargetStateProvider
     /// </summary>
     public void ClearGrabTargetImmediate()
     {
-        IKTargetState defaultState = GetDefaultState();
-        _currentTransform = Orthonormalise(defaultState.WorldTransform);
+        IKTargetIntent defaultIntent = GetDefaultIntent();
+        _currentTransform = Orthonormalise(defaultIntent.WorldTransform);
         _hasCurrentTransform = true;
         _lastTicksUsec = Time.GetTicksUsec();
         IsGrabOverrideActive = false;
@@ -88,40 +88,40 @@ public sealed partial class HandGrabTargetProvider : IKTargetStateProvider
     }
 
     /// <inheritdoc />
-    public override IKTargetState GetTargetState()
+    public override IKTargetIntent GetTargetIntent()
     {
-        IKTargetState defaultState = GetDefaultState();
+        IKTargetIntent defaultIntent = GetDefaultIntent();
         if (!IsGrabOverrideActive && !_returningToDefault)
         {
-            _currentTransform = Orthonormalise(defaultState.WorldTransform);
+            _currentTransform = Orthonormalise(defaultIntent.WorldTransform);
             _hasCurrentTransform = true;
             _lastTicksUsec = Time.GetTicksUsec();
-            return defaultState;
+            return defaultIntent;
         }
 
-        EnsureCurrentTransform(defaultState.WorldTransform);
+        EnsureCurrentTransform(defaultIntent.WorldTransform);
         float alpha = ComputeInterpolationAlpha();
-        Transform3D target = IsGrabOverrideActive ? GrabTarget : Orthonormalise(defaultState.WorldTransform);
+        Transform3D target = IsGrabOverrideActive ? GrabTarget : Orthonormalise(defaultIntent.WorldTransform);
         _currentTransform = Interpolate(_currentTransform, target, alpha);
 
         if (_returningToDefault && IsClose(_currentTransform, target))
         {
             _returningToDefault = false;
             _currentTransform = target;
-            return defaultState;
+            return defaultIntent;
         }
 
-        float influence = IsGrabOverrideActive ? Mathf.Max(defaultState.DesiredInfluence, GrabInfluence) : defaultState.DesiredInfluence;
-        return new IKTargetState(_currentTransform, influence);
+        float influence = IsGrabOverrideActive ? Mathf.Max(defaultIntent.DesiredInfluence, GrabInfluence) : defaultIntent.DesiredInfluence;
+        return new IKTargetIntent(_currentTransform, influence);
     }
 
-    private IKTargetState GetDefaultState()
+    private IKTargetIntent GetDefaultIntent()
         => DefaultProvider is not null && IsInstanceValid(DefaultProvider)
-            ? DefaultProvider.GetTargetState()
-            : new IKTargetState(_hasCurrentTransform ? _currentTransform : Transform3D.Identity, 0.0f);
+            ? DefaultProvider.GetTargetIntent()
+            : new IKTargetIntent(_hasCurrentTransform ? _currentTransform : Transform3D.Identity, 0.0f);
 
     private void EnsureCurrentTransform()
-        => EnsureCurrentTransform(GetDefaultState().WorldTransform);
+        => EnsureCurrentTransform(GetDefaultIntent().WorldTransform);
 
     private void EnsureCurrentTransform(Transform3D defaultTransform)
     {
