@@ -143,7 +143,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         controller.SetHandPose(LimbSide.Right, grabBall, weight: 0.4f, immediate: false);
         controller.Update(0.1);
         float weightedHalfwayBlend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle();
-        Assert.InRange(weightedHalfwayBlend, 0.18f, 0.22f);
+        Assert.InRange(weightedHalfwayBlend, 0.19f, 0.21f);
         controller.Update(0.1);
         Assert.InRange(tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle(), 0.39f, 0.41f);
         Assert.Same(grabBall, controller.CurrentRightHandPose);
@@ -152,6 +152,140 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
         Assert.Null(controller.CurrentLeftHandPose);
         Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle());
+    }
+
+    /// <summary>
+    /// Verifies clearing and switching poses settle at fixed-duration speed instead of asymptotically lingering.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void HandPoseController_ClearsAndSwitchesPosesWithinTransitionDuration()
+    {
+        Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
+        Animation alternateGrab = new()
+        {
+            ResourceName = "AlternateGrab",
+        };
+
+        AnimationTree tree = new()
+        {
+            TreeRoot = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(PoseStateMachineTreePath), exactMatch: false),
+        };
+
+        HandPoseController controller = new(tree)
+        {
+            TransitionDuration = 0.2f,
+        };
+
+        controller.SetHandPose(LimbSide.Left, grabBall, weight: 1f, immediate: true);
+        controller.ClearHandPose(LimbSide.Left);
+
+        AdvanceController(controller, 10, 0.02);
+
+        Assert.Null(controller.CurrentLeftHandPose);
+        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle());
+
+        controller.SetHandPose(LimbSide.Right, grabBall, weight: 1f, immediate: true);
+        controller.SetHandPose(LimbSide.Right, alternateGrab, weight: 1f, immediate: false);
+
+        AdvanceController(controller, 10, 0.02);
+
+        Assert.Same(alternateGrab, controller.CurrentRightHandPose);
+        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle());
+
+        AdvanceController(controller, 10, 0.02);
+
+        Assert.Equal(1f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle());
+
+        controller.SetHandPose(LimbSide.Left, grabBall, weight: 0.01f, immediate: true);
+        controller.ClearHandPose(LimbSide.Left);
+
+        AdvanceController(controller, 10, 0.02);
+
+        Assert.Null(controller.CurrentLeftHandPose);
+        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Left)).AsSingle());
+
+        controller.SetHandPose(LimbSide.Right, grabBall, weight: 0.01f, immediate: true);
+        controller.SetHandPose(LimbSide.Right, alternateGrab, weight: 1f, immediate: false);
+
+        AdvanceController(controller, 10, 0.02);
+
+        Assert.Same(alternateGrab, controller.CurrentRightHandPose);
+        Assert.Equal(0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle());
+    }
+
+    /// <summary>
+    /// Verifies a pose replacement activates as soon as fade-out reaches zero and uses remaining frame time to fade in.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void HandPoseController_SwitchingPoseActivatesPendingPoseInSameUpdateWhenFadeOutSettles()
+    {
+        Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
+        Animation alternateGrab = new()
+        {
+            ResourceName = "AlternateGrabSameUpdate",
+        };
+
+        AnimationTree tree = new()
+        {
+            TreeRoot = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(PoseStateMachineTreePath), exactMatch: false),
+        };
+
+        HandPoseController controller = new(tree)
+        {
+            TransitionDuration = 0.2f,
+        };
+
+        controller.SetHandPose(LimbSide.Right, grabBall, weight: 1f, immediate: true);
+        controller.SetHandPose(LimbSide.Right, alternateGrab, weight: 1f, immediate: false);
+
+        controller.Update(0.3);
+
+        Assert.Same(alternateGrab, controller.CurrentRightHandPose);
+        Assert.InRange(tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle(), 0.45f, 0.55f);
+    }
+
+    /// <summary>
+    /// Verifies reselecting the current pose during replacement fade-out cancels the pending replacement.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void HandPoseController_ReselectingCurrentPoseCancelsPendingReplacement()
+    {
+        Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
+        Animation alternateGrab = new()
+        {
+            ResourceName = "AlternateGrabCancelledPending",
+        };
+
+        AnimationTree tree = new()
+        {
+            TreeRoot = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(PoseStateMachineTreePath), exactMatch: false),
+        };
+
+        HandPoseController controller = new(tree)
+        {
+            TransitionDuration = 0.2f,
+        };
+
+        controller.SetHandPose(LimbSide.Right, grabBall, weight: 1f, immediate: true);
+        controller.SetHandPose(LimbSide.Right, alternateGrab, weight: 1f, immediate: false);
+        controller.Update(0.1);
+
+        controller.SetHandPose(LimbSide.Right, grabBall, weight: 1f, immediate: false);
+        AdvanceController(controller, 10, 0.02);
+
+        AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
+        AnimationNodeAnimation rightPoseNode = Assert.IsType<AnimationNodeAnimation>(
+            rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(LimbSide.Right)),
+            exactMatch: false);
+
+        Assert.Same(grabBall, controller.CurrentRightHandPose);
+        Assert.NotSame(alternateGrab, controller.CurrentRightHandPose);
+        Assert.Equal(new StringName("Grab-ball-40"), rightPoseNode.Animation);
+        Assert.NotEqual(new StringName("AlternateGrabCancelledPending"), rightPoseNode.Animation);
+        Assert.Equal(1f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle());
     }
 
     /// <summary>
@@ -368,6 +502,14 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
     private static float BasisDelta(Basis before, Basis after)
         => before.X.DistanceTo(after.X) + before.Y.DistanceTo(after.Y) + before.Z.DistanceTo(after.Z);
+
+    private static void AdvanceController(HandPoseController controller, int frameCount, double deltaSeconds)
+    {
+        for (int frame = 0; frame < frameCount; frame++)
+        {
+            controller.Update(deltaSeconds);
+        }
+    }
 
     private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
         => animationTree.Get(HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter()).As<AnimationNodeStateMachinePlayback>()

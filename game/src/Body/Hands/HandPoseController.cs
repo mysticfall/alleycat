@@ -8,6 +8,9 @@ namespace AlleyCat.Body.Hands;
 /// </summary>
 public sealed class HandPoseController
 {
+    private const float BlendSnapTolerance = 0.0001f;
+    private const float TimeSnapTolerance = 0.000001f;
+
     private static readonly ConditionalWeakTable<AnimationTree, HandPoseController> _controllersByTree = [];
 
     private readonly HandChannel _left = new(LimbSide.Left);
@@ -114,13 +117,15 @@ public sealed class HandPoseController
             channel.PendingPose = null;
             channel.TargetBlend = ResolveTargetBlend(channel);
             channel.CurrentBlend = channel.TargetBlend;
+            ResetTransition(channel);
             WriteChannel(channel);
             return;
         }
 
         if (ReferenceEquals(channel.CurrentPose, pose))
         {
-            channel.TargetBlend = ResolveTargetBlend(channel);
+            channel.PendingPose = null;
+            BeginTransition(channel, ResolveTargetBlend(channel));
             WriteChannel(channel);
             return;
         }
@@ -129,12 +134,12 @@ public sealed class HandPoseController
         {
             ApplyPoseNode(channel, pose);
             channel.CurrentPose = pose;
-            channel.TargetBlend = ResolveTargetBlend(channel);
+            BeginTransition(channel, ResolveTargetBlend(channel));
         }
         else
         {
             channel.PendingPose = pose;
-            channel.TargetBlend = 0f;
+            BeginTransition(channel, 0f);
         }
 
         WriteChannel(channel);
@@ -169,7 +174,18 @@ public sealed class HandPoseController
     {
         HandChannel channel = GetChannel(side);
         channel.TargetWeight = Mathf.Clamp(value, 0f, 1f);
-        channel.TargetBlend = ResolveTargetBlend(channel);
+        float targetBlend = channel.PendingPose is null ? ResolveTargetBlend(channel) : 0f;
+        if (TransitionDuration <= 0f)
+        {
+            channel.TargetBlend = targetBlend;
+            channel.CurrentBlend = targetBlend;
+            ResetTransition(channel);
+        }
+        else
+        {
+            BeginTransition(channel, targetBlend);
+        }
+
         WriteChannel(channel);
     }
 
@@ -177,6 +193,7 @@ public sealed class HandPoseController
     {
         channel.TargetWeight = 1f;
         channel.TargetBlend = 0f;
+        ResetTransition(channel);
         if (immediate)
         {
             channel.CurrentBlend = 0f;
@@ -188,24 +205,85 @@ public sealed class HandPoseController
 
     private void UpdateChannel(HandChannel channel, float delta)
     {
-        if (Mathf.IsEqualApprox(channel.CurrentBlend, channel.TargetBlend))
+        float remainingDelta = delta;
+        while (true)
         {
-            if (channel.PendingPose is not null || (channel.TargetPose is null && channel.CurrentPose is not null))
+            if (!IsBlendSettled(channel))
             {
-                ApplyPoseNode(channel, channel.PendingPose);
-                channel.CurrentPose = channel.PendingPose;
-                channel.PendingPose = null;
-                channel.TargetBlend = ResolveTargetBlend(channel);
+                AdvanceTransition(channel, remainingDelta, out remainingDelta);
             }
 
-            WriteChannel(channel);
+            if (!IsBlendSettled(channel))
+            {
+                break;
+            }
+
+            channel.CurrentBlend = channel.TargetBlend;
+            if (!TryActivateSettledPose(channel))
+            {
+                break;
+            }
+
+            if (remainingDelta <= 0f || IsBlendSettled(channel))
+            {
+                break;
+            }
+        }
+
+        WriteChannel(channel);
+    }
+
+    private static void AdvanceTransition(HandChannel channel, float delta, out float remainingDelta)
+    {
+        if (TransitionDurationIsInstant(channel))
+        {
+            channel.TransitionElapsed = 0f;
+            channel.CurrentBlend = channel.TargetBlend;
+            remainingDelta = delta;
             return;
         }
 
-        float transitionScale = Mathf.Max(channel.CurrentBlend, channel.TargetBlend);
-        float step = TransitionDuration <= 0f ? transitionScale : delta / TransitionDuration * transitionScale;
-        channel.CurrentBlend = Mathf.MoveToward(channel.CurrentBlend, channel.TargetBlend, step);
-        WriteChannel(channel);
+        float previousElapsed = channel.TransitionElapsed;
+        float remainingTransitionTime = channel.TransitionDuration - previousElapsed;
+        channel.TransitionElapsed = delta + TimeSnapTolerance >= remainingTransitionTime
+            ? channel.TransitionDuration
+            : previousElapsed + delta;
+        float progress = Mathf.Clamp(channel.TransitionElapsed / channel.TransitionDuration, 0f, 1f);
+        channel.CurrentBlend = channel.TransitionStartBlend + ((channel.TargetBlend - channel.TransitionStartBlend) * progress);
+        remainingDelta = Mathf.Max(0f, delta - remainingTransitionTime);
+    }
+
+    private bool TryActivateSettledPose(HandChannel channel)
+    {
+        if (channel.PendingPose is null && (channel.TargetPose is not null || channel.CurrentPose is null))
+        {
+            return false;
+        }
+
+        ApplyPoseNode(channel, channel.PendingPose);
+        channel.CurrentPose = channel.PendingPose;
+        channel.PendingPose = null;
+        BeginTransition(channel, ResolveTargetBlend(channel));
+        return true;
+    }
+
+    private static bool IsBlendSettled(HandChannel channel)
+        => Mathf.Abs(channel.CurrentBlend - channel.TargetBlend) <= BlendSnapTolerance;
+
+    private void BeginTransition(HandChannel channel, float targetBlend)
+    {
+        channel.TransitionStartBlend = channel.CurrentBlend;
+        channel.TransitionElapsed = 0f;
+        channel.TargetBlend = targetBlend;
+        channel.TransitionDuration = Math.Max(0f, TransitionDuration);
+    }
+
+    private static bool TransitionDurationIsInstant(HandChannel channel) => channel.TransitionDuration <= 0f;
+
+    private static void ResetTransition(HandChannel channel)
+    {
+        channel.TransitionStartBlend = channel.CurrentBlend;
+        channel.TransitionElapsed = 0f;
     }
 
     private void WriteChannel(HandChannel channel) => AnimationTree.Set(HandPoseAnimationTreePaths.GetHandBlendParameter(channel.Side), channel.CurrentBlend);
@@ -301,6 +379,21 @@ public sealed class HandPoseController
         }
 
         public float TargetBlend
+        {
+            get; set;
+        }
+
+        public float TransitionStartBlend
+        {
+            get; set;
+        }
+
+        public float TransitionElapsed
+        {
+            get; set;
+        }
+
+        public float TransitionDuration
         {
             get; set;
         }
