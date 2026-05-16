@@ -36,4 +36,5 @@ ReachDistanceMetres = 0.12
 PalmFacingMinimumDot = -1.0
 GrabAnimation = ExtResource("3_haxrv")
 GrabPointPositionOffsetFromHand = Vector3(0.001, 0.071, 0.049)
+GrabPointRotationOffsetFromHand = Vector3(-0.00048048052, 0.011107354, -1.5504136)
 metadata/_custom_type_script = "uid://cbwik5eyyjmn5"

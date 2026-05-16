@@ -63,7 +63,8 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
     /// Gets or sets the authored Euler rotation offset from the hand attachment to this grab point once held, in radians.
     /// </summary>
     /// <remarks>
-    /// The rotation is combined with the approach rotation so spherical grabs do not force a canonical hand orientation.
+    /// The rotation is preserved in the returned candidate for held-object composition, but it does not alter the
+    /// spherical hand target rotation after the palm-facing eligibility check succeeds.
     /// </remarks>
     [Export]
     public Vector3 GrabPointRotationOffsetFromHand { get; set; } = Vector3.Zero;
@@ -96,11 +97,10 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
             return null;
         }
 
-        Transform3D grabPointOffsetFromHand = GrabPointCandidate.ComposeGrabPointOffsetFromHand(
-            GrabPointPositionOffsetFromHand,
-            GrabPointRotationOffsetFromHand);
-        Transform3D approachHandAtCentre = new(handTransform.Basis.Orthonormalized(), centre);
-        Transform3D handTarget = approachHandAtCentre * grabPointOffsetFromHand.AffineInverse();
+        Basis handBasis = handTransform.Basis.Orthonormalized();
+        Basis grabPointRotationOffset = Basis.FromEuler(GrabPointRotationOffsetFromHand).Orthonormalized();
+        Transform3D handTarget = new(handBasis, centre - (handBasis * GrabPointPositionOffsetFromHand));
+        Transform3D selectedGrabPointTransform = new((handBasis * grabPointRotationOffset).Orthonormalized(), centre);
 
         return new GrabPointCandidate(
             this,
@@ -108,7 +108,7 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
             GrabAnimation,
             handSide,
             handTransform,
-            GlobalTransform,
+            selectedGrabPointTransform,
             GrabPointPositionOffsetFromHand,
             GrabPointRotationOffsetFromHand,
             Mathf.Sqrt(distanceSquared));

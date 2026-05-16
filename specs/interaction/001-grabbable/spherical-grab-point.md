@@ -29,7 +29,7 @@ Provide a grab point that:
   orientation relative to the approach direction.
 - Validates reach distance and palm facing angle.
 - Exposes an authored `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`
-  so items sit naturally in the hand.
+  so items sit naturally in the hand without spherical rotation offsets changing the hand target rotation.
 - Supports physical RigidBody3D objects with physics suspended while held.
 
 ## User Requirements
@@ -43,8 +43,10 @@ Provide a grab point that:
    preserved so items do not snap to a canonical orientation regardless of
    how the player approached.
 4. Grabbables support separate authored `GrabPointPositionOffsetFromHand`
-   and `GrabPointRotationOffsetFromHand` to correct how items sit in the hand
-   for a given animation or grab point.
+    and `GrabPointRotationOffsetFromHand` to correct how items sit in the hand
+    for a given animation or grab point. For spherical grabs, the rotation offset
+    affects held-object composition only; it must not make the hand rotate after
+    palm-facing acquisition has already succeeded.
 5. Authors can select a `SphericalGrabPoint` node in the Godot editor and see
    visual cues for the centre or origin, reach sphere, palm-facing direction
    cue, and authored hand offset or frame to tune the grab point more easily.
@@ -54,18 +56,21 @@ Provide a grab point that:
 1. `SphericalGrabPoint` extends `Marker3D` and implements `IGrabPoint`; its
    grab centre is `GlobalTransform.Origin`.
 2. `SphericalGrabPoint.GetGrabPoint` places the effective grab point
-    at its own `GlobalTransform.Origin`, enabling any approach direction.
-    When position or rotation offsets are authored, `HandTarget` differs from
-    the sphere centre while preserving approach-relative basis.
+     at its own `GlobalTransform.Origin`, enabling any approach direction.
+     When a position offset is authored, `HandTarget.Origin` differs from the
+     sphere centre while preserving the hand's approach basis.
 3. `HandTarget.Basis` is derived from the querying hand's current transform;
-    the component does NOT snap to a canonical orientation. The approach
-    direction and palm orientation are preserved through the hand's transform.
+     the component does NOT snap to a canonical orientation. The approach
+     direction and palm orientation are preserved through the hand's transform,
+     and `GrabPointRotationOffsetFromHand` does not alter `HandTarget.Basis`.
 4. The candidate's `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`
-    (authored from hand attachment space to grab point) can optionally correct how the item
-    sits in the hand. These are applied on commit as a combined transform:
-    position from the vector, rotation from the euler angles. Approach-relative
-    rotation is preserved because the hand-target basis is derived from the
-    querying hand's transform at query time.
+     (authored from hand attachment space to grab point) can optionally correct how the item
+     sits in the hand. These are retained for commit as a combined transform:
+     position from the vector, rotation from the euler angles. Spherical hand
+     target acquisition uses the position offset to keep the grab point at the
+     sphere centre, but folds the rotation offset into the candidate grab-point
+     frame so the inverse offset composition still reconstructs a hand target
+     with the querying hand's approach basis.
 5. Expose the following as authored configuration:
    - `ReachDistanceMetres` — maximum hand-to-centre distance for eligibility.
    - `PalmLocalDirection` — hand-local palm axis (exported, tunable, defaults
@@ -77,7 +82,8 @@ Provide a grab point that:
      execution system.
    - `GrabPointRotationOffsetFromHand: Vector3` — authored rotation offset (Euler
      radians) from hand attachment to grab point when held. Defaults to zero.
-     Combined with position to form the effective hand-relative grab-point transform.
+     Combined with position for held-object composition, but ignored as a hand-target
+     rotation driver by spherical acquisition.
 6. `SphericalGrabPoint.GetGrabPoint` rejects (returns null) when:
    - `GrabAnimation` is null.
    - `ReachDistanceMetres` is not positive.
@@ -120,8 +126,8 @@ Provide a grab point that:
 - `SphericalGrabPoint` extending `Marker3D`.
 - `IGrabPoint` implementation with reach and angle validation.
 - Authored configuration via exported properties.
-- Approach rotation preserved via hand transform basis (offset combined from
-  separate position and rotation).
+- Approach rotation preserved via hand transform basis. Authored rotation offset is
+  retained for held-item composition without rotating the spherical hand target.
 - Separate `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`
   authoring for held-item correction.
 - Rejection conditions for invalid configuration or candidate state.
@@ -147,13 +153,14 @@ Provide a grab point that:
 |    |                   | approach rotation is preserved. |
 | 4  | User              | Separate `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand` |
 |    |                   | enable per-animation or per-grab-point correction so items sit naturally in the |
-|    |                   | hand. |
+|    |                   | hand without spherical rotation offsets adding hand rotation after acquisition. |
 | 5  | Technical         | `SphericalGrabPoint` extends `Marker3D` and implements `IGrabPoint`, placing |
 |    |                   | the effective grab point at its own `GlobalTransform.Origin`. |
 | 6  | Technical         | `HandTarget.Basis` is derived from the querying hand's transform, not snapped |
-|    |                   | to a canonical orientation. |
+|    |                   | to a canonical orientation or altered by `GrabPointRotationOffsetFromHand`. |
 | 7  | Technical         | Position and rotation offsets are authored separately and combined on commit |
-|    |                   | to form the effective hand-relative grab-point transform. |
+|    |                   | to form the effective hand-relative grab-point transform; spherical acquisition |
+|    |                   | uses the position offset for `HandTarget` placement while preserving hand basis. |
 | 8  | Technical         | Exported properties exist for `ReachDistanceMetres`, `PalmLocalDirection`, |
 |    |                   | `PalmFacingMinimumDot`, `GrabAnimation`, `GrabPointPositionOffsetFromHand`, |
 |    |                   | and `GrabPointRotationOffsetFromHand`. |

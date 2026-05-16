@@ -19,11 +19,13 @@ namespace AlleyCat.IntegrationTests.Interaction;
 public sealed partial class HandGrabAssetIntegrationTests
 {
     private const float PositionToleranceMetres = 0.001f;
+    private const float BasisTolerance = 0.001f;
     private const float TestBallReachDistanceMetres = 0.12f;
     private const float TestPipeVisualHeightMetres = 0.5f;
     private const float TestPipeGrabLengthMetres = 0.4f;
     private const float TestPipeReachDistanceMetres = 0.08f;
     private static readonly Vector3 _testBallGrabPositionOffsetFromHand = new(0.001f, 0.071f, 0.049f);
+    private static readonly Vector3 _testBallGrabRotationOffsetFromHand = new(-0.00048048052f, 0.011107354f, -1.5504136f);
     private static readonly StringName _pendingGrabGroupName = new("pending_grab_test_grabbable");
 
     /// <summary>
@@ -130,7 +132,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             Vector3 grabPointPositionOffsetFromHand = grabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3();
             Vector3 grabPointRotationOffsetFromHand = grabPoint.Get("GrabPointRotationOffsetFromHand").AsVector3();
             Assert.Equal(_testBallGrabPositionOffsetFromHand, grabPointPositionOffsetFromHand);
-            Assert.Equal(Vector3.Zero, grabPointRotationOffsetFromHand);
+            Assert.Equal(_testBallGrabRotationOffsetFromHand, grabPointRotationOffsetFromHand);
         }
         finally
         {
@@ -162,7 +164,7 @@ public sealed partial class HandGrabAssetIntegrationTests
                 grabPointPositionOffsetFromHand.Length() > PositionToleranceMetres,
                 "Expected the authored test ball to carry a non-identity hand target offset.");
             Assert.Equal(_testBallGrabPositionOffsetFromHand, grabPointPositionOffsetFromHand);
-            Assert.Equal(Vector3.Zero, grabPointRotationOffsetFromHand);
+            Assert.Equal(_testBallGrabRotationOffsetFromHand, grabPointRotationOffsetFromHand);
             SphericalGrabPoint eligibilityProbe = new()
             {
                 Name = "TestBallSphericalGrabPointEligibilityProbe",
@@ -189,12 +191,13 @@ public sealed partial class HandGrabAssetIntegrationTests
             Assert.True(
                 candidate.HandTarget.Origin.DistanceTo(assetGrabPoint.GlobalPosition) > PositionToleranceMetres,
                 $"Expected offset hand target away from ball centre {assetGrabPoint.GlobalPosition}, observed {candidate.HandTarget.Origin}.");
+            AssertBasisApproximatelyEqual(handTransform.Basis, candidate.HandTarget.Basis);
             Transform3D effectiveGrabPoint = candidate.HandTarget * candidate.GrabPointOffsetFromHand;
             Assert.True(
                 effectiveGrabPoint.Origin.DistanceTo(assetGrabPoint.GlobalPosition) <= PositionToleranceMetres,
                 $"Expected effective grab point to stay aligned to ball centre {assetGrabPoint.GlobalPosition}, observed {effectiveGrabPoint.Origin}.");
             Assert.Equal(_testBallGrabPositionOffsetFromHand, candidate.GrabPointPositionOffsetFromHand);
-            Assert.Equal(Vector3.Zero, candidate.GrabPointRotationOffsetFromHand);
+            Assert.Equal(_testBallGrabRotationOffsetFromHand, candidate.GrabPointRotationOffsetFromHand);
         }
         finally
         {
@@ -1731,6 +1734,19 @@ public sealed partial class HandGrabAssetIntegrationTests
         Assert.True(
             actual.Basis.Z.DistanceTo(expected.Basis.Z) <= tolerance,
             $"Expected transform Z basis {expected.Basis.Z}, observed {actual.Basis.Z}.");
+    }
+
+    private static void AssertBasisApproximatelyEqual(Basis expected, Basis actual)
+    {
+        Assert.True(
+            actual.X.DistanceTo(expected.X) <= BasisTolerance,
+            $"Expected basis X axis {expected.X}, observed {actual.X}.");
+        Assert.True(
+            actual.Y.DistanceTo(expected.Y) <= BasisTolerance,
+            $"Expected basis Y axis {expected.Y}, observed {actual.Y}.");
+        Assert.True(
+            actual.Z.DistanceTo(expected.Z) <= BasisTolerance,
+            $"Expected basis Z axis {expected.Z}, observed {actual.Z}.");
     }
 
     private static void AssertBasisAngularDistanceLessThan(Basis expected, Basis actual, float maxRadians, string context)
