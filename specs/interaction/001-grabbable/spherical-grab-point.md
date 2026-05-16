@@ -35,16 +35,19 @@ Provide a grab point that:
 ## User Requirements
 
 1. Spherical centre-origin grab points are approachable from any hand
-   direction and yield a valid candidate when within centre reach and the
+   direction and yield a valid candidate when the hand is within reach and the
    palm side faces the centre.
 2. Characters receive a valid grab candidate only when both reach and
    palm-facing conditions are satisfied; otherwise the candidate is null.
 3. The hand orientation at grab time (including approach direction) is
-   preserved so items do not snap to a canonical orientation regardless
-   of how the player approached.
+   preserved so items do not snap to a canonical orientation regardless of
+   how the player approached.
 4. Grabbables support separate authored `GrabPointPositionOffsetFromHand`
    and `GrabPointRotationOffsetFromHand` to correct how items sit in the hand
    for a given animation or grab point.
+5. Authors can select a `SphericalGrabPoint` node in the Godot editor and see
+   visual cues for the centre or origin, reach sphere, palm-facing direction
+   cue, and authored hand offset or frame to tune the grab point more easily.
 
 ## Technical Requirements
 
@@ -84,6 +87,33 @@ Provide a grab point that:
 7. Distance check is performed first, then palm-facing check; null is returned
     on the first failure.
 8. The candidate returned includes the authored position and rotation offsets.
+9. `SphericalGrabPoint` must provide editor-only debug visualisation that draws
+   visual cues to assist with authoring and tuning. Visualisation must be
+   implemented using Godot editor-only drawing mechanisms (such as
+   `_Draw` in a `EditorNode3DGizmo` or `EditorNode3DGizmoPlugin`, or
+   `draw_*` methods invoked only in the editor via `@tool` or editor-conditional
+   checks) that do not execute at runtime.
+10. Visualisation must be scoped to the selected node by default, drawing only
+    when the `SphericalGrabPoint` node is currently selected in the Godot editor.
+    If the Godot editor API cannot guarantee strict selected-only drawing in all
+    contexts (for example, gizmo drawing that persists regardless of selection),
+    then unselected drawing must be absent or unobtrusive, and the selected state
+    must provide the full useful authoring view.
+11. Visualisation must not affect runtime behaviour in any way: it must not
+    modify the node's transform, add runtime children or meshes, affect scene
+    semantics, influence physics or collision, impact grab eligibility checks, or
+    persist to saved scenes. The visual cues exist purely for the author's
+    editor workflow.
+12. The debug visual cues must include at minimum:
+    - A centre or origin marker at the spherical grab point centre.
+    - A reach sphere or wire sphere using `ReachDistanceMetres` as the radius,
+      centred on the grab point, showing the acquisition volume.
+    - A palm-facing direction cue derived from `PalmLocalDirection` as a
+      hand-local preview or hint (the exact runtime palm-facing still depends
+      on the querying hand transform at grab time).
+    - An authored hand offset vector or frame derived from
+      `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`,
+      shown at the marker centre or a representative grab point.
 
 ## In Scope
 
@@ -133,6 +163,23 @@ Provide a grab point that:
 |    |                   | has zero length, or palm dot falls below `PalmFacingMinimumDot`. |
 | 11 | Technical         | Distance check precedes palm-facing check; null is returned on first failure. |
 | 12 | Technical         | Candidate includes the authored position and rotation offsets. |
+| 13 | User              | Selecting a `SphericalGrabPoint` node in the Godot editor displays visual |
+|    |                   | cues for the centre, reach sphere, palm-facing direction, and authored |
+|    |                   | hand offset, enabling easier verification and tuning. |
+| 14 | Technical         | Visualisation is implemented using editor-only drawing mechanisms that do |
+|    |                   | not execute at runtime, using `@tool` or editor-conditional code paths. |
+| 15 | Technical         | Visualisation draws when the `SphericalGrabPoint` node is selected; if the |
+|    |                   | Godot editor API cannot guarantee strict selected-only drawing, unselected |
+|    |                   | drawing is absent or unobtrusive, and selected state provides the full |
+|    |                   | authoring view. |
+| 16 | Technical         | Visualisation does not modify node transforms, add runtime children or meshes, |
+|    |                   | affect scene semantics, influence physics or grab eligibility, or persist |
+|    |                   | to saved scenes; it exists purely as an author-time debugging aid. |
+| 17 | Technical         | Visual cues include: centre or origin marker at the grab point centre; reach |
+|    |                   | sphere using ReachDistanceMetres as radius; palm-facing direction cue |
+|    |                   | derived from PalmLocalDirection; authored hand offset vector or frame at the |
+|    |                   | marker centre derived from GrabPointPositionOffsetFromHand and |
+|    |                   | GrabPointRotationOffsetFromHand. |
 
 ## References
 

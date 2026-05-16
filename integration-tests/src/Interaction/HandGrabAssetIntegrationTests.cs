@@ -20,6 +20,9 @@ public sealed partial class HandGrabAssetIntegrationTests
 {
     private const float PositionToleranceMetres = 0.001f;
     private const float TestBallReachDistanceMetres = 0.12f;
+    private const float TestPipeVisualHeightMetres = 0.5f;
+    private const float TestPipeGrabLengthMetres = 0.4f;
+    private const float TestPipeReachDistanceMetres = 0.08f;
     private static readonly Vector3 _testBallGrabPositionOffsetFromHand = new(0.001f, 0.071f, 0.049f);
     private static readonly StringName _pendingGrabGroupName = new("pending_grab_test_grabbable");
 
@@ -37,6 +40,61 @@ public sealed partial class HandGrabAssetIntegrationTests
         {
             Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female_export/GeneralSkeleton/RightHand"));
             Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female_export/GeneralSkeleton/LeftHand"));
+        }
+        finally
+        {
+            root.Free();
+        }
+    }
+
+    /// <summary>
+    /// Verifies the test pipe asset has the required dimensions and centre cylindrical grab point.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void TestPipe_HasFiftyCentimetreByTwoCentimetreCylinderAndCylindricalGrabPoint()
+    {
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        Node root = scene.Instantiate();
+
+        try
+        {
+            Assert.Equal(typeof(GrabbableRigidBody3D).FullName, root.GetType().FullName);
+            Node3D root3D = Assert.IsAssignableFrom<Node3D>(root);
+            AssertTransformApproximatelyEqual(Transform3D.Identity, root3D.Transform, PositionToleranceMetres);
+            Assert.Equal("uid://d0aaosrbv6dgv", root.GetMeta("_custom_type_script").AsString());
+            Assert.Contains(root.GetType().GetInterfaces(), static iface => iface.Name == nameof(IGrabbable));
+            Assert.True(root.IsInGroup("grabbable"));
+            MeshInstance3D meshInstance = root.GetNode<MeshInstance3D>("Mesh");
+            AssertTransformApproximatelyEqual(Transform3D.Identity, meshInstance.Transform, PositionToleranceMetres);
+            CylinderMesh cylinderMesh = Assert.IsType<CylinderMesh>(meshInstance.Mesh);
+            Assert.Equal(TestPipeVisualHeightMetres, cylinderMesh.Height, 3);
+            Assert.Equal(0.01f, cylinderMesh.TopRadius, 3);
+            Assert.Equal(0.01f, cylinderMesh.BottomRadius, 3);
+            CollisionShape3D collisionShape = root.GetNode<CollisionShape3D>("CollisionShape3D");
+            AssertTransformApproximatelyEqual(Transform3D.Identity, collisionShape.Transform, PositionToleranceMetres);
+            CylinderShape3D cylinderShape = Assert.IsType<CylinderShape3D>(collisionShape.Shape);
+            Assert.Equal(TestPipeVisualHeightMetres, cylinderShape.Height, 3);
+            Assert.Equal(0.01f, cylinderShape.Radius, 3);
+            Node3D grabPoint = root.GetNode<Node3D>("CylindricalGrabPoint");
+            AssertTransformApproximatelyEqual(Transform3D.Identity, grabPoint.Transform, PositionToleranceMetres);
+            Assert.Equal(typeof(CylindricalGrabPoint).FullName, grabPoint.GetType().FullName);
+            Assert.Equal("uid://cfbkq153qba1t", grabPoint.GetMeta("_custom_type_script").AsString());
+            Assert.Equal(TestPipeGrabLengthMetres, grabPoint.Get("LengthMetres").AsSingle(), 3);
+            Assert.Equal(0.05f, (TestPipeVisualHeightMetres - TestPipeGrabLengthMetres) * 0.5f, 3);
+            Assert.Equal(TestPipeReachDistanceMetres, grabPoint.Get("ReachDistanceMetres").AsSingle(), 3);
+            Assert.Equal(-1.0f, grabPoint.Get("PalmFacingMinimumDot").AsSingle(), 3);
+            Vector3 grabPointPositionOffsetFromHand = grabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3();
+            Vector3 canonicalOffsetWorld = new Basis(Vector3.Up, Vector3.Right, Vector3.Forward).Orthonormalized()
+                * grabPointPositionOffsetFromHand;
+            Assert.True(
+                Mathf.Abs(canonicalOffsetWorld.Dot(Vector3.Up)) <= 0.005f,
+                $"Expected test pipe offset not to bake a half-length displacement along the selected cylinder axis; observed {grabPointPositionOffsetFromHand}.");
+            Assert.True(
+                Mathf.Abs(canonicalOffsetWorld.Dot(Vector3.Up) - (TestPipeGrabLengthMetres * 0.5f)) > TestPipeGrabLengthMetres * 0.4f,
+                $"Expected selected-axis offset to stay far from the pipe half-length {TestPipeGrabLengthMetres * 0.5f}, observed {canonicalOffsetWorld.Dot(Vector3.Up)}.");
+            Animation grabAnimation = Assert.IsType<Animation>(grabPoint.Get("GrabAnimation").AsGodotObject(), exactMatch: false);
+            Assert.Equal("Grab-pipe-10", grabAnimation.ResourceName);
         }
         finally
         {
@@ -126,6 +184,9 @@ public sealed partial class HandGrabAssetIntegrationTests
             Assert.NotNull(candidate);
             Assert.Same(eligibilityProbe, candidate.Source);
             Assert.True(
+                Mathf.Abs(candidate.AcquisitionDistance - TestBallReachDistanceMetres) <= PositionToleranceMetres,
+                $"Expected spherical asset acquisition distance to remain hand-to-centre, observed {candidate.AcquisitionDistance}.");
+            Assert.True(
                 candidate.HandTarget.Origin.DistanceTo(assetGrabPoint.GlobalPosition) > PositionToleranceMetres,
                 $"Expected offset hand target away from ball centre {assetGrabPoint.GlobalPosition}, observed {candidate.HandTarget.Origin}.");
             Transform3D effectiveGrabPoint = candidate.HandTarget * candidate.GrabPointOffsetFromHand;
@@ -134,6 +195,301 @@ public sealed partial class HandGrabAssetIntegrationTests
                 $"Expected effective grab point to stay aligned to ball centre {assetGrabPoint.GlobalPosition}, observed {effectiveGrabPoint.Origin}.");
             Assert.Equal(_testBallGrabPositionOffsetFromHand, candidate.GrabPointPositionOffsetFromHand);
             Assert.Equal(Vector3.Zero, candidate.GrabPointRotationOffsetFromHand);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the authored physical test pipe yields a candidate along its local-Y grab segment.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task TestPipe_CylindricalGrabPointAcceptsClosestPointAlongLength()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        Node3D root = scene.Instantiate<Node3D>();
+
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Node3D assetGrabPoint = root.GetNode<Node3D>("CylindricalGrabPoint");
+            CylindricalGrabPoint grabPoint = new()
+            {
+                Name = "TestPipeCylindricalGrabPointEligibilityProbe",
+                LengthMetres = assetGrabPoint.Get("LengthMetres").AsSingle(),
+                ReachDistanceMetres = assetGrabPoint.Get("ReachDistanceMetres").AsSingle(),
+                PalmFacingMinimumDot = assetGrabPoint.Get("PalmFacingMinimumDot").AsSingle(),
+                PalmLocalDirection = assetGrabPoint.Get("PalmLocalDirection").AsVector3(),
+                GrabAnimation = Assert.IsType<Animation>(assetGrabPoint.Get("GrabAnimation").AsGodotObject(), exactMatch: false),
+                GrabPointPositionOffsetFromHand = assetGrabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3(),
+                GrabPointRotationOffsetFromHand = assetGrabPoint.Get("GrabPointRotationOffsetFromHand").AsVector3(),
+            };
+            root.AddChild(grabPoint);
+            grabPoint.GlobalTransform = assetGrabPoint.GlobalTransform;
+            Basis palmFacingPipeAxisBasis = new(Vector3.Up, Vector3.Right, Vector3.Forward);
+            Vector3 expectedClosestPoint = grabPoint.GlobalPosition + new Vector3(0.0f, 0.15f, 0.0f);
+            Vector3 authoredGripOffsetWorld = palmFacingPipeAxisBasis.Orthonormalized()
+                * grabPoint.GrabPointPositionOffsetFromHand;
+            Vector3 rawHandOrigin = expectedClosestPoint + new Vector3(0.005f, 0.0f, 0.0f);
+            Assert.True(
+                rawHandOrigin.DistanceTo(expectedClosestPoint) <= grabPoint.ReachDistanceMetres,
+                "Expected the asset probe to model a real hand positioned on the pipe, within reach by raw origin.");
+            Assert.True(
+                Mathf.Abs(authoredGripOffsetWorld.Dot(Vector3.Up)) <= 0.005f,
+                $"Expected the authored pipe grip offset not to include a fixed selected-axis displacement, observed {authoredGripOffsetWorld}.");
+            Transform3D handTransform = new(
+                palmFacingPipeAxisBasis,
+                rawHandOrigin);
+
+            GrabPointCandidate? candidate = grabPoint.GetGrabPoint(LimbSide.Right, handTransform);
+
+            Assert.NotNull(candidate);
+            Assert.Same(grabPoint, candidate.Source);
+            Assert.Equal(LimbSide.Right, candidate.HandSide);
+            Assert.True(
+                candidate.GrabPointTransform.Origin.DistanceTo(expectedClosestPoint) <= PositionToleranceMetres,
+                $"Expected test pipe selected grab point on the closest point along the pipe, observed {candidate.GrabPointTransform.Origin}.");
+            Assert.True(
+                Mathf.Abs(candidate.AcquisitionDistance - rawHandOrigin.DistanceTo(expectedClosestPoint)) <= PositionToleranceMetres,
+                $"Expected test pipe acquisition distance from the accepted raw hand reference, observed {candidate.AcquisitionDistance}.");
+            Transform3D effectiveGrabPoint = candidate.HandTarget * candidate.GrabPointOffsetFromHand;
+            Assert.True(
+                effectiveGrabPoint.Origin.DistanceTo(expectedClosestPoint) <= PositionToleranceMetres,
+                $"Expected offset composition to recover the selected point along the pipe, observed {effectiveGrabPoint.Origin}.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the authored test pipe's normal overhand approach does not preserve the obsolete half-turn calibration.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task TestPipe_NormalOverhandCandidateDoesNotRollHandAwayFromQueryBasisWhenCylinderAxisIsInverted()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        Node3D authoredPipe = scene.Instantiate<Node3D>();
+        Node3D authoredGrabPoint = authoredPipe.GetNode<Node3D>("CylindricalGrabPoint");
+        GrabbableNode pipe = CreateRuntimePipe(Vector3.Zero);
+        CylindricalGrabPoint grabPoint = pipe.GetNode<CylindricalGrabPoint>("CylindricalGrabPoint");
+        grabPoint.LengthMetres = authoredGrabPoint.Get("LengthMetres").AsSingle();
+        grabPoint.ReachDistanceMetres = authoredGrabPoint.Get("ReachDistanceMetres").AsSingle();
+        grabPoint.SnapDistanceMetres = authoredGrabPoint.Get("SnapDistanceMetres").AsSingle();
+        grabPoint.PalmFacingMinimumDot = authoredGrabPoint.Get("PalmFacingMinimumDot").AsSingle();
+        grabPoint.PalmLocalDirection = authoredGrabPoint.Get("PalmLocalDirection").AsVector3();
+        grabPoint.GrabAnimation = Assert.IsType<Animation>(authoredGrabPoint.Get("GrabAnimation").AsGodotObject(), exactMatch: false);
+        grabPoint.GrabPointPositionOffsetFromHand = authoredGrabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3();
+        grabPoint.GrabPointRotationOffsetFromHand = authoredGrabPoint.Get("GrabPointRotationOffsetFromHand").AsVector3();
+        authoredPipe.Free();
+
+        sceneTree.Root.AddChild(pipe);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Basis invertedCylinderAxisBasis = Basis.FromEuler(new Vector3(0.0f, 0.0f, Mathf.Pi)).Orthonormalized();
+            pipe.GlobalTransform = new Transform3D(invertedCylinderAxisBasis, Vector3.Zero);
+            pipe.ForceUpdateTransform();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Node3D assetGrabPoint = pipe.GetNode<Node3D>("CylindricalGrabPoint");
+            Basis normalOverhandBasis = new Basis(Vector3.Up, Vector3.Right, Vector3.Forward).Orthonormalized();
+            Transform3D queryHand = new(
+                normalOverhandBasis,
+                assetGrabPoint.GlobalPosition + new Vector3(0.005f, 0.0f, 0.0f));
+
+            object? reflectedCandidate = InvokeGrabPointQuery(assetGrabPoint, LimbSide.Right, queryHand);
+
+            Assert.NotNull(reflectedCandidate);
+            Transform3D handTarget = GetCandidateProperty<Transform3D>(reflectedCandidate, nameof(GrabPointCandidate.HandTarget));
+            Transform3D providerTarget = handTarget;
+            AssertBasisAngularDistanceLessThan(queryHand.Basis, handTarget.Basis, 0.05f, "candidate hand target");
+            AssertBasisAngularDistanceLessThan(queryHand.Basis, providerTarget.Basis, 0.05f, "provider target");
+            AssertNoPiRollAroundAxis(queryHand.Basis, handTarget.Basis, queryHand.Basis.Y.Normalized(), "candidate hand target");
+        }
+        finally
+        {
+            pipe.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a real authored pipe pending grab commits at the provider target and applies the pipe grab pose.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task TestPipe_PendingGrabCommitsAtProviderTargetAndAppliesGrabPipePose()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "TestPipePendingGrabCommitRoot"
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider"
+        };
+        AnimationPlayer animationPlayer = new()
+        {
+            Name = "AnimationPlayer"
+        };
+        AnimationTree animationTree = CreateHandPoseAnimationTree();
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            GrabTargetProvider = provider,
+            AnimationTree = animationTree,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.5f,
+            GrabCommitDistanceMetres = 0.02f,
+        };
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        Node3D authoredPipe = scene.Instantiate<Node3D>();
+        Node3D authoredGrabPoint = authoredPipe.GetNode<Node3D>("CylindricalGrabPoint");
+        GrabbableNode pipe = CreateRuntimePipe(Vector3.Zero);
+        CylindricalGrabPoint grabPoint = pipe.GetNode<CylindricalGrabPoint>("CylindricalGrabPoint");
+        grabPoint.LengthMetres = authoredGrabPoint.Get("LengthMetres").AsSingle();
+        grabPoint.ReachDistanceMetres = authoredGrabPoint.Get("ReachDistanceMetres").AsSingle();
+        grabPoint.SnapDistanceMetres = authoredGrabPoint.Get("SnapDistanceMetres").AsSingle();
+        grabPoint.PalmFacingMinimumDot = authoredGrabPoint.Get("PalmFacingMinimumDot").AsSingle();
+        grabPoint.PalmLocalDirection = authoredGrabPoint.Get("PalmLocalDirection").AsVector3();
+        grabPoint.GrabAnimation = Assert.IsType<Animation>(authoredGrabPoint.Get("GrabAnimation").AsGodotObject(), exactMatch: false);
+        grabPoint.GrabPointPositionOffsetFromHand = authoredGrabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3();
+        grabPoint.GrabPointRotationOffsetFromHand = authoredGrabPoint.Get("GrabPointRotationOffsetFromHand").AsVector3();
+        authoredPipe.Free();
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(animationPlayer);
+        root.AddChild(animationTree);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(pipe);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        pipe.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Node3D assetGrabPoint = pipe.GetNode<Node3D>("CylindricalGrabPoint");
+            Basis invertedCylinderAxisBasis = Basis.FromEuler(new Vector3(0.0f, 0.0f, Mathf.Pi)).Orthonormalized();
+            Basis normalOverhandBasis = new Basis(Vector3.Up, Vector3.Right, Vector3.Forward).Orthonormalized();
+            pipe.GlobalTransform = new Transform3D(invertedCylinderAxisBasis, Vector3.Zero);
+            pipe.ForceUpdateTransform();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            Transform3D queryHand = new(
+                normalOverhandBasis,
+                assetGrabPoint.GlobalPosition + new Vector3(0.005f, 0.0f, 0.0f));
+            handTarget.GlobalTransform = queryHand;
+            SetHandAttachmentTransform(skeleton, queryHand);
+            InvokeRefreshComponents(pipe);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            GrabPointCandidate? candidate = ((IGrabbable)pipe).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform);
+            Assert.NotNull(candidate);
+            Transform3D candidateHandTarget = candidate.HandTarget;
+            Animation candidateAnimation = candidate.Animation;
+            Assert.Equal("Grab-pipe-10", candidateAnimation.ResourceName);
+            AssertBasisAngularDistanceLessThan(queryHand.Basis, candidateHandTarget.Basis, 0.05f, "candidate hand target");
+
+            _ = hand.Grab();
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+            AssertBasisAngularDistanceLessThan(queryHand.Basis, provider.GrabTarget.Basis, 0.05f, "provider target");
+
+            handTarget.GlobalTransform = provider.GrabTarget;
+            SetHandAttachmentTransform(skeleton, provider.GrabTarget);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(pipe, hand.CurrentGrabbed);
+            Assert.Same(handAttachment, pipe.GetParent());
+            Assert.Same(candidateAnimation, hand.CurrentPose);
+            Assert.True(animationPlayer.HasAnimation(new StringName("Grab-pipe-10")));
+            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false);
+            AnimationNodeAnimation rightPoseNode = Assert.IsType<AnimationNodeAnimation>(
+                rootTree.GetNode(HandPoseAnimationTreePaths.RightHandPoseNode),
+                exactMatch: false);
+            Assert.Equal(new StringName("Grab-pipe-10"), rightPoseNode.Animation);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the authored test pipe's runtime grab area remains centred on both segment ends despite shifted hand poses.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task TestPipe_ActualCylindricalGrabPointUsesAcquisitionMetricAtAuthoredSegmentEnds()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        Node3D root = scene.Instantiate<Node3D>();
+
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Node grabPoint = root.GetNode("CylindricalGrabPoint");
+            Assert.Equal(typeof(CylindricalGrabPoint).FullName, grabPoint.GetType().FullName);
+            float lengthMetres = grabPoint.Get("LengthMetres").AsSingle();
+            float reachDistanceMetres = grabPoint.Get("ReachDistanceMetres").AsSingle();
+            Vector3 grabPointPositionOffsetFromHand = grabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3();
+            Assert.True(
+                grabPointPositionOffsetFromHand.Length() > PositionToleranceMetres,
+                "Expected the authored test pipe to carry a non-identity hand target offset.");
+            Basis palmFacingPipeAxisBasis = new(Vector3.Up, Vector3.Right, Vector3.Forward);
+            float halfLength = lengthMetres * 0.5f;
+            Vector3 radialOffset = new(0.005f, 0.0f, 0.0f);
+            Transform3D grabPointGlobalTransform = ((Node3D)grabPoint).GlobalTransform;
+            Vector3 positiveEnd = grabPointGlobalTransform * new Vector3(0.0f, halfLength, 0.0f);
+            Vector3 negativeEnd = grabPointGlobalTransform * new Vector3(0.0f, -halfLength, 0.0f);
+            Transform3D positiveEndHand = new(palmFacingPipeAxisBasis, positiveEnd + radialOffset);
+            Transform3D negativeEndHand = new(palmFacingPipeAxisBasis, negativeEnd + radialOffset);
+
+            object? positiveEndCandidate = InvokeGrabPointQuery(grabPoint, LimbSide.Right, positiveEndHand);
+            object? negativeEndCandidate = InvokeGrabPointQuery(grabPoint, LimbSide.Right, negativeEndHand);
+
+            AssertPipeEndCandidate(positiveEndCandidate, grabPoint, positiveEndHand, positiveEnd, reachDistanceMetres);
+            AssertPipeEndCandidate(negativeEndCandidate, grabPoint, negativeEndHand, negativeEnd, reachDistanceMetres);
+
+            Vector3 beyondPositiveEnd = grabPointGlobalTransform * new Vector3(
+                0.0f,
+                halfLength + reachDistanceMetres + 0.02f,
+                0.0f);
+            Transform3D beyondPositiveEndHand = new(palmFacingPipeAxisBasis, beyondPositiveEnd);
+            object? beyondPositiveEndCandidate = InvokeGrabPointQuery(grabPoint, LimbSide.Right, beyondPositiveEndHand);
+
+            Assert.Null(beyondPositiveEndCandidate);
         }
         finally
         {
@@ -264,6 +620,324 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
+    /// Verifies cylindrical runtime attachment interprets authored offsets in the hand-bone attachment frame when the
+    /// IK target and attachment transforms differ.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_CylindricalGrabWithDistinctIKTarget_AttachesSelectedPointInHandAttachmentFrame()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "CylindricalAttachmentFrameRoot"
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider"
+        };
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            GrabTargetProvider = provider,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.5f,
+            GrabCommitDistanceMetres = 0.02f,
+        };
+        GrabbableNode pipe = CreateRuntimePipe(Vector3.Zero);
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(pipe);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        pipe.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Basis targetBasis = Basis.Identity.Rotated(Vector3.Up, 0.35f).Orthonormalized();
+            Basis attachmentBasis = Basis.Identity.Rotated(Vector3.Forward, -0.55f).Orthonormalized();
+            handTarget.GlobalTransform = new Transform3D(targetBasis, new Vector3(0.005f, 0.0f, 0.0f));
+            SetHandAttachmentTransform(skeleton, new Transform3D(attachmentBasis, new Vector3(0.12f, -0.03f, 0.02f)));
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            Transform3D targetToAttachment = handTarget.GlobalTransform.AffineInverse() * handAttachment.GlobalTransform;
+            pipe.GlobalPosition = Vector3.Zero;
+            pipe.RefreshComponents();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            CylindricalGrabPoint grabPoint = pipe.GetNode<CylindricalGrabPoint>("CylindricalGrabPoint");
+            GrabPointCandidate? candidate = ((IGrabbable)pipe).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform);
+            Assert.NotNull(candidate);
+            Assert.True(
+                candidate.GrabPointTransform.Origin.DistanceTo(grabPoint.GlobalPosition) <= PositionToleranceMetres,
+                $"Expected centred cylindrical candidate, observed {candidate.GrabPointTransform.Origin}.");
+            Transform3D selectedPointInPipeSpace = pipe.GlobalTransform.AffineInverse() * candidate.GrabPointTransform;
+
+            _ = hand.Grab();
+            Transform3D expectedApproachTarget = candidate.GrabPointTransform
+                * candidate.GrabPointOffsetFromHand.AffineInverse()
+                * targetToAttachment.AffineInverse();
+            Assert.True(
+                provider.GrabTarget.Origin.DistanceTo(expectedApproachTarget.Origin) <= PositionToleranceMetres,
+                $"Expected approach target {provider.GrabTarget.Origin} to compensate for target-to-attachment offset and reach {expectedApproachTarget.Origin}.");
+            handTarget.GlobalTransform = provider.GrabTarget;
+            SetHandAttachmentTransform(skeleton, provider.GrabTarget * targetToAttachment);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(pipe, hand.CurrentGrabbed);
+            Assert.Same(handAttachment, pipe.GetParent());
+            Transform3D selectedPointAfterAttach = pipe.GlobalTransform * selectedPointInPipeSpace;
+            Transform3D expectedSelectedPoint = handAttachment.GlobalTransform * candidate.GrabPointOffsetFromHand;
+            Assert.True(
+                selectedPointAfterAttach.Origin.DistanceTo(expectedSelectedPoint.Origin) <= PositionToleranceMetres,
+                $"Expected cylindrical selected point {selectedPointAfterAttach.Origin} to align with hand attachment offset {expectedSelectedPoint.Origin}, not IK target {handTarget.GlobalPosition}.");
+            Assert.True(
+                selectedPointAfterAttach.Origin.DistanceTo(candidate.GrabPointTransform.Origin) <= PositionToleranceMetres,
+                $"Expected approach target to place the attachment so the centred cylindrical point remains at {candidate.GrabPointTransform.Origin}, observed {selectedPointAfterAttach.Origin}.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the authored test pipe remains centred after the real runtime attachment path commits a centre grab.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task TestPipe_RuntimeAttachmentKeepsCentredCylindricalSegmentAlignedToHandAttachmentOffset()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "TestPipeRuntimeAttachmentRoot"
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(new Vector3(0.2f, 0.0f, 0.0f));
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider"
+        };
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            GrabTargetProvider = provider,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.5f,
+            GrabCommitDistanceMetres = 0.02f,
+        };
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        Node3D pipe = scene.Instantiate<Node3D>();
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(pipe);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        pipe.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Node3D assetGrabPoint = pipe.GetNode<Node3D>("CylindricalGrabPoint");
+            Basis queryBasis = new Basis(Vector3.Up, Vector3.Right, Vector3.Forward).Orthonormalized();
+            pipe.GlobalTransform = Transform3D.Identity;
+            handTarget.GlobalTransform = new Transform3D(queryBasis, assetGrabPoint.GlobalPosition + new Vector3(0.005f, 0.0f, 0.0f));
+            SetHandAttachmentTransform(skeleton, new Transform3D(Basis.Identity, new Vector3(0.2f, 0.0f, 0.0f)));
+            InvokeRefreshComponents(pipe);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            object? reflectedCandidate = InvokeGrabPointQuery(assetGrabPoint, LimbSide.Right, handTarget.GlobalTransform);
+            Assert.NotNull(reflectedCandidate);
+            Transform3D candidateGrabPointTransform = GetCandidateProperty<Transform3D>(reflectedCandidate, nameof(GrabPointCandidate.GrabPointTransform));
+            Transform3D candidateGrabPointOffset = GetCandidateProperty<Transform3D>(reflectedCandidate, nameof(GrabPointCandidate.GrabPointOffsetFromHand));
+            Transform3D authoredGrabPointOffset = new(
+                Basis.FromEuler(assetGrabPoint.Get("GrabPointRotationOffsetFromHand").AsVector3()),
+                assetGrabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3());
+            Assert.True(
+                candidateGrabPointTransform.Origin.DistanceTo(assetGrabPoint.GlobalPosition) <= PositionToleranceMetres,
+                $"Expected real pipe centre candidate at {assetGrabPoint.GlobalPosition}, observed {candidateGrabPointTransform.Origin}.");
+            Transform3D selectedPointInPipeSpace = pipe.GlobalTransform.AffineInverse() * candidateGrabPointTransform;
+
+            GrabPointCandidate candidate = new(
+                new MutableGrabPoint(),
+                handTarget.GlobalTransform,
+                new Animation(),
+                LimbSide.Right,
+                handTarget.GlobalTransform,
+                candidateGrabPointTransform,
+                candidateGrabPointOffset);
+            InvokeAttachGrabbedNode(hand, pipe, candidate);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(handAttachment, pipe.GetParent());
+            Transform3D selectedPointAfterAttach = pipe.GlobalTransform * selectedPointInPipeSpace;
+            Transform3D expectedSelectedPoint = handAttachment.GlobalTransform * authoredGrabPointOffset;
+            float selectedAxisOffsetFromHand = Mathf.Abs(
+                (selectedPointAfterAttach.Origin - handAttachment.GlobalPosition)
+                .Dot(selectedPointAfterAttach.Basis.Y.Normalized()));
+            Vector3 positiveEndIfMarkerWereAtEnd = selectedPointAfterAttach.Origin + (selectedPointAfterAttach.Basis.Y.Normalized() * (TestPipeGrabLengthMetres * 0.5f));
+            Assert.True(
+                selectedPointAfterAttach.Origin.DistanceTo(expectedSelectedPoint.Origin) <= PositionToleranceMetres,
+                $"Expected real pipe centre to align with independently authored hand attachment offset {expectedSelectedPoint.Origin}, observed {selectedPointAfterAttach.Origin}.");
+            Assert.True(
+                selectedAxisOffsetFromHand <= 0.005f,
+                $"Expected centred pipe grab not to place the root/centre at a half-length selected-axis offset from the hand attachment, observed {selectedAxisOffsetFromHand}.");
+            Assert.True(
+                positiveEndIfMarkerWereAtEnd.DistanceTo(expectedSelectedPoint.Origin) > TestPipeGrabLengthMetres * 0.4f,
+                "Expected attachment not to align an authored pipe end as though the cylindrical marker were located there.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the authored test pipe can be grabbed at a non-centre selected/contact point through the real hand path.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task TestPipe_HandGrabPathWithNonCentreContact_AttachesSelectedEndInsteadOfCentre()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "TestPipeAuthoredEndContactRoot"
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider"
+        };
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            GrabTargetProvider = provider,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.5f,
+            GrabCommitDistanceMetres = 0.02f,
+        };
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn");
+        Node3D authoredPipe = scene.Instantiate<Node3D>();
+        Node3D authoredGrabPoint = authoredPipe.GetNode<Node3D>("CylindricalGrabPoint");
+        GrabbableNode pipe = CreateRuntimePipe(Vector3.Zero);
+        CylindricalGrabPoint grabPoint = pipe.GetNode<CylindricalGrabPoint>("CylindricalGrabPoint");
+        grabPoint.LengthMetres = authoredGrabPoint.Get("LengthMetres").AsSingle();
+        grabPoint.ReachDistanceMetres = authoredGrabPoint.Get("ReachDistanceMetres").AsSingle();
+        grabPoint.SnapDistanceMetres = authoredGrabPoint.Get("SnapDistanceMetres").AsSingle();
+        grabPoint.PalmFacingMinimumDot = authoredGrabPoint.Get("PalmFacingMinimumDot").AsSingle();
+        grabPoint.PalmLocalDirection = authoredGrabPoint.Get("PalmLocalDirection").AsVector3();
+        grabPoint.GrabAnimation = Assert.IsType<Animation>(authoredGrabPoint.Get("GrabAnimation").AsGodotObject(), exactMatch: false);
+        grabPoint.GrabPointPositionOffsetFromHand = authoredGrabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3();
+        grabPoint.GrabPointRotationOffsetFromHand = authoredGrabPoint.Get("GrabPointRotationOffsetFromHand").AsVector3();
+        authoredPipe.Free();
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(pipe);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        pipe.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Node3D assetGrabPoint = pipe.GetNode<Node3D>("CylindricalGrabPoint");
+            Basis queryBasis = new Basis(Vector3.Up, Vector3.Right, Vector3.Forward).Orthonormalized();
+            float halfLength = assetGrabPoint.Get("LengthMetres").AsSingle() * 0.5f;
+            pipe.GlobalTransform = Transform3D.Identity;
+            Vector3 expectedSelectedEnd = assetGrabPoint.GlobalTransform * new Vector3(0.0f, halfLength, 0.0f);
+            Transform3D endContactHandTransform = new(queryBasis, expectedSelectedEnd + new Vector3(0.005f, 0.0f, 0.0f));
+            handTarget.GlobalTransform = endContactHandTransform;
+            SetHandAttachmentTransform(skeleton, endContactHandTransform);
+            InvokeRefreshComponents(pipe);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            object? reflectedCandidate = InvokeGrabPointQuery(assetGrabPoint, LimbSide.Right, handTarget.GlobalTransform);
+            Assert.NotNull(reflectedCandidate);
+            Transform3D selectedEndTransform = GetCandidateProperty<Transform3D>(reflectedCandidate, nameof(GrabPointCandidate.GrabPointTransform));
+            Assert.True(
+                selectedEndTransform.Origin.DistanceTo(expectedSelectedEnd) <= PositionToleranceMetres,
+                $"Expected non-centre hand contact to select pipe end {expectedSelectedEnd}, observed {selectedEndTransform.Origin}.");
+            Assert.True(
+                selectedEndTransform.Origin.DistanceTo(assetGrabPoint.GlobalPosition) > TestPipeGrabLengthMetres * 0.4f,
+                "Expected non-centre selected point instead of falling back to the raw hand-origin closest point near the pipe centre.");
+            Transform3D selectedPointInPipeSpace = pipe.GlobalTransform.AffineInverse() * selectedEndTransform;
+            Assert.NotNull(((IGrabbable)pipe).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform));
+
+            _ = hand.Grab();
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            handTarget.GlobalTransform = provider.GrabTarget;
+            SetHandAttachmentTransform(skeleton, provider.GrabTarget);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            _ = hand.Grab();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(pipe, hand.CurrentGrabbed);
+            Assert.Same(handAttachment, pipe.GetParent());
+            Transform3D selectedPointAfterAttach = pipe.GlobalTransform * selectedPointInPipeSpace;
+            Transform3D authoredGrabPointOffset = new(
+                Basis.FromEuler(assetGrabPoint.Get("GrabPointRotationOffsetFromHand").AsVector3()),
+                assetGrabPoint.Get("GrabPointPositionOffsetFromHand").AsVector3());
+            Transform3D expectedSelectedPoint = handAttachment.GlobalTransform * authoredGrabPointOffset;
+            Vector3 selectedAxis = selectedPointAfterAttach.Basis.Y.Normalized();
+            Vector3 expectedPipeCentre = selectedPointAfterAttach.Origin - (selectedAxis * halfLength);
+            Assert.True(
+                selectedPointAfterAttach.Origin.DistanceTo(expectedSelectedPoint.Origin) <= PositionToleranceMetres,
+                $"Expected attached pipe end {selectedPointAfterAttach.Origin} to align with independently authored hand attachment contact offset {expectedSelectedPoint.Origin}.");
+            Assert.True(
+                selectedPointAfterAttach.Origin.DistanceTo(expectedSelectedEnd) <= PositionToleranceMetres,
+                $"Expected real hand grab path to preserve selected end {expectedSelectedEnd}, observed {selectedPointAfterAttach.Origin}.");
+            Assert.True(
+                pipe.GlobalPosition.DistanceTo(expectedPipeCentre) <= PositionToleranceMetres,
+                $"Expected pipe centre {pipe.GlobalPosition} to remain exactly one half-length behind selected end {selectedPointAfterAttach.Origin}, observed expected centre {expectedPipeCentre}.");
+            Assert.True(
+                pipe.GlobalPosition.DistanceTo(selectedPointAfterAttach.Origin) >= (halfLength - PositionToleranceMetres),
+                "Expected the pipe centre to remain half a grab length from the selected/contact end after attachment.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies execution-time freshness validation rejects a candidate after its source state has moved.
     /// </summary>
     [Headless]
@@ -315,15 +989,20 @@ public sealed partial class HandGrabAssetIntegrationTests
     [Fact]
     public void HandGrabAssets_LoadByPreservedUIDs()
     {
+        Assert.NotNull(ResourceLoader.Load<PackedScene>("res://assets/items/test_pipe_grabbable.tscn"));
+        Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://c45lomd35erjb"));
+
         Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://dp3fxu1uko3n7"));
         Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://c1rexm45hq1rf"));
         Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://df4i6mqjgm16e"));
+        Assert.NotNull(ResourceLoader.Load<Animation>("uid://bhyeepsp5ifv0"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://bdxl0giwm3sg1"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://clntm6ydqb54a"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://ddw5p2rob0g4h"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://d0aaosrbv6dgv"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://cxh7lfqn5k3nw"));
         Assert.NotNull(ResourceLoader.Load<Script>("uid://cbwik5eyyjmn5"));
+        Assert.NotNull(ResourceLoader.Load<Script>("uid://cfbkq153qba1t"));
     }
 
     /// <summary>
@@ -488,7 +1167,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             _ = hand.Grab();
             Assert.Null(hand.CurrentGrabbed);
 
-            handTarget.GlobalTransform = candidate.HandTarget;
+            handTarget.GlobalTransform = provider.GrabTarget;
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
             Assert.Same(ball, hand.CurrentGrabbed);
@@ -988,9 +1667,109 @@ public sealed partial class HandGrabAssetIntegrationTests
         return (skeleton, attachment);
     }
 
-    private static void SetHandAttachmentPosition(Skeleton3D skeleton, Vector3 position)
+    private static void AssertPipeEndCandidate(
+        object? candidate,
+        Node grabPoint,
+        Transform3D handTransform,
+        Vector3 expectedEnd,
+        float reachDistanceMetres)
     {
-        Transform3D transform = new(Basis.Identity, position);
+        Assert.NotNull(candidate);
+        Assert.Same(grabPoint, GetCandidateProperty<object>(candidate, nameof(GrabPointCandidate.Source)));
+        Transform3D grabPointTransform = GetCandidateProperty<Transform3D>(candidate, nameof(GrabPointCandidate.GrabPointTransform));
+        float acquisitionDistance = GetCandidateProperty<float>(candidate, nameof(GrabPointCandidate.AcquisitionDistance));
+        Assert.True(
+            grabPointTransform.Origin.DistanceTo(expectedEnd) <= PositionToleranceMetres,
+            $"Expected actual pipe candidate at authored segment end {expectedEnd}, observed {grabPointTransform.Origin}.");
+        Assert.True(
+            Mathf.Abs(acquisitionDistance - handTransform.Origin.DistanceTo(expectedEnd)) <= PositionToleranceMetres,
+            $"Expected pipe end acquisition distance from hand to segment end, observed {acquisitionDistance}.");
+        Assert.True(
+            acquisitionDistance <= reachDistanceMetres,
+            $"Expected pipe end acquisition within reach {reachDistanceMetres}, observed {acquisitionDistance}.");
+    }
+
+    private static object? InvokeGrabPointQuery(Node grabPoint, LimbSide side, Transform3D handTransform)
+    {
+        MethodInfo method = grabPoint.GetType().GetMethod(nameof(IGrabPoint.GetGrabPoint))
+            ?? throw new InvalidOperationException("GetGrabPoint method was not found on the authored grab point node.");
+        Type sideParameterType = method.GetParameters()[0].ParameterType;
+        object sideArgument = Enum.ToObject(sideParameterType, (int)side);
+
+        return method.Invoke(grabPoint, [sideArgument, handTransform]);
+    }
+
+    private static void InvokeRefreshComponents(Node grabbable)
+    {
+        MethodInfo method = grabbable.GetType().GetMethod("RefreshComponents")
+            ?? throw new InvalidOperationException("RefreshComponents method was not found on the authored grabbable node.");
+        _ = method.Invoke(grabbable, []);
+    }
+
+    private static T GetCandidateProperty<T>(object candidate, string propertyName)
+    {
+        PropertyInfo property = candidate.GetType().GetProperty(propertyName)
+            ?? throw new InvalidOperationException($"Candidate property {propertyName} was not found.");
+
+        return Assert.IsAssignableFrom<T>(property.GetValue(candidate));
+    }
+
+    private static void AssertTransformApproximatelyEqual(
+        Transform3D expected,
+        Transform3D actual,
+        float tolerance)
+    {
+        Assert.True(
+            actual.Origin.DistanceTo(expected.Origin) <= tolerance,
+            $"Expected transform origin {expected.Origin}, observed {actual.Origin}.");
+        Assert.True(
+            actual.Basis.X.DistanceTo(expected.Basis.X) <= tolerance,
+            $"Expected transform X basis {expected.Basis.X}, observed {actual.Basis.X}.");
+        Assert.True(
+            actual.Basis.Y.DistanceTo(expected.Basis.Y) <= tolerance,
+            $"Expected transform Y basis {expected.Basis.Y}, observed {actual.Basis.Y}.");
+        Assert.True(
+            actual.Basis.Z.DistanceTo(expected.Basis.Z) <= tolerance,
+            $"Expected transform Z basis {expected.Basis.Z}, observed {actual.Basis.Z}.");
+    }
+
+    private static void AssertBasisAngularDistanceLessThan(Basis expected, Basis actual, float maxRadians, string context)
+    {
+        Quaternion expectedRotation = new(expected.Orthonormalized());
+        Quaternion actualRotation = new(actual.Orthonormalized());
+        float dot = Mathf.Abs(
+            (expectedRotation.X * actualRotation.X)
+            + (expectedRotation.Y * actualRotation.Y)
+            + (expectedRotation.Z * actualRotation.Z)
+            + (expectedRotation.W * actualRotation.W));
+        float angle = 2.0f * Mathf.Acos(Mathf.Clamp(dot, -1.0f, 1.0f));
+
+        Assert.True(
+            angle <= maxRadians,
+            $"Expected {context} rotation to stay within {maxRadians} rad of the query hand basis using quaternion distance, observed {angle} rad.");
+    }
+
+    private static void AssertNoPiRollAroundAxis(Basis expected, Basis actual, Vector3 axis, string context)
+    {
+        Vector3 normalisedAxis = axis.Normalized();
+        Vector3 expectedXAxis = ProjectOntoPlane(expected.X, normalisedAxis).Normalized();
+        Vector3 actualXAxis = ProjectOntoPlane(actual.X, normalisedAxis).Normalized();
+        Vector3 expectedYAxis = ProjectOntoPlane(expected.Y, normalisedAxis).Normalized();
+        Vector3 actualYAxis = ProjectOntoPlane(actual.Y, normalisedAxis).Normalized();
+
+        Assert.True(
+            expectedXAxis.Dot(actualXAxis) > -0.95f || expectedYAxis.Dot(actualYAxis) > -0.95f,
+            $"Expected {context} not to be pi-rolled around axis {normalisedAxis}; observed projected axis dots X={expectedXAxis.Dot(actualXAxis)}, Y={expectedYAxis.Dot(actualYAxis)}.");
+    }
+
+    private static Vector3 ProjectOntoPlane(Vector3 vector, Vector3 planeNormal)
+        => vector - (planeNormal * vector.Dot(planeNormal));
+
+    private static void SetHandAttachmentPosition(Skeleton3D skeleton, Vector3 position)
+        => SetHandAttachmentTransform(skeleton, new Transform3D(Basis.Identity, position));
+
+    private static void SetHandAttachmentTransform(Skeleton3D skeleton, Transform3D transform)
+    {
         skeleton.SetBoneRest(0, transform);
         skeleton.SetBoneGlobalPose(0, transform);
     }
@@ -1013,6 +1792,30 @@ public sealed partial class HandGrabAssetIntegrationTests
         ball.AddToGroup("grabbable");
 
         return ball;
+    }
+
+    private static GrabbableNode CreateRuntimePipe(Vector3 position)
+    {
+        GrabbableNode pipe = new()
+        {
+            Name = "RuntimePipe",
+            Position = position
+        };
+        CylindricalGrabPoint grabPoint = new()
+        {
+            Name = "CylindricalGrabPoint",
+            LengthMetres = TestPipeGrabLengthMetres,
+            ReachDistanceMetres = TestPipeReachDistanceMetres,
+            SnapDistanceMetres = TestPipeReachDistanceMetres,
+            PalmFacingMinimumDot = -1.0f,
+            GrabAnimation = new Animation(),
+            GrabPointPositionOffsetFromHand = new Vector3(0.04f, 0.02f, -0.03f),
+            GrabPointRotationOffsetFromHand = new Vector3(0.1f, -0.2f, 0.3f),
+        };
+        pipe.AddChild(grabPoint);
+        pipe.AddToGroup("grabbable");
+
+        return pipe;
     }
 
     private static GrabbableNode CreateRuntimeMutableGrabbable(

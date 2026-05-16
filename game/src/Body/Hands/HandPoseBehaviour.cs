@@ -381,9 +381,10 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         EmitGrabDebug(
             $"Grab selected: {FormatGrabbable(selection.Grabbable)} mobility={selection.Grabbable.Mobility}, "
             + $"target={FormatVector(selection.Candidate.HandTarget.Origin)}, animation={FormatAnimation(selection.Candidate.Animation)}.");
-        GrabTargetProvider?.SetGrabTarget(selection.Candidate.HandTarget);
+        Transform3D approachHandTarget = ResolveApproachHandTarget(selection.Candidate, handTransform);
+        GrabTargetProvider?.SetGrabTarget(approachHandTarget);
         EmitGrabDebug($"Grab provider: active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}, default={FormatProviderDefaultState()}.");
-        _pendingGrabState = new PendingGrabState(selection.Grabbable, selection.Candidate);
+        _pendingGrabState = new PendingGrabState(selection.Grabbable, selection.Candidate, approachHandTarget);
         _nextPendingGrabDebugTicksUsec = 0;
 
         return CurrentGrabbed;
@@ -419,6 +420,24 @@ public sealed partial class HandPoseBehaviour : Node, IHand
             : HandBoneAttachment is not null && IsInstanceValid(HandBoneAttachment)
             ? HandBoneAttachment.GlobalTransform
             : Transform3D.Identity;
+
+    private Transform3D ResolveApproachHandTarget(GrabPointCandidate candidate, Transform3D queryHandTransform)
+    {
+        if (HandTargetNode is null
+            || !IsInstanceValid(HandTargetNode)
+            || GrabTargetProvider is null
+            || !IsInstanceValid(GrabTargetProvider)
+            || HandBoneAttachment is null
+            || !IsInstanceValid(HandBoneAttachment))
+        {
+            return candidate.HandTarget;
+        }
+
+        Transform3D targetToAttachment = queryHandTransform.AffineInverse() * HandBoneAttachment.GlobalTransform;
+        Transform3D desiredAttachmentTransform = candidate.GrabPointTransform * candidate.GrabPointOffsetFromHand.AffineInverse();
+
+        return desiredAttachmentTransform * targetToAttachment.AffineInverse();
+    }
 
     private IEnumerable<IGrabbable> EnumerateDiscoverableGrabbables()
     {
@@ -460,7 +479,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         }
 
         Transform3D currentHandTransform = ResolveHandTransform();
-        float distanceToCommit = currentHandTransform.Origin.DistanceTo(pending.Candidate.HandTarget.Origin);
+        float distanceToCommit = currentHandTransform.Origin.DistanceTo(pending.ApproachHandTarget.Origin);
         if (distanceToCommit > GrabCommitDistanceMetres)
         {
             EmitPendingGrabDebug(pending, force: false, currentHandTransform, distanceToCommit);
@@ -807,7 +826,10 @@ public sealed partial class HandPoseBehaviour : Node, IHand
 
     private readonly record struct CollisionExceptionPair(PhysicsBody3D HeldBody, PhysicsBody3D OtherBody);
 
-    private sealed record PendingGrabState(IGrabbable Grabbable, GrabPointCandidate Candidate);
+    private sealed record PendingGrabState(
+        IGrabbable Grabbable,
+        GrabPointCandidate Candidate,
+        Transform3D ApproachHandTarget);
 
     private sealed class ReleaseVelocityTracker
     {

@@ -110,6 +110,7 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
             handTransform,
             GlobalTransform,
             GrabPointPositionOffsetFromHand,
-            GrabPointRotationOffsetFromHand);
+            GrabPointRotationOffsetFromHand,
+            Mathf.Sqrt(distanceSquared));
     }
 }

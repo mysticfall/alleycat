@@ -56,7 +56,7 @@ public sealed class HandGrabCandidateSelectorTests
     [Fact]
     public void Select_RejectsCandidatesOutsideDiscoveryRange()
     {
-        FakeGrabbable candidate = new(new Vector3(0.31f, 0.0f, 0.0f));
+        FakeGrabbable candidate = new(new Vector3(0.31f, 0.0f, 0.0f), 0.31f);
 
         HandGrabSelection? selection = HandGrabCandidateSelector.Select(
             [candidate],
@@ -65,6 +65,43 @@ public sealed class HandGrabCandidateSelectorTests
             0.3f);
 
         Assert.Null(selection);
+    }
+
+    /// <summary>
+    /// Verifies discovery range filtering uses acquisition distance rather than the target IK pose.
+    /// </summary>
+    [Fact]
+    public void Select_HandTargetOutsideDiscoveryRangeButAcquisitionInRange_SelectsCandidate()
+    {
+        FakeGrabbable candidate = new(new Vector3(2.0f, 0.0f, 0.0f), 0.1f);
+
+        HandGrabSelection? selection = HandGrabCandidateSelector.Select(
+            [candidate],
+            LimbSide.Right,
+            Transform3D.Identity,
+            0.3f);
+
+        Assert.NotNull(selection);
+        Assert.Same(candidate, selection.Grabbable);
+    }
+
+    /// <summary>
+    /// Verifies ranking ignores misleading hand-target distances and uses acquisition distance.
+    /// </summary>
+    [Fact]
+    public void Select_MisleadingHandTargetDistances_ChoosesNearestAcquisitionDistance()
+    {
+        FakeGrabbable misleadingTargetNear = new(new Vector3(0.01f, 0.0f, 0.0f), 0.2f);
+        FakeGrabbable misleadingTargetFar = new(new Vector3(2.0f, 0.0f, 0.0f), 0.05f);
+
+        HandGrabSelection? selection = HandGrabCandidateSelector.Select(
+            [misleadingTargetNear, misleadingTargetFar],
+            LimbSide.Left,
+            Transform3D.Identity,
+            0.3f);
+
+        Assert.NotNull(selection);
+        Assert.Same(misleadingTargetFar, selection.Grabbable);
     }
 
     /// <summary>
@@ -85,9 +122,9 @@ public sealed class HandGrabCandidateSelectorTests
         Assert.Null(typeof(IHand).GetMethod("ClearPose"));
     }
 
-    private sealed class FakeGrabbable(Vector3 targetOrigin) : IGrabbable
+    private sealed class FakeGrabbable(Vector3 targetOrigin, float? acquisitionDistance = null) : IGrabbable
     {
-        private readonly FakeGrabPoint _grabPoint = new(targetOrigin);
+        private readonly FakeGrabPoint _grabPoint = new(targetOrigin, acquisitionDistance);
 
         public IReadOnlyList<IComponent> Components => [_grabPoint];
 
@@ -96,7 +133,7 @@ public sealed class HandGrabCandidateSelectorTests
         public bool Grab(GrabPointCandidate grabPoint) => ReferenceEquals(grabPoint.Source, _grabPoint);
     }
 
-    private sealed class FakeGrabPoint(Vector3 targetOrigin) : IGrabPoint
+    private sealed class FakeGrabPoint(Vector3 targetOrigin, float? acquisitionDistance) : IGrabPoint
     {
         public GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)
             => new(
@@ -105,7 +142,10 @@ public sealed class HandGrabCandidateSelectorTests
                 NullAnimationForPlainUnitTestHost(),
                 handSide,
                 handTransform,
-                new Transform3D(Basis.Identity, targetOrigin));
+                new Transform3D(Basis.Identity, targetOrigin),
+                Vector3.Zero,
+                Vector3.Zero,
+                acquisitionDistance ?? handTransform.Origin.DistanceTo(targetOrigin));
     }
 
     private static Animation NullAnimationForPlainUnitTestHost() => null!;

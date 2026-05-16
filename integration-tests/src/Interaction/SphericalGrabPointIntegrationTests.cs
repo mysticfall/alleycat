@@ -207,6 +207,9 @@ public sealed class SphericalGrabPointIntegrationTests
             Assert.NotNull(candidate);
             Assert.Equal(offset.Origin, candidate.GrabPointPositionOffsetFromHand);
             AssertBasisApproximatelyEqual(offset.Basis, Basis.FromEuler(candidate.GrabPointRotationOffsetFromHand));
+            Assert.True(
+                Mathf.Abs(candidate.AcquisitionDistance - hand.Origin.DistanceTo(grabPoint.GlobalPosition)) <= PositionToleranceMetres,
+                $"Expected spherical acquisition distance to remain hand-to-centre, observed {candidate.AcquisitionDistance}.");
             AssertBasisApproximatelyEqual(hand.Basis, (candidate.HandTarget * candidate.GrabPointOffsetFromHand).Basis);
             Assert.True(
                 (candidate.HandTarget * candidate.GrabPointOffsetFromHand).Origin.DistanceTo(grabPoint.GlobalPosition) <= PositionToleranceMetres,
@@ -250,6 +253,9 @@ public sealed class SphericalGrabPointIntegrationTests
         Assert.True(
             candidate.HandTarget.Origin.DistanceTo(grabPoint.GlobalPosition) <= PositionToleranceMetres,
             $"Expected hand target origin at the spherical centre {grabPoint.GlobalPosition}, observed {candidate.HandTarget.Origin}.");
+        Assert.True(
+            Mathf.Abs(candidate.AcquisitionDistance - expectedHandTransform.Origin.DistanceTo(grabPoint.GlobalPosition)) <= PositionToleranceMetres,
+            $"Expected acquisition distance from hand to spherical centre, observed {candidate.AcquisitionDistance}.");
         AssertBasisApproximatelyEqual(expectedHandTransform.Basis, candidate.HandTarget.Basis);
     }
 

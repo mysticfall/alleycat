@@ -75,7 +75,12 @@ Provide a grab execution system that:
 ### Candidate Selection
 
 4. Hand calls `IGrabbable.GetGrabPoint(Side, handTransform)` on discovered candidates.
-5. Selection uses the closest candidate by `GrabPointCandidate.HandTarget.Origin` distance.
+5. Selection uses the closest candidate by `GrabPointCandidate.AcquisitionDistance`.
+   `AcquisitionDistance` is the distance from the querying hand origin to the accepted
+   acquisition reference's selected point, as produced by the grab point implementation.
+   This metric, not `HandTarget.Origin`, must be used for ranking. `HandTarget` is for
+   the target hand pose/IK settling only and may differ from the acquisition point when
+   authored offsets exist.
 6. If multiple candidates are equally close, holder order (as defined in INTR-001) is tie-breaker.
 7. Candidate selection is deterministic: same hand position yields same result.
 8. Candidate includes the grab point's authored `GrabPointPositionOffsetFromHand` and
@@ -101,7 +106,10 @@ Provide a grab execution system that:
 
 17. Each `GrabPointCandidate` carries authored position and rotation offsets:
     - `GrabPointPositionOffsetFromHand: Vector3` — position offset from hand attachment
-      to grab point when held.
+      to the selected/contact grab point when held. For dynamic grab points this is
+      not an offset to the item root/centre unless the selected/contact point is the
+      root/centre; root-authored measurements must include the root-to-selected
+      transform before being used as this property.
     - `GrabPointRotationOffsetFromHand: Vector3` — rotation offset (Euler radians) from hand
       attachment to grab point when held.
 18. These offsets are stored in the candidate so they are immutable at query time.
@@ -116,7 +124,9 @@ Provide a grab execution system that:
 22. The authoring workflow is:
      a. Position the character hand in the desired grab pose.
      b. Place the item in the hand so it looks correct.
-     c. Read the item's local position and rotation (Euler) relative to the hand bone.
+     c. Read the selected/contact grab point's local position and rotation (Euler)
+        relative to the hand bone. If the tool reports the item root/centre instead,
+        compose the root-to-selected/contact transform first.
      d. Set these as `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`
         on the grab point or its associated animation resource.
 23. The offsets are optional; when both are zero, the grab point's global transform
@@ -283,7 +293,8 @@ Provide a grab execution system that:
 | 9  | User              | RigidBody3D test ball is discoverable and grabbable with |
 |    |                   | physics suspended while held and restored on release. |
 | 10 | Technical         | Discovery uses either Godot group or Area3D with configurable range. |
-| 11 | Technical         | Candidate selection is deterministic using closest-distance rule. |
+| 11 | Technical         | Candidate selection is deterministic using closest acquisition |
+|    |                   | distance rule; `HandTarget.Origin` must not be used for ranking. |
 | 12 | Technical         | Candidate carries authored `GrabPointPositionOffsetFromHand` |
 |    |                   | and `GrabPointRotationOffsetFromHand` (zero if absent). |
 | 13 | Technical         | Hand enters `Approaching` state, moves to target via IK, then |

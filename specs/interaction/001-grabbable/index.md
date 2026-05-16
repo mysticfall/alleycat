@@ -46,21 +46,27 @@ Provide a reusable grabbable interface that:
      — evaluates reach, angle, and state; returns `GrabPointCandidate`
      if eligible, or `null` if this grab point cannot be used.
 3. Define immutable `GrabPointCandidate` record containing:
-     - Source `IGrabPoint` component reference (for ownership verification).
-     - Hand target `Transform3D`.
-     - Animation resource (e.g., grab animation clip reference).
-     - Query hand side and hand transform used for execution-time freshness validation.
-     - Query-time grab-point transform used to reject moved/stale candidates before commitment.
+      - Source `IGrabPoint` component reference (for ownership verification).
+      - Hand target `Transform3D` (IK/settling pose; may differ from acquisition point when authored offsets exist).
+      - Acquisition distance `float` — distance from the querying hand origin to the
+        accepted acquisition reference's selected point. Used for candidate ranking and
+        filtering, not `HandTarget.Origin`. Must be produced by the grab point implementation
+        based on the accepted acquisition reference and its selected closest point.
+      - Animation resource (e.g., grab animation clip reference).
+      - Query hand side and hand transform used for execution-time freshness validation.
+      - Query-time grab-point transform used to reject moved/stale candidates before commitment.
 4. `IGrabbable` exposes
    `GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)`
    using the same argument order and nullable-return semantics as
    `IGrabPoint.GetGrabPoint`.
 5. `IGrabbable.GetGrabPoint` queries owned `IGrabPoint` components via
-   CORE-003 `GetComponents<IGrabPoint>()` in deterministic holder order,
-   asks every owned grab point for a candidate, and returns the closest
-   eligible candidate by comparing each candidate's `HandTarget.Origin` to
-   `handTransform.Origin`. Holder order is the deterministic tie-breaker:
-   equal-distance candidates do not replace the current best candidate.
+    CORE-003 `GetComponents<IGrabPoint>()` in deterministic holder order,
+    asks every owned grab point for a candidate, and returns the closest
+    eligible candidate by comparing each candidate's `AcquisitionDistance` to
+    determine ranking. Holder order is the deterministic tie-breaker:
+    equal-distance candidates do not replace the current best candidate.
+    `AcquisitionDistance` is the canonical distance metric; `HandTarget.Origin`
+    must not be used for ranking.
 6. `IGrabPoint.GetGrabPoint` is the only grab-point eligibility query; grab
    points that can reject cheaply may shortcut their own work inside that
    method.
@@ -99,8 +105,23 @@ Provide a reusable grabbable interface that:
 
 - [INTR-001-A: Spherical Grab Point](spherical-grab-point.md) — centre-origin
   grab point approachable from any direction.
+- [INTR-001-B: Cylindrical Grab Point](cylindrical-grab-point.md) — cylinder length
+  axis grab point approachable from any position along the length.
 - [INTR-002: Hand Grab Execution](../002-hand-grab-execution/index.md) — hand discovery,
   grab execution, release, and IK integration.
+
+## Future Grab Point Implementation Guidance
+
+Future concrete `IGrabPoint` implementations should include editor-only selected
+debug helpers showing their meaningful acquisition shape, axis, or origin, plus
+eligibility gates where useful, and the authored hand offset or frame. This enables
+authors to visualise and tune grab zones, reach volumes, and offset directions
+without affecting runtime behaviour, scene semantics, physics, grab eligibility,
+or creating saved runtime children or meshes. Keep visual cues scoped to the
+selected node where feasible, and use editor-only drawing mechanisms such as
+`EditorNode3DGizmo`, `EditorNode3DGizmoPlugin`, or `@tool` annotated methods.
+Do not over-prescribe exact visuals for unknown future grab point shapes; focus
+on showing what matters for authoring each concrete type.
 
 ## Out Of Scope
 
@@ -126,7 +147,8 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 |    |                   | `GetGrabPoint(LimbSide handSide, Transform3D handTransform)` |
 |    |                   | returning a nullable candidate and no separate `CanGrab` method. |
 | 3  | Technical         | `GrabPointCandidate` immutable record contains |
-|    |                   | source component reference, hand target, and animation. |
+|    |                   | source component reference, hand target, acquisition |
+|    |                   | distance, and animation. |
 | 4  | Technical         | `GetComponents<IGrabPoint>()` returns grab-point |
 |    |                   | components in deterministic order. |
 | 5  | Technical         | `IGrabbable.GetGrabPoint` uses the same argument |
@@ -146,6 +168,10 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 |    |                   | deterministic completion or graceful rejection. |
 | 13 | User              | Multiple grab options resolve deterministically |
 |    |                   | to the closest eligible target, with stable ties. |
+| 14 | User              | Authored-offset candidates where the acquisition point |
+|    |                   | is in range but `HandTarget` is offset must still select |
+|    |                   | and rank correctly using acquisition distance, not |
+|    |                   | `HandTarget.Origin`. |
 
 ## References
 
@@ -159,4 +185,5 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 - `game/src/Interaction/IGrabPoint.cs`
 - `game/src/Interaction/GrabPointCandidate.cs`
 - [INTR-001-A: Spherical Grab Point](spherical-grab-point.md)
+- [INTR-001-B: Cylindrical Grab Point](cylindrical-grab-point.md)
 - [BODY-001: Hands](../../body/001-hands/index.md)

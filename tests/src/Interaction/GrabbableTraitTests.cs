@@ -53,8 +53,8 @@ public sealed class GrabbableTraitTests
     public void GetGrabPoint_MultipleEligibleGrabPoints_ReturnsClosestCandidate()
     {
         var calls = new List<string>();
-        var farther = new FakeGrabPoint("farther", calls, source => CreateCandidate(source, new Vector3(5.0f, 0.0f, 0.0f)));
-        var closer = new FakeGrabPoint("closer", calls, source => CreateCandidate(source, new Vector3(2.0f, 0.0f, 0.0f)));
+        var farther = new FakeGrabPoint("farther", calls, source => CreateCandidate(source, new Vector3(5.0f, 0.0f, 0.0f), 5.0f));
+        var closer = new FakeGrabPoint("closer", calls, source => CreateCandidate(source, new Vector3(2.0f, 0.0f, 0.0f), 2.0f));
         IGrabbable holder = new FakeGrabbable(farther, new NonGrabComponent(), closer);
 
         GrabPointCandidate? candidate = holder.GetGrabPoint(LimbSide.Left, Transform3D.Identity);
@@ -71,8 +71,8 @@ public sealed class GrabbableTraitTests
     public void GetGrabPoint_EqualDistanceCandidates_UsesHolderOrderTieBreaker()
     {
         var calls = new List<string>();
-        var first = new FakeGrabPoint("first", calls, source => CreateCandidate(source, new Vector3(1.0f, 0.0f, 0.0f)));
-        var second = new FakeGrabPoint("second", calls, source => CreateCandidate(source, new Vector3(-1.0f, 0.0f, 0.0f)));
+        var first = new FakeGrabPoint("first", calls, source => CreateCandidate(source, new Vector3(1.0f, 0.0f, 0.0f), 1.0f));
+        var second = new FakeGrabPoint("second", calls, source => CreateCandidate(source, new Vector3(-1.0f, 0.0f, 0.0f), 1.0f));
         IGrabbable holder = new FakeGrabbable(first, new NonGrabComponent(), second);
 
         GrabPointCandidate? candidate = holder.GetGrabPoint(LimbSide.Left, Transform3D.Identity);
@@ -80,6 +80,30 @@ public sealed class GrabbableTraitTests
         Assert.NotNull(candidate);
         Assert.Same(first, candidate.Source);
         Assert.Equal(["first", "second"], calls);
+    }
+
+    /// <summary>
+    /// The default holder trait ranks candidates by acquisition distance, not by shifted hand-target origin.
+    /// </summary>
+    [Fact]
+    public void GetGrabPoint_MisleadingHandTargetDistances_ReturnsClosestAcquisitionCandidate()
+    {
+        var calls = new List<string>();
+        var misleadingTargetNear = new FakeGrabPoint(
+            "misleadingTargetNear",
+            calls,
+            source => CreateCandidate(source, new Vector3(0.01f, 0.0f, 0.0f), 0.2f));
+        var misleadingTargetFar = new FakeGrabPoint(
+            "misleadingTargetFar",
+            calls,
+            source => CreateCandidate(source, new Vector3(5.0f, 0.0f, 0.0f), 0.05f));
+        IGrabbable holder = new FakeGrabbable(misleadingTargetNear, new NonGrabComponent(), misleadingTargetFar);
+
+        GrabPointCandidate? candidate = holder.GetGrabPoint(LimbSide.Left, Transform3D.Identity);
+
+        Assert.NotNull(candidate);
+        Assert.Same(misleadingTargetFar, candidate.Source);
+        Assert.Equal(["misleadingTargetNear", "misleadingTargetFar"], calls);
     }
 
     /// <summary>
@@ -100,6 +124,7 @@ public sealed class GrabbableTraitTests
 
         Assert.Same(source, candidate.Source);
         Assert.Null(candidate.Animation);
+        Assert.Equal(0.0f, candidate.AcquisitionDistance);
     }
 
     /// <summary>
@@ -119,13 +144,22 @@ public sealed class GrabbableTraitTests
         CreateCandidate(source, Vector3.Zero);
 
     private static GrabPointCandidate CreateCandidate(IGrabPoint source, Vector3 handTargetOrigin) =>
+        CreateCandidate(source, handTargetOrigin, handTargetOrigin.Length());
+
+    private static GrabPointCandidate CreateCandidate(
+        IGrabPoint source,
+        Vector3 handTargetOrigin,
+        float acquisitionDistance) =>
         new(
             source,
             TransformAt(handTargetOrigin),
             NullAnimationForPlainUnitTestHost(),
             LimbSide.Left,
             Transform3D.Identity,
-            Transform3D.Identity);
+            Transform3D.Identity,
+            Vector3.Zero,
+            Vector3.Zero,
+            acquisitionDistance);
 
     private static Transform3D TransformAt(Vector3 origin) => new(Basis.Identity, origin);
 

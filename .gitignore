@@ -1,6 +1,9 @@
 # Godot 4+ specific ignores
 .godot/
-addons/
+!game/addons/
+game/addons/*
+!game/addons/alleycat_editor/
+!game/addons/alleycat_editor/**
 android/
 
 # JetBrains IDE

@@ -110,7 +110,7 @@ public partial class GrabbableRigidBody3D : RigidBody3D, IGrabbable, IReleasable
         GrabPointCandidate? refreshedCandidate = candidate.Source.GetGrabPoint(candidate.HandSide, candidate.HandTransform);
         return refreshedCandidate is not null
             && ReferenceEquals(refreshedCandidate.Source, candidate.Source)
-            && IsCurrentGrabPointTransform(candidate)
+            && IsMatchingGrabPointTransform(refreshedCandidate.GrabPointTransform, candidate.GrabPointTransform)
             && ReferenceEquals(refreshedCandidate.Animation, candidate.Animation)
             && refreshedCandidate.HandTarget.Origin.DistanceSquaredTo(candidate.HandTarget.Origin)
                 <= FreshnessPositionToleranceMetres * FreshnessPositionToleranceMetres
@@ -122,16 +122,15 @@ public partial class GrabbableRigidBody3D : RigidBody3D, IGrabbable, IReleasable
                 <= FreshnessBasisTolerance * FreshnessBasisTolerance;
     }
 
-    private static bool IsCurrentGrabPointTransform(GrabPointCandidate candidate)
-        => candidate.Source is not Node3D grabPointNode
-            || (grabPointNode.GlobalTransform.Origin.DistanceSquaredTo(candidate.GrabPointTransform.Origin)
-                    <= FreshnessPositionToleranceMetres * FreshnessPositionToleranceMetres
-                && grabPointNode.GlobalTransform.Basis.X.DistanceSquaredTo(candidate.GrabPointTransform.Basis.X)
-                    <= FreshnessBasisTolerance * FreshnessBasisTolerance
-                && grabPointNode.GlobalTransform.Basis.Y.DistanceSquaredTo(candidate.GrabPointTransform.Basis.Y)
-                    <= FreshnessBasisTolerance * FreshnessBasisTolerance
-                && grabPointNode.GlobalTransform.Basis.Z.DistanceSquaredTo(candidate.GrabPointTransform.Basis.Z)
-                    <= FreshnessBasisTolerance * FreshnessBasisTolerance);
+    private static bool IsMatchingGrabPointTransform(Transform3D refreshedTransform, Transform3D candidateTransform)
+        => refreshedTransform.Origin.DistanceSquaredTo(candidateTransform.Origin)
+                <= FreshnessPositionToleranceMetres * FreshnessPositionToleranceMetres
+            && refreshedTransform.Basis.X.DistanceSquaredTo(candidateTransform.Basis.X)
+                <= FreshnessBasisTolerance * FreshnessBasisTolerance
+            && refreshedTransform.Basis.Y.DistanceSquaredTo(candidateTransform.Basis.Y)
+                <= FreshnessBasisTolerance * FreshnessBasisTolerance
+            && refreshedTransform.Basis.Z.DistanceSquaredTo(candidateTransform.Basis.Z)
+                <= FreshnessBasisTolerance * FreshnessBasisTolerance;
 
     private sealed record PhysicsState(
         bool Freeze,

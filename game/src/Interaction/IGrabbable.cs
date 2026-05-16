@@ -29,7 +29,7 @@ public interface IGrabbable : IComponentHolder
     GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)
     {
         GrabPointCandidate? bestCandidate = null;
-        float bestDistanceSquared = float.PositiveInfinity;
+        float bestAcquisitionDistance = float.PositiveInfinity;
 
         foreach (IGrabPoint grabPoint in this.GetComponents<IGrabPoint>())
         {
@@ -39,11 +39,10 @@ public interface IGrabbable : IComponentHolder
                 continue;
             }
 
-            float distanceSquared = handTransform.Origin.DistanceSquaredTo(candidate.HandTarget.Origin);
-            if (distanceSquared < bestDistanceSquared)
+            if (candidate.AcquisitionDistance < bestAcquisitionDistance)
             {
                 bestCandidate = candidate;
-                bestDistanceSquared = distanceSquared;
+                bestAcquisitionDistance = candidate.AcquisitionDistance;
             }
         }
 

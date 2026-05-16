@@ -19,9 +19,8 @@ internal static class HandGrabCandidateSelector
             return null;
         }
 
-        float rangeSquared = discoveryRangeMetres * discoveryRangeMetres;
         HandGrabSelection? bestSelection = null;
-        float bestDistanceSquared = float.PositiveInfinity;
+        float bestAcquisitionDistance = float.PositiveInfinity;
 
         foreach (IGrabbable grabbable in grabbables)
         {
@@ -31,14 +30,14 @@ internal static class HandGrabCandidateSelector
                 continue;
             }
 
-            float distanceSquared = handTransform.Origin.DistanceSquaredTo(candidate.HandTarget.Origin);
-            if (distanceSquared > rangeSquared || distanceSquared >= bestDistanceSquared)
+            if (candidate.AcquisitionDistance > discoveryRangeMetres
+                || candidate.AcquisitionDistance >= bestAcquisitionDistance)
             {
                 continue;
             }
 
             bestSelection = new HandGrabSelection(grabbable, candidate);
-            bestDistanceSquared = distanceSquared;
+            bestAcquisitionDistance = candidate.AcquisitionDistance;
         }
 
         return bestSelection;

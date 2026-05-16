@@ -1,0 +1,39 @@
+[gd_scene format=3 uid="uid://c45lomd35erjb"]
+
+[ext_resource type="Script" uid="uid://d0aaosrbv6dgv" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="1_5o22g"]
+[ext_resource type="Script" uid="uid://cfbkq153qba1t" path="res://src/Interaction/CylindricalGrabPoint.cs" id="2_oao0k"]
+[ext_resource type="Animation" uid="uid://bhyeepsp5ifv0" path="res://assets/characters/reference/female/animations/Grab-pipe-10.tres" id="3_0f6u5"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pnfld"]
+albedo_color = Color(0.9, 0.72, 0.45, 1)
+roughness = 0.32
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_3p46e"]
+material = SubResource("StandardMaterial3D_pnfld")
+top_radius = 0.01
+bottom_radius = 0.01
+height = 0.5
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_paqko"]
+height = 0.5
+radius = 0.01
+
+[node name="TestPipeGrabbable" type="RigidBody3D" unique_id=362015970 groups=["grabbable"]]
+script = ExtResource("1_5o22g")
+metadata/_custom_type_script = "uid://d0aaosrbv6dgv"
+
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=90286787]
+mesh = SubResource("CylinderMesh_3p46e")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1754458640]
+shape = SubResource("CylinderShape3D_paqko")
+
+[node name="CylindricalGrabPoint" type="Marker3D" parent="." unique_id=1512140250]
+script = ExtResource("2_oao0k")
+LengthMetres = 0.4
+SnapDistanceMetres = 0.08
+PalmFacingMinimumDot = -1.0
+GrabAnimation = ExtResource("3_0f6u5")
+GrabPointPositionOffsetFromHand = Vector3(0.0026352, 0.0673249, 0.0298438)
+GrabPointRotationOffsetFromHand = Vector3(-0.00048048052, 0.011107354, -1.5504136)
+metadata/_custom_type_script = "uid://cfbkq153qba1t"
