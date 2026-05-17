@@ -10,6 +10,27 @@ namespace AlleyCat.Items;
 [GlobalClass]
 public partial class PhysicsChain : Node3D
 {
+    /// <summary>
+    /// Defines the generated joint constraint model used by the chain.
+    /// </summary>
+    public enum ChainJointType
+    {
+        /// <summary>
+        /// Legacy free-rotation point joint retained for compatibility and diagnostics.
+        /// </summary>
+        Pin,
+
+        /// <summary>
+        /// Rotation-limited cone/twist joint used to bound unrealistic chain straightening.
+        /// </summary>
+        ConeTwist,
+
+        /// <summary>
+        /// Rotation-limited hinge joint used when ConeTwist limits are not enforced by the active physics backend.
+        /// </summary>
+        HingeLimited,
+    }
+
     private const string ChainLinkScenePath = "res://assets/items/chain/chain_link.tscn";
     private const string LinksContainerPath = "Links";
     private const string JointsContainerPath = "Joints";
@@ -31,10 +52,12 @@ public partial class PhysicsChain : Node3D
     private readonly List<RigidBody3D> _linkBodies = [];
     private readonly List<Joint3D> _linkJoints = [];
     private LinkMetrics? _linkMetrics;
+    private float _restEndpointSpan;
 
     /// <summary>
     /// Gets or sets the number of chain links to build.
     /// </summary>
+    [ExportGroup("Links")]
     [Export(PropertyHint.Range, "2,64,1,or_greater")]
     public int LinkCount
     {
@@ -75,6 +98,7 @@ public partial class PhysicsChain : Node3D
     /// <summary>
     /// Gets or sets the per-link mass used for authored instances.
     /// </summary>
+    [ExportGroup("Link Physics")]
     [Export(PropertyHint.Range, "0.01,5.0,0.01,or_greater")]
     public float LinkMass
     {
@@ -90,11 +114,111 @@ public partial class PhysicsChain : Node3D
             field = clamped;
             QueueRebuild();
         }
-    } = 0.15f;
+    } = 0.08f;
+
+    /// <summary>
+    /// Gets or sets linear damping applied to each generated link body.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,5.0,0.01")]
+    public float LinkLinearDamping
+    {
+        get;
+        set
+        {
+            if (Mathf.IsEqualApprox(field, value))
+            {
+                return;
+            }
+
+            field = Mathf.Max(0f, value);
+            QueueRebuild();
+        }
+    } = 0.25f;
+
+    /// <summary>
+    /// Gets or sets angular damping applied to each generated link body.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,5.0,0.01")]
+    public float LinkAngularDamping
+    {
+        get;
+        set
+        {
+            if (Mathf.IsEqualApprox(field, value))
+            {
+                return;
+            }
+
+            field = Mathf.Max(0f, value);
+            QueueRebuild();
+        }
+    } = 0.45f;
+
+    /// <summary>
+    /// Gets or sets the joint type used between generated chain links.
+    /// </summary>
+    [ExportGroup("Joint Selection")]
+    [Export]
+    public ChainJointType LinkJointType
+    {
+        get;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            QueueRebuild();
+        }
+    } = ChainJointType.ConeTwist;
+
+    /// <summary>
+    /// Gets or sets the joint type used for optional start/end body attachments.
+    /// </summary>
+    [Export]
+    public ChainJointType AttachmentJointType
+    {
+        get;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            RefreshAttachmentJointsIfReady();
+        }
+    } = ChainJointType.ConeTwist;
+
+    /// <summary>
+    /// Gets or sets whether adjacent links receive paired constraints at both visible interlock ends.
+    /// This bounds the slack that a single ball-style pivot can accumulate under lengthwise tension.
+    /// </summary>
+    [Export]
+    public bool UsePairedLinkJoints
+    {
+        get;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            QueueRebuild();
+        }
+    } = true;
 
     /// <summary>
     /// Gets or sets the damping used by pin joints in the chain.
+    /// Jolt Physics currently ignores PinJoint3D damping, so this remains an
+    /// editor/authored compatibility value rather than the primary stability control.
     /// </summary>
+    [ExportGroup("Pin Joint Compatibility")]
     [Export(PropertyHint.Range, "0.01,5.0,0.01")]
     public float JointDamping
     {
@@ -109,11 +233,241 @@ public partial class PhysicsChain : Node3D
             field = value;
             QueueRebuild();
         }
+    } = 2.0f;
+
+    /// <summary>
+    /// Gets or sets the positional correction bias used by pin joints in the chain.
+    /// Jolt Physics currently ignores PinJoint3D bias, so this remains an
+    /// editor/authored compatibility value rather than the primary stability control.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.01,1.0,0.01")]
+    public float JointBias
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.01f, 1.0f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
+    } = 0.65f;
+
+    /// <summary>
+    /// Gets or sets the ConeTwist swing span for generated link-to-link joints, in radians.
+    /// Smaller values reduce unrealistically straightened chain poses under lengthwise tension.
+    /// </summary>
+    [ExportGroup("Cone Twist Link Limits")]
+    [Export(PropertyHint.Range, "0.05,1.57,0.01,radians")]
+    public float LinkJointSwingSpan
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.05f, Mathf.Pi * 0.5f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
+    } = 0.55f;
+
+    /// <summary>
+    /// Gets or sets the ConeTwist twist span for generated link-to-link joints, in radians.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.05,1.57,0.01,radians")]
+    public float LinkJointTwistSpan
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.05f, Mathf.Pi * 0.5f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
+    } = Mathf.Pi / 6f;
+
+    /// <summary>
+    /// Gets or sets the ConeTwist swing span for endpoint attachment joints, in radians.
+    /// </summary>
+    [ExportGroup("Cone Twist Attachment Limits")]
+    [Export(PropertyHint.Range, "0.05,1.57,0.01,radians")]
+    public float AttachmentJointSwingSpan
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.05f, Mathf.Pi * 0.5f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            RefreshAttachmentJointsIfReady();
+        }
+    } = 0.70f;
+
+    /// <summary>
+    /// Gets or sets the ConeTwist twist span for endpoint attachment joints, in radians.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.05,1.57,0.01,radians")]
+    public float AttachmentJointTwistSpan
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.05f, Mathf.Pi * 0.5f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            RefreshAttachmentJointsIfReady();
+        }
+    } = 0.55f;
+
+    /// <summary>
+    /// Gets or sets ConeTwist bias for authored tuning. Jolt may ignore non-limit softness-style parameters.
+    /// </summary>
+    [ExportGroup("Cone Twist Solver Tuning")]
+    [Export(PropertyHint.Range, "0.01,1.0,0.01")]
+    public float ConeTwistBias
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.01f, 1.0f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
+    } = 0.30f;
+
+    /// <summary>
+    /// Gets or sets ConeTwist softness for authored tuning. Jolt may ignore this property.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.01,1.0,0.01")]
+    public float ConeTwistSoftness
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.01f, 1.0f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
+    } = 0.80f;
+
+    /// <summary>
+    /// Gets or sets ConeTwist relaxation for authored tuning. Jolt may ignore this property.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.01,2.0,0.01")]
+    public float ConeTwistRelaxation
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.01f, 2.0f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
     } = 1.0f;
+
+    /// <summary>
+    /// Gets or sets the symmetric angular travel for limited hinge joints, in radians.
+    /// </summary>
+    [ExportGroup("Hinge Joint Limits")]
+    [Export(PropertyHint.Range, "0.05,1.57,0.01,radians")]
+    public float HingeJointLimitSpan
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.05f, Mathf.Pi * 0.5f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
+    } = 0.55f;
+
+    /// <summary>
+    /// Gets or sets the positional correction bias for limited hinge joints.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.01,1.0,0.01")]
+    public float HingeJointBias
+    {
+        get;
+        set
+        {
+            float clamped = Mathf.Clamp(value, 0.01f, 1.0f);
+            if (Mathf.IsEqualApprox(field, clamped))
+            {
+                return;
+            }
+
+            field = clamped;
+            QueueRebuild();
+        }
+    } = 0.30f;
+
+    /// <summary>
+    /// Gets or sets whether the chain applies a hard endpoint span guard after physics solving.
+    /// This prevents true accumulated stretch when the active backend leaves joint rotation/slack under-constrained.
+    /// </summary>
+    [ExportGroup("Stretch Guard")]
+    [Export]
+    public bool EnableEndpointSpanGuard
+    {
+        get;
+        set;
+    } = true;
+
+    /// <summary>
+    /// Gets or sets the maximum endpoint span growth permitted beyond the built rest span, in metres.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,0.20,0.001,or_greater")]
+    public float MaxEndpointSpanGrowth
+    {
+        get;
+        set => field = Mathf.Max(0f, value);
+    } = 0.04f;
 
     /// <summary>
     /// Gets or sets an optional physics body to attach to the first chain link.
     /// </summary>
+    [ExportGroup("Attachments")]
     [Export]
     public PhysicsBody3D? StartAttachedBody
     {
@@ -221,6 +575,10 @@ public partial class PhysicsChain : Node3D
         RebuildChainNow();
     }
 
+    /// <inheritdoc />
+    public override void _PhysicsProcess(double delta)
+        => ApplyEndpointSpanGuard();
+
     /// <summary>
     /// Rebuilds the entire chain immediately using current exported settings.
     /// </summary>
@@ -238,6 +596,7 @@ public partial class PhysicsChain : Node3D
         BuildLinks(linkScene, linkMetrics);
         BuildLinkJoints(linkMetrics);
         BuildAttachmentPoints(linkMetrics);
+        _restEndpointSpan = _startAttachmentPoint!.GlobalPosition.DistanceTo(_endAttachmentPoint!.GlobalPosition);
         RefreshAttachmentJoints();
     }
 
@@ -336,6 +695,7 @@ public partial class PhysicsChain : Node3D
         _endAttachmentPoint = null;
         _startAttachmentJoint = null;
         _endAttachmentJoint = null;
+        _restEndpointSpan = 0f;
 
         _linkBodies.Clear();
         _linkJoints.Clear();
@@ -372,8 +732,9 @@ public partial class PhysicsChain : Node3D
             RigidBody3D linkBody = linkScene.Instantiate<RigidBody3D>();
             linkBody.Name = $"Link{linkIndex + 1:00}";
             linkBody.Mass = LinkMass;
-            linkBody.LinearDamp = 0.05f;
-            linkBody.AngularDamp = 0.05f;
+            linkBody.LinearDamp = LinkLinearDamping;
+            linkBody.AngularDamp = LinkAngularDamping;
+            linkBody.CanSleep = false;
 
             Transform3D localTransform = Transform3D.Identity;
             localTransform.Origin = new Vector3(0f, 0f, -linkPitch * linkIndex);
@@ -398,13 +759,30 @@ public partial class PhysicsChain : Node3D
             RigidBody3D nextLink = _linkBodies[linkIndex + 1];
 
             Vector3 anchorPosition = currentLink.ToGlobal(linkMetrics.BackAttachmentLocalPosition);
-            PinJoint3D joint = CreatePinJoint(
-                $"Joint{linkIndex + 1:00}_{linkIndex + 2:00}",
-                anchorPosition);
+            Joint3D backJoint = CreateJoint(
+                $"Joint{linkIndex + 1:00}_{linkIndex + 2:00}_Back",
+                anchorPosition,
+                LinkJointType,
+                LinkJointSwingSpan,
+                LinkJointTwistSpan);
 
-            _jointsContainer!.AddChild(joint);
-            ConfigureJointBodies(joint, currentLink, nextLink);
-            _linkJoints.Add(joint);
+            _jointsContainer!.AddChild(backJoint);
+            ConfigureJointBodies(backJoint, currentLink, nextLink);
+            _linkJoints.Add(backJoint);
+
+            if (UsePairedLinkJoints)
+            {
+                Joint3D frontJoint = CreateJoint(
+                    $"Joint{linkIndex + 1:00}_{linkIndex + 2:00}_Front",
+                    nextLink.ToGlobal(linkMetrics.FrontAttachmentLocalPosition),
+                    LinkJointType,
+                    LinkJointSwingSpan,
+                    LinkJointTwistSpan);
+
+                _jointsContainer.AddChild(frontJoint);
+                ConfigureJointBodies(frontJoint, currentLink, nextLink);
+                _linkJoints.Add(frontJoint);
+            }
 
             currentLink.AddCollisionExceptionWith(nextLink);
             nextLink.AddCollisionExceptionWith(currentLink);
@@ -487,6 +865,46 @@ public partial class PhysicsChain : Node3D
         }
     }
 
+    private void ApplyEndpointSpanGuard()
+    {
+        if (!EnableEndpointSpanGuard || _restEndpointSpan <= 0f || _startAttachmentPoint is null || _endAttachmentPoint is null)
+        {
+            return;
+        }
+
+        Vector3 startPosition = _startAttachmentPoint.GlobalPosition;
+        Vector3 endPosition = _endAttachmentPoint.GlobalPosition;
+        Vector3 span = endPosition - startPosition;
+        float currentSpan = span.Length();
+        float maximumSpan = _restEndpointSpan + MaxEndpointSpanGrowth;
+        if (currentSpan <= maximumSpan || currentSpan <= Mathf.Epsilon)
+        {
+            return;
+        }
+
+        Vector3 direction = span / currentSpan;
+        float correctionDistance = currentSpan - maximumSpan;
+
+        RigidBody3D endLink = _linkBodies[^1];
+        endLink.GlobalPosition -= direction * correctionDistance;
+        RemoveOutwardVelocity(endLink, direction);
+
+        if (EndAttachedBody is RigidBody3D endAttachedRigidBody)
+        {
+            endAttachedRigidBody.GlobalPosition -= direction * correctionDistance;
+            RemoveOutwardVelocity(endAttachedRigidBody, direction);
+        }
+    }
+
+    private static void RemoveOutwardVelocity(RigidBody3D body, Vector3 outwardDirection)
+    {
+        float outwardSpeed = body.LinearVelocity.Dot(outwardDirection);
+        if (outwardSpeed > 0f)
+        {
+            body.LinearVelocity -= outwardDirection * outwardSpeed;
+        }
+    }
+
     private Joint3D CreateAttachmentJoint(
         string jointName,
         Marker3D chainAttachmentPoint,
@@ -500,10 +918,27 @@ public partial class PhysicsChain : Node3D
         chainBody.AddCollisionExceptionWith(externalBody);
         externalBody.AddCollisionExceptionWith(chainBody);
 
-        return CreatePinJoint(
+        return CreateJoint(
             jointName,
-            chainAttachmentPoint.GlobalPosition);
+            chainAttachmentPoint.GlobalPosition,
+            AttachmentJointType,
+            AttachmentJointSwingSpan,
+            AttachmentJointTwistSpan);
     }
+
+    private Joint3D CreateJoint(
+        string jointName,
+        Vector3 anchorPosition,
+        ChainJointType jointType,
+        float coneTwistSwingSpan,
+        float coneTwistTwistSpan)
+        => jointType switch
+        {
+            ChainJointType.Pin => CreatePinJoint(jointName, anchorPosition),
+            ChainJointType.ConeTwist => CreateConeTwistJoint(jointName, anchorPosition, coneTwistSwingSpan, coneTwistTwistSpan),
+            ChainJointType.HingeLimited => CreateHingeLimitedJoint(jointName, anchorPosition),
+            _ => throw new ArgumentOutOfRangeException(nameof(jointType), jointType, "Unsupported chain joint type."),
+        };
 
     private static Node3D ResolveExternalBodyAnchor(PhysicsBody3D externalBody, Node3D? externalBodyAnchor)
     {
@@ -541,7 +976,52 @@ public partial class PhysicsChain : Node3D
         };
 
         joint.SetParam(PinJoint3D.Param.Damping, JointDamping);
+        joint.SetParam(PinJoint3D.Param.Bias, JointBias);
         joint.SetParam(PinJoint3D.Param.ImpulseClamp, 0f);
+
+        return joint;
+    }
+
+    private ConeTwistJoint3D CreateConeTwistJoint(
+        string jointName,
+        Vector3 anchorPosition,
+        float swingSpan,
+        float twistSpan)
+    {
+        ConeTwistJoint3D joint = new()
+        {
+            Name = jointName,
+            Position = ToLocal(anchorPosition),
+            ExcludeNodesFromCollision = true,
+        };
+
+        joint.SetParam(ConeTwistJoint3D.Param.SwingSpan, swingSpan);
+        joint.SetParam(ConeTwistJoint3D.Param.TwistSpan, twistSpan);
+        joint.SetParam(ConeTwistJoint3D.Param.Bias, ConeTwistBias);
+        joint.SetParam(ConeTwistJoint3D.Param.Softness, ConeTwistSoftness);
+        joint.SetParam(ConeTwistJoint3D.Param.Relaxation, ConeTwistRelaxation);
+
+        return joint;
+    }
+
+    private HingeJoint3D CreateHingeLimitedJoint(
+        string jointName,
+        Vector3 anchorPosition)
+    {
+        HingeJoint3D joint = new()
+        {
+            Name = jointName,
+            Position = ToLocal(anchorPosition),
+            ExcludeNodesFromCollision = true,
+        };
+
+        joint.SetFlag(HingeJoint3D.Flag.UseLimit, true);
+        joint.SetFlag(HingeJoint3D.Flag.EnableMotor, false);
+        joint.SetParam(HingeJoint3D.Param.LimitLower, -HingeJointLimitSpan);
+        joint.SetParam(HingeJoint3D.Param.LimitUpper, HingeJointLimitSpan);
+        joint.SetParam(HingeJoint3D.Param.Bias, HingeJointBias);
+        joint.SetParam(HingeJoint3D.Param.LimitBias, HingeJointBias);
+        joint.SetParam(HingeJoint3D.Param.LimitRelaxation, 1.0f);
 
         return joint;
     }
