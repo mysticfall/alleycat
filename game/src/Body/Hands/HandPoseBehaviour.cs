@@ -100,7 +100,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     }
 
     /// <summary>
-    /// Optional collision object that receives temporary held-item collision shape proxies while movable items are held.
+    /// Optional collision object that receives temporary held-item runtime shape owners while movable items are held.
     /// </summary>
     [Export]
     public CollisionObject3D? HeldCollisionTarget
@@ -308,7 +308,6 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     {
         _controller?.Update(Side, delta);
         TryCommitPendingGrab();
-        UpdateHeldCollisionProxies();
         UpdateHeldReleaseVelocity(delta);
     }
 
@@ -620,40 +619,20 @@ public sealed partial class HandPoseBehaviour : Node, IHand
                 continue;
             }
 
-            CollisionShape3D proxyShape = new()
-            {
-                Name = $"{originalShape.Name}HeldProxy",
-                Shape = (Shape3D)originalShape.Shape.Duplicate(),
-                Disabled = false,
-            };
-            HeldCollisionTarget.AddChild(proxyShape);
-            proxyShape.Transform = HeldCollisionTarget.GlobalTransform.AffineInverse() * originalShape.GlobalTransform;
-            originalShape.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
-            proxyShapes.Add(new HeldCollisionProxyShapeState(originalShape, proxyShape, originalShape.Disabled));
+            uint shapeOwnerId = HeldCollisionTarget.CreateShapeOwner(originalShape);
+            HeldCollisionTarget.ShapeOwnerAddShape(shapeOwnerId, originalShape.Shape);
+            HeldCollisionTarget.ShapeOwnerSetTransform(
+                shapeOwnerId,
+                HeldCollisionTarget.GlobalTransform.AffineInverse() * originalShape.GlobalTransform);
+            HeldCollisionTarget.ShapeOwnerSetDisabled(shapeOwnerId, false);
+            bool wasDisabled = originalShape.Disabled;
+            originalShape.Disabled = true;
+            proxyShapes.Add(new HeldCollisionProxyShapeState(originalShape, shapeOwnerId, wasDisabled));
         }
 
         if (proxyShapes.Count > 0)
         {
             _heldCollisionProxyState = new HeldCollisionProxyState(HeldCollisionTarget, proxyShapes);
-        }
-    }
-
-    private void UpdateHeldCollisionProxies()
-    {
-        if (_heldCollisionProxyState is not HeldCollisionProxyState state || !IsInstanceValid(state.Target))
-        {
-            ClearHeldCollisionProxies();
-            return;
-        }
-
-        foreach (HeldCollisionProxyShapeState proxyShape in state.Shapes)
-        {
-            if (!IsInstanceValid(proxyShape.OriginalShape) || !IsInstanceValid(proxyShape.ProxyShape))
-            {
-                continue;
-            }
-
-            proxyShape.ProxyShape.Transform = state.Target.GlobalTransform.AffineInverse() * proxyShape.OriginalShape.GlobalTransform;
         }
     }
 
@@ -668,12 +647,12 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         {
             if (IsInstanceValid(proxyShape.OriginalShape))
             {
-                proxyShape.OriginalShape.SetDeferred(CollisionShape3D.PropertyName.Disabled, proxyShape.WasDisabled);
+                proxyShape.OriginalShape.Disabled = proxyShape.WasDisabled;
             }
 
-            if (IsInstanceValid(proxyShape.ProxyShape))
+            if (IsInstanceValid(state.Target))
             {
-                proxyShape.ProxyShape.QueueFree();
+                state.Target.RemoveShapeOwner(proxyShape.ShapeOwnerId);
             }
         }
 
@@ -945,7 +924,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
 
     private sealed record HeldCollisionProxyShapeState(
         CollisionShape3D OriginalShape,
-        CollisionShape3D ProxyShape,
+        uint ShapeOwnerId,
         bool WasDisabled);
 
     private readonly record struct CollisionExceptionPair(PhysicsBody3D HeldBody, PhysicsBody3D OtherBody);

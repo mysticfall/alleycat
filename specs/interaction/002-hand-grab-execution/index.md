@@ -208,38 +208,49 @@ Provide a grab execution system that:
 ### Held Collision Proxies
 
 43. Hand component exposes a configurable `HeldCollisionTarget: CollisionObject3D`
-     property that specifies where collision proxy shapes are attached while
-     holding a Movable grabbable. This is typically the hand target (which must
-     be a CollisionObject3D, such as an AnimatableBody3D) or a dedicated proxy
-     node under a CollisionObject3D.
+     property that specifies which collision object receives runtime shape
+     owners while holding a Movable grabbable. This is typically the hand target
+     (which must be a CollisionObject3D, such as an AnimatableBody3D) or a
+     dedicated proxy CollisionObject3D.
 44. On commit for a Movable grabbable, after parenting the object to hand bone:
-     a. Duplicate the held item's CollisionShape3D nodes as proxy shapes under
-        `HeldCollisionTarget`.
-     b. Disable the original item's collision shapes while proxies exist.
-     c. Preserve same-side collision exceptions between the held body and the
+     a. Create runtime shape owners on `HeldCollisionTarget` for each enabled
+        held item `CollisionShape3D`.
+     b. Add the original `Shape3D` resources to those runtime owners without
+        duplicating the resources or creating proxy `CollisionShape3D` nodes.
+     c. Capture each runtime shape owner's hand-target-local transform relative
+        to `HeldCollisionTarget` at commit, matching a manually authored
+        `CollisionShape3D` child under that target with the same local transform.
+     d. Disable the original item's enabled collision shapes while runtime owners
+        exist. Shapes that were already disabled are not proxied.
+     e. Preserve same-side collision exceptions between the held body and the
         grabbing hand (as per items 38-41 above).
-     d. Use deferred physics-safe toggles when enabling/disabling shapes;
-        record the prior disabled state for accurate restoration.
+     f. Toggle original shape disabled state synchronously during grab/release
+        processing; record the prior disabled state for accurate restoration.
 45. On release, for a Movable grabbable:
-     a. Remove all collision proxy shapes from `HeldCollisionTarget`.
+     a. Remove all runtime shape owners created on `HeldCollisionTarget`.
      b. Restore the original item's collision shapes to their prior disabled
-        state (using recorded state from step 44d).
+        state (using recorded state from step 44f).
      c. Remove collision exceptions added during hold (as per item 42 above).
      d. Restore physics state (as per existing throw momentum section).
-46. Duplicate proxy shapes are preferred over moving authored item shapes to
-     preserve scene hierarchy and enable clean restoration on release.
+46. Runtime shape owners must preserve scene hierarchy and avoid per-grab shape
+     resource duplication while enabling clean restoration on release.
 47. The collision proxy implementation must ensure the held item retains effective
      world collision while held, enabling the held item to hit and interact with
      other objects in the game world.
+48. Runtime shape owner transforms are captured as hand-target-local transforms
+     at commit and remain fixed in `HeldCollisionTarget` local space for the
+     duration of the hold. Movement of `HeldCollisionTarget` carries the proxy
+     shapes. The proxy system must not continuously chase the disabled source
+     `CollisionShape3D` global transforms each frame.
 
 ### Throw Momentum On Release
 
-48. While holding a Movable grabbable that is a RigidBody3D, the system
+49. While holding a Movable grabbable that is a RigidBody3D, the system
      estimates a release velocity from the recent motion of the hand or
      held-object transform. Estimation may use delta-position over delta-time
      from recent frames, with a smoothing window; stationary hold yields
      near-zero estimated velocity.
-49. On `Release()`, for a Movable physical grabbable:
+50. On `Release()`, for a Movable physical grabbable:
      - Restore physics state (unfreeze mode, re-enable collision).
      - Transfer the estimated release velocity so the object continues along
        the throw trajectory rather than dropping from rest.
@@ -250,28 +261,28 @@ Provide a grab execution system that:
        that the object follows the release trajectory with appropriate speed.
      - Clamp or tune the transferred velocity to avoid extreme impulses.
      - Immovable grabbables do not receive throw impulse.
-50. Existing collision exceptions are removed on release (as per item 45c above).
+51. Existing collision exceptions are removed on release (as per item 45c above).
 
 ### Release
 
-51. `Release()` must restore all involved subsystems:
+52. `Release()` must restore all involved subsystems:
      - Unparent grabbed object from BoneAttachment3D.
      - Clear hand pose via `HandPoseController.ClearHandPose()`.
      - Restore IK target to default via `IKTargetIntentProvider`.
-     - Remove collision proxy shapes from `HeldCollisionTarget`.
+     - Remove runtime shape owners from `HeldCollisionTarget`.
      - Restore original item collision shapes to prior disabled state.
      - Remove collision exceptions added during hold.
      - For a Movable physical grabbable, transfer estimated release velocity
        to the RigidBody3D so it follows the throw trajectory.
-52. Release is idempotent: calling on already-empty hand is a no-op.
+53. Release is idempotent: calling on already-empty hand is a no-op.
 
 ### Testing Asset
 
-53. Define a test ball asset:
+54. Define a test ball asset:
     - RigidBody3D with sphere mesh, radius 4cm (0.04m).
     - `SphericalGrabPoint` component at centre.
     - Authored in `test_ball.tscn` for photobooth verification.
-54. The scene must remain discoverable and grabbable; physics is suspended on grab and
+55. The scene must remain discoverable and grabbable; physics is suspended on grab and
     restored on release.
 
 ## In Scope
@@ -287,8 +298,9 @@ Provide a grab execution system that:
 - Object parenting via BoneAttachment3D.
 - Hand pose from grab point animation (left and right).
 - Physics state suspension on grab and restoration on release.
-- Held collision proxy system: `HeldCollisionTarget` property, duplicate proxy shapes,
-  original shape disable with prior-state tracking, proxy cleanup on release.
+- Held collision proxy system: `HeldCollisionTarget` property, runtime shape owners
+  using original `Shape3D` resources, original shape disable with prior-state tracking,
+  and owner cleanup on release.
 - Same-side collision exception handling for held Movables.
 - Release with subsystem state restoration.
 - Throw momentum: velocity estimation from hand/attachment motion and transfer
@@ -381,16 +393,20 @@ Provide a grab execution system that:
 |    |                   | effective world collision and can hit/interact with other |
 |    |                   | objects while following the hand. |
 | 32 | Technical         | Hand exposes configurable `HeldCollisionTarget: CollisionObject3D` |
-|    |                   | property specifying where collision proxy shapes attach while holding. |
-| 33 | Technical         | On commit for Movable grabbable, duplicate CollisionShape3D nodes |
-|    |                   | from held item as proxies under `HeldCollisionTarget`; disable |
-|    |                   | original item shapes while proxies exist. |
-| 34 | Technical         | Use deferred physics-safe toggles when enabling/disabling shapes; |
+|    |                   | property specifying where runtime shape owners attach while holding. |
+| 33 | Technical         | On commit for Movable grabbable, create runtime shape owners on |
+|    |                   | `HeldCollisionTarget` that reuse original `Shape3D` resources; no |
+|    |                   | proxy `CollisionShape3D` nodes or duplicated shape resources are created. |
+| 34 | Technical         | Toggle original shape disabled state synchronously during grab/release |
 |    |                   | record prior disabled state for accurate restoration. |
-| 35 | Technical         | On release, remove proxy shapes from `HeldCollisionTarget` and |
+| 35 | Technical         | On release, remove runtime shape owners from `HeldCollisionTarget` and |
 |    |                   | restore original item shapes to recorded prior disabled state. |
-| 36 | Technical         | Same-side collision exceptions are preserved during proxy-based |
+| 36 | Technical         | Same-side collision exceptions are preserved during shape-owner-based |
 |    |                   | held collision; exceptions are removed on release. |
+| 37 | Technical         | Runtime shape owner transforms are captured once as hand-target-local |
+|    |                   | transforms at commit, then remain fixed while |
+|    |                   | `HeldCollisionTarget` movement carries them; disabled original shapes |
+|    |                   | are not proxied. |
 
 ## References
 

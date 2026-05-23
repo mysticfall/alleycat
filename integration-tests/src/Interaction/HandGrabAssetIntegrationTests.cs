@@ -1312,7 +1312,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
-    /// Verifies movable held rigid bodies proxy enabled collision shapes under the configured hand collision target until release.
+    /// Verifies movable held rigid bodies proxy enabled collision shapes through runtime shape owners until release.
     /// </summary>
     [Headless]
     [Fact]
@@ -1381,6 +1381,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             ball.GlobalPosition = Vector3.Zero;
             handTarget.GlobalTransform = new Transform3D(Basis.Identity, Vector3.Zero);
             ball.RefreshComponents();
+            int[] initialShapeOwners = handTarget.GetShapeOwners();
             GrabPointCandidate? candidate = ((IGrabbable)ball).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform);
             Assert.NotNull(candidate);
 
@@ -1389,23 +1390,36 @@ public sealed partial class HandGrabAssetIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
             Assert.Same(ball, hand.CurrentGrabbed);
-            CollisionShape3D enabledProxy = handTarget.GetNode<CollisionShape3D>("EnabledHeldShapeHeldProxy");
-            CollisionShape3D nestedProxy = handTarget.GetNode<CollisionShape3D>("NestedEnabledHeldShapeHeldProxy");
+            Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("EnabledHeldShapeHeldProxy"));
+            Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("NestedEnabledHeldShapeHeldProxy"));
             Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("DisabledHeldShapeHeldProxy"));
-            Assert.NotSame(enabledShape.Shape, enabledProxy.Shape);
-            Assert.NotSame(nestedEnabledShape.Shape, nestedProxy.Shape);
-            Assert.False(enabledProxy.Disabled);
-            Assert.False(nestedProxy.Disabled);
+
+            int[] heldShapeOwners = handTarget.GetShapeOwners();
+            int[] proxyShapeOwners = [.. heldShapeOwners.Except(initialShapeOwners)];
+            Assert.Equal(2, proxyShapeOwners.Length);
+            uint enabledProxyOwner = AssertSingleShapeOwnerForShape(handTarget, proxyShapeOwners, enabledShape.Shape);
+            uint nestedProxyOwner = AssertSingleShapeOwnerForShape(handTarget, proxyShapeOwners, nestedEnabledShape.Shape);
+            Assert.DoesNotContain(
+                proxyShapeOwners,
+                ownerId => ShapeOwnerContainsShape(handTarget, ownerId, disabledShape.Shape));
+            Assert.False(handTarget.IsShapeOwnerDisabled(enabledProxyOwner));
+            Assert.False(handTarget.IsShapeOwnerDisabled(nestedProxyOwner));
             Assert.True(enabledShape.Disabled);
             Assert.True(nestedEnabledShape.Disabled);
             Assert.True(disabledShape.Disabled);
+            Transform3D expectedEnabledManualChildTransform = handTarget.GlobalTransform.AffineInverse()
+                * enabledShape.GlobalTransform;
+            Transform3D expectedNestedManualChildTransform = handTarget.GlobalTransform.AffineInverse()
+                * nestedEnabledShape.GlobalTransform;
+            Transform3D capturedEnabledProxyTransform = handTarget.ShapeOwnerGetTransform(enabledProxyOwner);
+            Transform3D capturedNestedProxyTransform = handTarget.ShapeOwnerGetTransform(nestedProxyOwner);
             AssertTransformApproximatelyEqual(
-                handTarget.GlobalTransform.AffineInverse() * enabledShape.GlobalTransform,
-                enabledProxy.Transform,
+                expectedEnabledManualChildTransform,
+                capturedEnabledProxyTransform,
                 PositionToleranceMetres);
             AssertTransformApproximatelyEqual(
-                handTarget.GlobalTransform.AffineInverse() * nestedEnabledShape.GlobalTransform,
-                nestedProxy.Transform,
+                expectedNestedManualChildTransform,
+                capturedNestedProxyTransform,
                 PositionToleranceMetres);
 
             ball.GlobalTransform = new Transform3D(new Basis(Vector3.Up, 0.5f), new Vector3(0.15f, 0.02f, -0.03f));
@@ -1413,12 +1427,20 @@ public sealed partial class HandGrabAssetIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
             AssertTransformApproximatelyEqual(
-                handTarget.GlobalTransform.AffineInverse() * enabledShape.GlobalTransform,
-                enabledProxy.Transform,
+                expectedEnabledManualChildTransform,
+                handTarget.ShapeOwnerGetTransform(enabledProxyOwner),
                 PositionToleranceMetres);
             AssertTransformApproximatelyEqual(
+                expectedNestedManualChildTransform,
+                handTarget.ShapeOwnerGetTransform(nestedProxyOwner),
+                PositionToleranceMetres);
+            AssertTransformNotApproximatelyEqual(
+                handTarget.GlobalTransform.AffineInverse() * enabledShape.GlobalTransform,
+                handTarget.ShapeOwnerGetTransform(enabledProxyOwner),
+                PositionToleranceMetres);
+            AssertTransformNotApproximatelyEqual(
                 handTarget.GlobalTransform.AffineInverse() * nestedEnabledShape.GlobalTransform,
-                nestedProxy.Transform,
+                handTarget.ShapeOwnerGetTransform(nestedProxyOwner),
                 PositionToleranceMetres);
 
             hand.Release();
@@ -1427,6 +1449,7 @@ public sealed partial class HandGrabAssetIntegrationTests
             Assert.Null(hand.CurrentGrabbed);
             Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("EnabledHeldShapeHeldProxy"));
             Assert.Null(handTarget.GetNodeOrNull<CollisionShape3D>("NestedEnabledHeldShapeHeldProxy"));
+            Assert.Equal(initialShapeOwners.OrderBy(ownerId => ownerId), handTarget.GetShapeOwners().OrderBy(ownerId => ownerId));
             Assert.False(enabledShape.Disabled);
             Assert.False(nestedEnabledShape.Disabled);
             Assert.True(disabledShape.Disabled);
@@ -1847,6 +1870,37 @@ public sealed partial class HandGrabAssetIntegrationTests
         return Assert.IsAssignableFrom<T>(property.GetValue(candidate));
     }
 
+    private static uint AssertSingleShapeOwnerForShape(
+        CollisionObject3D collisionObject,
+        IEnumerable<int> ownerIds,
+        Shape3D expectedShape)
+    {
+        uint[] matchingOwnerIds =
+            [.. ownerIds
+                .Where(ownerId => ShapeOwnerContainsShape(collisionObject, ownerId, expectedShape))
+                .Select(ownerId => (uint)ownerId)];
+
+        uint ownerId = Assert.Single(matchingOwnerIds);
+        Assert.Equal(1, collisionObject.ShapeOwnerGetShapeCount(ownerId));
+        Assert.Same(expectedShape, collisionObject.ShapeOwnerGetShape(ownerId, 0));
+        return ownerId;
+    }
+
+    private static bool ShapeOwnerContainsShape(CollisionObject3D collisionObject, int ownerId, Shape3D expectedShape)
+    {
+        uint unsignedOwnerId = (uint)ownerId;
+        int shapeCount = collisionObject.ShapeOwnerGetShapeCount(unsignedOwnerId);
+        for (int shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
+        {
+            if (collisionObject.ShapeOwnerGetShape(unsignedOwnerId, shapeIndex) == expectedShape)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static void AssertTransformApproximatelyEqual(
         Transform3D expected,
         Transform3D actual,
@@ -1864,6 +1918,21 @@ public sealed partial class HandGrabAssetIntegrationTests
         Assert.True(
             actual.Basis.Z.DistanceTo(expected.Basis.Z) <= tolerance,
             $"Expected transform Z basis {expected.Basis.Z}, observed {actual.Basis.Z}.");
+    }
+
+    private static void AssertTransformNotApproximatelyEqual(
+        Transform3D unexpected,
+        Transform3D actual,
+        float tolerance)
+    {
+        bool originsMatch = actual.Origin.DistanceTo(unexpected.Origin) <= tolerance;
+        bool xBasesMatch = actual.Basis.X.DistanceTo(unexpected.Basis.X) <= tolerance;
+        bool yBasesMatch = actual.Basis.Y.DistanceTo(unexpected.Basis.Y) <= tolerance;
+        bool zBasesMatch = actual.Basis.Z.DistanceTo(unexpected.Basis.Z) <= tolerance;
+
+        Assert.False(
+            originsMatch && xBasesMatch && yBasesMatch && zBasesMatch,
+            $"Expected transform to differ from {unexpected}, observed {actual}.");
     }
 
     private static void AssertBasisApproximatelyEqual(Basis expected, Basis actual)
