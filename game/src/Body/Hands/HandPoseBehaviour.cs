@@ -145,6 +145,12 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     public float GrabCommitDistanceMetres { get; set; } = 0.025f;
 
     /// <summary>
+    /// Additional grab-point reach tolerance used only when refreshing a pending movable grab candidate.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,0.1,0.001,or_greater,suffix:m")]
+    public float PendingMovableGrabAcquisitionToleranceMetres { get; set; } = 0.015f;
+
+    /// <summary>
     /// Minimum tracked release speed transferred to a released movable rigid body.
     /// </summary>
     [Export(PropertyHint.Range, "0,1,0.01,or_greater,suffix:m/s")]
@@ -490,8 +496,15 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         }
 
         Transform3D currentHandTransform = ResolveHandTransform();
-        float distanceToCommit = currentHandTransform.Origin.DistanceTo(pending.ApproachHandTarget.Origin);
-        if (distanceToCommit > GrabCommitDistanceMetres)
+        float originalDistanceToCommit = currentHandTransform.Origin.DistanceTo(pending.ApproachHandTarget.Origin);
+        bool originalCandidateSettled = originalDistanceToCommit <= GrabCommitDistanceMetres;
+        GrabPointCandidate? refreshedCandidate = RefreshPendingGrabCandidate(pending, currentHandTransform);
+        float refreshedDistanceToCommit = refreshedCandidate is null
+            ? float.PositiveInfinity
+            : currentHandTransform.Origin.DistanceTo(ResolveApproachHandTarget(refreshedCandidate, currentHandTransform).Origin);
+        bool refreshedCandidateSettled = refreshedDistanceToCommit <= GrabCommitDistanceMetres;
+        float distanceToCommit = Mathf.Min(originalDistanceToCommit, refreshedDistanceToCommit);
+        if (!originalCandidateSettled && !refreshedCandidateSettled)
         {
             EmitPendingGrabDebug(pending, force: false, currentHandTransform, distanceToCommit);
             return;
@@ -503,7 +516,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
 
         if (pending.Grabbable.Mobility == GrabbableMobility.Immovable)
         {
-            CommitImmovableGrab(pending);
+            CommitImmovableGrab(pending, refreshedCandidate, originalCandidateSettled, refreshedCandidateSettled);
             return;
         }
 
@@ -514,7 +527,10 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         }
 
         bool isNodeGrabbable = pending.Grabbable is Node3D;
-        bool acceptedGrab = isNodeGrabbable && pending.Grabbable.Grab(pending.Candidate);
+        GrabPointCandidate? commitCandidate = isNodeGrabbable
+            ? TryCommitGrabCandidate(pending, refreshedCandidate, originalCandidateSettled, refreshedCandidateSettled)
+            : null;
+        bool acceptedGrab = commitCandidate is not null;
         if (pending.Grabbable is not Node3D grabbedNode || !acceptedGrab)
         {
             _pendingGrabState = null;
@@ -527,11 +543,11 @@ public sealed partial class HandPoseBehaviour : Node, IHand
 
         try
         {
-            AttachGrabbedNode(grabbedNode, pending.Candidate);
+            AttachGrabbedNode(grabbedNode, commitCandidate!);
             CreateHeldCollisionProxies(grabbedNode);
             AddHeldMovableCollisionExceptions(grabbedNode);
             _releaseVelocityTracker.Reset(grabbedNode.GlobalPosition);
-            ApplyGrabPoseWithDiagnostics(pending.Candidate.Animation);
+            ApplyGrabPoseWithDiagnostics(commitCandidate!.Animation);
             CurrentGrabbed = pending.Grabbable;
             _pendingGrabState = null;
             GrabTargetProvider?.ClearGrabTargetImmediate();
@@ -551,6 +567,31 @@ public sealed partial class HandPoseBehaviour : Node, IHand
             $"Grab committed: movable {FormatGrabbable(CurrentGrabbed)}, provider active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}, "
             + $"default={FormatProviderDefaultState()}.");
     }
+
+    private GrabPointCandidate? RefreshPendingGrabCandidate(PendingGrabState pending, Transform3D currentHandTransform)
+    {
+        float acquisitionToleranceMetres = pending.Grabbable.Mobility == GrabbableMobility.Movable
+            ? PendingMovableGrabAcquisitionToleranceMetres
+            : 0.0f;
+        GrabPointCandidate? refreshedCandidate = pending.Grabbable.GetGrabPoint(
+            Side,
+            currentHandTransform,
+            acquisitionToleranceMetres);
+        return refreshedCandidate is not null && ReferenceEquals(refreshedCandidate.Source, pending.Candidate.Source)
+            ? refreshedCandidate
+            : null;
+    }
+
+    private static GrabPointCandidate? TryCommitGrabCandidate(
+        PendingGrabState pending,
+        GrabPointCandidate? refreshedCandidate,
+        bool originalCandidateSettled,
+        bool refreshedCandidateSettled)
+        => originalCandidateSettled && pending.Grabbable.Grab(pending.Candidate)
+            ? pending.Candidate
+            : refreshedCandidateSettled && refreshedCandidate is not null && pending.Grabbable.Grab(refreshedCandidate)
+            ? refreshedCandidate
+            : null;
 
     private void UpdateHeldReleaseVelocity(double delta)
     {
@@ -755,9 +796,18 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         _heldMovableCollisionExceptions.Clear();
     }
 
-    private void CommitImmovableGrab(PendingGrabState pending)
+    private void CommitImmovableGrab(
+        PendingGrabState pending,
+        GrabPointCandidate? refreshedCandidate,
+        bool originalCandidateSettled,
+        bool refreshedCandidateSettled)
     {
-        if (!pending.Grabbable.Grab(pending.Candidate))
+        GrabPointCandidate? commitCandidate = TryCommitGrabCandidate(
+            pending,
+            refreshedCandidate,
+            originalCandidateSettled,
+            refreshedCandidateSettled);
+        if (commitCandidate is null)
         {
             _pendingGrabState = null;
             GrabTargetProvider?.ReleaseGrabTarget();
@@ -765,7 +815,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
             return;
         }
 
-        ApplyGrabPoseWithDiagnostics(pending.Candidate.Animation);
+        ApplyGrabPoseWithDiagnostics(commitCandidate.Animation);
         CurrentGrabbed = pending.Grabbable;
         _pendingGrabState = null;
         EmitGrabDebug(

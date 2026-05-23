@@ -27,6 +27,14 @@ public sealed record GrabPointCandidate(
     float AcquisitionDistance)
 {
     /// <summary>
+    /// Gets additional acquisition tolerance applied when this candidate was produced for a pending grab refresh.
+    /// </summary>
+    public float AcquisitionToleranceMetres
+    {
+        get; init;
+    }
+
+    /// <summary>
     /// Gets the composed hand-relative transform from the authored position and Euler rotation offsets.
     /// </summary>
     public Transform3D GrabPointOffsetFromHand => ComposeGrabPointOffsetFromHand(

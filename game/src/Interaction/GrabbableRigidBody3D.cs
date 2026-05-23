@@ -107,7 +107,10 @@ public partial class GrabbableRigidBody3D : RigidBody3D, IGrabbable, IReleasable
 
     private static bool IsCandidateFresh(GrabPointCandidate candidate)
     {
-        GrabPointCandidate? refreshedCandidate = candidate.Source.GetGrabPoint(candidate.HandSide, candidate.HandTransform);
+        GrabPointCandidate? refreshedCandidate = candidate.Source.GetGrabPoint(
+            candidate.HandSide,
+            candidate.HandTransform,
+            candidate.AcquisitionToleranceMetres);
         return refreshedCandidate is not null
             && ReferenceEquals(refreshedCandidate.Source, candidate.Source)
             && IsMatchingGrabPointTransform(refreshedCandidate.GrabPointTransform, candidate.GrabPointTransform)

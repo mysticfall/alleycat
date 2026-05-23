@@ -71,7 +71,10 @@ public partial class GrabbableNode : Node3D, IGrabbable, IReleasableGrabbable
 
     private static bool IsCandidateFresh(GrabPointCandidate candidate)
     {
-        GrabPointCandidate? refreshedCandidate = candidate.Source.GetGrabPoint(candidate.HandSide, candidate.HandTransform);
+        GrabPointCandidate? refreshedCandidate = candidate.Source.GetGrabPoint(
+            candidate.HandSide,
+            candidate.HandTransform,
+            candidate.AcquisitionToleranceMetres);
         return refreshedCandidate is not null
             && ReferenceEquals(refreshedCandidate.Source, candidate.Source)
             && IsMatchingGrabPointTransform(refreshedCandidate.GrabPointTransform, candidate.GrabPointTransform)

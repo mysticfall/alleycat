@@ -83,6 +83,13 @@ public partial class CylindricalGrabPoint : Marker3D, IGrabPoint
 
     /// <inheritdoc />
     public GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)
+        => GetGrabPoint(handSide, handTransform, 0.0f);
+
+    /// <inheritdoc />
+    public GrabPointCandidate? GetGrabPoint(
+        LimbSide handSide,
+        Transform3D handTransform,
+        float acquisitionToleranceMetres)
     {
         if (GrabAnimation is null || LengthMetres <= 0.0f || ReachDistanceMetres <= 0.0f || SnapDistanceMetres < 0.0f)
         {
@@ -97,7 +104,9 @@ public partial class CylindricalGrabPoint : Marker3D, IGrabPoint
             GrabPointRotationOffsetFromHand);
         Vector3 rawHandReference = handTransform.Origin;
         Vector3 authoredGripReference = rawHandReference + (handBasis * GrabPointPositionOffsetFromHand);
-        float reachDistanceSquared = ReachDistanceMetres * ReachDistanceMetres;
+        float tolerance = Mathf.Max(0.0f, acquisitionToleranceMetres);
+        float effectiveReachDistanceMetres = ReachDistanceMetres + tolerance;
+        float reachDistanceSquared = effectiveReachDistanceMetres * effectiveReachDistanceMetres;
 
         AcquisitionCandidate rawHandAcquisition = GetAcquisitionCandidate(grabPointGlobalTransform, rawHandReference);
         AcquisitionCandidate authoredGripAcquisition = GetAcquisitionCandidate(grabPointGlobalTransform, authoredGripReference);
@@ -151,7 +160,10 @@ public partial class CylindricalGrabPoint : Marker3D, IGrabPoint
             selectedGrabPointTransform,
             GrabPointPositionOffsetFromHand,
             GrabPointRotationOffsetFromHand,
-            Mathf.Sqrt(selectedAcquisition.DistanceSquared));
+            Mathf.Sqrt(selectedAcquisition.DistanceSquared))
+        {
+            AcquisitionToleranceMetres = tolerance,
+        };
     }
 
     private AcquisitionCandidate GetAcquisitionCandidate(Transform3D grabPointGlobalTransform, Vector3 referencePoint)

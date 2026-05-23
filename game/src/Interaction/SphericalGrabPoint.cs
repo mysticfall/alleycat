@@ -71,6 +71,13 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
 
     /// <inheritdoc />
     public GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)
+        => GetGrabPoint(handSide, handTransform, 0.0f);
+
+    /// <inheritdoc />
+    public GrabPointCandidate? GetGrabPoint(
+        LimbSide handSide,
+        Transform3D handTransform,
+        float acquisitionToleranceMetres)
     {
         if (GrabAnimation is null || ReachDistanceMetres <= 0.0f)
         {
@@ -80,7 +87,8 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
         Vector3 centre = GlobalTransform.Origin;
         Vector3 handToCentre = centre - handTransform.Origin;
         float distanceSquared = handToCentre.LengthSquared();
-        if (distanceSquared <= 0.0f || distanceSquared > ReachDistanceMetres * ReachDistanceMetres)
+        float effectiveReachDistanceMetres = ReachDistanceMetres + Mathf.Max(0.0f, acquisitionToleranceMetres);
+        if (distanceSquared <= 0.0f || distanceSquared > effectiveReachDistanceMetres * effectiveReachDistanceMetres)
         {
             return null;
         }
@@ -111,6 +119,9 @@ public partial class SphericalGrabPoint : Marker3D, IGrabPoint
             selectedGrabPointTransform,
             GrabPointPositionOffsetFromHand,
             GrabPointRotationOffsetFromHand,
-            Mathf.Sqrt(distanceSquared));
+            Mathf.Sqrt(distanceSquared))
+        {
+            AcquisitionToleranceMetres = Mathf.Max(0.0f, acquisitionToleranceMetres),
+        };
     }
 }

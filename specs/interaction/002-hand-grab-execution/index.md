@@ -54,14 +54,18 @@ Provide a grab execution system that:
 10. Releasing a held Movable physical grabbable from a stationary hand
     does not launch the object; near-zero velocity is transferred.
 11. Releasing an Immovable grabbable does not apply throw impulse.
-12. Multiple hands operate independently without interference.
-13. A physical RigidBody3D test ball remains discoverable and grabbable
+12. A slowly moving or rolling Movable grabbable remains catchable when it
+     stays within the current hand's valid grab range during the approach,
+     including a small pending-grab tolerance that does not affect stationary
+     acquisition range.
+13. Multiple hands operate independently without interference.
+14. A physical RigidBody3D test ball remains discoverable and grabbable
     with physics suspended while held and restored on release.
-14. While holding a Movable grabbable, the held item must not collide with
+15. While holding a Movable grabbable, the held item must not collide with
      the grabbing hand's colliders (fingers, hand, lower-arm proxy) while
      still following hand motion. Non-grabbing hand and world collisions
      remain unless explicitly configured otherwise.
-15. While holding a Movable grabbable, the held item must retain effective
+16. While holding a Movable grabbable, the held item must retain effective
      world collision so it can hit and interact with other objects while
      following the hand. A held stick must be able to strike other objects.
 
@@ -104,10 +108,17 @@ Provide a grab execution system that:
      of the grab point's object-local transform.
 16. If the hand loses the candidate (e.g., object removed) before settling, the grab
     is abandoned and the hand returns to idle.
+17. On commit, the hand may refresh the selected grab point candidate using the
+     current hand transform, provided the refreshed candidate comes from the same
+     grab-point source as the pending selection. This allows slowly moving Movable
+     grabbables to be caught without accepting a different grab source.
+18. The commit-time refresh may apply a separate configurable acquisition tolerance
+    for `Movable` grabbables only. This tolerance does not change `ReachDistanceMetres`
+    on grab points and must not loosen initial stationary acquisition.
 
 ### Grab Point Transform Offset
 
-17. Each `GrabPointCandidate` carries authored position and rotation offsets:
+19. Each `GrabPointCandidate` carries authored position and rotation offsets:
     - `GrabPointPositionOffsetFromHand: Vector3` — position offset from hand attachment
       to the selected/contact grab point when held. For dynamic grab points this is
       not an offset to the item root/centre unless the selected/contact point is the
@@ -115,16 +126,16 @@ Provide a grab execution system that:
       transform before being used as this property.
     - `GrabPointRotationOffsetFromHand: Vector3` — rotation offset (Euler radians) from hand
       attachment to grab point when held.
-18. These offsets are stored in the candidate so they are immutable at query time.
-19. On commit, the selected grab point's hand-relative transform is composed from the
+20. These offsets are stored in the candidate so they are immutable at query time.
+21. On commit, the selected grab point's hand-relative transform is composed from the
      authored position and rotation offsets; object local transform may include the
      inverse of the grab point's object-local transform.
-20. The separate position and rotation vectors enable copy/paste from Godot editor
+22. The separate position and rotation vectors enable copy/paste from Godot editor
      and other tools that work with Vector3 values.
-21. `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand` enable per-animation
+23. `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand` enable per-animation
     or per-grab-point correction so items sit naturally in the hand regardless
     of the animation's canonical pose.
-22. The authoring workflow is:
+24. The authoring workflow is:
      a. Position the character hand in the desired grab pose.
      b. Place the item in the hand so it looks correct.
      c. Read the selected/contact grab point's local position and rotation (Euler)
@@ -132,12 +143,12 @@ Provide a grab execution system that:
         compose the root-to-selected/contact transform first.
      d. Set these as `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`
         on the grab point or its associated animation resource.
-23. The offsets are optional; when both are zero, the grab point's global transform
+25. The offsets are optional; when both are zero, the grab point's global transform
      is used directly as the held object's local transform.
 
 ### Hand Mobility During Hold
 
-24. Grab execution behaves differently based on `IGrabbable.Mobility`:
+26. Grab execution behaves differently based on `IGrabbable.Mobility`:
 
     **Movable grabbables** (e.g. ball, prop):
     - On commit, hand parents the object to the hand bone (BoneAttachment3D).
@@ -155,64 +166,64 @@ Provide a grab execution system that:
       fixed-offset attachment that does not follow hand motion; the IK target
       remains locked to the grab point.
 
-25. For both mobility types, releasing clears the grab point and returns the IK
+27. For both mobility types, releasing clears the grab point and returns the IK
     target to default (e.g., controller position) via smooth interpolation.
 
 ### Parenting And Hand Bone
 
-26. Parented object uses `BoneAttachment3D` nodes authored in `reference_female.tscn`.
-27. The hand component manages which bone attachment to use based on hand side.
-28. Object parenting preserves the grab point's relative transform at time of grab
+28. Parented object uses `BoneAttachment3D` nodes authored in `reference_female.tscn`.
+29. The hand component manages which bone attachment to use based on hand side.
+30. Object parenting preserves the grab point's relative transform at time of grab
     plus the authored position and rotation offsets.
 
 ### Hand Pose Integration
 
-29. On commit, the grab point's `GrabPointCandidate.Animation` resource is passed
+31. On commit, the grab point's `GrabPointCandidate.Animation` resource is passed
     to `HandPoseController.SetHandPose()` (internal, not via `IHand`).
-30. `HandPoseController` validates the resource as Godot `Animation` before use.
-31. Hand pose transition uses the existing smooth transition from BODY-001 (default 0.2s).
-32. Both left and right hand pose animations are supported while holding.
-33. On release, `HandPoseController.ClearHandPose()` restores upstream animation
+32. `HandPoseController` validates the resource as Godot `Animation` before use.
+33. Hand pose transition uses the existing smooth transition from BODY-001 (default 0.2s).
+34. Both left and right hand pose animations are supported while holding.
+35. On release, `HandPoseController.ClearHandPose()` restores upstream animation
     pass-through.
 
 ### Physics State Preservation
 
-34. `IGrabbable.Grab` implementation may suspend physics (e.g., RigidBody3D mode, collision)
+36. `IGrabbable.Grab` implementation may suspend physics (e.g., RigidBody3D mode, collision)
      on the item when committing the grab.
-35. `Release()` restores the object's prior physics state.
-36. For a RigidBody3D test ball, this means:
+37. `Release()` restores the object's prior physics state.
+38. For a RigidBody3D test ball, this means:
      - On commit: switch to StaticBody3D or disable physics integration.
      - On release: restore to RigidBody3D and re-enable physics.
-37. The mechanism for suspension/restoration is implementation-defined; the contract
+39. The mechanism for suspension/restoration is implementation-defined; the contract
      is that the object behaves physically when not held and becomes kinematic while held.
 
 ### Collision Exception Handling For Held Movables
 
-38. While holding a Movable grabbable, collision must be temporarily disabled between
+40. While holding a Movable grabbable, collision must be temporarily disabled between
      the held body and the grabbing hand's collision proxies to prevent erratic motion.
-39. Collision exceptions are added only between the held movable body and:
+41. Collision exceptions are added only between the held movable body and:
      - The hand target (IK target proxy collider).
      - The finger colliders of the grabbing hand.
      - The hand collider of the grabbing hand.
      - The lower-arm proxy collider of the grabbing hand.
-40. The held object preserves its RigidBody3D identity; do not replace the node type
+42. The held object preserves its RigidBody3D identity; do not replace the node type
      at runtime. Instead, emulate animatable held behaviour by:
      - Suspending physics integration (freezing linear/angular velocity).
      - Parenting to the hand bone as currently designed.
      - Using the collision exception mechanism to prevent self-collision.
-41. Non-grabbing hand collisions and world collisions remain active unless explicitly
+43. Non-grabbing hand collisions and world collisions remain active unless explicitly
      configured otherwise by the grabbable or grab point.
-42. On release, all collision exceptions are removed and the object's physics state
+44. On release, all collision exceptions are removed and the object's physics state
      is restored.
 
 ### Held Collision Proxies
 
-43. Hand component exposes a configurable `HeldCollisionTarget: CollisionObject3D`
+45. Hand component exposes a configurable `HeldCollisionTarget: CollisionObject3D`
      property that specifies which collision object receives runtime shape
      owners while holding a Movable grabbable. This is typically the hand target
      (which must be a CollisionObject3D, such as an AnimatableBody3D) or a
      dedicated proxy CollisionObject3D.
-44. On commit for a Movable grabbable, after parenting the object to hand bone:
+46. On commit for a Movable grabbable, after parenting the object to hand bone:
      a. Create runtime shape owners on `HeldCollisionTarget` for each enabled
         held item `CollisionShape3D`.
      b. Add the original `Shape3D` resources to those runtime owners without
@@ -223,21 +234,21 @@ Provide a grab execution system that:
      d. Disable the original item's enabled collision shapes while runtime owners
         exist. Shapes that were already disabled are not proxied.
      e. Preserve same-side collision exceptions between the held body and the
-        grabbing hand (as per items 38-41 above).
+        grabbing hand (as per items 40-43 above).
      f. Toggle original shape disabled state synchronously during grab/release
         processing; record the prior disabled state for accurate restoration.
-45. On release, for a Movable grabbable:
+47. On release, for a Movable grabbable:
      a. Remove all runtime shape owners created on `HeldCollisionTarget`.
      b. Restore the original item's collision shapes to their prior disabled
         state (using recorded state from step 44f).
-     c. Remove collision exceptions added during hold (as per item 42 above).
+     c. Remove collision exceptions added during hold (as per item 44 above).
      d. Restore physics state (as per existing throw momentum section).
-46. Runtime shape owners must preserve scene hierarchy and avoid per-grab shape
+48. Runtime shape owners must preserve scene hierarchy and avoid per-grab shape
      resource duplication while enabling clean restoration on release.
-47. The collision proxy implementation must ensure the held item retains effective
+49. The collision proxy implementation must ensure the held item retains effective
      world collision while held, enabling the held item to hit and interact with
      other objects in the game world.
-48. Runtime shape owner transforms are captured as hand-target-local transforms
+50. Runtime shape owner transforms are captured as hand-target-local transforms
      at commit and remain fixed in `HeldCollisionTarget` local space for the
      duration of the hold. Movement of `HeldCollisionTarget` carries the proxy
      shapes. The proxy system must not continuously chase the disabled source
@@ -245,12 +256,12 @@ Provide a grab execution system that:
 
 ### Throw Momentum On Release
 
-49. While holding a Movable grabbable that is a RigidBody3D, the system
+51. While holding a Movable grabbable that is a RigidBody3D, the system
      estimates a release velocity from the recent motion of the hand or
      held-object transform. Estimation may use delta-position over delta-time
      from recent frames, with a smoothing window; stationary hold yields
      near-zero estimated velocity.
-50. On `Release()`, for a Movable physical grabbable:
+52. On `Release()`, for a Movable physical grabbable:
      - Restore physics state (unfreeze mode, re-enable collision).
      - Transfer the estimated release velocity so the object continues along
        the throw trajectory rather than dropping from rest.
@@ -261,11 +272,11 @@ Provide a grab execution system that:
        that the object follows the release trajectory with appropriate speed.
      - Clamp or tune the transferred velocity to avoid extreme impulses.
      - Immovable grabbables do not receive throw impulse.
-51. Existing collision exceptions are removed on release (as per item 45c above).
+53. Existing collision exceptions are removed on release (as per item 47c above).
 
 ### Release
 
-52. `Release()` must restore all involved subsystems:
+54. `Release()` must restore all involved subsystems:
      - Unparent grabbed object from BoneAttachment3D.
      - Clear hand pose via `HandPoseController.ClearHandPose()`.
      - Restore IK target to default via `IKTargetIntentProvider`.
@@ -274,15 +285,15 @@ Provide a grab execution system that:
      - Remove collision exceptions added during hold.
      - For a Movable physical grabbable, transfer estimated release velocity
        to the RigidBody3D so it follows the throw trajectory.
-53. Release is idempotent: calling on already-empty hand is a no-op.
+55. Release is idempotent: calling on already-empty hand is a no-op.
 
 ### Testing Asset
 
-54. Define a test ball asset:
+56. Define a test ball asset:
     - RigidBody3D with sphere mesh, radius 4cm (0.04m).
     - `SphericalGrabPoint` component at centre.
     - Authored in `test_ball.tscn` for photobooth verification.
-55. The scene must remain discoverable and grabbable; physics is suspended on grab and
+57. The scene must remain discoverable and grabbable; physics is suspended on grab and
     restored on release.
 
 ## In Scope
@@ -306,6 +317,9 @@ Provide a grab execution system that:
 - Throw momentum: velocity estimation from hand/attachment motion and transfer
   to Movable physical grabbables on release.
 - Test ball asset (RigidBody3D + SphericalGrabPoint) in `test_ball.tscn`.
+- Commit-time candidate refresh for pending grabs whose selected grab-point source remains valid.
+- Separate pending-grab acquisition tolerance for `Movable` grabbables without changing
+  grab-point `ReachDistanceMetres` or initial stationary acquisition.
 
 ## Out Of Scope
 
@@ -329,84 +343,91 @@ Provide a grab execution system that:
 |    |                   | follows normal controller or default provider motion. |
 | 4  | User              | While holding a `Movable` grabbable, the held item follows the |
 |    |                   | hand through all movements. |
-| 4a | User              | While holding an `Immovable` grabbable, the hand stays constrained |
+| 5  | User              | While holding an `Immovable` grabbable, the hand stays constrained |
 |    |                   | to the grab point and cannot move freely. |
-| 5  | User              | Both left and right hand pose animations work while holding. |
-| 6  | User              | Grab points support separate authored position and |
+| 6  | User              | Both left and right hand pose animations work while holding. |
+| 7  | User              | Grab points support separate authored position and |
 |    |                   | rotation offsets per animation or grab point. |
-| 7  | User              | Authoring workflow exists to determine offset by manually |
+| 8  | User              | Authoring workflow exists to determine offset by manually |
 |    |                   | positioning an item on a character hand. |
-| 8  | User              | Release restores IK, hand pose, and parenting to initial states. |
-| 9  | User              | RigidBody3D test ball is discoverable and grabbable with |
+| 9  | User              | Release restores IK, hand pose, and parenting to initial states. |
+| 10 | User              | A slowly moving or rolling Movable grabbable can still be caught when |
+|    |                   | it remains in valid range of the current hand during approach. |
+| 11 | User              | RigidBody3D test ball is discoverable and grabbable with |
 |    |                   | physics suspended while held and restored on release. |
-| 10 | Technical         | Discovery uses either Godot group or Area3D with configurable range. |
-| 11 | Technical         | Candidate selection is deterministic using closest acquisition |
+| 12 | Technical         | Discovery uses either Godot group or Area3D with configurable range. |
+| 13 | Technical         | Candidate selection is deterministic using closest acquisition |
 |    |                   | distance rule; `HandTarget.Origin` must not be used for ranking. |
-| 12 | Technical         | Candidate carries authored `GrabPointPositionOffsetFromHand` |
+| 14 | Technical         | Candidate carries authored `GrabPointPositionOffsetFromHand` |
 |    |                   | and `GrabPointRotationOffsetFromHand` (zero if absent). |
-| 13 | Technical         | Hand enters `Approaching` state, moves to target via IK, then |
+| 15 | Technical         | Hand enters `Approaching` state, moves to target via IK, then |
 |    |                   | commits on settling (not on button press). |
-| 14 | Technical         | For `Movable` grabbables: on commit, after parenting object to hand |
+| 16 | Technical         | For `Movable` grabbables: on commit, after parenting object to hand |
 |    |                   | bone, clear the hand grab target provider override so hand can move |
 |    |                   | freely while the object follows. |
-| 15 | Technical         | For `Immovable` grabbables: on commit, keep hand grab target provider |
+| 17 | Technical         | For `Immovable` grabbables: on commit, keep hand grab target provider |
 |    |                   | override active throughout the hold; hand stays constrained to grab |
 |    |                   | point. |
-| 16 | Technical         | On commit, grab-point hand-relative transform is composed |
+| 18 | Technical         | On commit, grab-point hand-relative transform is composed |
 |    |                   | from `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand`; |
 |    |                   | object local may include inverse of grab-point object-local transform. |
-| 17 | Technical         | Physics is suspended on grab and restored on release for |
+| 19 | Technical         | Physics is suspended on grab and restored on release for |
 |    |                   | physical objects such as RigidBody3D. |
-| 18 | Technical         | `Release()` restores all subsystems and is idempotent. |
-| 19 | Technical         | Test ball exists as RigidBody3D with 4cm radius and centre |
+| 20 | Technical         | `Release()` restores all subsystems and is idempotent. |
+| 21 | Technical         | Test ball exists as RigidBody3D with 4cm radius and centre |
 |    |                   | SphericalGrabPoint in `test_ball.tscn`. |
-| 20 | Technical         | Authoring workflow uses manual positioning and reads relative |
+| 22 | Technical         | Authoring workflow uses manual positioning and reads relative |
 |    |                   | position and rotation (Euler) from hand bone. |
-| 21 | Technical         | Grab-point animation resource is validated as Godot `Animation` |
+| 23 | Technical         | Grab-point animation resource is validated as Godot `Animation` |
 |    |                   | before being passed to `HandPoseController.SetHandPose()`. |
-| 22 | User              | While holding a Movable grabbable, the held item does not collide |
+| 24 | User              | While holding a Movable grabbable, the held item does not collide |
 |    |                   | with the grabbing hand's colliders (fingers, hand, lower-arm) |
 |    |                   | while still following hand motion; non-grabbing hand/world |
 |    |                   | collisions remain unless configured otherwise. |
-| 23 | Technical         | Collision exceptions are added between held movable body and |
+| 25 | Technical         | Collision exceptions are added between held movable body and |
 |    |                   | same-side hand target, finger colliders, hand collider, and |
 |    |                   | lower-arm proxy collider of the grabbing hand. |
-| 24 | Technical         | Held object preserves RigidBody3D identity; physics is suspended |
+| 26 | Technical         | Held object preserves RigidBody3D identity; physics is suspended |
 |    |                   | while held and exceptions are removed on release. |
-| 25 | User              | Releasing a held Movable physical grabbable transfers an |
+| 27 | User              | Releasing a held Movable physical grabbable transfers an |
 |    |                   | estimated release velocity so the object follows the throw |
 |    |                   | trajectory instead of dropping from rest. |
-| 26 | User              | Releasing a held Movable physical grabbable from a stationary |
+| 28 | User              | Releasing a held Movable physical grabbable from a stationary |
 |    |                   | hand does not launch the object. |
-| 27 | User              | Releasing an Immovable grabbable does not apply throw impulse. |
-| 28 | Technical         | Release velocity is estimated from recent hand/attachment or |
+| 29 | User              | Releasing an Immovable grabbable does not apply throw impulse. |
+| 30 | Technical         | Release velocity is estimated from recent hand/attachment or |
 |    |                   | held-object transform motion; a smoothing window or low-pass |
 |    |                   | filter may be used; near-zero velocity for stationary hold. |
-| 29 | Technical         | Velocity/impulse transfer is implementation-defined; mass and |
+| 31 | Technical         | Velocity/impulse transfer is implementation-defined; mass and |
 |    |                   | impulse semantics are not specified, but intuitive throw |
 |    |                   | trajectory and testable behaviour are required. |
-| 30 | Technical         | Implemented via validation hooks or integration tests covering |
+| 32 | Technical         | Implemented via validation hooks or integration tests covering |
 |    |                   | non-zero release velocity (e.g. moving hand releases ball and |
 |    |                   | ball continues in throw direction) and stationary release |
 |    |                   | (e.g. stationary release does not launch ball). |
-| 31 | User              | While holding a Movable grabbable, the held item retains |
+| 33 | User              | While holding a Movable grabbable, the held item retains |
 |    |                   | effective world collision and can hit/interact with other |
 |    |                   | objects while following the hand. |
-| 32 | Technical         | Hand exposes configurable `HeldCollisionTarget: CollisionObject3D` |
+| 34 | Technical         | Hand exposes configurable `HeldCollisionTarget: CollisionObject3D` |
 |    |                   | property specifying where runtime shape owners attach while holding. |
-| 33 | Technical         | On commit for Movable grabbable, create runtime shape owners on |
+| 35 | Technical         | On commit for Movable grabbable, create runtime shape owners on |
 |    |                   | `HeldCollisionTarget` that reuse original `Shape3D` resources; no |
 |    |                   | proxy `CollisionShape3D` nodes or duplicated shape resources are created. |
-| 34 | Technical         | Toggle original shape disabled state synchronously during grab/release |
+| 36 | Technical         | Toggle original shape disabled state synchronously during grab/release |
 |    |                   | record prior disabled state for accurate restoration. |
-| 35 | Technical         | On release, remove runtime shape owners from `HeldCollisionTarget` and |
+| 37 | Technical         | On release, remove runtime shape owners from `HeldCollisionTarget` and |
 |    |                   | restore original item shapes to recorded prior disabled state. |
-| 36 | Technical         | Same-side collision exceptions are preserved during shape-owner-based |
+| 38 | Technical         | Same-side collision exceptions are preserved during shape-owner-based |
 |    |                   | held collision; exceptions are removed on release. |
-| 37 | Technical         | Runtime shape owner transforms are captured once as hand-target-local |
+| 39 | Technical         | Runtime shape owner transforms are captured once as hand-target-local |
 |    |                   | transforms at commit, then remain fixed while |
 |    |                   | `HeldCollisionTarget` movement carries them; disabled original shapes |
 |    |                   | are not proxied. |
+| 40 | Technical         | Commit-time candidate refresh accepts a moved pending grabbable only |
+|    |                   | when the current candidate is still produced by the same grab-point source. |
+| 41 | Technical         | Pending-grab refresh may use a separate `Movable`-only acquisition |
+|    |                   | tolerance without changing grab-point `ReachDistanceMetres` or initial |
+|    |                   | stationary acquisition. |
 
 ## References
 

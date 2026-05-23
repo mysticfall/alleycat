@@ -990,6 +990,305 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
+    /// Verifies a moving physical ball refreshes its pending candidate at commit so it can still be caught.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovingRigidBodyPendingGrab_RefreshesCandidateAndCommits()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "MovingRigidBodyGrabRoot"
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider"
+        };
+        AnimationPlayer animationPlayer = new()
+        {
+            Name = "AnimationPlayer"
+        };
+        AnimationTree animationTree = CreateHandPoseAnimationTree();
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            GrabTargetProvider = provider,
+            AnimationTree = animationTree,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.3f,
+            GrabCommitDistanceMetres = 0.005f,
+        };
+        Animation grabPose = new()
+        {
+            ResourceName = "MovingBallGrabPose"
+        };
+        GrabbableRigidBody3D ball = new()
+        {
+            Name = "MovingRigidBall",
+            Position = new Vector3(0.1f, 0.0f, 0.0f),
+            GravityScale = 0.0f,
+        };
+        SphericalGrabPoint grabPoint = new()
+        {
+            Name = "SphericalGrabPoint",
+            ReachDistanceMetres = 0.2f,
+            PalmFacingMinimumDot = -1.0f,
+            GrabAnimation = grabPose,
+            GrabPointPositionOffsetFromHand = new Vector3(0.05f, 0.0f, 0.0f),
+        };
+        ball.AddChild(grabPoint);
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(animationPlayer);
+        root.AddChild(animationTree);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(ball);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        ball.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            ball.RefreshComponents();
+            Transform3D initialHandTransform = new(Basis.Identity, new Vector3(0.05f, 0.0f, 0.0f));
+            handTarget.GlobalTransform = initialHandTransform;
+            SetHandAttachmentTransform(skeleton, initialHandTransform);
+            GrabPointCandidate? initialCandidate = ((IGrabbable)ball).GetGrabPoint(LimbSide.Right, initialHandTransform);
+            Assert.NotNull(initialCandidate);
+
+            _ = hand.Grab();
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            Transform3D movedBallTransform = new(Basis.Identity, new Vector3(0.12f, 0.0f, 0.0f));
+            Transform3D movedHandTransform = new(Basis.Identity, new Vector3(0.07f, 0.0f, 0.0f));
+            ball.GlobalTransform = movedBallTransform;
+            ball.ForceUpdateTransform();
+            handTarget.GlobalTransform = movedHandTransform;
+            SetHandAttachmentTransform(skeleton, movedHandTransform);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(ball, hand.CurrentGrabbed);
+            Assert.Same(handAttachment, ball.GetParent());
+            Assert.True(ball.IsGrabbed);
+            Assert.True(ball.Freeze);
+            Assert.Same(grabPose, hand.CurrentPose);
+            Assert.True(
+                initialCandidate.GrabPointTransform.Origin.DistanceTo(movedBallTransform.Origin) > PositionToleranceMetres,
+                "Expected the selected grab point to move far enough that the original candidate would be stale.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies pending movable refresh has a small extra reach tolerance without loosening initial acquisition.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovingPendingGrab_UsesPendingToleranceWithoutChangingInitialReach()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "MovingPendingToleranceRoot"
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider"
+        };
+        AnimationPlayer animationPlayer = new()
+        {
+            Name = "AnimationPlayer"
+        };
+        AnimationTree animationTree = CreateHandPoseAnimationTree();
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            GrabTargetProvider = provider,
+            AnimationTree = animationTree,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.3f,
+            GrabCommitDistanceMetres = 0.5f,
+            PendingMovableGrabAcquisitionToleranceMetres = 0.02f,
+        };
+        GrabbableNode ball = CreateRuntimeMutableGrabbable(new Vector3(0.1f, 0.0f, 0.0f));
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(animationPlayer);
+        root.AddChild(animationTree);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(ball);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        ball.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            handTarget.GlobalTransform = new Transform3D(Basis.Identity, Vector3.Zero);
+            SetHandAttachmentTransform(skeleton, handTarget.GlobalTransform);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            ball.RefreshComponents();
+            MutableGrabPoint grabPoint = ball.GetNode<MutableGrabPoint>("MutableGrabPoint");
+            grabPoint.ReachDistanceMetres = 0.1f;
+            grabPoint.TargetOrigin = new Vector3(0.1f, 0.0f, 0.0f);
+            grabPoint.HandTargetOrigin = Vector3.Zero;
+            Assert.NotNull(((IGrabbable)ball).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform));
+
+            _ = hand.Grab();
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            grabPoint.TargetOrigin = new Vector3(0.115f, 0.0f, 0.0f);
+            grabPoint.HandTargetOrigin = Vector3.Zero;
+            Assert.Null(((IGrabbable)ball).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform));
+            Assert.NotNull(((IGrabbable)ball).GetGrabPoint(
+                LimbSide.Right,
+                handTarget.GlobalTransform,
+                hand.PendingMovableGrabAcquisitionToleranceMetres));
+            _ = hand.Grab();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(ball, hand.CurrentGrabbed);
+            Assert.True(ball.IsGrabbed);
+            Assert.Same(handAttachment, ball.GetParent());
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies pending tolerance does not let refresh switch to a different grab-point source.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task HandPoseBehaviour_MovingPendingGrabTolerance_DoesNotAcceptDifferentSource()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "MovingPendingDifferentSourceRoot"
+        };
+        Node3D handTarget = new()
+        {
+            Name = "HandTarget"
+        };
+        (Skeleton3D skeleton, BoneAttachment3D handAttachment) = CreateHandAttachment(Vector3.Zero);
+        HandGrabTargetProvider provider = new()
+        {
+            Name = "GrabProvider"
+        };
+        AnimationPlayer animationPlayer = new()
+        {
+            Name = "AnimationPlayer"
+        };
+        AnimationTree animationTree = CreateHandPoseAnimationTree();
+        HandPoseBehaviour hand = new()
+        {
+            Name = "RightHandBehaviour",
+            Side = LimbSide.Right,
+            HandTargetNode = handTarget,
+            HandBoneAttachment = handAttachment,
+            GrabTargetProvider = provider,
+            AnimationTree = animationTree,
+            GrabbableGroupName = _pendingGrabGroupName,
+            DiscoveryRangeMetres = 0.3f,
+            GrabCommitDistanceMetres = 0.005f,
+            PendingMovableGrabAcquisitionToleranceMetres = 0.03f,
+        };
+        GrabbableNode ball = new()
+        {
+            Name = "MultiSourceBall",
+            Mobility = GrabbableMobility.Movable,
+        };
+        MutableGrabPoint originalGrabPoint = new()
+        {
+            Name = "OriginalGrabPoint",
+            TargetOrigin = new Vector3(0.1f, 0.0f, 0.0f),
+            HandTargetOrigin = Vector3.Zero,
+            ReachDistanceMetres = 0.1f,
+            Animation = new Animation(),
+        };
+        MutableGrabPoint alternateGrabPoint = new()
+        {
+            Name = "AlternateGrabPoint",
+            TargetOrigin = new Vector3(0.2f, 0.0f, 0.0f),
+            HandTargetOrigin = Vector3.Zero,
+            ReachDistanceMetres = 0.1f,
+            Animation = new Animation(),
+        };
+        ball.AddChild(originalGrabPoint);
+        ball.AddChild(alternateGrabPoint);
+
+        root.AddChild(handTarget);
+        root.AddChild(skeleton);
+        root.AddChild(animationPlayer);
+        root.AddChild(animationTree);
+        root.AddChild(provider);
+        root.AddChild(hand);
+        root.AddChild(ball);
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+        ball.AddToGroup(_pendingGrabGroupName);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            handTarget.GlobalTransform = new Transform3D(Basis.Identity, Vector3.Zero);
+            SetHandAttachmentTransform(skeleton, handTarget.GlobalTransform);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            ball.RefreshComponents();
+            GrabPointCandidate? initialCandidate = ((IGrabbable)ball).GetGrabPoint(LimbSide.Right, handTarget.GlobalTransform);
+            Assert.NotNull(initialCandidate);
+            Assert.Same(originalGrabPoint, initialCandidate.Source);
+
+            _ = hand.Grab();
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+
+            originalGrabPoint.TargetOrigin = new Vector3(0.2f, 0.0f, 0.0f);
+            alternateGrabPoint.TargetOrigin = new Vector3(0.115f, 0.0f, 0.0f);
+            _ = hand.Grab();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Null(hand.CurrentGrabbed);
+            Assert.False(ball.IsGrabbed);
+            Assert.True(provider.IsGrabOverrideActive);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies scene and script UID metadata remains preserved after the hand-grab scene edits.
     /// </summary>
     [Headless]
@@ -1847,7 +2146,10 @@ public sealed partial class HandGrabAssetIntegrationTests
 
     private static object? InvokeGrabPointQuery(Node grabPoint, LimbSide side, Transform3D handTransform)
     {
-        MethodInfo method = grabPoint.GetType().GetMethod(nameof(IGrabPoint.GetGrabPoint))
+        MethodInfo method = grabPoint.GetType().GetMethods()
+            .SingleOrDefault(method => method.Name == nameof(IGrabPoint.GetGrabPoint)
+                && method.GetParameters() is [_, { ParameterType: Type parameterType }]
+                && parameterType == typeof(Transform3D))
             ?? throw new InvalidOperationException("GetGrabPoint method was not found on the authored grab point node.");
         Type sideParameterType = method.GetParameters()[0].ParameterType;
         object sideArgument = Enum.ToObject(sideParameterType, (int)side);
@@ -2179,18 +2481,34 @@ public sealed partial class HandGrabAssetIntegrationTests
             get; set;
         }
 
+        public float ReachDistanceMetres { get; set; } = float.PositiveInfinity;
+
         public GrabPointCandidate? GetGrabPoint(LimbSide handSide, Transform3D handTransform)
+            => GetGrabPoint(handSide, handTransform, 0.0f);
+
+        public GrabPointCandidate? GetGrabPoint(
+            LimbSide handSide,
+            Transform3D handTransform,
+            float acquisitionToleranceMetres)
         {
             Transform3D handTarget = new(Basis.Identity, HandTargetOrigin ?? TargetOrigin);
             Transform3D grabPointTransform = new(Basis.Identity, TargetOrigin);
-            return new GrabPointCandidate(
+            float acquisitionDistance = handTransform.Origin.DistanceTo(TargetOrigin);
+            float effectiveReachDistanceMetres = ReachDistanceMetres + Mathf.Max(0.0f, acquisitionToleranceMetres);
+            return acquisitionDistance > effectiveReachDistanceMetres
+                ? null
+                : new GrabPointCandidate(
                 this,
                 handTarget,
                 Animation ?? _animation,
                 handSide,
                 handTransform,
                 grabPointTransform,
-                GrabPointOffsetFromHand);
+                GrabPointOffsetFromHand,
+                acquisitionDistance)
+                {
+                    AcquisitionToleranceMetres = Mathf.Max(0.0f, acquisitionToleranceMetres),
+                };
         }
     }
 
