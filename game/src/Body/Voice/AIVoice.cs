@@ -4,7 +4,7 @@ using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using Godot;
 
-namespace AlleyCat.Speech.Voice;
+namespace AlleyCat.Body.Voice;
 
 /// <summary>
 /// Voice implementation that generates speech audio and hands it off to lip-sync playback.

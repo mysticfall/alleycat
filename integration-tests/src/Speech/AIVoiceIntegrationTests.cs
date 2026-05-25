@@ -1,7 +1,7 @@
 using System.Text;
+using AlleyCat.Body.Voice;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
-using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;

@@ -1,4 +1,4 @@
-using AlleyCat.Speech.Voice;
+using AlleyCat.Body.Voice;
 using Xunit;
 
 namespace AlleyCat.Tests.Speech;

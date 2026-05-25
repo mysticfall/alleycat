@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Speech.Voice;
+namespace AlleyCat.Body.Voice;
 
 /// <summary>
 /// Base speech-voice component that converts dialogue into synchronised spoken playback.

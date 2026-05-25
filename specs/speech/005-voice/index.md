@@ -30,8 +30,8 @@ synchronised.
 
 ## Technical Requirements
 
-1. An abstract `Voice` class must be defined as a `Node` or `Node3D` subclass in
-   `@game/src/Speech/Voice/Voice.cs`.
+1. An abstract `Voice` class must be defined as a `Node` or `Node3D` subclass in the
+   `AlleyCat.Body.Voice` namespace at `@game/src/Body/Voice/Voice.cs`.
 2. An abstract method `Speak(string dialogue)` must be defined with the exact signature
    `void Speak(string dialogue)`.
 3. An exported `Enabled` property must control whether speech is permitted.
@@ -71,7 +71,7 @@ synchronised.
 - Synchronisation contract via `LipSyncPlayer.Play()` initiation path.
 - Signal contract for generation/conversion failures.
 - Error handling contract using `GD.PushError` for raw errors.
-- Implementation under `@game/src/Speech/Voice/`.
+- Implementation under `@game/src/Body/Voice/` using the `AlleyCat.Body.Voice` namespace.
 - Manual test scene under `@game/tests/speech/voice_test.tscn`.
 - Unit tests using mocks/fakes for `SpeechGenerator` and `LipSyncPlayer` dependencies.
 
@@ -160,8 +160,8 @@ meets the LipSyncPlayer's requirements:
 6. Manual test scene using `@game/assets/characters/reference/female/
    reference_female.tscn` is specified.
 7. Visual verification/testing is explicitly out of scope (requires backend access).
-8. Implementation path `@game/src/Speech/Voice/` and test path `@game/tests/speech/` are
-   specified.
+8. Implementation path `@game/src/Body/Voice/`, namespace `AlleyCat.Body.Voice`, and test path
+   `@game/tests/speech/` are specified.
 9. The spec does not exclude any mandatory delivery contracts through `Out Of Scope`.
 10. Playback completion notification is explicitly out of scope (depends on LipSyncPlayer
     changes not currently defined).
@@ -171,8 +171,8 @@ meets the LipSyncPlayer's requirements:
 
 ## Implementation References
 
-- `@game/src/Speech/Voice/Voice.cs` - Abstract Voice class
-- `@game/src/Speech/Voice/AIVoice.cs` - AIVoice implementation
+- `@game/src/Body/Voice/Voice.cs` - Abstract Voice class
+- `@game/src/Body/Voice/AIVoice.cs` - AIVoice implementation
 - `@game/tests/speech/voice_test.tscn` - Manual test scene
 
 ## Related Specs
