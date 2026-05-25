@@ -160,6 +160,24 @@ public sealed class PhysicalInteractionTests
     }
 
     /// <summary>
+    /// Verifies generated body-part interactions can be forwarded through the dynamic physical rig signal hub.
+    /// </summary>
+    [Fact]
+    public void DynamicPhysicalRig_DefinesGeneratedBodyPartInteractionSignalContract()
+    {
+        Type signalDelegateType = typeof(DynamicPhysicalRig).GetNestedType(
+            "PhysicalInteractionReceivedEventHandler",
+            BindingFlags.Public)
+            ?? throw new Xunit.Sdk.XunitException("Expected DynamicPhysicalRig to define an interaction signal delegate.");
+        MethodInfo invoke = signalDelegateType.GetMethod("Invoke")
+            ?? throw new Xunit.Sdk.XunitException("Expected interaction signal delegate to expose an Invoke method.");
+        Type[] parameterTypes = [.. invoke.GetParameters().Select(parameter => parameter.ParameterType)];
+
+        Assert.NotNull(Attribute.GetCustomAttribute(signalDelegateType, typeof(SignalAttribute)));
+        Assert.Equal([typeof(PhysicalInteractionReceipt), typeof(int), typeof(string[]), typeof(PhysicalBodyPart3D)], parameterTypes);
+    }
+
+    /// <summary>
     /// Verifies body-part interaction receipt emits through Godot without retaining mutable receive history.
     /// </summary>
     [Fact]
