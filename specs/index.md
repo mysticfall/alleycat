@@ -24,6 +24,7 @@
   - [BODY-008: Character Physical Interaction API](body/008-character-stimulus-detection-and-routing/index.md)
   - [BODY-003: Full-Body Collision Decision](body/003-full-body-collision-decision/index.md)
 - [BODY-004: Eyes](body/004-eyes/index.md)
+- [BODY-006: Voice Component](body/006-voice/index.md)
 
 ## Characters
 
@@ -67,7 +68,6 @@
 - [SPCH-002: Audio2Face LipSync Player](speech/002-audio2face-lipsync-player/index.md)
 - [SPCH-003: Transcriber Component](speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](speech/004-speech-generation/index.md)
-- [SPCH-005: Speech Voice Component](speech/005-voice/index.md)
 
 ## Testing
 

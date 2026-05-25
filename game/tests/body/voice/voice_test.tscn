@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="2_0iva6"]
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="3_q155j"]
 [ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="4_wihe7"]
-[ext_resource type="Script" uid="uid://3uodduftnti3" path="res://tests/speech/voice_test_control.gd" id="5_glwme"]
+[ext_resource type="Script" uid="uid://3uodduftnti3" path="res://tests/body/voice/voice_test_control.gd" id="5_glwme"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_q155j"]
 

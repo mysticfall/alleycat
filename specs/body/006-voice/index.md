@@ -1,9 +1,9 @@
 ---
-id: SPCH-005
-title: Speech Voice Component
+id: BODY-006
+title: Voice Component
 ---
 
-# Speech Voice Component
+# Voice Component
 
 ## Requirement
 
@@ -14,7 +14,7 @@ playback as an integrated unit.
 
 ## Goal
 
-Enable AI-driven character speech with lip synchronisation in the AlleyCat VR experience
+Enable AI-driven character voice output with lip synchronisation in the AlleyCat VR experience
 using a coordinated pipeline that ensures audio and blendshape playback remain
 synchronised.
 
@@ -72,7 +72,7 @@ synchronised.
 - Signal contract for generation/conversion failures.
 - Error handling contract using `GD.PushError` for raw errors.
 - Implementation under `@game/src/Body/Voice/` using the `AlleyCat.Body.Voice` namespace.
-- Manual test scene under `@game/tests/speech/voice_test.tscn`.
+- Manual test scene under `@game/tests/body/voice/voice_test.tscn`.
 - Unit tests using mocks/fakes for `SpeechGenerator` and `LipSyncPlayer` dependencies.
 
 ## Out Of Scope
@@ -161,7 +161,7 @@ meets the LipSyncPlayer's requirements:
    reference_female.tscn` is specified.
 7. Visual verification/testing is explicitly out of scope (requires backend access).
 8. Implementation path `@game/src/Body/Voice/`, namespace `AlleyCat.Body.Voice`, and test path
-   `@game/tests/speech/` are specified.
+   `@game/tests/body/voice/` are specified.
 9. The spec does not exclude any mandatory delivery contracts through `Out Of Scope`.
 10. Playback completion notification is explicitly out of scope (depends on LipSyncPlayer
     changes not currently defined).
@@ -169,15 +169,17 @@ meets the LipSyncPlayer's requirements:
     independently resample audio; it receives audio already normalised by `SpeechGenerator`
     via the `TargetSampleRate` configuration (see SPCH-004).
 
-## Implementation References
+## References
+
+### Implementation
 
 - `@game/src/Body/Voice/Voice.cs` - Abstract Voice class
 - `@game/src/Body/Voice/AIVoice.cs` - AIVoice implementation
-- `@game/tests/speech/voice_test.tscn` - Manual test scene
+- `@game/tests/body/voice/voice_test.tscn` - Manual test scene
 
-## Related Specs
+### Related Specs
 
-- [SPCH-001: Wav2Arkit LipSync Player](../001-wav2arkit-lipsync-player/index.md)
-- [SPCH-002: Audio2Face LipSync Player](../002-audio2face-lipsync-player/index.md)
-- [SPCH-004: Speech Generator Component](../004-speech-generation/index.md)
+- [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
+- [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
+- [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
