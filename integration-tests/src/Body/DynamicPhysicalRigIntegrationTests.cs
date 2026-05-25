@@ -1,6 +1,7 @@
 using System.Reflection;
 using AlleyCat.Body;
 using AlleyCat.IK;
+using AlleyCat.Interaction.Physical;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
 using Godot;
@@ -35,9 +36,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             int sourceShapeCount = CountSourceShapes(fixture.Rig.ColliderProfile?.SourceScene);
             int generatedBodyCount = CountGeneratedProxyBodies(fixture.Rig);
+            int generatedReceiverCount = CountGeneratedPhysicalInteractionReceivers(fixture.Rig);
 
             Assert.Equal(sourceShapeCount, fixture.Rig.GeneratedProxyCount);
             Assert.Equal(sourceShapeCount, generatedBodyCount);
+            Assert.Equal(generatedBodyCount, generatedReceiverCount);
             Assert.Equal(0, fixture.Rig.SkippedSourceShapeCount);
             Assert.True(fixture.Rig.IsPhysicsProcessing(), "Generated top-level proxy bodies require the rig's manual physics sync loop.");
             Assert.True(fixture.Rig.PhysicsProxySyncTickCount > 0, "Generated proxy bodies should be synchronised immediately and on physics ticks.");
@@ -46,6 +49,139 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             await fixture.DisposeAsync(sceneTree);
         }
+    }
+
+    /// <summary>
+    /// Verifies generated proxy bodies expose the BODY-008 physical interaction receiver contract and metadata.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_GeneratedProxyBodies_ImplementPhysicalInteractionReceiverWithMetadata()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            PhysicalBodyPart3D headProxy = Assert.IsType<PhysicalBodyPart3D>(FindGeneratedProxyBody(fixture.Rig, "Head"), exactMatch: false);
+            IPhysicalInteractionReceiver receiver = headProxy;
+            TestImpactPhysicalInteractionSource source = new(Vector3.Forward);
+
+            IImpactPhysicalInteraction interaction = Assert.IsAssignableFrom<IImpactPhysicalInteraction>(
+                receiver.InteractWith(source)
+                ?? throw new Xunit.Sdk.XunitException("Expected source to produce an interaction."));
+
+            Assert.Equal("Head", headProxy.BoneName.ToString());
+            Assert.True(headProxy.BoneIndex >= 0);
+            Assert.Contains("Head", headProxy.Tags);
+            Assert.NotEmpty(headProxy.SourceShapeId);
+            Assert.Same(fixture.Rig, headProxy.OwningRig);
+            Assert.Same(source, interaction.Source);
+            Assert.Equal(headProxy.GlobalPosition, interaction.ContactPoint);
+            Assert.Equal(Vector3.Forward, interaction.Velocity);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies generated body-part receiver signals are connected and forwarded by the owning rig.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_GeneratedProxyReceivesInteraction_ForwardsBodyPartSignal()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            PhysicalBodyPart3D headProxy = Assert.IsType<PhysicalBodyPart3D>(
+                FindGeneratedProxyBody(fixture.Rig, "Head"),
+                exactMatch: false);
+            TestImpactPhysicalInteractionSource source = new(Vector3.Forward);
+            int forwardedCount = 0;
+            PhysicalInteractionReceipt? forwardedReceipt = null;
+            int forwardedBoneIndex = -1;
+            string[] forwardedTags = [];
+            PhysicalBodyPart3D? forwardedBodyPart = null;
+            fixture.Rig.PhysicalInteractionReceived += (interaction, boneIndex, tags, bodyPart) =>
+            {
+                forwardedCount += 1;
+                forwardedReceipt = interaction;
+                forwardedBoneIndex = boneIndex;
+                forwardedTags = tags;
+                forwardedBodyPart = bodyPart;
+            };
+
+            IPhysicalInteraction interaction = headProxy.InteractWith(source)
+                ?? throw new Xunit.Sdk.XunitException("Expected source to produce an interaction.");
+
+            Assert.Equal(1, forwardedCount);
+            Assert.NotNull(forwardedReceipt);
+            Assert.Same(interaction, forwardedReceipt.Interaction);
+            Assert.Equal(headProxy.BoneIndex, forwardedBoneIndex);
+            Assert.Equal(headProxy.Tags, [.. forwardedTags]);
+            Assert.Same(headProxy, forwardedBodyPart);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies generated body-part receiver signals carry the delivered interaction, bone index, and tag snapshot.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PhysicalBodyPart3D_InteractWith_EmitsSignalWithInteractionBoneAndTags()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
+
+        try
+        {
+            PhysicalBodyPart3D headProxy = Assert.IsType<PhysicalBodyPart3D>(
+                FindGeneratedProxyBody(fixture.Rig, "Head"),
+                exactMatch: false);
+            TestImpactPhysicalInteractionSource source = new(Vector3.Forward);
+            int emittedCount = 0;
+            PhysicalInteractionReceipt? emittedReceipt = null;
+            int emittedBoneIndex = -1;
+            string[] emittedTags = [];
+            headProxy.PhysicalInteractionReceived += (receipt, boneIndex, tags) =>
+            {
+                emittedCount += 1;
+                emittedReceipt = receipt;
+                emittedBoneIndex = boneIndex;
+                emittedTags = tags;
+            };
+
+            IPhysicalInteraction interaction = headProxy.InteractWith(source)
+                ?? throw new Xunit.Sdk.XunitException("Expected source to produce an interaction.");
+
+            Assert.Equal(1, emittedCount);
+            Assert.NotNull(emittedReceipt);
+            Assert.Same(interaction, emittedReceipt.Interaction);
+            Assert.Equal(headProxy.BoneIndex, emittedBoneIndex);
+            Assert.Equal(headProxy.Tags, [.. emittedTags]);
+            Assert.NotSame(headProxy.Tags, emittedTags);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    private sealed class TestImpactPhysicalInteractionSource(Vector3 velocity) : IImpactPhysicalInteractionSource
+    {
+        public IReadOnlySet<string> Tags { get; } = new SortedSet<string>(["TestSource"], StringComparer.Ordinal);
+
+        public Vector3 Velocity => velocity;
+
     }
 
     /// <summary>
@@ -172,6 +308,71 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
+    /// Verifies the reusable reference female scene lets the right-hand IK collision path act as an impact source.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void ReferenceFemaleBase_RightHandIKTarget_ProvidesReusableBallPushCollisionPath()
+    {
+        PackedScene referenceScene = LoadPackedScene(ReferenceFemaleBaseScenePath);
+        Node sceneRoot = referenceScene.Instantiate();
+
+        try
+        {
+            AnimatableBody3D rightHandTarget = Assert.IsType<AnimatableBody3D>(
+                sceneRoot.GetNodeOrNull("IKTargets/RightHand"),
+                exactMatch: false);
+            Assert.Equal(8U, rightHandTarget.CollisionLayer);
+            Assert.Equal(5U, rightHandTarget.CollisionMask);
+            Assert.Null(sceneRoot.GetNodeOrNull("Female_export/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
+            Assert.DoesNotContain(rightHandTarget.GetChildren(), child => child is CollisionShape3D);
+            Assert.Null(rightHandTarget.GetNodeOrNull("ImpactSource"));
+        }
+        finally
+        {
+            sceneRoot.Free();
+        }
+    }
+
+    /// <summary>
+    /// Verifies the mirror-room scene delegates ball-push wiring to instanced assets instead of owning source nodes.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void MirrorRoom_DoesNotOwnDirectImpactRelayOrSourceResources()
+    {
+        PackedScene mirrorRoomScene = LoadPackedScene(MirrorRoomScenePath);
+        Node sceneRoot = mirrorRoomScene.Instantiate();
+
+        try
+        {
+            Node player = sceneRoot.GetNodeOrNull("Actors/Player")
+                ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance the player scene.");
+            Node ball = sceneRoot.GetNodeOrNull("Items/Ball")
+                ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance test_ball.tscn.");
+
+            Assert.Null(player.GetNodeOrNull("IKTargets/RightHand/ImpactSource"));
+            Assert.Null(player.GetNodeOrNull("Female_export/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
+            Assert.Null(sceneRoot.GetNodeOrNull("Actors/Player/Female_export/GeneralSkeleton/RightHand/MirrorRoomPhysicalImpactRelay"));
+            RigidBody3D ballBody = Assert.IsType<RigidBody3D>(ball, exactMatch: false);
+            Assert.True(ballBody.IsInGroup("hand_dynamic_interaction_body"));
+            Assert.Equal(2U, ballBody.CollisionLayer);
+            Assert.Equal(11U, ballBody.CollisionMask);
+            Node receiver = ball.GetNodeOrNull("ImpactInteractionReceiver")
+                ?? throw new Xunit.Sdk.XunitException("Expected test_ball.tscn to carry an impact receiver child.");
+            Assert.Equal(["Ball", "ImpactReceiver"], receiver.Get("AuthoredTags").AsStringArray());
+            Assert.Equal("uid://mwj3evwi2jvj", receiver.GetMeta("_custom_type_script").AsString());
+            Assert.DoesNotContain(GetPackedSceneDependencyPaths(mirrorRoomScene), path =>
+                path.EndsWith("PhysicalInteractionCollisionRelay3D.cs", StringComparison.Ordinal)
+                || path.EndsWith("PhysicalInteractionImpactSource3D.cs", StringComparison.Ordinal));
+        }
+        finally
+        {
+            sceneRoot.Free();
+        }
+    }
+
+    /// <summary>
     /// Verifies DynamicPhysicalRig fails clearly when the required collider profile is missing.
     /// </summary>
     [Headless]
@@ -217,6 +418,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         AnimatableBody3D leftIndexTip = FindGeneratedProxyBody(rig, "LeftIndexDistal");
         AnimatableBody3D leftMiddle = FindGeneratedProxyBody(rig, "LeftMiddleProximal");
         AnimatableBody3D rightIndex = FindGeneratedProxyBody(rig, "RightIndexProximal");
+        PhysicalBodyPart3D leftIndexReceiver = Assert.IsType<PhysicalBodyPart3D>(leftIndex, exactMatch: false);
         CollisionShape3D leftIndexShape = Assert.IsAssignableFrom<CollisionShape3D>(leftIndex.GetChild(0));
         CollisionShape3D leftIndexTipShape = Assert.IsAssignableFrom<CollisionShape3D>(leftIndexTip.GetChild(0));
         CollisionShape3D leftMiddleShape = Assert.IsAssignableFrom<CollisionShape3D>(leftMiddle.GetChild(0));
@@ -237,6 +439,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
         Assert.Equal(4, rig.GeneratedFingerProxyCount);
         Assert.Equal(7, rig.GeneratedProxyCount);
+        Assert.Equal("LeftIndexProximal", leftIndexReceiver.BoneName.ToString());
+        Assert.Contains("LeftIndexProximal", leftIndexReceiver.Tags);
+        Assert.Equal("GeneratedFinger:LeftIndexProximal", leftIndexReceiver.SourceShapeId);
+        Assert.Same(rig, leftIndexReceiver.OwningRig);
+        _ = Assert.IsAssignableFrom<IPhysicalInteractionReceiver>(leftIndexReceiver);
         Assert.Equal(2, rig.AdjacentBoneExceptionPairCount);
         Assert.Equal(7, rig.FingerSideExceptionPairCount);
         _ = Assert.Single(rig.GetGeneratedProxyBodiesForBone("LeftIndexProximal"));
@@ -1035,10 +1242,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
     private static int CountDynamicInteractionQueryShapes(IKTargetAnimatableActuator actuator)
     {
-        FieldInfo controllerField = GetNonPublicInstanceField(typeof(IKTargetAnimatableActuator), "_dynamicBodyInteraction")
-                                    ?? throw new InvalidOperationException("IKTargetAnimatableActuator._dynamicBodyInteraction was not found.");
-        object controller = controllerField.GetValue(actuator)
-                            ?? throw new Xunit.Sdk.XunitException("Expected hand actuator to have a dynamic interaction controller.");
+        HandDynamicBodyInteractionController controller = actuator.DynamicBodyInteractionControllerForTesting;
         FieldInfo queryShapeSourcesField = GetNonPublicInstanceField(controller.GetType(), "_queryShapeSources")
                                            ?? throw new InvalidOperationException(
                                                "HandDynamicBodyInteractionController._queryShapeSources was not found.");
@@ -1337,6 +1541,31 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return count;
     }
 
+    private static int CountGeneratedPhysicalInteractionReceivers(DynamicPhysicalRig rig)
+    {
+        int count = 0;
+
+        foreach (Node child in rig.TargetSkeleton!.GetChildren())
+        {
+            if (child is not BoneAttachment3D attachment)
+            {
+                continue;
+            }
+
+            if (!attachment.Name.ToString().StartsWith("Collider_", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (attachment.GetNodeOrNull("ProxyBody") is IPhysicalInteractionReceiver)
+            {
+                count += 1;
+            }
+        }
+
+        return count;
+    }
+
     private static Resource LoadResource(string resourcePath)
         => ResourceLoader.Load<Resource>(resourcePath)
            ?? throw new Xunit.Sdk.XunitException($"Expected resource '{resourcePath}' to load.");
@@ -1355,6 +1584,10 @@ public sealed class DynamicPhysicalRigIntegrationTests
 
         return Assert.IsType<TResource>(propertyValue.AsGodotObject(), exactMatch: false);
     }
+
+    private static IReadOnlyList<string> GetPackedSceneDependencyPaths(PackedScene scene)
+        => [.. ResourceLoader.GetDependencies(scene.ResourcePath)
+            .Select(dependency => dependency.ToString())];
 
     private static int CountSourceShapes(PackedScene? sourceScene)
     {

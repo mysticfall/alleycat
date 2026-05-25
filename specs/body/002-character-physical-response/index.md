@@ -118,6 +118,7 @@ individual response modes.
 
 - [BODY-002 Design Notes](design-notes.md)
 - [BODY-005: IK Target Pipeline Foundation](../005-ik-target-pipeline-foundation/index.md)
+- [BODY-008: Character Physical Interaction API](../008-character-stimulus-detection-and-routing/index.md)
 - [BODY-003: Full-Body Collision Decision](../003-full-body-collision-decision/index.md)
 - [DynamicPhysicalRig Implementation](../../../game/src/Body/DynamicPhysicalRig.cs)
 - [Character Skeleton Profile](../../characters/000-character-skeleton/index.md)

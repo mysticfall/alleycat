@@ -1,3 +1,4 @@
+using AlleyCat.Interaction.Physical;
 using Godot;
 
 namespace AlleyCat.IK;
@@ -8,6 +9,7 @@ namespace AlleyCat.IK;
 public sealed class HandDynamicBodyInteractionController(
     AnimatableBody3D handBody,
     IReadOnlyList<HandDynamicInteractionShape>? profileQueryShapes = null)
+    : IImpactPhysicalInteractionSource
 {
     private const float Epsilon = 1e-5f;
     private const float QueryMargin = 0.001f;
@@ -53,48 +55,78 @@ public sealed class HandDynamicBodyInteractionController(
 
     private Vector3 _previousTargetOrigin = Vector3.Zero;
     private bool _hasPreviousTargetOrigin;
+    private Vector3 _velocity = Vector3.Zero;
 
     /// <summary>
     /// Initialises explicit dynamic-body interaction handling for a hand actuator body.
     /// </summary>
     private readonly AnimatableBody3D _handBody = handBody;
     private readonly QueryShapeSource[] _queryShapeSources = CollectQueryShapeSources(handBody, profileQueryShapes);
-    private readonly ShapeCast3D[] _shapeCasts = CreateQueryShapeCasts(handBody, CollectQueryShapeSources(handBody, profileQueryShapes));
+    private readonly ShapeCast3D[] _shapeCasts = CreateQueryShapeCasts(
+        handBody,
+        CollectQueryShapeSources(handBody, profileQueryShapes));
+
+    /// <inheritdoc />
+    public IReadOnlySet<string> Tags { get; } = BuildSourceTags(handBody);
 
     /// <summary>
     /// Collision mask queried for explicit hand-to-dynamic-body interaction.
     /// </summary>
-    public uint CollisionMask { get; set; } = 2;
+    public uint CollisionMask
+    {
+        get; set;
+    } = 2;
 
     /// <summary>
     /// Minimum approach speed before the impact channel may fire.
     /// </summary>
-    public float ImpactApproachSpeedThreshold { get; set; } = DefaultImpactApproachSpeedThreshold;
+    public float ImpactApproachSpeedThreshold
+    {
+        get; set;
+    } = DefaultImpactApproachSpeedThreshold;
 
     /// <summary>
     /// Impact impulse gain applied per metre-per-second of approach speed.
     /// </summary>
-    public float ImpactImpulsePerSpeed { get; set; } = DefaultImpactImpulsePerSpeed;
+    public float ImpactImpulsePerSpeed
+    {
+        get; set;
+    } = DefaultImpactImpulsePerSpeed;
 
     /// <summary>
     /// Maximum impact impulse magnitude.
     /// </summary>
-    public float ImpactImpulseCap { get; set; } = DefaultImpactImpulseCap;
+    public float ImpactImpulseCap
+    {
+        get; set;
+    } = DefaultImpactImpulseCap;
 
     /// <summary>
     /// Minimum pressing speed before the sustained push channel may fire.
     /// </summary>
-    public float SustainedPushSpeedThreshold { get; set; } = DefaultSustainedPushSpeedThreshold;
+    public float SustainedPushSpeedThreshold
+    {
+        get; set;
+    } = DefaultSustainedPushSpeedThreshold;
 
     /// <summary>
     /// Sustained push-force gain applied per metre-per-second of pressing speed.
     /// </summary>
-    public float SustainedForcePerSpeed { get; set; } = DefaultSustainedForcePerSpeed;
+    public float SustainedForcePerSpeed
+    {
+        get; set;
+    } = DefaultSustainedForcePerSpeed;
 
     /// <summary>
     /// Maximum sustained push-force magnitude.
     /// </summary>
-    public float SustainedForceCap { get; set; } = DefaultSustainedForceCap;
+    public float SustainedForceCap
+    {
+        get; set;
+    } = DefaultSustainedForceCap;
+
+    /// <inheritdoc />
+    public Vector3 Velocity => _velocity;
 
     /// <summary>
     /// Updates dynamic-body interactions for the current hand pose.
@@ -120,7 +152,7 @@ public sealed class HandDynamicBodyInteractionController(
 
         foreach ((ulong contactId, ActiveContact contact) in activeContacts)
         {
-            ApplyInteraction(contact.Body, contactId, targetVelocity, contact.Normal);
+            ApplyInteraction(contact.Body, contactId, targetVelocity, contact.Normal, contact.Point);
         }
 
         ClearEndedContacts([.. activeContacts.Keys]);
@@ -178,7 +210,7 @@ public sealed class HandDynamicBodyInteractionController(
                 if (!activeContacts.TryGetValue(contactId, out ActiveContact existingContact)
                     || pressSpeed > ComputePressSpeed(targetVelocity, existingContact.Normal))
                 {
-                    activeContacts[contactId] = new ActiveContact(contact.Body, contact.Normal);
+                    activeContacts[contactId] = new ActiveContact(contact.Body, contact.Normal, contact.Point);
                 }
             }
         }
@@ -216,7 +248,7 @@ public sealed class HandDynamicBodyInteractionController(
         }
     }
 
-    private void ApplyInteraction(RigidBody3D rigidBody, ulong contactId, Vector3 targetVelocity, Vector3 contactNormal)
+    private void ApplyInteraction(RigidBody3D rigidBody, ulong contactId, Vector3 targetVelocity, Vector3 contactNormal, Vector3 contactPoint)
     {
         float pressSpeed = ComputePressSpeed(targetVelocity, contactNormal);
         bool hadContact = _contacts.TryGetValue(contactId, out ContactState state) && state.IsTouching;
@@ -232,6 +264,7 @@ public sealed class HandDynamicBodyInteractionController(
         {
             rigidBody.Sleeping = false;
             rigidBody.ApplyCentralImpulse((-contactNormal).Normalized() * impactImpulseMagnitude);
+            InteractWithReceiver(rigidBody, targetVelocity, contactPoint);
         }
 
         float sustainedForceMagnitude = ComputeSustainedForceMagnitude(
@@ -247,6 +280,35 @@ public sealed class HandDynamicBodyInteractionController(
         }
 
         _contacts[contactId] = new ContactState(true);
+    }
+
+    private void InteractWithReceiver(RigidBody3D rigidBody, Vector3 targetVelocity, Vector3 contactPoint)
+    {
+        if (FindReceiver(rigidBody) is not { } receiver)
+        {
+            return;
+        }
+
+        _velocity = targetVelocity;
+        if (receiver is RigidBodyImpactInteractionReceiver3D rigidBodyReceiver)
+        {
+            _ = rigidBodyReceiver.InteractWith(this, contactPoint);
+            return;
+        }
+
+        _ = receiver.InteractWith(this);
+    }
+
+    private static IReadOnlySet<string> BuildSourceTags(AnimatableBody3D handBody)
+    {
+        SortedSet<string> tags = new(StringComparer.Ordinal) { "ImpactSource" };
+        string handName = handBody.Name.ToString();
+        if (!string.IsNullOrWhiteSpace(handName))
+        {
+            _ = tags.Add(handName);
+        }
+
+        return tags;
     }
 
     private static bool TryBuildQueryContact(
@@ -272,8 +334,27 @@ public sealed class HandDynamicBodyInteractionController(
             return false;
         }
 
-        contact = new QueryContact(rigidBody, contactNormal.Normalized());
+        contact = new QueryContact(rigidBody, contactNormal.Normalized(), shapeCast.GetCollisionPoint(contactIndex));
         return true;
+    }
+
+    private static IPhysicalInteractionReceiver? FindReceiver(Node node)
+    {
+        if (node is IPhysicalInteractionReceiver receiver)
+        {
+            return receiver;
+        }
+
+        foreach (Node child in node.GetChildren())
+        {
+            if (FindReceiver(child) is { } childReceiver)
+            {
+                return childReceiver;
+            }
+        }
+
+        Node? parent = node.GetParent();
+        return parent is IPhysicalInteractionReceiver parentReceiver ? parentReceiver : null;
     }
 
     private Vector3 BuildTargetVelocity(Vector3 targetOrigin, float deltaSeconds)
@@ -395,7 +476,7 @@ public sealed class HandDynamicBodyInteractionController(
         }
     }
 
-    private readonly record struct QueryContact(RigidBody3D Body, Vector3 Normal);
+    private readonly record struct QueryContact(RigidBody3D Body, Vector3 Normal, Vector3 Point);
 
-    private readonly record struct ActiveContact(RigidBody3D Body, Vector3 Normal);
+    private readonly record struct ActiveContact(RigidBody3D Body, Vector3 Normal, Vector3 Point);
 }

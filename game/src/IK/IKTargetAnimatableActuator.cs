@@ -26,7 +26,12 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public int GeneratedMovementCollisionShapeCount { get; } = EnsureProfileMovementCollisionShapes(body, dynamicInteractionShapes);
 
-    private readonly HandDynamicBodyInteractionController _dynamicBodyInteraction = new(body, dynamicInteractionShapes);
+    private HandDynamicBodyInteractionController DynamicBodyInteraction { get; } = new(body, dynamicInteractionShapes);
+
+    /// <summary>
+    /// Gets the dynamic-body interaction controller for integration tests.
+    /// </summary>
+    public HandDynamicBodyInteractionController DynamicBodyInteractionControllerForTesting => DynamicBodyInteraction;
 
     /// <summary>
     /// Maximum translation speed in metres per second.
@@ -87,8 +92,8 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public uint DynamicBodyInteractionCollisionMask
     {
-        get => _dynamicBodyInteraction.CollisionMask;
-        set => _dynamicBodyInteraction.CollisionMask = value;
+        get => DynamicBodyInteraction.CollisionMask;
+        set => DynamicBodyInteraction.CollisionMask = value;
     }
 
     /// <summary>
@@ -96,8 +101,8 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public float DynamicImpactApproachSpeedThreshold
     {
-        get => _dynamicBodyInteraction.ImpactApproachSpeedThreshold;
-        set => _dynamicBodyInteraction.ImpactApproachSpeedThreshold = value;
+        get => DynamicBodyInteraction.ImpactApproachSpeedThreshold;
+        set => DynamicBodyInteraction.ImpactApproachSpeedThreshold = value;
     }
 
     /// <summary>
@@ -105,8 +110,8 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public float DynamicImpactImpulsePerSpeed
     {
-        get => _dynamicBodyInteraction.ImpactImpulsePerSpeed;
-        set => _dynamicBodyInteraction.ImpactImpulsePerSpeed = value;
+        get => DynamicBodyInteraction.ImpactImpulsePerSpeed;
+        set => DynamicBodyInteraction.ImpactImpulsePerSpeed = value;
     }
 
     /// <summary>
@@ -114,8 +119,8 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public float DynamicImpactImpulseCap
     {
-        get => _dynamicBodyInteraction.ImpactImpulseCap;
-        set => _dynamicBodyInteraction.ImpactImpulseCap = value;
+        get => DynamicBodyInteraction.ImpactImpulseCap;
+        set => DynamicBodyInteraction.ImpactImpulseCap = value;
     }
 
     /// <summary>
@@ -123,8 +128,8 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public float DynamicSustainedPushSpeedThreshold
     {
-        get => _dynamicBodyInteraction.SustainedPushSpeedThreshold;
-        set => _dynamicBodyInteraction.SustainedPushSpeedThreshold = value;
+        get => DynamicBodyInteraction.SustainedPushSpeedThreshold;
+        set => DynamicBodyInteraction.SustainedPushSpeedThreshold = value;
     }
 
     /// <summary>
@@ -132,8 +137,8 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public float DynamicSustainedForcePerSpeed
     {
-        get => _dynamicBodyInteraction.SustainedForcePerSpeed;
-        set => _dynamicBodyInteraction.SustainedForcePerSpeed = value;
+        get => DynamicBodyInteraction.SustainedForcePerSpeed;
+        set => DynamicBodyInteraction.SustainedForcePerSpeed = value;
     }
 
     /// <summary>
@@ -141,8 +146,8 @@ public sealed class IKTargetAnimatableActuator(
     /// </summary>
     public float DynamicSustainedForceCap
     {
-        get => _dynamicBodyInteraction.SustainedForceCap;
-        set => _dynamicBodyInteraction.SustainedForceCap = value;
+        get => DynamicBodyInteraction.SustainedForceCap;
+        set => DynamicBodyInteraction.SustainedForceCap = value;
     }
 
     /// <inheritdoc />
@@ -211,7 +216,7 @@ public sealed class IKTargetAnimatableActuator(
                 RotationSnapAngleRadians);
         }
 
-        _dynamicBodyInteraction.Update(targetTransform, delta);
+        DynamicBodyInteraction.Update(targetTransform, delta);
         Transform3D realisedTarget = body.GlobalTransform;
         _lastActuation = new IKTargetActuationResult(
             targetTransform,

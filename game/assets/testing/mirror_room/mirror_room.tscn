@@ -328,6 +328,9 @@ mesh = SubResource("CylinderMesh_ui8dj")
 [node name="Ball" parent="Items" unique_id=440488605 instance=ExtResource("6_dk4eq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6710081, 0.30162144, 0.47307545)
 
+[node name="Ball2" parent="Items" unique_id=2033382056 instance=ExtResource("6_dk4eq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8016772, 0.30162144, 0.3634836)
+
 [node name="Stick" parent="Items" unique_id=362015970 instance=ExtResource("7_yh5d4")]
 transform = Transform3D(0.73521054, -0.67783904, 2.9629284e-08, 0, -4.371139e-08, -1, 0.67783904, 0.73521054, -3.213707e-08, 0.51545995, 0.26368403, 0.34847197)
 

@@ -1,5 +1,6 @@
 using AlleyCat.Body;
 using AlleyCat.IK;
+using AlleyCat.Interaction.Physical;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -203,6 +204,46 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
     }
 
     /// <summary>
+    /// Verifies the existing hand dynamic-body collision path delivers the pluggable impact source to receivers.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task Update_FirstQualifyingPressingContact_InvokesPhysicalInteractionReceiver()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RuntimeFixture fixture = await RuntimeFixture.CreateAsync(
+            sceneTree,
+            actuator =>
+            {
+                actuator.DynamicImpactApproachSpeedThreshold = 0.05f;
+                actuator.DynamicImpactImpulsePerSpeed = 10.0f;
+                actuator.DynamicImpactImpulseCap = 0.50f;
+                actuator.DynamicSustainedForcePerSpeed = 0.0f;
+                actuator.DynamicSustainedForceCap = 0.0f;
+            },
+            addImpactInteractionWiring: true);
+
+        try
+        {
+            await fixture.PrimeAsync(new Vector3(0.12f, 0.0f, 0.0f));
+
+            await fixture.UpdateAsync(new Vector3(0.20f, 0.0f, 0.0f));
+
+            IImpactPhysicalInteraction interaction = Assert.IsAssignableFrom<IImpactPhysicalInteraction>(
+                fixture.ImpactReceiver?.LastImpactInteraction);
+            Assert.Same(fixture.DynamicBodyInteractionController, interaction.Source);
+            Assert.Equal(["HandBody", "ImpactSource"], [.. fixture.DynamicBodyInteractionController!.Tags]);
+            Assert.Equal(["DynamicBody", "ImpactReceiver"], [.. fixture.ImpactReceiver!.Tags]);
+            Assert.InRange(interaction.Velocity.X, 4.0f, 5.0f);
+            Assert.InRange(Mathf.Abs(interaction.ContactPoint.X - fixture.DynamicBody.GlobalPosition.X), 0.0f, 0.08f);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies profile-backed runtime movement shapes let a shapeless hand target collide with obstacles.
     /// </summary>
     [Headless]
@@ -249,7 +290,13 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
         Assert.InRange(Mathf.Abs(vector.Z), 0.0f, tolerance);
     }
 
-    private sealed class RuntimeFixture(Node3D root, AnimatableBody3D handBody, RigidBody3D dynamicBody, IKTargetAnimatableActuator actuator, TargetPoseSource targetPoseSource)
+    private sealed class RuntimeFixture(
+        Node3D root,
+        AnimatableBody3D handBody,
+        RigidBody3D dynamicBody,
+        IKTargetAnimatableActuator actuator,
+        TargetPoseSource targetPoseSource,
+        RigidBodyImpactInteractionReceiver3D? impactReceiver)
     {
         public Node3D Root { get; } = root;
 
@@ -261,11 +308,16 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
 
         public TargetPoseSource TargetPoseSource { get; } = targetPoseSource;
 
+        public HandDynamicBodyInteractionController? DynamicBodyInteractionController => Actuator.DynamicBodyInteractionControllerForTesting;
+
+        public RigidBodyImpactInteractionReceiver3D? ImpactReceiver { get; } = impactReceiver;
+
         public static async Task<RuntimeFixture> CreateAsync(
             SceneTree sceneTree,
             Action<IKTargetAnimatableActuator>? configureActuator = null,
             bool addDirectHandShape = true,
-            IReadOnlyList<HandDynamicInteractionShape>? profileShapes = null)
+            IReadOnlyList<HandDynamicInteractionShape>? profileShapes = null,
+            bool addImpactInteractionWiring = false)
         {
             Node3D root = new()
             {
@@ -307,6 +359,17 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
                 Name = "CollisionShape3D",
                 Shape = new BoxShape3D { Size = _boxSize },
             });
+            RigidBodyImpactInteractionReceiver3D? impactReceiver = null;
+            if (addImpactInteractionWiring)
+            {
+                impactReceiver = new RigidBodyImpactInteractionReceiver3D
+                {
+                    Name = "ImpactInteractionReceiver",
+                    AuthoredTags = ["DynamicBody", "ImpactReceiver"],
+                    ImpulseScale = 0.0f,
+                };
+                dynamicBody.AddChild(impactReceiver);
+            }
 
             root.AddChild(handBody);
             root.AddChild(dynamicBody);
@@ -340,7 +403,7 @@ public sealed class HandDynamicBodyInteractionControllerIntegrationTests
             dynamicBody.AngularVelocity = Vector3.Zero;
             dynamicBody.Sleeping = false;
 
-            return new RuntimeFixture(root, handBody, dynamicBody, actuator, targetPoseSource);
+            return new RuntimeFixture(root, handBody, dynamicBody, actuator, targetPoseSource, impactReceiver);
         }
 
         public async Task PrimeAsync(Vector3 handPosition)

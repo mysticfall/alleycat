@@ -22,6 +22,20 @@ public partial class DynamicPhysicalRig : Node
     private readonly List<ProxyBinding> _proxyBindings = [];
 
     /// <summary>
+    /// Emitted when a generated body-part proxy receives a physical interaction.
+    /// </summary>
+    /// <param name="receipt">Variant-compatible receipt that preserves the delivered interaction value.</param>
+    /// <param name="boneIndex">The skeleton bone index associated with the receiving proxy.</param>
+    /// <param name="tags">Receiver-owned metadata tags associated with the receiving proxy.</param>
+    /// <param name="bodyPart">The generated body-part proxy that received the physical interaction.</param>
+    [Signal]
+    public delegate void PhysicalInteractionReceivedEventHandler(
+        PhysicalInteractionReceipt receipt,
+        int boneIndex,
+        string[] tags,
+        PhysicalBodyPart3D bodyPart);
+
+    /// <summary>
     /// Reusable collider descriptor profile shared by runtime body systems.
     /// </summary>
     [Export]
@@ -297,7 +311,11 @@ public partial class DynamicPhysicalRig : Node
                     : default;
                 Transform3D localProxyTransform = isFingerBone ? fingerGeometry.LocalTransform : sourceShapeDescriptor.LocalTransform;
 
-                AnimatableBody3D proxyBody = CreateProxyBody(localProxyTransform);
+                PhysicalBodyPart3D proxyBody = CreateProxyBody(
+                    targetBoneName,
+                    targetBoneIndex,
+                    sourceShapeDescriptor.SourceIdentifier,
+                    localProxyTransform);
                 proxyBody.CollisionLayer = ProxyCollisionLayer;
                 proxyBody.CollisionMask = ProxyCollisionMask;
                 TagGeneratedNode(proxyBody, sourceShapeDescriptor.SourceIdentifier);
@@ -305,6 +323,7 @@ public partial class DynamicPhysicalRig : Node
                 AssignOwnerIfNeeded(proxyBody, persistedOwner);
                 proxyBody.Transform = localProxyTransform;
                 proxyBody.TopLevel = true;
+                ConnectGeneratedBodyPartPhysicalInteractionSignal(proxyBody);
                 _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, localProxyTransform));
 
                 CollisionShape3D proxyShape = isFingerBone
@@ -496,17 +515,44 @@ public partial class DynamicPhysicalRig : Node
         return attachment;
     }
 
-    private static AnimatableBody3D CreateProxyBody(Transform3D localProxyTransform)
+    private PhysicalBodyPart3D CreateProxyBody(
+        string boneName,
+        int boneIndex,
+        string sourceShapeId,
+        Transform3D localProxyTransform)
     {
-        AnimatableBody3D proxyBody = new()
+        PhysicalBodyPart3D proxyBody = new()
         {
             Name = "ProxyBody",
             Transform = localProxyTransform,
             SyncToPhysics = false,
+            BoneName = boneName,
+            BoneIndex = boneIndex,
+            AuthoredTags = [boneName],
+            SourceShapeId = sourceShapeId,
+            OwningRig = this,
         };
 
         return proxyBody;
     }
+
+    private void ConnectGeneratedBodyPartPhysicalInteractionSignal(PhysicalBodyPart3D proxyBody)
+        => proxyBody.PhysicalInteractionReceived += (interaction, boneIndex, tags) =>
+            OnGeneratedBodyPartPhysicalInteractionReceived(proxyBody, interaction, boneIndex, tags);
+
+    /// <summary>
+    /// Handles a received generated-proxy physical interaction before forwarding it from the rig.
+    /// </summary>
+    /// <param name="bodyPart">The generated body-part proxy that received the physical interaction.</param>
+    /// <param name="receipt">Variant-compatible receipt that preserves the delivered interaction value.</param>
+    /// <param name="boneIndex">The skeleton bone index associated with the receiving proxy.</param>
+    /// <param name="tags">Receiver-owned metadata tags associated with the receiving proxy.</param>
+    protected virtual void OnGeneratedBodyPartPhysicalInteractionReceived(
+        PhysicalBodyPart3D bodyPart,
+        PhysicalInteractionReceipt receipt,
+        int boneIndex,
+        string[] tags)
+        => _ = EmitSignal(SignalName.PhysicalInteractionReceived, receipt, boneIndex, tags, bodyPart);
 
     private static CollisionShape3D CreateProxyShape(BodyColliderShapeDescriptor sourceShapeDescriptor)
     {
@@ -554,7 +600,11 @@ public partial class DynamicPhysicalRig : Node
             skeleton.AddChild(attachment);
             AssignOwnerIfNeeded(attachment, persistedOwner);
 
-            AnimatableBody3D proxyBody = CreateProxyBody(geometry.LocalTransform);
+            PhysicalBodyPart3D proxyBody = CreateProxyBody(
+                boneName,
+                boneIndex,
+                $"GeneratedFinger:{boneName}",
+                geometry.LocalTransform);
             proxyBody.CollisionLayer = ProxyCollisionLayer;
             proxyBody.CollisionMask = ProxyCollisionMask;
             TagGeneratedNode(proxyBody, $"GeneratedFinger:{boneName}");
@@ -562,6 +612,7 @@ public partial class DynamicPhysicalRig : Node
             AssignOwnerIfNeeded(proxyBody, persistedOwner);
             proxyBody.Transform = geometry.LocalTransform;
             proxyBody.TopLevel = true;
+            ConnectGeneratedBodyPartPhysicalInteractionSignal(proxyBody);
             _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, geometry.LocalTransform));
 
             CollisionShape3D proxyShape = CreateFingerProxyShape(geometry);

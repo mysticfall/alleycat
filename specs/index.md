@@ -21,6 +21,7 @@
 - [BODY-002: Character Physical Response System](body/002-character-physical-response/index.md)
   - [BODY-002 Design Notes](body/002-character-physical-response/design-notes.md)
   - [BODY-005: IK Target Pipeline Foundation](body/005-ik-target-pipeline-foundation/index.md)
+  - [BODY-008: Character Physical Interaction API](body/008-character-stimulus-detection-and-routing/index.md)
   - [BODY-003: Full-Body Collision Decision](body/003-full-body-collision-decision/index.md)
 - [BODY-004: Eyes](body/004-eyes/index.md)
 
