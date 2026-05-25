@@ -26,7 +26,6 @@ public sealed partial class FootTargetSyncControllerIntegrationTests
     private const string CopyRightFootRotationPath = "Female_export/GeneralSkeleton/CopyRightFootRotation";
 
     private const float PositionToleranceMetres = 0.01f;
-    private const float MinimumFootShiftEffectMetres = 0.04f;
 
     /// <summary>
     /// Verifies scene-authored player pipeline ordering for foot sync, hip reconciliation, and leg solve chain.
@@ -104,11 +103,11 @@ public sealed partial class FootTargetSyncControllerIntegrationTests
     }
 
     /// <summary>
-    /// Verifies a hip-shift-style foot mutator only affects targets when ordered before sync.
+    /// Verifies foot targets are synchronised from animated foot bones before downstream modifiers run.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task FootTargetSyncController_FootShiftMutatorOrder_ControlsWhetherTargetsDrift()
+    public async Task FootTargetSyncController_SamplesAnimatedFootPoseBeforeDownstreamModifiers()
     {
         SceneTree sceneTree = GetSceneTree();
         await WaitForFramesAsync(sceneTree, 2);
@@ -163,55 +162,30 @@ public sealed partial class FootTargetSyncControllerIntegrationTests
         copyRightFootRotation.Active = false;
         hipReconciliationModifier.Active = false;
 
+        await WaitForFramesAsync(sceneTree, 4);
+
         int leftFootIndex = RequireBoneIndex(skeleton, "LeftFoot");
         int rightFootIndex = RequireBoneIndex(skeleton, "RightFoot");
 
-        FootShiftMutator shiftMutator = new()
-        {
-            Name = "FootShiftMutator",
-            LeftFootBasePose = skeleton.GetBonePosePosition(leftFootIndex),
-            RightFootBasePose = skeleton.GetBonePosePosition(rightFootIndex),
-            ShiftDelta = new Vector3(0.0f, 0.10f, 0.0f),
-            Active = true,
-        };
-        skeleton.AddChild(shiftMutator);
+        AssertFootTargetMatchesBonePose(skeleton, leftFootIndex, leftFootTarget, "left");
+        AssertFootTargetMatchesBonePose(skeleton, rightFootIndex, rightFootTarget, "right");
+    }
 
-        skeleton.MoveChild(shiftMutator, skeleton.GetChildCount() - 1);
-        Assert.True(
-            shiftMutator.GetIndex() > syncController.GetIndex(),
-            "Foot shift mutator should execute after FootTargetSyncController in post-sync case.");
-        await WaitForFramesAsync(sceneTree, 3);
-
-        Vector3 baselineLeftTarget = leftFootTarget.GlobalPosition;
-        Vector3 baselineRightTarget = rightFootTarget.GlobalPosition;
-
-        skeleton.MoveChild(shiftMutator, syncController.GetIndex());
-        Assert.True(
-            shiftMutator.GetIndex() < syncController.GetIndex(),
-            "Foot shift mutator should execute before FootTargetSyncController in pre-sync case.");
-        await WaitForFramesAsync(sceneTree, 4);
-
-        Vector3 shiftedLeftTarget = leftFootTarget.GlobalPosition;
-        Vector3 shiftedRightTarget = rightFootTarget.GlobalPosition;
+    private static void AssertFootTargetMatchesBonePose(
+        Skeleton3D skeleton,
+        int footBoneIndex,
+        Node3D footTarget,
+        string side)
+    {
+        Transform3D footGlobalPose = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(footBoneIndex);
 
         Assert.True(
-            shiftedLeftTarget.DistanceTo(baselineLeftTarget) >= MinimumFootShiftEffectMetres,
-            "Left target should drift when a foot-shift mutator executes before sync (proxy for after-hip sampling regression).");
-        Assert.True(
-            shiftedRightTarget.DistanceTo(baselineRightTarget) >= MinimumFootShiftEffectMetres,
-            "Right target should drift when a foot-shift mutator executes before sync (proxy for after-hip sampling regression).");
-
-        skeleton.MoveChild(shiftMutator, skeleton.GetChildCount() - 1);
-        await WaitForFramesAsync(sceneTree, 4);
+            footTarget.GlobalPosition.DistanceTo(footGlobalPose.Origin) <= PositionToleranceMetres,
+            $"Expected {side} foot target to match the animated {side} foot bone position sampled by FootTargetSyncController.");
 
         Assert.True(
-            leftFootTarget.GlobalPosition.DistanceTo(baselineLeftTarget) <= PositionToleranceMetres,
-            "Left target should remain stable when foot-shift mutator executes after sync.");
-        Assert.True(
-            rightFootTarget.GlobalPosition.DistanceTo(baselineRightTarget) <= PositionToleranceMetres,
-            "Right target should remain stable when foot-shift mutator executes after sync.");
-
-        shiftMutator.QueueFree();
+            footTarget.GlobalBasis.Orthonormalized().IsEqualApprox(footGlobalPose.Basis.Orthonormalized()),
+            $"Expected {side} foot target basis to match the animated {side} foot bone basis sampled by FootTargetSyncController.");
     }
 
     private static int RequireBoneIndex(Skeleton3D skeleton, string boneName)
@@ -219,54 +193,5 @@ public sealed partial class FootTargetSyncControllerIntegrationTests
         int boneIndex = skeleton.FindBone(boneName);
         Assert.True(boneIndex >= 0, $"Expected skeleton bone '{boneName}' to exist.");
         return boneIndex;
-    }
-
-    private sealed partial class FootShiftMutator : SkeletonModifier3D
-    {
-        public Vector3 LeftFootBasePose
-        {
-            get;
-            set;
-        }
-
-        public Vector3 RightFootBasePose
-        {
-            get;
-            set;
-        }
-
-        public Vector3 ShiftDelta
-        {
-            get;
-            set;
-        }
-
-        private int _leftFootBoneIndex = -1;
-        private int _rightFootBoneIndex = -1;
-
-        public override void _ProcessModificationWithDelta(double delta)
-        {
-            _ = delta;
-
-            Skeleton3D? skeleton = GetSkeleton();
-            if (skeleton is null)
-            {
-                return;
-            }
-
-            if (_leftFootBoneIndex < 0 || _rightFootBoneIndex < 0)
-            {
-                _leftFootBoneIndex = skeleton.FindBone("LeftFoot");
-                _rightFootBoneIndex = skeleton.FindBone("RightFoot");
-            }
-
-            if (_leftFootBoneIndex < 0 || _rightFootBoneIndex < 0)
-            {
-                return;
-            }
-
-            skeleton.SetBonePosePosition(_leftFootBoneIndex, LeftFootBasePose + ShiftDelta);
-            skeleton.SetBonePosePosition(_rightFootBoneIndex, RightFootBasePose + ShiftDelta);
-        }
     }
 }

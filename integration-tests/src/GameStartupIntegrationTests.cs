@@ -433,7 +433,7 @@ public sealed partial class GameStartupIntegrationTests
         }
 
         public void EmitSplashFinished()
-            => _ = EmitSignal(SplashScreen.SignalName.SplashFinished);
+            => _ = EmitSignal(SignalName.SplashFinished);
     }
 
     private sealed partial class TestLoadingScreen : LoadingScreen
@@ -462,6 +462,6 @@ public sealed partial class GameStartupIntegrationTests
         }
 
         public void EmitLoadCompleted()
-            => _ = EmitSignal(LoadingScreen.SignalName.LoadCompleted);
+            => _ = EmitSignal(SignalName.LoadCompleted);
     }
 }

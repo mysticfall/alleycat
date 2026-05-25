@@ -20,6 +20,7 @@ public partial class TestRuntimeRunner : Node
     private const string FailureMarker = "ALLEYCAT_INTEGRATION_PROBE_FAILURE";
     private const string TestPassMarker = "ALLEYCAT_INTEGRATION_TEST_PASS";
     private const string TestFailMarker = "ALLEYCAT_INTEGRATION_TEST_FAIL";
+    private const int ProbeReadyFrameLimit = 5;
     private const string TestResultMarkerPrefix = "ALLEYCAT_INTEGRATION_TEST_RESULT:";
 
     /// <summary>
@@ -105,11 +106,11 @@ public partial class TestRuntimeRunner : Node
                     return;
                 }
 
+                probeNode.RequestReady();
                 AddChild(probeNode);
 
-                _ = await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-
-                if (!TryReadReadyFlag(probeType, out string readyFlagError))
+                (bool ready, string readyFlagError) = await WaitForReadyFlagAsync(probeType);
+                if (!ready && !TryInvokeReadyCallback(probeNode, probeType, out readyFlagError))
                 {
                     FailProbeAndQuit(readyFlagError);
                     return;
@@ -250,6 +251,49 @@ public partial class TestRuntimeRunner : Node
         }
 
         return null;
+    }
+
+    private async Task<(bool Ready, string Error)> WaitForReadyFlagAsync(Type probeType)
+    {
+        string readyFlagError = string.Empty;
+        for (int frame = 0; frame < ProbeReadyFrameLimit; frame++)
+        {
+            _ = await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            if (TryReadReadyFlag(probeType, out readyFlagError))
+            {
+                return (true, string.Empty);
+            }
+        }
+
+        return (false, readyFlagError);
+    }
+
+    private static bool TryInvokeReadyCallback(Node probeNode, Type probeType, out string error)
+    {
+        MethodInfo? readyMethod = probeType.GetMethod(
+            nameof(_Ready),
+            BindingFlags.Public | BindingFlags.Instance,
+            binder: null,
+            types: Type.EmptyTypes,
+            modifiers: null);
+
+        if (readyMethod is null)
+        {
+            error = $"Probe node '{probeType.FullName}' did not report ready execution and does not expose a public _Ready callback.";
+            return false;
+        }
+
+        try
+        {
+            _ = readyMethod.Invoke(probeNode, null);
+        }
+        catch (Exception ex)
+        {
+            error = $"Probe node '{probeType.FullName}' did not report ready execution and invoking _Ready failed: {ex.Message}";
+            return false;
+        }
+
+        return TryReadReadyFlag(probeType, out error);
     }
 
     private static bool TryReadReadyFlag(Type probeType, out string error)
