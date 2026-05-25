@@ -85,13 +85,13 @@ future work.
     initiation context. Additional source roles such as pressure can be added later without adding duplicate collision
     shapes or relay nodes. `PhysicalInteractionImpactSource3D` is intentionally not part of this slice; impact
     initiation is implemented directly by `HandDynamicBodyInteractionController`.
-17. The mirror-room ball-push path shall reuse the existing right-hand IK target collision processing instead of adding
-    a separate `Area3D` relay, extra hand collision shape, or child source node. `HandDynamicBodyInteractionController`
-    shall initiate impact interactions directly from the IK target dynamic-body collision path and deliver itself to any
-    `IPhysicalInteractionReceiver` found on the contacted body, its children, or its parent. `test_ball.tscn`
-    shall carry `RigidBodyImpactInteractionReceiver3D` and use the dynamic-interaction collision layer/group expected
-    by the IK target query so it can create `ImpactPhysicalInteraction`, emit receipt notification, and apply an
-    impulse to the
+17. The mirror-room dynamic prop impact path shall reuse the existing right-hand IK target collision processing instead
+    of adding a separate `Area3D` relay, extra hand collision shape, or child source node.
+    `HandDynamicBodyInteractionController` shall initiate impact interactions directly from the IK target dynamic-body
+    collision path and deliver itself to any `IPhysicalInteractionReceiver` found on the contacted body, its children,
+    or its parent. Mirror-room dynamic props, including `test_ball.tscn` and `test_stick.tscn`, shall carry
+    `RigidBodyImpactInteractionReceiver3D` and use the dynamic-interaction collision layer/group expected by the IK
+    target query so they can create `ImpactPhysicalInteraction`, emit receipt notification, and apply an impulse to the
     referenced or parent `RigidBody3D`.
 
 ## In Scope
@@ -104,9 +104,9 @@ future work.
 - `DynamicPhysicalRig` generated receiver proxies and rig-level forwarding.
 - Unit and integration tests for the API, absence of source-owned receiver queries, receiver creation, unsupported
   sources, signal snapshots, rig forwarding, generated proxy count, sync preservation, read-only tags, and the minimal
-  real ball-push component contracts.
+  real dynamic-prop impact contracts.
 - Reusable right-hand IK target collision source initiation, plus mirror-room scenario validation through instancing and
-  `test_ball.tscn` rigid-body impact receiver wiring.
+  rigid-body impact receiver wiring on dynamic props including `test_ball.tscn` and `test_stick.tscn`.
 
 ## Out Of Scope
 
@@ -115,7 +115,7 @@ future work.
 - Thermal zone or environment object source implementations.
 - Post-receive reaction systems such as heat response, stagger, damage, haptics, audio, or visual cues.
 - Consumer subscription and event-driven reaction pipeline beyond rig-level receipt forwarding and the minimal
-  rigid-body impulse receiver used by `test_ball.tscn`.
+  rigid-body impulse receiver used by mirror-room dynamic props.
 - Final tuning of thresholds, filter constants, or anatomical limits.
 - Networking or multiplayer synchronisation.
 
@@ -139,11 +139,14 @@ future work.
 8. Technical Requirements 9-12 validated: `PhysicalBodyPart3D` creates and emits impact interactions,
    returns `null` for unsupported source types, snapshots tags, and has no mutable receive history.
 9. Technical Requirements 13-17 validated: `DynamicPhysicalRig` generates receiver proxies, forwards receipt signals,
-   preserves sync behaviour, avoids unrelated systems, uses runtime receiver access, and the ball-push path reuses the
-   existing IK target collision processor without an `Area3D` relay or new hand collision shape.
-10. Generated proxy count preserved: integration tests verify the same number of proxy bodies are generated as before
+   preserves sync behaviour, avoids unrelated systems, uses runtime receiver access, and the mirror-room dynamic prop
+   impact path reuses the existing IK target collision processor without an `Area3D` relay or new hand collision shape.
+10. User Requirements 2-3 and Technical Requirement 17 validated: mirror-room `test_ball.tscn` and `test_stick.tscn`
+    instances are `RigidBody3D` dynamic props with the hand dynamic interaction group, collision layer and mask, plus a
+    `RigidBodyImpactInteractionReceiver3D` child for receiver-owned impact interpretation.
+11. Generated proxy count preserved: integration tests verify the same number of proxy bodies are generated as before
     the refactor.
-11. Existing sync behaviour preserved: integration tests verify skeleton-to-proxy position/rotation sync continues to
+12. Existing sync behaviour preserved: integration tests verify skeleton-to-proxy position/rotation sync continues to
     function.
 
 ## References

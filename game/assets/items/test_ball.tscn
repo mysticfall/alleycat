@@ -44,5 +44,4 @@ metadata/_custom_type_script = "uid://cbwik5eyyjmn5"
 
 [node name="ImpactInteractionReceiver" type="Node" parent="." unique_id=485996718]
 script = ExtResource("4_bsubu")
-AuthoredTags = PackedStringArray("Ball", "ImpactReceiver")
 metadata/_custom_type_script = "uid://mwj3evwi2jvj"

@@ -335,7 +335,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the mirror-room scene delegates ball-push wiring to instanced assets instead of owning source nodes.
+    /// Verifies the mirror-room scene delegates prop-impact wiring to instanced assets instead of owning source nodes.
     /// </summary>
     [Headless]
     [Fact]
@@ -350,18 +350,14 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance the player scene.");
             Node ball = sceneRoot.GetNodeOrNull("Items/Ball")
                 ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance test_ball.tscn.");
+            Node stick = sceneRoot.GetNodeOrNull("Items/Stick")
+                ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance test_stick.tscn.");
 
             Assert.Null(player.GetNodeOrNull("IKTargets/RightHand/ImpactSource"));
             Assert.Null(player.GetNodeOrNull("Female_export/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
             Assert.Null(sceneRoot.GetNodeOrNull("Actors/Player/Female_export/GeneralSkeleton/RightHand/MirrorRoomPhysicalImpactRelay"));
-            RigidBody3D ballBody = Assert.IsType<RigidBody3D>(ball, exactMatch: false);
-            Assert.True(ballBody.IsInGroup("hand_dynamic_interaction_body"));
-            Assert.Equal(2U, ballBody.CollisionLayer);
-            Assert.Equal(11U, ballBody.CollisionMask);
-            Node receiver = ball.GetNodeOrNull("ImpactInteractionReceiver")
-                ?? throw new Xunit.Sdk.XunitException("Expected test_ball.tscn to carry an impact receiver child.");
-            Assert.Equal(["Ball", "ImpactReceiver"], receiver.Get("AuthoredTags").AsStringArray());
-            Assert.Equal("uid://mwj3evwi2jvj", receiver.GetMeta("_custom_type_script").AsString());
+            _ = AssertMirrorRoomDynamicPropContract(ball, "test_ball.tscn");
+            _ = AssertMirrorRoomDynamicPropContract(stick, "test_stick.tscn");
             Assert.DoesNotContain(GetPackedSceneDependencyPaths(mirrorRoomScene), path =>
                 path.EndsWith("PhysicalInteractionCollisionRelay3D.cs", StringComparison.Ordinal)
                 || path.EndsWith("PhysicalInteractionImpactSource3D.cs", StringComparison.Ordinal));
@@ -370,6 +366,19 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             sceneRoot.Free();
         }
+    }
+
+    private static Node AssertMirrorRoomDynamicPropContract(Node prop, string sceneName)
+    {
+        RigidBody3D propBody = Assert.IsType<RigidBody3D>(prop, exactMatch: false);
+        Assert.True(propBody.IsInGroup("hand_dynamic_interaction_body"));
+        Assert.Equal(2U, propBody.CollisionLayer);
+        Assert.Equal(11U, propBody.CollisionMask);
+        Node receiver = prop.GetNodeOrNull("ImpactInteractionReceiver")
+            ?? throw new Xunit.Sdk.XunitException($"Expected {sceneName} to carry an impact receiver child.");
+        Assert.Equal("uid://mwj3evwi2jvj", receiver.GetMeta("_custom_type_script").AsString());
+
+        return receiver;
     }
 
     /// <summary>
