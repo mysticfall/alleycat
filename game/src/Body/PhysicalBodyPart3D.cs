@@ -73,7 +73,7 @@ public partial class PhysicalBodyPart3D : AnimatableBody3D, IPhysicalInteraction
     }
 
     /// <summary>
-    /// Interprets a physical interaction source without storing history or applying reactions.
+    /// Interprets a physical interaction source and generates interaction data when applicable.
     /// </summary>
     /// <param name="source">The source carrying interaction properties to interpret.</param>
     /// <returns>The created interaction, or <see langword="null"/> when the source is unsupported.</returns>
