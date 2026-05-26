@@ -42,10 +42,10 @@ public partial class AIVoice : Voice
     }
 
     /// <inheritdoc />
-    public override void Speak(string dialogue)
-        => _ = SpeakAsync(dialogue);
+    public override void Speak(string speech)
+        => _ = SpeakAsync(speech);
 
-    internal async Task SpeakAsync(string dialogue)
+    internal async Task SpeakAsync(string speech)
     {
         if (!Enabled)
         {
@@ -72,9 +72,13 @@ public partial class AIVoice : Voice
                 return;
             }
 
-            byte[] generatedAudio = await GenerateSpeechAudioAsync(dialogue);
+            byte[] generatedAudio = await GenerateSpeechAudioAsync(speech);
             AudioStreamWav speechStream = CreatePlayableSpeech(generatedAudio);
-            await DispatchDeferredGodotActionAsync(() => PlayGeneratedSpeech(speechStream));
+            await DispatchDeferredGodotActionAsync(() =>
+            {
+                PlayGeneratedSpeech(speechStream);
+                OnSpeechGenerated(speech);
+            });
         }
         catch (AudioConversionException ex)
         {
@@ -230,12 +234,12 @@ public partial class AIVoice : Voice
     }
 
     /// <summary>
-    /// Generates raw speech audio bytes for the supplied dialogue.
+    /// Generates raw speech audio bytes for the supplied speech text.
     /// </summary>
-    /// <param name="dialogue">Dialogue text to synthesise.</param>
+    /// <param name="speech">Speech text to synthesise.</param>
     /// <returns>Generated speech audio bytes.</returns>
-    protected virtual Task<byte[]> GenerateSpeechAudioAsync(string dialogue)
-        => SpeechGenerator!.Generate(dialogue);
+    protected virtual Task<byte[]> GenerateSpeechAudioAsync(string speech)
+        => SpeechGenerator!.Generate(speech);
 
     /// <summary>
     /// Hands a prepared WAV stream off to the lip-sync playback boundary.

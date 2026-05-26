@@ -3,9 +3,10 @@ using Godot;
 namespace AlleyCat.Body.Voice;
 
 /// <summary>
-/// Base speech-voice component that converts dialogue into synchronised spoken playback.
+/// Base speech-voice component that converts speech text into synchronised spoken playback.
 /// </summary>
-public abstract partial class Voice : Node
+[GlobalClass]
+public abstract partial class Voice : Node3D, IVoice
 {
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
@@ -18,6 +19,12 @@ public abstract partial class Voice : Node
     public delegate void SpeechFailedEventHandler(string error);
 
     /// <summary>
+    /// Stable voice identifier used by characters and authoring tools.
+    /// </summary>
+    [Export]
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
     /// Enables voice playback.
     /// </summary>
     [Export]
@@ -27,11 +34,56 @@ public abstract partial class Voice : Node
         set;
     } = true;
 
+    /// <inheritdoc />
+    public Vector3 Origin => GlobalPosition;
+
     /// <summary>
-    /// Starts speech generation and playback for the supplied dialogue.
+    /// Starts speech generation and playback for the supplied speech text.
     /// </summary>
-    /// <param name="dialogue">Dialogue text to speak.</param>
-    public abstract void Speak(string dialogue);
+    /// <param name="speech">Speech text to speak.</param>
+    public abstract void Speak(string speech);
+
+    /// <summary>
+    /// Invokes the post-generation hook when speech is currently enabled.
+    /// </summary>
+    /// <param name="speech">Speech that completed generation or playback handoff.</param>
+    /// <returns>True when the hook was invoked; otherwise false.</returns>
+    protected bool TryNotifySpeechGeneratedWhenEnabled(string speech)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        OnSpeechGenerated(speech);
+        return true;
+    }
+
+    /// <summary>
+    /// Called after a speech request has completed its generation or playback handoff boundary.
+    /// </summary>
+    /// <param name="speech">Speech that completed generation or playback handoff.</param>
+    protected virtual void OnSpeechGenerated(string speech)
+    {
+        if (!IsInsideTree())
+        {
+            return;
+        }
+
+        SceneTree? sceneTree = GetTree();
+        if (sceneTree is null)
+        {
+            return;
+        }
+
+        foreach (Node node in sceneTree.GetNodesInGroup(IVoiceListener.GroupName))
+        {
+            if (node is IVoiceListener listener)
+            {
+                listener.ReceiveVoice(speech, this);
+            }
+        }
+    }
 
     /// <summary>
     /// Dispatches a Godot action through the deferred main-thread queue.

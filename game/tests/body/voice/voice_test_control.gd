@@ -1,14 +1,14 @@
 extends CanvasLayer
 
-@onready var _voice: Node = get_node_or_null("../AIVoice")
-@onready var _dialogue_input: TextEdit = $PanelContainer/MarginContainer/VBoxContainer/DialogueInput
+@onready var _voice: Node = get_node_or_null("../Character/Female_export/GeneralSkeleton/Head/AIVoice")
+@onready var _speech_input: TextEdit = $PanelContainer/MarginContainer/VBoxContainer/DialogueInput
 @onready var _speak_button: Button = $PanelContainer/MarginContainer/VBoxContainer/ButtonRow/SpeakButton
 @onready var _status_label: Label = $PanelContainer/MarginContainer/VBoxContainer/StatusLabel
 
 
 func _ready() -> void:
 	_speak_button.pressed.connect(_on_speak_requested)
-	_status_label.text = "Enter dialogue text and press Speak or Ctrl+Enter."
+	_status_label.text = "Enter speech text and press Speak or Ctrl+Enter."
 
 	if _voice != null and _voice.has_signal("SpeechFailed"):
 		_voice.connect("SpeechFailed", _on_speech_failed)
@@ -37,14 +37,14 @@ func _on_speak_requested() -> void:
 		_status_label.text = "Voice node missing."
 		return
 
-	var dialogue: String = _dialogue_input.text.strip_edges()
-	if dialogue.is_empty():
-		_status_label.text = "Enter dialogue before speaking."
+	var speech: String = _speech_input.text.strip_edges()
+	if speech.is_empty():
+		_status_label.text = "Enter speech before speaking."
 		return
 
-	_status_label.text = "Speaking: %s" % dialogue
+	_status_label.text = "Speaking: %s" % speech
 
-	_voice.call("Speak", dialogue)
+	_voice.call("Speak", speech)
 
 
 func _on_speech_failed(error: String) -> void:
