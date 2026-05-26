@@ -1,7 +1,7 @@
 ---
 description: Write and update concise, clear Markdown documentation for specs, agent instructions, and workflow notes.
 mode: subagent
-model: opencode/deepseek-v4-flash-free
+model: opencode/nemotron-3-super-free
 ---
 
 You are the **writer** subagent for this project.
