@@ -5,14 +5,19 @@
 [ext_resource type="PackedScene" uid="uid://dchnvffx15knj" path="res://assets/ui/splash_screen.tscn" id="1_axcyo"]
 [ext_resource type="PackedScene" uid="uid://bt5ksnc6kjekx" path="res://assets/xr/openxr_runtime.tscn" id="1_bt0ui"]
 [ext_resource type="Script" uid="uid://bmvh0kef7f276" path="res://src/XR/XRManager.cs" id="1_drti4"]
+[ext_resource type="Script" uid="uid://bsnxjgy8cpunq" path="res://src/Templating/HandlebarsTemplateCompiler.cs" id="3_b10sw"]
 [ext_resource type="PackedScene" uid="uid://kxw5dgct6125" path="res://assets/ui/loading_screen.tscn" id="6_v86yw"]
 [ext_resource type="Script" uid="uid://5eb2vgmywko" path="res://src/IK/PlayerVRIKStartupBinder.cs" id="7_4dmod"]
 [ext_resource type="PackedScene" path="res://assets/ui/ui_overlay.tscn" id="8_i1pu0"]
+
+[sub_resource type="Resource" id="Resource_template_compiler"]
+script = ExtResource("3_b10sw")
 
 [node name="Game" type="Node" unique_id=1021390965]
 script = ExtResource("1_4obgp")
 StartScenePath = "uid://baut876fuyk5c"
 SplashScreenScene = ExtResource("1_axcyo")
+ServiceRegistrars = Array[Resource]([SubResource("Resource_template_compiler")])
 metadata/_custom_type_script = "uid://dnifm5vgeh8bn"
 
 [node name="XR" type="Node" parent="." unique_id=1281566339]

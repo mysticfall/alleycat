@@ -1,5 +1,6 @@
 using System.Reflection;
 using AlleyCat.Core;
+using AlleyCat.Templating;
 using AlleyCat.Testing;
 using AlleyCat.UI;
 using AlleyCat.XR;
@@ -16,6 +17,7 @@ namespace AlleyCat.IntegrationTests;
 public sealed partial class GameStartupIntegrationTests
 {
     private const string EditorRunStartupBypassScenePath = "res://tests/startup/startup_bypass_runtime_test.tscn";
+    private const string GlobalScenePath = "res://assets/scenes/global.tscn";
     private const string StartScenePath = "res://assets/scenes/empty.tscn";
 
     private static readonly FieldInfo _splashScreenField = typeof(Game)
@@ -302,6 +304,105 @@ public sealed partial class GameStartupIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies resource-owned service registrars run through the generic <see cref="Game.ServiceRegistrars"/> path.
+    /// </summary>
+    [Fact]
+    public async Task GameEnterTree_ExecutesConfiguredResourceServiceRegistrarsBeforeSceneOwnedRegistrars()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TestGame game = new()
+        {
+            Name = "ConfiguredRegistrarFixture",
+        };
+
+        TestResourceRegistrar configuredRegistrar = new("configured-resource");
+        TestXRManager xrManager = new()
+        {
+            Name = "XR",
+        };
+        TestServiceRegistrar sceneRegistrar = new("scene-owned");
+
+        game.ServiceRegistrars.Add(configuredRegistrar);
+        game.AddChild(xrManager);
+        game.AddChild(sceneRegistrar);
+
+        game._EnterTree();
+        sceneTree.Root.AddChild(game);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(xrManager, Game.Instance.GetRequiredService<XRManager>());
+            Assert.Equal(
+                ["configured-resource", "scene-owned"],
+                Game.Instance.GetRequiredService<RegistrarDiscoveryLog>().Entries);
+        }
+        finally
+        {
+            if (GodotObject.IsInstanceValid(game) && game.IsInsideTree())
+            {
+                game.QueueFree();
+                await WaitForNextFrameAsync(sceneTree);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifies the authored global startup scene contains the configured template compiler resource.
+    /// </summary>
+    [Fact]
+    public async Task GlobalSceneEnterTree_ContainsConfiguredTemplateCompilerResourceRegistrar()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node game = LoadPackedScene(GlobalScenePath).Instantiate();
+
+        sceneTree.Root.AddChild(game);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Godot.Collections.Array<Resource> serviceRegistrars = Assert.IsType<Godot.Collections.Array<Resource>>(
+                game.Get("ServiceRegistrars").AsGodotArray<Resource>());
+            Resource configuredRegistrar = Assert.Single(serviceRegistrars);
+            Type templateCompilerInterface = configuredRegistrar.GetType().GetInterface("AlleyCat.Templating.ITemplateCompiler")
+                ?? throw new InvalidOperationException("Configured registrar must implement ITemplateCompiler.");
+            Type serviceRegistrarInterface = configuredRegistrar.GetType().GetInterface("AlleyCat.Core.IServiceRegistrar")
+                ?? throw new InvalidOperationException("Configured registrar must implement IServiceRegistrar.");
+
+            Assert.Equal("AlleyCat.Templating.HandlebarsTemplateCompiler", configuredRegistrar.GetType().FullName);
+            Assert.Equal("AlleyCat.Templating.ITemplateCompiler", templateCompilerInterface.FullName);
+            Assert.Equal("AlleyCat.Core.IServiceRegistrar", serviceRegistrarInterface.FullName);
+        }
+        finally
+        {
+            if (GodotObject.IsInstanceValid(game) && game.IsInsideTree())
+            {
+                game.QueueFree();
+                await WaitForNextFrameAsync(sceneTree);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifies the Godot resource registrar directly registers itself as the template compiler service.
+    /// </summary>
+    [Fact]
+    public void HandlebarsTemplateCompilerRegisterServices_RegistersSelfAsTemplateCompiler()
+    {
+        HandlebarsTemplateCompiler compiler = new();
+        ServiceCollection services = new();
+
+        compiler.RegisterServices(services);
+
+        using ServiceProvider provider = services.BuildServiceProvider();
+        ITemplateCompiler resolvedCompiler = provider.GetRequiredService<ITemplateCompiler>();
+
+        Assert.Same(compiler, resolvedCompiler);
+    }
+
     private static bool ReadBooleanProperty(object instance, string propertyName)
         => Assert.IsType<bool>(ReadPropertyValue(instance, propertyName));
 
@@ -409,21 +510,30 @@ public sealed partial class GameStartupIntegrationTests
     private sealed partial class TestServiceRegistrar(string entry) : Node, IServiceRegistrar
     {
         public void RegisterServices(IServiceCollection services)
-        {
-            ServiceDescriptor? descriptor = services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(RegistrarDiscoveryLog));
-            RegistrarDiscoveryLog log;
-            if (descriptor?.ImplementationInstance is RegistrarDiscoveryLog existingLog)
-            {
-                log = existingLog;
-            }
-            else
-            {
-                log = new RegistrarDiscoveryLog();
-                _ = services.AddSingleton(log);
-            }
+            => RegisterLogEntry(services, entry);
+    }
 
-            log.Entries.Add(entry);
+    private sealed partial class TestResourceRegistrar(string entry) : Resource, IServiceRegistrar
+    {
+        public void RegisterServices(IServiceCollection services)
+            => RegisterLogEntry(services, entry);
+    }
+
+    private static void RegisterLogEntry(IServiceCollection services, string entry)
+    {
+        ServiceDescriptor? descriptor = services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(RegistrarDiscoveryLog));
+        RegistrarDiscoveryLog log;
+        if (descriptor?.ImplementationInstance is RegistrarDiscoveryLog existingLog)
+        {
+            log = existingLog;
         }
+        else
+        {
+            log = new RegistrarDiscoveryLog();
+            _ = services.AddSingleton(log);
+        }
+
+        log.Entries.Add(entry);
     }
 
     private sealed partial class TestSplashScreen : SplashScreen

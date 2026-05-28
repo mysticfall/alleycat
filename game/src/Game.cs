@@ -30,6 +30,12 @@ public partial class Game : Node, IServiceProvider
     [Export]
     public PackedScene SplashScreenScene { get; set; } = null!;
 
+    /// <summary>
+    /// Resource-owned service registrars invoked before the global service provider is built.
+    /// </summary>
+    [Export]
+    public Godot.Collections.Array<Resource> ServiceRegistrars { get; set; } = [];
+
     private readonly TaskCompletionSource<bool> _xrInitialisationCompletionSource =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -54,6 +60,7 @@ public partial class Game : Node, IServiceProvider
         if (_serviceProvider is null)
         {
             RegisterServices(_services);
+            RegisterConfiguredServices(_services);
             RegisterSceneOwnedServices(_services);
             BuildServiceProvider();
             _xrManager = _serviceProvider!.GetRequiredService<XRManager>();
@@ -107,7 +114,17 @@ public partial class Game : Node, IServiceProvider
     /// Registers startup services before the service provider is built.
     /// </summary>
     /// <param name="services">Service collection to populate.</param>
-    protected virtual void RegisterServices(IServiceCollection services) => _ = services;
+    protected virtual void RegisterServices(IServiceCollection services)
+    {
+    }
+
+    private void RegisterConfiguredServices(IServiceCollection services)
+    {
+        foreach (IServiceRegistrar registrar in DiscoverResourceServiceRegistrars(ServiceRegistrars))
+        {
+            registrar.RegisterServices(services);
+        }
+    }
 
     private void RegisterSceneOwnedServices(IServiceCollection services)
     {
@@ -131,6 +148,17 @@ public partial class Game : Node, IServiceProvider
             foreach (IServiceRegistrar descendantRegistrar in DiscoverServiceRegistrars(child))
             {
                 yield return descendantRegistrar;
+            }
+        }
+    }
+
+    private static IEnumerable<IServiceRegistrar> DiscoverResourceServiceRegistrars(IEnumerable<Resource?> resources)
+    {
+        foreach (Resource? resource in resources)
+        {
+            if (resource is IServiceRegistrar registrar)
+            {
+                yield return registrar;
             }
         }
     }

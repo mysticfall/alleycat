@@ -19,6 +19,7 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <PackageReference Include="Handlebars.Net" Version="2.1.6" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
         <PackageReference Include="OpenAI" Version="2.10.0" />
         <PackageReference Include="xunit" Version="2.9.3"/>
