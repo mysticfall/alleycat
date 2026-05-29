@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AlleyCat.Body.Eyes;
 using Godot;
 using HttpClient = System.Net.Http.HttpClient;
 
@@ -311,6 +312,7 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     private bool _hasWarnedModeAutoAdjust;
     private bool _hasWarnedMissingEyeRotationFrames;
     private bool _hasWarnedMissingEyeBlendshapeChannels;
+    private static readonly IReadOnlySet<string> _eyesControlledBlendshapeNames = CreateEyesControlledBlendshapeNames();
 
     /// <inheritdoc />
     protected override void InitialiseBackend()
@@ -379,7 +381,10 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
             ApplyEyeRotationBlendshapeTranslation(payload.Frames, blendshapeNames, payload.EyeRotationFrames);
         }
 
-        return new LipSyncInferenceResult(payload.Frames, blendshapeNames, payload.Fps);
+        LipSyncInferenceResult filteredResult = RemoveEyesControlledBlendshapes(payload.Frames, blendshapeNames, payload.Fps);
+        return filteredResult.BlendshapeNames.Count == 0
+            ? throw new InvalidOperationException("LipSyncPlayer: API returned no non-eye blendshape names.")
+            : filteredResult;
     }
 
     /// <inheritdoc />
@@ -791,14 +796,14 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         out EyeBlendshapeIndices indices
     )
     {
-        if (!nameToIndex.TryGetValue("eyelookinleft", out int leftIn)
-            || !nameToIndex.TryGetValue("eyelookoutleft", out int leftOut)
-            || !nameToIndex.TryGetValue("eyelookupleft", out int leftUp)
-            || !nameToIndex.TryGetValue("eyelookdownleft", out int leftDown)
-            || !nameToIndex.TryGetValue("eyelookinright", out int rightIn)
-            || !nameToIndex.TryGetValue("eyelookoutright", out int rightOut)
-            || !nameToIndex.TryGetValue("eyelookupright", out int rightUp)
-            || !nameToIndex.TryGetValue("eyelookdownright", out int rightDown))
+        if (!nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookInLeftBlendShapeName), out int leftIn)
+            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookOutLeftBlendShapeName), out int leftOut)
+            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookUpLeftBlendShapeName), out int leftUp)
+            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookDownLeftBlendShapeName), out int leftDown)
+            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookInRightBlendShapeName), out int rightIn)
+            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookOutRightBlendShapeName), out int rightOut)
+            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookUpRightBlendShapeName), out int rightUp)
+            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookDownRightBlendShapeName), out int rightDown))
         {
             indices = default;
             return false;
@@ -815,6 +820,60 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
             rightDown
         );
         return true;
+    }
+
+    private static LipSyncInferenceResult RemoveEyesControlledBlendshapes(
+        float[][] frames,
+        IReadOnlyList<string> blendshapeNames,
+        float fps
+    )
+    {
+        var retainedIndices = new List<int>(blendshapeNames.Count);
+        var retainedNames = new List<string>(blendshapeNames.Count);
+        for (int index = 0; index < blendshapeNames.Count; index++)
+        {
+            if (IsEyesControlledBlendshapeName(blendshapeNames[index]))
+            {
+                continue;
+            }
+
+            retainedIndices.Add(index);
+            retainedNames.Add(blendshapeNames[index]);
+        }
+
+        if (retainedIndices.Count == blendshapeNames.Count)
+        {
+            return new LipSyncInferenceResult(frames, blendshapeNames, fps);
+        }
+
+        float[][] retainedFrames = new float[frames.Length][];
+        for (int frameIndex = 0; frameIndex < frames.Length; frameIndex++)
+        {
+            float[] sourceFrame = frames[frameIndex];
+            float[] retainedFrame = new float[retainedIndices.Count];
+            for (int index = 0; index < retainedIndices.Count; index++)
+            {
+                retainedFrame[index] = sourceFrame[retainedIndices[index]];
+            }
+
+            retainedFrames[frameIndex] = retainedFrame;
+        }
+
+        return new LipSyncInferenceResult(retainedFrames, retainedNames, fps);
+    }
+
+    private static bool IsEyesControlledBlendshapeName(string blendshapeName)
+        => _eyesControlledBlendshapeNames.Contains(NormalizeBlendshapeName(blendshapeName));
+
+    private static IReadOnlySet<string> CreateEyesControlledBlendshapeNames()
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string blendshapeName in EyesAnimationTreePaths.EyeBlendShapeNames)
+        {
+            _ = names.Add(NormalizeBlendshapeName(blendshapeName));
+        }
+
+        return names;
     }
 
     private readonly record struct EyeBlendshapeIndices(

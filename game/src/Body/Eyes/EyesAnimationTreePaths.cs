@@ -73,27 +73,97 @@ public static class EyesAnimationTreePaths
     private const string OneShotRequestSuffix = "/request";
     private const string TimeScaleSuffix = "/scale";
 
+    /// <summary>
+    /// ARKit blend-shape name for inward right-eye look.
+    /// </summary>
+    public const string EyeLookInRightBlendShapeName = "eyeLookInRight";
+
+    /// <summary>
+    /// ARKit blend-shape name for inward left-eye look.
+    /// </summary>
+    public const string EyeLookInLeftBlendShapeName = "eyeLookInLeft";
+
+    /// <summary>
+    /// ARKit blend-shape name for outward right-eye look.
+    /// </summary>
+    public const string EyeLookOutRightBlendShapeName = "eyeLookOutRight";
+
+    /// <summary>
+    /// ARKit blend-shape name for outward left-eye look.
+    /// </summary>
+    public const string EyeLookOutLeftBlendShapeName = "eyeLookOutLeft";
+
+    /// <summary>
+    /// ARKit blend-shape name for upward right-eye look.
+    /// </summary>
+    public const string EyeLookUpRightBlendShapeName = "eyeLookUpRight";
+
+    /// <summary>
+    /// ARKit blend-shape name for upward left-eye look.
+    /// </summary>
+    public const string EyeLookUpLeftBlendShapeName = "eyeLookUpLeft";
+
+    /// <summary>
+    /// ARKit blend-shape name for downward right-eye look.
+    /// </summary>
+    public const string EyeLookDownRightBlendShapeName = "eyeLookDownRight";
+
+    /// <summary>
+    /// ARKit blend-shape name for downward left-eye look.
+    /// </summary>
+    public const string EyeLookDownLeftBlendShapeName = "eyeLookDownLeft";
+
+    /// <summary>
+    /// ARKit blend-shape name for left-eye blink.
+    /// </summary>
+    public const string EyeBlinkLeftBlendShapeName = "eyeBlinkLeft";
+
+    /// <summary>
+    /// ARKit blend-shape name for right-eye blink.
+    /// </summary>
+    public const string EyeBlinkRightBlendShapeName = "eyeBlinkRight";
+
     private static readonly string[] _horizontalLookBlendShapeNames =
     [
-        "eyeLookInRight",
-        "eyeLookInLeft",
-        "eyeLookOutRight",
-        "eyeLookOutLeft",
+        EyeLookInRightBlendShapeName,
+        EyeLookInLeftBlendShapeName,
+        EyeLookOutRightBlendShapeName,
+        EyeLookOutLeftBlendShapeName,
     ];
 
     private static readonly string[] _verticalLookBlendShapeNames =
     [
-        "eyeLookUpRight",
-        "eyeLookUpLeft",
-        "eyeLookDownRight",
-        "eyeLookDownLeft",
+        EyeLookUpRightBlendShapeName,
+        EyeLookUpLeftBlendShapeName,
+        EyeLookDownRightBlendShapeName,
+        EyeLookDownLeftBlendShapeName,
     ];
 
     private static readonly string[] _blinkBlendShapeNames =
     [
-        "eyeBlinkLeft",
-        "eyeBlinkRight",
+        EyeBlinkLeftBlendShapeName,
+        EyeBlinkRightBlendShapeName,
     ];
+
+    /// <summary>
+    /// Gets the full set of eye blend-shape names owned by the Eyes component.
+    /// </summary>
+    public static IReadOnlySet<string> EyeBlendShapeNames
+    {
+        get;
+    } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        EyeLookInRightBlendShapeName,
+        EyeLookInLeftBlendShapeName,
+        EyeLookOutRightBlendShapeName,
+        EyeLookOutLeftBlendShapeName,
+        EyeLookUpRightBlendShapeName,
+        EyeLookUpLeftBlendShapeName,
+        EyeLookDownRightBlendShapeName,
+        EyeLookDownLeftBlendShapeName,
+        EyeBlinkLeftBlendShapeName,
+        EyeBlinkRightBlendShapeName,
+    };
 
     /// <summary>
     /// Gets the horizontal look seek parameter path.
