@@ -11,6 +11,11 @@
 - [CORE-003: Component/Trait System](core/003-component-system/index.md)
 - [CORE-004: Global Service Resolution](core/004-global-service-resolution/index.md)
 
+## AI
+
+- [AI System](ai/index.md)
+- [AI-001: Mind Component](ai/001-mind/index.md)
+
 ## TMPL
 
 - [TMPL-001: Templating System](tmpl/001-templating-system/index.md)

@@ -7,6 +7,11 @@
 [ext_resource type="PackedScene" uid="uid://doedwhsg5x0o0" path="res://assets/items/chain/physics_chain.tscn" id="4_3ounv"]
 [ext_resource type="PackedScene" uid="uid://df4i6mqjgm16e" path="res://assets/items/test_ball.tscn" id="6_dk4eq"]
 [ext_resource type="PackedScene" uid="uid://c45lomd35erjb" path="res://assets/items/test_stick.tscn" id="7_yh5d4"]
+[ext_resource type="Script" uid="uid://dyffnsg0122vb" path="res://src/Body/Voice/PlayerVoice.cs" id="8_player_voice"]
+[ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="9_speech_gen"]
+[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="10_lipsync"]
+[ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="11_ai_voice"]
+[ext_resource type="Script" path="res://src/AI/Mind.cs" id="12_mind"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
 size = Vector2(10, 10)
@@ -268,6 +273,43 @@ parameters/EyesBlinkTimeScale/scale = 1.0
 
 [node name="EyesBehaviour" parent="Actors/Female" index="6" unique_id=1199535973 node_paths=PackedStringArray("LookTarget")]
 LookTarget = NodePath("../../Player/Female_export/GeneralSkeleton/Head/Viewpoint")
+
+[node name="AIConversation" type="Node3D" parent="Actors"]
+
+[node name="PlayerVoice" type="Node3D" parent="Actors/AIConversation" node_paths=PackedStringArray("Transcriber")]
+script = ExtResource("8_player_voice")
+Id = "player"
+Transcriber = NodePath("../../Player/OpenAITranscriber")
+metadata/_custom_type_script = "uid://dyffnsg0122vb"
+
+[node name="AlleyVoice" type="Node3D" parent="Actors/AIConversation" node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.324, 1.45, -0.868)
+script = ExtResource("11_ai_voice")
+Id = "alley"
+SpeechGenerator = NodePath("SpeechGenerator")
+LipSyncPlayer = NodePath("LipSyncPlayer")
+metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
+
+[node name="SpeechGenerator" type="Node" parent="Actors/AIConversation/AlleyVoice"]
+script = ExtResource("9_speech_gen")
+VoiceOverride = "Emma"
+TargetSampleRate = 16000
+metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
+
+[node name="LipSyncPlayer" type="Node" parent="Actors/AIConversation/AlleyVoice" node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+script = ExtResource("10_lipsync")
+InputStrength = 0.6
+ConstantNoise = true
+EyeRotationToBlendshapeScale = 0.15
+Meshes = [NodePath("../../../Female/Female_export/GeneralSkeleton/Female_body_export"), NodePath("../../../Female/Female_export/GeneralSkeleton/Female_eyebrow006_export"), NodePath("../../../Female/Female_export/GeneralSkeleton/Female_eyelashes01_export"), NodePath("../../../Female/Female_export/GeneralSkeleton/Female_high-poly_export"), NodePath("../../../Female/Female_export/GeneralSkeleton/Female_teeth_shape01_export"), NodePath("../../../Female/Female_export/GeneralSkeleton/Female_tongue01_export")]
+AudioPlayer = NodePath("../AudioStreamPlayer3D")
+metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Actors/AIConversation/AlleyVoice"]
+
+[node name="Mind" type="Node" parent="Actors/AIConversation" node_paths=PackedStringArray("Voice")]
+script = ExtResource("12_mind")
+Voice = NodePath("../AlleyVoice")
 
 [node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_shmn4")]
 
