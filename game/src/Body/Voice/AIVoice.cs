@@ -74,9 +74,10 @@ public partial class AIVoice : Voice
 
             byte[] generatedAudio = await GenerateSpeechAudioAsync(speech);
             AudioStreamWav speechStream = CreatePlayableSpeech(generatedAudio);
+            LipSyncPlayer.PreparedPlayback preparedPlayback = await PrepareGeneratedSpeechAsync(speechStream);
             await DispatchDeferredGodotActionAsync(() =>
             {
-                PlayGeneratedSpeech(speechStream);
+                PlayGeneratedSpeech(preparedPlayback);
                 OnSpeechGenerated(speech);
             });
         }
@@ -242,11 +243,19 @@ public partial class AIVoice : Voice
         => SpeechGenerator!.Generate(speech);
 
     /// <summary>
-    /// Hands a prepared WAV stream off to the lip-sync playback boundary.
+    /// Prepares lip-sync data for a generated WAV stream before playback starts.
     /// </summary>
     /// <param name="speechStream">Prepared speech stream.</param>
-    protected virtual void PlayGeneratedSpeech(AudioStreamWav speechStream)
-        => LipSyncPlayer!.Play(speechStream);
+    /// <returns>Prepared speech playback data.</returns>
+    protected virtual Task<LipSyncPlayer.PreparedPlayback> PrepareGeneratedSpeechAsync(AudioStreamWav speechStream)
+        => LipSyncPlayer!.PreparePlaybackAsync(speechStream);
+
+    /// <summary>
+    /// Hands a prepared WAV stream off to the lip-sync playback boundary.
+    /// </summary>
+    /// <param name="preparedPlayback">Prepared speech stream and lip-sync inference data.</param>
+    protected virtual void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
+        => LipSyncPlayer!.PlayPrepared(preparedPlayback);
 
     private void ReportSpeechFailure(string emittedError, string loggedError)
     {

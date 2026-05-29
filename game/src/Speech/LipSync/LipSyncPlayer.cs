@@ -239,6 +239,28 @@ public abstract partial class LipSyncPlayer : Node
     /// </summary>
     public void Play(AudioStreamWav speech)
     {
+        try
+        {
+            PlayPrepared(PreparePlayback(speech));
+        }
+        catch (Exception ex)
+        {
+            StopPlayback(resetWeights: true, clearFrames: true);
+            SetPlaybackError($"LipSyncPlayer: playback failed: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// Prepares lip-sync inference data for the supplied speech clip off the caller thread.
+    /// </summary>
+    public Task<PreparedPlayback> PreparePlaybackAsync(AudioStreamWav speech)
+        => Task.Run(() => PreparePlayback(speech));
+
+    /// <summary>
+    /// Starts playback for lip-sync data prepared by <see cref="PreparePlaybackAsync" />.
+    /// </summary>
+    public void PlayPrepared(PreparedPlayback playback)
+    {
         PlaybackError = string.Empty;
 
         if (!EnsureInitialised())
@@ -247,22 +269,7 @@ public abstract partial class LipSyncPlayer : Node
         }
 
         StopPlayback(resetWeights: true, clearFrames: true);
-
-        if (speech is null)
-        {
-            SetPlaybackError("LipSyncPlayer: speech clip is not assigned.");
-            return;
-        }
-
-        try
-        {
-            StartPlayback(speech);
-        }
-        catch (Exception ex)
-        {
-            StopPlayback(resetWeights: true, clearFrames: true);
-            SetPlaybackError($"LipSyncPlayer: playback failed: {ex}");
-        }
+        StartPlayback(playback);
     }
 
     /// <summary>
@@ -284,6 +291,15 @@ public abstract partial class LipSyncPlayer : Node
     /// Data returned by a concrete lip-sync inference backend.
     /// </summary>
     protected sealed record LipSyncInferenceResult(float[][] Frames, IReadOnlyList<string> BlendshapeNames, float OutputFps);
+
+    /// <summary>
+    /// Speech clip and precomputed lip-sync inference data ready for playback.
+    /// </summary>
+    public sealed record PreparedPlayback(
+        AudioStreamWav Speech,
+        float[][] Frames,
+        IReadOnlyList<string> BlendshapeNames,
+        float OutputFps);
 
     private bool EnsureInitialised()
     {
@@ -341,19 +357,43 @@ public abstract partial class LipSyncPlayer : Node
         SetProcess(false);
     }
 
-    private void StartPlayback(AudioStreamWav speech)
+    private PreparedPlayback PreparePlayback(AudioStreamWav speech)
     {
+        if (speech is null)
+        {
+            throw new InvalidOperationException("LipSyncPlayer: speech clip is not assigned.");
+        }
+
+        if (!IsInitialised)
+        {
+            throw new InvalidOperationException("LipSyncPlayer: cannot prepare playback before initialisation succeeds.");
+        }
+
         LipSyncInferenceResult inferenceResult = RunBackendInference(speech);
+        ValidateInferenceResult(inferenceResult);
+
+        return new PreparedPlayback(
+            speech,
+            inferenceResult.Frames,
+            inferenceResult.BlendshapeNames,
+            inferenceResult.OutputFps);
+    }
+
+    private static void ValidateInferenceResult(LipSyncInferenceResult inferenceResult)
+    {
         if (inferenceResult.Frames.Length == 0)
         {
             throw new InvalidOperationException("LipSyncPlayer: inference produced zero frames.");
         }
+    }
 
-        _frames = inferenceResult.Frames;
-        _outputFps = inferenceResult.OutputFps > 0f ? inferenceResult.OutputFps : DefaultOutputFps;
+    private void StartPlayback(PreparedPlayback playback)
+    {
+        _frames = playback.Frames;
+        _outputFps = playback.OutputFps > 0f ? playback.OutputFps : DefaultOutputFps;
         BlendshapeChannelCount = _frames[0].Length;
 
-        BuildMeshBindings(inferenceResult.BlendshapeNames);
+        BuildMeshBindings(playback.BlendshapeNames);
         ResetPlaybackMetrics();
         ResetPlaybackTiming();
 
@@ -361,7 +401,7 @@ public abstract partial class LipSyncPlayer : Node
             $"LipSyncPlayer: loaded {_frames.Length} frames at {_outputFps:0.###} fps, mapped {_meshBindings.Count} mesh(es).");
 
         AudioPlayer.Stop();
-        AudioPlayer.Stream = speech;
+        AudioPlayer.Stream = playback.Speech;
         AudioPlayer.Play();
 
         _isPlaying = true;

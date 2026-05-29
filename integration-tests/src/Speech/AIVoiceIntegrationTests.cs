@@ -645,10 +645,13 @@ public sealed partial class AIVoiceIntegrationTests
 
         public List<string> FailureErrors { get; } = [];
 
-        protected override void PlayGeneratedSpeech(AudioStreamWav speechStream)
+        protected override Task<LipSyncPlayer.PreparedPlayback> PrepareGeneratedSpeechAsync(AudioStreamWav speechStream)
+            => Task.FromResult(new LipSyncPlayer.PreparedPlayback(speechStream, [[0f]], ["jawOpen"], 30f));
+
+        protected override void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
         {
             PlayGeneratedSpeechCallCount++;
-            LastPlayedSpeech = speechStream;
+            LastPlayedSpeech = preparedPlayback.Speech;
         }
 
         protected override void OnSpeechGenerated(string speech)
