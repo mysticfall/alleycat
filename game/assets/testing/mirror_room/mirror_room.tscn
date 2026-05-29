@@ -271,7 +271,7 @@ transform = Transform3D(0.98057705, -0.19612327, -0.0020664358, 0.0015760064, -0
 [node name="AnimationTree" parent="Actors/Female" index="5" unique_id=527893103]
 parameters/EyesBlinkTimeScale/scale = 1.0
 
-[node name="EyesBehaviour" parent="Actors/Female" index="6" unique_id=1199535973 node_paths=PackedStringArray("LookTarget")]
+[node name="Eyes" parent="Actors/Female" index="6" unique_id=1199535973 node_paths=PackedStringArray("LookTarget")]
 LookTarget = NodePath("../../Player/Female_export/GeneralSkeleton/Head/Viewpoint")
 
 [node name="AIConversation" type="Node3D" parent="Actors"]

@@ -22,8 +22,15 @@ public sealed class EyesBlendTreeIntegrationTests
     private const string HorizontalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_right_left.tres";
     private const string VerticalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_up_down.tres";
     private const string BlinkAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_blink.tres";
+    private const string ReferenceEyeSkeletonNodeName = "GeneralSkeleton";
     private const float BlinkClipLengthSeconds = 0.3f;
     private const float BlinkClosedPeakSeconds = 0.15f;
+    private static readonly string[] _referenceEyeMeshNodeNames =
+    [
+        "Female_high-poly_export",
+        "Female_eyelashes01_export",
+        "Female_body_export",
+    ];
 
     /// <summary>
     /// Verifies player and NPC roots expose the same eye partial blend graph after the hand overlays.
@@ -76,6 +83,50 @@ public sealed class EyesBlendTreeIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies the authored eye component applies one configured mesh list to look and blink filters at runtime.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferenceFemaleBaseScene_EyesBehaviour_ConfiguresRuntimeFiltersFromSingleMeshList()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PackedScene scene = LoadPackedScene(ReferenceFemaleBaseScenePath);
+        Node root = scene.Instantiate();
+
+        try
+        {
+            sceneTree.Root.AddChild(root);
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Node eyes = root.GetNode("Eyes");
+            AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
+            AnimationNodeBlendTree treeRoot = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
+            Skeleton3D skeleton = Assert.IsType<Skeleton3D>(eyes.Get("Skeleton").AsGodotObject(), exactMatch: false);
+            IReadOnlyList<string> meshNodeNames = GetConfiguredEyeMeshNodeNames(eyes);
+
+            Assert.Contains("Female_eyebrow006_export", meshNodeNames);
+            AssertEyeBlendFilters(
+                treeRoot,
+                EyesAnimationTreePaths.HorizontalLookBlendNode,
+                EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPaths(skeleton.Name.ToString(), _referenceEyeMeshNodeNames),
+                EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPaths(skeleton.Name.ToString(), _referenceEyeMeshNodeNames),
+                EyesAnimationTreePaths.BuildBlinkBlendShapeFilterPaths(skeleton.Name.ToString(), _referenceEyeMeshNodeNames));
+            AssertEyeBlendFilters(
+                treeRoot,
+                EyesAnimationTreePaths.VerticalLookBlendNode,
+                EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPaths(skeleton.Name.ToString(), _referenceEyeMeshNodeNames),
+                EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPaths(skeleton.Name.ToString(), _referenceEyeMeshNodeNames),
+                EyesAnimationTreePaths.BuildBlinkBlendShapeFilterPaths(skeleton.Name.ToString(), _referenceEyeMeshNodeNames));
+            AssertBlinkOneShot(treeRoot, EyesAnimationTreePaths.BlinkOneShotNode);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
     private static void AssertEyeBlendTree(string treePath)
     {
         AnimationNodeBlendTree root = Assert.IsType<AnimationNodeBlendTree>(
@@ -85,15 +136,27 @@ public sealed class EyesBlendTreeIntegrationTests
         AssertEyeBlendFilters(
             root,
             EyesAnimationTreePaths.HorizontalLookBlendNode,
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPaths(),
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPaths(),
-            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPaths());
+            EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPaths(
+                ReferenceEyeSkeletonNodeName,
+                _referenceEyeMeshNodeNames),
+            EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPaths(
+                ReferenceEyeSkeletonNodeName,
+                _referenceEyeMeshNodeNames),
+            EyesAnimationTreePaths.BuildBlinkBlendShapeFilterPaths(
+                ReferenceEyeSkeletonNodeName,
+                _referenceEyeMeshNodeNames));
         AssertEyeBlendFilters(
             root,
             EyesAnimationTreePaths.VerticalLookBlendNode,
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPaths(),
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPaths(),
-            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPaths());
+            EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPaths(
+                ReferenceEyeSkeletonNodeName,
+                _referenceEyeMeshNodeNames),
+            EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPaths(
+                ReferenceEyeSkeletonNodeName,
+                _referenceEyeMeshNodeNames),
+            EyesAnimationTreePaths.BuildBlinkBlendShapeFilterPaths(
+                ReferenceEyeSkeletonNodeName,
+                _referenceEyeMeshNodeNames));
         AssertAnimation(root, EyesAnimationTreePaths.HorizontalLookAnimationNode, EyesAnimationTreePaths.HorizontalLookAnimationName);
         AssertAnimation(root, EyesAnimationTreePaths.VerticalLookAnimationNode, EyesAnimationTreePaths.VerticalLookAnimationName);
         AssertAnimation(root, EyesAnimationTreePaths.BlinkAnimationNode, EyesAnimationTreePaths.BlinkAnimationName);
@@ -217,7 +280,7 @@ public sealed class EyesBlendTreeIntegrationTests
             sceneTree.Root.AddChild(root);
             await WaitForFramesAsync(sceneTree, 2);
 
-            Node eyes = root.GetNode("Actors/Female/EyesBehaviour");
+            Node eyes = root.GetNode("Actors/Female/Eyes");
             AnimationTree tree = root.GetNode<AnimationTree>("Actors/Female/AnimationTree");
 
             Node3D eyeOrigin = Assert.IsType<Node3D>(eyes.Get("EyeOrigin").AsGodotObject(), exactMatch: false);
@@ -258,7 +321,7 @@ public sealed class EyesBlendTreeIntegrationTests
             sceneTree.Root.AddChild(root);
             await WaitForFramesAsync(sceneTree, 4);
 
-            Node eyes = root.GetNode("Actors/Female/EyesBehaviour");
+            Node eyes = root.GetNode("Actors/Female/Eyes");
             AnimationTree tree = root.GetNode<AnimationTree>("Actors/Female/AnimationTree");
             Node3D eyeOrigin = Assert.IsType<Node3D>(eyes.Get("EyeOrigin").AsGodotObject(), exactMatch: false);
             Node3D lookTarget = Assert.IsType<Node3D>(eyes.Get("LookTarget").AsGodotObject(), exactMatch: false);
@@ -333,23 +396,35 @@ public sealed class EyesBlendTreeIntegrationTests
         AnimationNodeOneShot oneShot = Assert.IsType<AnimationNodeOneShot>(root.GetNode(nodeName), exactMatch: false);
         Assert.True(oneShot.FilterEnabled);
 
-        foreach (NodePath filterPath in EyesAnimationTreePaths.GetBlinkBlendShapeFilterPaths())
-        {
-            Assert.True(oneShot.IsPathFiltered(filterPath), $"Expected {nodeName} to filter blink path {filterPath}.");
-        }
-
-        foreach (NodePath filterPath in EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPaths())
+        foreach (NodePath filterPath in EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPaths(
+            ReferenceEyeSkeletonNodeName,
+            _referenceEyeMeshNodeNames))
         {
             Assert.False(oneShot.IsPathFiltered(filterPath), $"Expected {nodeName} not to filter horizontal look path {filterPath}.");
         }
 
-        foreach (NodePath filterPath in EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPaths())
+        foreach (NodePath filterPath in EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPaths(
+            ReferenceEyeSkeletonNodeName,
+            _referenceEyeMeshNodeNames))
         {
             Assert.False(oneShot.IsPathFiltered(filterPath), $"Expected {nodeName} not to filter vertical look path {filterPath}.");
         }
 
         Assert.False(oneShot.IsPathFiltered(new NodePath("%GeneralSkeleton:Hips")));
         Assert.False(oneShot.IsPathFiltered(new NodePath("%GeneralSkeleton:Head")));
+    }
+
+    private static IReadOnlyList<string> GetConfiguredEyeMeshNodeNames(Node eyes)
+    {
+        Godot.Collections.Array meshes = eyes.Get("EyeBlendShapeMeshes").AsGodotArray();
+        string[] names = new string[meshes.Count];
+        for (int index = 0; index < meshes.Count; index++)
+        {
+            MeshInstance3D mesh = Assert.IsType<MeshInstance3D>(meshes[index].AsGodotObject(), exactMatch: false);
+            names[index] = mesh.Name.ToString();
+        }
+
+        return names;
     }
 
     private static void AssertTimeScale(AnimationNodeBlendTree root, string nodeName)

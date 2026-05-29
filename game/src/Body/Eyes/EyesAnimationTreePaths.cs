@@ -73,54 +73,27 @@ public static class EyesAnimationTreePaths
     private const string OneShotRequestSuffix = "/request";
     private const string TimeScaleSuffix = "/scale";
 
-    private static readonly string[] _horizontalLookBlendShapeFilterPaths =
+    private static readonly string[] _horizontalLookBlendShapeNames =
     [
-        "GeneralSkeleton/Female_high-poly_export:eyeLookInRight",
-        "GeneralSkeleton/Female_high-poly_export:eyeLookInLeft",
-        "GeneralSkeleton/Female_high-poly_export:eyeLookOutRight",
-        "GeneralSkeleton/Female_high-poly_export:eyeLookOutLeft",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookInRight",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookInLeft",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookOutRight",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookOutLeft",
-        "GeneralSkeleton/Female_body_export:eyeLookInRight",
-        "GeneralSkeleton/Female_body_export:eyeLookInLeft",
-        "GeneralSkeleton/Female_body_export:eyeLookOutRight",
-        "GeneralSkeleton/Female_body_export:eyeLookOutLeft",
+        "eyeLookInRight",
+        "eyeLookInLeft",
+        "eyeLookOutRight",
+        "eyeLookOutLeft",
     ];
 
-    private static readonly string[] _verticalLookBlendShapeFilterPaths =
+    private static readonly string[] _verticalLookBlendShapeNames =
     [
-        "GeneralSkeleton/Female_high-poly_export:eyeLookUpRight",
-        "GeneralSkeleton/Female_high-poly_export:eyeLookUpLeft",
-        "GeneralSkeleton/Female_high-poly_export:eyeLookDownRight",
-        "GeneralSkeleton/Female_high-poly_export:eyeLookDownLeft",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookUpRight",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookUpLeft",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookDownRight",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeLookDownLeft",
-        "GeneralSkeleton/Female_body_export:eyeLookUpRight",
-        "GeneralSkeleton/Female_body_export:eyeLookUpLeft",
-        "GeneralSkeleton/Female_body_export:eyeLookDownRight",
-        "GeneralSkeleton/Female_body_export:eyeLookDownLeft",
+        "eyeLookUpRight",
+        "eyeLookUpLeft",
+        "eyeLookDownRight",
+        "eyeLookDownLeft",
     ];
 
-    private static readonly string[] _blinkBlendShapeFilterPaths =
+    private static readonly string[] _blinkBlendShapeNames =
     [
-        "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkLeft",
-        "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkRight",
-        "GeneralSkeleton/Female_body_export:eyeBlinkLeft",
-        "GeneralSkeleton/Female_body_export:eyeBlinkRight",
+        "eyeBlinkLeft",
+        "eyeBlinkRight",
     ];
-
-    private static readonly IReadOnlyList<string> _horizontalLookBlendShapeFilterPathStrings =
-        Array.AsReadOnly(_horizontalLookBlendShapeFilterPaths);
-
-    private static readonly IReadOnlyList<string> _verticalLookBlendShapeFilterPathStrings =
-        Array.AsReadOnly(_verticalLookBlendShapeFilterPaths);
-
-    private static readonly IReadOnlyList<string> _blinkBlendShapeFilterPathStrings =
-        Array.AsReadOnly(_blinkBlendShapeFilterPaths);
 
     /// <summary>
     /// Gets the horizontal look seek parameter path.
@@ -183,54 +156,111 @@ public static class EyesAnimationTreePaths
     public static string GetVerticalLookBlendParameterPath() => $"{ParametersPrefix}{VerticalLookBlendNode}{BlendAmountSuffix}";
 
     /// <summary>
-    /// Gets the exact eye blend-shape filter paths used by the reference eye partial blends.
+    /// Builds every eye blend-shape filter path for the supplied skeleton and mesh names.
     /// </summary>
-    public static IReadOnlyList<NodePath> GetEyeBlendShapeFilterPaths()
-        => ToNodePaths(_horizontalLookBlendShapeFilterPaths, _verticalLookBlendShapeFilterPaths, _blinkBlendShapeFilterPaths);
+    public static IReadOnlyList<NodePath> BuildEyeBlendShapeFilterPaths(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+        => ToNodePaths(
+            BuildFilterPathStrings(skeletonNodeName, meshNodeNames, _horizontalLookBlendShapeNames),
+            BuildFilterPathStrings(skeletonNodeName, meshNodeNames, _verticalLookBlendShapeNames),
+            BuildFilterPathStrings(skeletonNodeName, meshNodeNames, _blinkBlendShapeNames));
 
     /// <summary>
-    /// Gets the exact horizontal look blend-shape filter paths used by the reference eye partial blend.
+    /// Builds horizontal look blend-shape filter paths for the supplied skeleton and mesh names.
     /// </summary>
-    public static IReadOnlyList<NodePath> GetHorizontalLookBlendShapeFilterPaths()
-        => ToNodePaths(_horizontalLookBlendShapeFilterPaths);
+    public static IReadOnlyList<NodePath> BuildHorizontalLookBlendShapeFilterPaths(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+        => ToNodePaths(BuildHorizontalLookBlendShapeFilterPathStrings(skeletonNodeName, meshNodeNames));
 
     /// <summary>
-    /// Gets the exact horizontal look blend-shape filter path strings used by the reference eye partial blend.
+    /// Builds horizontal look blend-shape filter path strings for the supplied skeleton and mesh names.
     /// </summary>
-    public static IReadOnlyList<string> GetHorizontalLookBlendShapeFilterPathStrings()
-        => _horizontalLookBlendShapeFilterPathStrings;
+    public static IReadOnlyList<string> BuildHorizontalLookBlendShapeFilterPathStrings(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+        => BuildFilterPathStrings(skeletonNodeName, meshNodeNames, _horizontalLookBlendShapeNames);
 
     /// <summary>
-    /// Gets the exact vertical look blend-shape filter paths used by the reference eye partial blend.
+    /// Builds vertical look blend-shape filter paths for the supplied skeleton and mesh names.
     /// </summary>
-    public static IReadOnlyList<NodePath> GetVerticalLookBlendShapeFilterPaths()
-        => ToNodePaths(_verticalLookBlendShapeFilterPaths);
+    public static IReadOnlyList<NodePath> BuildVerticalLookBlendShapeFilterPaths(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+        => ToNodePaths(BuildVerticalLookBlendShapeFilterPathStrings(skeletonNodeName, meshNodeNames));
 
     /// <summary>
-    /// Gets the exact vertical look blend-shape filter path strings used by the reference eye partial blend.
+    /// Builds vertical look blend-shape filter path strings for the supplied skeleton and mesh names.
     /// </summary>
-    public static IReadOnlyList<string> GetVerticalLookBlendShapeFilterPathStrings()
-        => _verticalLookBlendShapeFilterPathStrings;
+    public static IReadOnlyList<string> BuildVerticalLookBlendShapeFilterPathStrings(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+        => BuildFilterPathStrings(skeletonNodeName, meshNodeNames, _verticalLookBlendShapeNames);
 
     /// <summary>
-    /// Gets the exact blink blend-shape filter paths used by the reference eye partial blend.
+    /// Builds blink blend-shape filter paths for the supplied skeleton and mesh names.
     /// </summary>
-    public static IReadOnlyList<NodePath> GetBlinkBlendShapeFilterPaths()
-        => ToNodePaths(_blinkBlendShapeFilterPaths);
+    public static IReadOnlyList<NodePath> BuildBlinkBlendShapeFilterPaths(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+        => ToNodePaths(BuildBlinkBlendShapeFilterPathStrings(skeletonNodeName, meshNodeNames));
 
     /// <summary>
-    /// Gets the exact blink blend-shape filter path strings used by the reference eye partial blend.
+    /// Builds blink blend-shape filter path strings for the supplied skeleton and mesh names.
     /// </summary>
-    public static IReadOnlyList<string> GetBlinkBlendShapeFilterPathStrings()
-        => _blinkBlendShapeFilterPathStrings;
+    public static IReadOnlyList<string> BuildBlinkBlendShapeFilterPathStrings(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+        => BuildFilterPathStrings(skeletonNodeName, meshNodeNames, _blinkBlendShapeNames);
 
     /// <summary>
-    /// Returns whether a filter path belongs to the configured eye blend-shape set.
+    /// Returns whether a filter path belongs to the supplied eye blend-shape set.
     /// </summary>
-    public static bool IsEyeBlendShapeFilterPath(string path)
-        => ContainsPath(_horizontalLookBlendShapeFilterPaths, path)
-        || ContainsPath(_verticalLookBlendShapeFilterPaths, path)
-        || ContainsPath(_blinkBlendShapeFilterPaths, path);
+    public static bool IsEyeBlendShapeFilterPath(
+        string path,
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames
+    )
+    {
+        IReadOnlyList<string> horizontalPaths = BuildHorizontalLookBlendShapeFilterPathStrings(skeletonNodeName, meshNodeNames);
+        IReadOnlyList<string> verticalPaths = BuildVerticalLookBlendShapeFilterPathStrings(skeletonNodeName, meshNodeNames);
+        IReadOnlyList<string> blinkPaths = BuildBlinkBlendShapeFilterPathStrings(skeletonNodeName, meshNodeNames);
+        return ContainsPath(horizontalPaths, path) || ContainsPath(verticalPaths, path) || ContainsPath(blinkPaths, path);
+    }
+
+    private static IReadOnlyList<string> BuildFilterPathStrings(
+        string skeletonNodeName,
+        IReadOnlyList<string> meshNodeNames,
+        IReadOnlyList<string> blendShapeNames
+    )
+    {
+        string trimmedSkeletonNodeName = string.IsNullOrWhiteSpace(skeletonNodeName)
+            ? throw new ArgumentException("Skeleton node name must not be empty.", nameof(skeletonNodeName))
+            : skeletonNodeName.Trim();
+
+        var paths = new List<string>(meshNodeNames.Count * blendShapeNames.Count);
+        for (int meshIndex = 0; meshIndex < meshNodeNames.Count; meshIndex++)
+        {
+            string meshNodeName = string.IsNullOrWhiteSpace(meshNodeNames[meshIndex])
+                ? throw new ArgumentException("Mesh node names must not be empty.", nameof(meshNodeNames))
+                : meshNodeNames[meshIndex].Trim();
+
+            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeNames.Count; blendShapeIndex++)
+            {
+                paths.Add($"{trimmedSkeletonNodeName}/{meshNodeName}:{blendShapeNames[blendShapeIndex]}");
+            }
+        }
+
+        return paths;
+    }
 
     private static bool ContainsPath(IReadOnlyList<string> paths, string path)
     {

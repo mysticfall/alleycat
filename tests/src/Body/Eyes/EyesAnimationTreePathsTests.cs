@@ -26,11 +26,20 @@ public sealed class EyesAnimationTreePathsTests
     /// Verifies the filter set includes eye blend shapes and excludes unrelated bones.
     /// </summary>
     [Fact]
-    public void IsEyeBlendShapeFilterPath_IncludesOnlyReferenceEyeBlendShapes()
+    public void IsEyeBlendShapeFilterPath_IncludesOnlyConfiguredEyeBlendShapes()
     {
-        Assert.True(EyesAnimationTreePaths.IsEyeBlendShapeFilterPath("GeneralSkeleton/Female_body_export:eyeLookInRight"));
-        Assert.True(EyesAnimationTreePaths.IsEyeBlendShapeFilterPath("GeneralSkeleton/Female_body_export:eyeBlinkLeft"));
-        Assert.False(EyesAnimationTreePaths.IsEyeBlendShapeFilterPath("%GeneralSkeleton:Head"));
+        Assert.True(EyesAnimationTreePaths.IsEyeBlendShapeFilterPath(
+            "Rig/FaceMesh:eyeLookInRight",
+            "Rig",
+            ["FaceMesh"]));
+        Assert.True(EyesAnimationTreePaths.IsEyeBlendShapeFilterPath(
+            "Rig/FaceMesh:eyeBlinkLeft",
+            "Rig",
+            ["FaceMesh"]));
+        Assert.False(EyesAnimationTreePaths.IsEyeBlendShapeFilterPath(
+            "%GeneralSkeleton:Head",
+            "Rig",
+            ["FaceMesh"]));
     }
 
     /// <summary>
@@ -40,30 +49,45 @@ public sealed class EyesAnimationTreePathsTests
     public void EyeBlendShapeFilterPaths_AreSeparatedByLookAxisAndBlink()
     {
         Assert.Contains(
-            "GeneralSkeleton/Female_body_export:eyeLookInRight",
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeLookInRight",
+            EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
         Assert.DoesNotContain(
-            "GeneralSkeleton/Female_body_export:eyeLookUpRight",
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeLookUpRight",
+            EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
         Assert.DoesNotContain(
-            "GeneralSkeleton/Female_body_export:eyeBlinkLeft",
-            EyesAnimationTreePaths.GetHorizontalLookBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeBlinkLeft",
+            EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
 
         Assert.Contains(
-            "GeneralSkeleton/Female_body_export:eyeLookUpRight",
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeLookUpRight",
+            EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
         Assert.DoesNotContain(
-            "GeneralSkeleton/Female_body_export:eyeLookOutRight",
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeLookOutRight",
+            EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
         Assert.DoesNotContain(
-            "GeneralSkeleton/Female_body_export:eyeBlinkLeft",
-            EyesAnimationTreePaths.GetVerticalLookBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeBlinkLeft",
+            EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
 
         Assert.Contains(
-            "GeneralSkeleton/Female_body_export:eyeBlinkLeft",
-            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeBlinkLeft",
+            EyesAnimationTreePaths.BuildBlinkBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
         Assert.DoesNotContain(
-            "GeneralSkeleton/Female_body_export:eyeLookInRight",
-            EyesAnimationTreePaths.GetBlinkBlendShapeFilterPathStrings());
+            "Rig/FaceMesh:eyeLookInRight",
+            EyesAnimationTreePaths.BuildBlinkBlendShapeFilterPathStrings("Rig", ["FaceMesh"]));
+    }
+
+    /// <summary>
+    /// Verifies filter paths are generated for every configured mesh.
+    /// </summary>
+    [Fact]
+    public void EyeBlendShapeFilterPaths_AreBuiltForEveryConfiguredMesh()
+    {
+        IReadOnlyList<string> paths = EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPathStrings(
+            "GeneralSkeleton",
+            ["Face", "Lashes"]);
+
+        Assert.Contains("GeneralSkeleton/Face:eyeLookInRight", paths);
+        Assert.Contains("GeneralSkeleton/Lashes:eyeLookInRight", paths);
+        Assert.DoesNotContain("GeneralSkeleton/Body:eyeLookInRight", paths);
     }
 }

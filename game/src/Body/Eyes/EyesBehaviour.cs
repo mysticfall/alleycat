@@ -12,8 +12,28 @@ public sealed partial class EyesBehaviour : Node, IEyes
     private Node3D? _lookTarget;
 
     /// <summary>
+    /// Gets or sets the skeleton node used as the root of eye blend-shape filter paths.
+    /// </summary>
+    [ExportGroup("Blend Shape Filters")]
+    [Export]
+    public Skeleton3D? Skeleton
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Gets or sets the mesh nodes that expose eye blend shapes controlled by this behaviour.
+    /// </summary>
+    [Export]
+    public MeshInstance3D[] EyeBlendShapeMeshes
+    {
+        get; set;
+    } = [];
+
+    /// <summary>
     /// Gets or sets the animation tree controlled by this behaviour.
     /// </summary>
+    [ExportGroup("Targets")]
     [Export]
     public AnimationTree? AnimationTree
     {
@@ -40,6 +60,7 @@ public sealed partial class EyesBehaviour : Node, IEyes
     /// <summary>
     /// Gets or sets the maximum horizontal eye angle in degrees.
     /// </summary>
+    [ExportGroup("Look")]
     [Export(PropertyHint.Range, "1,90,0.5")]
     public float MaxHorizontalAngleDegrees
     {
@@ -91,6 +112,7 @@ public sealed partial class EyesBehaviour : Node, IEyes
     /// <summary>
     /// Gets or sets the minimum random interval between blinks.
     /// </summary>
+    [ExportGroup("Blink")]
     [Export(PropertyHint.Range, "0,30,0.1,or_greater")]
     public float MinimumBlinkInterval
     {
@@ -157,6 +179,8 @@ public sealed partial class EyesBehaviour : Node, IEyes
             return;
         }
 
+        ConfigureEyeBlendFilters();
+
         _controller = new EyesController(AnimationTree)
         {
             LookTarget = _lookTarget,
@@ -202,4 +226,56 @@ public sealed partial class EyesBehaviour : Node, IEyes
     /// Starts a blink immediately through the runtime controller path.
     /// </summary>
     public void TriggerBlink() => _controller?.TriggerBlink();
+
+    private void ConfigureEyeBlendFilters()
+    {
+        if (Skeleton is null || EyeBlendShapeMeshes.Length == 0)
+        {
+            GD.PushWarning(
+                $"{nameof(EyesBehaviour)} has no configured eye blend-shape skeleton or meshes; existing filters remain unchanged.");
+            return;
+        }
+
+        if (AnimationTree?.TreeRoot is not AnimationNodeBlendTree root)
+        {
+            GD.PushError($"{nameof(EyesBehaviour)} requires an AnimationNodeBlendTree root to configure eye filters.");
+            return;
+        }
+
+        AnimationTree.TreeRoot = (AnimationRootNode)root.Duplicate(true);
+        root = (AnimationNodeBlendTree)AnimationTree.TreeRoot;
+
+        IReadOnlyList<string> meshNodeNames = GetMeshNodeNames(EyeBlendShapeMeshes);
+        string skeletonNodeName = Skeleton.Name.ToString();
+
+        SetFilterPaths(
+            root.GetNode(EyesAnimationTreePaths.HorizontalLookBlendNode),
+            EyesAnimationTreePaths.BuildHorizontalLookBlendShapeFilterPaths(skeletonNodeName, meshNodeNames));
+        SetFilterPaths(
+            root.GetNode(EyesAnimationTreePaths.VerticalLookBlendNode),
+            EyesAnimationTreePaths.BuildVerticalLookBlendShapeFilterPaths(skeletonNodeName, meshNodeNames));
+        SetFilterPaths(
+            root.GetNode(EyesAnimationTreePaths.BlinkOneShotNode),
+            EyesAnimationTreePaths.BuildBlinkBlendShapeFilterPaths(skeletonNodeName, meshNodeNames));
+    }
+
+    private static IReadOnlyList<string> GetMeshNodeNames(IReadOnlyList<MeshInstance3D> meshes)
+    {
+        string[] meshNodeNames = new string[meshes.Count];
+        for (int index = 0; index < meshes.Count; index++)
+        {
+            meshNodeNames[index] = meshes[index].Name.ToString();
+        }
+
+        return meshNodeNames;
+    }
+
+    private static void SetFilterPaths(AnimationNode node, IReadOnlyList<NodePath> filterPaths)
+    {
+        node.FilterEnabled = true;
+        for (int index = 0; index < filterPaths.Count; index++)
+        {
+            node.SetFilterPath(filterPaths[index], true);
+        }
+    }
 }

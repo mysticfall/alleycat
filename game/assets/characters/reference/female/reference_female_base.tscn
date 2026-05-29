@@ -387,8 +387,10 @@ parameters/EyesBlinkOneShot/active = false
 parameters/EyesBlinkOneShot/internal_active = false
 parameters/EyesBlinkOneShot/request = 0
 
-[node name="EyesBehaviour" type="Node" parent="." index="5" unique_id=1199535973 node_paths=PackedStringArray("AnimationTree", "EyeOrigin")]
+[node name="Eyes" type="Node" parent="." index="5" unique_id=1199535973 node_paths=PackedStringArray("Skeleton", "EyeBlendShapeMeshes", "AnimationTree", "EyeOrigin")]
 script = ExtResource("10_eyesbehaviour")
+Skeleton = NodePath("../Female_export/GeneralSkeleton")
+EyeBlendShapeMeshes = [NodePath("../Female_export/GeneralSkeleton/Female_body_export"), NodePath("../Female_export/GeneralSkeleton/Female_eyebrow006_export"), NodePath("../Female_export/GeneralSkeleton/Female_eyelashes01_export"), NodePath("../Female_export/GeneralSkeleton/Female_high-poly_export")]
 AnimationTree = NodePath("../AnimationTree")
 EyeOrigin = NodePath("../Female_export/GeneralSkeleton/Head/Viewpoint")
 metadata/_custom_type_script = "uid://ckmm3fnsp6y36"
