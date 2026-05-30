@@ -5,7 +5,7 @@ animation = &"eyes/Eyes Blink"
 
 [sub_resource type="AnimationNodeOneShot" id="AnimationNodeOneShot_eyes_blink"]
 filter_enabled = true
-filters = ["GeneralSkeleton/Female_body_export:eyeBlinkLeft", "GeneralSkeleton/Female_body_export:eyeBlinkRight", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkRight"]
+filters = ["GeneralSkeleton/Female_body_export:eyeBlinkLeft", "GeneralSkeleton/Female_body_export:eyeBlinkRight", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkRight", "GeneralSkeleton/Female_high-poly_export:eyeBlinkLeft", "GeneralSkeleton/Female_high-poly_export:eyeBlinkRight"]
 
 [sub_resource type="AnimationNodeTimeScale" id="AnimationNodeTimeScale_6hn8p"]
 
