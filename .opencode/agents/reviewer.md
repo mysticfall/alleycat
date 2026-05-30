@@ -11,6 +11,11 @@ handoff readiness for gameplay, systems, and tooling changes.
 - Treat the invoking agent as the decision-maker; provide evidence-first findings they can act on quickly.
 - Do not rewrite scope during review; escalate scope mismatches instead.
 - Prefer decisive recommendations (`must fix now` vs `safe to defer`) over neutral commentary.
+- Before any final hand-off recommendation, run the full unit and integration test suites yourself and include the exact
+  commands and outcomes in `Verified checks` or `Blocking issues`.
+- Use the full-suite commands `dotnet test tests/AlleyCat.Tests.csproj` and
+  `dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj`; do not rely only on the coder's filtered test
+  evidence for final readiness.
 
 ### Escalate Immediately When
 
@@ -27,7 +32,9 @@ handoff readiness for gameplay, systems, and tooling changes.
 - [ ] Naming, file/class structure, and access modifiers follow project C# conventions.
 - [ ] Nullability and guard checks are correct (`#nullable`, null checks, validity checks for engine objects).
 - [ ] New/changed contracts (save data, config, messages) remain backwards-compatible or document migration.
-- [ ] Relevant tests/checks were run, and manual verification is noted where automation is not enough.
+- [ ] The coder ran appropriately filtered unit and integration tests for the task, and manual verification is noted where
+  automation is not enough.
+- [ ] Full unit and integration test suites were run by the reviewer before final hand-off.
 
 ### Visual Evidence Verification
 

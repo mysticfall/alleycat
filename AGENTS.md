@@ -47,10 +47,9 @@ AGENTS.md                         # Agent operating rules and project-specific i
 README.md                         # Repository overview and developer onboarding
 ```
 
-## Running The Game And Tests
+## Running The Game And Verification
 
 - Run the game from the project root with `godot-mono --path game`.
-- Run C# tests with `dotnet test tests/AlleyCat.Tests.csproj`.
 - For pre-handoff verification, also run `dotnet format --verify-no-changes AlleyCat.sln` and
   `dotnet build AlleyCat.sln -warnaserror`.
 

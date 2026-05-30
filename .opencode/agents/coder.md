@@ -14,6 +14,15 @@ Godot engine.
 - Use Godot patterns correctly (node lifecycle, signals, input actions, exported fields/properties, and autoloads).
 - Keep runtime behaviour safe for per-frame and VR-critical paths (no blocking work or avoidable allocations).
 - Run relevant checks/tests and note manual verification for gameplay behaviour.
+- Always run task-scoped unit and integration tests with the narrowest appropriate filters for the current change. Use
+  `dotnet test tests/AlleyCat.Tests.csproj --filter FullyQualifiedName~Namespace.TypeOrMethod` for unit tests and the
+  integration-test filters from the `csharp-developer` skill, for example
+  `dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- --test-class Fully.Qualified.TypeName` or
+  `--test-method Fully.Qualified.TypeName.MethodName`.
+- Do not run the full unit or integration suite by default while implementing; leave full-suite verification for the
+  reviewer/final hand-off gate unless explicitly requested.
+- If no focused automated test exists for the changed behaviour, run the closest affected filtered test set and report the
+  coverage gap in `Validation`.
 - For automated integration test runs, default to headless execution flags to prevent OpenXR/UI-dialog interruptions
   unless non-headless mode is explicitly required.
 
