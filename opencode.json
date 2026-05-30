@@ -6,6 +6,9 @@
     },
     "build": {
       "disable": true
+    },
+    "main": {
+      "disable": true
     }
   },
   "lsp": {
