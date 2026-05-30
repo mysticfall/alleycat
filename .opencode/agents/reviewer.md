@@ -12,7 +12,8 @@ handoff readiness for gameplay, systems, and tooling changes.
 - Do not rewrite scope during review; escalate scope mismatches instead.
 - Prefer decisive recommendations (`must fix now` vs `safe to defer`) over neutral commentary.
 - Before any final hand-off recommendation, run the full unit and integration test suites yourself and include the exact
-  commands and outcomes in `Verified checks` or `Blocking issues`.
+  commands and outcomes in `Verified checks` or `Blocking issues`, except for tooling-only tasks where those suites are
+  unrelated (for example creating a Blender script).
 - Use the full-suite commands `dotnet test tests/AlleyCat.Tests.csproj` and
   `dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj`; do not rely only on the coder's filtered test
   evidence for final readiness.
@@ -34,7 +35,8 @@ handoff readiness for gameplay, systems, and tooling changes.
 - [ ] New/changed contracts (save data, config, messages) remain backwards-compatible or document migration.
 - [ ] The coder ran appropriately filtered unit and integration tests for the task, and manual verification is noted where
   automation is not enough.
-- [ ] Full unit and integration test suites were run by the reviewer before final hand-off.
+- [ ] Full unit and integration test suites were run by the reviewer before final hand-off, unless skipped for a
+  tooling-only task with the skip reason recorded in `Verified checks`.
 
 ### Visual Evidence Verification
 
