@@ -140,7 +140,6 @@ public partial class PlayerVRIK : CharacterIK
             return;
         }
 
-        rig.SyncProxyBodiesToPhysics();
         _rightFingerCollisionShapeMirror.Sync(rig, _rightHandBoneName, ResolvedRightHandIKTarget);
         _leftFingerCollisionShapeMirror.Sync(rig, _leftHandBoneName, ResolvedLeftHandIKTarget);
     }

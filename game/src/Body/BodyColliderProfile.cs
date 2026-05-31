@@ -90,8 +90,9 @@ public partial class BodyColliderProfile : Resource
         Shape3D sourceShapeResource = sourceShape.Shape
                                       ?? throw new InvalidOperationException(
                                           $"Source shape '{sourceShape.Name}' requires a configured {nameof(Shape3D)} resource.");
+        Transform3D sourceShapeFrameTransform = ResolveSourceShapeTransform(sourceShape, sourceBoneAttachment);
         Transform3D localTransform = ResolveSourceAttachmentTransform(sourceBoneAttachment).AffineInverse()
-                                     * ResolveSourceShapeTransform(sourceShape, sourceBoneAttachment);
+                                     * sourceShapeFrameTransform;
 
         return new BodyColliderShapeDescriptor(
             sourceShape.Name,
@@ -100,7 +101,8 @@ public partial class BodyColliderProfile : Resource
             sourcePhysicsBody.Name,
             sourceShapeResource,
             sourceShape.Disabled,
-            localTransform);
+            localTransform,
+            sourceShapeFrameTransform);
     }
 
     private static Transform3D ResolveSourceShapeTransform(CollisionShape3D sourceShape, BoneAttachment3D sourceBoneAttachment)

@@ -82,3 +82,8 @@
 
 - [TEST-001: Integration Test Framework](testing/001-test-framework/index.md)
 - [TEST-002: Visual Verification Scope](testing/002-visual-verification-scope/index.md)
+
+## Tooling
+
+- [GDScript API Documentation Generator](tooling/gdscript-api-doc-generator/index.md)
+- [Character Generator](tooling/character-generator/index.md)

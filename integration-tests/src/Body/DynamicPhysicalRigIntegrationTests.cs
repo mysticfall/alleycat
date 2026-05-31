@@ -15,19 +15,28 @@ namespace AlleyCat.IntegrationTests.Body;
 /// </summary>
 public sealed class DynamicPhysicalRigIntegrationTests
 {
-    private const string CollidersScenePath = "res://assets/characters/reference/female/colliders.tscn";
+    private const string CollidersScenePath = "res://assets/characters/reference/female/reference_female_colliders.tscn";
     private const string ColliderProfilePath = "res://assets/characters/reference/female/body_collider_profile.tres";
     private const string ColliderProfileUID = "uid://dpisik0mj8f6a";
     private const string ReferenceFemaleBaseScenePath = "res://assets/characters/reference/female/reference_female_base.tscn";
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const float PositionToleranceMetres = 0.001f;
+    private static readonly Transform3D _rotatedSourceAttachmentTransform = new(
+        Basis.FromEuler(new Vector3(0.17f, -0.29f, 0.13f)),
+        new Vector3(-0.08f, 0.04f, 0.11f));
+    private static readonly Transform3D _rotatedSourceBodyTransform = new(
+        Basis.FromEuler(new Vector3(-0.07f, 0.23f, 0.31f)),
+        new Vector3(0.05f, -0.02f, 0.03f));
+    private static readonly Transform3D _rotatedSourceShapeTransform = new(
+        Basis.FromEuler(new Vector3(0.41f, 0.19f, -0.27f)),
+        new Vector3(0.02f, 0.06f, -0.04f));
 
     /// <summary>
-    /// Verifies runtime setup builds the generated proxy count and enables manual physics synchronisation.
+    /// Verifies runtime setup builds generated proxy bodies that inherit generated attachment transforms directly.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task DynamicPhysicalRig_RuntimeSetup_BuildsExpectedProxyCountWithManualPhysicsSync()
+    public async Task DynamicPhysicalRig_RuntimeSetup_BuildsExpectedInheritedProxyTopology()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
@@ -42,8 +51,8 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(sourceShapeCount, generatedBodyCount);
             Assert.Equal(generatedBodyCount, generatedReceiverCount);
             Assert.Equal(0, fixture.Rig.SkippedSourceShapeCount);
-            Assert.True(fixture.Rig.IsPhysicsProcessing(), "Generated top-level proxy bodies require the rig's manual physics sync loop.");
-            Assert.True(fixture.Rig.PhysicsProxySyncTickCount > 0, "Generated proxy bodies should be synchronised immediately and on physics ticks.");
+            Assert.False(fixture.Rig.IsPhysicsProcessing(), "Generated proxy bodies inherit BoneAttachment3D transforms without per-frame processing.");
+            AssertGeneratedProxyBodiesUseInheritedAttachmentTopology(fixture.Rig);
         }
         finally
         {
@@ -197,25 +206,157 @@ public sealed class DynamicPhysicalRigIntegrationTests
         try
         {
             const string rotatedBoneName = "LeftHand";
+            BodyColliderShapeDescriptor descriptor = Assert.Single(fixture.Rig.ColliderProfile!.QueryShapeDescriptorsForBone(rotatedBoneName));
             AnimatableBody3D handProxy = FindGeneratedProxyBody(fixture.Rig, rotatedBoneName);
             BoneAttachment3D handAttachment = FindGeneratedAttachment(fixture.Rig.TargetSkeleton!, rotatedBoneName);
-            Transform3D expectedProxyLocalTransform = ResolveExpectedProxyLocalTransform(fixture.Rig.ColliderProfile?.SourceScene, rotatedBoneName);
             CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(handProxy.GetChild(0));
             Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(handAttachment);
             Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(handProxy);
+            Transform3D shapeGlobalTransform = ResolveNodeGlobalTransform(proxyShape);
 
-            Assert.True(handProxy.TopLevel, "Generated proxies should be top-level because manual sync writes global transforms.");
-            AssertTransformApproximately(expectedProxyLocalTransform, attachmentGlobalTransform.AffineInverse() * proxyGlobalTransform, PositionToleranceMetres);
-            AssertTransformApproximately(Transform3D.Identity, proxyShape.Transform, PositionToleranceMetres);
-            Assert.False(handProxy.SyncToPhysics, "Generated proxies are manually synchronised during the rig physics tick.");
+            Assert.False(handProxy.TopLevel, "Generated authored proxies should inherit generated BoneAttachment3D transforms.");
+            AssertTransformApproximately(Transform3D.Identity, handProxy.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(attachmentGlobalTransform, proxyGlobalTransform, PositionToleranceMetres);
+            AssertTransformApproximately(descriptor.LocalTransform, proxyShape.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(attachmentGlobalTransform * descriptor.LocalTransform, shapeGlobalTransform, PositionToleranceMetres);
+            AssertTransformNotApproximately(proxyShape.Transform, handProxy.Transform, PositionToleranceMetres);
+            Assert.False(handProxy.SyncToPhysics, "Generated proxies inherit attachment transforms and do not need AnimatableBody3D physics sync.");
             Assert.Equal(fixture.Rig.ProxyCollisionLayer, handProxy.CollisionLayer);
             Assert.Equal(fixture.Rig.ProxyCollisionMask, handProxy.CollisionMask);
 
-            AssertProxyShapeDataPreservedWithIdentityTransform(fixture.Rig.ColliderProfile?.SourceScene, handProxy, rotatedBoneName);
+            AssertProxyShapeDataPreservedWithDescriptorTransform(fixture.Rig.ColliderProfile?.SourceScene, handProxy, rotatedBoneName, descriptor.LocalTransform);
         }
         finally
         {
             await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies generated authored shape transforms carry non-identity collider rotations below identity proxy bodies.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_AuthoredProxyShapeTransform_PreservesRotatedGeneratedSourceShapeGlobalPose()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "RotatedProxyTopologyRoot",
+            Transform = new Transform3D(Basis.FromEuler(new Vector3(0.0f, 0.19f, 0.0f)), new Vector3(0.23f, 0.41f, -0.17f)),
+        };
+        Skeleton3D skeleton = CreateSkeleton();
+        skeleton.Transform = new Transform3D(Basis.FromEuler(new Vector3(0.11f, -0.23f, 0.07f)), new Vector3(-0.31f, 0.18f, 0.29f));
+        PackedScene sourceScene = CreatePackedSourceSceneWithRotatedAttachmentAndShape("LeftHand");
+        BodyColliderProfile colliderProfile = CreateColliderProfile(sourceScene);
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            ColliderProfile = colliderProfile,
+        };
+
+        root.AddChild(skeleton);
+        skeleton.AddChild(rig);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+            int boneIndex = skeleton.FindBone("LeftHand");
+            Assert.True(boneIndex >= 0, "Expected test skeleton to contain LeftHand.");
+            skeleton.SetBonePoseRotation(boneIndex, new Quaternion(Vector3.Up, 0.37f).Normalized());
+            ForceBuildGeneratedRig(rig);
+            await WaitForFramesAsync(sceneTree, 1);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+
+            Assert.True(boneIndex >= 0, "Expected test skeleton to contain LeftHand.");
+            BodyColliderShapeDescriptor descriptor = Assert.Single(colliderProfile.QueryShapeDescriptorsForBone("LeftHand"));
+            AnimatableBody3D proxyBody = FindGeneratedProxyBody(rig, "LeftHand");
+            BoneAttachment3D attachment = FindGeneratedAttachment(skeleton, "LeftHand");
+            CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(proxyBody.GetChild(0));
+
+            Transform3D expectedShapeGlobalTransform = attachment.GlobalTransform * descriptor.LocalTransform;
+
+            Assert.False(descriptor.LocalTransform.Basis.IsEqualApprox(Basis.Identity), "Test source collider must exercise a non-identity local rotation.");
+            AssertTransformApproximately(
+                descriptor.SourceShapeFrameTransform,
+                ResolveSourceShapeSkeletonTransform(sourceScene, "LeftHand"),
+                PositionToleranceMetres);
+            Assert.False(proxyBody.TopLevel, "Generated authored proxy bodies should inherit their BoneAttachment3D parent.");
+            AssertTransformApproximately(Transform3D.Identity, proxyBody.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(attachment.GlobalTransform, ResolveNodeGlobalTransform(proxyBody), PositionToleranceMetres);
+            AssertTransformApproximately(descriptor.LocalTransform, proxyShape.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(expectedShapeGlobalTransform, ResolveNodeGlobalTransform(proxyShape), PositionToleranceMetres);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
+
+    /// <summary>
+    /// Verifies source model-frame diagnostics do not drive generated authored proxy placement.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DynamicPhysicalRig_SourceShapeFrameTransform_IsDiagnosticForAuthoredProxyPlacement()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "SourceFrameRebaseRoot",
+            Transform = new Transform3D(Basis.FromEuler(new Vector3(0.08f, -0.14f, 0.21f)), new Vector3(0.18f, -0.06f, 0.27f)),
+        };
+        Skeleton3D skeleton = CreateSkeletonWithRotatedLeftHandRest();
+        PackedScene sourceScene = CreatePackedSourceSceneWithRotatedAttachmentAndShape("LeftHand");
+        BodyColliderProfile colliderProfile = CreateColliderProfile(sourceScene);
+        DynamicPhysicalRig rig = new()
+        {
+            Name = "DynamicPhysicalRig",
+            TargetSkeleton = skeleton,
+            ColliderProfile = colliderProfile,
+        };
+
+        root.AddChild(skeleton);
+        skeleton.AddChild(rig);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 2);
+            ForceBuildGeneratedRig(rig);
+            await WaitForFramesAsync(sceneTree, 1);
+
+            int boneIndex = skeleton.FindBone("LeftHand");
+            Assert.True(boneIndex >= 0, "Expected test skeleton to contain LeftHand.");
+            BodyColliderShapeDescriptor descriptor = Assert.Single(colliderProfile.QueryShapeDescriptorsForBone("LeftHand"));
+            AnimatableBody3D proxyBody = FindGeneratedProxyBody(rig, "LeftHand");
+            BoneAttachment3D attachment = FindGeneratedAttachment(skeleton, "LeftHand");
+            CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(proxyBody.GetChild(0));
+            Transform3D expectedSourceShapeFrame = _rotatedSourceAttachmentTransform
+                                                   * _rotatedSourceBodyTransform
+                                                   * _rotatedSourceShapeTransform;
+            Transform3D rebasedSourceFrameTransform = skeleton.GetBoneGlobalRest(boneIndex).AffineInverse() * expectedSourceShapeFrame;
+
+            Assert.False(
+                descriptor.SourceShapeFrameTransform.Basis.IsEqualApprox(descriptor.LocalTransform.Basis),
+                "Test fixture must exercise a source attachment basis that differs from the source model frame.");
+            Assert.False(
+                skeleton.GetBoneGlobalRest(boneIndex).Basis.IsEqualApprox(Basis.Identity),
+                "Test fixture must exercise a rotated target bone rest basis.");
+            AssertTransformApproximately(expectedSourceShapeFrame, descriptor.SourceShapeFrameTransform, PositionToleranceMetres);
+            AssertTransformApproximately(Transform3D.Identity, proxyBody.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(attachment.GlobalTransform, ResolveNodeGlobalTransform(proxyBody), PositionToleranceMetres);
+            AssertTransformApproximately(descriptor.LocalTransform, proxyShape.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(attachment.GlobalTransform * descriptor.LocalTransform, ResolveNodeGlobalTransform(proxyShape), PositionToleranceMetres);
+            AssertTransformNotApproximately(rebasedSourceFrameTransform, proxyShape.Transform, PositionToleranceMetres);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
         }
     }
 
@@ -288,7 +429,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
         try
         {
             Node rig = Assert.IsType<Node>(
-                sceneRoot.GetNodeOrNull("Female_export/GeneralSkeleton/DynamicPhysicalRig"),
+                sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/DynamicPhysicalRig"),
                 exactMatch: false);
             Resource colliderProfile = ReadResourceProperty<Resource>(rig, nameof(DynamicPhysicalRig.ColliderProfile));
             PackedScene profileSourceScene = ReadResourceProperty<PackedScene>(colliderProfile, "SourceScene");
@@ -324,7 +465,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 exactMatch: false);
             Assert.Equal(8U, rightHandTarget.CollisionLayer);
             Assert.Equal(5U, rightHandTarget.CollisionMask);
-            Assert.Null(sceneRoot.GetNodeOrNull("Female_export/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
+            Assert.Null(sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
             Assert.DoesNotContain(rightHandTarget.GetChildren(), child => child is CollisionShape3D);
             Assert.Null(rightHandTarget.GetNodeOrNull("ImpactSource"));
         }
@@ -354,8 +495,8 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance test_stick.tscn.");
 
             Assert.Null(player.GetNodeOrNull("IKTargets/RightHand/ImpactSource"));
-            Assert.Null(player.GetNodeOrNull("Female_export/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
-            Assert.Null(sceneRoot.GetNodeOrNull("Actors/Player/Female_export/GeneralSkeleton/RightHand/MirrorRoomPhysicalImpactRelay"));
+            Assert.Null(player.GetNodeOrNull("Female/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
+            Assert.Null(sceneRoot.GetNodeOrNull("Actors/Player/Female/GeneralSkeleton/RightHand/MirrorRoomPhysicalImpactRelay"));
             _ = AssertMirrorRoomDynamicPropContract(ball, "test_ball.tscn");
             _ = AssertMirrorRoomDynamicPropContract(stick, "test_stick.tscn");
             Assert.DoesNotContain(GetPackedSceneDependencyPaths(mirrorRoomScene), path =>
@@ -437,12 +578,16 @@ public sealed class DynamicPhysicalRigIntegrationTests
         Vector3 leftIndexSegmentOffset = ResolveRestOffsetToChild(skeleton, "LeftIndexProximal", "LeftIndexDistal");
         float leftIndexRestLength = leftIndexSegmentOffset.Length();
         Vector3 leftIndexDirection = leftIndexSegmentOffset.Normalized();
-        float capsuleCentreProjection = leftIndex.Transform.Origin.Dot(leftIndexDirection);
+        Assert.False(leftIndex.TopLevel, "Generated finger proxies should inherit generated BoneAttachment3D transforms.");
+        AssertTransformApproximately(Transform3D.Identity, leftIndex.Transform, PositionToleranceMetres);
+        AssertTransformApproximately(leftIndexShape.Transform, ResolveNodeGlobalTransform(leftIndex).AffineInverse() * ResolveNodeGlobalTransform(leftIndexShape), PositionToleranceMetres);
+
+        float capsuleCentreProjection = leftIndexShape.Transform.Origin.Dot(leftIndexDirection);
         float capsuleStartProjection = capsuleCentreProjection - (capsule.Height * 0.5f);
         float capsuleEndProjection = capsuleCentreProjection + (capsule.Height * 0.5f);
         float terminalSegmentLength = leftIndexRestLength;
         Vector3 terminalDirection = leftIndexSegmentOffset.Normalized();
-        float terminalCentreProjection = leftIndexTip.Transform.Origin.Dot(terminalDirection);
+        float terminalCentreProjection = leftIndexTipShape.Transform.Origin.Dot(terminalDirection);
         float terminalStartProjection = terminalCentreProjection - (terminalCapsule.Height * 0.5f);
         float terminalEndProjection = terminalCentreProjection + (terminalCapsule.Height * 0.5f);
 
@@ -606,11 +751,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies manual sync moves generated top-level proxy bodies with generated attachments after pose changes.
+    /// Verifies generated proxy bodies inherit generated attachment pose changes through the scene tree.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task DynamicPhysicalRig_SyncProxyBodiesToPhysics_FollowsGeneratedAttachmentPose()
+    public async Task DynamicPhysicalRig_GeneratedProxyBodies_InheritGeneratedAttachmentPose()
     {
         SceneTree sceneTree = GetSceneTree();
         RuntimeFixture fixture = await RuntimeFixture.CreateAsync(sceneTree);
@@ -620,22 +765,14 @@ public sealed class DynamicPhysicalRigIntegrationTests
             const string boneName = "LeftHand";
             AnimatableBody3D handProxy = FindGeneratedProxyBody(fixture.Rig, boneName);
             BoneAttachment3D handAttachment = FindGeneratedAttachment(fixture.Rig.TargetSkeleton!, boneName);
-            Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(handAttachment);
             Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(handProxy);
-            Transform3D localProxyTransform = attachmentGlobalTransform.AffineInverse() * proxyGlobalTransform;
-            Transform3D restProxyGlobalTransform = proxyGlobalTransform;
-            Transform3D movedAttachmentTransform = new(
-                Basis.FromEuler(new Vector3(0.0f, 0.31f, -0.17f)) * attachmentGlobalTransform.Basis,
-                attachmentGlobalTransform.Origin + new Vector3(0.17f, 0.11f, -0.09f));
-            ulong initialSyncTickCount = fixture.Rig.PhysicsProxySyncTickCount;
+            await WaitForFramesAsync(sceneTree, 1);
 
-            handAttachment.Transform = movedAttachmentTransform;
-            AssertTransformApproximately(restProxyGlobalTransform, ResolveNodeGlobalTransform(handProxy), PositionToleranceMetres);
-
-            fixture.Rig.SyncProxyBodiesToPhysics();
-
-            Assert.True(fixture.Rig.PhysicsProxySyncTickCount > initialSyncTickCount);
-            AssertTransformApproximately(movedAttachmentTransform * localProxyTransform, ResolveNodeGlobalTransform(handProxy), PositionToleranceMetres);
+            Assert.Same(handAttachment, handProxy.GetParent());
+            Assert.False(handProxy.TopLevel, "Generated proxies must remain normal attachment children.");
+            AssertTransformApproximately(Transform3D.Identity, handProxy.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(handAttachment.GlobalTransform, ResolveNodeGlobalTransform(handProxy), PositionToleranceMetres);
+            AssertTransformApproximately(proxyGlobalTransform, ResolveNodeGlobalTransform(handProxy), PositionToleranceMetres);
         }
         finally
         {
@@ -662,12 +799,12 @@ public sealed class DynamicPhysicalRigIntegrationTests
         Node sceneRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected mirror-room scene to become current scene.");
         Node rig = Assert.IsType<Node>(
-            sceneRoot.GetNodeOrNull("Actors/Female/Female_export/GeneralSkeleton/DynamicPhysicalRig"),
+            sceneRoot.GetNodeOrNull("Actors/Female/Female/GeneralSkeleton/DynamicPhysicalRig"),
             exactMatch: false);
         Skeleton3D skeleton = Assert.IsAssignableFrom<Skeleton3D>(rig.GetParent());
 
         Assert.True(ReadProperty<int>(rig, nameof(DynamicPhysicalRig.GeneratedProxyCount)) > 0, "Mirror-room NPC rig should generate runtime proxy bodies.");
-        Assert.True(rig.IsPhysicsProcessing(), "Mirror-room NPC rig should keep the manual physics sync loop enabled.");
+        Assert.False(rig.IsPhysicsProcessing(), "Mirror-room NPC rig should inherit generated attachment transforms without per-frame processing.");
 
         const string boneName = "LeftHand";
         int boneIndex = skeleton.FindBone(boneName);
@@ -676,17 +813,17 @@ public sealed class DynamicPhysicalRigIntegrationTests
         BoneAttachment3D attachment = FindGeneratedAttachment(skeleton, boneName);
         Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(attachment);
         Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(proxy);
-        Transform3D localProxyTransform = ResolveExpectedProxyLocalTransform(
-            LoadPackedScene(CollidersScenePath),
-            boneName);
+        CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(proxy.GetChild(0));
+        BodyColliderProfile colliderProfile = CreateColliderProfile(LoadPackedScene(CollidersScenePath));
+        BodyColliderShapeDescriptor descriptor = Assert.Single(colliderProfile.QueryShapeDescriptorsForBone(boneName));
         Transform3D expectedAttachmentGlobalTransform = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(boneIndex);
         Transform3D restAttachmentGlobalTransform = skeleton.GlobalTransform * skeleton.GetBoneGlobalRest(boneIndex);
 
         AssertTransformApproximately(expectedAttachmentGlobalTransform, attachmentGlobalTransform, PositionToleranceMetres);
-        AssertTransformApproximately(
-            attachmentGlobalTransform * localProxyTransform,
-            proxyGlobalTransform,
-            PositionToleranceMetres);
+        AssertTransformApproximately(Transform3D.Identity, proxy.Transform, PositionToleranceMetres);
+        AssertTransformApproximately(attachmentGlobalTransform, proxyGlobalTransform, PositionToleranceMetres);
+        AssertTransformApproximately(descriptor.LocalTransform, proxyShape.Transform, PositionToleranceMetres);
+        AssertTransformApproximately(attachmentGlobalTransform * descriptor.LocalTransform, ResolveNodeGlobalTransform(proxyShape), PositionToleranceMetres);
         Assert.True(
             attachmentGlobalTransform.Origin.DistanceTo(restAttachmentGlobalTransform.Origin) > 0.01f,
             "Mirror-room NPC attachment should reflect the overridden runtime pose rather than the imported rest pose.");
@@ -696,13 +833,9 @@ public sealed class DynamicPhysicalRigIntegrationTests
         await WaitForFramesAsync(sceneTree, 1);
         await WaitForPhysicsFramesAsync(sceneTree, 1);
 
-        InvokeMethod(rig, nameof(DynamicPhysicalRig.SyncProxyBodiesToPhysics));
-
         Transform3D movedAttachmentGlobalTransform = ResolveNodeGlobalTransform(attachment);
-        AssertTransformApproximately(
-            movedAttachmentGlobalTransform * localProxyTransform,
-            ResolveNodeGlobalTransform(proxy),
-            PositionToleranceMetres);
+        AssertTransformApproximately(movedAttachmentGlobalTransform, ResolveNodeGlobalTransform(proxy), PositionToleranceMetres);
+        AssertTransformApproximately(movedAttachmentGlobalTransform * descriptor.LocalTransform, ResolveNodeGlobalTransform(proxyShape), PositionToleranceMetres);
     }
 
     /// <summary>
@@ -958,8 +1091,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Transform3D movedAttachmentTransform = new(
                 Basis.FromEuler(new Vector3(0.0f, 0.23f, 0.11f)) * proximalAttachment.Transform.Basis,
                 proximalAttachment.Transform.Origin + new Vector3(0.03f, 0.01f, 0.02f));
-            ulong initialProxySyncTickCount = fixture.Rig.PhysicsProxySyncTickCount;
-
             proximalAttachment.Transform = movedAttachmentTransform;
 
             InvokeUpdatePhysicalActuators(fixture.PlayerVRIK, 1.0d / 60.0d);
@@ -969,9 +1100,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Transform3D expectedMirrorTransform = ResolveNodeGlobalTransform(fixture.RightHandTarget).AffineInverse()
                                                   * ResolveNodeGlobalTransform(proximalSource.SourceShape);
 
-            Assert.True(
-                fixture.Rig.PhysicsProxySyncTickCount > initialProxySyncTickCount,
-                "CharacterIK hand actuator cycle should synchronise DynamicPhysicalRig proxies before hand target movement.");
             Assert.Equal(sourceShapes.Count, mirroredShapes.Count);
             Assert.True(ReferenceEquals(proximalSource.Shape, mirroredShape.Shape));
             AssertTransformApproximately(expectedMirrorTransform, mirroredShape.Transform, PositionToleranceMetres);
@@ -1321,7 +1449,11 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return obstacle;
     }
 
-    private static void AssertProxyShapeDataPreservedWithIdentityTransform(PackedScene? sourceScene, AnimatableBody3D proxyBody, string boneName)
+    private static void AssertProxyShapeDataPreservedWithDescriptorTransform(
+        PackedScene? sourceScene,
+        AnimatableBody3D proxyBody,
+        string boneName,
+        Transform3D expectedLocalTransform)
     {
         Node sourceRoot = sourceScene?.Instantiate()
                           ?? throw new Xunit.Sdk.XunitException("BodyColliderProfile source scene should be configured.");
@@ -1334,7 +1466,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
             Assert.Equal(sourceShape.Name, proxyShape.Name);
             Assert.Equal(sourceShape.Disabled, proxyShape.Disabled);
             Assert.IsType(sourceShape.Shape.GetType(), proxyShape.Shape);
-            AssertTransformApproximately(Transform3D.Identity, proxyShape.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(expectedLocalTransform, proxyShape.Transform, PositionToleranceMetres);
         }
         finally
         {
@@ -1365,28 +1497,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
         }
 
         throw new Xunit.Sdk.XunitException($"Expected source shape for mapped profile bone '{profileBoneName}'.");
-    }
-
-    private static Transform3D ResolveExpectedProxyLocalTransform(PackedScene? sourceScene, string boneName)
-    {
-        Node sourceRoot = sourceScene?.Instantiate()
-                          ?? throw new Xunit.Sdk.XunitException("BodyColliderProfile source scene should be configured.");
-
-        try
-        {
-            CollisionShape3D sourceShape = FindSourceShapeForProfileBone(sourceRoot, boneName);
-            BoneAttachment3D sourceAttachment = FindClosestBoneAttachmentAncestor(sourceShape)
-                                                ?? throw new Xunit.Sdk.XunitException(
-                                                    $"Expected source shape '{sourceShape.Name}' to have a BoneAttachment3D ancestor.");
-            Node? sourceFrameRoot = FindAncestor<Skeleton3D>(sourceAttachment) ?? sourceAttachment.GetParent();
-            Transform3D sourceAttachmentSkeletonTransform = ComposeTransformRelativeToAncestor(sourceAttachment, sourceFrameRoot);
-            Transform3D sourceShapeSkeletonTransform = ComposeTransformRelativeToAncestor(sourceShape, sourceFrameRoot);
-            return sourceAttachmentSkeletonTransform.AffineInverse() * sourceShapeSkeletonTransform;
-        }
-        finally
-        {
-            sourceRoot.Free();
-        }
     }
 
     private static Transform3D ResolveSourceShapeSkeletonTransform(PackedScene? sourceScene, string boneName)
@@ -1518,13 +1628,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
         return Assert.IsType<T>(value, exactMatch: false);
     }
 
-    private static void InvokeMethod(object target, string methodName)
-    {
-        MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public)
-                            ?? throw new Xunit.Sdk.XunitException($"Expected '{target.GetType().Name}' to expose method '{methodName}'.");
-        InvokeReflectedMethod(method, target, null);
-    }
-
     private static int CountGeneratedProxyBodies(DynamicPhysicalRig rig)
     {
         int count = 0;
@@ -1573,6 +1676,29 @@ public sealed class DynamicPhysicalRigIntegrationTests
         }
 
         return count;
+    }
+
+    private static void AssertGeneratedProxyBodiesUseInheritedAttachmentTopology(DynamicPhysicalRig rig)
+    {
+        foreach (Node child in rig.TargetSkeleton!.GetChildren())
+        {
+            if (child is not BoneAttachment3D attachment
+                || !attachment.Name.ToString().StartsWith("Collider_", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            AnimatableBody3D proxyBody = Assert.IsAssignableFrom<AnimatableBody3D>(attachment.GetNodeOrNull("ProxyBody"));
+            CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(proxyBody.GetChild(0));
+
+            Assert.Same(attachment, proxyBody.GetParent());
+            Assert.False(proxyBody.TopLevel, "Generated proxy bodies should inherit generated BoneAttachment3D transforms.");
+            AssertTransformApproximately(Transform3D.Identity, proxyBody.Transform, PositionToleranceMetres);
+            AssertTransformApproximately(
+                attachment.GlobalTransform * proxyShape.Transform,
+                ResolveNodeGlobalTransform(proxyShape),
+                PositionToleranceMetres);
+        }
     }
 
     private static Resource LoadResource(string resourcePath)
@@ -1657,15 +1783,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
         _ = method.Invoke(playerVRIK, null);
     }
 
-    private static void InvokeNonPublicInstanceMethod(object target, string methodName)
-    {
-        MethodInfo method = GetNonPublicInstanceMethod(target.GetType(), methodName)
-                            ?? throw new InvalidOperationException(
-                                $"{target.GetType().Name}.{methodName} was not found in the inheritance chain.");
-
-        InvokeReflectedMethod(method, target, null);
-    }
-
     private static FieldInfo? GetNonPublicInstanceField(Type type, string fieldName)
     {
         for (Type? current = type; current is not null; current = current.BaseType)
@@ -1730,6 +1847,16 @@ public sealed class DynamicPhysicalRigIntegrationTests
     {
         AssertVectorApproximately(expected.Origin, actual.Origin, epsilon);
         AssertBasisApproximately(expected.Basis, actual.Basis, epsilon);
+    }
+
+    private static void AssertTransformNotApproximately(Transform3D notExpected, Transform3D actual, float epsilon)
+    {
+        bool originMatches = notExpected.Origin.DistanceTo(actual.Origin) <= epsilon;
+        bool basisMatches = notExpected.Basis.X.DistanceTo(actual.Basis.X) <= epsilon
+                            && notExpected.Basis.Y.DistanceTo(actual.Basis.Y) <= epsilon
+                            && notExpected.Basis.Z.DistanceTo(actual.Basis.Z) <= epsilon;
+
+        Assert.False(originMatches && basisMatches, "Transforms unexpectedly matched within tolerance.");
     }
 
     private static void AssertBasisApproximately(Basis expected, Basis actual, float epsilon)
@@ -1856,6 +1983,48 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             Name = shapeName,
             Shape = shapeResource,
+        };
+
+        root.AddChild(sourceBoneAttachment);
+        sourceBoneAttachment.Owner = root;
+        sourceBoneAttachment.AddChild(sourceBody);
+        sourceBody.Owner = root;
+        sourceBody.AddChild(sourceShape);
+        sourceShape.Owner = root;
+
+        PackedScene sourceScene = new();
+        Error packResult = sourceScene.Pack(root);
+        root.Free();
+
+        Assert.Equal(Error.Ok, packResult);
+        return sourceScene;
+    }
+
+    private static PackedScene CreatePackedSourceSceneWithRotatedAttachmentAndShape(string boneName)
+    {
+        Node root = new()
+        {
+            Name = "CollidersRoot",
+        };
+        BoneAttachment3D sourceBoneAttachment = new()
+        {
+            Name = $"{boneName}Attachment",
+            BoneName = boneName,
+            Transform = _rotatedSourceAttachmentTransform,
+        };
+        AnimatableBody3D sourceBody = new()
+        {
+            Name = "SourceBody",
+            Transform = _rotatedSourceBodyTransform,
+        };
+        CollisionShape3D sourceShape = new()
+        {
+            Name = "RotatedSourceShape",
+            Shape = new BoxShape3D
+            {
+                Size = new Vector3(0.12f, 0.08f, 0.18f),
+            },
+            Transform = _rotatedSourceShapeTransform,
         };
 
         root.AddChild(sourceBoneAttachment);
@@ -2044,6 +2213,22 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 skeleton.SetBoneParent(boneIndex, boneIndices[parent]);
             }
         }
+
+        return skeleton;
+    }
+
+    private static Skeleton3D CreateSkeletonWithRotatedLeftHandRest()
+    {
+        Skeleton3D skeleton = CreateSkeleton();
+        int leftHandIndex = skeleton.FindBone("LeftHand");
+        Assert.True(leftHandIndex >= 0, "Expected test skeleton to contain LeftHand.");
+
+        Transform3D existingRest = skeleton.GetBoneRest(leftHandIndex);
+        skeleton.SetBoneRest(
+            leftHandIndex,
+            new Transform3D(
+                Basis.FromEuler(new Vector3(-0.32f, 0.24f, 0.18f)),
+                existingRest.Origin));
 
         return skeleton;
     }

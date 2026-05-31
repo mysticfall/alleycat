@@ -1,0 +1,5 @@
+[gd_scene format=3 uid="uid://dcm8wf2r1xlx5"]
+
+[ext_resource type="PackedScene" uid="uid://b6yfnqveypvrx" path="res://assets/characters/reference/female/reference_female.colliders.blend" id="1_2it3p"]
+
+[node name="reference_female_colliders" unique_id=1837684230 instance=ExtResource("1_2it3p")]

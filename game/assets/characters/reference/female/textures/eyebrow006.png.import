@@ -2,20 +2,17 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://br15wgve3j2xk"
-path.s3tc="res://.godot/imported/reference_female_f_top_01_diffuse.png-10599581346f66c27d28cda862c298df.s3tc.ctex"
+uid="uid://coywrkussu6y"
+path.s3tc="res://.godot/imported/eyebrow006.png-8c3004f9be61efa99fc2053aae8ea8ee.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "5b8bfd684191734252b6c8a9ce0d13c1"
-}
 
 [deps]
 
-source_file="res://assets/characters/reference/female/reference_female_f_top_01_diffuse.png"
-dest_files=["res://.godot/imported/reference_female_f_top_01_diffuse.png-10599581346f66c27d28cda862c298df.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/textures/eyebrow006.png"
+dest_files=["res://.godot/imported/eyebrow006.png-8c3004f9be61efa99fc2053aae8ea8ee.s3tc.ctex"]
 
 [params]
 
@@ -25,12 +22,12 @@ compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1
-roughness/mode=0
-roughness/src_normal=""
+roughness/mode=1
+roughness/src_normal="res://assets/characters/reference/female/textures/eyebrow006.png"
 process/channel_remap/red=0
 process/channel_remap/green=1
 process/channel_remap/blue=2

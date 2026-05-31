@@ -13,7 +13,7 @@ public sealed class HeadTrackingHipProfileIntegrationTests
     private const string VerificationScenePath = "res://tests/characters/ik/head_tracking_hip_profile_test.tscn";
     private const string SubjectPath = "Subject/Female";
     private const string DriverPath = "PoseStateMachineDriver";
-    private const string HipModifierPath = "Subject/Female/Female_export/GeneralSkeleton/HipReconciliationModifier";
+    private const string HipModifierPath = "Subject/Female/Female/GeneralSkeleton/HipReconciliationModifier";
     private const string ScenarioMarkersRootPath = "Markers/PoseStateMachine/Scenarios";
     private const string HeadRestMarkerPath = "Markers/PoseStateMachine/RestHeadTarget";
     private const string LeftHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestLeft";
@@ -21,7 +21,7 @@ public sealed class HeadTrackingHipProfileIntegrationTests
     private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
     private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
     private const string HeadIKSolveTargetPath = "Subject/Female/IKTargets/HeadSolve";
-    private const string SkeletonPath = "Subject/Female/Female_export/GeneralSkeleton";
+    private const string SkeletonPath = "Subject/Female/Female/GeneralSkeleton";
     private const string AnimationTreePath = "Subject/Female/AnimationTree";
     private const float MinimumVerticalHipDropMetres = 0.15f;
     private const float MinimumVerticalVsStoopHipDropDeltaMetres = 0.07f;

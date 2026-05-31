@@ -12,7 +12,8 @@ public sealed class BodyColliderShapeDescriptor(
     string sourcePhysicsBodyName,
     Shape3D shape,
     bool disabled,
-    Transform3D localTransform)
+    Transform3D localTransform,
+    Transform3D sourceShapeFrameTransform)
 {
     /// <summary>
     /// Name of the source <see cref="CollisionShape3D"/> node.
@@ -46,6 +47,12 @@ public sealed class BodyColliderShapeDescriptor(
 
     /// <summary>
     /// Shape transform relative to the closest source <see cref="BoneAttachment3D"/> ancestor.
+    /// Retained for non-rig query consumers that need the authored hand/body local shape offset.
     /// </summary>
     public Transform3D LocalTransform { get; } = localTransform;
+
+    /// <summary>
+    /// Shape transform in the source skeleton/model frame retained for diagnostics and authoring audits.
+    /// </summary>
+    public Transform3D SourceShapeFrameTransform { get; } = sourceShapeFrameTransform;
 }

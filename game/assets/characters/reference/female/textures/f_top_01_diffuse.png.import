@@ -2,20 +2,17 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dbkxcj754ajap"
-path.s3tc="res://.godot/imported/reference_female_brown_eye.png-a9641293e77d021dc15fb3b10978885c.s3tc.ctex"
+uid="uid://c7acunh5ljh6n"
+path.s3tc="res://.godot/imported/f_top_01_diffuse.png-03604d6ab1d31e646c851af3fd5247ef.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "1b93ce1fc9dfa16177a6d61005cdb4fd"
-}
 
 [deps]
 
-source_file="res://assets/characters/reference/female/reference_female_brown_eye.png"
-dest_files=["res://.godot/imported/reference_female_brown_eye.png-a9641293e77d021dc15fb3b10978885c.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/textures/f_top_01_diffuse.png"
+dest_files=["res://.godot/imported/f_top_01_diffuse.png-03604d6ab1d31e646c851af3fd5247ef.s3tc.ctex"]
 
 [params]
 

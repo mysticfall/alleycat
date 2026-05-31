@@ -27,9 +27,9 @@ public sealed class EyesBlendTreeIntegrationTests
     private const float BlinkClosedPeakSeconds = 0.15f;
     private static readonly string[] _referenceEyeMeshNodeNames =
     [
-        "Female_high-poly_export",
-        "Female_eyelashes01_export",
-        "Female_body_export",
+        "Female_high-poly",
+        "Female_eyelashes01",
+        "Female_body",
     ];
 
     /// <summary>
@@ -73,9 +73,9 @@ public sealed class EyesBlendTreeIntegrationTests
         Node instance = scene.Instantiate();
         try
         {
-            AssertNeutralEyeLookDown(instance.GetNode("Female_export/GeneralSkeleton/Female_body_export"));
-            AssertNeutralEyeLookDown(instance.GetNode("Female_export/GeneralSkeleton/Female_eyelashes01_export"));
-            AssertNeutralEyeLookDown(instance.GetNode("Female_export/GeneralSkeleton/Female_high-poly_export"));
+            AssertNeutralEyeLookDown(instance.GetNode("Female/GeneralSkeleton/Female_body"));
+            AssertNeutralEyeLookDown(instance.GetNode("Female/GeneralSkeleton/Female_eyelashes01"));
+            AssertNeutralEyeLookDown(instance.GetNode("Female/GeneralSkeleton/Female_high-poly"));
         }
         finally
         {

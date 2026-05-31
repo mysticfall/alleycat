@@ -2,20 +2,17 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bvrraxpcfo3al"
-path.s3tc="res://.godot/imported/reference_female_jean_shorts_diff.png-86e8cfbf7b18d2615ce2a6cde06f6869.s3tc.ctex"
+uid="uid://bov6b1oe1g7rs"
+path.s3tc="res://.godot/imported/short01_diffuse.png-6288cca6a0789bd74bf776d0e0b5aff0.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "dc75d3848c6e2c65620ab3b074c52e06"
-}
 
 [deps]
 
-source_file="res://assets/characters/reference/female/reference_female_jean_shorts_diff.png"
-dest_files=["res://.godot/imported/reference_female_jean_shorts_diff.png-86e8cfbf7b18d2615ce2a6cde06f6869.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/textures/short01_diffuse.png"
+dest_files=["res://.godot/imported/short01_diffuse.png-6288cca6a0789bd74bf776d0e0b5aff0.s3tc.ctex"]
 
 [params]
 

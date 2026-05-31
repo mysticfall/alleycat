@@ -186,7 +186,7 @@ public partial class CharacterLocomotion : LocomotionBase
         base._Ready();
         TargetCharacterBodyResolved = TargetCharacterBodyNode ?? this.RequireNode<CharacterBody3D>("..");
         AnimationTreeResolved = AnimationTree ?? this.RequireNode<AnimationTree>("../AnimationTree");
-        RootMotionReferenceResolved = RootMotionReference ?? this.RequireNode<Node3D>("../Female_export");
+        RootMotionReferenceResolved = RootMotionReference ?? this.RequireNode<Node3D>("../Female");
 
         SetPhysicsProcess(true);
     }

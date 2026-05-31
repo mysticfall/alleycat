@@ -9,7 +9,7 @@
 
 [node name="Photobooth" unique_id=1137450292 instance=ExtResource("1_base")]
 
-[node name="GeneralSkeleton" parent="Subject/Female/Female_export" parent_id_path=PackedInt32Array(1534184585, 716732083) index="0" unique_id=441014641]
+[node name="GeneralSkeleton" parent="Subject/Female/Female" parent_id_path=PackedInt32Array(1534184585, 716732083) index="0" unique_id=441014641]
 bones/1/position = Vector3(0, 0.8389602, 0.022851786)
 bones/1/rotation = Quaternion(0, 0, 0, 1)
 bones/2/rotation = Quaternion(0, 0, 0, 1)
@@ -65,7 +65,7 @@ bones/52/rotation = Quaternion(0, 1, 0, 0)
 bones/53/rotation = Quaternion(0, 0.70710677, -0.70710677, 0)
 bones/54/rotation = Quaternion(0, 1, 0, 0)
 
-[node name="HipReconciliationModifier" type="SkeletonModifier3D" parent="Subject/Female/Female_export/GeneralSkeleton" index="25" unique_id=1889005020]
+[node name="HipReconciliationModifier" type="SkeletonModifier3D" parent="Subject/Female/Female/GeneralSkeleton" index="25" unique_id=1889005020]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -85,7 +85,7 @@ influence = 1.0
 script = ExtResource("7_hip_modifier")
 metadata/_custom_type_script = "uid://bfa76a86uhk1m"
 
-[node name="Head" parent="Subject/Female/Female_export/GeneralSkeleton" index="26" unique_id=694402195]
+[node name="Head" parent="Subject/Female/Female/GeneralSkeleton" index="26" unique_id=694402195]
 transform = Transform3D(1, 0, 0, 0, 1, -5.9604645e-08, 0, 5.9604645e-08, 1, 0, 1.4656217, 0.036765665)
 
 [node name="RightElbow" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="1" unique_id=1389246902]
@@ -161,7 +161,7 @@ label_text = "crouch-then-stoop-forward"
 script = ExtResource("5_driver")
 States = [ExtResource("4_state")]
 AnimationTree = NodePath("../Subject/Female/AnimationTree")
-Skeleton = NodePath("../Subject/Female/Female_export/GeneralSkeleton")
+Skeleton = NodePath("../Subject/Female/Female/GeneralSkeleton")
 metadata/_custom_type_script = "uid://dq8mx4eet2kcv"
 
 [editable path="Subject/Female"]

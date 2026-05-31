@@ -1,0 +1,9 @@
+{
+  "preset": "Female",
+  "name": "Female",
+  "outputFile": "assets/characters/reference/female/reference_female.blend",
+  "amimations": [
+    "assets/characters/reference/female/animations/source/animations.blend",
+    "assets/characters/reference/female/animations/source/animations_rigify.blend"
+  ]
+}

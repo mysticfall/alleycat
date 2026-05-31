@@ -19,8 +19,8 @@ public sealed class ArmShoulderIKIntegrationTests
     private const string RightHandTargetPath = "Markers/RightHandTarget";
     private const string LeftPoleTargetPath = "Markers/LeftPoleTarget";
     private const string RightPoleTargetPath = "Markers/RightPoleTarget";
-    private const string LeftArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController";
-    private const string RightArmControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightArmIKController";
+    private const string LeftArmControllerPath = "Subject/Female/Female/GeneralSkeleton/LeftArmIKController";
+    private const string RightArmControllerPath = "Subject/Female/Female/GeneralSkeleton/RightArmIKController";
     private const string CanonicalPoleAnchorSetPath = "res://assets/characters/ik/arm_ik_target_set.tres";
     private const string ArmIKControllerScriptPath = "res://src/IK/ArmIKController.cs";
     private const string PoleAnchorSetScriptPath = "res://src/IK/Anchors/ArmPoleAnchorSetResource.cs";

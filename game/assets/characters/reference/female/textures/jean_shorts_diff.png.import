@@ -2,20 +2,17 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://v0ec8dekvma1"
-path.s3tc="res://.godot/imported/reference_female_tongue01_diffuse.png-133f03dbc80efea2541c93bb2fd55d57.s3tc.ctex"
+uid="uid://w1mve3jvakl7"
+path.s3tc="res://.godot/imported/jean_shorts_diff.png-8b11a1601833662dfda98f1789cc0040.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "03f3c7040385e3ed039d14478b4cedb3"
-}
 
 [deps]
 
-source_file="res://assets/characters/reference/female/reference_female_tongue01_diffuse.png"
-dest_files=["res://.godot/imported/reference_female_tongue01_diffuse.png-133f03dbc80efea2541c93bb2fd55d57.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/textures/jean_shorts_diff.png"
+dest_files=["res://.godot/imported/jean_shorts_diff.png-8b11a1601833662dfda98f1789cc0040.s3tc.ctex"]
 
 [params]
 

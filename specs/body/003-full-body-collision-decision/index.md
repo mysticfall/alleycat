@@ -37,8 +37,10 @@ through explicit force-transfer channels.
    that references a configurable collider source `PackedScene` and exposes
    query descriptors for authored shapes by source bone/name.
 2. `BodyColliderProfile` descriptors shall expose the original `Shape3D`
-   resource and immutable authoring metadata for read/query consumers. They
-   must not duplicate `Shape3D` resources as part of query generation.
+    resource, immutable authoring metadata, the source attachment-local shape
+    transform for query consumers and runtime proxy generation, and the source
+    skeleton/model-frame shape transform for diagnostics. They must not duplicate
+    `Shape3D` resources as part of query generation.
 3. `DynamicPhysicalRig` shall be a `[Tool]` runtime component that generates
    proxy collision bodies from a required `BodyColliderProfile`.
 4. For each source `CollisionShape3D`, the implementation shall resolve the
@@ -54,20 +56,18 @@ through explicit force-transfer channels.
        and continue processing remaining shapes.
     e. Required setup errors (missing source scene, missing shape resource, or
        missing physics-body ancestor) still fail fast.
-5. Non-finger source shapes resolved from the profile shall produce proxy
-   bodies with `CollisionShape3D` nodes that reuse the descriptor `Shape3D`
-   resource and have identity local transform in the generated body topology.
-   Generated target attachments shall be `BoneAttachment3D` nodes as children
-   of the target `Skeleton3D`. Generated proxy bodies shall be top-level
-   `AnimatableBody3D` nodes associated with the generated attachments.
-   A local proxy transform shall be derived from the source authoring
-   attachment/body/shape hierarchy, NOT from the target skeleton's current pose.
-   This preserves authored collider offset/rotation without cancelling
-   scene-authored target bone pose overrides (for example a mirror-room NPC
-   pose override). Generated shape transforms are identity in the current
-   topology; proxy generation may duplicate `Shape3D` resources only if needed
-   for runtime-body safety, while the profile query contract remains
-   non-duplicating.
+5. Non-finger source shapes resolved from the profile shall produce generated
+   target attachments as `BoneAttachment3D` nodes under the target `Skeleton3D`.
+   Each generated `PhysicalBodyPart3D` shall be a normal child of its generated
+   attachment, shall have identity local transform, and shall not be top-level.
+   Its generated `CollisionShape3D` shall reuse the descriptor `Shape3D` resource
+   and carry the descriptor attachment-local `LocalTransform`. This preserves the
+   authored collider offset/rotation in the editor-inspectable shape child while
+   allowing Godot's scene tree to inherit the target bone attachment transform.
+   `DynamicPhysicalRig` shall not rebase authored non-finger placement through
+   the target bone rest frame or source skeleton/model-frame diagnostic transform.
+   Proxy generation may duplicate `Shape3D` resources only if needed for runtime
+   body safety, while the profile query contract remains non-duplicating.
 6. For each finger bone on the target skeleton, the rig shall generate at most
    one finger proxy body directly from skeleton rest data. Resolved source
    profile descriptors for that finger bone mark it as covered and prevent
@@ -86,14 +86,16 @@ through explicit force-transfer channels.
         length. The capsule centre and height must span the measured segment from
         the bone origin to the inferred endpoint while respecting Godot capsule
         radius constraints.
-    d. Assign this geometry to the proxy body and `CollisionShape3D` in place
-       of any source-profile shape.
+    d. Assign generated finger geometry to the `CollisionShape3D` local transform
+       below an identity, non-top-level generated body, in place of any
+       source-profile shape. Finger body topology therefore matches authored
+       non-finger topology, while the geometry is still derived procedurally from
+       target skeleton rest data.
     e. Count and expose generated finger proxies separately from profile-driven
        proxies.
-7. Every physics frame, manual sync shall set:
-   `ProxyBody.GlobalTransform = Attachment.GlobalTransform * LocalProxyTransform`
-   so proxies follow animated/posed bones at runtime while preserving authored
-   offsets/rotations.
+7. Generated proxy bodies shall follow animated/posed bones solely through
+   normal `BoneAttachment3D` parent-child transform inheritance. BODY generation
+   shall not expose a separate proxy-body synchronisation API for this topology.
 8. The rig shall clear and rebuild deterministically on each initialisation.
 9. Reference IK target nodes for the head, hands, and feet shall not carry
    primitive anatomical `CollisionShape3D` children. Anatomical body collision
@@ -180,7 +182,8 @@ through explicit force-transfer channels.
   bodies.
 - Configurable strength parameters for both interaction channels.
 - Collision-layer contract for generated proxies and dynamic interaction bodies.
-- Manual runtime sync of top-level proxy bodies to animated/posed bones.
+- Generated proxy bodies following animated/posed bones through inherited
+  `BoneAttachment3D` transforms.
 - IK consumers (e.g. `PlayerVRIK`) consuming an explicit `CharacterIK.PhysicalRig`
    reference for generated body proxy collision integration, with no per-frame
    skeleton child discovery. Dependency direction remains IK → shared profile and
@@ -223,28 +226,27 @@ through explicit force-transfer channels.
 8. If `BoneName` is empty or does not resolve against the target skeleton,
    the implementation logs a warning once, increments the skipped-shape count,
    skips that shape, and continues processing remaining shapes.
-9. Non-finger proxy bodies use descriptor `Shape3D` resources with identity
-   local transform in the generated body topology. Generated attachments are
-   `BoneAttachment3D` nodes under the target `Skeleton3D`. Generated proxy
-   bodies are top-level `AnimatableBody3D` nodes associated with the generated
-   attachments.
-10. Local proxy transform is derived from the source authoring attachment/body/
-    shape hierarchy and preserved at runtime; it does NOT cancel scene-authored
-    target bone pose overrides.
-11. Every physics frame, proxies update via manual sync:
-    `ProxyBody.GlobalTransform = Attachment.GlobalTransform * LocalProxyTransform`.
-12. Tests verify that proxies move with animated/posed bones at runtime,
-    and that NPC/scene-authored pose overrides are not cancelled by the sync.
-13. Generated proxy transforms preserve authored collider pose in skeleton-local
+9. Non-finger proxy bodies use descriptor `Shape3D` resources below generated
+   `BoneAttachment3D` nodes under the target `Skeleton3D`. Generated
+   `PhysicalBodyPart3D` nodes are not top-level and have identity local
+   transform; generated `CollisionShape3D` nodes carry descriptor
+   `LocalTransform`.
+10. Tests verify that authored non-finger proxy placement does not use the body
+    transform for collider offset/rotation and does not use source
+    skeleton/model-frame diagnostic transforms for generated placement.
+11. Tests verify that proxies move with animated/posed bones at runtime through
+    inherited attachment transforms, and that NPC/scene-authored pose overrides
+    are preserved by the generated attachment-child topology.
+12. Generated shape transforms preserve authored collider pose in attachment-local
     space; rotated colliders are not flattened to identity. Tests verify a
     rotated source collider produces correctly rotated target collision shape.
-14. The rig clears and regenerates deterministically on each initialisation.
-15. Reference head, hand, and foot IK targets have no direct primitive
+13. The rig clears and regenerates deterministically on each initialisation.
+14. Reference head, hand, and foot IK targets have no direct primitive
     `CollisionShape3D` children; their anatomical collision shape data is
     sourced from `BodyColliderProfile` and generated proxies.
-16. Adjacent-bone collision exceptions are applied bidirectionally for
+15. Adjacent-bone collision exceptions are applied bidirectionally for
     non-finger profile-driven bodies.
-17. For each finger bone, the rig generates at most one capsule proxy body from
+16. For each finger bone, the rig generates at most one capsule proxy body from
     skeleton rest data. Resolved source profile descriptors mark the finger bone
     as covered but are replaced with generated primitive capsule geometry; tests
     verify duplicate source descriptors for one finger bone do not inflate the
@@ -254,53 +256,53 @@ through explicit force-transfer channels.
      bone and measured parent/sibling context for terminal bones. Radius is
      clamped to valid Godot capsule constraints, and tests verify capsule axis,
      centre, and height against measured segment lengths.
-18. Finger proxy count is exposed separately from total proxy count.
-19. Same-side finger self-collision exceptions are applied per rig instance:
+17. Finger proxy count is exposed separately from total proxy count.
+18. Same-side finger self-collision exceptions are applied per rig instance:
     a. Tests verify that finger bodies suppress collision against same-side hand
        bodies on the same instance.
     b. Tests verify that finger bodies suppress collision against other same-side
        finger bodies on the same instance.
     c. Tests verify that finger bodies do NOT suppress collision against bodies
        from other character instances.
-20. Collision layers are correctly configured for generated proxies:
+19. Collision layers are correctly configured for generated proxies:
      generated proxy bodies use the configured layer and mask, and same-side
      filtering is represented by instance-local exceptions.
-21. Hand actuators use `AnimatableBody3D` with physics-timed position updates
+20. Hand actuators use `AnimatableBody3D` with physics-timed position updates
     from `PlayerVRIK._PhysicsProcess`, preserving target driving, tolerating
     the absence of direct primitive authored target shapes, and ignoring their
     own generated same-side finger proxies through bidirectional instance-local
     exceptions.
-22. Hand-to-dynamic-body interaction uses explicit capped impact and sustained
+21. Hand-to-dynamic-body interaction uses explicit capped impact and sustained
     push channels, with profile-backed query shapes when direct primitive hand
     target shapes are absent.
-23. Dynamic bodies receive explicit hand interaction only when they have
+22. Dynamic bodies receive explicit hand interaction only when they have
     collision layer 2 and belong to group `hand_dynamic_interaction_body`.
-24. Impact and sustained channels are governed by configurable parameters.
-25. Head collision remains out of scope; no requirement mandates head collision
+23. Impact and sustained channels are governed by configurable parameters.
+24. Head collision remains out of scope; no requirement mandates head collision
     response that could conflict with head target driving.
-26. Automated tests verify the core contracts for rig generation, hand actuator
+25. Automated tests verify the core contracts for rig generation, hand actuator
      setup, collision layers, and explicit force transfer.
-27. Automated tests verify that a shapeless authored hand target gains runtime
+26. Automated tests verify that a shapeless authored hand target gains runtime
      profile-backed movement collision shapes that reuse descriptor `Shape3D`
      resources/transforms and make `TestMove`/`MoveAndCollide` collide with
      body/proxy obstacles rather than passing through.
-28. Tests verify `DynamicPhysicalRig.GetGeneratedFingerProxyCollisionShapesForHand`
+27. Tests verify `DynamicPhysicalRig.GetGeneratedFingerProxyCollisionShapesForHand`
      returns the generated finger proxy collision shapes for the specified hand,
      enabling IK consumers to query body-owned finger proxy geometry.
-29. Tests verify mirrored finger proxy collision shapes exist under each hand IK
+28. Tests verify mirrored finger proxy collision shapes exist under each hand IK
      target node in `PlayerVRIK`, and hand-actuator movement collides against the
      same finger proxies that body animation uses.
-30. Tests verify `CharacterIK.UpdatePhysicalActuators()` invokes the pre-hand-actuator
+29. Tests verify `CharacterIK.UpdatePhysicalActuators()` invokes the pre-hand-actuator
      hook before each `_[Left|Right]HandActuator.Actuate(...)` call, confirming mirrored
      finger shapes are synchronised before hand movement and collision detection.
-31. Code review confirms `DynamicPhysicalRig` contains no references to IK nodes,
+30. Code review confirms `DynamicPhysicalRig` contains no references to IK nodes,
      components, or state, preserving the IK → Body coupling direction.
-32. Tests verify that scenes requiring generated proxy collision integration
+31. Tests verify that scenes requiring generated proxy collision integration
      (e.g. `game/assets/characters/reference/female_reference_npc.tscn` and
      `game/assets/characters/reference/player.tscn`) wire an explicit
      `PhysicalRig` path on their `CharacterIK` node without serialising a
      separate `Skeleton` path.
-33. Tests verify that `PlayerVRIK` uses the configured `PhysicalRig` reference for
+32. Tests verify that `PlayerVRIK` uses the configured `PhysicalRig` reference for
      finger mirroring, generated target proxy collision exceptions, and hand dynamic
      interaction shape resolution, with no per-frame skeleton child scanning.
 

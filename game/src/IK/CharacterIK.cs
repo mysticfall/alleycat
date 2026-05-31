@@ -542,7 +542,7 @@ public partial class CharacterIK : Node3D
             return;
         }
 
-        ResolvedViewpoint = Viewpoint ?? this.RequireNode<Marker3D>("Female_export/GeneralSkeleton/Head/Viewpoint");
+        ResolvedViewpoint = Viewpoint ?? this.RequireNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
         ResolvedHeadIKTarget = HeadIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/Head");
         ResolvedHeadIKSolveTarget = HeadIKSolveTarget ?? this.RequireNode<Node3D>("IKTargets/HeadSolve");
         ResolvedRightHandIKTarget = RightHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/RightHand");
@@ -567,7 +567,7 @@ public partial class CharacterIK : Node3D
     {
         DynamicPhysicalRig physicalRig = PhysicalRig
                                          ?? this.RequireNode<DynamicPhysicalRig>(
-                                             "Female_export/GeneralSkeleton/DynamicPhysicalRig");
+                                             "Female/GeneralSkeleton/DynamicPhysicalRig");
 
         return physicalRig.TargetSkeleton
             ?? (physicalRig.GetParent() is Skeleton3D parentSkeleton

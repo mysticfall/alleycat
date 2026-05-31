@@ -2,20 +2,17 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://f2dgsyalmxfy"
-path.s3tc="res://.godot/imported/reference_female_young_lightskinned_female_diffuse_Bronze.png-4234638559ed50837500ecc2a06f17e5.s3tc.ctex"
+uid="uid://uhvpnu5wjsr"
+path.s3tc="res://.godot/imported/young_lightskinned_female_diffuse_Bronze.png-8c3a5ef97781c0546547ba6ad45442ef.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "66bee23d0bf576af8dc60b20f1aff960"
-}
 
 [deps]
 
-source_file="res://assets/characters/reference/female/reference_female_young_lightskinned_female_diffuse_Bronze.png"
-dest_files=["res://.godot/imported/reference_female_young_lightskinned_female_diffuse_Bronze.png-4234638559ed50837500ecc2a06f17e5.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/textures/young_lightskinned_female_diffuse_Bronze.png"
+dest_files=["res://.godot/imported/young_lightskinned_female_diffuse_Bronze.png-8c3a5ef97781c0546547ba6ad45442ef.s3tc.ctex"]
 
 [params]
 

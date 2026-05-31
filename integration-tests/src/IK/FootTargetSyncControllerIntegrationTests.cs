@@ -12,18 +12,18 @@ public sealed partial class FootTargetSyncControllerIntegrationTests
 {
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
 
-    private const string SkeletonPath = "Female_export/GeneralSkeleton";
+    private const string SkeletonPath = "Female/GeneralSkeleton";
     private const string LeftFootTargetPath = "IKTargets/LeftFoot";
     private const string RightFootTargetPath = "IKTargets/RightFoot";
 
-    private const string FootTargetSyncControllerPath = "Female_export/GeneralSkeleton/FootTargetSyncController";
-    private const string HipReconciliationModifierPath = "Female_export/GeneralSkeleton/HipReconciliationModifier";
-    private const string LeftLegIKControllerPath = "Female_export/GeneralSkeleton/LeftLegIKController";
-    private const string RightLegIKControllerPath = "Female_export/GeneralSkeleton/RightLegIKController";
-    private const string LeftLegTwoBoneIKControllerPath = "Female_export/GeneralSkeleton/LeftLegTwoBoneIKController";
-    private const string RightLegTwoBoneIKControllerPath = "Female_export/GeneralSkeleton/RightLegTwoBoneIKController";
-    private const string CopyLeftFootRotationPath = "Female_export/GeneralSkeleton/CopyLeftFootRotation";
-    private const string CopyRightFootRotationPath = "Female_export/GeneralSkeleton/CopyRightFootRotation";
+    private const string FootTargetSyncControllerPath = "Female/GeneralSkeleton/FootTargetSyncController";
+    private const string HipReconciliationModifierPath = "Female/GeneralSkeleton/HipReconciliationModifier";
+    private const string LeftLegIKControllerPath = "Female/GeneralSkeleton/LeftLegIKController";
+    private const string RightLegIKControllerPath = "Female/GeneralSkeleton/RightLegIKController";
+    private const string LeftLegTwoBoneIKControllerPath = "Female/GeneralSkeleton/LeftLegTwoBoneIKController";
+    private const string RightLegTwoBoneIKControllerPath = "Female/GeneralSkeleton/RightLegTwoBoneIKController";
+    private const string CopyLeftFootRotationPath = "Female/GeneralSkeleton/CopyLeftFootRotation";
+    private const string CopyRightFootRotationPath = "Female/GeneralSkeleton/CopyRightFootRotation";
 
     private const float PositionToleranceMetres = 0.01f;
 

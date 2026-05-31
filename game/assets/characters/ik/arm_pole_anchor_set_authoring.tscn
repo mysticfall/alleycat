@@ -8,14 +8,14 @@
 
 [node name="ArmPoleAnchorSetAuthoring" type="Node3D" unique_id=688560345]
 script = ExtResource("1_po3ms")
-SkeletonPath = NodePath("ReferenceFemale/Female_export/GeneralSkeleton")
+SkeletonPath = NodePath("ReferenceFemale/Female/GeneralSkeleton")
 PoseContainerPath = NodePath("ArmPoleAnchorPoses")
 OutputResourcePath = "res://assets/characters/ik/arm_ik_target_set.tres"
 metadata/_custom_type_script = "uid://bb0cyh8r56fpv"
 
 [node name="ReferenceFemale" parent="." unique_id=1792987446 instance=ExtResource("2_7b0yo")]
 
-[node name="LeftArmIKController" type="SkeletonModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="10" unique_id=1713652168 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="LeftArmIKController" type="SkeletonModifier3D" parent="ReferenceFemale/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="10" unique_id=1713652168 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -38,7 +38,7 @@ PoleTarget = NodePath("../../../../IK Targets/LeftPole")
 PoleAnchorSet = ExtResource("4_v1m1f")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="RightArmIKController" type="SkeletonModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="11" unique_id=286462511 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="RightArmIKController" type="SkeletonModifier3D" parent="ReferenceFemale/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="11" unique_id=286462511 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -62,7 +62,7 @@ Side = 1
 PoleAnchorSet = ExtResource("4_v1m1f")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="12" unique_id=1365175166]
+[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="ReferenceFemale/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="12" unique_id=1365175166]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../IK Targets/LeftHand")
 settings/0/pole_node = NodePath("../../../../IK Targets/LeftPole")
@@ -76,7 +76,7 @@ settings/0/end_bone = 10
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="13" unique_id=574401663]
+[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="ReferenceFemale/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="13" unique_id=574401663]
 setting_count = 1
 settings/0/target_node = NodePath("../../../../IK Targets/RightHand")
 settings/0/pole_node = NodePath("../../../../IK Targets/RightPole")
@@ -90,7 +90,7 @@ settings/0/end_bone = 29
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="14" unique_id=1630330781]
+[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="ReferenceFemale/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="14" unique_id=1630330781]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "RightHand"
@@ -102,7 +102,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="ReferenceFemale/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="15" unique_id=1649695050]
+[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="ReferenceFemale/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(1792987446, 469333434) index="15" unique_id=1649695050]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "LeftHand"

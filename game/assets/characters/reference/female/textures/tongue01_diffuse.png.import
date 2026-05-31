@@ -2,20 +2,17 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://vm4jchew8uek"
-path.s3tc="res://.godot/imported/reference_female_short01_diffuse.png-e99a3f14485ac0c1274ad3fea557c55e.s3tc.ctex"
+uid="uid://b8avdnr57m73a"
+path.s3tc="res://.godot/imported/tongue01_diffuse.png-cde34e9e1388ba469e3b6dfe556ae21f.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
-generator_parameters={
-"md5": "6d41c36857fc300b6692779db805843c"
-}
 
 [deps]
 
-source_file="res://assets/characters/reference/female/reference_female_short01_diffuse.png"
-dest_files=["res://.godot/imported/reference_female_short01_diffuse.png-e99a3f14485ac0c1274ad3fea557c55e.s3tc.ctex"]
+source_file="res://assets/characters/reference/female/textures/tongue01_diffuse.png"
+dest_files=["res://.godot/imported/tongue01_diffuse.png-cde34e9e1388ba469e3b6dfe556ae21f.s3tc.ctex"]
 
 [params]
 

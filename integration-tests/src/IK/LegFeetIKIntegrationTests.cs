@@ -16,13 +16,13 @@ public sealed class LegFeetIKIntegrationTests
     private const string RightFootTargetPath = "Markers/RightFootTarget";
     private const string LeftPoleTargetPath = "Markers/LeftKneePoleTarget";
     private const string RightPoleTargetPath = "Markers/RightKneePoleTarget";
-    private const string LeftLegIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/LeftLegIKController";
-    private const string RightLegIKControllerPath = "Subject/Female/Female_export/GeneralSkeleton/RightLegIKController";
+    private const string LeftLegIKControllerPath = "Subject/Female/Female/GeneralSkeleton/LeftLegIKController";
+    private const string RightLegIKControllerPath = "Subject/Female/Female/GeneralSkeleton/RightLegIKController";
 
     private const string FootPoseMarkersPath = "Markers/FootTargetPoses";
     private const string HipsPoseMarkersPath = "Markers/HipsOverridePoses";
 
-    private const string HipsHarnessPath = "Subject/Female/Female_export/GeneralSkeleton/HipsOverrideHarness";
+    private const string HipsHarnessPath = "Subject/Female/Female/GeneralSkeleton/HipsOverrideHarness";
 
     private const int SettleSkeletonUpdates = 4;
 

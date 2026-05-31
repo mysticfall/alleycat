@@ -24,34 +24,34 @@ ambient_light_source = 3
 
 [node name="Character" parent="." unique_id=263578101 instance=ExtResource("1_q155j")]
 
-[node name="AIVoice" type="Node3D" parent="Character/Female_export/GeneralSkeleton/Head" parent_id_path=PackedInt32Array(263578101, 694402195) index="1" unique_id=1536983584 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
+[node name="AIVoice" type="Node3D" parent="Character/Female/GeneralSkeleton/Head" parent_id_path=PackedInt32Array(263578101, 694402195) index="1" unique_id=1536983584 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 script = ExtResource("4_wihe7")
 SpeechGenerator = NodePath("SpeechGenerator")
 LipSyncPlayer = NodePath("LipSyncPlayer")
 metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
 
-[node name="SpeechGenerator" type="Node" parent="Character/Female_export/GeneralSkeleton/Head/AIVoice" unique_id=1805541475]
+[node name="SpeechGenerator" type="Node" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1805541475]
 script = ExtResource("2_0iva6")
 VoiceOverride = "Emma"
 TargetSampleRate = 16000
 metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
 
-[node name="LipSyncPlayer" type="Node" parent="Character/Female_export/GeneralSkeleton/Head/AIVoice" unique_id=1952690197 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+[node name="LipSyncPlayer" type="Node" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1952690197 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
 script = ExtResource("3_q155j")
 InputStrength = 0.6
 ConstantNoise = true
 EyeRotationToBlendshapeScale = 0.15
-Meshes = [NodePath("../../../Female_body_export"), NodePath("../../../Female_eyebrow006_export"), NodePath("../../../Female_eyelashes01_export"), NodePath("../../../Female_high-poly_export"), NodePath("../../../Female_teeth_shape01_export"), NodePath("../../../Female_tongue01_export")]
+Meshes = [NodePath("../../../Female_body"), NodePath("../../../Female_eyebrow006"), NodePath("../../../Female_eyelashes01"), NodePath("../../../Female_high-poly"), NodePath("../../../Female_teeth_shape01"), NodePath("../../../Female_tongue01")]
 AudioPlayer = NodePath("../AudioStreamPlayer3D")
 metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
 
-[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Character/Female_export/GeneralSkeleton/Head/AIVoice" unique_id=1643775147]
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1643775147]
 
-[node name="RightHand" parent="Character/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(263578101, 111354195) index="10" unique_id=190350548]
+[node name="RightHand" parent="Character/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(263578101, 111354195) index="10" unique_id=190350548]
 transform = Transform3D(0.440444, -0.5169338, 0.73402214, 0.4658435, -0.56732756, -0.67906505, 0.7674626, 0.6410296, -0.009065724, -0.42150915, 0.9773546, 0.16186677)
 
-[node name="LeftHand" parent="Character/Female_export/GeneralSkeleton" parent_id_path=PackedInt32Array(263578101, 111354195) index="11" unique_id=792521653]
+[node name="LeftHand" parent="Character/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(263578101, 111354195) index="11" unique_id=792521653]
 transform = Transform3D(0.440444, 0.5169338, -0.73402214, -0.4658435, -0.56732756, -0.67906505, -0.7674626, 0.6410296, -0.009065724, 0.42150915, 0.9773546, 0.16186677)
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=77492201]

@@ -42,7 +42,7 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         try
         {
             _ = Assert.IsType<Node>(
-                sceneRoot.GetNodeOrNull("Female_export/GeneralSkeleton/DynamicPhysicalRig"),
+                sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/DynamicPhysicalRig"),
                 exactMatch: false);
             Node locomotion = AssertCharacterLocomotionNode(sceneRoot.GetNodeOrNull("Locomotion"));
             _ = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull("AnimationTree"), exactMatch: false);
@@ -52,7 +52,7 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
             Assert.Null(sceneRoot.GetNodeOrNull("VRIK"));
             Assert.Null(sceneRoot.GetNodeOrNull("PlayerController"));
             Assert.Null(sceneRoot.GetNodeOrNull("OpenAITranscriber"));
-            Assert.Null(sceneRoot.GetNodeOrNull("Female_export/GeneralSkeleton/HipReconciliationModifier"));
+            Assert.Null(sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/HipReconciliationModifier"));
         }
         finally
         {

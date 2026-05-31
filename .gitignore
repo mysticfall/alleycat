@@ -14,6 +14,9 @@ bin/
 obj/
 *.DotSettings.user
 
+# Python
+__pycache__
+
 # Godot-generated solution in game project
 game/AlleyCat.sln
 

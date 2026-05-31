@@ -19,8 +19,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     private const string PlayerVRIKScriptPath = "res://src/IK/PlayerVRIK.cs";
     private const string CharacterIKScriptPath = "res://src/IK/CharacterIK.cs";
     private const string DynamicPhysicalRigScriptPath = "res://src/Body/DynamicPhysicalRig.cs";
-    private static NodePath ExpectedPlayerPhysicalRigPath => new("../Female_export/GeneralSkeleton/DynamicPhysicalRig");
-    private static NodePath ExpectedFemaleReferenceNPCPhysicalRigPath => new("../Female_export/GeneralSkeleton/DynamicPhysicalRig");
+    private static NodePath ExpectedPlayerPhysicalRigPath => new("../Female/GeneralSkeleton/DynamicPhysicalRig");
+    private static NodePath ExpectedFemaleReferenceNPCPhysicalRigPath => new("../Female/GeneralSkeleton/DynamicPhysicalRig");
 
     /// <summary>
     /// Verifies the actual player scene explicitly wires PlayerVRIK to the generated physical rig dependency.
@@ -32,7 +32,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         using Node player = LoadPackedScene(PlayerScenePath).Instantiate();
 
         Node playerVRIK = player.GetNode<Node>("VRIK");
-        Node physicalRig = player.GetNode<Node>("Female_export/GeneralSkeleton/DynamicPhysicalRig");
+        Node physicalRig = player.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
         GodotObject configuredPhysicalRig = playerVRIK.Get("PhysicalRig").AsGodotObject()
             ?? throw new Xunit.Sdk.XunitException("Expected player VRIK PhysicalRig to resolve to a node.");
 
@@ -52,7 +52,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         using Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
 
         Node characterIK = npc.GetNode<Node>("CharacterIK");
-        Node physicalRig = npc.GetNode<Node>("Female_export/GeneralSkeleton/DynamicPhysicalRig");
+        Node physicalRig = npc.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
         GodotObject configuredPhysicalRig = characterIK.Get("PhysicalRig").AsGodotObject()
             ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK PhysicalRig to resolve to a node.");
 

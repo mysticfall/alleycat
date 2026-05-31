@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://d3nb4wrvj6vkf"
-path="res://.godot/imported/colliders.blend-4d126c32c56208573f4931da3bf9e06e.scn"
+uid="uid://b6yfnqveypvrx"
+path="res://.godot/imported/reference_female.colliders.blend-77be8d08dd01ac16cad740474b52e370.scn"
 
 [deps]
 
-source_file="res://assets/characters/reference/female/colliders.blend"
-dest_files=["res://.godot/imported/colliders.blend-4d126c32c56208573f4931da3bf9e06e.scn"]
+source_file="res://assets/characters/reference/female/reference_female.colliders.blend"
+dest_files=["res://.godot/imported/reference_female.colliders.blend-77be8d08dd01ac16cad740474b52e370.scn"]
 
 [params]
 

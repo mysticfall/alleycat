@@ -5,7 +5,7 @@ animation = &"eyes/Eyes Blink"
 
 [sub_resource type="AnimationNodeOneShot" id="AnimationNodeOneShot_eyes_blink"]
 filter_enabled = true
-filters = ["GeneralSkeleton/Female_body_export:eyeBlinkLeft", "GeneralSkeleton/Female_body_export:eyeBlinkRight", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeBlinkRight", "GeneralSkeleton/Female_high-poly_export:eyeBlinkLeft", "GeneralSkeleton/Female_high-poly_export:eyeBlinkRight"]
+filters = ["GeneralSkeleton/Female_body:eyeBlinkLeft", "GeneralSkeleton/Female_body:eyeBlinkRight", "GeneralSkeleton/Female_eyelashes01:eyeBlinkLeft", "GeneralSkeleton/Female_eyelashes01:eyeBlinkRight", "GeneralSkeleton/Female_high-poly:eyeBlinkLeft", "GeneralSkeleton/Female_high-poly:eyeBlinkRight"]
 
 [sub_resource type="AnimationNodeTimeScale" id="AnimationNodeTimeScale_8verw"]
 
@@ -14,7 +14,7 @@ animation = &"eyes/Eyes Right Left"
 
 [sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_eyes_horizontal"]
 filter_enabled = true
-filters = ["GeneralSkeleton/Female_body_export:eyeLookInLeft", "GeneralSkeleton/Female_body_export:eyeLookInRight", "GeneralSkeleton/Female_body_export:eyeLookOutLeft", "GeneralSkeleton/Female_body_export:eyeLookOutRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookInLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookInRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookOutLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookOutRight", "GeneralSkeleton/Female_high-poly_export:eyeLookInLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookInRight", "GeneralSkeleton/Female_high-poly_export:eyeLookOutLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookOutRight"]
+filters = ["GeneralSkeleton/Female_body:eyeLookInLeft", "GeneralSkeleton/Female_body:eyeLookInRight", "GeneralSkeleton/Female_body:eyeLookOutLeft", "GeneralSkeleton/Female_body:eyeLookOutRight", "GeneralSkeleton/Female_eyelashes01:eyeLookInLeft", "GeneralSkeleton/Female_eyelashes01:eyeLookInRight", "GeneralSkeleton/Female_eyelashes01:eyeLookOutLeft", "GeneralSkeleton/Female_eyelashes01:eyeLookOutRight", "GeneralSkeleton/Female_high-poly:eyeLookInLeft", "GeneralSkeleton/Female_high-poly:eyeLookInRight", "GeneralSkeleton/Female_high-poly:eyeLookOutLeft", "GeneralSkeleton/Female_high-poly:eyeLookOutRight"]
 
 [sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_eyes_horizontal"]
 
@@ -23,7 +23,7 @@ animation = &"eyes/Eyes Up Down"
 
 [sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_eyes_vertical"]
 filter_enabled = true
-filters = ["GeneralSkeleton/Female_body_export:eyeLookDownLeft", "GeneralSkeleton/Female_body_export:eyeLookDownRight", "GeneralSkeleton/Female_body_export:eyeLookUpLeft", "GeneralSkeleton/Female_body_export:eyeLookUpRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookDownLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookDownRight", "GeneralSkeleton/Female_eyelashes01_export:eyeLookUpLeft", "GeneralSkeleton/Female_eyelashes01_export:eyeLookUpRight", "GeneralSkeleton/Female_high-poly_export:eyeLookDownLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookDownRight", "GeneralSkeleton/Female_high-poly_export:eyeLookUpLeft", "GeneralSkeleton/Female_high-poly_export:eyeLookUpRight"]
+filters = ["GeneralSkeleton/Female_body:eyeLookDownLeft", "GeneralSkeleton/Female_body:eyeLookDownRight", "GeneralSkeleton/Female_body:eyeLookUpLeft", "GeneralSkeleton/Female_body:eyeLookUpRight", "GeneralSkeleton/Female_eyelashes01:eyeLookDownLeft", "GeneralSkeleton/Female_eyelashes01:eyeLookDownRight", "GeneralSkeleton/Female_eyelashes01:eyeLookUpLeft", "GeneralSkeleton/Female_eyelashes01:eyeLookUpRight", "GeneralSkeleton/Female_high-poly:eyeLookDownLeft", "GeneralSkeleton/Female_high-poly:eyeLookDownRight", "GeneralSkeleton/Female_high-poly:eyeLookUpLeft", "GeneralSkeleton/Female_high-poly:eyeLookUpRight"]
 
 [sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_eyes_vertical"]
 

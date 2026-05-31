@@ -474,7 +474,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         try
         {
             AnimationPlayer player = root.GetNode<AnimationPlayer>("AnimationPlayer");
-            Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female_export/GeneralSkeleton");
+            Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female/GeneralSkeleton");
             int fingerBoneIndex = skeleton.FindBone(fingerBoneName);
             Assert.True(fingerBoneIndex >= 0, $"Expected skeleton to contain {fingerBoneName}.");
 

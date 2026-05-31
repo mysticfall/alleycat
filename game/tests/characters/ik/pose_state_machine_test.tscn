@@ -28,7 +28,7 @@ States = [ExtResource("4_6h6qw"), ExtResource("10_rv40o"), ExtResource("5_02pgv"
 Transitions = [ExtResource("11_j2eh4"), ExtResource("12_y6tyd"), ExtResource("13_1b5h7"), ExtResource("14_5kmsa"), ExtResource("15_4j6te")]
 InitialStateId = &"Standing"
 AnimationTree = NodePath("../Subject/Female/AnimationTree")
-Skeleton = NodePath("../Subject/Female/Female_export/GeneralSkeleton")
+Skeleton = NodePath("../Subject/Female/Female/GeneralSkeleton")
 metadata/_custom_type_script = "uid://dq8mx4eet2kcv"
 
 [node name="PoseStateMachine" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0"]

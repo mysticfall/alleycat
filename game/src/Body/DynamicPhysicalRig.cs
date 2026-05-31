@@ -19,7 +19,6 @@ public partial class DynamicPhysicalRig : Node
     private bool _regenerationQueued;
     private readonly Dictionary<StringName, List<PhysicsBody3D>> _generatedBodiesByBoneName = [];
     private readonly Dictionary<FingerSide, List<PhysicsBody3D>> _generatedFingerBodiesBySide = [];
-    private readonly List<ProxyBinding> _proxyBindings = [];
 
     /// <summary>
     /// Emitted when a generated body-part proxy receives a physical interaction.
@@ -177,15 +176,6 @@ public partial class DynamicPhysicalRig : Node
     }
 
     /// <summary>
-    /// Number of manual generated-proxy synchronisation passes run since the latest clear.
-    /// </summary>
-    public ulong PhysicsProxySyncTickCount
-    {
-        get;
-        private set;
-    }
-
-    /// <summary>
     /// Returns the generated proxy bodies currently bound to the requested skeleton bone.
     /// </summary>
     public IReadOnlyList<PhysicsBody3D> GetGeneratedProxyBodiesForBone(StringName boneName)
@@ -225,15 +215,8 @@ public partial class DynamicPhysicalRig : Node
     public override void _Ready()
     {
         base._Ready();
-        SetPhysicsProcess(_proxyBindings.Count > 0);
+        SetPhysicsProcess(false);
         QueueRigRefresh();
-    }
-
-    /// <inheritdoc />
-    public override void _PhysicsProcess(double delta)
-    {
-        base._PhysicsProcess(delta);
-        SyncProxyBodiesToPhysics();
     }
 
     /// <summary>
@@ -309,22 +292,19 @@ public partial class DynamicPhysicalRig : Node
                 FingerProxyGeometry fingerGeometry = isFingerBone
                     ? BuildFingerProxyGeometry(skeleton, targetBoneIndex)
                     : default;
-                Transform3D localProxyTransform = isFingerBone ? fingerGeometry.LocalTransform : sourceShapeDescriptor.LocalTransform;
 
                 PhysicalBodyPart3D proxyBody = CreateProxyBody(
                     targetBoneName,
                     targetBoneIndex,
-                    sourceShapeDescriptor.SourceIdentifier,
-                    localProxyTransform);
+                    sourceShapeDescriptor.SourceIdentifier);
                 proxyBody.CollisionLayer = ProxyCollisionLayer;
                 proxyBody.CollisionMask = ProxyCollisionMask;
                 TagGeneratedNode(proxyBody, sourceShapeDescriptor.SourceIdentifier);
                 attachment.AddChild(proxyBody);
                 AssignOwnerIfNeeded(proxyBody, persistedOwner);
-                proxyBody.Transform = localProxyTransform;
-                proxyBody.TopLevel = true;
+                proxyBody.Transform = Transform3D.Identity;
+                proxyBody.TopLevel = false;
                 ConnectGeneratedBodyPartPhysicalInteractionSignal(proxyBody);
-                _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, localProxyTransform));
 
                 CollisionShape3D proxyShape = isFingerBone
                     ? CreateFingerProxyShape(fingerGeometry)
@@ -380,8 +360,7 @@ public partial class DynamicPhysicalRig : Node
                     $"{nameof(DynamicPhysicalRig)} '{Name}' could not generate any proxy bodies from '{sourcePath}'.");
             }
 
-            SyncProxyBodiesToPhysics();
-            SetPhysicsProcess(_proxyBindings.Count > 0);
+            SetPhysicsProcess(false);
         }
         catch
         {
@@ -434,38 +413,9 @@ public partial class DynamicPhysicalRig : Node
         GeneratedFingerProxyCount = 0;
         FingerSideExceptionPairCount = 0;
         SkippedSourceShapeCount = 0;
-        PhysicsProxySyncTickCount = 0;
         _generatedBodiesByBoneName.Clear();
         _generatedFingerBodiesBySide.Clear();
-        _proxyBindings.Clear();
     }
-
-    /// <summary>
-    /// Manually synchronises generated top-level proxy bodies to their generated bone attachments.
-    /// </summary>
-    public void SyncProxyBodiesToPhysics()
-    {
-        if (_proxyBindings.Count == 0)
-        {
-            return;
-        }
-
-        foreach (ProxyBinding binding in _proxyBindings)
-        {
-            Transform3D globalProxyTransform = ResolveNodeGlobalTransform(binding.Attachment) * binding.LocalProxyTransform;
-            binding.ProxyBody.GlobalTransform = globalProxyTransform;
-            binding.ProxyBody.Transform = globalProxyTransform;
-            if (binding.ProxyBody.IsInsideTree())
-            {
-                binding.ProxyBody.ForceUpdateTransform();
-            }
-        }
-
-        PhysicsProxySyncTickCount += 1;
-    }
-
-    private static Transform3D ResolveNodeGlobalTransform(Node3D node)
-        => node.GetParent() is Node3D parent ? parent.GlobalTransform * node.Transform : node.GlobalTransform;
 
     private void AddGeneratedBodyForBone(StringName boneName, PhysicsBody3D body)
     {
@@ -518,13 +468,12 @@ public partial class DynamicPhysicalRig : Node
     private PhysicalBodyPart3D CreateProxyBody(
         string boneName,
         int boneIndex,
-        string sourceShapeId,
-        Transform3D localProxyTransform)
+        string sourceShapeId)
     {
         PhysicalBodyPart3D proxyBody = new()
         {
             Name = "ProxyBody",
-            Transform = localProxyTransform,
+            Transform = Transform3D.Identity,
             SyncToPhysics = false,
             BoneName = boneName,
             BoneIndex = boneIndex,
@@ -561,7 +510,7 @@ public partial class DynamicPhysicalRig : Node
             Name = sourceShapeDescriptor.SourceShapeName,
             Shape = sourceShapeDescriptor.Shape,
             Disabled = sourceShapeDescriptor.Disabled,
-            Transform = Transform3D.Identity,
+            Transform = sourceShapeDescriptor.LocalTransform,
         };
 
         return proxyShape;
@@ -577,7 +526,7 @@ public partial class DynamicPhysicalRig : Node
                 Height = geometry.Height,
             },
             Disabled = false,
-            Transform = Transform3D.Identity,
+            Transform = geometry.LocalTransform,
         };
 
     private void GenerateFingerProxyBodies(
@@ -603,17 +552,15 @@ public partial class DynamicPhysicalRig : Node
             PhysicalBodyPart3D proxyBody = CreateProxyBody(
                 boneName,
                 boneIndex,
-                $"GeneratedFinger:{boneName}",
-                geometry.LocalTransform);
+                $"GeneratedFinger:{boneName}");
             proxyBody.CollisionLayer = ProxyCollisionLayer;
             proxyBody.CollisionMask = ProxyCollisionMask;
             TagGeneratedNode(proxyBody, $"GeneratedFinger:{boneName}");
             attachment.AddChild(proxyBody);
             AssignOwnerIfNeeded(proxyBody, persistedOwner);
-            proxyBody.Transform = geometry.LocalTransform;
-            proxyBody.TopLevel = true;
+            proxyBody.Transform = Transform3D.Identity;
+            proxyBody.TopLevel = false;
             ConnectGeneratedBodyPartPhysicalInteractionSignal(proxyBody);
-            _proxyBindings.Add(new ProxyBinding(attachment, proxyBody, geometry.LocalTransform));
 
             CollisionShape3D proxyShape = CreateFingerProxyShape(geometry);
             TagGeneratedNode(proxyShape, $"GeneratedFingerShape:{boneName}");
@@ -990,11 +937,6 @@ public partial class DynamicPhysicalRig : Node
         source.AddCollisionExceptionWith(other);
         other.AddCollisionExceptionWith(source);
     }
-
-    private readonly record struct ProxyBinding(
-        BoneAttachment3D Attachment,
-        AnimatableBody3D ProxyBody,
-        Transform3D LocalProxyTransform);
 
     private readonly record struct FingerProxyGeometry(
         Transform3D LocalTransform,

@@ -42,8 +42,8 @@ public sealed partial class HandGrabAssetIntegrationTests
 
         try
         {
-            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female_export/GeneralSkeleton/RightHand"));
-            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female_export/GeneralSkeleton/LeftHand"));
+            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/GeneralSkeleton/RightHand"));
+            Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/GeneralSkeleton/LeftHand"));
         }
         finally
         {

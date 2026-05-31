@@ -42,6 +42,7 @@ test-framework/
 ├── test/                         # Unit tests for the test framework
 ├── AlleyCat.TestFramework.csproj
 └── AlleyCat.TestFramework.Tests.csproj
+tools/                            # Blender and documentation generation utilities
 AlleyCat.sln                      # Root .NET solution wiring game and test projects
 AGENTS.md                         # Agent operating rules and project-specific instructions
 README.md                         # Repository overview and developer onboarding
