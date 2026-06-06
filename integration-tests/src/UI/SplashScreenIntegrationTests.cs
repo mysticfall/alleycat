@@ -183,7 +183,10 @@ public sealed class SplashScreenIntegrationTests : IAsyncLifetime
         splashScreen.Set(nameof(SplashScreen.FadeOutDelaySeconds), fixture.FadeOutDelaySeconds);
 
         sceneTree.Root.AddChild(splashScreen);
-        await WaitForFramesAsync(sceneTree, 2);
+        if (!splashScreen.IsNodeReady())
+        {
+            _ = await sceneTree.ToSignal(splashScreen, Node.SignalName.Ready);
+        }
 
         return splashScreen;
     }
