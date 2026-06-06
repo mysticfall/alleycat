@@ -79,12 +79,15 @@ using the `[Headless]` attribute.
 **CLI override:**
 - `--headless` — forces all tests to run in headless mode, overriding all attribute settings.
 
+Windowed mode is retained as the default because it mirrors editor/runtime rendering more closely. Headless mode is an
+explicit framework capability for tests whose contracts do not depend on a renderer.
+
 ## Supported CLI Options
 
 - `--test-class <Fully.Qualified.TypeName>` — narrows selection to tests on the exact type.
 - `--test-method <Fully.Qualified.TypeName.MethodName>` — narrows selection to one exact test method.
 - `--headless` — forces all tests to run in headless mode. Overrides per-test and per-class `HeadlessAttribute`
-  settings. Useful for CI environments.
+  settings. Intended for tests known to be safe without renderer-backed behaviour.
 
 **Precedence:** If both `--test-class` and `--test-method` are supplied, `--test-method` takes precedence.
 

@@ -199,23 +199,7 @@ Use short, descriptive group names that reflect the logical role of the properti
 - Add Godot-dependent integration tests under `integration-tests/src/`.
 - Use the `AlleyCat.IntegrationTests` namespace for integration test code.
 - Author integration tests as parameterless `[Fact]` methods so they are discovered reliably.
-
-Run the full integration suite:
-
-```bash
-dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj
-```
-
-Run a subset when iterating on a feature:
-
-```bash
-dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- --test-class Fully.Qualified.TypeName
-dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- --test-method Fully.Qualified.TypeName.MethodName
-```
-
-- If both filters are provided, `--test-method` takes precedence over `--test-class`.
-- Trait/category filters are not currently supported for integration tests.
-- Treat framework/runtime errors as distinct from assertion failures when triaging results.
+- Load the `godot-integration-testing` skill before running, triaging, or reporting integration test results.
 
 ## Pre-Handoff Formatting Check
 
