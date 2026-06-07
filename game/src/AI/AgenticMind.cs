@@ -1,0 +1,402 @@
+using System.ComponentModel;
+using AlleyCat.AI.Provider;
+using AlleyCat.AI.Tool;
+using AlleyCat.Body.Voice;
+using Godot;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using AgentObservation = AlleyCat.AI.Observation.Observation;
+using SpeechObservation = AlleyCat.AI.Observation.SpeechObservation;
+
+namespace AlleyCat.AI;
+
+/// <summary>
+/// Speech-driven NPC mind that batches observations and delegates responses to an LLM backend.
+/// </summary>
+[GlobalClass]
+public partial class AgenticMind : Mind
+{
+    private const string AlleyInstructions = """
+        You are Alley, a warm, observant person standing with the player in a VR room.
+        Reply naturally and briefly, as if speaking aloud in real time.
+        You must not answer with normal chat text. For every response, call the speak tool exactly once with the
+        words Alley should say aloud. Do not describe tool use and do not include stage directions.
+        """;
+
+    private readonly Lock _responseStateLock = new();
+    private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
+    private readonly Lock _deferredGodotActionsLock = new();
+    private readonly MindToolServiceProvider _toolServices;
+    private ResponseTurn? _activeTurn;
+    private ClientProvider? _clientProviderForAgent;
+    private ChatClientAgent? _agent;
+    private AgentSession? _session;
+    private bool _deferredGodotActionFlushQueued;
+    private bool _isResponding;
+
+    /// <summary>
+    /// Creates an AgenticMind with its Agent Framework tool invocation services.
+    /// </summary>
+    public AgenticMind()
+    {
+        _toolServices = new MindToolServiceProvider(new MindSpeechToolContext(this));
+    }
+
+    /// <summary>
+    /// Minimum time to keep player listening paused after Alley starts speaking.
+    /// </summary>
+    [ExportGroup("Response")]
+    [Export(PropertyHint.Range, "0,10,0.1")]
+    public float PostReplyListenCooldownSeconds { get; set; } = 1f;
+
+    /// <summary>
+    /// Backend factory used to create the chat client for Agent Framework turns.
+    /// </summary>
+    [ExportGroup("Backend")]
+    [Export]
+    public ClientProvider? ClientProvider { get; set; } = new OpenAIClientProvider();
+
+    /// <inheritdoc />
+    public override void ReceiveVoice(string speech, IVoice source)
+    {
+        if (!ShouldHandleVoice(speech, source) || IsResponding())
+        {
+            return;
+        }
+
+        _ = Observe(new SpeechObservation(source.Id, speech.Trim()));
+    }
+
+    private bool IsResponding()
+    {
+        lock (_responseStateLock)
+        {
+            return _isResponding;
+        }
+    }
+
+    private ResponseTurn? TryBeginResponse()
+    {
+        lock (_responseStateLock)
+        {
+            if (_isResponding)
+            {
+                return null;
+            }
+
+            _isResponding = true;
+            _activeTurn = new ResponseTurn();
+            return _activeTurn;
+        }
+    }
+
+    private void EndResponse(ResponseTurn turn)
+    {
+        lock (_responseStateLock)
+        {
+            if (ReferenceEquals(_activeTurn, turn))
+            {
+                _activeTurn = null;
+            }
+
+            _isResponding = false;
+        }
+    }
+
+    private async Task RespondAsync(IReadOnlyList<AgentObservation> observations, ResponseTurn turn)
+    {
+        try
+        {
+            if (Voice is null)
+            {
+                GD.PushError("AgenticMind requires a configured NPC Voice.");
+                return;
+            }
+
+            if (ClientProvider is null)
+            {
+                GD.PushError("AgenticMind requires a configured ClientProvider.");
+                return;
+            }
+
+            await RunAgentTurnAsync(observations, turn.CancellationTokenSource.Token);
+        }
+        catch (OperationCanceledException) when (turn.HasSpoken)
+        {
+            // The turn is cancelled after the first speak tool call so the prototype cannot keep talking to itself.
+        }
+        catch (Exception ex)
+        {
+            GD.PushError(ex.ToString());
+        }
+        finally
+        {
+            await WaitForReplyCooldownAsync(turn);
+            EndResponse(turn);
+        }
+    }
+
+    private async Task<string> SpeakFromToolAsync(string speech, CancellationToken cancellationToken)
+    {
+        ResponseTurn? turn = GetActiveTurn();
+        if (turn is null)
+        {
+            return "No active player turn.";
+        }
+
+        if (!turn.TrySetSpokenSpeech(speech))
+        {
+            return "Already spoken. Wait for the next player speech before replying again.";
+        }
+
+        await SpeakAsync(speech, cancellationToken);
+        turn.CancellationTokenSource.Cancel();
+
+        return "Spoken. End this turn and wait for the next player speech.";
+    }
+
+    private ResponseTurn? GetActiveTurn()
+    {
+        lock (_responseStateLock)
+        {
+            return _activeTurn;
+        }
+    }
+
+    private Task SpeakAsync(string speech, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(speech))
+        {
+            return Task.CompletedTask;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return DispatchDeferredGodotActionAsync(() => Voice?.Speak(speech.Trim()));
+    }
+
+    private async Task WaitForReplyCooldownAsync(ResponseTurn turn)
+    {
+        if (!turn.HasSpoken)
+        {
+            return;
+        }
+
+        double cooldownSeconds = Math.Max(PostReplyListenCooldownSeconds, EstimateSpeechDurationSeconds(turn.SpokenSpeech));
+        if (cooldownSeconds <= 0d)
+        {
+            return;
+        }
+
+        await Task.Delay(TimeSpan.FromSeconds(cooldownSeconds));
+    }
+
+    private static double EstimateSpeechDurationSeconds(string speech)
+    {
+        int characterCount = speech.Count(character => !char.IsWhiteSpace(character));
+        return characterCount / 12d;
+    }
+
+    private AgentDefinition CreateAgentDefinition()
+    {
+        return new AgentDefinition(
+            AlleyInstructions,
+            "Alley",
+            "Prototype NPC mind for in-world speech responses.",
+            [AgentTool.Create(SpeechTool.Speak, _toolServices, "speak", "Speak the supplied text aloud to the player.")]);
+    }
+
+    private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
+    {
+        ChatClientAgent agent = EnsureAgent();
+        _session ??= await agent.CreateSessionAsync();
+
+        _ = await agent.RunAsync(RenderObservationSummary(observations), _session, cancellationToken: cancellationToken);
+    }
+
+    private ChatClientAgent EnsureAgent()
+    {
+        if (_agent is not null && ReferenceEquals(_clientProviderForAgent, ClientProvider))
+        {
+            return _agent;
+        }
+
+        if (ClientProvider is null)
+        {
+            throw new InvalidOperationException("AgenticMind requires a configured ClientProvider.");
+        }
+
+        AgentDefinition definition = CreateAgentDefinition();
+        _session = null;
+        _clientProviderForAgent = ClientProvider;
+        _agent = ClientProvider.CreateChatClient().AsAIAgent(
+            instructions: definition.Instructions,
+            name: definition.Name,
+            description: definition.Description,
+            tools: definition.Tools);
+
+        return _agent;
+    }
+
+    private static string RenderObservationSummary(IReadOnlyList<AgentObservation> observations)
+    {
+        if (observations.Count == 0)
+        {
+            return "No new observations.";
+        }
+
+        List<string> lines = new(observations.Count + 1)
+        {
+            "New observations since the last turn:",
+        };
+
+        foreach (AgentObservation observation in observations)
+        {
+            lines.Add($"- {observation.ToPromptString()}");
+        }
+
+        return string.Join(System.Environment.NewLine, lines);
+    }
+
+    /// <inheritdoc />
+    protected override async Task ProcessObservationsAsync(
+        IReadOnlyList<AgentObservation> observations,
+        CancellationToken cancellationToken)
+    {
+        if (observations.Count == 0)
+        {
+            return;
+        }
+
+        ResponseTurn? turn = TryBeginResponse();
+        if (turn is null)
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await RespondAsync(observations, turn);
+    }
+
+    private Task DispatchDeferredGodotActionAsync(Action action)
+    {
+        TaskCompletionSource completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        lock (_deferredGodotActionsLock)
+        {
+            _deferredGodotActions.Enqueue(new DeferredGodotAction(action, completionSource));
+
+            if (!_deferredGodotActionFlushQueued)
+            {
+                _deferredGodotActionFlushQueued = true;
+                _ = CallDeferred(nameof(FlushDeferredGodotActions));
+            }
+        }
+
+        return completionSource.Task;
+    }
+
+    private void FlushDeferredGodotActions()
+    {
+        DeferredGodotAction[] actions;
+
+        lock (_deferredGodotActionsLock)
+        {
+            actions = [.. _deferredGodotActions];
+            _deferredGodotActions.Clear();
+            _deferredGodotActionFlushQueued = false;
+        }
+
+        foreach (DeferredGodotAction action in actions)
+        {
+            try
+            {
+                action.Action();
+                _ = action.CompletionSource.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                _ = action.CompletionSource.TrySetException(ex);
+            }
+        }
+
+        lock (_deferredGodotActionsLock)
+        {
+            if (_deferredGodotActions.Count > 0 && !_deferredGodotActionFlushQueued)
+            {
+                _deferredGodotActionFlushQueued = true;
+                _ = CallDeferred(nameof(FlushDeferredGodotActions));
+            }
+        }
+    }
+
+    private sealed record AgentDefinition(
+        string Instructions,
+        string Name,
+        string Description,
+        IList<AITool> Tools);
+
+    private sealed class DeferredGodotAction(Action action, TaskCompletionSource completionSource)
+    {
+        public Action Action { get; } = action;
+
+        public TaskCompletionSource CompletionSource { get; } = completionSource;
+    }
+
+    private sealed class ResponseTurn
+    {
+        private readonly Lock _lock = new();
+
+        public CancellationTokenSource CancellationTokenSource { get; } = new();
+
+        public bool HasSpoken
+        {
+            get; private set;
+        }
+
+        public string SpokenSpeech { get; private set; } = string.Empty;
+
+        public bool TrySetSpokenSpeech(string speech)
+        {
+            lock (_lock)
+            {
+                if (HasSpoken)
+                {
+                    return false;
+                }
+
+                SpokenSpeech = speech.Trim();
+                HasSpoken = true;
+                return true;
+            }
+        }
+    }
+
+    private interface IMindSpeechToolContext
+    {
+        Task<string> SpeakAsync(string speech, CancellationToken cancellationToken);
+    }
+
+    private sealed class MindSpeechToolContext(AgenticMind mind) : IMindSpeechToolContext
+    {
+        public Task<string> SpeakAsync(string speech, CancellationToken cancellationToken)
+            => mind.SpeakFromToolAsync(speech, cancellationToken);
+    }
+
+    private sealed class MindToolServiceProvider(IMindSpeechToolContext speechToolContext) : IServiceProvider
+    {
+        public object? GetService(Type serviceType)
+            => serviceType == typeof(IMindSpeechToolContext) ? speechToolContext : null;
+    }
+
+    private static class SpeechTool
+    {
+        [Description("Speak a natural-language reply to the player.")]
+        public static Task<string> Speak(
+            [Description("Exact words Alley should say aloud.")] string speech,
+            IServiceProvider services,
+            CancellationToken cancellationToken)
+            => services.GetService(typeof(IMindSpeechToolContext)) is IMindSpeechToolContext context
+                ? context.SpeakAsync(speech, cancellationToken)
+                : Task.FromResult("Unable to speak because AgenticMind speech context is unavailable.");
+    }
+}

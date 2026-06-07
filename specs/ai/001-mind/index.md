@@ -7,7 +7,7 @@ title: Mind Component
 
 ## Requirement
 
-The system must provide a Mind component that lets an NPC hear player speech and respond through the NPC voice.
+The system must provide a Mind component family that lets an NPC hear player speech and respond through the NPC voice.
 
 ## Goal
 
@@ -24,25 +24,42 @@ reply aloud as an embodied character.
 
 ## Technical Requirements
 
-1. The Mind component must implement the voice-listener contract and listen only for the configured player voice ID.
+1. The abstract Mind base must implement the voice-listener contract and listen only for the configured player voice ID.
 2. The initial player voice ID must default to `player`.
-3. The Mind component must call an exported NPC voice reference to speak responses.
-4. Agent backend creation must be delegated to an exported, replaceable Godot Resource provider.
-5. The Mind component must own Microsoft Agent Framework turn execution, session state, tools, and persona setup.
-6. The initial provider must supply an OpenAI-compatible chat client to the Agent Framework adapter.
-7. The OpenAI-compatible provider must expose an editor-selectable client kind for chat-completions or responses
-   adapters.
-8. The Mind component must hard-code the Alley persona and instruct the agent to use a `speak` tool for all replies.
-9. The `speak` tool must invoke the Mind component's configured voice output rather than returning player-facing text.
-10. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
-11. Player listening must remain paused for a short cooldown after the NPC starts speaking.
-12. OpenAI-compatible backend settings must load from the merged configuration API under an `[AI]` section.
-13. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
+3. Mind must own generic observation queueing, cumulative weight triggering, maximum-wait scheduling, and processing
+   guards for derived minds.
+4. Queued observations must wait no more than 10 seconds by default before Mind processing.
+5. Disabling Mind must stop observation scheduling immediately while preserving pending observations for later
+   re-enable.
+6. The concrete AgenticMind component must call an exported NPC voice reference to speak responses.
+7. Chat-client backend creation must be delegated to an exported, replaceable Godot Resource client provider.
+8. AgenticMind must own persona, tool definition, client-provider wiring, Agent Framework turn execution, and session
+   state caching.
+9. The initial client provider must supply an OpenAI-compatible chat client to the Agent Framework adapter.
+10. The OpenAI-compatible provider must expose an editor-selectable client kind for chat-completions or responses
+    adapters.
+11. AgenticMind must hard-code the Alley persona and define a `speak` tool for all replies.
+12. The `speak` tool must invoke AgenticMind's configured voice output rather than returning player-facing text.
+13. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
+14. Player listening must remain paused for a short cooldown after the NPC starts speaking.
+15. OpenAI-compatible backend settings must load from the merged configuration API under an `[AI]` section.
+16. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
+    checks.
+17. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
+
+### AI-002 Runtime Sync Note
+
+The AgenticMind speech path now fulfils the AI-001 contract through the AI-002 runtime: player voice input is queued as
+a speech observation by the base Mind cycle, AgenticMind executes the agent turn, and backend `speak` tool calls receive
+execution services through `IServiceProvider` at invocation time. This preserves the one-spoken-reply turn boundary
+while keeping backend failures contained to logged errors.
 
 ## In Scope
 
-- Mind node component for player-speech-triggered NPC responses.
-- Replaceable Agent Framework backend provider Resource.
+- Abstract Mind base node for mind-like voice listeners and generic observation-cycle scheduling.
+- AgenticMind node component for player-speech-triggered NPC responses.
+- AgenticMind-owned persona, tool definition, client-provider wiring, and Agent Framework turn orchestration.
+- Replaceable Agent Framework client provider Resource for chat-client creation.
 - Microsoft Agent Framework prototype backend.
 - OpenAI-compatible chat configuration.
 - Editor-selectable OpenAI chat-completions and responses client adapters.
@@ -58,23 +75,28 @@ reply aloud as an embodied character.
 
 ## Acceptance Criteria
 
-1. A Mind node in the mirror room receives speech from a voice whose ID is `player`.
-2. Player speech is passed to a Microsoft Agent Framework agent created from a replaceable provider Resource.
-3. The Mind component constructs a hard-coded Alley persona and `speak` tool for the agent.
-4. The OpenAI-compatible provider supplies the chat client used by the default Agent Framework adapter.
-5. The provider loads `[AI]` Host, optional ApiKey, Model, and Timeout settings through the merged config API.
-6. The provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
-7. The Mind ignores further `speak` tool calls and player voice input until the current reply turn completes.
-8. Missing voice/backend configuration and backend failures are logged without crashing the scene.
-9. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
+1. An AgenticMind node in the mirror room receives speech from a voice whose ID is `player`.
+2. Player speech is queued as an observation by Mind and orchestrated by AgenticMind into an Agent Framework turn.
+3. AgenticMind constructs a hard-coded Alley persona and `speak` tool definition for the agent turn.
+4. The OpenAI-compatible client provider supplies the chat client used by the default Agent Framework adapter.
+5. Agent Framework turn execution and session state caching are owned by `AgenticMind`.
+6. The client provider loads `[AI]` Host, optional ApiKey, Model, and Timeout settings through the merged config API.
+7. The client provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
+8. AgenticMind ignores further `speak` tool calls and player voice input until the current reply turn completes.
+9. Observation prompt formatting is verified through the observation contract without concrete-type switches in
+   AgenticMind or provider code.
+10. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
+11. Missing voice/backend configuration and backend failures are logged without crashing the scene.
+12. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
 
 ## References
 
 ### Implementation
 
 - game/src/AI/Mind.cs
-- game/src/AI/MindAgentProvider.cs
-- game/src/AI/OpenAIMindAgentProvider.cs
+- game/src/AI/AgenticMind.cs
+- game/src/AI/Provider/ClientProvider.cs
+- game/src/AI/Provider/OpenAIClientProvider.cs
 - game/assets/testing/mirror_room/mirror_room.tscn
 - game/AlleyCat.cfg
 

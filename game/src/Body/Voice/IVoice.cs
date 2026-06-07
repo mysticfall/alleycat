@@ -9,6 +9,14 @@ namespace AlleyCat.Body.Voice;
 public interface IVoice : IComponent
 {
     /// <summary>
+    /// Stable voice identifier used by characters and authoring tools.
+    /// </summary>
+    string Id
+    {
+        get;
+    }
+
+    /// <summary>
     /// World-space position where this voice originates.
     /// </summary>
     Vector3 Origin

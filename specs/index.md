@@ -15,6 +15,7 @@
 
 - [AI System](ai/index.md)
 - [AI-001: Mind Component](ai/001-mind/index.md)
+- [AI-002: Agent Runtime](ai/002-agent-runtime/index.md)
 
 ## TMPL
 

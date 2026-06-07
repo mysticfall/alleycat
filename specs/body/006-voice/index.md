@@ -32,7 +32,8 @@ the real-world expectation that a voice belongs to a speaker and originates from
 
 1. An abstract `[GlobalClass]` `Voice` class must be defined as a `Node3D` subclass in the
    `AlleyCat.Body.Voice` namespace at `@game/src/Body/Voice/Voice.cs`.
-2. `IVoice` must define `Vector3 Origin { get; }` and `void Speak(string speech)`.
+2. `IVoice` must define stable identity, location, and output capability through `string Id { get; }`,
+   `Vector3 Origin { get; }`, and `void Speak(string speech)`.
 3. `Voice` must implement `IVoice`, expose `abstract void Speak(string speech)`, and resolve `Origin` from its
    world-space `GlobalPosition`.
 4. `Voice` must expose exported `Id` and `Enabled` properties.
@@ -41,8 +42,8 @@ the real-world expectation that a voice belongs to a speaker and originates from
 7. The post-generation hook must query nodes in `IVoiceListener.GroupName`, filter `IVoiceListener` implementations,
    and invoke them with the speech and source `IVoice`.
 8. `IVoiceListener.GroupName` must be the global Godot listener group constant `"voice_listeners"`.
-9. `Voice` may expose protected helper behaviour for applying `Enabled` before the post-generation hook, but no helper
-   or state property may be added to `IVoice`.
+9. `Voice` may expose protected helper behaviour for applying `Enabled` before the post-generation hook, but runtime
+   control state such as `Enabled` must remain on `Voice` rather than the `IVoice` capability contract.
 10. `IHasVoice` must follow the component-holder trait pattern and expose `TryGetVoice(out IVoice? voice)` and
     `RequireVoice()` helpers over `IComponentHolder`.
 11. The concrete `AIVoice` implementation must:
@@ -69,7 +70,7 @@ the real-world expectation that a voice belongs to a speaker and originates from
 ## In Scope
 
 - Abstract `Voice` class definition with `Id`, `Enabled`, `Speak(string speech)`, and post-generation hook contracts.
-- `IVoice` as the voice capability interface with `Origin` and `Speak(string speech)`.
+- `IVoice` as the voice capability interface with `Id`, `Origin`, and `Speak(string speech)`.
 - `IHasVoice` as the component-holder trait for resolving a composed voice capability.
 - Concrete `AIVoice` implementation coordinating `SpeechGenerator` and `LipSyncPlayer`.
 - Concrete `PlayerVoice` implementation coordinating `Transcriber` completion with inherited voice output.
@@ -108,6 +109,7 @@ the real-world expectation that a voice belongs to a speaker and originates from
 
 | Member | Type | Description |
 |--------|------|-------------|
+| `IVoice.Id` | `string` | Stable identifier used to attribute generated voice events to a speaker. |
 | `IVoice.Origin` | `Vector3` | World-space position where the voice originates. |
 | `IVoice.Speak(string speech)` | `void` | Initiates speech output for the supplied speech text. |
 | `IVoiceListener.GroupName` | `string` | Global Godot group constant: `"voice_listeners"`. |
@@ -171,7 +173,7 @@ The `AIVoice` implementation must ensure audio passed to `LipSyncPlayer.Play(Aud
 
 1. The spec defines both user-visible speech output with lip-sync and technical implementation contracts.
 2. `Voice` is an abstract `[GlobalClass] Node3D` with exported `Id` and `Enabled` properties.
-3. `IVoice` contains `Vector3 Origin { get; }` and `void Speak(string speech)`.
+3. `IVoice` contains `string Id { get; }`, `Vector3 Origin { get; }`, and `void Speak(string speech)`.
 4. `IHasVoice` exposes component-holder helpers for resolving a single `IVoice`.
 5. `IVoiceListener` defines the `voice_listeners` group constant and receives speech with the source `IVoice`.
 6. `AIVoice` invokes the inherited post-generation hook only after successful asynchronous generation, conversion, and

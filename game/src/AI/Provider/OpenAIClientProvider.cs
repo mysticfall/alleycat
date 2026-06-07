@@ -7,12 +7,12 @@ using OpenAI;
 using OpenAI.Chat;
 using OpenAI.Responses;
 
-namespace AlleyCat.AI;
+namespace AlleyCat.AI.Provider;
 
 /// <summary>
-/// OpenAI client adapter used by the Mind provider.
+/// OpenAI client adapter used by the Agent Framework runtime.
 /// </summary>
-public enum OpenAIMindChatClientKind
+public enum OpenAIChatClientKind
 {
     /// <summary>
     /// Use the OpenAI chat-completions client adapter.
@@ -26,17 +26,17 @@ public enum OpenAIMindChatClientKind
 }
 
 /// <summary>
-/// OpenAI-compatible chat-client provider for the prototype Mind component.
+/// OpenAI-compatible chat-client provider for Agent Framework turn execution.
 /// </summary>
 [GlobalClass]
-public partial class OpenAIMindAgentProvider : MindAgentProvider
+public partial class OpenAIClientProvider : ClientProvider
 {
     private const string ConfigSection = "AI";
     private const string DefaultConfigPath = ConfigProvider.DefaultBaseConfigPath;
     private const string DefaultModel = "gpt-4o-mini";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
 
-    private OpenAIMindAgentProviderSettings? _settings;
+    private OpenAIClientProviderSettings? _settings;
 
     /// <summary>
     /// Config file used to resolve OpenAI-compatible AI settings.
@@ -48,29 +48,29 @@ public partial class OpenAIMindAgentProvider : MindAgentProvider
     /// OpenAI client adapter used to expose the backend as an <see cref="IChatClient" />.
     /// </summary>
     [Export]
-    public OpenAIMindChatClientKind ChatClientKind { get; set; } = OpenAIMindChatClientKind.ChatCompletions;
+    public OpenAIChatClientKind ChatClientKind { get; set; } = OpenAIChatClientKind.ChatCompletions;
 
     /// <inheritdoc />
-    protected override IChatClient CreateChatClient()
+    public override IChatClient CreateChatClient()
     {
-        OpenAIMindAgentProviderSettings settings = _settings ??= OpenAIMindAgentProviderSettings.Load(ConfigPath);
+        OpenAIClientProviderSettings settings = _settings ??= OpenAIClientProviderSettings.Load(ConfigPath);
         return ChatClientKind switch
         {
-            OpenAIMindChatClientKind.ChatCompletions => settings.CreateChatClient().AsIChatClient(),
-            OpenAIMindChatClientKind.Responses => CreateResponsesChatClient(settings),
+            OpenAIChatClientKind.ChatCompletions => settings.CreateChatClient().AsIChatClient(),
+            OpenAIChatClientKind.Responses => CreateResponsesChatClient(settings),
             _ => throw new InvalidOperationException($"Unsupported OpenAI chat client kind '{ChatClientKind}'."),
         };
     }
 
 #pragma warning disable OPENAI001 // The OpenAI Responses APIs are experimental in the SDK.
-    private static IChatClient CreateResponsesChatClient(OpenAIMindAgentProviderSettings settings)
+    private static IChatClient CreateResponsesChatClient(OpenAIClientProviderSettings settings)
     {
         ResponsesClient responsesClient = settings.CreateOpenAIClient().GetResponsesClient();
         return responsesClient.AsIChatClient(settings.Model);
     }
 #pragma warning restore OPENAI001
 
-    internal sealed record OpenAIMindAgentProviderSettings(
+    internal sealed record OpenAIClientProviderSettings(
         string Host,
         string? ApiKey,
         string Model,
@@ -91,7 +91,7 @@ public partial class OpenAIMindAgentProvider : MindAgentProvider
             if (string.IsNullOrWhiteSpace(endpointUrl))
             {
                 throw new InvalidOperationException(
-                    $"Missing '{ConfigSection}/Host' in OpenAI Mind config '{ConfigPathDescription}'.");
+                    $"Missing '{ConfigSection}/Host' in OpenAI client config '{ConfigPathDescription}'.");
             }
 
             if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out Uri? endpointUri))
@@ -126,18 +126,18 @@ public partial class OpenAIMindAgentProvider : MindAgentProvider
 
         private string ConfigPathDescription { get; init; } = DefaultConfigPath;
 
-        public static OpenAIMindAgentProviderSettings Load(string configPath)
+        public static OpenAIClientProviderSettings Load(string configPath)
             => Load(configPath, () => ConfigProvider.LoadMerged(), ConfigProvider.Load);
 
-        internal static OpenAIMindAgentProviderSettings Load(
+        internal static OpenAIClientProviderSettings Load(
             string configPath,
             Func<ConfigProvider> mergedConfigLoader,
             Func<string, ConfigProvider> singleConfigLoader)
             => Load(LoadConfigProvider(configPath, mergedConfigLoader, singleConfigLoader), configPath);
 
-        internal static OpenAIMindAgentProviderSettings Load(ConfigProvider configProvider, string configPathDescription)
+        internal static OpenAIClientProviderSettings Load(ConfigProvider configProvider, string configPathDescription)
         {
-            return new OpenAIMindAgentProviderSettings(
+            return new OpenAIClientProviderSettings(
                 GetString(configProvider, nameof(Host)),
                 GetOptionalString(configProvider, nameof(ApiKey)),
                 GetOptionalString(configProvider, nameof(Model)) ?? DefaultModel,
