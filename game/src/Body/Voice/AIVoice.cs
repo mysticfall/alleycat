@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text;
+using AlleyCat.Diagnostics;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using Godot;
@@ -58,8 +60,12 @@ public partial class AIVoice : Voice
             return;
         }
 
+        Stopwatch totalStopwatch = AIPipelineDebugLog.StartTimer();
+
         try
         {
+            AIPipelineDebugLog.Stage("TTS request received", $"{speech.Trim().Length} chars");
+
             if (SpeechGenerator is null)
             {
                 await FailSpeechAsync("AIVoice requires a configured SpeechGenerator.");
@@ -72,21 +78,33 @@ public partial class AIVoice : Voice
                 return;
             }
 
+            Stopwatch generationStopwatch = AIPipelineDebugLog.StartTimer();
             byte[] generatedAudio = await GenerateSpeechAudioAsync(speech);
+            AIPipelineDebugLog.Latency("TTS audio generated in", generationStopwatch, $"{generatedAudio.Length} bytes");
+
+            Stopwatch parseStopwatch = AIPipelineDebugLog.StartTimer();
             AudioStreamWav speechStream = CreatePlayableSpeech(generatedAudio);
+            AIPipelineDebugLog.Latency("TTS audio parsed in", parseStopwatch, $"{speechStream.Data.Length} PCM bytes");
+
+            Stopwatch lipSyncStopwatch = AIPipelineDebugLog.StartTimer();
             LipSyncPlayer.PreparedPlayback preparedPlayback = await PrepareGeneratedSpeechAsync(speechStream);
+            AIPipelineDebugLog.Latency("TTS lip-sync prepared in", lipSyncStopwatch, $"{preparedPlayback.Frames.Length} frames");
+
             await DispatchDeferredGodotActionAsync(() =>
             {
                 PlayGeneratedSpeech(preparedPlayback);
                 OnSpeechGenerated(speech);
             });
+            AIPipelineDebugLog.Latency("TTS playback started after", totalStopwatch);
         }
         catch (AudioConversionException ex)
         {
+            AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
             await FailSpeechAsync(AudioFormatIncompatibleMessage, $"Audio conversion failed: {ex.Message}");
         }
         catch (Exception ex)
         {
+            AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
             await FailSpeechAsync(ex.Message, ex.ToString());
         }
         finally

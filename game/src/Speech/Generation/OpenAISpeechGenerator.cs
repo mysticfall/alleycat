@@ -1,6 +1,8 @@
 using System.ClientModel;
+using System.Diagnostics;
 using System.Globalization;
 using AlleyCat.Core;
+using AlleyCat.Diagnostics;
 using AlleyCat.UI;
 using Godot;
 using OpenAI;
@@ -65,7 +67,9 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
         OpenAISpeechGeneratorSettings settings = _settings ?? OpenAISpeechGeneratorSettings.Load(ConfigPath);
         AudioClient client = settings.CreateAudioClient();
         SpeechGenerationOptions options = CreateSpeechGenerationOptions(settings, instruction);
+        Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
         BinaryData audio = await client.GenerateSpeechAsync(text, settings.GetVoice(VoiceOverride), options);
+        AIPipelineDebugLog.Latency("TTS backend returned in", backendStopwatch, $"model {settings.Model}");
         return audio.ToArray();
     }
 

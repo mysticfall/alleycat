@@ -1,7 +1,9 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using AlleyCat.AI.Provider;
 using AlleyCat.AI.Tool;
 using AlleyCat.Body.Voice;
+using AlleyCat.Diagnostics;
 using Godot;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -64,7 +66,9 @@ public partial class AgenticMind : Mind
             return;
         }
 
-        _ = Observe(new SpeechObservation(source.Id, speech.Trim()));
+        string trimmedSpeech = speech.Trim();
+        AIPipelineDebugLog.Stage("LLM observation received", $"{trimmedSpeech.Length} chars");
+        _ = Observe(new SpeechObservation(source.Id, trimmedSpeech));
     }
 
     private bool IsResponding()
@@ -149,7 +153,9 @@ public partial class AgenticMind : Mind
             return "Already spoken. Wait for the next player speech before replying again.";
         }
 
+        AIPipelineDebugLog.Latency("LLM first speak tool call after", turn.Stopwatch, $"{turn.SpokenSpeech.Length} chars");
         await SpeakAsync(speech, cancellationToken);
+        AIPipelineDebugLog.Latency("LLM speech dispatched after", turn.Stopwatch);
         turn.CancellationTokenSource.Cancel();
 
         return "Spoken. End this turn and wait for the next player speech.";
@@ -208,9 +214,22 @@ public partial class AgenticMind : Mind
     private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
     {
         ChatClientAgent agent = EnsureAgent();
-        _session ??= await agent.CreateSessionAsync();
+        if (_session is null)
+        {
+            Stopwatch sessionStopwatch = AIPipelineDebugLog.StartTimer();
+            _session = await agent.CreateSessionAsync();
+            AIPipelineDebugLog.Latency("LLM session created in", sessionStopwatch);
+        }
 
-        _ = await agent.RunAsync(RenderObservationSummary(observations), _session, cancellationToken: cancellationToken);
+        Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
+        try
+        {
+            _ = await agent.RunAsync(RenderObservationSummary(observations), _session, cancellationToken: cancellationToken);
+        }
+        finally
+        {
+            AIPipelineDebugLog.Latency("LLM turn returned in", runStopwatch, $"{observations.Count} observation(s)");
+        }
     }
 
     private ChatClientAgent EnsureAgent()
@@ -347,6 +366,8 @@ public partial class AgenticMind : Mind
         private readonly Lock _lock = new();
 
         public CancellationTokenSource CancellationTokenSource { get; } = new();
+
+        public Stopwatch Stopwatch { get; } = AIPipelineDebugLog.StartTimer();
 
         public bool HasSpoken
         {

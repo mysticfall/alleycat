@@ -1,7 +1,9 @@
 using System.ClientModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using AlleyCat.Core;
+using AlleyCat.Diagnostics;
 using AlleyCat.UI;
 using Godot;
 using OpenAI;
@@ -65,10 +67,15 @@ public partial class OpenAITranscriber : Transcriber
     {
         OpenAITranscriberSettings settings = _settings ?? OpenAITranscriberSettings.Load(ConfigPath);
 
+        Stopwatch preparationStopwatch = AIPipelineDebugLog.StartTimer();
         using MemoryStream wavStream = CreateWaveFileStream(audioStream);
         AudioClient client = settings.CreateAudioClient();
         AudioTranscriptionOptions options = CreateTranscriptionOptions(settings);
+        AIPipelineDebugLog.Latency("STT request prepared in", preparationStopwatch, $"model {settings.Model}");
+
+        Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
         AudioTranscription response = await client.TranscribeAudioAsync(wavStream, "alleycat-recording.wav", options);
+        AIPipelineDebugLog.Latency("STT backend returned in", backendStopwatch, $"model {settings.Model}");
         return GetTranscriptionTextOrThrow(response);
     }
 

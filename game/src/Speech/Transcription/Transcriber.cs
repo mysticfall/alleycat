@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using AlleyCat.Body;
+using AlleyCat.Diagnostics;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
@@ -24,6 +26,7 @@ public abstract partial class Transcriber : Node
     private bool _xrInitialised;
     private bool _isBound;
     private bool _deferredGodotActionFlushQueued;
+    private Stopwatch? _recordingStopwatch;
 
     /// <summary>
     /// Emitted when a transcription request completes successfully.
@@ -356,6 +359,8 @@ public abstract partial class Transcriber : Node
         microphonePlayer.Play();
         maxDurationTimer.Start();
         IsRecording = true;
+        _recordingStopwatch = AIPipelineDebugLog.StartTimer();
+        AIPipelineDebugLog.Stage("STT recording started");
         OnRecordingStarted();
     }
 
@@ -367,13 +372,20 @@ public abstract partial class Transcriber : Node
     private void StopRecordingInternal()
     {
         bool wasRecording = IsRecording;
+        Stopwatch? recordingStopwatch = _recordingStopwatch;
         _maxDurationTimer?.Stop();
         _microphonePlayer?.Stop();
         _recordEffect?.SetRecordingActive(false);
         IsRecording = false;
+        _recordingStopwatch = null;
 
         if (wasRecording)
         {
+            if (recordingStopwatch is not null)
+            {
+                AIPipelineDebugLog.Latency("STT recording stopped after", recordingStopwatch);
+            }
+
             OnRecordingStopped();
         }
     }
@@ -394,8 +406,12 @@ public abstract partial class Transcriber : Node
 
         StopRecordingInternal();
         AudioStreamWav recording = recordEffect.GetRecording();
+        AIPipelineDebugLog.Stage("STT recording captured", $"{GetRecordingByteCount(recording)} bytes");
         await InvokeTranscriptionAsync(recording);
     }
+
+    private static int GetRecordingByteCount(AudioStreamWav recording)
+        => recording?.Data?.Length ?? 0;
 
     private async Task InvokeTranscriptionAsync(AudioStreamWav recording)
     {
@@ -404,14 +420,18 @@ public abstract partial class Transcriber : Node
             return;
         }
 
+        Stopwatch stopwatch = AIPipelineDebugLog.StartTimer();
+
         try
         {
             IsTranscribing = true;
             string text = await Transcribe(recording);
+            AIPipelineDebugLog.Latency("STT completed in", stopwatch, $"{text.Length} chars");
             await DispatchGodotActionAsync(() => HandleTranscriptionSuccess(text));
         }
         catch (Exception ex)
         {
+            AIPipelineDebugLog.Latency("STT failed after", stopwatch);
             await DispatchGodotActionAsync(() => HandleTranscriptionFailure(ex));
         }
         finally
