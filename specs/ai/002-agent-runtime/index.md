@@ -8,7 +8,7 @@ title: Agent Runtime
 ## Requirement
 
 Refactor Mind into an observation-driven runtime slice: observation contracts, async batching loop with weighted
-triggering, and AgenticMind-owned Agent Framework tool invocation context for in-world actions.
+triggering, dynamic Agent Framework tool resources, and AgenticMind-owned invocation context for in-world actions.
 
 ## Goal
 
@@ -45,8 +45,12 @@ invocation context.
     - Speaking is exposed as an Agent Framework `speak` tool.
     - Visible mirror-room behaviour (player speech -> NPC speech) is maintained.
 5. Define concrete tool invocation context:
-    - Agent Framework tools receive per-Mind execution dependencies through `IServiceProvider` at invocation time.
-    - The initial `speak` tool uses the configured voice component through that context.
+    - AI tools are authored as top-level Godot `Resource` classes under `AlleyCat.AI.Tool` so scenes can configure
+      the current tool set without nested serialisation types.
+    - AgenticMind exports the active tool resources and supplies them through per-turn Agent Framework chat options
+      instead of registering static tools on agent construction.
+    - Agent Framework tools receive AgenticMind itself as the `IServiceProvider` execution context for the turn.
+    - The initial `speak` tool queries `IVoice` from that context and uses the configured voice component.
     - Future action tools must be creatable without adding a central action-layer switch.
 6. Maintain compatibility with existing Mind component contracts where applicable:
     - Voice-listener contract adapted to produce voice observations.
@@ -59,7 +63,7 @@ invocation context.
 - Main interaction workflow, with dual-track guidance/support noted only as a future contract.
 - Mind-owned asynchronous consciousness loop with observation-weighted triggering.
 - Migration path from AI-001: player speech → observation, speaking → Agent Framework tool.
-- Concrete `speak` tool invocation context using `IServiceProvider`.
+- Dynamic Godot Resource tool API, including the concrete `speak` tool invocation context using `IServiceProvider`.
 - Configuration contracts for maximum observation wait and observation weight threshold.
 - Preservation of mirror-room test scene behaviour.
 - Updated AI-001 AgenticMind component to emit observations, execute Agent Framework turns, and own session state;
@@ -89,6 +93,9 @@ invocation context.
     - Main interaction workflow established, without context/guidance placeholder APIs.
     - Mind-owned asynchronous consciousness loop contract with configurable maximum wait and weight-based triggering.
     - Agent Framework `speak` tool receives Mind execution services through `IServiceProvider` at invocation time.
+    - The `IServiceProvider` execution context is the calling AgenticMind and resolves the current turn's `IVoice`.
+    - Tool resources are selected through per-turn `ChatOptions`, so changes to `AgenticMind` tool configuration apply
+      to the next agent turn without rebuilding the agent/session.
     - Mirror-room behaviour preserved via observation/tool migration.
     - AI-001 AgenticMind component emits voice observations, owns Agent Framework session state, executes Agent
       Framework turns, and uses its client provider only to obtain an `IChatClient`.
@@ -107,10 +114,11 @@ invocation context.
 
 - game/src/AI/Observation/Observation.cs
 - game/src/AI/Tool/AgentTool.cs
+- game/src/AI/Tool/SpeechTool.cs
 - game/src/AI/Mind.cs (abstract base)
 - game/src/AI/AgenticMind.cs
 - game/src/AI/Provider/ClientProvider.cs
-- game/assets/testing/mirror_room/mirror_room.tscn (unchanged)
+- game/assets/testing/mirror_room/mirror_room.tscn
 
 ### Related Specs
 

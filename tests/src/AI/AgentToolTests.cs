@@ -17,7 +17,7 @@ public sealed class AgentToolTests
     {
         RecordingService service = new();
         RecordingServiceProvider services = new(service);
-        AIFunction function = AgentTool.Create(ToolHost.Speak, services, "speak", "Speak aloud.");
+        AIFunction function = AgentTool.CreateFunction(ToolHost.Speak, services, "speak", "Speak aloud.");
         AIFunctionArguments arguments = new()
         {
             ["speech"] = " Alley speaks. ",
@@ -27,6 +27,19 @@ public sealed class AgentToolTests
 
         Assert.Equal("Spoken.", result?.ToString());
         Assert.Equal("Alley speaks.", service.SpokenLine);
+    }
+
+    /// <summary>
+    /// Tool resources should pass authored metadata through to the generated Agent Framework function.
+    /// </summary>
+    [Fact]
+    public void CreateFunction_WithResourceMetadata_UsesConfiguredNameAndDescription()
+    {
+        RecordingServiceProvider services = new(new RecordingService());
+        AIFunction function = AgentTool.CreateFunction(ToolHost.Speak, services, "speak", "Speak aloud.");
+
+        Assert.Equal("speak", function.Name);
+        Assert.Equal("Speak aloud.", function.Description);
     }
 
     private sealed class RecordingService

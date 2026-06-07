@@ -1,16 +1,45 @@
+using Godot;
 using Microsoft.Extensions.AI;
 
 namespace AlleyCat.AI.Tool;
 
 /// <summary>
-/// Creates Agent Framework functions that receive the Mind's invocation services at tool-call time.
+/// Godot-authored AI tool resource that creates Agent Framework functions for an AgenticMind turn.
 /// </summary>
-public static class AgentTool
+[Tool]
+[GlobalClass]
+public abstract partial class AgentTool : Resource
 {
     /// <summary>
-    /// Creates an AI function whose invocation arguments resolve services from the supplied service provider.
+    /// Agent Framework function name exposed to the model.
     /// </summary>
-    public static AIFunction Create(
+    [Export]
+    public string ToolName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Agent Framework function description exposed to the model.
+    /// </summary>
+    [Export(PropertyHint.MultilineText)]
+    public string ToolDescription { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Creates an AI function whose invocation arguments resolve services from the supplied turn context.
+    /// </summary>
+    public AIFunction CreateFunction(IServiceProvider services)
+    {
+        Delegate method = CreateDelegate();
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(services);
+
+        string? name = string.IsNullOrWhiteSpace(ToolName) ? null : ToolName.Trim();
+        string? description = string.IsNullOrWhiteSpace(ToolDescription) ? null : ToolDescription.Trim();
+        return CreateFunction(method, services, name, description);
+    }
+
+    /// <summary>
+    /// Creates an AI function for non-Resource tests and helpers using the same invocation-service wiring.
+    /// </summary>
+    public static AIFunction CreateFunction(
         Delegate method,
         IServiceProvider services,
         string? name = null,
@@ -22,6 +51,11 @@ public static class AgentTool
         AIFunction inner = AIFunctionFactory.Create(method, name, description);
         return new ServiceProviderFunction(inner, services);
     }
+
+    /// <summary>
+    /// Creates the delegate used by Agent Framework for this tool.
+    /// </summary>
+    protected abstract Delegate CreateDelegate();
 
     private sealed class ServiceProviderFunction(AIFunction inner, IServiceProvider services) : DelegatingAIFunction(inner)
     {

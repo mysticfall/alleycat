@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using AlleyCat.AI.Prompting;
 using AlleyCat.AI.Provider;
@@ -18,12 +17,11 @@ namespace AlleyCat.AI;
 /// Speech-driven NPC mind that batches observations and delegates responses to an LLM backend.
 /// </summary>
 [GlobalClass]
-public partial class AgenticMind : Mind
+public partial class AgenticMind : Mind, IServiceProvider
 {
     private readonly Lock _responseStateLock = new();
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
-    private readonly MindToolServiceProvider _toolServices;
     private ResponseTurn? _activeTurn;
     private ClientProvider? _clientProviderForAgent;
     private PromptStack? _systemInstructionForAgent;
@@ -31,14 +29,6 @@ public partial class AgenticMind : Mind
     private AgentSession? _session;
     private bool _deferredGodotActionFlushQueued;
     private bool _isResponding;
-
-    /// <summary>
-    /// Creates an AgenticMind with its Agent Framework tool invocation services.
-    /// </summary>
-    public AgenticMind()
-    {
-        _toolServices = new MindToolServiceProvider(new MindSpeechToolContext(this));
-    }
 
     /// <summary>
     /// Minimum time to keep player listening paused after Alley starts speaking.
@@ -63,6 +53,13 @@ public partial class AgenticMind : Mind
     [ExportGroup("Backend")]
     [Export]
     public ClientProvider? ClientProvider { get; set; } = new OpenAIClientProvider();
+
+    /// <summary>
+    /// Editor-authored Agent Framework tools selected for each agent turn.
+    /// </summary>
+    [ExportGroup("Tools")]
+    [Export]
+    public Godot.Collections.Array<AgentTool> Tools { get; set; } = [];
 
     /// <inheritdoc />
     public override void ReceiveVoice(string speech, IVoice source)
@@ -152,25 +149,38 @@ public partial class AgenticMind : Mind
         }
     }
 
-    private async Task<string> SpeakFromToolAsync(string speech, CancellationToken cancellationToken)
+    private bool TrySpeakFromTool(string speech)
     {
         ResponseTurn? turn = GetActiveTurn();
         if (turn is null)
         {
-            return "No active player turn.";
+            return false;
         }
 
         if (!turn.TrySetSpokenSpeech(speech))
         {
-            return "Already spoken. Wait for the next player speech before replying again.";
+            return false;
         }
 
         AIPipelineDebugLog.Latency("LLM first speak tool call after", turn.Stopwatch, $"{turn.SpokenSpeech.Length} chars");
-        await SpeakAsync(speech, cancellationToken);
-        AIPipelineDebugLog.Latency("LLM speech dispatched after", turn.Stopwatch);
+        _ = SpeakAsync(speech, CancellationToken.None).ContinueWith(
+            task =>
+            {
+                if (task.IsFaulted)
+                {
+                    GD.PushError(task.Exception?.GetBaseException().ToString());
+                    return;
+                }
+
+                AIPipelineDebugLog.Latency("LLM speech dispatched after", turn.Stopwatch);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
         turn.CancellationTokenSource.Cancel();
 
-        return "Spoken. End this turn and wait for the next player speech.";
+        return true;
     }
 
     private ResponseTurn? GetActiveTurn()
@@ -226,8 +236,24 @@ public partial class AgenticMind : Mind
         return new AgentDefinition(
             instructions,
             "Alley",
-            "Prototype NPC mind for in-world speech responses.",
-            [AgentTool.Create(SpeechTool.Speak, _toolServices, "speak", "Speak the supplied text aloud to the player.")]);
+            "Prototype NPC mind for in-world speech responses.");
+    }
+
+    private List<AITool> CreateTurnTools()
+    {
+        List<AITool> tools = new(Tools.Count);
+
+        foreach (AgentTool? tool in Tools)
+        {
+            if (tool is null)
+            {
+                continue;
+            }
+
+            tools.Add(tool.CreateFunction(this));
+        }
+
+        return tools;
     }
 
     private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
@@ -243,7 +269,12 @@ public partial class AgenticMind : Mind
         Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
         try
         {
-            _ = await agent.RunAsync(RenderObservationSummary(observations), _session, cancellationToken: cancellationToken);
+            ChatClientAgentRunOptions options = new(new ChatOptions
+            {
+                Tools = CreateTurnTools(),
+            });
+
+            _ = await agent.RunAsync(RenderObservationSummary(observations), _session, options, cancellationToken);
         }
         finally
         {
@@ -277,8 +308,7 @@ public partial class AgenticMind : Mind
         _agent = ClientProvider.CreateChatClient().AsAIAgent(
             instructions: definition.Instructions,
             name: definition.Name,
-            description: definition.Description,
-            tools: definition.Tools);
+            description: definition.Description);
 
         return _agent;
     }
@@ -378,8 +408,7 @@ public partial class AgenticMind : Mind
     private sealed record AgentDefinition(
         string Instructions,
         string Name,
-        string Description,
-        IList<AITool> Tools);
+        string Description);
 
     private sealed class DeferredGodotAction(Action action, TaskCompletionSource completionSource)
     {
@@ -419,32 +448,22 @@ public partial class AgenticMind : Mind
         }
     }
 
-    private interface IMindSpeechToolContext
+    /// <inheritdoc />
+    public object? GetService(Type serviceType)
     {
-        Task<string> SpeakAsync(string speech, CancellationToken cancellationToken);
+        ArgumentNullException.ThrowIfNull(serviceType);
+
+        return serviceType.IsInstanceOfType(this)
+            ? this
+            : serviceType == typeof(IVoice) ? new ToolVoice(this) : null;
     }
 
-    private sealed class MindSpeechToolContext(AgenticMind mind) : IMindSpeechToolContext
+    private sealed class ToolVoice(AgenticMind mind) : IVoice
     {
-        public Task<string> SpeakAsync(string speech, CancellationToken cancellationToken)
-            => mind.SpeakFromToolAsync(speech, cancellationToken);
-    }
+        public string Id => mind.Voice?.Id ?? mind.Name;
 
-    private sealed class MindToolServiceProvider(IMindSpeechToolContext speechToolContext) : IServiceProvider
-    {
-        public object? GetService(Type serviceType)
-            => serviceType == typeof(IMindSpeechToolContext) ? speechToolContext : null;
-    }
+        public Vector3 Origin => mind.Voice?.Origin ?? Vector3.Zero;
 
-    private static class SpeechTool
-    {
-        [Description("Speak a natural-language reply to the player.")]
-        public static Task<string> Speak(
-            [Description("Exact words Alley should say aloud.")] string speech,
-            IServiceProvider services,
-            CancellationToken cancellationToken)
-            => services.GetService(typeof(IMindSpeechToolContext)) is IMindSpeechToolContext context
-                ? context.SpeakAsync(speech, cancellationToken)
-                : Task.FromResult("Unable to speak because AgenticMind speech context is unavailable.");
+        public void Speak(string speech) => _ = mind.TrySpeakFromTool(speech);
     }
 }

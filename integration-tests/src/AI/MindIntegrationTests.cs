@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using AlleyCat.AI;
 using AlleyCat.AI.Prompting;
 using AlleyCat.AI.Provider;
+using AlleyCat.AI.Tool;
 using AlleyCat.Body.Voice;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.TestFramework;
@@ -46,6 +47,7 @@ public sealed partial class MindIntegrationTests
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
             PostReplyListenCooldownSeconds = 0f,
+            Tools = [new SpeechTool()],
         };
 
         clientProvider.AfterFirstSpeakAsync = () =>
@@ -53,6 +55,11 @@ public sealed partial class MindIntegrationTests
             mind.ReceiveVoice("interrupting player speech", playerVoice);
             return Task.CompletedTask;
         };
+
+        IServiceProvider toolServices = mind;
+        Assert.Same(mind, toolServices.GetService(typeof(AgenticMind)));
+        IVoice toolVoice = Assert.IsAssignableFrom<IVoice>(toolServices.GetService(typeof(IVoice)));
+        Assert.Equal("alley", toolVoice.Id);
 
         AddTestNode(sceneTree, npcVoice);
         AddTestNode(sceneTree, playerVoice);
@@ -70,9 +77,63 @@ public sealed partial class MindIntegrationTests
             FakeChatClient client = clientProvider.Client;
             Assert.Equal(1, client.RunCount);
             Assert.Contains("- Speech from player: hello Alley", Assert.Single(client.Prompts));
-            Assert.Equal("Spoken. End this turn and wait for the next player speech.", client.FirstSpeakResult);
-            Assert.Equal("Already spoken. Wait for the next player speech before replying again.", client.SecondSpeakResult);
+            Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
+            Assert.Equal("Spoken through the configured voice.", client.SecondSpeakResult);
             Assert.Equal(["First reply."], npcVoice.SpokenLines);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, mind, playerVoice, npcVoice);
+        }
+    }
+
+    /// <summary>
+    /// AgenticMind should select exported tools for every turn through per-invocation ChatOptions.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WhenToolsChangeBetweenTurns_SendsCurrentToolsInRunOptions()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecordingVoice npcVoice = new()
+        {
+            Id = "alley",
+        };
+        RecordingVoice playerVoice = new()
+        {
+            Id = "player",
+        };
+        FakeClientProvider clientProvider = new();
+        AgenticMind mind = new()
+        {
+            ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
+            Voice = npcVoice,
+            MaxObservationWaitSeconds = 0.05f,
+            ObservationWeightThreshold = 1f,
+            PostReplyListenCooldownSeconds = 0f,
+            Tools = [new MarkerTool("first_tool")],
+        };
+
+        AddTestNode(sceneTree, npcVoice);
+        AddTestNode(sceneTree, playerVoice);
+        AddTestNode(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("first turn", playerVoice);
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 1, Completed: true }, maxFrames: 120);
+
+            mind.Tools = [new MarkerTool("second_tool")];
+            clientProvider.Client!.Completed = false;
+            mind.ReceiveVoice("second turn", playerVoice);
+
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 2, Completed: true }, maxFrames: 120);
+
+            Assert.NotNull(clientProvider.Client);
+            Assert.Equal(2, clientProvider.Client.RunCount);
+            Assert.Equal(["first_tool", "second_tool"], clientProvider.Client.ToolNamesByRun);
+            Assert.Empty(npcVoice.SpokenLines);
         }
         finally
         {
@@ -104,6 +165,7 @@ public sealed partial class MindIntegrationTests
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
             PostReplyListenCooldownSeconds = 0f,
+            Tools = [new SpeechTool()],
         };
 
         AddTestNode(sceneTree, npcVoice);
@@ -150,6 +212,7 @@ public sealed partial class MindIntegrationTests
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
             PostReplyListenCooldownSeconds = 0f,
+            Tools = [new SpeechTool()],
         };
 
         AddTestNode(sceneTree, npcVoice);
@@ -200,6 +263,7 @@ public sealed partial class MindIntegrationTests
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 2f,
             PostReplyListenCooldownSeconds = 0f,
+            Tools = [new SpeechTool()],
         };
 
         AddTestNode(sceneTree, npcVoice);
@@ -313,6 +377,7 @@ public sealed partial class MindIntegrationTests
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
             PostReplyListenCooldownSeconds = 0f,
+            Tools = [new SpeechTool()],
         };
 
         AddTestNode(sceneTree, npcVoice);
@@ -472,10 +537,12 @@ public sealed partial class MindIntegrationTests
         public bool Completed
         {
             get;
-            private set;
+            set;
         }
 
         public List<string> Prompts { get; } = [];
+
+        public List<string> ToolNamesByRun { get; } = [];
 
         public string? FirstSpeakResult
         {
@@ -501,15 +568,23 @@ public sealed partial class MindIntegrationTests
             {
                 Assert.NotNull(options);
                 Assert.NotNull(options.Tools);
-                AIFunction speakFunction = Assert.IsAssignableFrom<AIFunction>(Assert.Single(options.Tools));
-                FirstSpeakResult = await InvokeSpeakAsync(speakFunction, firstSpeech, cancellationToken);
+                AIFunction toolFunction = Assert.IsAssignableFrom<AIFunction>(Assert.Single(options.Tools));
+                ToolNamesByRun.Add(toolFunction.Name);
+
+                if (toolFunction.Name != "speak")
+                {
+                    _ = await toolFunction.InvokeAsync([], cancellationToken);
+                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty));
+                }
+
+                FirstSpeakResult = await InvokeSpeakAsync(toolFunction, firstSpeech, cancellationToken);
 
                 if (afterFirstSpeakAsync is not null)
                 {
                     await afterFirstSpeakAsync();
                 }
 
-                SecondSpeakResult = await InvokeSpeakAsync(speakFunction, secondSpeech, CancellationToken.None);
+                SecondSpeakResult = await InvokeSpeakAsync(toolFunction, secondSpeech, CancellationToken.None);
 
                 return new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty));
             }
@@ -561,5 +636,18 @@ public sealed partial class MindIntegrationTests
         public void Speak(string speech)
         {
         }
+    }
+
+    private sealed partial class MarkerTool : AgentTool
+    {
+        public MarkerTool(string toolName)
+        {
+            ToolName = toolName;
+            ToolDescription = "Records that this test tool was selected.";
+        }
+
+        protected override Delegate CreateDelegate() => Mark;
+
+        private static string Mark() => "Marked.";
     }
 }

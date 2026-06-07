@@ -33,23 +33,27 @@ reply aloud as an embodied character.
    re-enable.
 6. The concrete AgenticMind component must call an exported NPC voice reference to speak responses.
 7. Chat-client backend creation must be delegated to an exported, replaceable Godot Resource client provider.
-8. AgenticMind must own system-instruction rendering, tool definition, client-provider wiring, Agent Framework turn
-   execution, and session state caching.
-9. The initial client provider must supply an OpenAI-compatible chat client to the Agent Framework adapter.
-10. The OpenAI-compatible provider must expose an editor-selectable client kind for chat-completions or responses
+8. AgenticMind must own system-instruction rendering, exported tool-resource selection, client-provider wiring, Agent
+   Framework turn execution, and session state caching.
+9. Exported tool resources must follow the dynamic Resource and per-turn `ChatOptions` contract in
+   [AI-002](../002-agent-runtime/index.md).
+10. The initial client provider must supply an OpenAI-compatible chat client to the Agent Framework adapter.
+11. The OpenAI-compatible provider must expose an editor-selectable client kind for chat-completions or responses
     adapters.
-11. AgenticMind must export `SystemInstruction` as a `PromptStack` compatible with
+12. AgenticMind must export `SystemInstruction` as a `PromptStack` compatible with
     [AI-003](../003-prompt-api/index.md).
-12. AgenticMind must compile and render `SystemInstruction` into Agent Framework instructions for each agent turn.
-13. The mirror-room AgenticMind scene configuration must provide the Alley prompt through `SystemInstruction` as one
+13. AgenticMind must compile and render `SystemInstruction` into Agent Framework instructions for each agent turn.
+14. The mirror-room AgenticMind scene configuration must provide the Alley prompt through `SystemInstruction` as one
     `TextPromptSection` named `Instructions`.
-14. The `speak` tool must invoke AgenticMind's configured voice output rather than returning player-facing text.
-15. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
-16. Player listening must remain paused for a short cooldown after the NPC starts speaking.
-17. OpenAI-compatible backend settings must load from the merged configuration API under an `[AI]` section.
-18. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
+15. The `speak` tool must invoke AgenticMind's configured `IVoice` output rather than returning visible text.
+16. Tool invocation services must include the calling AgenticMind and its configured `IVoice` so Resource tools can
+    execute against that instance.
+17. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
+18. Player listening must remain paused for a short cooldown after the NPC starts speaking.
+19. OpenAI-compatible backend settings must load from the merged configuration API under an `[AI]` section.
+20. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
     checks.
-19. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
+21. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
 
 ### AI-002 Runtime Sync Note
 
@@ -62,8 +66,8 @@ while keeping backend failures contained to logged errors.
 
 - Abstract Mind base node for mind-like voice listeners and generic observation-cycle scheduling.
 - AgenticMind node component for player-speech-triggered NPC responses.
-- AgenticMind-owned prompt-stack system instructions, tool definition, client-provider wiring, and Agent Framework turn
-  orchestration.
+- AgenticMind-owned prompt-stack system instructions, exported tool selection, client-provider wiring, and Agent
+  Framework turn orchestration.
 - Mirror-room Alley prompt assignment through an AI-003 `PromptStack` with one `TextPromptSection`.
 - Replaceable Agent Framework client provider Resource for chat-client creation.
 - Microsoft Agent Framework prototype backend.
@@ -87,18 +91,21 @@ while keeping backend failures contained to logged errors.
 3. The mirror-room NPC answers as Alley through spoken in-world voice output.
 4. The OpenAI-compatible client provider supplies the chat client used by the default Agent Framework adapter.
 5. Agent Framework turn execution and session state caching are owned by `AgenticMind`.
-6. The client provider loads `[AI]` Host, optional ApiKey, Model, and Timeout settings through the merged config API.
-7. The client provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
-8. AgenticMind ignores further `speak` tool calls and player voice input until the current reply turn completes.
-9. Observation prompt formatting is verified through the observation contract without concrete-type switches in
+6. Exported tool resources are delivered per turn through `ChatOptions` under the AI-002 runtime contract.
+7. The client provider loads `[AI]` Host, optional ApiKey, Model, and Timeout settings through the merged config API.
+8. The client provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
+9. AgenticMind ignores further `speak` tool calls and player voice input until the current reply turn completes.
+10. Tool invocation uses an `IServiceProvider` context that contains the calling AgenticMind and configured `IVoice`
+    for that turn.
+11. Observation prompt formatting is verified through the observation contract without concrete-type switches in
    AgenticMind or provider code.
-10. `AgenticMind.SystemInstruction` is an exported `PromptStack` compiled and rendered into Agent Framework
+12. `AgenticMind.SystemInstruction` is an exported `PromptStack` compiled and rendered into Agent Framework
     instructions instead of hard-coded production persona text.
-11. The mirror-room AgenticMind node assigns the Alley prompt as one `TextPromptSection` named `Instructions` on
+13. The mirror-room AgenticMind node assigns the Alley prompt as one `TextPromptSection` named `Instructions` on
     `SystemInstruction`.
-12. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
-13. Missing voice/backend configuration and backend failures are logged without crashing the scene.
-14. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
+14. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
+15. Missing voice/backend configuration and backend failures are logged without crashing the scene.
+16. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
 
 ## References
 
@@ -106,6 +113,8 @@ while keeping backend failures contained to logged errors.
 
 - game/src/AI/Mind.cs
 - game/src/AI/AgenticMind.cs
+- game/src/AI/Tool/AgentTool.cs
+- game/src/AI/Tool/SpeechTool.cs
 - game/src/AI/Provider/ClientProvider.cs
 - game/src/AI/Provider/OpenAIClientProvider.cs
 - game/assets/testing/mirror_room/mirror_room.tscn
