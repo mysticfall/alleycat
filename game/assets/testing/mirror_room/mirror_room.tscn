@@ -12,6 +12,8 @@
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="10_lipsync"]
 [ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="11_ai_voice"]
 [ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/AI/AgenticMind.cs" id="12_mind"]
+[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/AI/Prompting/TextPromptSection.cs" id="agentic_text_prompt_section"]
+[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/AI/Prompting/PromptStack.cs" id="agentic_prompt_stack"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
 size = Vector2(10, 10)
@@ -40,6 +42,18 @@ radius = 0.3
 top_radius = 0.3
 bottom_radius = 0.3
 height = 1.0
+
+[sub_resource type="Resource" id="Resource_agentic_system_text_section"]
+script = ExtResource("agentic_text_prompt_section")
+Text = "You are Alley, a warm, observant person standing with the player in a VR room.
+Reply naturally and briefly, as if speaking aloud in real time.
+You must not answer with normal chat text. For every response, call the speak tool exactly once with the
+words Alley should say aloud. Do not describe tool use and do not include stage directions."
+Name = "Instructions"
+
+[sub_resource type="Resource" id="Resource_agentic_system_instruction"]
+script = ExtResource("agentic_prompt_stack")
+Sections = [SubResource("Resource_agentic_system_text_section")]
 
 [node name="MirrorRoom" type="Node3D" unique_id=973335562]
 
@@ -288,6 +302,7 @@ metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
 
 [node name="Mind" type="Node" parent="Actors/AIConversation" unique_id=1959394491 node_paths=PackedStringArray("Voice")]
 script = ExtResource("12_mind")
+SystemInstruction = SubResource("Resource_agentic_system_instruction")
 Voice = NodePath("../AlleyVoice")
 
 [node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_shmn4")]

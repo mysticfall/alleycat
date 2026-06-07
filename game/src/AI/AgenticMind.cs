@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using AlleyCat.AI.Prompting;
 using AlleyCat.AI.Provider;
 using AlleyCat.AI.Tool;
 using AlleyCat.Body.Voice;
 using AlleyCat.Diagnostics;
+using AlleyCat.Templating;
 using Godot;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -18,19 +20,13 @@ namespace AlleyCat.AI;
 [GlobalClass]
 public partial class AgenticMind : Mind
 {
-    private const string AlleyInstructions = """
-        You are Alley, a warm, observant person standing with the player in a VR room.
-        Reply naturally and briefly, as if speaking aloud in real time.
-        You must not answer with normal chat text. For every response, call the speak tool exactly once with the
-        words Alley should say aloud. Do not describe tool use and do not include stage directions.
-        """;
-
     private readonly Lock _responseStateLock = new();
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
     private readonly MindToolServiceProvider _toolServices;
     private ResponseTurn? _activeTurn;
     private ClientProvider? _clientProviderForAgent;
+    private PromptStack? _systemInstructionForAgent;
     private ChatClientAgent? _agent;
     private AgentSession? _session;
     private bool _deferredGodotActionFlushQueued;
@@ -50,6 +46,16 @@ public partial class AgenticMind : Mind
     [ExportGroup("Response")]
     [Export(PropertyHint.Range, "0,10,0.1")]
     public float PostReplyListenCooldownSeconds { get; set; } = 1f;
+
+    /// <summary>
+    /// Editor-authored system prompt stack compiled into the Agent Framework instructions for this mind.
+    /// </summary>
+    [ExportGroup("Prompt")]
+    [Export]
+    public PromptStack? SystemInstruction
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Backend factory used to create the chat client for Agent Framework turns.
@@ -120,6 +126,12 @@ public partial class AgenticMind : Mind
             if (ClientProvider is null)
             {
                 GD.PushError("AgenticMind requires a configured ClientProvider.");
+                return;
+            }
+
+            if (SystemInstruction is null)
+            {
+                GD.PushError("AgenticMind requires a configured SystemInstruction prompt stack.");
                 return;
             }
 
@@ -204,8 +216,15 @@ public partial class AgenticMind : Mind
 
     private AgentDefinition CreateAgentDefinition()
     {
+        PromptStack systemInstruction = SystemInstruction
+            ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
+
+        string instructions = systemInstruction
+            .Compile(new HandlebarsTemplateCompiler())
+            .Render(new Dictionary<string, object?>());
+
         return new AgentDefinition(
-            AlleyInstructions,
+            instructions,
             "Alley",
             "Prototype NPC mind for in-world speech responses.",
             [AgentTool.Create(SpeechTool.Speak, _toolServices, "speak", "Speak the supplied text aloud to the player.")]);
@@ -234,7 +253,9 @@ public partial class AgenticMind : Mind
 
     private ChatClientAgent EnsureAgent()
     {
-        if (_agent is not null && ReferenceEquals(_clientProviderForAgent, ClientProvider))
+        if (_agent is not null
+            && ReferenceEquals(_clientProviderForAgent, ClientProvider)
+            && ReferenceEquals(_systemInstructionForAgent, SystemInstruction))
         {
             return _agent;
         }
@@ -244,9 +265,15 @@ public partial class AgenticMind : Mind
             throw new InvalidOperationException("AgenticMind requires a configured ClientProvider.");
         }
 
+        if (SystemInstruction is null)
+        {
+            throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
+        }
+
         AgentDefinition definition = CreateAgentDefinition();
         _session = null;
         _clientProviderForAgent = ClientProvider;
+        _systemInstructionForAgent = SystemInstruction;
         _agent = ClientProvider.CreateChatClient().AsAIAgent(
             instructions: definition.Instructions,
             name: definition.Name,

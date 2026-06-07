@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using AlleyCat.AI;
+using AlleyCat.AI.Prompting;
 using AlleyCat.AI.Provider;
 using AlleyCat.Body.Voice;
 using AlleyCat.IntegrationTests.Support;
@@ -40,6 +41,7 @@ public sealed partial class MindIntegrationTests
         AgenticMind mind = new()
         {
             ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
@@ -97,6 +99,7 @@ public sealed partial class MindIntegrationTests
         AgenticMind mind = new()
         {
             ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
@@ -142,6 +145,7 @@ public sealed partial class MindIntegrationTests
         AgenticMind mind = new()
         {
             ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
@@ -191,6 +195,7 @@ public sealed partial class MindIntegrationTests
         AgenticMind mind = new()
         {
             ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 2f,
@@ -303,6 +308,7 @@ public sealed partial class MindIntegrationTests
         {
             ClientProvider = clientProvider,
             Enabled = false,
+            SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
             ObservationWeightThreshold = 1f,
@@ -333,6 +339,18 @@ public sealed partial class MindIntegrationTests
         Node parent = sceneTree.CurrentScene ?? sceneTree.Root;
         parent.AddChild(node);
     }
+
+    private static PromptStack CreateTestSystemInstruction() => new()
+    {
+        Sections =
+        [
+            new TextPromptSection
+            {
+                Name = "Test Instructions",
+                Text = "Run the integration test turn.",
+            },
+        ],
+    };
 
     private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames)
     {
