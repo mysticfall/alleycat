@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://dsoyrofkocge2" path="res://assets/testing/photobooth/templates/face_cam.tscn" id="1_base"]
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="2_hm21w"]
-[ext_resource type="Script" path="res://tests/speech/lipsync_test_control.gd" id="4_hm21w"]
+[ext_resource type="Script" uid="uid://dg6taiw72mwe3" path="res://tests/speech/lipsync_test_control.gd" id="4_hm21w"]
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_dvpdu"]
 
@@ -20,7 +20,7 @@ visible = false
 
 [node name="PlayCamera" type="Camera3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=1428506455]
 unique_name_in_owner = true
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4750656, 0.4216671)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.477374, -0.35153675)
 attributes = SubResource("CameraAttributesPractical_dvpdu")
 current = true
 fov = 45.0
@@ -34,7 +34,7 @@ InputStrength = 0.6
 ConstantNoise = true
 EyeRotationToBlendshapeScale = 0.15
 EyeRotationSmoothingFactor = 0.15000000000000002
-Meshes = [NodePath("../Subject/Female/Female/GeneralSkeleton/Female_body"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyebrow006"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyelashes01"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_high-poly"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_tongue01")]
+Meshes = [NodePath("../Subject/Female/Female/GeneralSkeleton/Female_body"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyebrow006"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyelashes01"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_high-poly"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_tongue01"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_teeth_shape01")]
 AudioPlayer = NodePath("../Subject/Female/Female/GeneralSkeleton/HeadBone/AudioStreamPlayer3D")
 LoopPlayback = true
 metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
@@ -50,6 +50,7 @@ offset_bottom = 88.0
 
 [node name="PlayButton" type="Button" parent="LipSyncTestControl/MarginContainer" index="0"]
 custom_minimum_size = Vector2(320, 64)
+layout_mode = 2
 text = "Play / Restart Speech"
 
 [editable path="Subject/Female"]
