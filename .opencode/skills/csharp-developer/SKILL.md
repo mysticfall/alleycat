@@ -189,10 +189,29 @@ Use short, descriptive group names that reflect the logical role of the properti
 
 ## Namespaces and Project Mapping
 
-- Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to the `src` folder (for example, types in
-  `AlleyCat.UI` belong in `src/UI`).
-- Use `AlleyCat.Tests` as the root namespace for `AlleyCat.Tests.csproj`.
-- Use `AlleyCat.IntegrationTests` as the root namespace for `AlleyCat.IntegrationTests.csproj`.
+- Use `AlleyCat` as the root namespace for `AlleyCat.csproj`, mapped to `game/src` from the repository root
+  (`src` relative to `game/AlleyCat.csproj`; for example, types in `AlleyCat.UI` belong in `game/src/UI`).
+- Use `AlleyCat.Tests` as the root namespace for `AlleyCat.Tests.csproj`, mapped to `tests/src`.
+- Use `AlleyCat.IntegrationTests` as the root namespace for `AlleyCat.IntegrationTests.csproj`, mapped to
+  `integration-tests/src`.
+- Use `AlleyCat.TestFramework` as the root namespace for `AlleyCat.TestFramework.csproj`, mapped to
+  `test-framework/src`.
+- Use `AlleyCat.TestFramework.Tests` as the root namespace for `AlleyCat.TestFramework.Tests.csproj`, mapped to
+  `test-framework/test`.
+- When renaming or moving a namespace, move the matching files/directories in every affected source tree in the same
+  change. This includes product code, unit tests, integration tests, and test-framework code; do not leave tests under
+  an old directory such as `AI` after production code moved to `Mind`.
+
+## Rename and Move Refactors
+
+- When renaming or moving a class, namespace, or source file, update all matching paths and references in the same
+  change. Cover product code, unit tests, integration tests, test-framework code, specs, workflow docs, scenes, and
+  resources when they refer to the moved symbol or path.
+- For Godot C# scripts, move the matching `.cs.uid` sidecar with the script and update any `.tscn` or `.tres` script
+  references to the new `res://` path while preserving UID mappings. If script UIDs were moved, refresh/verify Godot's
+  resource cache and run affected scene/integration coverage.
+- Before handoff for a rename/move refactor, search for both the old symbol/namespace and the old directory or
+  resource path across product, unit-test, integration-test, specs, scenes/resources, and workflow docs.
 
 ## Integration Tests (Godot Runtime)
 
