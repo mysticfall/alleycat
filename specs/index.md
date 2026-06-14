@@ -17,6 +17,7 @@
 - [AI-001: Mind Component](ai/001-mind/index.md)
 - [AI-002: Agent Runtime](ai/002-agent-runtime/index.md)
 - [AI-003: Prompt API](ai/003-prompt-api/index.md)
+- [AI-004: Lore And Backstory Source Compilation](ai/004-lore-backstory/index.md)
 
 ## TMPL
 

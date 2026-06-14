@@ -66,7 +66,8 @@ roleplay without breaking immersion or performance.
 ## In Scope
 
 - Parent index for AI character behaviour specifications.
-- Current entries for AI-001: Mind Component, AI-002: Agent Runtime, and AI-003: Prompt API.
+- Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, and AI-004: Lore And
+  Backstory Source Compilation.
 - High-level contracts covering the six requirement themes above.
 - Extensibility points for lore, actions, and context providers.
 
@@ -95,17 +96,19 @@ roleplay without breaking immersion or performance.
    - Budget/scheduler mechanism described.
    - Parallel workflow expectation stated.
    - Extensibility contracts for external data and pluggable components.
-3. AI-001: Mind Component, AI-002: Agent Runtime, and AI-003: Prompt API are identified as current normative child
-   contracts for their respective scopes.
+3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, and AI-004: Lore And Backstory Source
+   Compilation are identified as current normative child contracts for their respective scopes.
 
 ## Specifications
 
 - [AI-001: Mind Component](001-mind/index.md)
 - [AI-002: Agent Runtime](002-agent-runtime/index.md)
 - [AI-003: Prompt API](003-prompt-api/index.md)
+- [AI-004: Lore And Backstory Source Compilation](004-lore-backstory/index.md)
 
 ## References
 
 - AI-001: Mind Component
 - AI-002: Agent Runtime
 - AI-003: Prompt API
+- AI-004: Lore And Backstory Source Compilation
