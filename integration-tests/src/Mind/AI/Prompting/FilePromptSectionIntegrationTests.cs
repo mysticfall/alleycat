@@ -1,8 +1,8 @@
-using AlleyCat.AI.Prompting;
+using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.TestFramework;
 using Xunit;
 
-namespace AlleyCat.IntegrationTests.AI.Prompting;
+namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 
 /// <summary>
 /// Godot runtime coverage for AI-003 file-backed prompt sections.

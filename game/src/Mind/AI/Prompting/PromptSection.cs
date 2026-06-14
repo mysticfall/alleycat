@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.AI.Prompting;
+namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
 /// Base Godot-authorable resource for a named prompt section.

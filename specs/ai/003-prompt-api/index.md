@@ -29,7 +29,7 @@ syntax decision.
 
 ## Technical Requirements
 
-1. Prompt API types must live under the `AlleyCat.AI.Prompting` namespace.
+1. Prompt API types must live under the `AlleyCat.Mind.AI.Prompting` namespace.
 2. The API must define Godot `Resource` types for `PromptStack` and prompt sections.
 3. `PromptSection` must be abstract, expose a `Name`, and define an abstract `GetContent` method.
 4. `TextPromptSection` must return the value of its `Text` property from `GetContent`.
@@ -50,7 +50,7 @@ syntax decision.
 
 ## In Scope
 
-- Prompt composition resources in `AlleyCat.AI.Prompting`.
+- Prompt composition resources in `AlleyCat.Mind.AI.Prompting`.
 - `PromptStack`, `PromptSection`, `TextPromptSection`, and `FilePromptSection` contracts.
 - Concatenation, section demarcation, source trimming, and delegation to the existing template compiler.
 - Unit or integration coverage for source assembly and compiler delegation.

@@ -1,8 +1,8 @@
-using AlleyCat.AI.Prompting;
+using AlleyCat.Mind.AI.Prompting;
 using Godot;
 using Xunit;
 
-namespace AlleyCat.Tests.AI.Prompting;
+namespace AlleyCat.Tests.Mind.AI.Prompting;
 
 /// <summary>
 /// Unit coverage for AI-003 prompt resource authoring contracts that can be verified without Godot runtime execution.

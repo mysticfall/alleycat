@@ -27,7 +27,7 @@ Examples:
 
 ```bash
 dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
-  --headless --test-class AlleyCat.IntegrationTests.AI.MindIntegrationTests
+  --headless --test-class AlleyCat.IntegrationTests.Mind.AI.MindIntegrationTests
 ```
 
 If a test validates rendering, screenshots, visual timing, viewport contents, animation visibility, or other

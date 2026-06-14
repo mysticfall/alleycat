@@ -1,7 +1,7 @@
 using Godot;
 using Microsoft.Extensions.AI;
 
-namespace AlleyCat.AI.Provider;
+namespace AlleyCat.Mind.AI.Provider;
 
 /// <summary>
 /// Replaceable backend factory for agent chat clients.

@@ -1,23 +1,24 @@
 using System.Diagnostics;
-using AlleyCat.AI.Prompting;
-using AlleyCat.AI.Provider;
-using AlleyCat.AI.Tool;
 using AlleyCat.Body.Voice;
 using AlleyCat.Diagnostics;
+using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Mind.AI.Provider;
+using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Templating;
 using Godot;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using AgentObservation = AlleyCat.AI.Observation.Observation;
-using SpeechObservation = AlleyCat.AI.Observation.SpeechObservation;
+using AgentObservation = AlleyCat.Mind.Observation.Observation;
+using MindBase = AlleyCat.Mind.Mind;
+using SpeechObservation = AlleyCat.Mind.Observation.SpeechObservation;
 
-namespace AlleyCat.AI;
+namespace AlleyCat.Mind.AI;
 
 /// <summary>
 /// Speech-driven NPC mind that batches observations and delegates responses to an LLM backend.
 /// </summary>
 [GlobalClass]
-public partial class AgenticMind : Mind, IServiceProvider
+public partial class AgenticMind : MindBase, IServiceProvider
 {
     private readonly Lock _responseStateLock = new();
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];

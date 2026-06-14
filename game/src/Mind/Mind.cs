@@ -1,9 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using AlleyCat.Body.Voice;
 using Godot;
-using AgentObservation = AlleyCat.AI.Observation.Observation;
+using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
-namespace AlleyCat.AI;
+namespace AlleyCat.Mind;
 
 /// <summary>
 /// Abstract base for NPC mind-like components that can receive player voice events.

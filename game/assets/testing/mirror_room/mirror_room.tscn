@@ -11,10 +11,10 @@
 [ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="9_speech_gen"]
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="10_lipsync"]
 [ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="11_ai_voice"]
-[ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/AI/AgenticMind.cs" id="12_mind"]
-[ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/AI/Tool/SpeechTool.cs" id="agentic_speech_tool"]
-[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/AI/Prompting/TextPromptSection.cs" id="agentic_text_prompt_section"]
-[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/AI/Prompting/PromptStack.cs" id="agentic_prompt_stack"]
+[ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="12_mind"]
+[ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="agentic_speech_tool"]
+[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="agentic_text_prompt_section"]
+[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="agentic_prompt_stack"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
 size = Vector2(10, 10)

@@ -1,17 +1,18 @@
 using System.Runtime.CompilerServices;
-using AlleyCat.AI;
-using AlleyCat.AI.Prompting;
-using AlleyCat.AI.Provider;
-using AlleyCat.AI.Tool;
 using AlleyCat.Body.Voice;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Mind.AI.Provider;
+using AlleyCat.Mind.AI.Tool;
 using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Extensions.AI;
 using Xunit;
-using AgentObservation = AlleyCat.AI.Observation.Observation;
+using AgentObservation = AlleyCat.Mind.Observation.Observation;
+using MindBase = AlleyCat.Mind.Mind;
 
-namespace AlleyCat.IntegrationTests.AI;
+namespace AlleyCat.IntegrationTests.Mind.AI;
 
 /// <summary>
 /// Isolated runtime coverage for the migrated AgenticMind speech path without reference character assets or backend calls.
@@ -453,7 +454,7 @@ public sealed partial class MindIntegrationTests
         }
     }
 
-    private sealed partial class TestMind : Mind
+    private sealed partial class TestMind : MindBase
     {
         public List<IReadOnlyList<AgentObservation>> ProcessedBatches { get; } = [];
 

@@ -1,9 +1,9 @@
-using AlleyCat.AI.Prompting;
+using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Templating;
 using AlleyCat.TestFramework;
 using Xunit;
 
-namespace AlleyCat.IntegrationTests.AI.Prompting;
+namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 
 /// <summary>
 /// Godot runtime coverage for AI-003 prompt stack source assembly and compiler delegation.

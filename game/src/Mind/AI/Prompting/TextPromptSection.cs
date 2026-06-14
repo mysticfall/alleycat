@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.AI.Prompting;
+namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
 /// Inline text prompt section authored directly in the Godot editor.

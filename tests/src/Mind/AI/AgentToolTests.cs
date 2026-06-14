@@ -1,8 +1,8 @@
-using AlleyCat.AI.Tool;
+using AlleyCat.Mind.AI.Tool;
 using Microsoft.Extensions.AI;
 using Xunit;
 
-namespace AlleyCat.Tests.AI;
+namespace AlleyCat.Tests.Mind.AI;
 
 /// <summary>
 /// Unit coverage for Agent Framework tool invocation context wiring.

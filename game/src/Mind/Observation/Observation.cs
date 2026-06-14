@@ -1,4 +1,4 @@
-namespace AlleyCat.AI.Observation;
+namespace AlleyCat.Mind.Observation;
 
 /// <summary>
 /// Base contract for sensory data perceived by an agent.

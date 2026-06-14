@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.AI.Prompting;
+namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
 /// Prompt section that loads its content from a Godot resource path.

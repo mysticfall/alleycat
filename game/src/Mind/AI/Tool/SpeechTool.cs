@@ -2,7 +2,7 @@ using System.ComponentModel;
 using AlleyCat.Body.Voice;
 using Godot;
 
-namespace AlleyCat.AI.Tool;
+namespace AlleyCat.Mind.AI.Tool;
 
 /// <summary>
 /// Agent Framework tool that speaks natural-language output through the invocation voice context.

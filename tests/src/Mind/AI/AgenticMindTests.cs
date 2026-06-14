@@ -1,7 +1,7 @@
-using AlleyCat.AI.Observation;
+using AlleyCat.Mind.Observation;
 using Xunit;
 
-namespace AlleyCat.Tests.AI;
+namespace AlleyCat.Tests.Mind.AI;
 
 /// <summary>
 /// Unit coverage for observation contracts consumed by agentic minds.

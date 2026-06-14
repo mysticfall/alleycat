@@ -1,7 +1,7 @@
 using Godot;
 using Microsoft.Extensions.AI;
 
-namespace AlleyCat.AI.Tool;
+namespace AlleyCat.Mind.AI.Tool;
 
 /// <summary>
 /// Godot-authored AI tool resource that creates Agent Framework functions for an AgenticMind turn.

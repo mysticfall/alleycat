@@ -2,7 +2,7 @@ using System.Text;
 using AlleyCat.Templating;
 using Godot;
 
-namespace AlleyCat.AI.Prompting;
+namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
 /// Ordered prompt stack that composes named sections and compiles the generated source.

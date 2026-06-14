@@ -25,7 +25,7 @@ invocation context.
 
 ## Technical Requirements
 
-1. Define an abstract `Observation` contract under `AlleyCat.AI.Observation`:
+1. Define an abstract `Observation` contract under `AlleyCat.Mind.Observation`:
     - Observations encapsulate sensory data (e.g., voice heard -> speech observation with speaker ID and content).
 2. Implement the main interaction track for the agent workflow:
     - Main interaction track handles immediate observations for low-latency response.
@@ -45,7 +45,7 @@ invocation context.
     - Speaking is exposed as an Agent Framework `speak` tool.
     - Visible mirror-room behaviour (player speech -> NPC speech) is maintained.
 5. Define concrete tool invocation context:
-    - AI tools are authored as top-level Godot `Resource` classes under `AlleyCat.AI.Tool` so scenes can configure
+    - AI tools are authored as top-level Godot `Resource` classes under `AlleyCat.Mind.AI.Tool` so scenes can configure
       the current tool set without nested serialisation types.
     - AgenticMind exports the active tool resources and supplies them through per-turn Agent Framework chat options
       instead of registering static tools on agent construction.
@@ -112,12 +112,12 @@ invocation context.
 
 ### Implementation
 
-- game/src/AI/Observation/Observation.cs
-- game/src/AI/Tool/AgentTool.cs
-- game/src/AI/Tool/SpeechTool.cs
-- game/src/AI/Mind.cs (abstract base)
-- game/src/AI/AgenticMind.cs
-- game/src/AI/Provider/ClientProvider.cs
+- game/src/Mind/Observation/Observation.cs
+- game/src/Mind/AI/Tool/AgentTool.cs
+- game/src/Mind/AI/Tool/SpeechTool.cs
+- game/src/Mind/Mind.cs (abstract base)
+- game/src/Mind/AI/AgenticMind.cs
+- game/src/Mind/AI/Provider/ClientProvider.cs
 - game/assets/testing/mirror_room/mirror_room.tscn
 
 ### Related Specs

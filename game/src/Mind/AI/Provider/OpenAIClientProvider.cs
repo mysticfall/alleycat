@@ -7,7 +7,7 @@ using OpenAI;
 using OpenAI.Chat;
 using OpenAI.Responses;
 
-namespace AlleyCat.AI.Provider;
+namespace AlleyCat.Mind.AI.Provider;
 
 /// <summary>
 /// OpenAI client adapter used by the Agent Framework runtime.

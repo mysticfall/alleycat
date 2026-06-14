@@ -111,12 +111,12 @@ while keeping backend failures contained to logged errors.
 
 ### Implementation
 
-- game/src/AI/Mind.cs
-- game/src/AI/AgenticMind.cs
-- game/src/AI/Tool/AgentTool.cs
-- game/src/AI/Tool/SpeechTool.cs
-- game/src/AI/Provider/ClientProvider.cs
-- game/src/AI/Provider/OpenAIClientProvider.cs
+- game/src/Mind/Mind.cs
+- game/src/Mind/AI/AgenticMind.cs
+- game/src/Mind/AI/Tool/AgentTool.cs
+- game/src/Mind/AI/Tool/SpeechTool.cs
+- game/src/Mind/AI/Provider/ClientProvider.cs
+- game/src/Mind/AI/Provider/OpenAIClientProvider.cs
 - game/assets/testing/mirror_room/mirror_room.tscn
 - game/AlleyCat.cfg
 
