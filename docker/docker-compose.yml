@@ -1,0 +1,48 @@
+services:
+  vibevoice-realtime-openai-api:
+    image: vibevoice-realtime-openai-api
+    container_name: vibevoice-realtime-openai-api
+    ports:
+      - "8880:8880"
+    volumes:
+      - ~/.cache/vibevoice:/home/ubuntu/app/models
+      - ~/.cache/huggingface:/home/ubuntu/app/models/huggingface
+    environment:
+      - CFG_SCALE=1.25  # (0.0 - 3.0, higher = more expressive)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  speaches-api:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    #image: ghcr.io/speaches-ai/speaches:latest-gpu
+    container_name: speaches-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ~/.cache/huggingface:/home/ubuntu/.cache/huggingface
+    #deploy:
+    #  resources:
+    #    reservations:
+    #      devices:
+    #        - driver: nvidia
+    #          count: all
+    #          capabilities: [gpu]
+  audio2face-api:
+    image: audio2face-api
+    container_name: audio2face-api
+    ports:
+      - "8765:8765"
+    volumes:
+      - ~/.cache/a2f:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
