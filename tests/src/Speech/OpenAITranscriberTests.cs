@@ -297,4 +297,40 @@ public sealed class OpenAITranscriberTests
         Assert.Equal(0x78, bytes[46]);
         Assert.Equal(0x56, bytes[47]);
     }
+
+    /// <summary>
+    /// OpenAI request preparation must produce a rewound WAV stream and configured SDK options off the caller path.
+    /// </summary>
+    [Fact]
+    public async Task PrepareTranscriptionRequestAsync_ConfiguredAudioAndSettings_CreatesUploadRequest()
+    {
+        OpenAITranscriber.RecordedAudioData recordedAudio = new(
+            Data: [0x34, 0x12, 0x78, 0x56],
+            MixRate: 16000,
+            Stereo: false,
+            Format: AudioStreamWav.FormatEnum.Format16Bits);
+        OpenAITranscriber.OpenAITranscriberSettings settings = new(
+            Host: "https://api.openai.com/v1",
+            ApiKey: string.Empty,
+            Model: "whisper-1",
+            Language: "en",
+            Prompt: "Transcribe clearly.",
+            Temperature: 0.35f,
+            TimeoutSeconds: 30);
+
+        using OpenAITranscriber.PreparedTranscriptionRequest request =
+            await OpenAITranscriber.PrepareTranscriptionRequestAsync(recordedAudio, settings);
+        byte[] bytes = request.WavStream.ToArray();
+
+        Assert.NotNull(request.Client);
+        Assert.Equal(0, request.WavStream.Position);
+        Assert.Equal(48, request.WavStream.Length);
+        Assert.Equal((byte)'R', bytes[0]);
+        Assert.Equal((byte)'I', bytes[1]);
+        Assert.Equal((byte)'F', bytes[2]);
+        Assert.Equal((byte)'F', bytes[3]);
+        Assert.Equal("en", request.Options.Language);
+        Assert.Equal("Transcribe clearly.", request.Options.Prompt);
+        Assert.Equal(0.35f, request.Options.Temperature);
+    }
 }

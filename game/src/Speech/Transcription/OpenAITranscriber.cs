@@ -66,16 +66,20 @@ public partial class OpenAITranscriber : Transcriber
     public override async Task<string> Transcribe(AudioStreamWav audioStream)
     {
         OpenAITranscriberSettings settings = _settings ?? OpenAITranscriberSettings.Load(ConfigPath);
+        RecordedAudioData recordedAudio = CaptureRecordedAudio(audioStream);
 
         Stopwatch preparationStopwatch = AIPipelineDebugLog.StartTimer();
-        using MemoryStream wavStream = CreateWaveFileStream(audioStream);
-        AudioClient client = settings.CreateAudioClient();
-        AudioTranscriptionOptions options = CreateTranscriptionOptions(settings);
-        AIPipelineDebugLog.Latency("STT request prepared in", preparationStopwatch, $"model {settings.Model}");
+        using PreparedTranscriptionRequest request = await PrepareTranscriptionRequestAsync(recordedAudio, settings)
+            .ConfigureAwait(false);
+        await LogLatencyOnGodotThreadAsync("STT request prepared in", preparationStopwatch, $"model {settings.Model}")
+            .ConfigureAwait(false);
 
         Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
-        AudioTranscription response = await client.TranscribeAudioAsync(wavStream, "alleycat-recording.wav", options);
-        AIPipelineDebugLog.Latency("STT backend returned in", backendStopwatch, $"model {settings.Model}");
+        AudioTranscription response = await request.Client
+            .TranscribeAudioAsync(request.WavStream, "alleycat-recording.wav", request.Options)
+            .ConfigureAwait(false);
+        await LogLatencyOnGodotThreadAsync("STT backend returned in", backendStopwatch, $"model {settings.Model}")
+            .ConfigureAwait(false);
         return GetTranscriptionTextOrThrow(response);
     }
 
@@ -99,12 +103,14 @@ public partial class OpenAITranscriber : Transcriber
 
     internal static MemoryStream CreateWaveFileStream(AudioStreamWav audioStream)
     {
-        return CreateWaveFileStream(
-            audioStream.Data,
-            audioStream.MixRate,
-            audioStream.Stereo,
-            audioStream.Format);
+        RecordedAudioData recordedAudio = CaptureRecordedAudio(audioStream);
+        return CreateWaveFileStream(recordedAudio.Data, recordedAudio.MixRate, recordedAudio.Stereo, recordedAudio.Format);
     }
+
+    internal static Task<PreparedTranscriptionRequest> PrepareTranscriptionRequestAsync(
+        RecordedAudioData recordedAudio,
+        OpenAITranscriberSettings settings)
+        => Task.Run(() => PrepareTranscriptionRequest(recordedAudio, settings));
 
     internal static byte[] CreateWaveFileBytes(
         byte[] data,
@@ -155,6 +161,9 @@ public partial class OpenAITranscriber : Transcriber
                 "OpenAI transcription response did not contain a non-empty 'text' field.")
             : response.Text.Trim();
 
+    internal static RecordedAudioData CaptureRecordedAudio(AudioStreamWav audioStream)
+        => new(audioStream.Data, audioStream.MixRate, audioStream.Stereo, audioStream.Format);
+
     private static MemoryStream CreateWaveFileStream(
         byte[] data,
         int mixRate,
@@ -201,6 +210,32 @@ public partial class OpenAITranscriber : Transcriber
         return stream;
     }
 
+    private static PreparedTranscriptionRequest PrepareTranscriptionRequest(
+        RecordedAudioData recordedAudio,
+        OpenAITranscriberSettings settings)
+    {
+        MemoryStream? wavStream = null;
+
+        try
+        {
+            wavStream = CreateWaveFileStream(
+                recordedAudio.Data,
+                recordedAudio.MixRate,
+                recordedAudio.Stereo,
+                recordedAudio.Format);
+
+            return new PreparedTranscriptionRequest(
+                wavStream,
+                settings.CreateAudioClient(),
+                CreateTranscriptionOptions(settings));
+        }
+        catch
+        {
+            wavStream?.Dispose();
+            throw;
+        }
+    }
+
     private void PostDebugNotification(string message)
     {
         if (!DebugNotificationOutputEnabled)
@@ -210,6 +245,9 @@ public partial class OpenAITranscriber : Transcriber
 
         _ = DispatchDeferredGodotActionAsync(() => _ = this.PostNotification(message));
     }
+
+    private Task LogLatencyOnGodotThreadAsync(string stage, Stopwatch stopwatch, string detail)
+        => DispatchDeferredGodotActionAsync(() => AIPipelineDebugLog.Latency(stage, stopwatch, detail));
 
     private static string FormatDebugTranscript(string text)
         => string.IsNullOrWhiteSpace(text) ? "<empty>" : text.Trim();
@@ -336,5 +374,25 @@ public partial class OpenAITranscriber : Transcriber
                     : throw new InvalidOperationException(
                         $"Config key '{ConfigSection}/{key}' must be a valid integer. Got '{text}'.");
         }
+    }
+
+    internal readonly record struct RecordedAudioData(
+        byte[] Data,
+        int MixRate,
+        bool Stereo,
+        AudioStreamWav.FormatEnum Format);
+
+    internal sealed class PreparedTranscriptionRequest(
+        MemoryStream wavStream,
+        AudioClient client,
+        AudioTranscriptionOptions options) : IDisposable
+    {
+        public MemoryStream WavStream { get; } = wavStream;
+
+        public AudioClient Client { get; } = client;
+
+        public AudioTranscriptionOptions Options { get; } = options;
+
+        public void Dispose() => WavStream.Dispose();
     }
 }
