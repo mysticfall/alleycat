@@ -1,5 +1,4 @@
 using AlleyCat.Body;
-using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.IK;
@@ -10,6 +9,8 @@ namespace AlleyCat.IK;
 [GlobalClass]
 public partial class CharacterIK : Node3D
 {
+    private const int RuntimeBindingWarningAttemptThreshold = 6;
+
     private Skeleton3D? _skeleton;
 
     private IKTargetBodyActuator? _headActuator;
@@ -17,6 +18,9 @@ public partial class CharacterIK : Node3D
     private IKTargetAnimatableActuator? _rightHandActuator;
     private IKTargetPipeline? _headTargetPipeline;
     private IKTargetPipeline? _leftHandTargetPipeline;
+    private bool _warnedWaitingForBindings;
+    private int _runtimeBindingAttempts;
+    private bool _stageModifiersInserted;
     private IKTargetPipeline? _rightHandTargetPipeline;
 
     private IKTargetActivityGate? _headTargetActivityGate;
@@ -33,7 +37,8 @@ public partial class CharacterIK : Node3D
     [Export]
     public Marker3D? Viewpoint
     {
-        get; set;
+        get => field ??= ResolveConventionViewpoint();
+        set;
     }
 
     /// <summary>
@@ -97,7 +102,8 @@ public partial class CharacterIK : Node3D
     [Export]
     public DynamicPhysicalRig? PhysicalRig
     {
-        get; set;
+        get => field ??= ResolveConventionPhysicalRig();
+        set;
     }
 
     /// <summary>
@@ -116,7 +122,8 @@ public partial class CharacterIK : Node3D
     [Export]
     public IKTargetIntentProvider? RightHandIKTargetIntentProvider
     {
-        get; set;
+        get => field ??= GetNodeOrNull<IKTargetIntentProvider>("RightHandGrabProvider");
+        set;
     }
 
     /// <summary>
@@ -135,7 +142,8 @@ public partial class CharacterIK : Node3D
     [Export]
     public IKTargetIntentProvider? LeftHandIKTargetIntentProvider
     {
-        get; set;
+        get => field ??= GetNodeOrNull<IKTargetIntentProvider>("LeftHandGrabProvider");
+        set;
     }
 
     /// <summary>
@@ -359,6 +367,36 @@ public partial class CharacterIK : Node3D
     }
 
     /// <summary>
+    /// Clears cached runtime bindings after installer-driven exported references are rebound.
+    /// </summary>
+    public void ResetRuntimeBindings()
+    {
+        _skeleton = null;
+        _headActuator = null;
+        _leftHandActuator = null;
+        _rightHandActuator = null;
+        _headTargetPipeline = null;
+        _leftHandTargetPipeline = null;
+        _rightHandTargetPipeline = null;
+        _headTargetActivityGate = null;
+        _rightHandTargetActivityGate = null;
+        _leftHandTargetActivityGate = null;
+        _rightFootTargetActivityGate = null;
+        _leftFootTargetActivityGate = null;
+        _stageModifiersInserted = false;
+        ResolvedViewpoint = null;
+        ResolvedHeadIKTarget = null;
+        ResolvedHeadIKSolveTarget = null;
+        ResolvedRightHandIKTarget = null;
+        ResolvedLeftHandIKTarget = null;
+        ResolvedRightFootIKTarget = null;
+        ResolvedLeftFootIKTarget = null;
+        HeadBoneIndex = -1;
+        _viewpointLocalTransform = Transform3D.Identity;
+        ViewpointLocalInverseTransform = Transform3D.Identity;
+    }
+
+    /// <summary>
     /// Last debug snapshot for the right-hand target pipeline.
     /// </summary>
     public IKTargetPipelineResult RightHandTargetPipelineDebugState
@@ -457,11 +495,10 @@ public partial class CharacterIK : Node3D
     public override void _Ready()
     {
         base._Ready();
-        EnsureResolvedNodes();
-        EnsureTargetActivityGates();
-        EnsureActuators();
-        SetPhysicsProcess(true);
-        InsertStageModifiers();
+        if (!IsInsideTree())
+        {
+            _ = TryInitialiseRuntimeBindings();
+        }
     }
 
     /// <inheritdoc />
@@ -472,7 +509,49 @@ public partial class CharacterIK : Node3D
             return;
         }
 
+        if (_skeleton is null && !TryInitialiseRuntimeBindings())
+        {
+            return;
+        }
+
         UpdatePhysicalActuators(delta);
+    }
+
+    private bool TryInitialiseRuntimeBindings()
+    {
+        try
+        {
+            EnsureResolvedNodes();
+            EnsureTargetActivityGates();
+            EnsureActuators();
+            if (!_stageModifiersInserted)
+            {
+                InsertStageModifiers();
+                _stageModifiersInserted = true;
+            }
+
+            _warnedWaitingForBindings = false;
+            _runtimeBindingAttempts = 0;
+            SetPhysicsProcess(true);
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (!IsInsideTree())
+            {
+                throw;
+            }
+
+            _runtimeBindingAttempts++;
+            if (!_warnedWaitingForBindings && _runtimeBindingAttempts >= RuntimeBindingWarningAttemptThreshold)
+            {
+                GD.PushWarning($"{GetType().Name} '{Name}' is waiting for runtime IK bindings: {ex.Message}");
+                _warnedWaitingForBindings = true;
+            }
+
+            SetPhysicsProcess(true);
+            return false;
+        }
     }
 
     /// <summary>
@@ -533,7 +612,7 @@ public partial class CharacterIK : Node3D
         => _skeleton ?? throw new InvalidOperationException($"{GetType().Name} skeleton not resolved before use.");
 
     /// <summary>
-    /// Resolves exported or convention-based target, modifier, and physical-rig-owned skeleton nodes.
+    /// Resolves exported or portable convention-based target, modifier, and physical-rig-owned skeleton nodes.
     /// </summary>
     protected void EnsureResolvedNodes()
     {
@@ -542,13 +621,16 @@ public partial class CharacterIK : Node3D
             return;
         }
 
-        ResolvedViewpoint = Viewpoint ?? this.RequireNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
-        ResolvedHeadIKTarget = HeadIKTarget ?? this.RequireNode<CharacterBody3D>("IKTargets/Head");
-        ResolvedHeadIKSolveTarget = HeadIKSolveTarget ?? this.RequireNode<Node3D>("IKTargets/HeadSolve");
-        ResolvedRightHandIKTarget = RightHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/RightHand");
-        ResolvedLeftHandIKTarget = LeftHandIKTarget ?? this.RequireNode<AnimatableBody3D>("IKTargets/LeftHand");
-        ResolvedRightFootIKTarget = RightFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/RightFoot");
-        ResolvedLeftFootIKTarget = LeftFootIKTarget ?? GetNodeOrNull<Node3D>("IKTargets/LeftFoot");
+        ResolvedViewpoint = RequireExportedReference(
+            Viewpoint,
+            nameof(Viewpoint),
+            "assign the avatar eye-centre marker or install a character module that binds it");
+        ResolvedHeadIKTarget = HeadIKTarget ?? RequireConventionTargetNode<CharacterBody3D>("IKTargets/Head", nameof(HeadIKTarget));
+        ResolvedHeadIKSolveTarget = HeadIKSolveTarget ?? RequireConventionTargetNode<Node3D>("IKTargets/HeadSolve", nameof(HeadIKSolveTarget));
+        ResolvedRightHandIKTarget = RightHandIKTarget ?? RequireConventionTargetNode<AnimatableBody3D>("IKTargets/RightHand", nameof(RightHandIKTarget));
+        ResolvedLeftHandIKTarget = LeftHandIKTarget ?? RequireConventionTargetNode<AnimatableBody3D>("IKTargets/LeftHand", nameof(LeftHandIKTarget));
+        ResolvedRightFootIKTarget = RightFootIKTarget ?? ResolveConventionTargetNode<Node3D>("IKTargets/RightFoot");
+        ResolvedLeftFootIKTarget = LeftFootIKTarget ?? ResolveConventionTargetNode<Node3D>("IKTargets/LeftFoot");
         _skeleton = ResolveDrivenSkeleton();
         EnsureDefaultModifierGroups(_skeleton);
         EnsureSubclassResolvedNodes(_skeleton);
@@ -565,9 +647,10 @@ public partial class CharacterIK : Node3D
 
     private Skeleton3D ResolveDrivenSkeleton()
     {
-        DynamicPhysicalRig physicalRig = PhysicalRig
-                                         ?? this.RequireNode<DynamicPhysicalRig>(
-                                             "Female/GeneralSkeleton/DynamicPhysicalRig");
+        DynamicPhysicalRig physicalRig = RequireExportedReference(
+            PhysicalRig,
+            nameof(PhysicalRig),
+            "assign the generated dynamic physical rig or install a character module that binds it");
 
         return physicalRig.TargetSkeleton
             ?? (physicalRig.GetParent() is Skeleton3D parentSkeleton
@@ -575,6 +658,81 @@ public partial class CharacterIK : Node3D
             : throw new InvalidOperationException(
                 $"{GetType().Name} '{Name}' requires {nameof(PhysicalRig)} '{physicalRig.Name}' to have either an explicit {nameof(DynamicPhysicalRig.TargetSkeleton)} or a parent {nameof(Skeleton3D)}."));
     }
+
+    private DynamicPhysicalRig? ResolveConventionPhysicalRig()
+    {
+        Node? root = GetParent();
+        if (root is null || !IsInstanceValid(root))
+        {
+            return null;
+        }
+
+        Skeleton3D? skeleton = ResolveSingleSkeleton(root);
+        return skeleton?.GetNodeOrNull<DynamicPhysicalRig>("DynamicPhysicalRig");
+    }
+
+    private T RequireConventionTargetNode<T>(string path, string propertyName)
+        where T : Node
+        => ResolveConventionTargetNode<T>(path)
+            ?? throw new InvalidOperationException(
+                $"{GetType().Name} '{Name}' requires exported {propertyName} to be assigned; assign '{path}' under the character root or install a character module that binds it.");
+
+    private T? ResolveConventionTargetNode<T>(string path)
+        where T : Node
+    {
+        Node? root = GetParent();
+        T? rootNode = root is null || !IsInstanceValid(root) ? null : root.GetNodeOrNull<T>(path);
+        return rootNode ?? GetNodeOrNull<T>(path);
+    }
+
+    private Marker3D? ResolveConventionViewpoint()
+    {
+        Node? root = GetParent();
+        if (root is null || !IsInstanceValid(root))
+        {
+            return null;
+        }
+
+        Skeleton3D? skeleton = ResolveSingleSkeleton(root);
+        return skeleton?.GetNodeOrNull<Marker3D>("Head/Viewpoint");
+    }
+
+    private static Skeleton3D? ResolveSingleSkeleton(Node root)
+    {
+        Skeleton3D? match = null;
+        foreach (Node child in root.GetChildren())
+        {
+            if (child is Skeleton3D skeleton)
+            {
+                if (match is not null)
+                {
+                    return null;
+                }
+
+                match = skeleton;
+            }
+
+            Skeleton3D? childMatch = ResolveSingleSkeleton(child);
+            if (childMatch is null)
+            {
+                continue;
+            }
+
+            if (match is not null)
+            {
+                return null;
+            }
+
+            match = childMatch;
+        }
+
+        return match;
+    }
+
+    private TNode RequireExportedReference<TNode>(TNode? node, string propertyName, string authoringAction)
+        where TNode : Node
+        => node ?? throw new InvalidOperationException(
+            $"{GetType().Name} '{Name}' requires exported {propertyName} to be assigned; {authoringAction}.");
 
     /// <summary>
     /// Applies runtime binding to all configured fallback providers.

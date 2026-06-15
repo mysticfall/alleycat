@@ -97,7 +97,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 | AC-04 | Correct results in non-upright poses without pose-specific branches. | Arm IK Contract |
 | AC-05 | Hand-rotation adjusts pole direction smoothly across full range. | Arm IK Contract |
 | AC-06 | ArmIKController applies pre-IK shoulder correction, preventing deformation. | Shoulder Adjustment Contract |
-| AC-07 | Reusable IK scene contains ArmIKController, TwoBoneIK3D, and target nodes. | This Page |
+| AC-07 | Portable IK scene avoids concrete `Female` node/mesh dependencies. | This Page |
 | AC-08 | Photobooth validates arm IK and shoulder correction across key poses. | This Page |
 | AC-09 | Visual checks confirm natural poses without deformation or discontinuities. | This Page |
 | AC-10 | C# integration tests validate behaviour with non-visual assertions. | This Page |
@@ -128,8 +128,6 @@ All criteria remain normative. IDs are provided for traceability to component co
 
 ## References
 
-- @game/assets/characters/reference/female/reference_female.tscn
-- @game/assets/characters/reference/female/reference_female_base.tscn
 - @game/assets/characters/reference/player.tscn
 - @specs/characters/ik/001-neck-spine-ik/index.md
 - @specs/testing/002-visual-verification-scope/index.md

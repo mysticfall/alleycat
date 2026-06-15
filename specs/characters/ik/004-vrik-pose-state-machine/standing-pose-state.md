@@ -135,5 +135,6 @@ and the default hip reconciliation profile.
 - [Hip Reconciliation Contract](hip-reconciliation-contract.md)
 - [Kneeling Pose State](kneeling-pose-state.md)
 - [AllFours Pose State](all-fours-pose-state.md)
-- @game/assets/characters/ik/vrik.tscn
-- @game/assets/characters/reference/female/animations/animation_tree_player.tscn
+- @game/assets/characters/templates/ik/vrik.tscn
+- @game/assets/characters/templates/animation/animation_tree_root_player.tres
+- @game/assets/characters/templates/reference_female/reference_female_player.tscn

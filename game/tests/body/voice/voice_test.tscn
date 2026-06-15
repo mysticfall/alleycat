@@ -1,42 +1,32 @@
 [gd_scene format=3 uid="uid://uvywgxhpdah6"]
-
-[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_q155j"]
+[ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_q155j"]
 [ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="2_0iva6"]
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="3_q155j"]
 [ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="4_wihe7"]
 [ext_resource type="Script" uid="uid://3uodduftnti3" path="res://tests/body/voice/voice_test_control.gd" id="5_glwme"]
-
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_q155j"]
-
 [sub_resource type="Sky" id="Sky_0iva6"]
 sky_material = SubResource("PhysicalSkyMaterial_q155j")
-
 [sub_resource type="Environment" id="Environment_xjhvu"]
 background_mode = 2
 background_intensity = 63443.82
 sky = SubResource("Sky_0iva6")
 sky_rotation = Vector3(0, 2.4609141, 0)
 ambient_light_source = 3
-
 [sub_resource type="CameraAttributesPhysical" id="CameraAttributesPhysical_q155j"]
-
 [node name="VoiceTest" type="Node3D" unique_id=810449613]
-
 [node name="Character" parent="." unique_id=263578101 instance=ExtResource("1_q155j")]
-
 [node name="AIVoice" type="Node3D" parent="Character/Female/GeneralSkeleton/Head" parent_id_path=PackedInt32Array(263578101, 694402195) index="1" unique_id=1536983584 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 script = ExtResource("4_wihe7")
 SpeechGenerator = NodePath("SpeechGenerator")
 LipSyncPlayer = NodePath("LipSyncPlayer")
 metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
-
 [node name="SpeechGenerator" type="Node" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1805541475]
 script = ExtResource("2_0iva6")
 VoiceOverride = "Emma"
 TargetSampleRate = 16000
 metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
-
 [node name="LipSyncPlayer" type="Node" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1952690197 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
 script = ExtResource("3_q155j")
 InputStrength = 0.6
@@ -45,64 +35,49 @@ EyeRotationToBlendshapeScale = 0.15
 Meshes = [NodePath("../../../Female_body"), NodePath("../../../Female_eyebrow006"), NodePath("../../../Female_eyelashes01"), NodePath("../../../Female_high-poly"), NodePath("../../../Female_teeth_shape01"), NodePath("../../../Female_tongue01")]
 AudioPlayer = NodePath("../AudioStreamPlayer3D")
 metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
-
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1643775147]
-
 [node name="RightHand" parent="Character/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(263578101, 111354195) index="10" unique_id=190350548]
 transform = Transform3D(0.440444, -0.5169338, 0.73402214, 0.4658435, -0.56732756, -0.67906505, 0.7674626, 0.6410296, -0.009065724, -0.42150915, 0.9773546, 0.16186677)
-
 [node name="LeftHand" parent="Character/Female/GeneralSkeleton" parent_id_path=PackedInt32Array(263578101, 111354195) index="11" unique_id=792521653]
 transform = Transform3D(0.440444, 0.5169338, -0.73402214, -0.4658435, -0.56732756, -0.67906505, -0.7674626, 0.6410296, -0.009065724, 0.42150915, 0.9773546, 0.16186677)
-
 [node name="Camera3D" type="Camera3D" parent="." unique_id=77492201]
 transform = Transform3D(-0.98618174, 0, -0.16566736, 0, 1, 0, 0.16566736, 0, -0.98618174, 0.02370505, 1.4893267, -0.51236725)
 environment = SubResource("Environment_xjhvu")
 attributes = SubResource("CameraAttributesPhysical_q155j")
 current = true
-
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=407809945]
 transform = Transform3D(0.7902727, 0.3799911, 0.48070347, 0, -0.78449506, 0.6201351, 0.6127553, -0.4900759, -0.619965, 0.99228525, 2.0944283, -0.692612)
-
 [node name="VoiceTestControl" type="CanvasLayer" parent="." unique_id=735795587]
 script = ExtResource("5_glwme")
-
 [node name="PanelContainer" type="PanelContainer" parent="VoiceTestControl" unique_id=625461304]
 offset_left = 10.0
 offset_top = 10.0
 offset_right = 430.0
 offset_bottom = 208.0
-
 [node name="MarginContainer" type="MarginContainer" parent="VoiceTestControl/PanelContainer" unique_id=1748997583]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
-
 [node name="VBoxContainer" type="VBoxContainer" parent="VoiceTestControl/PanelContainer/MarginContainer" unique_id=1766577914]
 layout_mode = 2
 theme_override_constants/separation = 9
-
 [node name="TitleLabel" type="Label" parent="VoiceTestControl/PanelContainer/MarginContainer/VBoxContainer" unique_id=1794275081]
 layout_mode = 2
 text = "AI Voice Test"
-
 [node name="DialogueInput" type="TextEdit" parent="VoiceTestControl/PanelContainer/MarginContainer/VBoxContainer" unique_id=1401151158]
 layout_mode = 2
 size_flags_vertical = 3
 text = "Hello from AlleyCat."
 placeholder_text = "Hello from AlleyCat."
-
 [node name="ButtonRow" type="HBoxContainer" parent="VoiceTestControl/PanelContainer/MarginContainer/VBoxContainer" unique_id=1009998707]
 layout_mode = 2
-
 [node name="SpeakButton" type="Button" parent="VoiceTestControl/PanelContainer/MarginContainer/VBoxContainer/ButtonRow" unique_id=502289392]
 layout_mode = 2
 size_flags_horizontal = 8
 text = "Speak"
-
 [node name="StatusLabel" type="Label" parent="VoiceTestControl/PanelContainer/MarginContainer/VBoxContainer" unique_id=1400216874]
 layout_mode = 2
 autowrap_mode = 3
-
 [editable path="Character"]

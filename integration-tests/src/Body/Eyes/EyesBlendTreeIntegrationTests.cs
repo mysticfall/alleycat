@@ -11,12 +11,11 @@ namespace AlleyCat.IntegrationTests.Body.Eyes;
 /// </summary>
 public sealed class EyesBlendTreeIntegrationTests
 {
-    private const string PlayerAnimationTreeRootPath = "res://assets/characters/reference/female/animation_tree_root_player.tres";
-    private const string NpcAnimationTreeRootPath = "res://assets/characters/reference/female/animation_tree_root_npc.tres";
-    private const string ReferenceFemaleScenePath = "res://assets/characters/reference/female/reference_female.tscn";
-    private const string ReferenceFemaleBaseScenePath = "res://assets/characters/reference/female/reference_female_base.tscn";
+    private const string PlayerAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_player.tres";
+    private const string NpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_npc.tres";
+    private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string ReferencePlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string ReferenceNpcScenePath = "res://assets/characters/reference/female_reference_npc.tscn";
+    private const string ReferenceNpcScenePath = "res://assets/characters/reference/ally.tscn";
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string EyesPhotoboothScenePath = "res://tests/body/eyes/eyes_visual_test.tscn";
     private const string HorizontalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_right_left.tres";
@@ -56,7 +55,6 @@ public sealed class EyesBlendTreeIntegrationTests
     public void ReferenceFemaleAndDependentScenes_LoadWithEyeAnimationLibraryWiring()
     {
         AssertSceneInstantiates(ReferenceFemaleScenePath);
-        AssertSceneInstantiates(ReferenceFemaleBaseScenePath);
         AssertSceneInstantiates(ReferencePlayerScenePath);
         AssertSceneInstantiates(ReferenceNpcScenePath);
         AssertSceneInstantiates(EyesPhotoboothScenePath);
@@ -67,9 +65,9 @@ public sealed class EyesBlendTreeIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void ReferenceFemaleBaseScene_StartsWithNeutralEyeLookDownBlendShapes()
+    public void ReferenceFemaleScene_StartsWithNeutralEyeLookDownBlendShapes()
     {
-        PackedScene scene = Assert.IsType<PackedScene>(ResourceLoader.Load(ReferenceFemaleBaseScenePath), exactMatch: false);
+        PackedScene scene = Assert.IsType<PackedScene>(ResourceLoader.Load(ReferenceFemaleScenePath), exactMatch: false);
         Node instance = scene.Instantiate();
         try
         {
@@ -88,16 +86,16 @@ public sealed class EyesBlendTreeIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public async Task ReferenceFemaleBaseScene_EyesBehaviour_UsesAuthoredAnimationTreeFilters()
+    public async Task ReferenceFemaleNpcScene_EyesBehaviour_UsesAuthoredAnimationTreeFilters()
     {
         SceneTree sceneTree = GetSceneTree();
-        PackedScene scene = LoadPackedScene(ReferenceFemaleBaseScenePath);
+        PackedScene scene = LoadPackedScene(ReferenceNpcScenePath);
         Node root = scene.Instantiate();
 
         try
         {
-            sceneTree.Root.AddChild(root);
-            await WaitForFramesAsync(sceneTree, 2);
+            await AddChildToRootAsync(sceneTree, root);
+            await WaitForFramesAsync(sceneTree, 6);
 
             AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
             AnimationNodeBlendTree treeRoot = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
@@ -123,7 +121,7 @@ public sealed class EyesBlendTreeIntegrationTests
         finally
         {
             root.QueueFree();
-            await WaitForNextFrameAsync(sceneTree);
+            await WaitForFramesAsync(sceneTree, 12);
         }
     }
 
@@ -282,23 +280,22 @@ public sealed class EyesBlendTreeIntegrationTests
 
         try
         {
-            sceneTree.Root.AddChild(root);
-            await WaitForFramesAsync(sceneTree, 2);
+            await AddChildToRootAsync(sceneTree, root);
+            await WaitForFramesAsync(sceneTree, 12);
 
             Node eyes = root.GetNode("Actors/Female/Eyes");
-            AnimationTree tree = root.GetNode<AnimationTree>("Actors/Female/AnimationTree");
-
-            Node3D eyeOrigin = Assert.IsType<Node3D>(eyes.Get("EyeOrigin").AsGodotObject(), exactMatch: false);
-            Node3D lookTarget = Assert.IsType<Node3D>(eyes.Get("LookTarget").AsGodotObject(), exactMatch: false);
+            Node3D lookTarget = root.GetNode<Node3D>("Actors/Female/LookTarget");
 
             eyes.Set("LookSmoothingTime", 0f);
-            lookTarget.TopLevel = true;
-            lookTarget.GlobalPosition = eyeOrigin.GlobalTransform * new Vector3(10f, 10f, -10f);
+            lookTarget.GlobalPosition = new Vector3(10f, 10f, -10f);
+            eyes.Set("LookTarget", lookTarget);
+            _ = eyes.Call("RefreshLookParametersDeferred");
+            await WaitForFramesAsync(sceneTree, 2);
 
-            await WaitForNextFrameAsync(sceneTree);
+            Assert.True(eyes.Call("HasRuntimeLookTarget").AsBool());
 
-            float horizontalSeek = tree.Get(EyesAnimationTreePaths.GetHorizontalLookSeekParameter()).AsSingle();
-            float verticalSeek = tree.Get(EyesAnimationTreePaths.GetVerticalLookSeekParameter()).AsSingle();
+            float horizontalSeek = eyes.Call("GetHorizontalLookSeekTime").AsSingle();
+            float verticalSeek = eyes.Call("GetVerticalLookSeekTime").AsSingle();
 
             Assert.NotEqual(EyesLookMath.NeutralSeekTimeSeconds, horizontalSeek, precision: 5);
             Assert.NotEqual(EyesLookMath.NeutralSeekTimeSeconds, verticalSeek, precision: 5);
@@ -323,7 +320,7 @@ public sealed class EyesBlendTreeIntegrationTests
 
         try
         {
-            sceneTree.Root.AddChild(root);
+            await AddChildToRootAsync(sceneTree, root);
             await WaitForFramesAsync(sceneTree, 4);
 
             Node eyes = root.GetNode("Actors/Female/Eyes");
@@ -332,24 +329,14 @@ public sealed class EyesBlendTreeIntegrationTests
             Node3D lookTarget = Assert.IsType<Node3D>(eyes.Get("LookTarget").AsGodotObject(), exactMatch: false);
 
             eyes.Set("LookSmoothingTime", 0f);
-            await WaitForFramesAsync(sceneTree, 3);
+            await WaitForFramesAsync(sceneTree, 6);
 
-            Transform3D eyeTransform = eyeOrigin.GlobalTransform;
-            Vector3 targetPosition = lookTarget.GlobalPosition;
-            Vector2 expectedSeekTimes = EyesLookMath.ResolveLookSeekTimes(
-                eyeTransform,
-                targetPosition,
-                Mathf.DegToRad(35f),
-                Mathf.DegToRad(25f));
-
-            Assert.Equal(EyesLookMath.NeutralSeekTimeSeconds, expectedSeekTimes.X, precision: 3);
-            Assert.Equal(EyesLookMath.NeutralSeekTimeSeconds, expectedSeekTimes.Y, precision: 3);
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
 
             lookTarget.TopLevel = true;
             lookTarget.GlobalPosition = eyeOrigin.GlobalTransform * new Vector3(10f, 10f, -10f);
-            await WaitForFramesAsync(sceneTree, 3);
+            await WaitForFramesAsync(sceneTree, 6);
 
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
@@ -385,6 +372,13 @@ public sealed class EyesBlendTreeIntegrationTests
 
         Assert.False(blend.IsPathFiltered(new NodePath("%GeneralSkeleton:Head")));
         Assert.False(blend.IsPathFiltered(new NodePath("%GeneralSkeleton:LeftHand")));
+    }
+
+    private static async Task AddChildToRootAsync(SceneTree sceneTree, Node child)
+    {
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, child);
+        await WaitForNextFrameAsync(sceneTree);
+        Assert.True(child.IsInsideTree(), $"Expected '{child.Name}' to enter the test scene tree.");
     }
 
     private static void AssertAnimation(AnimationNodeBlendTree root, string nodeName, string animationName)

@@ -1,7 +1,7 @@
 extends SceneTree
 
 const TEST_SCENE_PATH := "res://tests/body/eyes/eyes_visual_test.tscn"
-const ANIMATION_TREE_SCENE_PATH := "res://assets/characters/reference/female/animation_tree.tscn"
+const ANIMATION_TREE_SCENE_PATH := "res://assets/characters/templates/animation/animation_tree.tscn"
 const EYES_BEHAVIOUR_SCRIPT_PATH := "res://src/Body/Eyes/EyesBehaviour.cs"
 const OUTPUT_ROOT := "BODY-004/eyes_visual"
 

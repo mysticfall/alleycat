@@ -10,11 +10,11 @@ namespace AlleyCat.IntegrationTests.IK;
 public sealed class NeckSpineIKIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/neck_spine_ccdik_test.tscn";
-    private const string ReusableIkScenePath = "res://assets/characters/ik/neck_spine_ccdik.tscn";
+    private const string ReusableIkScenePath = "res://assets/characters/templates/ik/neck_spine_ccdik.tscn";
     private const string MarkersRootPath = "Markers";
     private const string HeadTargetPath = "Markers/HeadTarget";
     private const string TargetPosesPath = "Markers/TargetPoses";
-    private const string IkNodeName = "NeckSpineCCDIK3D";
+    private const string IkNodeName = "NeckSpineIK";
     private static readonly string[] _headBoneNameCandidates = ["Head"];
     private static readonly string[] _neckBoneNameCandidates = ["Neck"];
     private static readonly string[] _spineBoneNameCandidates = ["Spine3", "Spine2", "Spine1", "Spine"];

@@ -171,7 +171,8 @@ Provide a grab execution system that:
 
 ### Parenting And Hand Bone
 
-28. Parented object uses `BoneAttachment3D` nodes authored in `reference_female.tscn`.
+28. Parented objects use character hand `BoneAttachment3D` nodes supplied by the character's visible runtime module
+    templates.
 29. The hand component manages which bone attachment to use based on hand side.
 30. Object parenting preserves the grab point's relative transform at time of grab
     plus the authored position and rotation offsets.
@@ -437,5 +438,5 @@ Provide a grab execution system that:
 - [BODY-001: Hands](../../body/001-hands/index.md)
 - [IK-002: Arm And Shoulder IK System](../../characters/ik/002-arm-shoulder-ik/index.md)
 - [IK Implementation Notes](../../characters/ik/implementation-notes.md)
-- `game/assets/characters/reference/female/reference_female.tscn`
+- [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
 - `game/src/Interaction/` (implementation namespace)

@@ -298,4 +298,5 @@ gating for non-standing poses.
 - [Kneeling Pose State](kneeling-pose-state.md)
 - [AllFours Pose State](all-fours-pose-state.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
-- @game/assets/characters/reference/female/animations/animation_tree_player.tscn
+- @game/assets/characters/templates/animation/animation_tree_root_player.tres
+- @game/assets/characters/templates/reference_female/reference_female_player.tscn

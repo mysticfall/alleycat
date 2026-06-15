@@ -298,8 +298,8 @@ through explicit force-transfer channels.
 30. Code review confirms `DynamicPhysicalRig` contains no references to IK nodes,
      components, or state, preserving the IK → Body coupling direction.
 31. Tests verify that scenes requiring generated proxy collision integration
-     (e.g. `game/assets/characters/reference/female_reference_npc.tscn` and
-     `game/assets/characters/reference/player.tscn`) wire an explicit
+     (e.g. `game/assets/characters/reference/ally.tscn` and
+      `game/assets/characters/reference/player.tscn`) wire an explicit
      `PhysicalRig` path on their `CharacterIK` node without serialising a
      separate `Skeleton` path.
 32. Tests verify that `PlayerVRIK` uses the configured `PhysicalRig` reference for

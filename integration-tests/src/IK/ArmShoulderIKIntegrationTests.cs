@@ -14,6 +14,8 @@ namespace AlleyCat.IntegrationTests.IK;
 public sealed class ArmShoulderIKIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/characters/ik/arm_shoulder_ik_test.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string NPCScenePath = "res://assets/characters/reference/ally.tscn";
     private const string HandTargetPosesPath = "Markers/HandTargetPoses";
     private const string LeftHandTargetPath = "Markers/LeftHandTarget";
     private const string RightHandTargetPath = "Markers/RightHandTarget";
@@ -21,7 +23,7 @@ public sealed class ArmShoulderIKIntegrationTests
     private const string RightPoleTargetPath = "Markers/RightPoleTarget";
     private const string LeftArmControllerPath = "Subject/Female/Female/GeneralSkeleton/LeftArmIKController";
     private const string RightArmControllerPath = "Subject/Female/Female/GeneralSkeleton/RightArmIKController";
-    private const string CanonicalPoleAnchorSetPath = "res://assets/characters/ik/arm_ik_target_set.tres";
+    private const string CanonicalPoleAnchorSetPath = "res://assets/characters/templates/ik/arm_ik_target_set.tres";
     private const string ArmIKControllerScriptPath = "res://src/IK/ArmIKController.cs";
     private const string PoleAnchorSetScriptPath = "res://src/IK/Anchors/ArmPoleAnchorSetResource.cs";
     private const string PoleAnchorScriptPath = "res://src/IK/Anchors/ArmPoleAnchorResource.cs";
@@ -29,6 +31,8 @@ public sealed class ArmShoulderIKIntegrationTests
     private const float MinimumPoleDirectionAlignment = 0.3f;
     private const float MaximumHandResidualDistance = 0.15f;
     private const float PoleOffsetFloorToleranceMetres = 0.005f;
+    private const float RuntimePoleSideMinimum = 0.08f;
+    private const float RuntimeElbowSideMinimum = 0.015f;
 
     private static readonly string[] _expectedCanonicalAnchorNames =
     [
@@ -298,6 +302,137 @@ public sealed class ArmShoulderIKIntegrationTests
     }
 
     /// <summary>
+    /// Verifies installer-materialised player and NPC arm IK controllers bind to the live target nodes and keep
+    /// elbows/poles on the correct avatar side for the compensated reference rig frame.
+    /// </summary>
+    [Fact]
+    public async Task ArmIk_RuntimeInstalledPlayer_UsesReferenceRigFrameForArmPolesAndShoulders()
+        => await AssertRuntimeInstalledCharacterUsesReferenceRigFrameForArmPolesAndShoulders(
+            PlayerScenePath,
+            "player",
+            verifyDirectPoleSolve: true);
+
+    /// <summary>
+    /// Verifies installer-materialised NPC arm IK controllers bind to the live target nodes and keep elbows/poles on
+    /// the correct avatar side for the compensated reference rig frame.
+    /// </summary>
+    [Fact]
+    public async Task ArmIk_RuntimeInstalledNPC_UsesReferenceRigFrameForArmPolesAndShoulders()
+        => await AssertRuntimeInstalledCharacterUsesReferenceRigFrameForArmPolesAndShoulders(
+            NPCScenePath,
+            "npc",
+            verifyDirectPoleSolve: false);
+
+    private static async Task AssertRuntimeInstalledCharacterUsesReferenceRigFrameForArmPolesAndShoulders(
+        string scenePath,
+        string actorLabel,
+        bool verifyDirectPoleSolve)
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(scenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+        await WaitForFramesAsync(sceneTree, 2);
+        Node actor = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException($"Expected runtime {actorLabel} scene to become current scene.");
+
+        try
+        {
+            EnsureCharacterRuntimeInstalled(actor);
+            await WaitForFramesAsync(sceneTree, 4);
+
+            Skeleton3D skeleton = actor.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            AssertReferenceRigSkeletonLocalFrame(skeleton, actorLabel);
+
+            Node3D leftHandTarget = actor.GetNode<Node3D>("IKTargets/LeftHand");
+            Node3D rightHandTarget = actor.GetNode<Node3D>("IKTargets/RightHand");
+            Node3D leftPoleTarget = actor.GetNode<Node3D>("IKTargets/LeftElbow");
+            Node3D rightPoleTarget = actor.GetNode<Node3D>("IKTargets/RightElbow");
+            SkeletonModifier3D leftArmController = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/LeftArmIKController");
+            SkeletonModifier3D rightArmController = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/RightArmIKController");
+            SkeletonModifier3D leftArmIK = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/LeftArmTwoBoneIKController");
+            SkeletonModifier3D rightArmIK = actor.GetNode<SkeletonModifier3D>("Female/GeneralSkeleton/RightArmTwoBoneIKController");
+
+            // Drive the installed arm modifiers directly for this regression. Runtime CharacterIK provider stages may
+            // intentionally deactivate hands when no XR/NPC provider is present in the test process; the assertion here
+            // is the installed controller frame, target binding, and shoulder/pole solve once the hand group is active.
+            DisableCharacterIKNode(actor.GetNodeOrNull("VRIK"));
+            DisableCharacterIKNode(actor.GetNodeOrNull("CharacterIK"));
+            DeactivateRuntimeModifierIfPresent(skeleton, "CharacterIKBeginStage");
+            DeactivateRuntimeModifierIfPresent(skeleton, "CharacterIKFootProviderStage");
+            DeactivateRuntimeModifierIfPresent(skeleton, "CharacterIKEndStage");
+            ActivateRuntimeModifier(leftArmController);
+            ActivateRuntimeModifier(rightArmController);
+            ActivateRuntimeModifier(leftArmIK);
+            ActivateRuntimeModifier(rightArmIK);
+
+            AssertExportedNodeReference(leftArmController, "HandTarget", leftHandTarget, $"{actorLabel} left hand target");
+            AssertExportedNodeReference(leftArmController, "PoleTarget", leftPoleTarget, $"{actorLabel} left elbow pole target");
+            AssertExportedNodeReference(rightArmController, "HandTarget", rightHandTarget, $"{actorLabel} right hand target");
+            AssertExportedNodeReference(rightArmController, "PoleTarget", rightPoleTarget, $"{actorLabel} right elbow pole target");
+            AssertArmPoleAnchorSet(leftArmController, $"{actorLabel} left arm controller");
+            AssertArmPoleAnchorSet(rightArmController, $"{actorLabel} right arm controller");
+
+            int hipsIdx = RequireBone(skeleton, "Hips");
+            int neckIdx = RequireBone(skeleton, "Neck");
+            int leftShoulderIdx = RequireBone(skeleton, "LeftShoulder");
+            int rightShoulderIdx = RequireBone(skeleton, "RightShoulder");
+            int leftUpperArmIdx = RequireBone(skeleton, "LeftUpperArm");
+            int rightUpperArmIdx = RequireBone(skeleton, "RightUpperArm");
+            int leftLowerArmIdx = RequireBone(skeleton, "LeftLowerArm");
+            int rightLowerArmIdx = RequireBone(skeleton, "RightLowerArm");
+
+            Basis bodyBasis = ComputeBodyBasis(skeleton, hipsIdx, neckIdx, leftShoulderIdx, rightShoulderIdx);
+            Vector3 bodyRight = bodyBasis.Column0;
+            Vector3 bodyUp = bodyBasis.Column1;
+            Vector3 bodyForward = bodyBasis.Column2;
+            Vector3 leftShoulder = BoneWorldPosition(skeleton, leftUpperArmIdx);
+            Vector3 rightShoulder = BoneWorldPosition(skeleton, rightUpperArmIdx);
+
+            // Body-space representative forward reach. In the compensated runtime rig, avatar forward is body +Z
+            // (skeleton-local +Z), avatar right is body +X (skeleton-local -X), and left is body -X.
+            leftHandTarget.GlobalPosition = leftShoulder + (-0.19f * bodyRight) + (-0.05f * bodyUp) + (0.40f * bodyForward);
+            rightHandTarget.GlobalPosition = rightShoulder + (0.19f * bodyRight) + (-0.05f * bodyUp) + (0.40f * bodyForward);
+            leftHandTarget.ForceUpdateTransform();
+            rightHandTarget.ForceUpdateTransform();
+
+            skeleton.Advance(1.0d / 60.0d);
+            await WaitForFramesAsync(sceneTree, 8);
+            await WaitForPhysicsFramesAsync(sceneTree, 4);
+            await WaitForFramesAsync(sceneTree, 4);
+
+            if (verifyDirectPoleSolve)
+            {
+                Basis settledBodyBasisInverse = ComputeBodyBasisInverse(skeleton, hipsIdx, neckIdx, leftShoulderIdx, rightShoulderIdx);
+                AssertRuntimeArmSide(
+                    actorLabel,
+                    "left",
+                    skeleton,
+                    settledBodyBasisInverse,
+                    leftPoleTarget,
+                    leftHandTarget,
+                    leftUpperArmIdx,
+                    leftLowerArmIdx,
+                    expectedSideSign: -1f);
+                AssertRuntimeArmSide(
+                    actorLabel,
+                    "right",
+                    skeleton,
+                    settledBodyBasisInverse,
+                    rightPoleTarget,
+                    rightHandTarget,
+                    rightUpperArmIdx,
+                    rightLowerArmIdx,
+                    expectedSideSign: 1f);
+            }
+        }
+        finally
+        {
+            _ = sceneTree.ChangeSceneToPacked(null);
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies folded/compressed arm reaches enforce the rest-arm-derived elbow pole floor.
     /// </summary>
     [Fact]
@@ -535,6 +670,96 @@ public sealed class ArmShoulderIKIntegrationTests
         }
     }
 
+    private static void AssertReferenceRigSkeletonLocalFrame(Skeleton3D skeleton, string actorLabel)
+    {
+        int hipsIdx = RequireBone(skeleton, "Hips");
+        int neckIdx = RequireBone(skeleton, "Neck");
+        int leftShoulderIdx = RequireBone(skeleton, "LeftShoulder");
+        int rightShoulderIdx = RequireBone(skeleton, "RightShoulder");
+
+        Basis restBodyBasis = ComputeRestBodyBasis(skeleton, hipsIdx, neckIdx, leftShoulderIdx, rightShoulderIdx);
+
+        Assert.True(
+            restBodyBasis.Column0.Dot(Vector3.Left) >= 0.9f,
+            $"Expected {actorLabel} reference-rig avatar right to resolve to skeleton-local -X. " +
+            $"Rest body right column: {restBodyBasis.Column0}.");
+        Assert.True(
+            restBodyBasis.Column2.Dot(Vector3.Back) >= 0.9f,
+            $"Expected {actorLabel} reference-rig avatar forward/body +Z to resolve to skeleton-local +Z. " +
+            $"Rest body +Z column: {restBodyBasis.Column2}.");
+    }
+
+    private static void AssertRuntimeArmSide(
+        string actorLabel,
+        string sideLabel,
+        Skeleton3D skeleton,
+        Basis bodyBasisInverse,
+        Node3D poleTarget,
+        Node3D handTarget,
+        int upperArmIdx,
+        int lowerArmIdx,
+        float expectedSideSign)
+    {
+        Vector3 shoulderPos = BoneWorldPosition(skeleton, upperArmIdx);
+        Vector3 midpoint = (shoulderPos + handTarget.GlobalPosition) * 0.5f;
+        Vector3 poleDirBody = bodyBasisInverse * (poleTarget.GlobalPosition - midpoint).Normalized();
+        Vector3 elbowOffsetBody = bodyBasisInverse * (BoneWorldPosition(skeleton, lowerArmIdx) - shoulderPos);
+
+        Assert.True(
+            poleDirBody.X * expectedSideSign >= RuntimePoleSideMinimum,
+            $"Expected {actorLabel} {sideLabel} elbow pole to stay on the {sideLabel} avatar side in body space. " +
+            $"Pole direction body={poleDirBody}, expected side sign={expectedSideSign}.");
+        Assert.True(
+            elbowOffsetBody.X * expectedSideSign >= RuntimeElbowSideMinimum,
+            $"Expected {actorLabel} {sideLabel} lower-arm/elbow pose not to cross shoulders after IK solve. " +
+            $"Elbow offset body={elbowOffsetBody}, expected side sign={expectedSideSign}.");
+    }
+
+    private static void AssertExportedNodeReference(Node owner, string propertyName, Node expectedNode, string context)
+    {
+        Variant property = owner.Get(propertyName);
+        Assert.Equal(Variant.Type.Object, property.VariantType);
+        GodotObject? actual = property.AsGodotObject();
+        Assert.NotNull(actual);
+        Assert.True(
+            expectedNode.GetInstanceId() == actual.GetInstanceId(),
+            $"Expected {context} to reference '{expectedNode.GetPath()}', got '{(actual as Node)?.GetPath()}'.");
+    }
+
+    private static void AssertArmPoleAnchorSet(Node controller, string context)
+    {
+        Resource poleAnchorSet = RequirePoleAnchorSetResource((SkeletonModifier3D)controller, context);
+        Assert.Equal(CanonicalPoleAnchorSetPath, poleAnchorSet.ResourcePath);
+    }
+
+    private static void ActivateRuntimeModifier(SkeletonModifier3D modifier)
+    {
+        modifier.Active = true;
+        modifier.Influence = 1.0f;
+    }
+
+    private static void DeactivateRuntimeModifierIfPresent(Skeleton3D skeleton, string modifierName)
+    {
+        if (skeleton.GetNodeOrNull<SkeletonModifier3D>(modifierName) is not { } modifier)
+        {
+            return;
+        }
+
+        modifier.Active = false;
+        modifier.Influence = 0.0f;
+    }
+
+    private static void DisableCharacterIKNode(Node? characterIK)
+    {
+        if (characterIK is null)
+        {
+            return;
+        }
+
+        characterIK.Set("Active", false);
+        characterIK.ProcessMode = Node.ProcessModeEnum.Disabled;
+    }
+
     private static Basis ComputeBodyBasisInverse(
         Skeleton3D skeleton,
         int hipsIdx,
@@ -568,6 +793,31 @@ public sealed class ArmShoulderIKIntegrationTests
         };
 
         return bodyBasis;
+    }
+
+    private static Basis ComputeRestBodyBasis(
+        Skeleton3D skeleton,
+        int hipsIdx,
+        int neckIdx,
+        int lShoulderIdx,
+        int rShoulderIdx)
+    {
+        Vector3 hipsPos = skeleton.GetBoneGlobalRest(hipsIdx).Origin;
+        Vector3 neckPos = skeleton.GetBoneGlobalRest(neckIdx).Origin;
+        Vector3 lShoulderPos = skeleton.GetBoneGlobalRest(lShoulderIdx).Origin;
+        Vector3 rShoulderPos = skeleton.GetBoneGlobalRest(rShoulderIdx).Origin;
+
+        Vector3 bodyUp = (neckPos - hipsPos).Normalized();
+        Vector3 bodyRight = (rShoulderPos - lShoulderPos).Normalized();
+        bodyRight = (bodyRight - (bodyRight.Dot(bodyUp) * bodyUp)).Normalized();
+        Vector3 bodyForward = bodyRight.Cross(bodyUp);
+
+        return new Basis
+        {
+            Column0 = bodyRight,
+            Column1 = bodyUp,
+            Column2 = -bodyForward,
+        };
     }
 
     private static Dictionary<string, Node3D> ResolvePoseMarkers(Node3D handTargetPoses)

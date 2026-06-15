@@ -113,8 +113,8 @@ IK-002 naming, design, and test conventions.
   on current animation state.
 - Unconditional knee pole minimum-offset safeguarding using a rest-leg-length
   derived floor.
-- A reusable leg-feet IK scene (`reference_female_base.tscn`) and a lower-body
-  photobooth verification workflow aligned to IK-002 structure.
+- A portable leg-feet IK contract that does not depend on concrete `Female` node/mesh names, with a
+  lower-body photobooth verification workflow aligned to IK-002 structure.
 - Provider-driven foot target support via `IKTargetIntentProvider`, coexisting
   with `FootTargetSyncController` without conflict.
 - Provider influence gating that deactivates leg IK when influence is 0.
@@ -176,12 +176,10 @@ pages.
   consistent with IK-002 patterns (controller-first, contract split,
   per-side instances). *(Leg-Feet IK Contract)*
 
-- **AC-08** — Reusable IK scene at
-  `@game/assets/characters/reference/female/reference_female_base.tscn` containing
-  `LegIKController` (left/right), `TwoBoneIK3D` (left/right), and leg target
-  nodes (`IKTargets/LeftFoot`, `IKTargets/RightFoot`). Consuming scene
-  `@game/assets/characters/reference/player.tscn` inherits base scene and wires
-  foot targets for runtime solving. *(This Page)*
+- **AC-08** — Portable IK contract defines `LegIKController` (left/right), `TwoBoneIK3D`
+  (left/right), and leg target nodes (`IKTargets/LeftFoot`, `IKTargets/RightFoot`) without
+  dependence on concrete `Female` node/mesh names. Consuming scenes compose these controllers via
+  template-authored exported references. *(This Page)*
 
 - **AC-09** — A photobooth verification scene exists under `@game/tests/` and
   inherits `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`,
@@ -231,8 +229,6 @@ pages.
 
 ## References
 
-- @game/assets/characters/reference/female/reference_female.tscn
-- @game/assets/characters/reference/female/reference_female_base.tscn
 - @game/assets/characters/reference/player.tscn
 - @game/assets/testing/photobooth/templates/lower_body_5_cams.tscn
 - @specs/characters/ik/002-arm-shoulder-ik/index.md

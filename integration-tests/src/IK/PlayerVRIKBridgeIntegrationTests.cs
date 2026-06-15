@@ -15,7 +15,8 @@ namespace AlleyCat.IntegrationTests.IK;
 public sealed partial class PlayerVRIKBridgeIntegrationTests
 {
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string FemaleReferenceNPCScenePath = "res://assets/characters/reference/female_reference_npc.tscn";
+    private const string FemaleReferenceNPCScenePath = "res://assets/characters/reference/ally.tscn";
+    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string PlayerVRIKScriptPath = "res://src/IK/PlayerVRIK.cs";
     private const string CharacterIKScriptPath = "res://src/IK/CharacterIK.cs";
     private const string DynamicPhysicalRigScriptPath = "res://src/Body/DynamicPhysicalRig.cs";
@@ -27,19 +28,31 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void PlayerScene_PlayerVRIKPhysicalRig_ResolvesToGeneratedDynamicPhysicalRig()
+    public async Task PlayerScene_PlayerVRIKPhysicalRig_ResolvesToGeneratedDynamicPhysicalRig()
     {
-        using Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+        SceneTree sceneTree = GetSceneTree();
+        Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+        sceneTree.Root.AddChild(player);
+        await WaitForFramesAsync(sceneTree, 6);
+        EnsureRuntimeRoleInstalled(player);
 
-        Node playerVRIK = player.GetNode<Node>("VRIK");
-        Node physicalRig = player.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
-        GodotObject configuredPhysicalRig = playerVRIK.Get("PhysicalRig").AsGodotObject()
-            ?? throw new Xunit.Sdk.XunitException("Expected player VRIK PhysicalRig to resolve to a node.");
+        try
+        {
+            Node playerVRIK = player.GetNode<Node>("VRIK");
+            Node physicalRig = player.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
+            GodotObject configuredPhysicalRig = GetScriptProperty<GodotObject>(playerVRIK, "PhysicalRig")
+                ?? throw new Xunit.Sdk.XunitException("Expected player VRIK PhysicalRig to resolve to a node.");
 
-        Assert.Equal(physicalRig.GetInstanceId(), configuredPhysicalRig.GetInstanceId());
-        Assert.Equal(ExpectedPlayerPhysicalRigPath, playerVRIK.GetPathTo(physicalRig));
-        Assert.Equal(PlayerVRIKScriptPath, AssertNodeScriptPath(playerVRIK));
-        Assert.Equal(DynamicPhysicalRigScriptPath, AssertNodeScriptPath(physicalRig));
+            Assert.Equal(physicalRig.GetInstanceId(), configuredPhysicalRig.GetInstanceId());
+            Assert.Equal(ExpectedPlayerPhysicalRigPath, playerVRIK.GetPathTo(physicalRig));
+            Assert.Equal(PlayerVRIKScriptPath, AssertNodeScriptPath(playerVRIK));
+            Assert.Equal(DynamicPhysicalRigScriptPath, AssertNodeScriptPath(physicalRig));
+        }
+        finally
+        {
+            player.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
     }
 
     /// <summary>
@@ -47,19 +60,168 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void FemaleReferenceNPCScene_CharacterIKPhysicalRig_ResolvesToGeneratedDynamicPhysicalRig()
+    public async Task FemaleReferenceNPCScene_CharacterIKPhysicalRig_ResolvesToGeneratedDynamicPhysicalRig()
     {
-        using Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        SceneTree sceneTree = GetSceneTree();
+        Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        sceneTree.Root.AddChild(npc);
+        await WaitForFramesAsync(sceneTree, 6);
+        EnsureRuntimeRoleInstalled(npc);
 
-        Node characterIK = npc.GetNode<Node>("CharacterIK");
-        Node physicalRig = npc.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
-        GodotObject configuredPhysicalRig = characterIK.Get("PhysicalRig").AsGodotObject()
-            ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK PhysicalRig to resolve to a node.");
+        try
+        {
+            Node characterIK = npc.GetNode<Node>("CharacterIK");
+            Node physicalRig = npc.GetNode<Node>("Female/GeneralSkeleton/DynamicPhysicalRig");
+            GodotObject configuredPhysicalRig = GetScriptProperty<GodotObject>(characterIK, "PhysicalRig")
+                ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK PhysicalRig to resolve to a node.");
 
-        Assert.Equal(physicalRig.GetInstanceId(), configuredPhysicalRig.GetInstanceId());
-        Assert.Equal(ExpectedFemaleReferenceNPCPhysicalRigPath, characterIK.GetPathTo(physicalRig));
-        Assert.Equal(CharacterIKScriptPath, AssertNodeScriptPath(characterIK));
-        Assert.Equal(DynamicPhysicalRigScriptPath, AssertNodeScriptPath(physicalRig));
+            Assert.Equal(physicalRig.GetInstanceId(), configuredPhysicalRig.GetInstanceId());
+            Assert.Equal(ExpectedFemaleReferenceNPCPhysicalRigPath, characterIK.GetPathTo(physicalRig));
+            Assert.Equal(CharacterIKScriptPath, AssertNodeScriptPath(characterIK));
+            Assert.Equal(DynamicPhysicalRigScriptPath, AssertNodeScriptPath(physicalRig));
+        }
+        finally
+        {
+            npc.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the actual player scene's role installer binds PlayerVRIK to the installed head viewpoint marker.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerScene_PlayerVRIKViewpoint_ResolvesToInstalledHeadViewpoint()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+        sceneTree.Root.AddChild(player);
+        await WaitForFramesAsync(sceneTree, 8);
+        await WaitForPhysicsFramesAsync(sceneTree, 2);
+        EnsureRuntimeRoleInstalled(player);
+
+        try
+        {
+            Node playerVRIK = player.GetNode<Node>("VRIK");
+            Marker3D viewpoint = player.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            GodotObject configuredViewpoint = GetGodotNodeProperty(playerVRIK, nameof(CharacterIK.Viewpoint), "viewpoint")
+                ?? throw new Xunit.Sdk.XunitException("Expected player VRIK Viewpoint to resolve to a marker.");
+
+            Assert.Equal(viewpoint.GetInstanceId(), configuredViewpoint.GetInstanceId());
+            Assert.Equal(new NodePath("../Female/GeneralSkeleton/Head/Viewpoint"), playerVRIK.GetPathTo(viewpoint));
+        }
+        finally
+        {
+            player.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the actual NPC scene's role installer binds CharacterIK to the installed head viewpoint marker.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task FemaleReferenceNPCScene_CharacterIKViewpoint_ResolvesToInstalledHeadViewpoint()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        sceneTree.Root.AddChild(npc);
+        await WaitForFramesAsync(sceneTree, 8);
+        await WaitForPhysicsFramesAsync(sceneTree, 2);
+        EnsureRuntimeRoleInstalled(npc);
+
+        try
+        {
+            Node characterIK = npc.GetNode<Node>("CharacterIK");
+            Marker3D viewpoint = npc.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            GodotObject configuredViewpoint = GetGodotNodeProperty(characterIK, nameof(CharacterIK.Viewpoint), "viewpoint")
+                ?? throw new Xunit.Sdk.XunitException("Expected NPC CharacterIK Viewpoint to resolve to a marker.");
+
+            Assert.Equal(viewpoint.GetInstanceId(), configuredViewpoint.GetInstanceId());
+            Assert.Equal(new NodePath("../Female/GeneralSkeleton/Head/Viewpoint"), characterIK.GetPathTo(viewpoint));
+        }
+        finally
+        {
+            npc.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the mirror-room runtime scene path resolves player/NPC IK viewpoints and NPC eye-tracking bindings.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task MirrorRoomScene_RuntimeInstallers_BindIKViewpointsAndNpcEyeTracking()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node mirrorRoom = LoadPackedScene(MirrorRoomScenePath).Instantiate();
+        sceneTree.Root.AddChild(mirrorRoom);
+        await WaitForFramesAsync(sceneTree, 10);
+        await WaitForPhysicsFramesAsync(sceneTree, 2);
+        EnsureRuntimeRoleInstalled(mirrorRoom.GetNode("Actors/Player"));
+        EnsureRuntimeRoleInstalled(mirrorRoom.GetNode("Actors/Female"));
+
+        try
+        {
+            Node player = mirrorRoom.GetNode("Actors/Player");
+            Node playerVRIK = player.GetNode<Node>("VRIK");
+            Marker3D playerViewpoint = player.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            Node npc = mirrorRoom.GetNode("Actors/Female");
+            Node npcIK = npc.GetNode<Node>("CharacterIK");
+            Marker3D npcViewpoint = npc.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
+            Node npcEyes = npc.GetNode<Node>("Eyes");
+            GodotObject playerConfiguredViewpoint = GetGodotNodeProperty(playerVRIK, nameof(CharacterIK.Viewpoint), "viewpoint")
+                ?? throw new Xunit.Sdk.XunitException("Expected mirror-room player VRIK Viewpoint to resolve to a marker.");
+            GodotObject npcConfiguredViewpoint = GetGodotNodeProperty(npcIK, nameof(CharacterIK.Viewpoint), "viewpoint")
+                ?? throw new Xunit.Sdk.XunitException("Expected mirror-room NPC CharacterIK Viewpoint to resolve to a marker.");
+            GodotObject npcEyeOrigin = GetGodotNodeProperty(npcEyes, "EyeOrigin", "eye_origin")
+                ?? throw new Xunit.Sdk.XunitException("Expected mirror-room NPC Eyes EyeOrigin to resolve to a marker.");
+
+            Assert.Equal(playerViewpoint.GetInstanceId(), playerConfiguredViewpoint.GetInstanceId());
+            Assert.Equal(npcViewpoint.GetInstanceId(), npcConfiguredViewpoint.GetInstanceId());
+            Assert.Equal(npcViewpoint.GetInstanceId(), npcEyeOrigin.GetInstanceId());
+        }
+        finally
+        {
+            mirrorRoom.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies reusable CharacterIK authoring fails explicitly when no viewpoint is bound.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void CharacterIK_MissingViewpoint_FailsFastWithAuthoringMessage()
+    {
+        using CharacterIK characterIK = new()
+        {
+            Name = "CharacterIK",
+        };
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(characterIK._Ready);
+
+        Assert.Contains(nameof(CharacterIK.Viewpoint), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("install a character module", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies reusable CharacterIK authoring fails explicitly when no physical rig is bound.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void CharacterIK_MissingPhysicalRig_FailsFastWithAuthoringMessage()
+    {
+        using CharacterIK characterIK = CreateCharacterIKWithRequiredTargets();
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(characterIK._Ready);
+
+        Assert.Contains(nameof(CharacterIK.PhysicalRig), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("install a character module", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -67,24 +229,165 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void FemaleReferenceNPCScene_CharacterIKHandTargetProviders_ResolveToHandGrabProviders()
+    public async Task FemaleReferenceNPCScene_CharacterIKHandTargetProviders_ResolveToHandGrabProviders()
     {
-        using Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        SceneTree sceneTree = GetSceneTree();
+        Node npc = LoadPackedScene(FemaleReferenceNPCScenePath).Instantiate();
+        sceneTree.Root.AddChild(npc);
 
-        Node characterIK = npc.GetNode<Node>("CharacterIK");
-        Node rightProvider = npc.GetNode<Node>("CharacterIK/RightHandGrabProvider");
-        Node leftProvider = npc.GetNode<Node>("CharacterIK/LeftHandGrabProvider");
-        GodotObject configuredRightProvider = characterIK.Get("RightHandIKTargetIntentProvider").AsGodotObject()
-            ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK right hand provider to resolve to a node.");
-        GodotObject configuredLeftProvider = characterIK.Get("LeftHandIKTargetIntentProvider").AsGodotObject()
-            ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK left hand provider to resolve to a node.");
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 8);
+            EnsureRuntimeRoleInstalled(npc);
+            Node characterIK = npc.GetNode<Node>("CharacterIK");
+            Node rightProvider = npc.GetNode<Node>("CharacterIK/RightHandGrabProvider");
+            Node leftProvider = npc.GetNode<Node>("CharacterIK/LeftHandGrabProvider");
+            GodotObject configuredRightProvider = characterIK.Get("RightHandIKTargetIntentProvider").AsGodotObject()
+                ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK right hand provider to resolve to a node.");
+            GodotObject configuredLeftProvider = characterIK.Get("LeftHandIKTargetIntentProvider").AsGodotObject()
+                ?? throw new Xunit.Sdk.XunitException("Expected female reference NPC CharacterIK left hand provider to resolve to a node.");
 
-        Assert.Equal(rightProvider.GetInstanceId(), configuredRightProvider.GetInstanceId());
-        Assert.Equal(leftProvider.GetInstanceId(), configuredLeftProvider.GetInstanceId());
-        Assert.Equal(new NodePath("RightHandGrabProvider"), characterIK.GetPathTo(rightProvider));
-        Assert.Equal(new NodePath("LeftHandGrabProvider"), characterIK.GetPathTo(leftProvider));
-        Assert.Equal(typeof(HandGrabTargetProvider).FullName, configuredRightProvider.GetType().FullName);
-        Assert.Equal(typeof(HandGrabTargetProvider).FullName, configuredLeftProvider.GetType().FullName);
+            Assert.Equal(rightProvider.GetInstanceId(), configuredRightProvider.GetInstanceId());
+            Assert.Equal(leftProvider.GetInstanceId(), configuredLeftProvider.GetInstanceId());
+            Assert.Equal(new NodePath("RightHandGrabProvider"), characterIK.GetPathTo(rightProvider));
+            Assert.Equal(new NodePath("LeftHandGrabProvider"), characterIK.GetPathTo(leftProvider));
+            Assert.Equal(typeof(HandGrabTargetProvider).FullName, configuredRightProvider.GetType().FullName);
+            Assert.Equal(typeof(HandGrabTargetProvider).FullName, configuredLeftProvider.GetType().FullName);
+        }
+        finally
+        {
+            npc.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the real player auto-install path keeps grab providers staged while routing them to XR controller defaults.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlayerScene_HandGrabProviders_DefaultToXRControllerSourcesAndEmitMovedHandIntent()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TestGame root = new()
+        {
+            Name = "PlayerHandMovementFixture",
+        };
+
+        TestXRManager xrManager = new()
+        {
+            Name = "XR",
+        };
+        root.AddChild(xrManager);
+
+        TestXROrigin origin = new(1.0f)
+        {
+            Name = "Origin",
+        };
+        root.AddChild(origin);
+
+        Camera3D cameraNode = new()
+        {
+            Name = "Camera",
+            Position = new Vector3(0.0f, 1.6f, 0.0f),
+        };
+        origin.AddChild(cameraNode);
+
+        Node3D rightController = new()
+        {
+            Name = "RightController",
+        };
+        origin.AddChild(rightController);
+        Node3D rightSource = new()
+        {
+            Name = "RightHandPosition",
+        };
+        rightController.AddChild(rightSource);
+
+        Node3D leftController = new()
+        {
+            Name = "LeftController",
+        };
+        origin.AddChild(leftController);
+        Node3D leftSource = new()
+        {
+            Name = "LeftHandPosition",
+        };
+        leftController.AddChild(leftSource);
+
+        xrManager.SetRuntime(new TestXRRuntime(
+            origin,
+            new TestXRCamera(cameraNode),
+            new TestXRHandController(rightController, rightSource),
+            new TestXRHandController(leftController, leftSource)));
+
+        Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+        root.AddChild(player);
+
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 10);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+            EnsureRuntimeRoleInstalled(player);
+
+            Node playerVRIK = player.GetNode<Node>("VRIK");
+            Node rightGrabProvider = player.GetNode<Node>("VRIK/RightHandGrabProvider");
+            Node leftGrabProvider = player.GetNode<Node>("VRIK/LeftHandGrabProvider");
+            Node rightFallback = player.GetNode<Node>("VRIK/RightHandFallbackIntentProvider");
+            Node leftFallback = player.GetNode<Node>("VRIK/LeftHandFallbackIntentProvider");
+            AnimatableBody3D rightHandTarget = player.GetNode<AnimatableBody3D>("IKTargets/RightHand");
+            AnimatableBody3D leftHandTarget = player.GetNode<AnimatableBody3D>("IKTargets/LeftHand");
+            GodotObject configuredRightProvider = GetGodotNodeProperty(playerVRIK, "RightHandIKTargetIntentProvider", "right_hand_iktarget_intent_provider")
+                ?? throw new Xunit.Sdk.XunitException("Expected player VRIK right hand provider to resolve to a node.");
+            GodotObject configuredLeftProvider = GetGodotNodeProperty(playerVRIK, "LeftHandIKTargetIntentProvider", "left_hand_iktarget_intent_provider")
+                ?? throw new Xunit.Sdk.XunitException("Expected player VRIK left hand provider to resolve to a node.");
+            GodotObject configuredRightDefault = GetGodotNodeProperty(rightGrabProvider, nameof(HandGrabTargetProvider.DefaultProvider), "default_provider")
+                ?? throw new Xunit.Sdk.XunitException("Expected right grab provider default to resolve to a node.");
+            GodotObject configuredLeftDefault = GetGodotNodeProperty(leftGrabProvider, nameof(HandGrabTargetProvider.DefaultProvider), "default_provider")
+                ?? throw new Xunit.Sdk.XunitException("Expected left grab provider default to resolve to a node.");
+
+            Assert.Equal(rightGrabProvider.GetInstanceId(), configuredRightProvider.GetInstanceId());
+            Assert.Equal(leftGrabProvider.GetInstanceId(), configuredLeftProvider.GetInstanceId());
+            Assert.Equal(rightFallback.GetInstanceId(), configuredRightDefault.GetInstanceId());
+            Assert.Equal(leftFallback.GetInstanceId(), configuredLeftDefault.GetInstanceId());
+            Assert.Equal((long)LimbSide.Right, rightFallback.Get("Side").AsInt64());
+            Assert.Equal((long)LimbSide.Left, leftFallback.Get("Side").AsInt64());
+
+            SetScriptProperty(rightFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), rightSource);
+            SetScriptProperty(leftFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), leftSource);
+            SetScriptField(playerVRIK, "_isBound", true);
+
+            Transform3D rightTargetTransform = new(Basis.Identity, rightHandTarget.GlobalPosition + new Vector3(0.01f, 0.0f, 0.0f));
+            Transform3D leftTargetTransform = new(Basis.Identity, leftHandTarget.GlobalPosition + new Vector3(-0.01f, 0.0f, 0.0f));
+            rightSource.Position = rightTargetTransform.Origin;
+            leftSource.Position = leftTargetTransform.Origin;
+            rightSource.ForceUpdateTransform();
+            leftSource.ForceUpdateTransform();
+            rightTargetTransform = rightSource.GlobalTransform;
+            leftTargetTransform = leftSource.GlobalTransform;
+
+            object rightIntent = InvokeScriptMethod(rightGrabProvider, nameof(HandGrabTargetProvider.GetTargetIntent));
+            object leftIntent = InvokeScriptMethod(leftGrabProvider, nameof(HandGrabTargetProvider.GetTargetIntent));
+            InvokeScriptVoidMethod(playerVRIK, nameof(PlayerVRIK._PhysicsProcess), 1.0d / 60.0d);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+
+            GodotObject configuredRightSource = GetGodotNodeProperty(rightFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), "resolved_source_node")
+                ?? throw new Xunit.Sdk.XunitException("Expected right XR fallback source to resolve to a node.");
+            GodotObject configuredLeftSource = GetGodotNodeProperty(leftFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), "resolved_source_node")
+                ?? throw new Xunit.Sdk.XunitException("Expected left XR fallback source to resolve to a node.");
+
+            Assert.Equal(rightSource.GetInstanceId(), configuredRightSource.GetInstanceId());
+            Assert.Equal(leftSource.GetInstanceId(), configuredLeftSource.GetInstanceId());
+            AssertIntentApproximately(rightTargetTransform, 1.0f, rightIntent);
+            AssertIntentApproximately(leftTargetTransform, 1.0f, leftIntent);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
     }
 
     /// <summary>
@@ -1905,6 +2208,27 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             leftHandController);
     }
 
+    private static CharacterIK CreateCharacterIKWithRequiredTargets()
+    {
+        CharacterIK characterIK = new()
+        {
+            Name = "CharacterIK",
+            Viewpoint = new Marker3D { Name = "Viewpoint" },
+        };
+
+        Node3D ikTargets = new()
+        {
+            Name = "IKTargets",
+        };
+        ikTargets.AddChild(new CharacterBody3D { Name = "Head" });
+        ikTargets.AddChild(new Node3D { Name = "HeadSolve" });
+        ikTargets.AddChild(new AnimatableBody3D { Name = "RightHand" });
+        ikTargets.AddChild(new AnimatableBody3D { Name = "LeftHand" });
+        characterIK.AddChild(ikTargets);
+
+        return characterIK;
+    }
+
     private static async Task<CharacterIKFixture<TCharacterIK>> CreateCharacterIKFixtureAsync<TCharacterIK>(
         SceneTree sceneTree,
         string name)
@@ -2543,6 +2867,18 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         AssertBasisApproximately(expected.Basis, actual.Basis, epsilon);
     }
 
+    private static void AssertIntentApproximately(Transform3D expectedTransform, float expectedInfluence, object intent)
+    {
+        Type intentType = intent.GetType();
+        var worldTransform = (Transform3D)(intentType.GetProperty(nameof(IKTargetIntent.WorldTransform))?.GetValue(intent)
+            ?? throw new Xunit.Sdk.XunitException("Expected IK target intent WorldTransform to resolve."));
+        float desiredInfluence = (float)(intentType.GetProperty(nameof(IKTargetIntent.DesiredInfluence))?.GetValue(intent)
+            ?? throw new Xunit.Sdk.XunitException("Expected IK target intent DesiredInfluence to resolve."));
+
+        Assert.Equal(expectedInfluence, desiredInfluence);
+        AssertTransformApproximately(expectedTransform, worldTransform);
+    }
+
     private static void AssertBasisApproximately(Basis expected, Basis actual, float epsilon)
     {
         AssertVectorApproximately(expected.X, actual.X, epsilon);
@@ -2600,6 +2936,77 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     {
         Script script = Assert.IsType<Script>(node.GetScript().AsGodotObject(), exactMatch: false);
         return script.ResourcePath;
+    }
+
+    private static T? GetScriptProperty<T>(Node node, string propertyName)
+        where T : GodotObject
+        => node.GetType().GetProperty(propertyName)?.GetValue(node) as T;
+
+    private static void EnsureRuntimeRoleInstalled(Node character)
+    {
+        Node? installer = character.GetNodeOrNull("PlayerCharacterInstaller")
+            ?? character.GetNodeOrNull("NPCCharacterInstaller");
+        if (installer is null)
+        {
+            return;
+        }
+
+        Type installerType = installer.GetType();
+        Type contextType = installerType.Assembly.GetType("AlleyCat.Core.Installer.SceneInstallationContext")
+            ?? throw new InvalidOperationException("Failed to resolve loaded SceneInstallationContext type.");
+        object context = Activator.CreateInstance(contextType, character, "alleycat.scene_installer")
+            ?? throw new InvalidOperationException("Failed to create loaded scene installation context.");
+        object result = installerType.GetMethod("Install")?.Invoke(installer, [context])
+            ?? throw new InvalidOperationException("Failed to invoke runtime role installer.");
+        bool succeeded = (bool)(result.GetType().GetProperty("Succeeded")?.GetValue(result) ?? false);
+        if (!succeeded)
+        {
+            object? errors = result.GetType().GetProperty("Errors")?.GetValue(result);
+            throw new Xunit.Sdk.XunitException(errors?.ToString() ?? "Runtime role installer failed.");
+        }
+    }
+
+    private static void SetScriptProperty(Node node, string propertyName, object? value)
+    {
+        PropertyInfo property = node.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException($"Expected script property '{propertyName}' to resolve on '{node.Name}'.");
+        property.SetValue(node, value);
+    }
+
+    private static void SetScriptField(Node node, string fieldName, object? value)
+    {
+        FieldInfo field = node.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException($"Expected script field '{fieldName}' to resolve on '{node.Name}'.");
+        field.SetValue(node, value);
+    }
+
+    private static void InvokeScriptVoidMethod(Node node, string methodName, params object?[] arguments)
+    {
+        MethodInfo method = node.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException($"Expected script method '{methodName}' to resolve on '{node.Name}'.");
+        _ = method.Invoke(node, arguments);
+    }
+
+    private static object InvokeScriptMethod(Node node, string methodName, params object?[] arguments)
+    {
+        MethodInfo method = node.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException($"Expected script method '{methodName}' to resolve on '{node.Name}'.");
+        return method.Invoke(node, arguments)
+               ?? throw new Xunit.Sdk.XunitException($"Expected script method '{methodName}' to return a value.");
+    }
+
+    private static GodotObject? GetGodotNodeProperty(Node node, params string[] propertyNames)
+    {
+        foreach (string propertyName in propertyNames)
+        {
+            GodotObject? value = node.Get(propertyName).AsGodotObject();
+            if (value is not null)
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 
     private sealed partial class TestXRManager : XRManager

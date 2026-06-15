@@ -33,7 +33,7 @@ USAGE = (
     "<character-config.json>"
 )
 WORLD_ENVIRONMENT_TEXTURE_NAME = "monochrome_studio_04_1k.exr"
-RIGIFY_ANIMATION_OBJECT_NAME = "Female.rigify"
+RIGIFY_ANIMATION_OBJECT_SUFFIX = ".rigify"
 RIGIFY_SOURCE_ACTION_SUFFIX = "-noexp"
 RIGIFY_POLE_VECTOR_PARENT_BONES = (
     "upper_arm_parent.R",
@@ -1033,6 +1033,12 @@ def action_name(item: object) -> str:
     return name if isinstance(name, str) else str(item)
 
 
+def rigify_animation_object_name(character_name: str) -> str:
+    """Return the configured character's expected Rigify source object name."""
+
+    return f"{character_name}{RIGIFY_ANIMATION_OBJECT_SUFFIX}"
+
+
 def nla_reference_name(action: bpy.types.Action) -> str:
     """Return a deterministic NLA track and strip name for a persisted action reference."""
 
@@ -1140,7 +1146,7 @@ def validate_action_nla_references(
         )
 
 
-def animation_source_contains_rigify_object(source_blend_path: Path) -> bool:
+def animation_source_contains_rigify_object(source_blend_path: Path, character_name: str) -> bool:
     """Inspect an animation source without loading data to detect Rigify retarget input."""
 
     if not source_blend_path.is_file():
@@ -1149,12 +1155,14 @@ def animation_source_contains_rigify_object(source_blend_path: Path) -> bool:
             f'"{source_blend_path}".'
         )
 
+    expected_object_name = rigify_animation_object_name(character_name)
+
     try:
         with bpy.data.libraries.load(
             str(source_blend_path), link=False, relative=False
         ) as (data_from, _data_to):
             object_names = {action_name(obj) for obj in data_from.objects}
-            return RIGIFY_ANIMATION_OBJECT_NAME in object_names
+            return expected_object_name in object_names
     except Exception as exc:
         raise ScriptError(
             "Animation source detection failed because Blender could not inspect source "
@@ -1163,7 +1171,7 @@ def animation_source_contains_rigify_object(source_blend_path: Path) -> bool:
 
 
 def append_rigify_animation_object(
-    scene: bpy.types.Scene, source_blend_path: Path
+    scene: bpy.types.Scene, source_blend_path: Path, character_name: str
 ) -> tuple[bpy.types.Object, set[bpy.types.Object]]:
     """Append the source Rigify object locally and return every new appended object."""
 
@@ -1173,6 +1181,8 @@ def append_rigify_animation_object(
             f'"{source_blend_path}".'
         )
 
+    expected_object_name = rigify_animation_object_name(character_name)
+
     objects_before_append = set(bpy.data.objects)
     appended_objects: list[bpy.types.Object] = []
 
@@ -1181,14 +1191,14 @@ def append_rigify_animation_object(
             str(source_blend_path), link=False, relative=False
         ) as (data_from, data_to):
             object_names = [action_name(obj) for obj in data_from.objects]
-            if RIGIFY_ANIMATION_OBJECT_NAME not in object_names:
+            if expected_object_name not in object_names:
                 raise ScriptError(
                     "Rigify animation source setup failed because the source Blender file does "
-                    f'not contain object "{RIGIFY_ANIMATION_OBJECT_NAME}": '
+                    f'not contain object "{expected_object_name}": '
                     f'"{source_blend_path}".'
                 )
 
-            data_to.objects = [RIGIFY_ANIMATION_OBJECT_NAME]
+            data_to.objects = [expected_object_name]
 
         appended_objects = [
             cast(bpy.types.Object, obj) for obj in data_to.objects if obj is not None
@@ -1198,7 +1208,7 @@ def append_rigify_animation_object(
     except Exception as exc:
         raise ScriptError(
             "Rigify animation source setup failed because Blender could not append object "
-            f'"{RIGIFY_ANIMATION_OBJECT_NAME}" from "{source_blend_path}": {exc}'
+            f'"{expected_object_name}" from "{source_blend_path}": {exc}'
         ) from exc
 
     new_objects = set(bpy.data.objects) - objects_before_append
@@ -1206,7 +1216,7 @@ def append_rigify_animation_object(
         object_list = ", ".join(obj.name for obj in appended_objects) or "none"
         raise ScriptError(
             "Rigify animation source setup failed because Blender did not return exactly one "
-            f'appended object for "{RIGIFY_ANIMATION_OBJECT_NAME}" from "{source_blend_path}". '
+            f'appended object for "{expected_object_name}" from "{source_blend_path}". '
             f"Returned: {object_list}."
         )
 
@@ -1229,7 +1239,7 @@ def append_rigify_animation_object(
     except Exception as exc:
         raise ScriptError(
             "Rigify animation source setup failed because Blender could not link and select "
-            f'appended local object "{RIGIFY_ANIMATION_OBJECT_NAME}" from "{source_blend_path}": '
+            f'appended local object "{expected_object_name}" from "{source_blend_path}": '
             f"{exc}"
         ) from exc
 
@@ -2086,11 +2096,12 @@ def retarget_animation_source(
     exported_animation_owner: bpy.types.Object,
     source_blend_path: Path,
     mpfb_appended_actions: list[bpy.types.Action],
+    character_name: str,
 ) -> list[bpy.types.Action]:
     """Append, retarget, bake, clean up, and validate one Rigify animation source."""
 
     rigify_animation_owner, rigify_appended_objects = append_rigify_animation_object(
-        scene, source_blend_path
+        scene, source_blend_path, character_name
     )
     rigify_source_actions = append_rigify_animation_actions(
         source_blend_path,
@@ -2246,7 +2257,7 @@ def generate_character(config: CharacterConfig) -> Path:
     baked_rigify_actions: list[bpy.types.Action] = []
 
     for source_blend_path in config.animation_source_paths:
-        if animation_source_contains_rigify_object(source_blend_path):
+        if animation_source_contains_rigify_object(source_blend_path, character_name):
             baked_rigify_actions.extend(
                 retarget_animation_source(
                     scene,
@@ -2254,6 +2265,7 @@ def generate_character(config: CharacterConfig) -> Path:
                     exported_animation_owner,
                     source_blend_path,
                     mpfb_appended_actions,
+                    character_name,
                 )
             )
             if baked_rigify_actions:

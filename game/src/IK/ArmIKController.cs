@@ -213,7 +213,7 @@ public partial class ArmIKController : SkeletonModifier3D
             _bonesResolved = true;
         }
 
-        if (HandTarget is null || PoleTarget is null)
+        if (!TryResolveRuntimeTargets(out Node3D handTarget, out Node3D poleTarget))
         {
             return;
         }
@@ -241,7 +241,7 @@ public partial class ArmIKController : SkeletonModifier3D
 
         // Phase 1 -- Arm Direction in Body Space
         Vector3 shoulderPos = BoneGlobalPosition(_upperArmIdx);
-        Vector3 handPos = HandTarget.GlobalPosition;
+        Vector3 handPos = handTarget.GlobalPosition;
         Vector3 armDirGlobal = (handPos - shoulderPos).Normalized();
         Vector3 armDirBody = bodyBasisInverse * armDirGlobal;
 
@@ -277,7 +277,32 @@ public partial class ArmIKController : SkeletonModifier3D
             offset = Mathf.Max(offset, compressedFloor);
         }
 
-        PoleTarget.GlobalPosition = midpoint + (poleDirGlobal * offset);
+        if (!IsInstanceValid(poleTarget))
+        {
+            return;
+        }
+
+        poleTarget.GlobalPosition = midpoint + (poleDirGlobal * offset);
+    }
+
+    private bool TryResolveRuntimeTargets(out Node3D handTarget, out Node3D poleTarget)
+    {
+        handTarget = null!;
+        poleTarget = null!;
+
+        if (HandTarget is null || PoleTarget is null)
+        {
+            return false;
+        }
+
+        if (!IsInstanceValid(HandTarget) || !IsInstanceValid(PoleTarget))
+        {
+            return false;
+        }
+
+        handTarget = HandTarget;
+        poleTarget = PoleTarget;
+        return true;
     }
 
     /// <summary>

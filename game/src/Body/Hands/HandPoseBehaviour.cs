@@ -1,6 +1,5 @@
 using AlleyCat.IK;
 using AlleyCat.Interaction;
-using AlleyCat.UI;
 using Godot;
 
 namespace AlleyCat.Body.Hands;
@@ -11,7 +10,6 @@ namespace AlleyCat.Body.Hands;
 [GlobalClass]
 public sealed partial class HandPoseBehaviour : Node, IHand
 {
-    private const ulong PendingGrabDebugIntervalUsec = 750_000;
     private static readonly StringName _rightHandBoneName = new("RightHand");
     private static readonly StringName _leftHandBoneName = new("LeftHand");
     private static readonly StringName _rightLowerArmBoneName = new("RightLowerArm");
@@ -23,7 +21,6 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     private PendingGrabState? _pendingGrabState;
     private readonly ReleaseVelocityTracker _releaseVelocityTracker = new();
     private readonly List<CollisionExceptionPair> _heldMovableCollisionExceptions = [];
-    private ulong _nextPendingGrabDebugTicksUsec;
 
     /// <summary>
     /// Gets or sets the animation tree controlled by this behaviour.
@@ -31,7 +28,17 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     [Export]
     public AnimationTree? AnimationTree
     {
-        get; set;
+        get;
+        set
+        {
+            if (!ReferenceEquals(field, value))
+            {
+                _controller = null;
+            }
+
+            field = value;
+            TryInitialiseController();
+        }
     }
 
     /// <inheritdoc />
@@ -258,16 +265,6 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     }
 
     /// <summary>
-    /// Gets or sets whether grab execution diagnostics are posted through the global notification UI.
-    /// </summary>
-    [ExportGroup("Debug")]
-    [Export]
-    public bool DebugGrabOutput
-    {
-        get; set;
-    }
-
-    /// <summary>
     /// Gets the currently applied left hand pose after transition state has settled.
     /// </summary>
     public Animation? CurrentLeftHandPose => _controller?.CurrentLeftHandPose;
@@ -287,9 +284,17 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     public override void _Ready()
     {
         AnimationTree ??= GetParentOrNull<AnimationTree>();
-        if (AnimationTree is null)
+        TryInitialiseController();
+        if (_controller is null)
         {
-            GD.PushError($"{nameof(HandPoseBehaviour)} requires an AnimationTree reference or AnimationTree parent.");
+            GD.PushWarning($"{nameof(HandPoseBehaviour)} '{Name}' is waiting for an AnimationTree binding.");
+        }
+    }
+
+    private void TryInitialiseController()
+    {
+        if (_controller is not null || AnimationTree is null)
+        {
             return;
         }
 
@@ -312,6 +317,13 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     /// <inheritdoc />
     public override void _Process(double delta)
     {
+        if (_controller is not null && !IsInstanceValid(_controller.AnimationTree))
+        {
+            _controller = null;
+            AnimationTree = IsInsideTree() ? GetParentOrNull<AnimationTree>() : null;
+            TryInitialiseController();
+        }
+
         _controller?.Update(Side, delta);
         TryCommitPendingGrab();
         UpdateHeldReleaseVelocity(delta);
@@ -365,43 +377,32 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     /// <inheritdoc />
     public IGrabbable? Grab()
     {
-        EmitGrabDebug($"Grab press: current={FormatGrabbable(CurrentGrabbed)}, pending={_pendingGrabState is not null}.");
-
         if (CurrentGrabbed is not null)
         {
-            EmitGrabDebug($"Grab ignored: already holding {FormatGrabbable(CurrentGrabbed)}.");
             return CurrentGrabbed;
         }
 
         if (_pendingGrabState is not null)
         {
-            EmitPendingGrabDebug(_pendingGrabState, force: true);
             TryCommitPendingGrab();
             return CurrentGrabbed;
         }
 
         Transform3D handTransform = ResolveHandTransform();
-        var grabbables = EnumerateDiscoverableGrabbables().ToList();
         HandGrabSelection? selection = HandGrabCandidateSelector.Select(
-            grabbables,
+            EnumerateDiscoverableGrabbables(),
             Side,
             handTransform,
             DiscoveryRangeMetres);
 
         if (selection is null)
         {
-            EmitGrabDebug($"Grab failed: no candidate. Discoverable={grabbables.Count}, range={DiscoveryRangeMetres:0.###}m, hand={FormatVector(handTransform.Origin)}.");
             return null;
         }
 
-        EmitGrabDebug(
-            $"Grab selected: {FormatGrabbable(selection.Grabbable)} mobility={selection.Grabbable.Mobility}, "
-            + $"target={FormatVector(selection.Candidate.HandTarget.Origin)}, animation={FormatAnimation(selection.Candidate.Animation)}.");
         Transform3D approachHandTarget = ResolveApproachHandTarget(selection.Candidate, handTransform);
         GrabTargetProvider?.SetGrabTarget(approachHandTarget);
-        EmitGrabDebug($"Grab provider: active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}, default={FormatProviderDefaultState()}.");
         _pendingGrabState = new PendingGrabState(selection.Grabbable, selection.Candidate, approachHandTarget);
-        _nextPendingGrabDebugTicksUsec = 0;
 
         return CurrentGrabbed;
     }
@@ -411,13 +412,11 @@ public sealed partial class HandPoseBehaviour : Node, IHand
     {
         if (CurrentGrabbed is null && _pendingGrabState is null)
         {
-            EmitGrabDebug("Release ignored: no current or pending grab.");
             return;
         }
 
         IGrabbable? grabbed = CurrentGrabbed;
         Vector3 releaseVelocity = ResolveReleaseVelocity(grabbed);
-        EmitGrabDebug($"Release: current={FormatGrabbable(grabbed)}, pending={FormatGrabbable(_pendingGrabState?.Grabbable)}.");
         CurrentGrabbed = null;
         _pendingGrabState = null;
         _releaseVelocityTracker.Reset();
@@ -428,7 +427,6 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         GrabTargetProvider?.ReleaseGrabTarget();
         grabbed?.ReleaseIfSupported();
         ApplyReleaseVelocity(grabbed, releaseVelocity);
-        EmitGrabDebug($"Release complete: provider active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}, default={FormatProviderDefaultState()}.");
     }
 
     private Transform3D ResolveHandTransform()
@@ -503,16 +501,10 @@ public sealed partial class HandPoseBehaviour : Node, IHand
             ? float.PositiveInfinity
             : currentHandTransform.Origin.DistanceTo(ResolveApproachHandTarget(refreshedCandidate, currentHandTransform).Origin);
         bool refreshedCandidateSettled = refreshedDistanceToCommit <= GrabCommitDistanceMetres;
-        float distanceToCommit = Mathf.Min(originalDistanceToCommit, refreshedDistanceToCommit);
         if (!originalCandidateSettled && !refreshedCandidateSettled)
         {
-            EmitPendingGrabDebug(pending, force: false, currentHandTransform, distanceToCommit);
             return;
         }
-
-        EmitGrabDebug(
-            $"Grab commit check: {FormatGrabbable(pending.Grabbable)} distance={distanceToCommit:0.###}m "
-            + $"threshold={GrabCommitDistanceMetres:0.###}m mobility={pending.Grabbable.Mobility}.");
 
         if (pending.Grabbable.Mobility == GrabbableMobility.Immovable)
         {
@@ -522,7 +514,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
 
         if (HandBoneAttachment is null || !IsInstanceValid(HandBoneAttachment))
         {
-            AbandonPendingGrab("Grab commit abandoned: movable grabbable needs a valid hand bone attachment.");
+            AbandonPendingGrab();
             return;
         }
 
@@ -535,9 +527,6 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         {
             _pendingGrabState = null;
             GrabTargetProvider?.ReleaseGrabTarget();
-            EmitGrabDebug(
-                $"Grab commit failed: node={isNodeGrabbable}, accepted={acceptedGrab}, "
-                + $"provider active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}.");
             return;
         }
 
@@ -547,7 +536,7 @@ public sealed partial class HandPoseBehaviour : Node, IHand
             CreateHeldCollisionProxies(grabbedNode);
             AddHeldMovableCollisionExceptions(grabbedNode);
             _releaseVelocityTracker.Reset(grabbedNode.GlobalPosition);
-            ApplyGrabPoseWithDiagnostics(commitCandidate!.Animation);
+            SetPose(commitCandidate!.Animation);
             CurrentGrabbed = pending.Grabbable;
             _pendingGrabState = null;
             GrabTargetProvider?.ClearGrabTargetImmediate();
@@ -562,10 +551,6 @@ public sealed partial class HandPoseBehaviour : Node, IHand
             GrabTargetProvider?.ReleaseGrabTarget();
             throw;
         }
-
-        EmitGrabDebug(
-            $"Grab committed: movable {FormatGrabbable(CurrentGrabbed)}, provider active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}, "
-            + $"default={FormatProviderDefaultState()}.");
     }
 
     private GrabPointCandidate? RefreshPendingGrabCandidate(PendingGrabState pending, Transform3D currentHandTransform)
@@ -639,8 +624,6 @@ public sealed partial class HandPoseBehaviour : Node, IHand
                 AddHeldMovableCollisionException(heldCollisionBody, otherBody);
             }
         }
-
-        EmitGrabDebug($"Grab collision exceptions: movable={heldBody.Name}, pairs={_heldMovableCollisionExceptions.Count}.");
     }
 
     private void CreateHeldCollisionProxies(Node3D grabbedNode)
@@ -811,140 +794,19 @@ public sealed partial class HandPoseBehaviour : Node, IHand
         {
             _pendingGrabState = null;
             GrabTargetProvider?.ReleaseGrabTarget();
-            EmitGrabDebug($"Grab commit failed: immovable {FormatGrabbable(pending.Grabbable)} rejected candidate.");
             return;
         }
 
-        ApplyGrabPoseWithDiagnostics(commitCandidate.Animation);
+        SetPose(commitCandidate.Animation);
         CurrentGrabbed = pending.Grabbable;
         _pendingGrabState = null;
-        EmitGrabDebug(
-            $"Grab committed: immovable {FormatGrabbable(CurrentGrabbed)}, provider active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}.");
     }
 
-    private void ApplyGrabPoseWithDiagnostics(Animation animation)
-    {
-        EmitAnimationDiagnostics(animation, "before");
-        try
-        {
-            SetPose(animation);
-        }
-        catch (Exception exception)
-        {
-            EmitGrabDebug($"Grab animation failed: {FormatAnimation(animation)} error={exception.GetType().Name}: {exception.Message}");
-            throw;
-        }
-
-        EmitAnimationDiagnostics(animation, "after");
-    }
-
-    private void EmitPendingGrabDebug(
-        PendingGrabState pending,
-        bool force,
-        Transform3D? currentHandTransform = null,
-        float? distanceToCommit = null)
-    {
-        if (!DebugGrabOutput)
-        {
-            return;
-        }
-
-        ulong now = Time.GetTicksUsec();
-        if (!force && now < _nextPendingGrabDebugTicksUsec)
-        {
-            return;
-        }
-
-        _nextPendingGrabDebugTicksUsec = now + PendingGrabDebugIntervalUsec;
-        Transform3D current = currentHandTransform ?? ResolveHandTransform();
-        float distance = distanceToCommit ?? current.Origin.DistanceTo(pending.Candidate.HandTarget.Origin);
-        EmitGrabDebug(
-            $"Grab pending: {FormatGrabbable(pending.Grabbable)} target={FormatVector(pending.Candidate.HandTarget.Origin)}, "
-            + $"current={FormatVector(current.Origin)}, distance={distance:0.###}m/{GrabCommitDistanceMetres:0.###}m.");
-    }
-
-    private void EmitAnimationDiagnostics(Animation animation, string phase)
-    {
-        if (!DebugGrabOutput)
-        {
-            return;
-        }
-
-        string animationName = ResolveAnimationName(animation).ToString();
-        AnimationPlayer? player = ResolveAnimationPlayer();
-        bool registered = player?.HasAnimation(new StringName(animationName)) ?? false;
-        string poseNodeState = ResolvePoseNodeAnimationName();
-        EmitGrabDebug(
-            $"Grab animation {phase}: resource={FormatAnimation(animation)}, name={animationName}, "
-            + $"player={(player is null ? "missing" : "ok")}, registered={registered}, poseNode={poseNodeState}.");
-    }
-
-    private void EmitGrabDebug(string message)
-    {
-        if (!DebugGrabOutput)
-        {
-            return;
-        }
-
-        _ = this.PostNotification($"Grab: {message}", 4.0);
-    }
-
-    private void AbandonPendingGrab(string reason)
+    private void AbandonPendingGrab()
     {
         _pendingGrabState = null;
         GrabTargetProvider?.ReleaseGrabTarget();
-        EmitGrabDebug($"{reason} Provider active={GrabTargetProvider?.IsGrabOverrideActive.ToString() ?? "none"}.");
     }
-
-    private string FormatProviderDefaultState()
-        => GrabTargetProvider is null
-            ? "none"
-            : GrabTargetProvider.DefaultProvider is not null && IsInstanceValid(GrabTargetProvider.DefaultProvider)
-            ? "available"
-            : "missing";
-
-    private string ResolvePoseNodeAnimationName()
-        => AnimationTree?.TreeRoot is AnimationNodeBlendTree rootTree
-            ? rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(Side)) is AnimationNodeAnimation poseNode
-                ? poseNode.Animation.ToString()
-                : "node-missing"
-            : "tree-missing";
-
-    private AnimationPlayer? ResolveAnimationPlayer()
-    {
-        if (AnimationTree is null)
-        {
-            return null;
-        }
-
-        NodePath animPlayerPath = AnimationTree.AnimPlayer;
-        return animPlayerPath.IsEmpty
-            ? null
-            : AnimationTree.GetNodeOrNull<AnimationPlayer>(animPlayerPath);
-    }
-
-    private static StringName ResolveAnimationName(Animation? pose)
-        => pose is null
-            ? new StringName(HandPoseAnimationTreePaths.ResetAnimationName)
-            : string.IsNullOrWhiteSpace(pose.ResourceName)
-            ? new StringName(pose.ResourcePath.GetFile().GetBaseName())
-            : new StringName(pose.ResourceName);
-
-    private static string FormatGrabbable(IGrabbable? grabbable)
-        => grabbable is Node node
-            ? $"{node.Name}"
-            : grabbable?.GetType().Name ?? "none";
-
-    private static string FormatAnimation(Animation? animation)
-        => animation is null
-            ? "none"
-            : !string.IsNullOrWhiteSpace(animation.ResourceName)
-            ? animation.ResourceName
-            : !string.IsNullOrWhiteSpace(animation.ResourcePath)
-            ? animation.ResourcePath.GetFile()
-            : "unnamed";
-
-    private static string FormatVector(Vector3 value) => $"({value.X:0.###},{value.Y:0.###},{value.Z:0.###})";
 
     private void RestoreGrabbedNodeParent()
     {

@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://yvm5bo58su3h"]
 
-[ext_resource type="PackedScene" uid="uid://iljwxhb7keyb" path="res://assets/testing/photobooth/templates/full_body_ik_5_cams.tscn" id="1_base"]
+[ext_resource type="PackedScene" uid="uid://c0rxgj1jy4k1e" path="res://assets/testing/photobooth/templates/full_body_player_ik_5_cams.tscn" id="1_base"]
 [ext_resource type="PackedScene" uid="uid://h1r8aegpc4i6" path="res://assets/markers/debug_marker.tscn" id="3_marker"]
 [ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://assets/characters/ik/pose/standing_pose_state.tres" id="4_state"]
 [ext_resource type="Script" uid="uid://dq8mx4eet2kcv" path="res://src/IK/Pose/PoseStateMachineMarkerDriver.cs" id="5_driver"]
-[ext_resource type="PackedScene" uid="uid://djeh2d5hkxyoj" path="res://assets/characters/reference/female/animation_tree_player.tscn" id="6_animation_tree"]
+[ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/templates/animation/animation_tree_root_player.tres" id="6_animation_tree"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="7_hip_modifier"]
 
 [node name="Photobooth" unique_id=1137450292 instance=ExtResource("1_base")]
@@ -106,8 +106,11 @@ transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, 0.15
 [node name="LeftFoot" parent="Subject/Female/IKTargets" parent_id_path=PackedInt32Array(1534184585, 546537465) index="8" unique_id=1292107592]
 transform = Transform3D(1, -8.742278e-08, 0, 0, 0, 1, -8.742278e-08, -1, 0, -0.15998398, 0.0683572, -0.027253283)
 
-[node name="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="4" unique_id=527893103 instance=ExtResource("6_animation_tree")]
+[node name="AnimationTree" type="AnimationTree" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="4" unique_id=527893103]
 active = true
+root_motion_track = NodePath("%GeneralSkeleton:Root")
+tree_root = ExtResource("6_animation_tree")
+anim_player = NodePath("../AnimationPlayer")
 
 [node name="Locomotion" parent="Subject/Female" parent_id_path=PackedInt32Array(1534184585) index="5" unique_id=668991861]
 process_mode = 4

@@ -59,7 +59,8 @@ permission outputs that gate player movement in non-standing poses.
 - State detection and transition architecture using extensible Godot `Resource` definitions.
 - State-dependent hip translation reconciliation.
 - Locomotion permission source integration for movement gating in non-standing poses.
-- Reusable scene composition via separate reusable components in `player.tscn`.
+- Reusable character logic composition via template-authored exported references, not
+  through deep inheritance of character-specific scenes.
 
 ## Out Of Scope
 
@@ -102,7 +103,7 @@ permission outputs that gate player movement in non-standing poses.
 - [Kneeling Pose State](kneeling-pose-state.md)
 - [AllFours Pose State](all-fours-pose-state.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
-- @game/assets/characters/ik/vrik.tscn
-- @game/assets/characters/reference/female/animations/animation_tree_player.tscn
-- @game/assets/characters/reference/female/reference_female_base.tscn
+- @game/assets/characters/templates/ik/vrik.tscn
+- @game/assets/characters/templates/animation/animation_tree_root_player.tres
+- @game/assets/characters/templates/reference_female/reference_female_player.tscn
 - @game/assets/characters/reference/player.tscn

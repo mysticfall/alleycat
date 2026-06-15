@@ -1,6 +1,5 @@
 using AlleyCat.Body;
 using AlleyCat.Body.Hands;
-using AlleyCat.Common;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.XR;
 using Godot;
@@ -21,6 +20,9 @@ public partial class PlayerController : Node
     private IHasHands? _hands;
     private bool _xrInitialised;
     private bool _isBound;
+    private bool _leftFloatGrabPressed;
+    private bool _rightFloatGrabPressed;
+    private bool _handResolutionRetryQueued;
 
     /// <summary>
     /// Optional direct locomotion node reference.
@@ -49,6 +51,24 @@ public partial class PlayerController : Node
     public StringName GrabActionName { get; set; } = new("grip_click");
 
     /// <summary>
+    /// XR analogue action used as a grab fallback when controllers expose grip as a float instead of a click button.
+    /// </summary>
+    [Export]
+    public StringName GrabFloatActionName { get; set; } = new("grip");
+
+    /// <summary>
+    /// Analogue grab threshold for <see cref="GrabFloatActionName" /> press/release transitions.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float GrabFloatPressThreshold { get; set; } = 0.55f;
+
+    /// <summary>
+    /// Analogue grab release threshold for <see cref="GrabFloatActionName" />.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float GrabFloatReleaseThreshold { get; set; } = 0.35f;
+
+    /// <summary>
     /// XR vector2 action consumed from the left controller.
     /// </summary>
     [Export]
@@ -71,8 +91,9 @@ public partial class PlayerController : Node
     /// <inheritdoc />
     public override void _Ready()
     {
-        _locomotion = ResolveLocomotion();
+        _ = TryResolveLocomotion(out _locomotion);
         _hands = ResolveHands();
+        QueueHandsResolutionRetryIfNeeded();
         _xrManager = ResolveXRManager();
 
         _xrManager.Initialised += OnXRInitialised;
@@ -122,12 +143,25 @@ public partial class PlayerController : Node
         }
     }
 
-    private ILocomotion ResolveLocomotion()
+    private bool TryResolveLocomotion(out ILocomotion? locomotion)
     {
-        Node locomotionNode = LocomotionNode ?? this.RequireNode<Node>("../Locomotion");
-        return locomotionNode as ILocomotion
+        locomotion = null;
+
+        Node? locomotionNode = LocomotionNode;
+        if (locomotionNode is null || !IsInstanceValid(locomotionNode))
+        {
+            locomotionNode = GetParent()?.GetNodeOrNull<Node>("Locomotion");
+        }
+
+        if (locomotionNode is null)
+        {
+            return false;
+        }
+
+        locomotion = locomotionNode as ILocomotion
             ?? throw new InvalidOperationException(
                 $"Node '{locomotionNode.GetPath()}' must implement {nameof(ILocomotion)}.");
+        return true;
     }
 
     private static XRManager ResolveXRManager()
@@ -139,10 +173,54 @@ public partial class PlayerController : Node
         return handHolderNode as IHasHands;
     }
 
+    private bool TryResolveHands(out IHasHands? hands)
+    {
+        hands = ResolveHands();
+        return hands is not null;
+    }
+
+    private bool EnsureHandsResolved()
+    {
+        if (_hands is not null && (_hands is not Node handsNode || IsInstanceValid(handsNode)))
+        {
+            return true;
+        }
+
+        bool resolved = TryResolveHands(out _hands);
+        if (!resolved)
+        {
+            QueueHandsResolutionRetryIfNeeded();
+        }
+
+        return resolved;
+    }
+
+    private void QueueHandsResolutionRetryIfNeeded()
+    {
+        if (_hands is not null || _handResolutionRetryQueued || !IsInsideTree())
+        {
+            return;
+        }
+
+        _handResolutionRetryQueued = true;
+        _ = CallDeferred(MethodName.ResolveHandsAfterTreeSettled);
+    }
+
+    private void ResolveHandsAfterTreeSettled()
+    {
+        _handResolutionRetryQueued = false;
+        if (!IsInstanceValid(this) || !IsInsideTree() || _hands is not null)
+        {
+            return;
+        }
+
+        _ = EnsureHandsResolved();
+    }
+
     private bool TryBindControllers()
     {
         XRManager? xrManager = _xrManager;
-        if (xrManager is null)
+        if (xrManager is null || !TryResolveRuntimeDependencies())
         {
             return false;
         }
@@ -156,12 +234,17 @@ public partial class PlayerController : Node
         _rightHandController.ActionVector2InputChanged += OnRightControllerVector2Changed;
         _leftHandController.ActionButtonPressed += OnLeftControllerButtonPressed;
         _leftHandController.ActionButtonReleased += OnLeftControllerButtonReleased;
+        _leftHandController.ActionFloatInputChanged += OnLeftControllerFloatChanged;
         _rightHandController.ActionButtonPressed += OnRightControllerButtonPressed;
         _rightHandController.ActionButtonReleased += OnRightControllerButtonReleased;
+        _rightHandController.ActionFloatInputChanged += OnRightControllerFloatChanged;
         _isBound = true;
         SetProcess(false);
         return true;
     }
+
+    private bool TryResolveRuntimeDependencies()
+        => (_locomotion is not null || TryResolveLocomotion(out _locomotion)) && EnsureHandsResolved();
 
     private void DisconnectControllers()
     {
@@ -170,6 +253,7 @@ public partial class PlayerController : Node
             leftHandController.ActionVector2InputChanged -= OnLeftControllerVector2Changed;
             leftHandController.ActionButtonPressed -= OnLeftControllerButtonPressed;
             leftHandController.ActionButtonReleased -= OnLeftControllerButtonReleased;
+            leftHandController.ActionFloatInputChanged -= OnLeftControllerFloatChanged;
             _leftHandController = null;
         }
 
@@ -178,10 +262,13 @@ public partial class PlayerController : Node
             rightHandController.ActionVector2InputChanged -= OnRightControllerVector2Changed;
             rightHandController.ActionButtonPressed -= OnRightControllerButtonPressed;
             rightHandController.ActionButtonReleased -= OnRightControllerButtonReleased;
+            rightHandController.ActionFloatInputChanged -= OnRightControllerFloatChanged;
             _rightHandController = null;
         }
 
         _isBound = false;
+        _leftFloatGrabPressed = false;
+        _rightFloatGrabPressed = false;
         SetProcess(_xrInitialised);
 
         UpdateMovementInput(Vector2.Zero);
@@ -198,6 +285,7 @@ public partial class PlayerController : Node
         }
 
         _xrInitialised = true;
+        _ = EnsureHandsResolved();
         _isBound = TryBindControllers();
 
         if (!_isBound)
@@ -222,6 +310,12 @@ public partial class PlayerController : Node
         }
     }
 
+    private void OnLeftControllerFloatChanged(string actionName, float value)
+        => HandleGrabFloatChanged(LimbSide.Left, actionName, value, ref _leftFloatGrabPressed);
+
+    private void OnRightControllerFloatChanged(string actionName, float value)
+        => HandleGrabFloatChanged(LimbSide.Right, actionName, value, ref _rightFloatGrabPressed);
+
     private void OnLeftControllerButtonPressed(string actionName) => HandleGrabButtonPressed(LimbSide.Left, actionName);
 
     private void OnLeftControllerButtonReleased(string actionName) => HandleGrabButtonReleased(LimbSide.Left, actionName);
@@ -230,17 +324,44 @@ public partial class PlayerController : Node
 
     private void HandleGrabButtonPressed(LimbSide side, string actionName)
     {
-        if (actionName == GrabActionName && _hands?.TryGetHand(side, out IHand? hand) == true)
+        if (actionName == GrabActionName
+            && EnsureHandsResolved()
+            && _hands?.TryGetHand(side, out IHand? hand) == true
+            && hand is not null)
         {
-            _ = hand?.Grab();
+            _ = hand.Grab();
         }
     }
 
     private void HandleGrabButtonReleased(LimbSide side, string actionName)
     {
-        if (actionName == GrabActionName && _hands?.TryGetHand(side, out IHand? hand) == true)
+        if (actionName == GrabActionName
+            && EnsureHandsResolved()
+            && _hands?.TryGetHand(side, out IHand? hand) == true
+            && hand is not null)
         {
-            hand?.Release();
+            hand.Release();
+        }
+    }
+
+    private void HandleGrabFloatChanged(LimbSide side, string actionName, float value, ref bool pressed)
+    {
+        float pressThreshold = Mathf.Clamp(GrabFloatPressThreshold, 0.0f, 1.0f);
+        float releaseThreshold = Mathf.Min(Mathf.Clamp(GrabFloatReleaseThreshold, 0.0f, 1.0f), pressThreshold);
+        if (actionName != GrabFloatActionName)
+        {
+            return;
+        }
+
+        if (!pressed && value >= pressThreshold)
+        {
+            pressed = true;
+            HandleGrabButtonPressed(side, GrabActionName);
+        }
+        else if (pressed && value <= releaseThreshold)
+        {
+            pressed = false;
+            HandleGrabButtonReleased(side, GrabActionName);
         }
     }
 

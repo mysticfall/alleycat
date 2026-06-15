@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://deek4lix763je"]
+
+[ext_resource type="Script" uid="uid://cnc3kfkhjn7qf" path="res://src/Character/Installer/CharacterRoleTemplateSceneInstaller.cs" id="1_role"]
+[ext_resource type="PackedScene" uid="uid://jlhxmgxicdex" path="res://assets/characters/templates/reference_female/reference_female_player.tscn" id="2_template"]
+[ext_resource type="Script" uid="uid://31cfhn1u2aw1" path="res://src/Body/BodyPartsInstaller.cs" id="3_body"]
+[ext_resource type="Script" uid="uid://btv3tfkqsrnpy" path="res://src/Body/DynamicPhysicalRigTemplateInstaller.cs" id="4_rig"]
+[ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="5_profile"]
+[ext_resource type="Script" uid="uid://b1tn7xw1iaug7" path="res://src/Character/Runtime/CharacterRuntimeSubsystemInstaller.cs" id="7_runtime"]
+[ext_resource type="Script" uid="uid://cseq3eanfhreq" path="res://src/IK/PlayerRigInstaller.cs" id="8_playerrig"]
+[ext_resource type="Script" uid="uid://b6purqid0hate" path="res://src/Character/Installer/CharacterTemplateSubtreeInstaller.cs" id="9_ihuu2"]
+[ext_resource type="Script" uid="uid://dfuyjv41fcmsi" path="res://src/Character/Installer/CharacterTemplateSkeletonSubtreeInstaller.cs" id="10_skeleton"]
+
+[node name="PlayerCharacterInstaller" type="Node" unique_id=1367199896 node_paths=PackedStringArray("Installers")]
+script = ExtResource("1_role")
+Template = ExtResource("2_template")
+Installers = [NodePath("TemplateRootSubtreesInstaller"), NodePath("TemplateSkeletonSubtreesInstaller"), NodePath("BodyPartsInstaller"), NodePath("DynamicPhysicalRigInstaller"), NodePath("ReferenceFemaleRuntimeSubsystemInstaller"), NodePath("PlayerRigInstaller")]
+AutoInstallOnReady = true
+metadata/_custom_type_script = "uid://cnc3kfkhjn7qf"
+
+[node name="BodyPartsInstaller" type="Node" parent="." unique_id=1573767933]
+script = ExtResource("3_body")
+metadata/_custom_type_script = "uid://31cfhn1u2aw1"
+
+[node name="DynamicPhysicalRigInstaller" type="Node" parent="." unique_id=564541131]
+script = ExtResource("4_rig")
+ColliderProfile = ExtResource("5_profile")
+InstallMode = 2
+metadata/_custom_type_script = "uid://btv3tfkqsrnpy"
+
+[node name="ReferenceFemaleRuntimeSubsystemInstaller" type="Node" parent="." unique_id=1697232092]
+script = ExtResource("7_runtime")
+metadata/_custom_type_script = "uid://b1tn7xw1iaug7"
+
+[node name="PlayerRigInstaller" type="Node" parent="." unique_id=549837561]
+script = ExtResource("8_playerrig")
+metadata/_custom_type_script = "uid://cseq3eanfhreq"
+
+[node name="TemplateRootSubtreesInstaller" type="Node" parent="." unique_id=1236041257]
+script = ExtResource("9_ihuu2")
+InstallMode = 1
+metadata/_custom_type_script = "uid://b6purqid0hate"
+
+[node name="TemplateSkeletonSubtreesInstaller" type="Node" parent="." unique_id=1195740570]
+script = ExtResource("10_skeleton")
+metadata/_custom_type_script = "uid://dfuyjv41fcmsi"

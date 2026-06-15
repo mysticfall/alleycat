@@ -30,7 +30,8 @@ Deliver kneeling behaviour: armed-then-retreat trigger model, transition constra
    - The transition becomes armed after sufficient forward travel from the full-crouch baseline.
    - The transition fires only after retreating from the armed peak by a configurable amount.
 2. The Standing→Kneeling transition additionally requires a crouch-depth threshold before triggering.
-3. The Kneeling→Standing return transition uses the same armed-then-retreat model, providing bidirectional transitions.
+3. The Kneeling→Standing return transition uses the same armed-then-retreat model, providing bidirectional
+   transitions.
 4. After kneeling, transitions stay locked until forward-axis returns near the baseline.
 5. Kneeling transition thresholds use normalised ratios derived from rest-pose body measures, not absolute metres.
 6. The crouch-depth gate uses at minimum the head-height measure from rest pose (`RestHeadHeight`).
@@ -89,4 +90,5 @@ Deliver kneeling behaviour: armed-then-retreat trigger model, transition constra
 - [Hip Reconciliation Contract](hip-reconciliation-contract.md)
 - [Standing Pose State](standing-pose-state.md)
 - [AllFours Pose State](all-fours-pose-state.md)
-- @game/assets/characters/reference/female/animations/animation_tree_player.tscn
+- @game/assets/characters/templates/animation/animation_tree_root_player.tres
+- @game/assets/characters/templates/reference_female/reference_female_player.tscn

@@ -13,19 +13,19 @@ const REQUIRED_CAMERAS := [
 ]
 
 const HEAD_MODIFIER_PATHS := [
-	^"Subject/Female/Female_export/GeneralSkeleton/NeckSpineIK",
-	^"Subject/Female/Female_export/GeneralSkeleton/HeadCopyRotation",
-	^"Subject/Female/Female_export/GeneralSkeleton/NeckTwistDisperser",
+	^"Subject/Female/Female/GeneralSkeleton/NeckSpineIK",
+	^"Subject/Female/Female/GeneralSkeleton/HeadCopyRotation",
+	^"Subject/Female/Female/GeneralSkeleton/NeckTwistDisperser",
 ]
 const RIGHT_HAND_MODIFIER_PATHS := [
-	^"Subject/Female/Female_export/GeneralSkeleton/RightArmIKController",
-	^"Subject/Female/Female_export/GeneralSkeleton/RightArmTwoBoneIKController",
-	^"Subject/Female/Female_export/GeneralSkeleton/RightHandCopyRotation",
+	^"Subject/Female/Female/GeneralSkeleton/RightArmIKController",
+	^"Subject/Female/Female/GeneralSkeleton/RightArmTwoBoneIKController",
+	^"Subject/Female/Female/GeneralSkeleton/RightHandCopyRotation",
 ]
 const LEFT_HAND_MODIFIER_PATHS := [
-	^"Subject/Female/Female_export/GeneralSkeleton/LeftArmIKController",
-	^"Subject/Female/Female_export/GeneralSkeleton/LeftArmTwoBoneIKController",
-	^"Subject/Female/Female_export/GeneralSkeleton/LeftHandCopyRotation",
+	^"Subject/Female/Female/GeneralSkeleton/LeftArmIKController",
+	^"Subject/Female/Female/GeneralSkeleton/LeftArmTwoBoneIKController",
+	^"Subject/Female/Female/GeneralSkeleton/LeftHandCopyRotation",
 ]
 
 
@@ -46,7 +46,7 @@ func _run() -> void:
 
 	var character_ik: Node = SceneUtils.require_node(photobooth, ^"Subject/Female/CharacterIK")
 	var animation_tree: AnimationTree = SceneUtils.require_node(photobooth, ^"Subject/Female/AnimationTree") as AnimationTree
-	var skeleton: Skeleton3D = SceneUtils.require_node(photobooth, ^"Subject/Female/Female_export/GeneralSkeleton") as Skeleton3D
+	var skeleton: Skeleton3D = SceneUtils.require_node(photobooth, ^"Subject/Female/Female/GeneralSkeleton") as Skeleton3D
 	var head_target: CollisionObject3D = SceneUtils.require_node(photobooth, ^"Subject/Female/IKTargets/Head") as CollisionObject3D
 	var right_hand_target: CollisionObject3D = SceneUtils.require_node(photobooth, ^"Subject/Female/IKTargets/RightHand") as CollisionObject3D
 	var left_hand_target: CollisionObject3D = SceneUtils.require_node(photobooth, ^"Subject/Female/IKTargets/LeftHand") as CollisionObject3D
@@ -76,7 +76,38 @@ func _run() -> void:
 	_print_pose_delta(initial_metrics, advanced_metrics)
 	await photobooth.capture_screenshots("%s/poses/02_advanced_idle.jpg" % OUTPUT_ROOT)
 
+	character_ik = null
+	animation_tree = null
+	skeleton = null
+	head_target = null
+	right_hand_target = null
+	left_hand_target = null
+	initial_metrics.clear()
+	advanced_metrics.clear()
+
+	await _cleanup_and_quit(photobooth)
+
+
+func _cleanup_and_quit(photobooth: Photobooth) -> void:
+	if photobooth != null and is_instance_valid(photobooth):
+		_disable_processing_recursively(photobooth)
+		root.remove_child(photobooth)
+		photobooth.free()
+		await SceneUtils.wait_frames(self, 12)
+		await SceneUtils.wait_seconds(self, 1.0)
+
 	quit(0)
+
+
+func _disable_processing_recursively(node: Node) -> void:
+	node.process_mode = Node.PROCESS_MODE_DISABLED
+	node.set_process(false)
+	node.set_physics_process(false)
+	if node is SkeletonModifier3D:
+		(node as SkeletonModifier3D).active = false
+		(node as SkeletonModifier3D).influence = 0.0
+	for child: Node in node.get_children():
+		_disable_processing_recursively(child)
 
 
 func _validate_cameras(photobooth: Photobooth) -> void:

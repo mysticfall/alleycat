@@ -1,7 +1,7 @@
 extends SceneTree
 
 const TEST_SCENE_PATH := "res://tests/characters/ik/head_hips_ik_test.tscn"
-const IK_SCENE_PATH := "res://assets/characters/ik/head_hips_ik.tscn"
+const IK_SCENE_PATH := "res://assets/characters/templates/ik/neck_spine_ccdik.tscn"
 
 const OUTPUT_ROOT := "IK-001/head_hips_ik"
 

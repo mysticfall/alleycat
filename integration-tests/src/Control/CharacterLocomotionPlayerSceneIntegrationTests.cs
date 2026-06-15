@@ -1,4 +1,5 @@
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Core.Installer;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -11,72 +12,40 @@ namespace AlleyCat.IntegrationTests.Control;
 /// </summary>
 public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
 {
+    private const string BrokenCharacterSceneFileName = "reference_female" + "_character.tscn";
+    private const string BrokenVisualSceneFileName = "reference_female" + "_visual.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string BaseScenePath = "res://assets/characters/reference/female/reference_female_base.tscn";
-    private const string BaseSceneUid = "uid://e765iqdvmnjd";
-    private const string ReferenceFemaleScenePath = "res://assets/characters/reference/female/reference_female.tscn";
+    private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+    private const string ReferenceFemalePlayerTemplatePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
+    private const string PlayerInstallerScenePath = "res://assets/characters/templates/installers/player_installer.tscn";
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
-    private const string AnimationTreeScenePath = "res://assets/characters/reference/female/animation_tree_player.tscn";
+    private const string PlayerAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_player.tres";
     private const string CharacterLocomotionScriptPath = "res://src/Control/Locomotion/CharacterLocomotion.cs";
     private const string PlayerControllerScriptPath = "res://src/Control/PlayerController.cs";
 
     /// <summary>
-    /// Verifies the shared reference base scene owns non-player locomotion and physical-rig wiring only.
+    /// Verifies the player scene contains the shared character rig and applies VRIK-specific locomotion permission wiring.
     /// </summary>
     [Headless]
     [Fact]
-    public void ReferenceFemaleBaseScene_InstantiatesSharedCharacterRigWithoutPlayerOnlyNodes()
-    {
-        Resource baseSceneByUid = ResourceLoader.Load(BaseSceneUid)
-            ?? throw new Xunit.Sdk.XunitException($"Expected '{BaseSceneUid}' to resolve successfully.");
-        Assert.Equal(BaseScenePath, baseSceneByUid.ResourcePath);
-
-        string baseSceneText = ReadResourceText(BaseScenePath);
-        Assert.Contains($"path=\"{ReferenceFemaleScenePath}\"", baseSceneText);
-        Assert.Contains("[node name=\"Female\"", baseSceneText);
-        Assert.Contains("instance=ExtResource(\"1_yqj8o\")", baseSceneText);
-
-        PackedScene baseScene = LoadPackedScene(BaseScenePath);
-        Node sceneRoot = baseScene.Instantiate();
-
-        try
-        {
-            _ = Assert.IsType<Node>(
-                sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/DynamicPhysicalRig"),
-                exactMatch: false);
-            Node locomotion = AssertCharacterLocomotionNode(sceneRoot.GetNodeOrNull("Locomotion"));
-            _ = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull("AnimationTree"), exactMatch: false);
-
-            Assert.Equal(TurnMode.Smooth.ToString(), ReadProperty(locomotion, nameof(CharacterLocomotion.TurnMode))?.ToString());
-            Assert.Empty(ReadPermissionSourceNodes(locomotion));
-            Assert.Null(sceneRoot.GetNodeOrNull("VRIK"));
-            Assert.Null(sceneRoot.GetNodeOrNull("PlayerController"));
-            Assert.Null(sceneRoot.GetNodeOrNull("OpenAITranscriber"));
-            Assert.Null(sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/HipReconciliationModifier"));
-        }
-        finally
-        {
-            sceneRoot.QueueFree();
-        }
-    }
-
-    /// <summary>
-    /// Verifies the player scene inherits the shared base and applies VRIK-specific locomotion permission wiring.
-    /// </summary>
-    [Headless]
-    [Fact]
-    public void PlayerScene_InheritsBaseSceneAndOverridesVRIKLocomotionPermissionSource()
+    public void PlayerScene_InstallsTemplatePlayerAndOverridesVRIKLocomotionPermissionSource()
     {
         string playerSceneText = ReadResourceText(PlayerScenePath);
-        Assert.Contains($"uid=\"{BaseSceneUid}\" path=\"{BaseScenePath}\"", playerSceneText);
         Assert.Contains("[node name=\"Player\"", playerSceneText);
-        Assert.Contains("instance=ExtResource(\"1_edvvb\")", playerSceneText);
+        Assert.Contains(PlayerInstallerScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("CharacterRoleTemplateSceneInstaller.cs", playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReferenceFemaleScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(BrokenCharacterSceneFileName, playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(BrokenVisualSceneFileName, playerSceneText, StringComparison.Ordinal);
 
         PackedScene playerScene = LoadPackedScene(PlayerScenePath);
         Node sceneRoot = playerScene.Instantiate();
 
         try
         {
+            object result = InvokeLoadedInstaller(sceneRoot.GetNode("PlayerCharacterInstaller"), sceneRoot);
+            AssertLoadedInstallSucceeded(result);
+
             Node locomotion = AssertCharacterLocomotionNode(sceneRoot.GetNodeOrNull("Locomotion"));
 
             Assert.Equal(TurnMode.Smooth.ToString(), ReadProperty(locomotion, nameof(CharacterLocomotion.TurnMode))?.ToString());
@@ -105,24 +74,16 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         Assert.Equal(CharacterLocomotionScriptPath, locomotionScript.ResourcePath);
         Assert.Equal(PlayerControllerScriptPath, playerControllerScript.ResourcePath);
 
-        PackedScene animationTreeScene = LoadPackedScene(AnimationTreeScenePath);
-        AnimationTree authoredAnimationTree = Assert.IsAssignableFrom<AnimationTree>(animationTreeScene.Instantiate());
+        AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(
+            ResourceLoader.Load(PlayerAnimationTreeRootPath),
+            exactMatch: false);
+        AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(
+            rootTree.GetNode("States"),
+            exactMatch: false);
 
-        try
-        {
-            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(authoredAnimationTree.TreeRoot, exactMatch: false);
-            AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(
-                rootTree.GetNode("States"),
-                exactMatch: false);
-
-            Assert.NotNull(stateMachine.GetNode("AllFours"));
-            Assert.NotNull(stateMachine.GetNode("AllFoursForward"));
-            Assert.NotNull(stateMachine.GetNode("AllFoursTransitioning"));
-        }
-        finally
-        {
-            authoredAnimationTree.QueueFree();
-        }
+        Assert.NotNull(stateMachine.GetNode("AllFours"));
+        Assert.NotNull(stateMachine.GetNode("AllFoursForward"));
+        Assert.NotNull(stateMachine.GetNode("AllFoursTransitioning"));
     }
 
     /// <summary>
@@ -146,6 +107,10 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("PlayerController"), exactMatch: false);
         _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Locomotion"), exactMatch: false);
         _ = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull("AnimationTree"), exactMatch: false);
+        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("VRIK/PoseStateMachine"), exactMatch: false);
+        _ = Assert.IsType<SkeletonModifier3D>(
+            sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/HipReconciliationModifier"),
+            exactMatch: false);
     }
 
     /// <summary>
@@ -170,6 +135,7 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/PlayerController"), exactMatch: false);
         _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/Locomotion"), exactMatch: false);
         _ = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull("Actors/Player/AnimationTree"), exactMatch: false);
+        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/VRIK/PoseStateMachine"), exactMatch: false);
 
         Script locomotionScript = LoadScript(CharacterLocomotionScriptPath);
         Assert.Equal(CharacterLocomotionScriptPath, locomotionScript.ResourcePath);
@@ -178,6 +144,29 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
     private static Script LoadScript(string path)
         => ResourceLoader.Load<Script>(path)
             ?? throw new Xunit.Sdk.XunitException($"Expected script resource '{path}' to load successfully.");
+
+    private static object InvokeLoadedInstaller(object installer, Node targetRoot)
+    {
+        Type installerType = installer.GetType();
+        Type contextType = installerType.Assembly.GetType(typeof(SceneInstallationContext).FullName!)
+            ?? throw new InvalidOperationException("Failed to resolve loaded SceneInstallationContext type.");
+        object context = Activator.CreateInstance(contextType, targetRoot, SceneInstallationMetadata.DefaultNamespace)
+            ?? throw new InvalidOperationException("Failed to create loaded scene installation context.");
+        object? result = installerType.GetMethod(nameof(SceneInstaller.Install))?.Invoke(installer, [context]);
+        Assert.NotNull(result);
+        return result;
+    }
+
+    private static void AssertLoadedInstallSucceeded(object result)
+    {
+        bool succeeded = (bool)(result.GetType().GetProperty(nameof(SceneInstallationResult.Succeeded))?.GetValue(result)
+            ?? false);
+        object? errors = result.GetType().GetProperty(nameof(SceneInstallationResult.Errors))?.GetValue(result);
+        string errorText = errors is IEnumerable<string> typedErrors
+            ? string.Join('\n', typedErrors)
+            : errors?.ToString() ?? string.Empty;
+        Assert.True(succeeded, errorText);
+    }
 
     private static Node AssertCharacterLocomotionNode(Node? node)
     {

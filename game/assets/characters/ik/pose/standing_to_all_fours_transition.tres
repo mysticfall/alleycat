@@ -1,7 +1,5 @@
-[gd_resource type="Resource" script_class="AllFoursEntryPoseTransition" format=3]
-
-[ext_resource type="Script" path="res://src/IK/Pose/AllFoursEntryPoseTransition.cs" id="1_62pwd"]
-
+[gd_resource type="Resource" script_class="AllFoursEntryPoseTransition" format=3 uid="uid://chnxep12fdsf1"]
+[ext_resource type="Script" uid="uid://c51q5bbwdnihs" path="res://src/IK/Pose/AllFoursEntryPoseTransition.cs" id="1_62pwd"]
 [resource]
 resource_name = "StandingToAllFoursTransition"
 script = ExtResource("1_62pwd")

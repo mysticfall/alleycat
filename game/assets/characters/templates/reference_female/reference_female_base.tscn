@@ -1,20 +1,29 @@
-[gd_scene format=3 uid="uid://e765iqdvmnjd"]
+[gd_scene format=3 uid="uid://c7xlydturc3b0"]
 
-[ext_resource type="PackedScene" uid="uid://dp3fxu1uko3n7" path="res://assets/characters/reference/female/reference_female.tscn" id="1_yqj8o"]
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
+[ext_resource type="AnimationLibrary" uid="uid://xjgp5mvaystq" path="res://assets/characters/reference/female/animations/eyes/eyes.tres" id="2_ei3al"]
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Body/DynamicPhysicalRig.cs" id="3_2a5tg"]
-[ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
+[ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/templates/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
 [ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_5hhxm"]
-[ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/ik/arm_ik_target_set.tres" id="5_vhysq"]
+[ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/templates/ik/arm_ik_target_set.tres" id="5_vhysq"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="6_65br6"]
 [ext_resource type="Script" uid="uid://bortwjgmky2ik" path="res://src/IK/FootTargetSyncController.cs" id="7_56k28"]
-[ext_resource type="PackedScene" uid="uid://degycvmqbvjx1" path="res://assets/characters/reference/female/animation_tree.tscn" id="8_2a5tg"]
+[ext_resource type="PackedScene" uid="uid://degycvmqbvjx1" path="res://assets/characters/templates/animation/animation_tree.tscn" id="8_2a5tg"]
 [ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="9_ctrlloco"]
 [ext_resource type="Script" uid="uid://ckmm3fnsp6y36" path="res://src/Body/Eyes/EyesBehaviour.cs" id="10_eyesbehaviour"]
 [ext_resource type="Script" uid="uid://clntm6ydqb54a" path="res://src/Body/Hands/HandComponentHolder.cs" id="11_jgvmf"]
 [ext_resource type="Script" uid="uid://cxh7lfqn5k3nw" path="res://src/Body/Hands/HandPoseBehaviour.cs" id="12_kqwe4"]
 
-[node name="Female" unique_id=1792987446 groups=["Actors"] instance=ExtResource("1_yqj8o")]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
+radius = 0.1
+
+
+[node name="Female" unique_id=1792987446 groups=["Actors"] instance=ExtResource("1_5molt")]
+
+[node name="Female" parent="." index="0" unique_id=973242638]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
 [node name="FootTargetSyncController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" index="9" unique_id=556407372 node_paths=PackedStringArray("LeftFootTarget", "RightFootTarget")]
 unique_name_in_owner = false
@@ -263,17 +272,28 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="Head" parent="Female/GeneralSkeleton" index="25" unique_id=694402195]
-transform = Transform3D(0.9999999, 6.0535967e-09, 0, -4.1909516e-09, 1, 0, 0, -5.9604645e-08, 0.99999994, 0.0003332151, 1.4614565, 0.036107678)
+[node name="Head" type="BoneAttachment3D" parent="Female/GeneralSkeleton" index="9" unique_id=694402195]
+transform = Transform3D(1, 0, 0, 0, 1, 8.707866e-08, 0, -8.707866e-08, 1, 0, 1.4594107, 0.041874606)
+bone_name = "Head"
+bone_idx = 46
 
-[node name="Viewpoint" parent="Female/GeneralSkeleton/Head" index="0" unique_id=488293773]
+[node name="Viewpoint" type="Marker3D" parent="Female/GeneralSkeleton/Head" index="0" unique_id=488293773]
+unique_name_in_owner = true
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
 
-[node name="RightHand" parent="Female/GeneralSkeleton" index="26" unique_id=190350548]
-transform = Transform3D(-5.9604645e-08, -1, 2.2351742e-08, -2.9802322e-08, -4.4703484e-08, -0.9999998, 0.9999998, -1.1920929e-07, -2.9802322e-08, -0.581, 1.244, -7.8231096e-08)
+[node name="RightHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" index="10" unique_id=190350548]
+transform = Transform3D(0.8850008, -0.46467716, -0.029130071, 0.03788188, 0.13422425, -0.990227, 0.4640457, 0.875248, 0.1363914, -0.15211736, 0.037800312, 0.8748765)
+bone_name = "RightHand"
+bone_idx = 29
 
-[node name="LeftHand" parent="Female/GeneralSkeleton" index="27" unique_id=792521653]
-transform = Transform3D(1.6391277e-07, 1, -3.1664968e-08, 4.4703484e-08, -8.381903e-08, -1.0000001, -1.0000002, 3.1292439e-07, -3.7252903e-08, 0.581, 1.244, 1.0430813e-07)
+[node name="LeftHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" index="11" unique_id=792521653]
+transform = Transform3D(0.98049486, 0.19413461, 0.030685276, 0.0052477717, 0.13020831, -0.9914726, -0.19647457, 0.9722946, 0.12664968, 0.1477892, 0.04072591, 0.8651524)
+bone_name = "LeftHand"
+bone_idx = 10
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." index="1" unique_id=385661659]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+shape = SubResource("SphereShape3D_osxwe")
 
 [node name="DynamicPhysicalRig" type="Node" parent="Female/GeneralSkeleton" index="28" unique_id=966532134]
 script = ExtResource("3_2a5tg")
@@ -346,19 +366,23 @@ metadata/_custom_type_script = "uid://cjt48dl58j31y"
 script = ExtResource("11_jgvmf")
 metadata/_custom_type_script = "uid://clntm6ydqb54a"
 
-[node name="RightHand" type="Node" parent="Hands" index="0" unique_id=122437311 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget")]
+[node name="RightHand" type="Node" parent="Hands" index="0" unique_id=122437311 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget", "PhysicalRig")]
 script = ExtResource("12_kqwe4")
 AnimationTree = NodePath("../../AnimationTree")
 Side = 1
 HandTargetNode = NodePath("../../IKTargets/RightHand")
 HandBoneAttachment = NodePath("../../Female/GeneralSkeleton/RightHand")
 HeldCollisionTarget = NodePath("../../IKTargets/RightHand")
+PhysicalRig = NodePath("../../Female/GeneralSkeleton/DynamicPhysicalRig")
 metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"
 
-[node name="LeftHand" type="Node" parent="Hands" index="1" unique_id=1448579806 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget")]
+[node name="LeftHand" type="Node" parent="Hands" index="1" unique_id=1448579806 node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget", "PhysicalRig")]
 script = ExtResource("12_kqwe4")
 AnimationTree = NodePath("../../AnimationTree")
 HandTargetNode = NodePath("../../IKTargets/LeftHand")
 HandBoneAttachment = NodePath("../../Female/GeneralSkeleton/LeftHand")
 HeldCollisionTarget = NodePath("../../IKTargets/LeftHand")
+PhysicalRig = NodePath("../../Female/GeneralSkeleton/DynamicPhysicalRig")
 metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"
+
+[editable path="Female"]

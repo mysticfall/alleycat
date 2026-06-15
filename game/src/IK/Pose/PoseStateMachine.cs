@@ -83,6 +83,21 @@ public partial class PoseStateMachine : Node, ILocomotionPermissionSource, ILoco
     }
 
     /// <summary>
+    /// Restarts the active pose state's AnimationTree node after a late AnimationTree binding or root override.
+    /// </summary>
+    public void RestartCurrentAnimationState()
+    {
+        EnsureInitialStateResolved();
+
+        if (AnimationTree is null || CurrentState is null)
+        {
+            return;
+        }
+
+        CurrentState.Start(AnimationTree);
+    }
+
+    /// <summary>
     /// When true, enables state machine processing. When false, skips state machine ticks.
     /// </summary>
     [Export]

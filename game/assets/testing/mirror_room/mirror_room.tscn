@@ -1,323 +1,62 @@
 [gd_scene format=3 uid="uid://baut876fuyk5c"]
-
 [ext_resource type="PackedScene" uid="uid://dei4vqs1pclk8" path="res://assets/testing/test_mirror.tscn" id="1_70tdi"]
 [ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/player.tscn" id="2_o5j6c"]
 [ext_resource type="PackedScene" uid="uid://bx2i1qev0800s" path="res://assets/testing/test_environment.tscn" id="3_shmn4"]
-[ext_resource type="PackedScene" uid="uid://bp4em7ort8h1t" path="res://assets/characters/reference/female_reference_npc.tscn" id="3_ui8dj"]
+[ext_resource type="PackedScene" uid="uid://bmy3r56h5ufd6" path="res://assets/characters/reference/ally.tscn" id="3_ui8dj"]
 [ext_resource type="PackedScene" uid="uid://doedwhsg5x0o0" path="res://assets/items/chain/physics_chain.tscn" id="4_3ounv"]
 [ext_resource type="PackedScene" uid="uid://df4i6mqjgm16e" path="res://assets/items/test_ball.tscn" id="6_dk4eq"]
 [ext_resource type="PackedScene" uid="uid://c45lomd35erjb" path="res://assets/items/test_stick.tscn" id="7_yh5d4"]
-[ext_resource type="Script" uid="uid://dyffnsg0122vb" path="res://src/Body/Voice/PlayerVoice.cs" id="8_player_voice"]
-[ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="9_speech_gen"]
-[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="10_lipsync"]
-[ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="11_ai_voice"]
-[ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="11_uq3xf"]
-[ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="12_mind"]
-[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="agentic_prompt_stack"]
-[ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="agentic_speech_tool"]
-[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="agentic_text_prompt_section"]
-
 [sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
 size = Vector2(10, 10)
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_shmn4"]
 size = Vector3(10, 0.01, 10)
-
-[sub_resource type="Resource" id="Resource_agentic_system_text_section"]
-script = ExtResource("agentic_text_prompt_section")
-Text = "You are Alley, a warm, observant person standing with the player in a VR room.
-Reply naturally and briefly, as if speaking aloud in real time.
-You must not answer with normal chat text. For every response, call the speak tool exactly once with the
-words Alley should say aloud. Do not describe tool use and do not include stage directions."
-Name = "Instructions"
-
-[sub_resource type="Resource" id="Resource_agentic_system_instruction"]
-script = ExtResource("agentic_prompt_stack")
-Sections = [SubResource("Resource_agentic_system_text_section")]
-
-[sub_resource type="Resource" id="Resource_agentic_speech_tool"]
-script = ExtResource("agentic_speech_tool")
-ToolName = "speak"
-ToolDescription = "Speak the supplied text aloud through the configured voice."
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_ui8dj"]
 size = Vector3(0.06, 0.12, 0.06)
-
 [sub_resource type="BoxMesh" id="BoxMesh_tl84k"]
 size = Vector3(0.06, 0.12, 0.06)
-
 [sub_resource type="SphereShape3D" id="SphereShape3D_dk4eq"]
 radius = 0.075
-
 [sub_resource type="SphereMesh" id="SphereMesh_yh5d4"]
 radius = 0.075
 height = 0.15
-
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_ui8dj"]
 height = 1.0
 radius = 0.3
-
 [sub_resource type="CylinderMesh" id="CylinderMesh_ui8dj"]
 top_radius = 0.3
 bottom_radius = 0.3
 height = 1.0
-
 [node name="MirrorRoom" type="Node3D" unique_id=973335562]
-
 [node name="Mirrors" type="Node3D" parent="." unique_id=770923602]
-
 [node name="FrontMirror" parent="Mirrors" unique_id=916837440 instance=ExtResource("1_70tdi")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -2)
 size = Vector2(4, 2)
-
 [node name="BackMirror" parent="Mirrors" unique_id=1697368584 instance=ExtResource("1_70tdi")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 2)
 size = Vector2(4, 2)
-
 [node name="RightMirror" parent="Mirrors" unique_id=1095035094 instance=ExtResource("1_70tdi")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -2, 1, 0)
 size = Vector2(4, 2)
-
 [node name="LeftMirror" parent="Mirrors" unique_id=740348980 instance=ExtResource("1_70tdi")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 2, 1, 0)
 size = Vector2(4, 2)
-
 [node name="Floor" type="MeshInstance3D" parent="." unique_id=732614940]
 mesh = SubResource("PlaneMesh_0r23o")
-
 [node name="StaticBody3D" type="StaticBody3D" parent="Floor" unique_id=597068289]
-
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor/StaticBody3D" unique_id=1376618379]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.005, 0)
 shape = SubResource("BoxShape3D_shmn4")
-
 [node name="Actors" type="Node3D" parent="." unique_id=1775714844]
-
 [node name="Player" parent="Actors" unique_id=1792987446 instance=ExtResource("2_o5j6c")]
-
-[node name="GeneralSkeleton" parent="Actors/Player/Female" parent_id_path=PackedInt32Array(1792987446, 533815400) index="0" unique_id=442410748]
-bones/1/position = Vector3(-4.367798e-17, 0.31294632, 0.070556186)
-bones/1/rotation = Quaternion(-0.1882067, 0, 0, 0.98212945)
-bones/2/rotation = Quaternion(0.09452675, 7.7002866e-08, 3.429257e-08, 0.9955224)
-bones/3/rotation = Quaternion(0.14025044, -4.2227395e-08, -4.255166e-09, 0.99011606)
-bones/4/rotation = Quaternion(0.32547188, 0.6047862, 0.71915984, -0.10540782)
-bones/6/rotation = Quaternion(0.046031103, 1.7176157e-08, -2.616004e-10, 0.99894005)
-bones/7/rotation = Quaternion(0.47675806, 0.47664338, 0.5303406, -0.51405424)
-bones/8/rotation = Quaternion(-0.09840517, 0.84005696, -0.53104484, -0.051109463)
-bones/9/rotation = Quaternion(0.61277914, -0.3280523, 0.3175644, 0.64500874)
-bones/10/rotation = Quaternion(-0.33626077, 0.7790972, 0.47674412, 0.22945884)
-bones/11/rotation = Quaternion(-0.017204719, 0.025752638, -0.089198954, 0.9955323)
-bones/12/rotation = Quaternion(-2.8312203e-07, 0, 1.6391276e-07, 1)
-bones/13/rotation = Quaternion(1.7881393e-07, -5.9604645e-08, 1.4901161e-07, 1)
-bones/14/rotation = Quaternion(-2.9802319e-08, 3.8743013e-07, 3.1292436e-07, 1)
-bones/15/rotation = Quaternion(-5.066394e-07, -1.788139e-07, -1.3411044e-07, 1)
-bones/16/rotation = Quaternion(2.3841855e-07, 0, 0, 1)
-bones/17/rotation = Quaternion(-0.0028181674, -0.060764663, 0.13709018, 0.9886891)
-bones/18/rotation = Quaternion(-1.1920926e-07, -6.556509e-07, 0, 1)
-bones/19/rotation = Quaternion(-8.940695e-08, -8.940695e-08, -1.3411044e-07, 1)
-bones/20/rotation = Quaternion(-0.0013739167, -0.029556062, 0.07789751, 0.99652225)
-bones/21/rotation = Quaternion(-2.9802322e-08, -1.7881393e-07, 2.9802322e-08, 1)
-bones/22/rotation = Quaternion(-1.6391276e-07, 0, 4.4703476e-08, 1)
-bones/23/rotation = Quaternion(-0.24540925, 0.6830076, -0.071444355, 0.68422997)
-bones/24/rotation = Quaternion(0.050866924, -0.043619942, 0.028105136, 0.9973565)
-bones/24/scale = Vector3(1.0000466, 0.9999629, 0.9999892)
-bones/25/rotation = Quaternion(-7.450581e-08, 4.470349e-08, -1.7881396e-07, 1)
-bones/26/rotation = Quaternion(0.4758435, -0.48576766, -0.5326332, -0.50388944)
-bones/27/rotation = Quaternion(0.1105804, 0.84264064, -0.5239771, 0.056363404)
-bones/28/rotation = Quaternion(0.6175428, 0.3222772, -0.3145312, 0.6448631)
-bones/29/rotation = Quaternion(-0.3207907, -0.7790672, -0.45748493, 0.28435043)
-bones/30/rotation = Quaternion(-0.017204657, -0.025752366, 0.0891985, 0.9955323)
-bones/31/rotation = Quaternion(-1.4901158e-07, -1.4901158e-07, 2.086162e-07, 1)
-bones/32/rotation = Quaternion(8.940697e-08, 1.0430813e-07, -5.9604645e-08, 1)
-bones/33/rotation = Quaternion(-2.9802322e-08, -2.0861626e-07, -1.4901161e-07, 1)
-bones/34/rotation = Quaternion(2.9802322e-07, 1.937151e-07, 0, 1)
-bones/35/rotation = Quaternion(-2.8312203e-07, -2.9802319e-08, -4.4703476e-08, 1)
-bones/36/rotation = Quaternion(-0.0028181078, 0.06076462, -0.13708998, 0.9886891)
-bones/37/rotation = Quaternion(-5.066395e-07, 6.2584877e-07, -2.9802322e-08, 1)
-bones/38/rotation = Quaternion(1.4901161e-07, 2.0861626e-07, 1.4901161e-07, 1)
-bones/39/rotation = Quaternion(-0.0013742148, 0.029555645, -0.077897005, 0.99652225)
-bones/40/rotation = Quaternion(-4.4703476e-08, 3.4272668e-07, -3.4272668e-07, 1)
-bones/41/rotation = Quaternion(5.9604638e-08, 0, -5.9604638e-08, 1)
-bones/42/rotation = Quaternion(-0.24540924, -0.6830078, 0.07144428, 0.6842298)
-bones/43/rotation = Quaternion(0.050866753, 0.043620303, -0.02810517, 0.9973565)
-bones/43/scale = Vector3(1.0000466, 0.9999628, 0.99998975)
-bones/44/rotation = Quaternion(1.490116e-07, -8.940695e-08, -2.9802319e-08, 1)
-bones/45/rotation = Quaternion(0.046030715, 9.611443e-09, 3.4496004e-08, 0.99894005)
-bones/46/rotation = Quaternion(0.09559992, 3.899156e-08, -1.4337758e-08, 0.99541986)
-bones/47/rotation = Quaternion(-0.035323802, 0.4402095, 0.89041495, -0.110131554)
-bones/48/rotation = Quaternion(0.24182439, 0.29784602, -0.91456115, 0.12801042)
-bones/49/rotation = Quaternion(0.16489854, 0.56628406, -0.80668914, -0.03719566)
-bones/50/rotation = Quaternion(7.1198547e-06, 0.91198987, 0.410213, 2.640599e-05)
-bones/51/rotation = Quaternion(0.043410398, 0.44828728, 0.8926642, 0.017457675)
-bones/52/rotation = Quaternion(-0.16787688, 0.3019209, -0.93170464, -0.11219455)
-bones/53/rotation = Quaternion(-0.120971605, 0.5231796, -0.8418455, -0.05427017)
-bones/54/rotation = Quaternion(1.8785971e-05, 0.92607546, 0.37733847, 6.1221594e-06)
-
-[node name="Head" parent="Actors/Player/Female/GeneralSkeleton" index="26" unique_id=694402195]
-transform = Transform3D(1, 7.1054274e-15, -4.2632564e-14, -3.5527137e-15, 1.0000001, -2.9802322e-08, 2.842171e-14, 2.9802322e-08, 1.0000001, -3.2751228e-09, 0.9242729, 0.019603673)
-
-[node name="RightHand" parent="Actors/Player/Female/GeneralSkeleton" index="27" unique_id=190350548]
-transform = Transform3D(-8.940697e-08, -0.9999999, 0, 0, 1.1920929e-07, -1.0000001, 0.9999999, -1.1920929e-07, 2.9802322e-08, -0.45407546, 1.1296095, 0.006320022)
-
-[node name="LeftHand" parent="Actors/Player/Female/GeneralSkeleton" index="28" unique_id=792521653]
-transform = Transform3D(8.940697e-08, 1, -7.4505806e-08, 1.1920929e-07, -1.4901161e-07, -1.0000001, -1.0000001, 1.4901161e-07, -8.940697e-08, 0.45411232, 1.129565, 0.006333527)
-
-[node name="RightElbow" parent="Actors/Player/IKTargets" parent_id_path=PackedInt32Array(1792987446, 546537465) index="2" unique_id=1389246902]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5384225, 0.89441085, -0.21364684)
-
-[node name="LeftElbow" parent="Actors/Player/IKTargets" parent_id_path=PackedInt32Array(1792987446, 546537465) index="3" unique_id=1323926424]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.53767586, 0.8936842, -0.21397342)
-
-[node name="RightKnee" parent="Actors/Player/IKTargets" parent_id_path=PackedInt32Array(1792987446, 546537465) index="6" unique_id=1677817895]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13952923, 0.2391145, -0.55855834)
-
-[node name="LeftKnee" parent="Actors/Player/IKTargets" parent_id_path=PackedInt32Array(1792987446, 546537465) index="7" unique_id=1717634996]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22227466, 0.24609432, -0.5441986)
-
-[node name="RightFoot" parent="Actors/Player/IKTargets" parent_id_path=PackedInt32Array(1792987446, 546537465) index="8" unique_id=1245707026]
-transform = Transform3D(0.9725358, 0.1664549, 0.16268659, -2.5749214e-05, -0.69888836, 0.71523076, 0.23275343, -0.6955916, -0.6796897, 0.060946114, 0.1200235, -0.095398046)
-
-[node name="LeftFoot" parent="Actors/Player/IKTargets" parent_id_path=PackedInt32Array(1792987446, 546537465) index="9" unique_id=1292107592]
-transform = Transform3D(0.9804194, -0.13068639, -0.14730543, -5.346535e-05, -0.7482205, 0.6634501, -0.19692083, -0.6504516, -0.73357683, -0.059582762, 0.1224994, -0.1047874)
-
 [node name="Female" parent="Actors" unique_id=781997941 instance=ExtResource("3_ui8dj")]
 transform = Transform3D(-0.7993387, 0, -0.6008807, 0, 1, 0, 0.6008807, 0, -0.7993387, -1.324, 0, -0.868)
-
-[node name="GeneralSkeleton" parent="Actors/Female/Female" parent_id_path=PackedInt32Array(781997941, 533815400) index="0" unique_id=442410748]
-bones/1/position = Vector3(0, 0.8350087, -0.0056000818)
-bones/1/rotation = Quaternion(-0.008051274, 0.000784472, 0.0012914167, 0.99996644)
-bones/2/rotation = Quaternion(0.0028405697, 7.998583e-08, 2.6604217e-08, 0.99999607)
-bones/3/rotation = Quaternion(0.014087276, -3.844496e-08, -2.0140329e-08, 0.9999009)
-bones/4/rotation = Quaternion(0.3254719, 0.6047862, 0.71915984, -0.10540786)
-bones/6/rotation = Quaternion(0.010009938, 1.740141e-08, -3.9073234e-09, 0.99995)
-bones/7/rotation = Quaternion(0.49555957, 0.492446, 0.5333977, -0.4768697)
-bones/8/rotation = Quaternion(-0.05017114, 0.7602076, -0.6466937, -0.03680374)
-bones/9/rotation = Quaternion(0.15324616, -0.7209664, 0.17162663, 0.6536569)
-bones/10/rotation = Quaternion(-0.06849188, 0.7690772, -0.10277205, 0.6271102)
-bones/11/rotation = Quaternion(-0.017204659, 0.025752638, -0.089199014, 0.9955323)
-bones/12/rotation = Quaternion(-2.533197e-07, 0, 1.3411044e-07, 1)
-bones/13/rotation = Quaternion(2.6822087e-07, -1.4901159e-08, 1.19209275e-07, 1)
-bones/14/rotation = Quaternion(-0.026076058, -0.00092079263, 0.0040021036, 0.99965155)
-bones/15/rotation = Quaternion(-0.0002235251, 0.0059282635, 0.003133686, 0.9999775)
-bones/16/rotation = Quaternion(2.3841855e-07, 0, 0, 1)
-bones/17/rotation = Quaternion(-0.025205249, -0.053624544, 0.1298165, 0.98976606)
-bones/18/rotation = Quaternion(-7.45058e-08, -7.003545e-07, -1.19209275e-07, 1)
-bones/19/rotation = Quaternion(-8.940695e-08, -8.940695e-08, -1.3411044e-07, 1)
-bones/20/rotation = Quaternion(-0.02398269, -0.02753007, 0.0799163, 0.99613273)
-bones/21/rotation = Quaternion(-2.9802322e-08, -1.4901161e-07, 2.9802322e-08, 1)
-bones/22/rotation = Quaternion(-4.4703484e-08, -4.4703484e-08, 4.4703484e-08, 1)
-bones/23/rotation = Quaternion(-0.25589654, 0.6746255, -0.054070354, 0.6902708)
-bones/24/rotation = Quaternion(0.045045376, -0.034527145, 0.02639251, 0.99803925)
-bones/24/scale = Vector3(1.0000466, 0.9999631, 0.9999892)
-bones/25/rotation = Quaternion(-7.450581e-08, 1.4901163e-08, -1.192093e-07, 1)
-bones/26/rotation = Quaternion(0.4923551, -0.49529624, -0.5361428, -0.47415078)
-bones/27/rotation = Quaternion(0.07405529, 0.7782023, -0.6224842, 0.037820183)
-bones/28/rotation = Quaternion(0.19437845, 0.64756364, -0.17879288, 0.7147808)
-bones/29/rotation = Quaternion(-0.14442298, -0.70559585, 0.085329086, 0.68847334)
-bones/30/rotation = Quaternion(-0.015263697, -0.024298167, 0.083138004, 0.99612486)
-bones/31/rotation = Quaternion(-1.7881389e-07, -1.7881389e-07, 1.7881389e-07, 1)
-bones/32/rotation = Quaternion(8.940697e-08, 1.0430813e-07, -5.9604645e-08, 1)
-bones/33/rotation = Quaternion(-0.001191432, -0.0028595557, 0.007105081, 0.99996996)
-bones/34/rotation = Quaternion(3.5762787e-07, 1.7881393e-07, 0, 1)
-bones/35/rotation = Quaternion(-3.1292436e-07, -2.9802319e-08, -1.4901159e-08, 1)
-bones/36/rotation = Quaternion(0.017611811, 0.0645777, -0.13766001, 0.9882152)
-bones/37/rotation = Quaternion(-5.2154064e-07, 6.4074993e-07, -5.9604645e-08, 1)
-bones/38/rotation = Quaternion(2.0861626e-07, 1.4901161e-07, 1.4901161e-07, 1)
-bones/39/rotation = Quaternion(0.0058536925, 0.02805857, -0.071695134, 0.99701464)
-bones/40/rotation = Quaternion(-2.9802322e-08, 3.1292439e-07, -3.7252903e-07, 1)
-bones/41/rotation = Quaternion(2.9802319e-08, -2.9802319e-08, -8.940695e-08, 1)
-bones/42/rotation = Quaternion(-0.25159428, -0.6784305, 0.059901774, 0.6876367)
-bones/43/rotation = Quaternion(0.050866738, 0.04362026, -0.02810517, 0.9973565)
-bones/43/scale = Vector3(1.0000466, 0.999963, 0.99998987)
-bones/44/rotation = Quaternion(1.490116e-07, -8.940695e-08, -2.9802319e-08, 1)
-bones/45/rotation = Quaternion(0.010009778, 1.0680501e-08, 2.9859777e-08, 0.99994993)
-bones/46/rotation = Quaternion(0.0770388, -0.00021393101, -0.0020645764, 0.99702597)
-bones/47/rotation = Quaternion(-0.009326629, 0.014710212, 0.9965528, 0.081112176)
-bones/48/rotation = Quaternion(-0.00023374303, 0.9998631, -0.01646093, 0.0017105155)
-bones/49/rotation = Quaternion(0.12897792, 0.6980427, -0.70401376, 0.021580623)
-bones/50/rotation = Quaternion(4.3747772e-05, 0.9999998, -0.000589192, 6.034705e-05)
-bones/51/rotation = Quaternion(0.007776896, 0.025287215, 0.9975008, -0.06551586)
-bones/52/rotation = Quaternion(-0.00019238555, 0.9995697, -0.029270664, -0.0019369434)
-bones/53/rotation = Quaternion(-0.13801953, 0.69358045, -0.70587665, -0.040434778)
-bones/54/rotation = Quaternion(-4.4455708e-05, 0.9999999, -0.0005898476, -6.0526832e-05)
-
-[node name="Head" parent="Actors/Female/Female/GeneralSkeleton" index="25" unique_id=694402195]
-transform = Transform3D(1, 5.820766e-11, 5.6577846e-08, -1.5716068e-09, 0.9999999, 1.4901161e-07, -5.7043508e-08, -1.6391277e-07, 0.9999999, -0.0001016428, 1.4608423, 0.035326414)
-
-[node name="RightHand" parent="Actors/Female/Female/GeneralSkeleton" index="26" unique_id=190350548]
-transform = Transform3D(-4.4703484e-08, -0.9999998, 3.7252903e-08, -5.9604645e-08, -2.9802322e-08, -0.9999999, 0.9999999, 2.9802322e-08, -8.940697e-08, -0.5809999, 1.244, 3.7252903e-08)
-
-[node name="LeftHand" parent="Actors/Female/Female/GeneralSkeleton" index="27" unique_id=792521653]
-transform = Transform3D(1.0430813e-07, 0.9999999, -1.3783574e-07, 2.9802322e-08, -4.0978193e-08, -0.99999964, -0.99999976, 4.4703484e-08, -2.9802322e-08, 0.581, 1.244, 2.0489097e-07)
-
-[node name="RightElbow" parent="Actors/Female/IKTargets" parent_id_path=PackedInt32Array(781997941, 546537465) index="2" unique_id=1389246902]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35043108, 1.2624028, 0.20185947)
-
-[node name="LeftElbow" parent="Actors/Female/IKTargets" parent_id_path=PackedInt32Array(781997941, 546537465) index="3" unique_id=1323926424]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35039663, 1.2636304, 0.20280015)
-
-[node name="RightKnee" parent="Actors/Female/IKTargets" parent_id_path=PackedInt32Array(781997941, 546537465) index="6" unique_id=1677817895]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12175006, 0.39207068, -0.48477435)
-
-[node name="LeftKnee" parent="Actors/Female/IKTargets" parent_id_path=PackedInt32Array(781997941, 546537465) index="7" unique_id=1717634996]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.11531401, 0.37579417, -0.47883534)
-
-[node name="RightFoot" parent="Actors/Female/IKTargets" parent_id_path=PackedInt32Array(781997941, 546537465) index="8" unique_id=1245707026]
-transform = Transform3D(0.9722519, 0.23386964, -0.0055830437, 0.003329552, 0.010029387, 0.9999442, 0.23391256, -0.9722161, 0.008972411, 0.05803448, 0.064606875, -0.027971983)
-
-[node name="LeftFoot" parent="Actors/Female/IKTargets" parent_id_path=PackedInt32Array(781997941, 546537465) index="9" unique_id=1292107592]
-transform = Transform3D(0.98069155, -0.19544044, -0.0068532685, 0.007881371, 0.0044832467, 0.99995893, -0.1954017, -0.9807053, 0.005937021, -0.03851527, 0.065054, -0.021187067)
-
-[node name="AnimationTree" parent="Actors/Female" index="5" unique_id=527893103]
-parameters/EyesBlinkTimeScale/scale = 1.0
-
-[node name="Eyes" parent="Actors/Female" index="6" unique_id=1199535973 node_paths=PackedStringArray("LookTarget")]
-LookTarget = NodePath("../../Player/Female/GeneralSkeleton/Head/Viewpoint")
-
-[node name="AIConversation" type="Node3D" parent="Actors" unique_id=1217876690]
-
-[node name="PlayerVoice" type="Node3D" parent="Actors/AIConversation" unique_id=859780857 node_paths=PackedStringArray("Transcriber")]
-script = ExtResource("8_player_voice")
-Transcriber = NodePath("../../Player/OpenAITranscriber")
-Id = "player"
-metadata/_custom_type_script = "uid://dyffnsg0122vb"
-
-[node name="AlleyVoice" type="Node3D" parent="Actors/AIConversation" unique_id=1790187431 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.324, 1.45, -0.868)
-script = ExtResource("11_ai_voice")
-SpeechGenerator = NodePath("SpeechGenerator")
-LipSyncPlayer = NodePath("LipSyncPlayer")
-Id = "alley"
-metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
-
-[node name="SpeechGenerator" type="Node" parent="Actors/AIConversation/AlleyVoice" unique_id=1937148862]
-script = ExtResource("9_speech_gen")
-VoiceOverride = "Elena.wav"
-TargetSampleRate = 16000
-metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
-
-[node name="LipSyncPlayer" type="Node" parent="Actors/AIConversation/AlleyVoice" unique_id=904819147 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
-script = ExtResource("10_lipsync")
-InputStrength = 0.6
-ConstantNoise = true
-EyeRotationToBlendshapeScale = 0.15
-Meshes = [NodePath("../../../Female/Female/GeneralSkeleton/Female_body"), NodePath("../../../Female/Female/GeneralSkeleton/Female_eyebrow006"), NodePath("../../../Female/Female/GeneralSkeleton/Female_eyelashes01"), NodePath("../../../Female/Female/GeneralSkeleton/Female_high-poly"), NodePath("../../../Female/Female/GeneralSkeleton/Female_teeth_shape01"), NodePath("../../../Female/Female/GeneralSkeleton/Female_tongue01")]
-AudioPlayer = NodePath("../AudioStreamPlayer3D")
-metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
-
-[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Actors/AIConversation/AlleyVoice" unique_id=1364016812]
-
-[node name="Mind" type="Node" parent="Actors/AIConversation" unique_id=1959394491 node_paths=PackedStringArray("Voice")]
-script = ExtResource("12_mind")
-SystemInstruction = SubResource("Resource_agentic_system_instruction")
-Tools = Array[ExtResource("11_uq3xf")]([SubResource("Resource_agentic_speech_tool")])
-Voice = NodePath("../AlleyVoice")
-
+[node name="LookTarget" type="Marker3D" parent="Actors/Female" index="1" unique_id=149871830]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 10, -10)
+[node name="FemaleEyeLookTarget" type="Marker3D" parent="Actors" unique_id=109095476]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 10, -10)
 [node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_shmn4")]
-
 [node name="Items" type="Node3D" parent="." unique_id=1247114236]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7552289, -0.6124832)
-
 [node name="Chain" parent="Items" unique_id=1490776132 node_paths=PackedStringArray("StartAttachedBody", "StartAttachedBodyAnchor", "EndAttachedBody", "EndAttachedBodyAnchor") instance=ExtResource("4_3ounv")]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 1.2, 0)
 LinkCount = 32
@@ -325,7 +64,6 @@ StartAttachedBody = NodePath("../StartAnchor")
 StartAttachedBodyAnchor = NodePath("../StartAnchor/AttachmentPoint")
 EndAttachedBody = NodePath("../EndWeight")
 EndAttachedBodyAnchor = NodePath("../EndWeight/AttachmentPoint")
-
 [node name="StartAnchor" type="RigidBody3D" parent="Items" unique_id=920795106 groups=["hand_dynamic_interaction_body"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2707611, 0)
 collision_layer = 2
@@ -333,16 +71,12 @@ collision_mask = 11
 mass = 5.0
 gravity_scale = 0.0
 freeze = true
-
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Items/StartAnchor" unique_id=1491942265]
 shape = SubResource("BoxShape3D_ui8dj")
-
 [node name="Mesh" type="MeshInstance3D" parent="Items/StartAnchor" unique_id=1363968189]
 mesh = SubResource("BoxMesh_tl84k")
-
 [node name="AttachmentPoint" type="Marker3D" parent="Items/StartAnchor" unique_id=162430268]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, 0)
-
 [node name="EndWeight" type="RigidBody3D" parent="Items" unique_id=585176685 groups=["hand_dynamic_interaction_body"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35450745, 5.9604645e-08)
 collision_layer = 2
@@ -350,34 +84,23 @@ collision_mask = 11
 mass = 0.6
 linear_damp = 0.02
 angular_damp = 0.05
-
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Items/EndWeight" unique_id=898110529]
 shape = SubResource("SphereShape3D_dk4eq")
-
 [node name="Mesh" type="MeshInstance3D" parent="Items/EndWeight" unique_id=1151649996]
 mesh = SubResource("SphereMesh_yh5d4")
-
 [node name="AttachmentPoint" type="Marker3D" parent="Items/EndWeight" unique_id=490933954]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
-
 [node name="Table" type="StaticBody3D" parent="Items" unique_id=977064214]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.72102123, -0.25, 0.31848186)
-
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Items/Table" unique_id=1840040471]
 shape = SubResource("CylinderShape3D_ui8dj")
-
 [node name="Mesh" type="MeshInstance3D" parent="Items/Table" unique_id=1268389928]
 mesh = SubResource("CylinderMesh_ui8dj")
-
-[node name="Ball" parent="Items" unique_id=440488605 instance=ExtResource("6_dk4eq")]
+[node name="Ball" parent="Items" unique_id=440488605 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("6_dk4eq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6710081, 0.30162144, 0.47307545)
-
-[node name="Ball2" parent="Items" unique_id=2033382056 instance=ExtResource("6_dk4eq")]
+[node name="Ball2" parent="Items" unique_id=2033382056 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("6_dk4eq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8016772, 0.30162144, 0.3634836)
-
-[node name="Stick" parent="Items" unique_id=362015970 instance=ExtResource("7_yh5d4")]
+[node name="Stick" parent="Items" unique_id=362015970 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("7_yh5d4")]
 transform = Transform3D(0.73521054, -0.67783904, 2.9629284e-08, 0, -4.371139e-08, -1, 0.67783904, 0.73521054, -3.213707e-08, 0.51545995, 0.26368403, 0.34847197)
-
 [editable path="Actors/Player"]
-[editable path="Actors/Player/VRIK"]
 [editable path="Actors/Female"]

@@ -56,7 +56,7 @@ instantiated across character setups.
    chain (serialised in saved `CCDIK3D` settings) to keep rotations within plausible
    ranges. (TRACES TR-1, TR-3)
 4. The IK configuration is saved as a reusable scene at
-   `@game/assets/characters/ik/neck_spine_ccdik.tscn`, with the target node left
+   `@game/assets/characters/templates/ik/neck_spine_ccdik.tscn`, with the target node left
    unbound so consuming scenes provide/bind the head target externally. (TRACES TR-2)
 5. A photobooth verification scene exists at:
    - `@game/tests/characters/ik/neck_spine_ccdik_test.tscn`
@@ -78,7 +78,7 @@ instantiated across character setups.
 
 ## References
 
-- @game/assets/characters/ik/neck_spine_ccdik.tscn
+- @game/assets/characters/templates/ik/neck_spine_ccdik.tscn
 - @game/assets/testing/photobooth/templates/full_body_5_cams.tscn
 - @game/tests/characters/ik/neck_spine_ccdik_test.tscn
 - @game/tests/characters/ik/neck_spine_ccdik_test.gd

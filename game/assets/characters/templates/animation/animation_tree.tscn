@@ -1,6 +1,6 @@
 [gd_scene uid="uid://degycvmqbvjx1" format=3]
 
-[ext_resource type="AnimationNodeBlendTree" uid="uid://c485owf86etdu" path="res://assets/characters/reference/female/animation_tree_root_npc.tres" id="1_ibtlu"]
+[ext_resource type="AnimationNodeBlendTree" uid="uid://c485owf86etdu" path="res://assets/characters/templates/animation/animation_tree_root_npc.tres" id="1_ibtlu"]
 
 [node name="AnimationTree" type="AnimationTree" unique_id=2098590596]
 active = true

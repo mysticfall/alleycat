@@ -125,14 +125,32 @@ public static class HandPoseAnimationTreePaths
     /// <summary>
     /// Gets the exact finger-bone filter paths for a hand side, excluding hand and arm bones.
     /// </summary>
-    public static IReadOnlyList<NodePath> GetFingerFilterPaths(LimbSide side)
+    public static IReadOnlyList<NodePath> GetFingerFilterPaths(LimbSide side, NodePath skeletonFilterRoot)
     {
+        IReadOnlyList<string> pathStrings = GetFingerFilterPathStrings(side, skeletonFilterRoot.ToString());
+        var paths = new NodePath[pathStrings.Count];
+
+        for (int index = 0; index < pathStrings.Count; index++)
+        {
+            paths[index] = new NodePath(pathStrings[index]);
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    /// Gets the exact finger-bone filter path strings for a hand side using the configured skeleton filter root.
+    /// </summary>
+    public static IReadOnlyList<string> GetFingerFilterPathStrings(LimbSide side, string skeletonFilterRoot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(skeletonFilterRoot);
+
         string[] bones = side == LimbSide.Left ? _leftFingerBones : _rightFingerBones;
-        var paths = new NodePath[bones.Length];
+        string[] paths = new string[bones.Length];
 
         for (int index = 0; index < bones.Length; index++)
         {
-            paths[index] = new NodePath($"%GeneralSkeleton:{bones[index]}");
+            paths[index] = $"{skeletonFilterRoot}:{bones[index]}";
         }
 
         return paths;

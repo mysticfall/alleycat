@@ -1,0 +1,95 @@
+[gd_scene format=3 uid="uid://jlhxmgxicdex"]
+[ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_edvvb"]
+[ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
+[ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/templates/ik/vrik.tscn" id="7_2a5tg"]
+[ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
+[ext_resource type="Script" uid="uid://dyffnsg0122vb" path="res://src/Body/Voice/PlayerVoice.cs" id="8_player_voice"]
+[ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
+[ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/templates/animation/animation_tree_root_player.tres" id="11_pose_tree"]
+[node name="Player" unique_id=1792987446 groups=["Player"] instance=ExtResource("1_edvvb")]
+[node name="HipReconciliationModifier" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" index="10" unique_id=1650923012 node_paths=PackedStringArray("StateMachine")]
+unique_name_in_owner = false
+process_mode = 0
+process_priority = 0
+process_physics_priority = 0
+process_thread_group = 0
+physics_interpolation_mode = 0
+auto_translate_mode = 0
+editor_description = ""
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0, 0)
+rotation_edit_mode = 0
+rotation_order = 2
+top_level = false
+visible = true
+visibility_parent = NodePath("")
+active = true
+influence = 1.0
+script = ExtResource("5_hipmod")
+StateMachine = NodePath("../../../VRIK/PoseStateMachine")
+metadata/_custom_type_script = "uid://bfa76a86uhk1m"
+[node name="AnimationTree" parent="." index="4"]
+tree_root = ExtResource("11_pose_tree")
+[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadFallbackIntentProvider", "RightHandFallbackIntentProvider", "LeftHandFallbackIntentProvider", "RightFootFallbackIntentProvider", "LeftFootFallbackIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup", "PoseStateMachine") instance=ExtResource("7_2a5tg")]
+Viewpoint = NodePath("../Female/GeneralSkeleton/Head/Viewpoint")
+HeadIKTarget = NodePath("../IKTargets/Head")
+HeadIKSolveTarget = NodePath("../IKTargets/HeadSolve")
+RightHandIKTarget = NodePath("../IKTargets/RightHand")
+LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
+RightFootIKTarget = NodePath("../IKTargets/RightFoot")
+LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
+PhysicalRig = NodePath("../Female/GeneralSkeleton/DynamicPhysicalRig")
+RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
+LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
+HeadFallbackIntentProvider = NodePath("HeadFallbackIntentProvider")
+RightHandFallbackIntentProvider = NodePath("RightHandFallbackIntentProvider")
+LeftHandFallbackIntentProvider = NodePath("LeftHandFallbackIntentProvider")
+RightFootFallbackIntentProvider = NodePath("RightFootFallbackIntentProvider")
+LeftFootFallbackIntentProvider = NodePath("LeftFootFallbackIntentProvider")
+HeadModifierGroup = [NodePath("../Female/GeneralSkeleton/NeckSpineIK"), NodePath("../Female/GeneralSkeleton/HeadCopyRotation"), NodePath("../Female/GeneralSkeleton/NeckTwistDisperser")]
+RightHandModifierGroup = [NodePath("../Female/GeneralSkeleton/RightArmIKController"), NodePath("../Female/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/RightHandCopyRotation")]
+LeftHandModifierGroup = [NodePath("../Female/GeneralSkeleton/LeftArmIKController"), NodePath("../Female/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/LeftHandCopyRotation")]
+RightFootModifierGroup = [NodePath("../Female/GeneralSkeleton/RightLegIKController"), NodePath("../Female/GeneralSkeleton/RightLegTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/CopyRightFootRotation")]
+LeftFootModifierGroup = [NodePath("../Female/GeneralSkeleton/LeftLegIKController"), NodePath("../Female/GeneralSkeleton/LeftLegTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/CopyLeftFootRotation")]
+PoseStateMachine = NodePath("PoseStateMachine")
+
+[node name="PoseStateMachine" parent="VRIK" index="0" node_paths=PackedStringArray("AnimationTree")]
+AnimationTree = NodePath("../../AnimationTree")
+
+[node name="HeadFallbackIntentProvider" parent="VRIK" index="1" node_paths=PackedStringArray("Viewpoint")]
+Viewpoint = NodePath("../../Female/GeneralSkeleton/Head/Viewpoint")
+
+[node name="RightFootFallbackIntentProvider" parent="VRIK" index="4" node_paths=PackedStringArray("FootTarget")]
+FootTarget = NodePath("../../IKTargets/RightFoot")
+
+[node name="LeftFootFallbackIntentProvider" parent="VRIK" index="5" node_paths=PackedStringArray("FootTarget")]
+FootTarget = NodePath("../../IKTargets/LeftFoot")
+
+[node name="PlayerController" type="Node" parent="." index="7" unique_id=500632269 node_paths=PackedStringArray("LocomotionNode", "HandHolderNode")]
+script = ExtResource("10_ctrlplayer")
+LocomotionNode = NodePath("../Locomotion")
+HandHolderNode = NodePath("../Hands")
+metadata/_custom_type_script = "uid://2whl41iq7k4b"
+[node name="RightHand" parent="Hands" index="0" node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget", "GrabTargetProvider", "PhysicalRig")]
+AnimationTree = NodePath("../../AnimationTree")
+HandTargetNode = NodePath("../../IKTargets/RightHand")
+HandBoneAttachment = NodePath("../../Female/GeneralSkeleton/RightHand")
+HeldCollisionTarget = NodePath("../../IKTargets/RightHand")
+GrabTargetProvider = NodePath("../../VRIK/RightHandGrabProvider")
+PhysicalRig = NodePath("../../Female/GeneralSkeleton/DynamicPhysicalRig")
+[node name="LeftHand" parent="Hands" index="1" node_paths=PackedStringArray("AnimationTree", "HandTargetNode", "HandBoneAttachment", "HeldCollisionTarget", "GrabTargetProvider", "PhysicalRig")]
+AnimationTree = NodePath("../../AnimationTree")
+HandTargetNode = NodePath("../../IKTargets/LeftHand")
+HandBoneAttachment = NodePath("../../Female/GeneralSkeleton/LeftHand")
+HeldCollisionTarget = NodePath("../../IKTargets/LeftHand")
+GrabTargetProvider = NodePath("../../VRIK/LeftHandGrabProvider")
+PhysicalRig = NodePath("../../Female/GeneralSkeleton/DynamicPhysicalRig")
+[node name="OpenAITranscriber" type="Node" parent="." index="8" unique_id=1267890585]
+script = ExtResource("7_j7l2f")
+DebugNotificationOutputEnabled = true
+metadata/_custom_type_script = "uid://cmo0rjfoojh7u"
+
+[node name="Voice" type="Node3D" parent="." index="9" unique_id=859780857 node_paths=PackedStringArray("Transcriber")]
+script = ExtResource("8_player_voice")
+Transcriber = NodePath("../OpenAITranscriber")
+Id = "player"
+metadata/_custom_type_script = "uid://dyffnsg0122vb"

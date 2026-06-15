@@ -13,16 +13,16 @@ namespace AlleyCat.IntegrationTests.Body.Hands;
 /// </summary>
 public sealed class HandPoseBlendTreeIntegrationTests
 {
-    private const string PoseStateMachineTreePath = "res://assets/characters/reference/female/animation_tree_root_player.tres";
-    private const string NpcAnimationTreeRootPath = "res://assets/characters/reference/female/animation_tree_root_npc.tres";
-    private const string AnimationTreeScenePath = "res://assets/characters/reference/female/animation_tree_player.tscn";
+    private const string PoseStateMachineTreePath = "res://assets/characters/templates/animation/animation_tree_root_player.tres";
+    private const string NpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_npc.tres";
+    private const string PlayerTemplateScenePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string StandingPoseStatePath = "res://assets/characters/ik/pose/standing_pose_state.tres";
     private const string ResetAnimationPath = "res://assets/characters/reference/female/animations/Reset.tres";
     private const string GrabBallAnimationPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";
     private const string PoseStateMachineTreeUID = "uid://bge48ng374i85";
     private const string NpcAnimationTreeRootUID = "uid://c485owf86etdu";
-    private const string AnimationTreeSceneUID = "uid://djeh2d5hkxyoj";
+    private static readonly NodePath _referenceFemaleSkeletonFilterRoot = new("%GeneralSkeleton");
 
     /// <summary>
     /// Verifies the reference female tree has one active upstream state machine and finger-only hand blends.
@@ -90,7 +90,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         [
             PoseStateMachineTreePath,
             NpcAnimationTreeRootPath,
-            AnimationTreeScenePath,
+            PlayerTemplateScenePath,
             PlayerScenePath,
             StandingPoseStatePath,
         ];
@@ -300,6 +300,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
         try
         {
+            TestUtils.EnsureCharacterRuntimeInstalled(root);
             AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
             AnimationPlayer player = root.GetNode<AnimationPlayer>("AnimationPlayer");
             Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
@@ -347,6 +348,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
         try
         {
+            TestUtils.EnsureCharacterRuntimeInstalled(root);
             root.GetNode<Node>("Hands").QueueFree();
             AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
             AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
@@ -424,7 +426,6 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
         _ = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(PoseStateMachineTreeUID), exactMatch: false);
         _ = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(NpcAnimationTreeRootUID), exactMatch: false);
-        _ = Assert.IsType<PackedScene>(ResourceLoader.Load(AnimationTreeSceneUID), exactMatch: false);
     }
 
     private static void AssertHandBlendFilters(AnimationNodeBlendTree root, LimbSide side, string nodeName)
@@ -432,7 +433,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
         AnimationNodeBlend2 blend = Assert.IsType<AnimationNodeBlend2>(root.GetNode(nodeName), exactMatch: false);
         Assert.True(blend.FilterEnabled);
 
-        foreach (NodePath filterPath in HandPoseAnimationTreePaths.GetFingerFilterPaths(side))
+        foreach (NodePath filterPath in HandPoseAnimationTreePaths.GetFingerFilterPaths(side, _referenceFemaleSkeletonFilterRoot))
         {
             Assert.True(blend.IsPathFiltered(filterPath), $"Expected {nodeName} to filter {filterPath}.");
         }
@@ -473,22 +474,38 @@ public sealed class HandPoseBlendTreeIntegrationTests
 
         try
         {
+            TestUtils.EnsureCharacterRuntimeInstalled(root);
             AnimationPlayer player = root.GetNode<AnimationPlayer>("AnimationPlayer");
+            AnimationTree tree = root.GetNode<AnimationTree>("AnimationTree");
             Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
+            Animation reset = Assert.IsType<Animation>(ResourceLoader.Load(ResetAnimationPath), exactMatch: false);
+            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
+            AnimationNodeAnimation poseNode = Assert.IsType<AnimationNodeAnimation>(
+                rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(side)),
+                exactMatch: false);
+            NodePath fingerTrackPath = new($"%GeneralSkeleton:{fingerBoneName}");
+            int resetTrackIndex = RequireRotationTrack(reset, fingerTrackPath);
+            int grabTrackIndex = RequireRotationTrack(grabBall, fingerTrackPath);
             int fingerBoneIndex = skeleton.FindBone(fingerBoneName);
             Assert.True(fingerBoneIndex >= 0, $"Expected skeleton to contain {fingerBoneName}.");
+            Assert.True(player.HasAnimation(new StringName(HandPoseAnimationTreePaths.ResetAnimationName)));
+            Assert.True(player.HasAnimation(new StringName("Grab-ball-40")));
 
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            player.Play(new StringName(HandPoseAnimationTreePaths.ResetAnimationName));
-            player.Advance(1.0 / 60.0);
-            Basis beforePose = skeleton.GetBonePose(fingerBoneIndex).Basis;
+            tree.Active = true;
+            ResolvePlayback(tree).Start(new StringName("StandingCrouching"), true);
+            HandPoseController controller = new(tree);
+            controller.ClearHandPose(side, immediate: true);
 
-            player.Play(new StringName("Grab-ball-40"));
-            player.Advance(1.0 / 60.0);
-            await TestUtils.WaitForFramesAsync(sceneTree, 3);
+            controller.SetHandPose(side, grabBall, weight: 1f, immediate: true);
+            float blend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(side)).AsSingle();
+            Quaternion resetPose = reset.RotationTrackInterpolate(resetTrackIndex, 0.0, backward: false);
+            Quaternion grabPose = grabBall.RotationTrackInterpolate(grabTrackIndex, 0.0, backward: false);
+            float poseDelta = QuaternionAngleRadians(resetPose, grabPose);
 
-            Basis afterPose = skeleton.GetBonePose(fingerBoneIndex).Basis;
-            float poseDelta = BasisDelta(beforePose, afterPose);
+            Assert.Equal(new StringName("Grab-ball-40"), poseNode.Animation);
+            Assert.InRange(blend, 0.99f, 1.0f);
             Assert.True(
                 poseDelta > 0.001f,
                 $"Expected {side} grab pose to visibly affect {fingerBoneName}; observed basis delta {poseDelta:0.######}.");
@@ -500,8 +517,22 @@ public sealed class HandPoseBlendTreeIntegrationTests
         }
     }
 
-    private static float BasisDelta(Basis before, Basis after)
-        => before.X.DistanceTo(after.X) + before.Y.DistanceTo(after.Y) + before.Z.DistanceTo(after.Z);
+    private static int RequireRotationTrack(Animation animation, NodePath path)
+    {
+        for (int trackIndex = 0; trackIndex < animation.GetTrackCount(); trackIndex++)
+        {
+            if (animation.TrackGetType(trackIndex) == Animation.TrackType.Rotation3D
+                && animation.TrackGetPath(trackIndex) == path)
+            {
+                return trackIndex;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Expected animation '{animation.ResourcePath}' to contain rotation track '{path}'.");
+    }
+
+    private static float QuaternionAngleRadians(Quaternion from, Quaternion to)
+        => Mathf.Abs(from.AngleTo(to));
 
     private static void AdvanceController(HandPoseController controller, int frameCount, double deltaSeconds)
     {

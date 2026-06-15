@@ -32,13 +32,28 @@ public sealed class HandPoseAnimationTreePathsTests
     }
 
     /// <summary>
+    /// Verifies finger filters are rooted in caller-supplied skeleton binding paths rather than character-specific names.
+    /// </summary>
+    [Fact]
+    public void GetFingerFilterPaths_UsesConfiguredSkeletonFilterRoot()
+    {
+        IReadOnlyList<string> paths = HandPoseAnimationTreePaths.GetFingerFilterPathStrings(
+            LimbSide.Left,
+            "%PortableRigSkeleton");
+
+        Assert.Contains("%PortableRigSkeleton:LeftIndexProximal", paths);
+        Assert.Contains("%PortableRigSkeleton:LeftThumbDistal", paths);
+        Assert.DoesNotContain(paths, path => path.Contains("GeneralSkeleton", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Verifies filter logic excludes hand and arm bones.
     /// </summary>
     [Theory]
-    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftHand")]
-    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftLowerArm")]
-    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightHand")]
-    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightUpperArm")]
+    [InlineData(LimbSide.Left, "%PortableRigSkeleton:LeftHand")]
+    [InlineData(LimbSide.Left, "%PortableRigSkeleton:LeftLowerArm")]
+    [InlineData(LimbSide.Right, "%PortableRigSkeleton:RightHand")]
+    [InlineData(LimbSide.Right, "%PortableRigSkeleton:RightUpperArm")]
     public void IsFingerFilterPath_ExcludesHandsAndArmBones(LimbSide side, string path)
         => Assert.False(HandPoseAnimationTreePaths.IsFingerFilterPath(side, path));
 
@@ -46,10 +61,10 @@ public sealed class HandPoseAnimationTreePathsTests
     /// Verifies filter logic includes finger descendants.
     /// </summary>
     [Theory]
-    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftIndexProximal")]
-    [InlineData(LimbSide.Left, "%GeneralSkeleton:LeftThumbMetacarpal")]
-    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightRingDistal")]
-    [InlineData(LimbSide.Right, "%GeneralSkeleton:RightLittleIntermediate")]
+    [InlineData(LimbSide.Left, "%PortableRigSkeleton:LeftIndexProximal")]
+    [InlineData(LimbSide.Left, "%PortableRigSkeleton:LeftThumbMetacarpal")]
+    [InlineData(LimbSide.Right, "%PortableRigSkeleton:RightRingDistal")]
+    [InlineData(LimbSide.Right, "%PortableRigSkeleton:RightLittleIntermediate")]
     public void IsFingerFilterPath_IncludesFingerBones(LimbSide side, string path)
         => Assert.True(HandPoseAnimationTreePaths.IsFingerFilterPath(side, path));
 }

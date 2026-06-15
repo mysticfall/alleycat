@@ -63,9 +63,8 @@ the real-world expectation that a voice belongs to a speaker and originates from
     - Avoid duplicate subscriptions and remove event handlers when leaving the tree.
     - Forward only non-empty, non-whitespace transcript text through `Speak(string speech)`.
     - Honour the inherited `Enabled` contract in its speech path.
-17. The manual voice test scene must use `@game/assets/characters/reference/female/reference_female.tscn`, place the
-    `AIVoice` node under `Character/Female_export/GeneralSkeleton/Head`, and keep playback audio spatially attached to
-    that voice origin.
+17. The manual voice test scene must place the `AIVoice` node under the character's head attachment and keep playback
+    audio spatially attached to that voice origin.
 
 ## In Scope
 
@@ -185,7 +184,7 @@ The `AIVoice` implementation must ensure audio passed to `LipSyncPlayer.Play(Aud
    WAV for `LipSyncPlayer.Play(AudioStreamWav)`.
 10. Synchronisation contract is explicitly defined: all playback timing is governed by `LipSyncPlayer.Play()`.
 11. Error handling contract uses `GD.PushError` for raw errors and emits `SpeechFailed` signal.
-12. Manual test scene using `@game/assets/characters/reference/female/reference_female.tscn` is specified.
+12. Manual test scene using a character head attachment as the voice origin is specified.
 13. Visual verification/testing is explicitly out of scope.
 14. Implementation path `@game/src/Body/Voice/`, namespace `AlleyCat.Body.Voice`, and test path
     `@game/tests/body/voice/` are specified.

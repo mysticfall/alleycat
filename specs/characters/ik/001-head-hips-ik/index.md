@@ -43,7 +43,8 @@ Define a portable, spec-first contract for a neck-spine IK scene testable across
 1. Spec defines user-visible outcomes and technical contracts.
 2. Implementation uses `CCDIK3D` receiving head target from consuming scene.
 3. Joint constraints are serialised to prevent implausible rotations.
-4. Reusable scene saved at `@game/assets/characters/ik/head_hips_ik.tscn` with target left unbound.
+4. Reusable scene saved at `@game/assets/characters/templates/ik/neck_spine_ccdik.tscn` with target left
+   unbound.
 5. Photobooth scene exists at `@game/tests/characters/ik/head_hips_ik_test.tscn`.
 6. Test defines markers for poses: forward, left, right, up, down, stoop-forward, lean-back.
 7. Runner confirms marker visibility before pose capture.
@@ -52,7 +53,7 @@ Define a portable, spec-first contract for a neck-spine IK scene testable across
 
 ## References
 
-- @game/assets/characters/ik/head_hips_ik.tscn
+- @game/assets/characters/templates/ik/neck_spine_ccdik.tscn
 - @game/tests/characters/ik/head_hips_ik_test.tscn
 - @specs/testing/002-visual-verification-scope/index.md
 - @specs/characters/000-character-skeleton/index.md

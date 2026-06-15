@@ -15,7 +15,6 @@ public partial class MockXRHandControllerNode : Node3D, IXRHandController
         set;
     }
 
-#pragma warning disable CS0067 // Event is never used
     /// <inheritdoc />
     public event Action<string>? ActionButtonPressed;
 
@@ -27,7 +26,6 @@ public partial class MockXRHandControllerNode : Node3D, IXRHandController
 
     /// <inheritdoc />
     public event Action<string, Vector2>? ActionVector2InputChanged;
-#pragma warning restore CS0067
 
     /// <inheritdoc />
     public Node3D ControllerNode => this;
@@ -52,4 +50,16 @@ public partial class MockXRHandControllerNode : Node3D, IXRHandController
     /// </summary>
     public void TriggerActionButtonReleased(string actionName)
         => ActionButtonReleased?.Invoke(actionName);
+
+    /// <summary>
+    /// Emits a mock XR float input change for integration tests.
+    /// </summary>
+    public void TriggerActionFloatInputChanged(string actionName, float value)
+        => ActionFloatInputChanged?.Invoke(actionName, value);
+
+    /// <summary>
+    /// Emits a mock XR Vector2 input change for integration tests.
+    /// </summary>
+    public void TriggerActionVector2InputChanged(string actionName, Vector2 value)
+        => ActionVector2InputChanged?.Invoke(actionName, value);
 }

@@ -1,5 +1,4 @@
 using AlleyCat.Body.Hands;
-using AlleyCat.Common;
 using Godot;
 
 namespace AlleyCat.Control.Locomotion;
@@ -47,7 +46,12 @@ public partial class CharacterLocomotion : LocomotionBase
     public CharacterBody3D? TargetCharacterBodyNode
     {
         get;
-        set;
+        set
+        {
+            field = value;
+            TargetCharacterBodyResolved = null;
+            TryResolveRuntimeReferences();
+        }
     }
 
     /// <summary>
@@ -57,7 +61,12 @@ public partial class CharacterLocomotion : LocomotionBase
     public AnimationTree? AnimationTree
     {
         get;
-        set;
+        set
+        {
+            field = value;
+            AnimationTreeResolved = null;
+            TryResolveRuntimeReferences();
+        }
     }
 
     /// <summary>
@@ -67,7 +76,12 @@ public partial class CharacterLocomotion : LocomotionBase
     public Node3D? RootMotionReference
     {
         get;
-        set;
+        set
+        {
+            field = value;
+            RootMotionReferenceResolved = null;
+            TryResolveRuntimeReferences();
+        }
     }
 
     /// <summary>
@@ -184,11 +198,42 @@ public partial class CharacterLocomotion : LocomotionBase
     public override void _Ready()
     {
         base._Ready();
-        TargetCharacterBodyResolved = TargetCharacterBodyNode ?? this.RequireNode<CharacterBody3D>("..");
-        AnimationTreeResolved = AnimationTree ?? this.RequireNode<AnimationTree>("../AnimationTree");
-        RootMotionReferenceResolved = RootMotionReference ?? this.RequireNode<Node3D>("../Female");
+        TryResolveRuntimeReferences();
+        if (RootMotionReferenceResolved is null)
+        {
+            if (!IsInsideTree())
+            {
+                throw new InvalidOperationException(
+                    $"{GetType().Name} '{Name}' requires exported {nameof(RootMotionReference)} to be assigned; assign the character root motion reference or install a character module that binds it.");
+            }
 
-        SetPhysicsProcess(true);
+            GD.PushWarning(
+                $"{GetType().Name} '{Name}' is waiting for exported {nameof(RootMotionReference)} to be bound by a character module.");
+        }
+    }
+
+    private void TryResolveRuntimeReferences()
+    {
+        if (TargetCharacterBodyResolved is not null && !IsInstanceValid(TargetCharacterBodyResolved))
+        {
+            TargetCharacterBodyResolved = null;
+        }
+
+        if (AnimationTreeResolved is not null && !IsInstanceValid(AnimationTreeResolved))
+        {
+            AnimationTreeResolved = null;
+        }
+
+        if (RootMotionReferenceResolved is not null && !IsInstanceValid(RootMotionReferenceResolved))
+        {
+            RootMotionReferenceResolved = null;
+        }
+
+        TargetCharacterBodyResolved ??= TargetCharacterBodyNode ?? (IsInsideTree() ? GetParentOrNull<CharacterBody3D>() : null);
+        AnimationTreeResolved ??= AnimationTree ?? (IsInsideTree() ? GetNodeOrNull<AnimationTree>("../AnimationTree") : null);
+        RootMotionReferenceResolved ??= RootMotionReference;
+
+        SetPhysicsProcess(TargetCharacterBodyResolved is not null && AnimationTreeResolved is not null && RootMotionReferenceResolved is not null);
     }
 
     /// <inheritdoc />

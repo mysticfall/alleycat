@@ -35,19 +35,24 @@ public sealed partial class HandGrabAssetIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void ReferenceFemale_HasHandBoneAttachments()
+    public async Task ReferenceFemale_HasHandBoneAttachments()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/female/reference_female.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/ally.tscn");
         Node root = scene.Instantiate();
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        sceneTree.Root.AddChild(root);
 
         try
         {
+            await TestUtils.WaitForFramesAsync(sceneTree, 8);
+            EnsureRuntimeRoleInstalled(root);
             Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/GeneralSkeleton/RightHand"));
             Assert.NotNull(root.GetNodeOrNull<BoneAttachment3D>("Female/GeneralSkeleton/LeftHand"));
         }
         finally
         {
-            root.Free();
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
         }
     }
 
@@ -508,13 +513,17 @@ public sealed partial class HandGrabAssetIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void PlayerScene_HandGrabScriptedNodesHaveCustomTypeMetadata()
+    public async Task PlayerScene_HandGrabScriptedNodesHaveCustomTypeMetadata()
     {
         PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/player.tscn");
         Node root = scene.Instantiate();
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        sceneTree.Root.AddChild(root);
 
         try
         {
+            await TestUtils.WaitForFramesAsync(sceneTree, 8);
+            EnsureRuntimeRoleInstalled(root);
             Node rightProvider = root.GetNode("VRIK/RightHandGrabProvider");
             Node leftProvider = root.GetNode("VRIK/LeftHandGrabProvider");
             Node hands = root.GetNode("Hands");
@@ -529,22 +538,24 @@ public sealed partial class HandGrabAssetIntegrationTests
         }
         finally
         {
-            root.Free();
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
         }
     }
 
     /// <summary>
-    /// Verifies the mirror room does not opt the playable player hands into verbose grab debug notifications.
+    /// Verifies the mirror room player hands keep their authored hand-pose behaviour and collision targets.
     /// </summary>
     [Headless]
     [Fact]
-    public void MirrorRoom_PlayerHandsHaveGrabDebugOutputDisabledByDefault()
+    public void MirrorRoom_PlayerHandsUseAuthoredHandPoseBehaviourAndCollisionTargets()
     {
         PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/testing/mirror_room/mirror_room.tscn");
         Node root = scene.Instantiate();
 
         try
         {
+            EnsureRuntimeRoleInstalled(root.GetNode("Actors/Player"));
             Node rightHand = root.GetNode("Actors/Player/Hands/RightHand");
             Node leftHand = root.GetNode("Actors/Player/Hands/LeftHand");
 
@@ -552,12 +563,101 @@ public sealed partial class HandGrabAssetIntegrationTests
             Assert.Equal(typeof(HandPoseBehaviour).FullName, leftHand.GetType().FullName);
             Assert.Same(root.GetNode("Actors/Player/IKTargets/RightHand"), rightHand.Get("HeldCollisionTarget").AsGodotObject());
             Assert.Same(root.GetNode("Actors/Player/IKTargets/LeftHand"), leftHand.Get("HeldCollisionTarget").AsGodotObject());
-            Assert.False(rightHand.Get("DebugGrabOutput").AsBool());
-            Assert.False(leftHand.Get("DebugGrabOutput").AsBool());
         }
         finally
         {
             root.Free();
+        }
+    }
+
+    /// <summary>
+    /// Verifies the template-installed mirror-room player can drive a real hand grab into provider state and commit it.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task MirrorRoom_PlayerRightHandGrabActivatesProviderAndCommitsTestBall()
+    {
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/testing/mirror_room/mirror_room.tscn");
+        Node root = scene.Instantiate();
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(sceneTree, 8);
+            Node player = root.GetNode("Actors/Player");
+            EnsureRuntimeRoleInstalled(player);
+            await TestUtils.WaitForFramesAsync(sceneTree, 4);
+
+            Node rightHand = player.GetNode("Hands/RightHand");
+            Node provider = player.GetNode("VRIK/RightHandGrabProvider");
+            Node3D authoredHandTarget = player.GetNode<Node3D>("IKTargets/RightHand");
+            Node3D handTarget = new()
+            {
+                Name = "RightHandGrabProbe"
+            };
+            root.AddChild(handTarget);
+            Skeleton3D skeleton = player.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+            RigidBody3D ball = root.GetNode<RigidBody3D>("Items/Ball");
+            Node3D grabPoint = ball.GetNode<Node3D>("SphericalGrabPoint");
+
+            Assert.Equal(typeof(GrabbableRigidBody3D).FullName, ball.GetType().FullName);
+            Assert.Equal(typeof(SphericalGrabPoint).FullName, grabPoint.GetType().FullName);
+            Assert.Equal(typeof(HandPoseBehaviour).FullName, rightHand.GetType().FullName);
+            Assert.Equal(typeof(HandGrabTargetProvider).FullName, provider.GetType().FullName);
+            Assert.Same(provider, rightHand.Get("GrabTargetProvider").AsGodotObject());
+            Assert.Same(authoredHandTarget, rightHand.Get("HandTargetNode").AsGodotObject());
+            Assert.Same(player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/RightHand"), rightHand.Get("HandBoneAttachment").AsGodotObject());
+            Assert.Equal(new StringName("grabbable"), rightHand.Get("GrabbableGroupName").AsStringName());
+            Assert.False(GetLoadedProperty<bool>(provider, "IsGrabOverrideActive"));
+            Assert.Null(GetLoadedPropertyValue(rightHand, "CurrentGrabbed"));
+            rightHand.Set("HandTargetNode", handTarget);
+
+            ball.Freeze = true;
+            ball.LinearVelocity = Vector3.Zero;
+            ball.AngularVelocity = Vector3.Zero;
+            Transform3D queryHandTransform = new(
+                Basis.Identity,
+                grabPoint.GlobalPosition + new Vector3(0.0f, TestBallReachDistanceMetres * 0.5f, 0.0f));
+            handTarget.GlobalTransform = queryHandTransform;
+            SetSkeletonBoneWorldTransform(skeleton, "RightHand", queryHandTransform);
+            handTarget.ForceUpdateTransform();
+            ball.ForceUpdateTransform();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            Assert.True(ball.IsInsideTree());
+            Assert.True(ball.IsInGroup(new StringName("grabbable")));
+            Assert.Contains(sceneTree.GetNodesInGroup(new StringName("grabbable")), node => ReferenceEquals(node, ball));
+            queryHandTransform = new Transform3D(
+                Basis.Identity,
+                grabPoint.GlobalPosition + new Vector3(0.0f, TestBallReachDistanceMetres * 0.5f, 0.0f));
+            handTarget.GlobalTransform = queryHandTransform;
+            SetSkeletonBoneWorldTransform(skeleton, "RightHand", queryHandTransform);
+            handTarget.ForceUpdateTransform();
+            Assert.NotNull(grabPoint.Get("GrabAnimation").AsGodotObject());
+            float reachDistanceMetres = grabPoint.Get("ReachDistanceMetres").AsSingle();
+            Assert.True(handTarget.GlobalPosition.DistanceTo(grabPoint.GlobalPosition) < reachDistanceMetres);
+            object? candidate = InvokeLoadedMethod(grabPoint, "GetGrabPoint", GetLoadedPropertyValue(rightHand, "Side")!, handTarget.GlobalTransform);
+            Assert.NotNull(candidate);
+
+            object? grabResult = InvokeLoadedMethod(rightHand, "Grab");
+
+            Assert.Null(grabResult);
+            Assert.True(GetLoadedProperty<bool>(provider, "IsGrabOverrideActive"));
+            Transform3D providerGrabTarget = GetLoadedProperty<Transform3D>(provider, "GrabTarget");
+            Assert.NotEqual(Transform3D.Identity, providerGrabTarget);
+
+            handTarget.GlobalTransform = providerGrabTarget;
+            SetSkeletonBoneWorldTransform(skeleton, "RightHand", providerGrabTarget);
+            await TestUtils.WaitForFramesAsync(sceneTree, 3);
+
+            Assert.Same(ball, GetLoadedPropertyValue(rightHand, "CurrentGrabbed"));
+            Assert.Same(player.GetNode<BoneAttachment3D>("Female/GeneralSkeleton/RightHand"), ball.GetParent());
+            Assert.False(GetLoadedProperty<bool>(provider, "IsGrabOverrideActive"));
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
         }
     }
 
@@ -1297,7 +1397,8 @@ public sealed partial class HandGrabAssetIntegrationTests
     {
         Assert.NotNull(ResourceLoader.Load<PackedScene>(TestStickScenePath));
 
-        Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://dp3fxu1uko3n7"));
+        Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://c7xlydturc3b0"));
+        Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://bibq37gjbxvhn"));
         Assert.NotNull(ResourceLoader.Load<PackedScene>("uid://c1rexm45hq1rf"));
         Assert.NotNull(ResourceLoader.Load<PackedScene>(TestBallScenePath));
         Assert.NotNull(ResourceLoader.Load<Animation>("uid://bhyeepsp5ifv0"));
@@ -2291,6 +2392,15 @@ public sealed partial class HandGrabAssetIntegrationTests
         skeleton.SetBoneGlobalPose(0, transform);
     }
 
+    private static void SetSkeletonBoneWorldTransform(Skeleton3D skeleton, string boneName, Transform3D worldTransform)
+    {
+        int boneIndex = skeleton.FindBone(boneName);
+        Assert.True(boneIndex >= 0, $"Expected skeleton '{skeleton.GetPath()}' to contain bone '{boneName}'.");
+        Transform3D skeletonSpaceTransform = skeleton.GlobalTransform.AffineInverse() * worldTransform;
+        skeleton.SetBoneGlobalPose(boneIndex, skeletonSpaceTransform);
+        skeleton.ForceUpdateTransform();
+    }
+
     private static GrabbableNode CreateRuntimeBall(Vector3 position)
     {
         GrabbableNode ball = new()
@@ -2413,6 +2523,54 @@ public sealed partial class HandGrabAssetIntegrationTests
         FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"Field {fieldName} was not found on {instance.GetType().Name}.");
         return Assert.IsAssignableFrom<T>(field.GetValue(instance));
+    }
+
+    private static T GetLoadedProperty<T>(object instance, string propertyName)
+    {
+        PropertyInfo property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new InvalidOperationException($"Property {propertyName} was not found on {instance.GetType().Name}.");
+        return Assert.IsAssignableFrom<T>(property.GetValue(instance));
+    }
+
+    private static object? GetLoadedPropertyValue(object instance, string propertyName)
+    {
+        PropertyInfo property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new InvalidOperationException($"Property {propertyName} was not found on {instance.GetType().Name}.");
+        return property.GetValue(instance);
+    }
+
+    private static object? InvokeLoadedMethod(object instance, string methodName)
+    {
+        MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public, [])
+            ?? throw new InvalidOperationException($"Method {methodName} was not found on {instance.GetType().Name}.");
+        return method.Invoke(instance, []);
+    }
+
+    private static object? InvokeLoadedMethod(object instance, string methodName, params object[] arguments)
+    {
+        MethodInfo method = instance.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .Single(candidate => candidate.Name == methodName && candidate.GetParameters().Length == arguments.Length);
+        return method.Invoke(instance, arguments);
+    }
+
+    private static void EnsureRuntimeRoleInstalled(Node character)
+    {
+        Node? installer = character.GetNodeOrNull("PlayerCharacterInstaller")
+            ?? character.GetNodeOrNull("NPCCharacterInstaller");
+        if (installer is null)
+        {
+            return;
+        }
+
+        Type installerType = installer.GetType();
+        Type contextType = installerType.Assembly.GetType("AlleyCat.Core.Installer.SceneInstallationContext")
+            ?? throw new InvalidOperationException("Failed to resolve loaded SceneInstallationContext type.");
+        object context = Activator.CreateInstance(contextType, character, "alleycat.scene_installer")
+            ?? throw new InvalidOperationException("Failed to create loaded scene installation context.");
+        object result = installerType.GetMethod("Install")?.Invoke(installer, [context])
+            ?? throw new InvalidOperationException("Failed to invoke runtime role installer.");
+        bool succeeded = (bool)(result.GetType().GetProperty("Succeeded")?.GetValue(result) ?? false);
+        Assert.True(succeeded, "Runtime role installer failed.");
     }
 
     private static void AssertBodiesHaveMutualCollisionException(PhysicsBody3D first, PhysicsBody3D second)

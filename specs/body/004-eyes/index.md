@@ -60,6 +60,11 @@ Provide a reusable eye component system that:
    so inherited scene overrides cannot disable target-driven eye movement.
 8. Player and NPC AnimationTree roots include the eye partial blend setup.
 
+## Validation Status
+
+Current branch handoff has unresolved broken eye behaviour reported by the user. This is a known open issue pending
+follow-up validation and repair. The required long-term behaviour in this spec remains mandatory and is not deferred.
+
 ## In Scope
 
 - `IEyes` component capability interface.
@@ -107,6 +112,8 @@ Provide a reusable eye component system that:
 | 15 | User              | Visual verification confirms: (a) neutral eyes face forward at 0.5s seek, |
 |    |                   | (b) directional look animates correctly for up/down/left/right, |
 |    |                   | (c) blink animation opens and closes eyes. |
+| 16 | User + Technical  | Handoff notes identify the current broken eye behaviour as unresolved until |
+|    |                   | follow-up validation confirms the required behaviour works again. |
 
 ## References
 

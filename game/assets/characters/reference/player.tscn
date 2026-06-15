@@ -1,122 +1,13 @@
-[gd_scene format=3 uid="uid://c1rexm45hq1rf"]
+[gd_scene load_steps=4 format=3 uid="uid://c1rexm45hq1rf"]
 
-[ext_resource type="PackedScene" uid="uid://e765iqdvmnjd" path="res://assets/characters/reference/female/reference_female_base.tscn" id="1_edvvb"]
-[ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
-[ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/ik/vrik.tscn" id="7_2a5tg"]
-[ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
-[ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
-[ext_resource type="Script" uid="uid://b4sqrh01qb30h" path="res://src/IK/XRControllerTargetProvider.cs" id="11_xrctl"]
-[ext_resource type="Script" uid="uid://bs7wqkhs0vmpi" path="res://src/IK/XRHeadTargetIntentProvider.cs" id="12_xrhead"]
-[ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/reference/female/animation_tree_root_player.tres" id="13_pose_tree"]
-[ext_resource type="Script" uid="uid://cycxrw4g6pnl6" path="res://src/IK/AnimationSynchronizedFootTargetProvider.cs" id="14_footfb"]
-[ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="34_704ic"]
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
+[ext_resource type="PackedScene" uid="uid://deek4lix763je" path="res://assets/characters/templates/installers/player_installer.tscn" id="2_installer"]
 
-[node name="Player" unique_id=1792987446 groups=["Player"] instance=ExtResource("1_edvvb")]
+[node name="Player" groups=["Player"] instance=ExtResource("1_blend")]
 
-[node name="HipReconciliationModifier" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" index="10" unique_id=1650923012 node_paths=PackedStringArray("StateMachine")]
-unique_name_in_owner = false
-process_mode = 0
-process_priority = 0
-process_physics_priority = 0
-process_thread_group = 0
-physics_interpolation_mode = 0
-auto_translate_mode = 0
-editor_description = ""
-transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 0, 0, 0)
-rotation_edit_mode = 0
-rotation_order = 2
-top_level = false
-visible = true
-visibility_parent = NodePath("")
-active = true
-influence = 1.0
-script = ExtResource("5_hipmod")
-StateMachine = NodePath("../../../VRIK/PoseStateMachine")
-metadata/_custom_type_script = "uid://bfa76a86uhk1m"
+[node name="Female" parent="." index="0"]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadFallbackIntentProvider", "RightHandFallbackIntentProvider", "LeftHandFallbackIntentProvider", "RightFootFallbackIntentProvider", "LeftFootFallbackIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup") instance=ExtResource("7_2a5tg")]
-Viewpoint = NodePath("../Female/GeneralSkeleton/Head/Viewpoint")
-HeadIKTarget = NodePath("../IKTargets/Head")
-HeadIKSolveTarget = NodePath("../IKTargets/HeadSolve")
-RightHandIKTarget = NodePath("../IKTargets/RightHand")
-LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
-RightFootIKTarget = NodePath("../IKTargets/RightFoot")
-LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
-PhysicalRig = NodePath("../Female/GeneralSkeleton/DynamicPhysicalRig")
-RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
-LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
-HeadFallbackIntentProvider = NodePath("HeadFallbackIntentProvider")
-RightHandFallbackIntentProvider = NodePath("RightHandFallbackIntentProvider")
-LeftHandFallbackIntentProvider = NodePath("LeftHandFallbackIntentProvider")
-RightFootFallbackIntentProvider = NodePath("RightFootFallbackIntentProvider")
-LeftFootFallbackIntentProvider = NodePath("LeftFootFallbackIntentProvider")
-HeadModifierGroup = [NodePath("../Female/GeneralSkeleton/NeckSpineIK"), NodePath("../Female/GeneralSkeleton/HeadCopyRotation"), NodePath("../Female/GeneralSkeleton/NeckTwistDisperser")]
-RightHandModifierGroup = [NodePath("../Female/GeneralSkeleton/RightArmIKController"), NodePath("../Female/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/RightHandCopyRotation")]
-LeftHandModifierGroup = [NodePath("../Female/GeneralSkeleton/LeftArmIKController"), NodePath("../Female/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/LeftHandCopyRotation")]
-RightFootModifierGroup = [NodePath("../Female/GeneralSkeleton/RightLegIKController"), NodePath("../Female/GeneralSkeleton/RightLegTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/CopyRightFootRotation")]
-LeftFootModifierGroup = [NodePath("../Female/GeneralSkeleton/LeftLegIKController"), NodePath("../Female/GeneralSkeleton/LeftLegTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/CopyLeftFootRotation")]
+[node name="PlayerCharacterInstaller" parent="." instance=ExtResource("2_installer")]
 
-[node name="PoseStateMachine" parent="VRIK" index="0" unique_id=1387079067 node_paths=PackedStringArray("AnimationTree")]
-AnimationTree = NodePath("../../AnimationTree")
-
-[node name="HeadFallbackIntentProvider" type="Node" parent="VRIK" index="1" unique_id=1786683400 node_paths=PackedStringArray("Viewpoint")]
-script = ExtResource("12_xrhead")
-Viewpoint = NodePath("../../Female/GeneralSkeleton/Head/Viewpoint")
-metadata/_custom_type_script = "uid://bs7wqkhs0vmpi"
-
-[node name="RightHandFallbackIntentProvider" type="Node" parent="VRIK" index="2" unique_id=547249746]
-script = ExtResource("11_xrctl")
-metadata/_custom_type_script = "uid://b4sqrh01qb30h"
-
-[node name="LeftHandFallbackIntentProvider" type="Node" parent="VRIK" index="3" unique_id=2091540058]
-script = ExtResource("11_xrctl")
-Side = 0
-metadata/_custom_type_script = "uid://b4sqrh01qb30h"
-
-[node name="RightFootFallbackIntentProvider" type="Node" parent="VRIK" index="4" unique_id=281121727 node_paths=PackedStringArray("FootTarget")]
-script = ExtResource("14_footfb")
-FootTarget = NodePath("../../IKTargets/RightFoot")
-metadata/_custom_type_script = "uid://cycxrw4g6pnl6"
-
-[node name="LeftFootFallbackIntentProvider" type="Node" parent="VRIK" index="5" unique_id=53288521 node_paths=PackedStringArray("FootTarget")]
-script = ExtResource("14_footfb")
-FootTarget = NodePath("../../IKTargets/LeftFoot")
-metadata/_custom_type_script = "uid://cycxrw4g6pnl6"
-
-[node name="RightHandGrabProvider" type="Node" parent="VRIK" index="6" unique_id=1567802820 node_paths=PackedStringArray("DefaultProvider")]
-script = ExtResource("34_704ic")
-DefaultProvider = NodePath("../RightHandFallbackIntentProvider")
-metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
-
-[node name="LeftHandGrabProvider" type="Node" parent="VRIK" index="7" unique_id=524151125 node_paths=PackedStringArray("DefaultProvider")]
-script = ExtResource("34_704ic")
-DefaultProvider = NodePath("../LeftHandFallbackIntentProvider")
-metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
-
-[node name="AnimationTree" parent="." index="5" unique_id=527893103]
-tree_root = ExtResource("13_pose_tree")
-parameters/States/AllFoursTransitioning/TimeSeek/seek_request = -1.0
-parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0
-parameters/EyesBlinkTimeScale/scale = 1.0
-
-[node name="PlayerController" type="Node" parent="." index="7" unique_id=500632269 node_paths=PackedStringArray("LocomotionNode")]
-script = ExtResource("10_ctrlplayer")
-LocomotionNode = NodePath("../Locomotion")
-metadata/_custom_type_script = "uid://2whl41iq7k4b"
-
-[node name="OpenAITranscriber" type="Node" parent="." index="8" unique_id=1267890585]
-script = ExtResource("7_j7l2f")
-DebugNotificationOutputEnabled = true
-metadata/_custom_type_script = "uid://cmo0rjfoojh7u"
-
-[node name="RightHand" parent="Hands" parent_id_path=PackedInt32Array(2126650831) index="0" unique_id=122437311 node_paths=PackedStringArray("GrabTargetProvider")]
-GrabTargetProvider = NodePath("../../VRIK/RightHandGrabProvider")
-
-[node name="LeftHand" parent="Hands" parent_id_path=PackedInt32Array(2126650831) index="1" unique_id=1448579806 node_paths=PackedStringArray("GrabTargetProvider")]
-GrabTargetProvider = NodePath("../../VRIK/LeftHandGrabProvider")
-
-[node name="Locomotion" parent="." index="10" unique_id=668991861 node_paths=PackedStringArray("PermissionSourceNodes")]
-IdleAnimationStateName = &"StandingCrouching"
-PermissionSourceNodes = [NodePath("../VRIK/PoseStateMachine")]
-
-[editable path="VRIK"]
+[editable path="Female"]

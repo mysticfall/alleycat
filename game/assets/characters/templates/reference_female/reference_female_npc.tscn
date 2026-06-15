@@ -1,6 +1,6 @@
-[gd_scene format=3 uid="uid://bp4em7ort8h1t"]
+[gd_scene format=3 uid="uid://bibq37gjbxvhn"]
 
-[ext_resource type="PackedScene" uid="uid://e765iqdvmnjd" path="res://assets/characters/reference/female/reference_female_base.tscn" id="1_vf6rf"]
+[ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_vf6rf"]
 [ext_resource type="Script" uid="uid://bxb7ysth4n1du" path="res://src/IK/CharacterIK.cs" id="2_charik"]
 [ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="3_mgn5w"]
 
@@ -33,8 +33,3 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 script = ExtResource("3_mgn5w")
 metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 
-[node name="RightHand" parent="Hands" parent_id_path=PackedInt32Array(2126650831) index="0" unique_id=122437311 node_paths=PackedStringArray("GrabTargetProvider")]
-GrabTargetProvider = NodePath("../../CharacterIK/RightHandGrabProvider")
-
-[node name="LeftHand" parent="Hands" parent_id_path=PackedInt32Array(2126650831) index="1" unique_id=1448579806 node_paths=PackedStringArray("GrabTargetProvider")]
-GrabTargetProvider = NodePath("../../CharacterIK/LeftHandGrabProvider")

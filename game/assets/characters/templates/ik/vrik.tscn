@@ -1,0 +1,60 @@
+[gd_scene load_steps=15 format=3 uid="uid://couudrq528l5x"]
+
+[ext_resource type="Script" uid="uid://dvtvdxo5ew24i" path="res://src/IK/PlayerVRIK.cs" id="1_4nh4n"]
+[ext_resource type="Script" uid="uid://66gi6n1gstbb" path="res://src/IK/Pose/PoseStateMachine.cs" id="2_du0il"]
+[ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://assets/characters/ik/pose/standing_pose_state.tres" id="3_ocj6u"]
+[ext_resource type="Resource" uid="uid://b0ajquunweskg" path="res://assets/characters/ik/pose/kneeling_pose_state.tres" id="4_dvkm3"]
+[ext_resource type="Resource" uid="uid://cuvgylplksi3l" path="res://assets/characters/ik/pose/all_fours_pose_state.tres" id="5_gdh78"]
+[ext_resource type="Resource" uid="uid://bmch0c48icbrn" path="res://assets/characters/ik/pose/standing_to_kneeling_transition.tres" id="6_77pio"]
+[ext_resource type="Resource" uid="uid://drkyc2pa7vma6" path="res://assets/characters/ik/pose/kneeling_to_standing_transition.tres" id="7_urr2x"]
+[ext_resource type="Resource" uid="uid://chnxep12fdsf1" path="res://assets/characters/ik/pose/standing_to_all_fours_transition.tres" id="8_3j27f"]
+[ext_resource type="Resource" uid="uid://cbgjs7yax6mtd" path="res://assets/characters/ik/pose/kneeling_to_all_fours_transition.tres" id="9_obhfn"]
+[ext_resource type="Resource" uid="uid://c2ecgvou6y8e5" path="res://assets/characters/ik/pose/all_fours_to_standing_transition.tres" id="10_n0xia"]
+[ext_resource type="Script" uid="uid://bs7wqkhs0vmpi" path="res://src/IK/XRHeadTargetIntentProvider.cs" id="11_qwxeq"]
+[ext_resource type="Script" uid="uid://b4sqrh01qb30h" path="res://src/IK/XRControllerTargetProvider.cs" id="12_vd2w6"]
+[ext_resource type="Script" uid="uid://cycxrw4g6pnl6" path="res://src/IK/AnimationSynchronizedFootTargetProvider.cs" id="13_wiypf"]
+[ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="14_ys8sr"]
+
+[node name="VRIK" type="Node3D" unique_id=959527804 node_paths=PackedStringArray("RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider")]
+script = ExtResource("1_4nh4n")
+RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
+LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
+metadata/_custom_type_script = "uid://dvtvdxo5ew24i"
+
+[node name="PoseStateMachine" type="Node" parent="." unique_id=367005450]
+script = ExtResource("2_du0il")
+States = [ExtResource("3_ocj6u"), ExtResource("4_dvkm3"), ExtResource("5_gdh78")]
+Transitions = [ExtResource("6_77pio"), ExtResource("7_urr2x"), ExtResource("8_3j27f"), ExtResource("9_obhfn"), ExtResource("10_n0xia")]
+InitialStateId = &"Standing"
+metadata/_custom_type_script = "uid://66gi6n1gstbb"
+
+[node name="HeadFallbackIntentProvider" type="Node" parent="." unique_id=1278430148]
+script = ExtResource("11_qwxeq")
+metadata/_custom_type_script = "uid://bs7wqkhs0vmpi"
+
+[node name="RightHandFallbackIntentProvider" type="Node" parent="." unique_id=242143700]
+script = ExtResource("12_vd2w6")
+metadata/_custom_type_script = "uid://b4sqrh01qb30h"
+
+[node name="LeftHandFallbackIntentProvider" type="Node" parent="." unique_id=25253155]
+script = ExtResource("12_vd2w6")
+Side = 0
+metadata/_custom_type_script = "uid://b4sqrh01qb30h"
+
+[node name="RightFootFallbackIntentProvider" type="Node" parent="." unique_id=1284619862]
+script = ExtResource("13_wiypf")
+metadata/_custom_type_script = "uid://cycxrw4g6pnl6"
+
+[node name="LeftFootFallbackIntentProvider" type="Node" parent="." unique_id=1359873198]
+script = ExtResource("13_wiypf")
+metadata/_custom_type_script = "uid://cycxrw4g6pnl6"
+
+[node name="RightHandGrabProvider" type="Node" parent="." unique_id=1370331368 node_paths=PackedStringArray("DefaultProvider")]
+script = ExtResource("14_ys8sr")
+DefaultProvider = NodePath("../RightHandFallbackIntentProvider")
+metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
+
+[node name="LeftHandGrabProvider" type="Node" parent="." unique_id=1204828445 node_paths=PackedStringArray("DefaultProvider")]
+script = ExtResource("14_ys8sr")
+DefaultProvider = NodePath("../LeftHandFallbackIntentProvider")
+metadata/_custom_type_script = "uid://bdxl0giwm3sg1"

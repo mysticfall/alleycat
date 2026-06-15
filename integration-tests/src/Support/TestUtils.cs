@@ -1,4 +1,5 @@
 using Godot;
+using Xunit;
 
 namespace AlleyCat.IntegrationTests.Support;
 
@@ -7,6 +8,9 @@ namespace AlleyCat.IntegrationTests.Support;
 /// </summary>
 public static class TestUtils
 {
+    private const string SceneInstallationContextTypeName = "AlleyCat.Core.Installer.SceneInstallationContext";
+    private const string DefaultInstallerNamespace = "alleycat.scene_installer";
+
     /// <summary>
     /// Returns the active <see cref="SceneTree"/> from the Godot main loop.
     /// </summary>
@@ -74,4 +78,36 @@ public static class TestUtils
     public static PackedScene LoadPackedScene(string path)
         => ResourceLoader.Load<PackedScene>(path)
             ?? throw new InvalidOperationException($"Failed to load packed scene at path '{path}'.");
+
+    /// <summary>
+    /// Ensures an installer-driven runtime character scene has materialised its template-owned nodes.
+    /// </summary>
+    public static void EnsureCharacterRuntimeInstalled(Node characterRoot)
+    {
+        if (characterRoot.GetNodeOrNull("AnimationTree") is not null
+            && characterRoot.GetNodeOrNull("Female/GeneralSkeleton") is not null)
+        {
+            return;
+        }
+
+        Node? installer = characterRoot.GetNodeOrNull("PlayerCharacterInstaller")
+            ?? characterRoot.GetNodeOrNull("NPCCharacterInstaller")
+            ?? characterRoot.GetNodeOrNull("BaseCharacterInstaller");
+        Assert.NotNull(installer);
+
+        Type installerType = installer.GetType();
+        Type contextType = installerType.Assembly.GetType(SceneInstallationContextTypeName)
+            ?? throw new InvalidOperationException("Failed to resolve loaded SceneInstallationContext type.");
+        object context = Activator.CreateInstance(contextType, characterRoot, DefaultInstallerNamespace)
+            ?? throw new InvalidOperationException("Failed to create loaded scene installation context.");
+        object result = installerType.GetMethod("Install")?.Invoke(installer, [context])
+            ?? throw new InvalidOperationException("Failed to invoke character scene installer.");
+        bool succeeded = (bool)(result.GetType().GetProperty("Succeeded")?.GetValue(result) ?? false);
+        object? errors = result.GetType().GetProperty("Errors")?.GetValue(result);
+        string errorText = errors is IEnumerable<string> typedErrors
+            ? string.Join('\n', typedErrors)
+            : errors?.ToString() ?? string.Empty;
+
+        Assert.True(succeeded, errorText);
+    }
 }

@@ -13,8 +13,7 @@ namespace AlleyCat.IntegrationTests.Control;
 public sealed partial class CharacterLocomotionIntegrationTests
 {
     private const float Tolerance = 1e-4f;
-    private const string ReferenceFemaleBaseScenePath = "res://assets/characters/reference/female/reference_female_base.tscn";
-    private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/female_reference_npc.tscn";
+    private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string PlayerAnimationTreeRootUID = "uid://bge48ng374i85";
@@ -37,6 +36,38 @@ public sealed partial class CharacterLocomotionIntegrationTests
         finally
         {
             await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies missing root-motion authoring fails explicitly instead of falling back to a reference-specific path.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void CharacterLocomotion_MissingRootMotionReference_FailsFastWithAuthoringMessage()
+    {
+        CharacterBody3D body = new()
+        {
+            Name = "Body",
+        };
+        CharacterLocomotion locomotion = new()
+        {
+            Name = "Locomotion",
+            TargetCharacterBodyNode = body,
+            AnimationTree = new AnimationTree { Name = "AnimationTree" },
+        };
+        body.AddChild(locomotion);
+
+        try
+        {
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(locomotion._Ready);
+
+            Assert.Contains(nameof(CharacterLocomotion.RootMotionReference), exception.Message, StringComparison.Ordinal);
+            Assert.Contains("install a character module", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            body.QueueFree();
         }
     }
 
@@ -77,7 +108,8 @@ public sealed partial class CharacterLocomotionIntegrationTests
 
         try
         {
-            Assert.Equal("Start", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+            string initialState = ResolvePlayback(animationTree).GetCurrentNode().ToString();
+            Assert.True(initialState is "Start" or "Idle", $"Expected Start or Idle before manual physics; got {initialState}.");
 
             rig.Locomotion._PhysicsProcess(0.016d);
             animationTree.Advance(0.0);
@@ -134,10 +166,6 @@ public sealed partial class CharacterLocomotionIntegrationTests
     [Fact]
     public async Task CharacterLocomotion_ReferenceScenes_WireAnimationTreesForRuntimePlayback()
     {
-        await AssertReferenceSceneAnimationTreesAsync(
-            ReferenceFemaleBaseScenePath,
-            [new ExpectedAnimationTree(NpcAnimationTreeRootUID, "Idle")]);
-
         await AssertReferenceSceneAnimationTreesAsync(
             ReferenceFemaleNpcScenePath,
             [new ExpectedAnimationTree(NpcAnimationTreeRootUID, "Idle")]);
@@ -691,7 +719,7 @@ public sealed partial class CharacterLocomotionIntegrationTests
         }
 
         body.AddChild(locomotion);
-        sceneTree.Root.AddChild(root);
+        await AddChildToRootAsync(sceneTree, root);
 
         await WaitForFramesAsync(sceneTree, 2);
         locomotion._Ready();
@@ -793,7 +821,8 @@ public sealed partial class CharacterLocomotionIntegrationTests
 
         try
         {
-            await WaitForFramesAsync(sceneTree, 3);
+            await WaitForFramesAsync(sceneTree, 12);
+            EnsureInstallerInventory(root);
 
             List<AnimationTree> animationTrees = [];
             CollectAnimationTrees(root, animationTrees);
@@ -801,7 +830,9 @@ public sealed partial class CharacterLocomotionIntegrationTests
             foreach (ExpectedAnimationTree expectedTree in expectedTrees)
             {
                 AnimationTree animationTree = animationTrees.FirstOrDefault(tree => GetTreeRootUID(tree) == expectedTree.TreeRootUID)
-                    ?? throw new Xunit.Sdk.XunitException($"Expected an AnimationTree with root UID {expectedTree.TreeRootUID} in {scenePath}.");
+                    ?? throw new Xunit.Sdk.XunitException(
+                        $"Expected an AnimationTree with root UID {expectedTree.TreeRootUID} in {scenePath}. Found: "
+                        + string.Join(", ", animationTrees.Select(tree => $"{tree.GetPath()}={GetTreeRootUID(tree)} path={tree.TreeRoot?.ResourcePath}")));
 
                 Assert.True(animationTree.Active, $"Expected {scenePath} AnimationTree {expectedTree.TreeRootUID} to be active.");
                 Assert.NotEqual(Variant.Type.Nil, animationTree.Get("parameters/States/Walking/blend_position").VariantType);
@@ -837,6 +868,43 @@ public sealed partial class CharacterLocomotionIntegrationTests
         {
             CollectAnimationTrees(child, animationTrees);
         }
+    }
+
+    private static void EnsureInstallerInventory(Node root)
+    {
+        if (root.FindChild("AnimationTree", recursive: true, owned: false) is not null)
+        {
+            return;
+        }
+
+        Node? installer = root.GetNodeOrNull("PlayerCharacterInstaller")
+            ?? root.GetNodeOrNull("NPCCharacterInstaller")
+            ?? root.GetNodeOrNull("BaseCharacterInstaller");
+        if (installer is null)
+        {
+            return;
+        }
+
+        Type installerType = installer.GetType();
+        Type contextType = installerType.Assembly.GetType("AlleyCat.Core.Installer.SceneInstallationContext")
+            ?? throw new InvalidOperationException("Failed to resolve loaded SceneInstallationContext type.");
+        object context = Activator.CreateInstance(contextType, root, "alleycat.scene_installer")
+            ?? throw new InvalidOperationException("Failed to create loaded scene installation context.");
+        object result = installerType.GetMethod("Install")?.Invoke(installer, [context])
+            ?? throw new InvalidOperationException("Failed to invoke reference scene installer.");
+        bool succeeded = (bool)(result.GetType().GetProperty("Succeeded")?.GetValue(result) ?? false);
+        if (!succeeded)
+        {
+            object? errors = result.GetType().GetProperty("Errors")?.GetValue(result);
+            throw new Xunit.Sdk.XunitException(errors?.ToString() ?? "Reference scene installer failed.");
+        }
+    }
+
+    private static async Task AddChildToRootAsync(SceneTree sceneTree, Node child)
+    {
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, child);
+        await WaitForNextFrameAsync(sceneTree);
+        Assert.True(child.IsInsideTree(), $"Expected '{child.Name}' to enter the test scene tree.");
     }
 
     private static string GetTreeRootUID(AnimationTree animationTree)

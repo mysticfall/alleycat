@@ -1,0 +1,68 @@
+[gd_scene load_steps=14 format=3 uid="uid://bmy3r56h5ufd6"]
+
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
+[ext_resource type="PackedScene" uid="uid://dxao507r2dgb2" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_installer"]
+[ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="3_ai_voice"]
+[ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="4_speech_gen"]
+[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="5_lipsync"]
+[ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="6_mind"]
+[ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="7_agent_tool"]
+[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="8_prompt_stack"]
+[ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="9_speech_tool"]
+[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="10_text_prompt_section"]
+
+[sub_resource type="Resource" id="Resource_agentic_system_text_section"]
+script = ExtResource("10_text_prompt_section")
+Text = "You are Alley, a warm, observant person standing with the player in a VR room.
+Reply naturally and briefly, as if speaking aloud in real time.
+You must not answer with normal chat text. For every response, call the speak tool exactly once with the
+words Alley should say aloud. Do not describe tool use and do not include stage directions."
+Name = "Instructions"
+
+[sub_resource type="Resource" id="Resource_agentic_system_instruction"]
+script = ExtResource("8_prompt_stack")
+Sections = [SubResource("Resource_agentic_system_text_section")]
+
+[sub_resource type="Resource" id="Resource_agentic_speech_tool"]
+script = ExtResource("9_speech_tool")
+ToolName = "speak"
+ToolDescription = "Speak the supplied text aloud through the configured voice."
+
+[node name="Ally" groups=["Actors"] instance=ExtResource("1_blend")]
+
+[node name="Female" parent="." index="0"]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+
+[node name="NPCCharacterInstaller" parent="." instance=ExtResource("2_installer")]
+
+[node name="Voice" type="Node3D" parent="." unique_id=1790187431 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.45, 0)
+script = ExtResource("3_ai_voice")
+SpeechGenerator = NodePath("SpeechGenerator")
+LipSyncPlayer = NodePath("LipSyncPlayer")
+Id = "Elena.wav"
+metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
+
+[node name="SpeechGenerator" type="Node" parent="Voice" unique_id=1937148862]
+script = ExtResource("4_speech_gen")
+VoiceOverride = "Elena.wav"
+TargetSampleRate = 16000
+metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
+
+[node name="LipSyncPlayer" type="Node" parent="Voice" unique_id=904819147 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+script = ExtResource("5_lipsync")
+InputStrength = 0.6
+ConstantNoise = true
+EyeRotationToBlendshapeScale = 0.15
+Meshes = [NodePath("../../Female/GeneralSkeleton/Female_body"), NodePath("../../Female/GeneralSkeleton/Female_eyebrow006"), NodePath("../../Female/GeneralSkeleton/Female_eyelashes01"), NodePath("../../Female/GeneralSkeleton/Female_high-poly"), NodePath("../../Female/GeneralSkeleton/Female_teeth_shape01"), NodePath("../../Female/GeneralSkeleton/Female_tongue01")]
+AudioPlayer = NodePath("../AudioStreamPlayer3D")
+metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Voice" unique_id=1364016812]
+
+[node name="Mind" type="Node" parent="." unique_id=1959394491 node_paths=PackedStringArray("Voice")]
+script = ExtResource("6_mind")
+SystemInstruction = SubResource("Resource_agentic_system_instruction")
+Tools = [SubResource("Resource_agentic_speech_tool")]
+Voice = NodePath("../Voice")
+metadata/_custom_type_script = "uid://hadsjgek6b2p"
