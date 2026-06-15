@@ -25,35 +25,51 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 5. An Enabled property must allow TTS to be toggled at runtime.
 6. A TargetSampleRate property must allow output sample rate configuration for
    downstream consumers such as lip-sync compatibility.
+7. Speech-generation consumers must be able to observe streamed audio chunks as
+   soon as the backend provides them, reducing perceived TTS latency where a
+   consumer can play or buffer partial audio safely.
 
 ## Technical Requirements
 
 1. An abstract SpeechGenerator class must be defined as a Node or Node3D subclass.
-2. An abstract method Generate(string text, string? instruction = null) must be
-   defined as async Task<byte[]>, returning raw audio bytes. Backends that do not
-   support instruction must silently ignore it.
-3. A Godot signal SpeechGenerationCompleted(byte[] audio) must be emitted on success.
-4. An exported Enabled property must control whether generation is permitted.
-5. An exported TargetSampleRate property must allow configuration of output sample
+2. A Generate(string text, string? instruction = null) method must be defined as
+   async Task<byte[]>, preserving the existing full-response contract. Backends
+   that do not support instruction must silently ignore it.
+3. A streaming generation API must allow an asynchronous chunk callback while
+   still returning the full generated audio bytes on completion.
+4. A Godot signal SpeechGenerationCompleted(byte[] audio) must be emitted on success.
+5. A Godot signal SpeechGenerationChunkReceived(byte[] audioChunk) must be
+   emitted for backend-provided audio chunks when the dispatch path uses a
+   streaming-capable backend.
+6. Streamed chunks may be raw backend chunks before generator-level whole-file
+   normalisation. Consumers requiring TargetSampleRate-normalised WAV output
+   must wait for SpeechGenerationCompleted.
+7. An exported Enabled property must control whether generation is permitted.
+8. An exported TargetSampleRate property must allow configuration of output sample
    rate. When greater than 0, audio must be resampled before emission. Default: 0
    (no resampling). Recommended: 16000.
-6. On generation failure, errors must be logged via GD.PushError and a failure
+9. On generation failure, errors must be logged via GD.PushError and a failure
    signal emitted.
-7. On resampling failure, errors must be logged and the failure signal emitted
+10. On resampling failure, errors must be logged and the failure signal emitted
    instead of completion.
-8. The concrete OpenAISpeechGenerator implementation must use the official OpenAI
-   .NET SDK.
-9. Configuration must be loaded from the merged configuration API. The [TTS]
+11. The concrete OpenAISpeechGenerator implementation must use the official OpenAI
+   .NET SDK and its streaming speech API when dispatching speech generation.
+12. Godot signals and hooks for streamed chunks, completion, and failure must be
+   dispatched on the Godot thread through the deferred action pattern.
+13. Enabled and single in-flight generation behaviour must apply to the streaming
+   dispatch path as well as the full-response path.
+14. Configuration must be loaded from the merged configuration API. The [TTS]
    section must contain Host (full endpoint URL), ApiKey (optional API key), and
    additional API-supported properties.
-10. Implementation must be under game/src/Speech/Generation/.
-11. Integration tests must be under integration-tests/src/.
+15. Implementation must be under game/src/Speech/Generation/.
+16. Integration tests must be under integration-tests/src/.
 
 ## In Scope
 
 - Abstract SpeechGenerator class with Enabled property.
-- Async abstract Generate method returning byte[].
+- Async Generate method returning full-response byte[].
 - Signal contracts for completion and failure.
+- Streaming chunk API and signal contract.
 - Error handling using GD.PushError.
 - OpenAISpeechGenerator using OpenAI .NET SDK.
 - Configuration from merged API.
@@ -62,7 +78,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 ## Out Of Scope
 
 - Speech-to-text (STT) or transcription.
-- Real-time streaming audio playback.
+- Real-time streaming audio playback beyond exposing backend chunk events.
 - Multiple simultaneous generation sessions.
 - Local-only TTS without network.
 - Non-OpenAI-compatible backend implementations beyond OpenAISpeechGenerator.
@@ -73,8 +89,8 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 
 1. The spec defines both user-visible speech generation outcomes and technical
    implementation contracts.
-2. The abstract SpeechGenerator class defines Enabled, Generate method, and signal
-   contracts.
+2. The abstract SpeechGenerator class defines Enabled, Generate, streaming chunk
+   API, and signal contracts.
 3. Error handling uses GD.PushError for raw errors.
 4. OpenAISpeechGenerator uses the official OpenAI .NET SDK and loads configuration
    from the merged configuration API.
@@ -84,6 +100,10 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 7. The spec does not exclude mandatory delivery contracts through Out Of Scope.
 8. The resample feature is defined with TargetSampleRate, resampling applies before
    completion signal, and failure handling is distinct.
+9. Streamed chunk delivery is covered as a raw backend-chunk contract, and final
+   completion audio remains TargetSampleRate-normalised.
+10. OpenAISpeechGenerator dispatch uses the OpenAI-compatible streaming speech API
+   while preserving Enabled and single in-flight behaviour.
 
 ## References
 

@@ -24,6 +24,17 @@ public abstract partial class SpeechGenerator : Node
     public delegate void SpeechGenerationCompletedEventHandler(byte[] audio);
 
     /// <summary>
+    /// Emitted when a speech-generation backend streams an incremental audio chunk.
+    /// </summary>
+    /// <remarks>
+    /// Chunks are backend-provided data emitted before generator-level whole-file normalisation is applied.
+    /// Consumers that require the configured <see cref="TargetSampleRate" /> must use
+    /// <see cref="SpeechGenerationCompletedEventHandler" /> instead.
+    /// </remarks>
+    [Signal]
+    public delegate void SpeechGenerationChunkReceivedEventHandler(byte[] audioChunk);
+
+    /// <summary>
     /// Emitted when a speech-generation request fails.
     /// </summary>
     [Signal]
@@ -63,9 +74,25 @@ public abstract partial class SpeechGenerator : Node
     /// </summary>
     /// <param name="text">Text to synthesise.</param>
     /// <param name="instruction">Optional backend-specific instruction or prompt.</param>
-    /// <returns>Raw generated audio bytes.</returns>
+    /// <returns>Generated audio bytes after generator-level normalisation.</returns>
     public async Task<byte[]> Generate(string text, string? instruction = null)
         => NormaliseGeneratedAudio(await GenerateCore(text, instruction));
+
+    /// <summary>
+    /// Generates speech audio and optionally reports backend-provided audio chunks before completion.
+    /// </summary>
+    /// <param name="text">Text to synthesise.</param>
+    /// <param name="instruction">Optional backend-specific instruction or prompt.</param>
+    /// <param name="audioChunkHandler">
+    /// Optional asynchronous callback for incremental backend chunks. Chunks are emitted before generator-level
+    /// whole-file normalisation and may therefore differ in sample rate or container structure from the final result.
+    /// </param>
+    /// <returns>Generated audio bytes after generator-level normalisation.</returns>
+    public async Task<byte[]> GenerateStreaming(
+        string text,
+        string? instruction = null,
+        Func<byte[], Task>? audioChunkHandler = null)
+        => NormaliseGeneratedAudio(await GenerateStreamingCore(text, instruction, audioChunkHandler ?? NoOpAudioChunkHandler));
 
     /// <summary>
     /// Backend-specific speech generation implementation prior to generator-level normalisation.
@@ -74,6 +101,22 @@ public abstract partial class SpeechGenerator : Node
     /// <param name="instruction">Optional backend-specific instruction or prompt.</param>
     /// <returns>Raw generated audio bytes from the backend.</returns>
     protected abstract Task<byte[]> GenerateCore(string text, string? instruction = null);
+
+    /// <summary>
+    /// Backend-specific streaming speech generation implementation prior to generator-level normalisation.
+    /// </summary>
+    /// <param name="text">Text to synthesise.</param>
+    /// <param name="instruction">Optional backend-specific instruction or prompt.</param>
+    /// <param name="audioChunkHandler">Callback for raw backend audio chunks emitted during generation.</param>
+    /// <returns>Raw generated audio bytes from the backend.</returns>
+    protected virtual Task<byte[]> GenerateStreamingCore(
+        string text,
+        string? instruction,
+        Func<byte[], Task> audioChunkHandler)
+    {
+        _ = audioChunkHandler;
+        return GenerateCore(text, instruction);
+    }
 
     /// <summary>
     /// Dispatches a speech-generation request and emits completion or failure signals.
@@ -88,6 +131,14 @@ public abstract partial class SpeechGenerator : Node
     /// </summary>
     /// <param name="audio">Generated audio bytes.</param>
     protected virtual void OnSpeechGenerationCompleted(byte[] audio)
+    {
+    }
+
+    /// <summary>
+    /// Hook invoked when the backend streams an incremental audio chunk.
+    /// </summary>
+    /// <param name="audioChunk">Backend-provided audio chunk before generator-level normalisation.</param>
+    protected virtual void OnSpeechGenerationChunkReceived(byte[] audioChunk)
     {
     }
 
@@ -130,7 +181,7 @@ public abstract partial class SpeechGenerator : Node
 
         try
         {
-            byte[] audio = await Generate(text, instruction);
+            byte[] audio = await GenerateStreaming(text, instruction, DispatchGenerationChunkAsync);
             await DispatchGodotActionAsync(() => HandleGenerationSuccess(audio));
         }
         catch (Exception ex)
@@ -223,6 +274,15 @@ public abstract partial class SpeechGenerator : Node
         OnSpeechGenerationCompleted(audio);
     }
 
+    private Task DispatchGenerationChunkAsync(byte[] audioChunk)
+        => DispatchGodotActionAsync(() => HandleGenerationChunk(audioChunk));
+
+    private void HandleGenerationChunk(byte[] audioChunk)
+    {
+        _ = EmitSignal(SignalName.SpeechGenerationChunkReceived, audioChunk);
+        OnSpeechGenerationChunkReceived(audioChunk);
+    }
+
     private void HandleGenerationFailure(Exception ex)
     {
         GD.PushError(ex.ToString());
@@ -236,6 +296,12 @@ public abstract partial class SpeechGenerator : Node
         public Action Action { get; } = action;
 
         public TaskCompletionSource CompletionSource { get; } = completionSource;
+    }
+
+    private static Task NoOpAudioChunkHandler(byte[] audioChunk)
+    {
+        _ = audioChunk;
+        return Task.CompletedTask;
     }
 
     private static byte[] ResamplePcmWave(byte[] audio, int targetSampleRate)

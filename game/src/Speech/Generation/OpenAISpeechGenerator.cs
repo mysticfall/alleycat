@@ -1,6 +1,9 @@
 using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text.Json;
 using AlleyCat.Core;
 using AlleyCat.Diagnostics;
 using AlleyCat.UI;
@@ -9,6 +12,8 @@ using OpenAI;
 using OpenAI.Audio;
 
 namespace AlleyCat.Speech.Generation;
+
+#pragma warning disable OPENAI001 // Streaming TTS APIs are required to minimise runtime speech latency.
 
 /// <summary>
 /// OpenAI-compatible speech generator backed by the official OpenAI .NET SDK.
@@ -68,9 +73,52 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
         AudioClient client = settings.CreateAudioClient();
         SpeechGenerationOptions options = CreateSpeechGenerationOptions(settings, instruction);
         Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
-        BinaryData audio = await client.GenerateSpeechAsync(text, settings.GetVoice(VoiceOverride), options);
-        AIPipelineDebugLog.Latency("TTS backend returned in", backendStopwatch, $"model {settings.Model}");
-        return audio.ToArray();
+        try
+        {
+            BinaryData audio = await client.GenerateSpeechAsync(text, settings.GetVoice(VoiceOverride), options);
+            AIPipelineDebugLog.Latency("TTS backend returned in", backendStopwatch, $"model {settings.Model}");
+            return audio.ToArray();
+        }
+        catch (ClientResultException ex)
+        {
+            throw await OpenAISpeechErrorDiagnostics.CreateExceptionAsync(ex);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task<byte[]> GenerateStreamingCore(
+        string text,
+        string? instruction,
+        Func<byte[], Task> audioChunkHandler)
+    {
+        OpenAISpeechGeneratorSettings settings = _settings ?? OpenAISpeechGeneratorSettings.Load(ConfigPath);
+        AudioClient client = settings.CreateAudioClient();
+        SpeechGenerationOptions options = CreateSpeechGenerationOptions(settings, instruction);
+        Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
+
+        using MemoryStream audioStream = new();
+        try
+        {
+            await foreach (StreamingSpeechUpdate update in client.GenerateSpeechStreamingAsync(
+                text,
+                settings.GetVoice(VoiceOverride),
+                options))
+            {
+                if (update is StreamingSpeechAudioDeltaUpdate audioDeltaUpdate)
+                {
+                    byte[] audioChunk = audioDeltaUpdate.AudioBytes.ToArray();
+                    await audioStream.WriteAsync(audioChunk);
+                    await audioChunkHandler(audioChunk);
+                }
+            }
+
+            AIPipelineDebugLog.Latency("TTS backend stream completed in", backendStopwatch, $"model {settings.Model}");
+            return audioStream.ToArray();
+        }
+        catch (ClientResultException ex)
+        {
+            throw await OpenAISpeechErrorDiagnostics.CreateExceptionAsync(ex);
+        }
     }
 
     internal static SpeechGenerationOptions CreateSpeechGenerationOptions(
@@ -94,6 +142,138 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
 
         return options;
     }
+
+    internal static class OpenAISpeechErrorDiagnostics
+    {
+        private const string FailurePrefix = "OpenAI-compatible TTS request failed";
+
+        public static async Task<Exception> CreateExceptionAsync(ClientResultException ex)
+        {
+            string message = await FormatExceptionMessageAsync(ex);
+            return new OpenAISpeechGenerationException(message, ex);
+        }
+
+        internal static async Task<string> FormatExceptionMessageAsync(ClientResultException ex)
+        {
+            PipelineResponse? response = ex.GetRawResponse();
+            string status = response is null ? ex.Status.ToString(CultureInfo.InvariantCulture) : response.Status.ToString(CultureInfo.InvariantCulture);
+            string? rawBody = response is null ? null : await ReadResponseBodyAsync(response);
+            string? parsedDiagnostic = FormatResponseDiagnostic(rawBody);
+
+            string message = $"{FailurePrefix}. Status: {status}.";
+            if (!string.IsNullOrWhiteSpace(parsedDiagnostic))
+            {
+                message += $" Error: {parsedDiagnostic}.";
+            }
+
+            if (!string.IsNullOrWhiteSpace(rawBody))
+            {
+                message += $" Raw response body: {rawBody}";
+            }
+
+            return message;
+        }
+
+        internal static string? FormatResponseDiagnostic(string? rawBody)
+        {
+            if (string.IsNullOrWhiteSpace(rawBody))
+            {
+                return null;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(rawBody);
+                JsonElement root = document.RootElement;
+
+                return root.ValueKind == JsonValueKind.Object
+                    ? FormatObjectResponseDiagnostic(root)
+                    : null;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static async Task<string?> ReadResponseBodyAsync(PipelineResponse response)
+        {
+            try
+            {
+                BinaryData content = response.Content;
+                return content.ToString();
+            }
+            catch (InvalidOperationException)
+            {
+                try
+                {
+                    BinaryData content = await response.BufferContentAsync(CancellationToken.None);
+                    return content.ToString();
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private static string? FormatObjectResponseDiagnostic(JsonElement root)
+            => root.TryGetProperty("error", out JsonElement error)
+                && error.ValueKind == JsonValueKind.Object
+                && TryGetNonEmptyString(error, "message", out string? openAIMessage)
+                ? FormatOpenAIError(openAIMessage, error)
+                : TryGetNonEmptyString(root, "detail", out string? detail)
+                    ? detail
+                    : TryGetNonEmptyString(root, "message", out string? message) ? message : null;
+
+        private static string FormatOpenAIError(string message, JsonElement error)
+        {
+            List<string> attributes = [];
+            AddOpenAIErrorAttribute(attributes, error, "type");
+            AddOpenAIErrorAttribute(attributes, error, "code");
+            AddOpenAIErrorAttribute(attributes, error, "param");
+
+            return attributes.Count == 0
+                ? message
+                : $"{message} ({string.Join(", ", attributes)})";
+        }
+
+        private static void AddOpenAIErrorAttribute(List<string> attributes, JsonElement error, string propertyName)
+        {
+            if (TryGetNonEmptyString(error, propertyName, out string? value))
+            {
+                attributes.Add($"{propertyName}: {value}");
+            }
+        }
+
+        private static bool TryGetNonEmptyString(
+            JsonElement parent,
+            string propertyName,
+            [NotNullWhen(true)] out string? value)
+        {
+            value = null;
+            if (!parent.TryGetProperty(propertyName, out JsonElement property) || property.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            string? text = property.GetString()?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            value = text;
+            return true;
+        }
+    }
+
+    internal sealed class OpenAISpeechGenerationException(string message, Exception innerException)
+        : InvalidOperationException(message, innerException);
 
     internal sealed record OpenAISpeechGeneratorSettings(
         string Host,

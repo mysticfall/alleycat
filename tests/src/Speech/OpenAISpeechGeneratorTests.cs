@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AlleyCat.Core;
 using AlleyCat.Speech.Generation;
 using OpenAI.Audio;
@@ -10,6 +11,83 @@ namespace AlleyCat.Tests.Speech;
 /// </summary>
 public sealed class OpenAISpeechGeneratorTests
 {
+    /// <summary>
+    /// Standard OpenAI error bodies should produce a concise diagnostic while preserving details.
+    /// </summary>
+    [Fact]
+    public void FormatResponseDiagnostic_OpenAIError_ReturnsMessageWithAttributes()
+    {
+        string rawBody = JsonSerializer.Serialize(new
+        {
+            error = new
+            {
+                message = "Unknown voice.",
+                type = "invalid_request_error",
+                code = "voice_not_found",
+                param = "voice",
+            },
+        });
+
+        string? diagnostic = OpenAISpeechGenerator.OpenAISpeechErrorDiagnostics.FormatResponseDiagnostic(rawBody);
+
+        Assert.Equal("Unknown voice. (type: invalid_request_error, code: voice_not_found, param: voice)", diagnostic);
+    }
+
+    /// <summary>
+    /// Compatible backend detail fields should be surfaced as the primary diagnostic.
+    /// </summary>
+    [Fact]
+    public void FormatResponseDiagnostic_DetailError_ReturnsDetail()
+    {
+        string rawBody = JsonSerializer.Serialize(new
+        {
+            detail = "Voice file 'Emma' not found."
+        });
+
+        string? diagnostic = OpenAISpeechGenerator.OpenAISpeechErrorDiagnostics.FormatResponseDiagnostic(rawBody);
+
+        Assert.Equal("Voice file 'Emma' not found.", diagnostic);
+    }
+
+    /// <summary>
+    /// Root-level message fields should be used when no richer error object is available.
+    /// </summary>
+    [Fact]
+    public void FormatResponseDiagnostic_MessageError_ReturnsMessage()
+    {
+        string rawBody = JsonSerializer.Serialize(new
+        {
+            message = "Model is unavailable."
+        });
+
+        string? diagnostic = OpenAISpeechGenerator.OpenAISpeechErrorDiagnostics.FormatResponseDiagnostic(rawBody);
+
+        Assert.Equal("Model is unavailable.", diagnostic);
+    }
+
+    /// <summary>
+    /// Unknown or invalid JSON shapes should leave callers to fall back to the raw response body.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(UnknownErrorBodies))]
+    public void FormatResponseDiagnostic_UnknownBody_ReturnsNull(string rawBody)
+    {
+        string? diagnostic = OpenAISpeechGenerator.OpenAISpeechErrorDiagnostics.FormatResponseDiagnostic(rawBody);
+
+        Assert.Null(diagnostic);
+    }
+
+    /// <summary>
+    /// Unknown response bodies that should not produce parsed diagnostics.
+    /// </summary>
+    public static TheoryData<string> UnknownErrorBodies()
+        =>
+        [
+            string.Concat("not", "-json"),
+            JsonSerializer.Serialize(new { unexpected = "shape" }),
+            JsonSerializer.Serialize(new[] { "error" }),
+        ];
+
     /// <summary>
     /// OpenAI-compatible backends without auth must still produce an SDK-safe credential value.
     /// </summary>
