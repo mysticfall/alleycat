@@ -292,7 +292,7 @@ metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
 
 [node name="SpeechGenerator" type="Node" parent="Actors/AIConversation/AlleyVoice" unique_id=1937148862]
 script = ExtResource("9_speech_gen")
-VoiceOverride = "Emma"
+VoiceOverride = "Elena.wav"
 TargetSampleRate = 16000
 metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
 
