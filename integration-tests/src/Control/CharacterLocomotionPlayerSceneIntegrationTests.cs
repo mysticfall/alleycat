@@ -33,7 +33,7 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         string playerSceneText = ReadResourceText(PlayerScenePath);
         Assert.Contains("[node name=\"Player\"", playerSceneText);
         Assert.Contains(PlayerInstallerScenePath, playerSceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("CharacterRoleTemplateSceneInstaller.cs", playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("RigRoleTemplateSceneInstaller.cs", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain(ReferenceFemaleScenePath, playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain(BrokenCharacterSceneFileName, playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain(BrokenVisualSceneFileName, playerSceneText, StringComparison.Ordinal);

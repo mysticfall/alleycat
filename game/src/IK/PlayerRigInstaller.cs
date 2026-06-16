@@ -1,8 +1,8 @@
-using AlleyCat.Character.Installer;
 using AlleyCat.Control;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK.Pose;
+using AlleyCat.Rigging.Installation;
 using Godot;
 
 namespace AlleyCat.IK;
@@ -106,7 +106,7 @@ public partial class PlayerRigInstaller : CharacterIKSubsystemInstaller
         => IsAssigned(provider) ? provider : playerVRIK.GetNodeOrNull<IKTargetIntentProvider>(providerName);
 
     /// <inheritdoc />
-    public override SceneInstallationResult Install(CharacterInstallationContext context)
+    public override SceneInstallationResult Install(RigInstallationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 

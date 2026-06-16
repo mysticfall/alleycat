@@ -2,9 +2,9 @@ using System.Reflection;
 using AlleyCat.Body;
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
-using AlleyCat.Character.Installer;
-using AlleyCat.Character.Runtime;
+using AlleyCat.Character;
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Installation;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -347,7 +347,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
 
         public SceneInstallationResult Install()
         {
-            CharacterInstallationContext context = new(
+            RigInstallationContext context = new(
                 _targetRoot,
                 "test.character_runtime",
                 _templateRoot,

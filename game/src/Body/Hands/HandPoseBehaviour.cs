@@ -1,5 +1,6 @@
 using AlleyCat.IK;
 using AlleyCat.Interaction;
+using AlleyCat.Rigging.Physics;
 using Godot;
 
 namespace AlleyCat.Body.Hands;

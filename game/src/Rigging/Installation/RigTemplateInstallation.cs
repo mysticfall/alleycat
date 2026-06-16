@@ -1,12 +1,12 @@
 using AlleyCat.Core.Installer;
 using Godot;
 
-namespace AlleyCat.Character.Installer;
+namespace AlleyCat.Rigging.Installation;
 
 /// <summary>
-/// Character-specific helpers for content copied from role-provided template context.
+/// Rig-specific helpers for content copied from role-provided template context.
 /// </summary>
-public static class CharacterTemplateInstallation
+public static class RigTemplateInstallation
 {
     /// <summary>
     /// Rebinds direct bone attachments installed under a skeleton to their same-named bones.
@@ -31,7 +31,7 @@ public static class CharacterTemplateInstallation
             if (boneIndex < 0)
             {
                 throw new InvalidOperationException(
-                    $"Character template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' installed "
+                    $"Rig template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' installed "
                     + $"bone attachment '{attachment.GetPath()}' for missing bone '{boneName}' on skeleton '{skeleton.GetPath()}'.");
             }
 
@@ -44,7 +44,7 @@ public static class CharacterTemplateInstallation
     /// </summary>
     public static void RebaseTemplateReferences(
         Node root,
-        CharacterInstallationContext context,
+        RigInstallationContext context,
         ISceneInstaller installer,
         bool failOnUnresolved = true)
         => TemplateSceneReferenceRebaser.RebaseExportedNodeReferences(
@@ -77,7 +77,7 @@ public static class CharacterTemplateInstallation
         if (bindingsVariant.VariantType != Variant.Type.Dictionary)
         {
             throw new InvalidOperationException(
-                $"Character template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' found invalid "
+                $"Rig template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' found invalid "
                 + $"template_bindings metadata on '{node.GetPath()}'.");
         }
 
@@ -89,7 +89,7 @@ public static class CharacterTemplateInstallation
             var targetPath = new NodePath(pathVariant.AsString());
             Node target = context.TargetRoot.GetNodeOrNull(targetPath)
                 ?? throw new InvalidOperationException(
-                    $"Character template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' could not resolve "
+                    $"Rig template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' could not resolve "
                     + $"binding target '{targetPath}' for property '{propertyName}' on '{node.GetPath()}'.");
 
             node.Set(propertyName, target);

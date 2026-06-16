@@ -1,24 +1,24 @@
 using AlleyCat.Core.Installer;
 using Godot;
 
-namespace AlleyCat.Character.Installer;
+namespace AlleyCat.Rigging.Installation;
 
 /// <summary>
-/// Character-specialised installer that copies selected subtrees from the role-provided template context.
+/// Rig-specialised installer that copies selected subtrees from the role-provided template context.
 /// </summary>
 [Tool]
 [GlobalClass]
-public partial class CharacterTemplateSubtreeInstaller : CharacterSceneInstaller
+public partial class RigTemplateSubtreeInstaller : RigSceneInstaller
 {
     /// <summary>
-    /// Gets or sets which portion of the character template root should be installed.
+    /// Gets or sets which portion of the rig template root should be installed.
     /// </summary>
     [ExportGroup("Template Source")]
     [Export]
     public TemplateInstallMode InstallMode { get; set; } = TemplateInstallMode.TemplateRoot;
 
     /// <summary>
-    /// Gets or sets an optional path within the character template root used by selected-subtree install modes.
+    /// Gets or sets an optional path within the rig template root used by selected-subtree install modes.
     /// </summary>
     [Export]
     public NodePath SourcePath { get; set; } = new();
@@ -39,13 +39,13 @@ public partial class CharacterTemplateSubtreeInstaller : CharacterSceneInstaller
     }
 
     /// <inheritdoc />
-    public override SceneInstallationResult Install(CharacterInstallationContext context)
+    public override SceneInstallationResult Install(RigInstallationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         try
         {
-            CharacterInstallationContext delegatedContext = TargetSkeleton ? context.WithSkeletonTarget() : context;
+            RigInstallationContext delegatedContext = TargetSkeleton ? context.WithSkeletonTarget() : context;
             Node baseTarget = delegatedContext.TargetRoot;
             SceneInstallationResult result = TemplateSceneInstallation.Install(
                 this,
@@ -55,12 +55,12 @@ public partial class CharacterTemplateSubtreeInstaller : CharacterSceneInstaller
                 ResolveSourcePath(context));
             if (result.Succeeded && TargetSkeleton)
             {
-                CharacterTemplateInstallation.RebindDirectBoneAttachments(context.Skeleton, this);
+                RigTemplateInstallation.RebindDirectBoneAttachments(context.Skeleton, this);
             }
 
             if (result.Succeeded)
             {
-                CharacterTemplateInstallation.RebaseTemplateReferences(baseTarget, context, this, failOnUnresolved: false);
+                RigTemplateInstallation.RebaseTemplateReferences(baseTarget, context, this, failOnUnresolved: false);
             }
 
             return result;
@@ -74,7 +74,7 @@ public partial class CharacterTemplateSubtreeInstaller : CharacterSceneInstaller
     /// <summary>
     /// Resolves the source path used by selected-subtree install modes.
     /// </summary>
-    protected virtual NodePath ResolveSourcePath(CharacterInstallationContext context)
+    protected virtual NodePath ResolveSourcePath(RigInstallationContext context)
     {
         _ = context;
         return SourcePath;
@@ -83,7 +83,7 @@ public partial class CharacterTemplateSubtreeInstaller : CharacterSceneInstaller
     /// <summary>
     /// Resolves the target parent that receives installed template content.
     /// </summary>
-    protected virtual Node? ResolveTargetParent(CharacterInstallationContext context)
+    protected virtual Node? ResolveTargetParent(RigInstallationContext context)
     {
         if (string.IsNullOrWhiteSpace(TargetParentPath.ToString()))
         {
@@ -94,7 +94,7 @@ public partial class CharacterTemplateSubtreeInstaller : CharacterSceneInstaller
         return targetParent is not null
             ? targetParent
             : throw new InvalidOperationException(
-                $"Character template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(this)}' target '{context.TargetRoot.Name}' "
+                $"Rig template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(this)}' target '{context.TargetRoot.Name}' "
                 + $"could not resolve target parent path '{TargetParentPath}'.");
     }
 }

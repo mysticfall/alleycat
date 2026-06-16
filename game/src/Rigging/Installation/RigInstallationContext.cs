@@ -1,17 +1,17 @@
 using AlleyCat.Core.Installer;
 using Godot;
 
-namespace AlleyCat.Character.Installer;
+namespace AlleyCat.Rigging.Installation;
 
 /// <summary>
-/// Strongly-typed character template installation context with explicit template and skeleton dependencies.
+/// Strongly-typed rig template installation context with explicit template and skeleton dependencies.
 /// </summary>
 /// <param name="targetRoot">The character root being installed.</param>
 /// <param name="metadataNamespace">The metadata namespace used for idempotency markers.</param>
 /// <param name="templateRoot">The instantiated role template root.</param>
 /// <param name="targetSkeleton">The target character skeleton.</param>
 /// <param name="templateSkeleton">The template character skeleton.</param>
-public sealed class CharacterInstallationContext(
+public sealed class RigInstallationContext(
     Node targetRoot,
     string metadataNamespace,
     Node templateRoot,
@@ -20,7 +20,7 @@ public sealed class CharacterInstallationContext(
     : TemplateSceneInstallationContext(targetRoot, metadataNamespace, templateRoot)
 {
     /// <summary>
-    /// Gets the resolved skeleton for skeleton-bound character modules.
+    /// Gets the resolved skeleton for skeleton-bound rig modules.
     /// </summary>
     public Skeleton3D Skeleton
     {
@@ -38,13 +38,13 @@ public sealed class CharacterInstallationContext(
     /// <summary>
     /// Creates a copy of the context with a different target root while preserving template and skeleton dependencies.
     /// </summary>
-    public override CharacterInstallationContext WithTargetRoot(Node targetRoot)
+    public override RigInstallationContext WithTargetRoot(Node targetRoot)
         => new(targetRoot, MetadataNamespace, TemplateRoot, Skeleton, TemplateSkeleton);
 
     /// <summary>
     /// Creates a copy of the context targeting the resolved skeleton.
     /// </summary>
-    public CharacterInstallationContext WithSkeletonTarget()
+    public RigInstallationContext WithSkeletonTarget()
         => WithTargetRoot(Skeleton);
 
     /// <summary>
@@ -69,7 +69,7 @@ public sealed class CharacterInstallationContext(
         return skeletonPath is not null && !string.IsNullOrWhiteSpace(skeletonPath.ToString())
             ? root.GetNodeOrNull<Skeleton3D>(skeletonPath)
                 ?? throw new InvalidOperationException(
-                    $"Character installer {roleDescription} '{root.GetPath()}' could not resolve {nameof(Skeleton3D)} path '{skeletonPath}'.")
+                    $"Rig installer {roleDescription} '{root.GetPath()}' could not resolve {nameof(Skeleton3D)} path '{skeletonPath}'.")
             : ResolveSingleSkeleton(root, roleDescription);
     }
 
@@ -86,9 +86,9 @@ public sealed class CharacterInstallationContext(
             ? skeletons[0]
             : throw new InvalidOperationException(
             skeletons.Count == 0
-                ? $"Character installer {roleDescription} '{targetRoot.GetPath()}' does not contain a {nameof(Skeleton3D)}. "
+                ? $"Rig installer {roleDescription} '{targetRoot.GetPath()}' does not contain a {nameof(Skeleton3D)}. "
                     + $"Configure a single root-level skeleton path or provide exactly one skeleton under the {roleDescription} root."
-                : $"Character installer {roleDescription} '{targetRoot.GetPath()}' contains {skeletons.Count} skeletons. "
+                : $"Rig installer {roleDescription} '{targetRoot.GetPath()}' contains {skeletons.Count} skeletons. "
                     + $"Configure a single root-level skeleton path or provide exactly one skeleton under the {roleDescription} root.");
     }
 

@@ -139,4 +139,4 @@ Provide a reusable eye component system that:
 - `game/src/Body/Eyes/IEyes.cs`
 - `game/src/Body/Eyes/IEyesHolder.cs`
 - `game/src/Body/Eyes/EyesBehaviour.cs`
-- `game/src/Character/Runtime/CharacterRuntimeSubsystemInstaller.cs`
+- `game/src/Character/CharacterRuntimeSubsystemInstaller.cs`

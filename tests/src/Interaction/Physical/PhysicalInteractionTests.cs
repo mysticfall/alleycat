@@ -4,6 +4,7 @@ using AlleyCat.Body;
 using AlleyCat.Common;
 using AlleyCat.IK;
 using AlleyCat.Interaction.Physical;
+using AlleyCat.Rigging.Physics;
 using Godot;
 using Xunit;
 

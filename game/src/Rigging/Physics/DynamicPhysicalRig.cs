@@ -1,6 +1,7 @@
+using AlleyCat.Body;
 using Godot;
 
-namespace AlleyCat.Body;
+namespace AlleyCat.Rigging.Physics;
 
 /// <summary>
 /// Builds a bone-attached proxy collision rig from a collider profile.

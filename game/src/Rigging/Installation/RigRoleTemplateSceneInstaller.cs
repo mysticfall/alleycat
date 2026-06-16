@@ -1,16 +1,16 @@
 using AlleyCat.Core.Installer;
 using Godot;
 
-namespace AlleyCat.Character.Installer;
+namespace AlleyCat.Rigging.Installation;
 
 /// <summary>
-/// Top-level character installer that exposes a shared role template to child module installers.
+/// Top-level rig installer that exposes a shared role template to child module installers.
 /// </summary>
 [Tool]
 [GlobalClass]
-public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
+public partial class RigRoleTemplateSceneInstaller : SceneInstaller
 {
-    private CharacterSceneInstaller[] InstallersValue { get; set; } = [];
+    private RigSceneInstaller[] InstallersValue { get; set; } = [];
 
     private bool _automaticallyInstalled;
     private bool _pendingAutomaticInstall;
@@ -38,10 +38,10 @@ public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
     public NodePath TemplateSkeletonPath { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets the explicit character module installers run in order for this role.
+    /// Gets or sets the explicit rig module installers run in order for this role.
     /// </summary>
     [Export]
-    public CharacterSceneInstaller[] Installers
+    public RigSceneInstaller[] Installers
     {
         get => InstallersValue.Length > 0 ? InstallersValue : GetDirectChildInstallers();
         set => InstallersValue = value ?? [];
@@ -95,7 +95,7 @@ public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
         if (Template is null)
         {
             return SceneInstallationResult.Failed(
-                $"Character role template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(this)}' requires an assigned PackedScene template.");
+                $"Rig role template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(this)}' requires an assigned PackedScene template.");
         }
 
         Skeleton3D targetSkeleton;
@@ -104,8 +104,8 @@ public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
         Node templateRoot = ownedTemplateRoot;
         try
         {
-            targetSkeleton = CharacterInstallationContext.ResolveSkeleton(context.TargetRoot, TargetSkeletonPath, "target");
-            templateSkeleton = CharacterInstallationContext.ResolveSkeleton(templateRoot, TemplateSkeletonPath, "template");
+            targetSkeleton = RigInstallationContext.ResolveSkeleton(context.TargetRoot, TargetSkeletonPath, "target");
+            templateSkeleton = RigInstallationContext.ResolveSkeleton(templateRoot, TemplateSkeletonPath, "template");
         }
         catch (InvalidOperationException ex)
         {
@@ -113,7 +113,7 @@ public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
             return SceneInstallationResult.Failed(ex.Message);
         }
 
-        var characterContext = new CharacterInstallationContext(
+        var characterContext = new RigInstallationContext(
             context.TargetRoot,
             context.MetadataNamespace,
             templateRoot,
@@ -138,20 +138,20 @@ public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
         ClearInstallerOwnedOutput(targetRoot);
     }
 
-    private SceneInstallationResult InstallCharacterModules(CharacterInstallationContext context)
+    private SceneInstallationResult InstallCharacterModules(RigInstallationContext context)
     {
         Node? targetRoot = ResolveEditorRefreshTargetRoot(context);
-        CharacterInstallationContext delegatedContext = targetRoot is null ? context : context.WithTargetRoot(targetRoot);
+        RigInstallationContext delegatedContext = targetRoot is null ? context : context.WithTargetRoot(targetRoot);
         List<SceneInstallationResult> results = [];
 
-        CharacterSceneInstaller[] installers = Installers;
+        RigSceneInstaller[] installers = Installers;
         for (int index = 0; index < installers.Length; index++)
         {
-            CharacterSceneInstaller? installer = installers[index];
+            RigSceneInstaller? installer = installers[index];
             if (installer is null)
             {
                 results.Add(SceneInstallationResult.Failed(
-                    $"{DescribeInstaller(this)} has a null character installer at ordered slot {index}."));
+                    $"{DescribeInstaller(this)} has a null rig installer at ordered slot {index}."));
                 continue;
             }
 
@@ -180,12 +180,12 @@ public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
         return SceneInstallationResult.Merge(results);
     }
 
-    private CharacterSceneInstaller[] GetDirectChildInstallers()
+    private RigSceneInstaller[] GetDirectChildInstallers()
     {
-        List<CharacterSceneInstaller> childInstallers = [];
+        List<RigSceneInstaller> childInstallers = [];
         foreach (Node child in GetChildren())
         {
-            if (child is CharacterSceneInstaller installer)
+            if (child is RigSceneInstaller installer)
             {
                 childInstallers.Add(installer);
             }
@@ -221,7 +221,7 @@ public partial class CharacterRoleTemplateSceneInstaller : SceneInstaller
 
         Node targetRoot = ResolveEditorRefreshTargetRoot()
             ?? throw new InvalidOperationException(
-                $"{nameof(CharacterRoleTemplateSceneInstaller)} node '{Name}' could not resolve a target root from "
+                $"{nameof(RigRoleTemplateSceneInstaller)} node '{Name}' could not resolve a target root from "
                 + $"{nameof(TargetRoot)}, its parent, owner, or current scene when {nameof(AutoInstallOnReady)} is enabled.");
 
         SceneInstallationResult result = Install(new SceneInstallationContext(targetRoot));

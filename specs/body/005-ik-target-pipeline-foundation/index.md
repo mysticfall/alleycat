@@ -119,6 +119,6 @@ architecture, contributor model, and actuator abstraction before adding constrai
 
 - [BODY-002: Character Physical Response System](../002-character-physical-response/index.md)
 - [BODY-002 Design Notes](../002-character-physical-response/design-notes.md)
-- [DynamicPhysicalRig Implementation](../../../game/src/Body/DynamicPhysicalRig.cs)
+- [DynamicPhysicalRig Implementation](../../../game/src/Rigging/Physics/DynamicPhysicalRig.cs)
 - [IK Implementation Notes](../../ik/implementation-notes.md)
 - [IK-002: Arm And Shoulder IK System](../../ik/002-arm-shoulder-ik/index.md)

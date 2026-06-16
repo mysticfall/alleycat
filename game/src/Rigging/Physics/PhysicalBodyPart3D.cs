@@ -1,7 +1,8 @@
+using AlleyCat.Body;
 using AlleyCat.Interaction.Physical;
 using Godot;
 
-namespace AlleyCat.Body;
+namespace AlleyCat.Rigging.Physics;
 
 /// <summary>
 /// Generated body-part proxy that can receive physical interactions without applying reactions.

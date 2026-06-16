@@ -89,13 +89,14 @@ Provide a contract for composing scene setup logic through modular installers. T
     preserved.
 22. Rebase logic is limited to template-root to target-root boundary translation and validation; it must not become the
       primary place where reusable topology or reference wiring is encoded.
-23. Character role installer roots resolve target and template character skeletons once and expose them through
-    `CharacterInstallationContext`; auto-resolution by convention is allowed, with optional skeleton paths configured
+23. Character role installer roots use the `AlleyCat.Rigging.Installation` APIs, resolve target and
+    template character skeletons once, and expose them through `RigInstallationContext`; auto-resolution by convention
+    is allowed, with optional skeleton paths configured
     only on the role root.
 24. Role-flow child installer scenes consume skeletons from typed context and must not serialise skeleton source paths,
     `TargetSkeleton`, or equivalent per-child skeleton configuration.
 25. Template subtree installers are context-only consumers. They do not provide standalone `PackedScene` fallback APIs,
-       and skeleton-dependent child installers fail clearly when invoked without `CharacterInstallationContext`.
+       and skeleton-dependent child installers fail clearly when invoked without `RigInstallationContext`.
 26. Copy operations preserve Godot ownership, installer metadata, idempotency, sibling installer output, and role split.
 27. Child installers, not template-provider root installers, copy visual/import roots or other selected template
        subtrees when the role flow requires them.
@@ -110,7 +111,7 @@ Provide a contract for composing scene setup logic through modular installers. T
         `InstallNowInEditor` as the imperative helper used by editor workflows and tests.
 33. Editor undo semantics are coarse: undo clears installer-owned generated output and redo reinstalls it. Exact prior
         generated node identity is not guaranteed across undo/redo.
-34. Character installer composition is split into explicit player/NPC role installer scenes. Shared base template
+34. Character rig installer composition is split into explicit player/NPC role installer scenes. Shared base template
     content is provided by the role-owned template scene; misleading generic base-installer assets are removed rather
     than advertising character-context-only children as generic composites.
 35. Player-specific animation-tree root selection is authored in the player role/template layer. Player subsystem
@@ -126,8 +127,9 @@ Provide a contract for composing scene setup logic through modular installers. T
 - Contracts for runtime and editor-debug installation workflows.
 - Exported editor install trigger and helper workflow.
 - Character rig portability as a use case of the installer pattern.
-- Base-vs-role character installer split, with template-aware role installer scenes for player/NPC assembly.
-- Template-scene context creation and propagation from a role installer scene root to child installers.
+- Base-vs-role character rig installer split, with template-aware role installer scenes for player/NPC assembly.
+- Template-scene context creation and propagation through `AlleyCat.Rigging.Installation` from a role installer
+  scene root to child installers.
 - Character skeleton dependency resolution and propagation from a role installer scene root to child installers.
 - Template-provider root installer delegation through `ISceneInstaller.Install` without root-owned node copying.
 - Explicit child-installer subtree copy operations, including selected-node and selected-node-children copy modes.
@@ -167,7 +169,7 @@ Provide a contract for composing scene setup logic through modular installers. T
 ### Technical Requirements
 1. A core installer interface is defined in `AlleyCat.Core.Installer` with an explicit installation target context.
 2. At least two module installers implement the core interface and encapsulate domain-specific setup.
-3. Character role installers orchestrate `CharacterSceneInstaller` children explicitly; generic installer composition
+3. Character role installers orchestrate `RigSceneInstaller` children explicitly; generic installer composition
    does not require a built-in composite node type.
 4. Installers use relative paths, template-authored exported references, or component binding to modify the target.
 5. Installer logic avoids hard-coded strings like `Female` except in reference-only fixtures.
@@ -178,7 +180,7 @@ Provide a contract for composing scene setup logic through modular installers. T
    inventory creation.
 9. Role installer scene roots implement `ISceneInstaller.Install`, export `PackedScene Template`, instantiate the
    configured template source, resolve target and template skeletons for character scenes, create
-   `CharacterInstallationContext`, and pass it to child installers.
+   `RigInstallationContext`, and pass it to child installers.
 10. Role installer scene roots do not copy template nodes themselves and do not own install mode, source path, or target
      parent path properties.
 11. Child installers copy selected template subtrees using source paths relative to their typed template context, target
@@ -204,7 +206,7 @@ Provide a contract for composing scene setup logic through modular installers. T
 23. Tests or review confirm player-only VRIK/pose/hip reconciliation is absent from NPC/base output, and NPC
          `CharacterIK`/provider setup is absent from player/base output.
 24. Unit tests verify the generic context has no template root or service dictionary API, typed context interfaces are
-       present, and auto-install is not duplicated by character subsystem bases.
+       present, and auto-install is not duplicated by rig subsystem bases.
 25. Role installer roots resolve target and template skeletons once, with optional skeleton path configuration only on
     the role root.
 26. Tests or scene review confirm role installer child serialisation contains no `Female/GeneralSkeleton`-style skeleton

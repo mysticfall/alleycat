@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
 [ext_resource type="AnimationLibrary" uid="uid://xjgp5mvaystq" path="res://assets/characters/reference/female/animations/eyes/eyes.tres" id="2_ei3al"]
-[ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Body/DynamicPhysicalRig.cs" id="3_2a5tg"]
+[ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Rigging/Physics/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/templates/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
 [ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_5hhxm"]

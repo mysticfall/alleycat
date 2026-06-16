@@ -1,21 +1,21 @@
-using AlleyCat.Body;
-using AlleyCat.Character.Installer;
-using AlleyCat.Character.Runtime;
+using AlleyCat.Character;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK;
 using AlleyCat.IK.Pose;
+using AlleyCat.Rigging.Installation;
+using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
-namespace AlleyCat.IntegrationTests.Character.Installation;
+namespace AlleyCat.IntegrationTests.Rigging.Installation;
 
 /// <summary>
-/// Integration coverage for character-domain installers built on the CORE-005 scene installer framework.
+/// Integration coverage for rig-domain installers built on the CORE-005 scene installer framework.
 /// </summary>
-public sealed class CharacterInstallerIntegrationTests
+public sealed class RigInstallerIntegrationTests
 {
     private const string PlayerInstallerPath =
         "res://assets/characters/templates/installers/player_installer.tscn";
@@ -66,24 +66,24 @@ public sealed class CharacterInstallerIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterTemplateSubtreeInstaller_ContextSkeleton_CreatesAttachmentsUnderActualSkeleton()
+    public void RigTemplateSubtreeInstaller_ContextSkeleton_CreatesAttachmentsUnderActualSkeleton()
     {
         using CharacterFixture fixture = CreateAliceFixture();
         using Node templateRoot = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
         using Node targetTemplateRoot = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
-        using var installer = new CharacterTemplateSubtreeInstaller
+        using var installer = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.SelectedNodeChildren,
             SourcePath = new NodePath("Female/GeneralSkeleton"),
             TargetSkeleton = true,
         };
-        using var targetInstaller = new CharacterTemplateSubtreeInstaller
+        using var targetInstaller = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.SelectedNode,
             SourcePath = new NodePath("IKTargets"),
         };
-        CharacterInstallationContext context = CreateCharacterContext(fixture, templateRoot);
-        CharacterInstallationContext targetContext = CreateCharacterContext(fixture, targetTemplateRoot);
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
+        RigInstallationContext targetContext = CreateCharacterContext(fixture, targetTemplateRoot);
 
         SceneInstallationResult targets = targetInstaller.Install(targetContext);
         SceneInstallationResult first = installer.Install(context);
@@ -111,16 +111,16 @@ public sealed class CharacterInstallerIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterTemplateSubtreeInstaller_ContextTemplate_CreatesRootLevelTargetContainerOnce()
+    public void RigTemplateSubtreeInstaller_ContextTemplate_CreatesRootLevelTargetContainerOnce()
     {
         using CharacterFixture fixture = CreateAliceFixture();
         using Node templateRoot = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
-        using var installer = new CharacterTemplateSubtreeInstaller
+        using var installer = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.SelectedNode,
             SourcePath = new NodePath("IKTargets"),
         };
-        CharacterInstallationContext context = CreateCharacterContext(fixture, templateRoot);
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
 
         SceneInstallationResult first = installer.Install(context);
         SceneInstallationResult second = installer.Install(context);
@@ -144,15 +144,15 @@ public sealed class CharacterInstallerIntegrationTests
     }
 
     /// <summary>
-    /// Character installers conventionally resolve a single skeleton under the composite target root.
+    /// Rig installers conventionally resolve a single skeleton under the composite target root.
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterTemplateSubtreeInstaller_MissingSkeletonService_FailsClearly()
+    public void RigTemplateSubtreeInstaller_MissingSkeletonService_FailsClearly()
     {
         using CharacterFixture fixture = CreateAliceFixture();
         using Node templateRoot = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
-        using var installer = new CharacterTemplateSubtreeInstaller
+        using var installer = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.SelectedNodeChildren,
             SourcePath = new NodePath("Female/GeneralSkeleton"),
@@ -162,7 +162,7 @@ public sealed class CharacterInstallerIntegrationTests
         SceneInstallationResult result = installer.Install(new SceneInstallationContext(fixture.Root));
 
         Assert.False(result.Succeeded);
-        Assert.Contains(nameof(CharacterInstallationContext), string.Join('\n', result.Errors), StringComparison.Ordinal);
+        Assert.Contains(nameof(RigInstallationContext), string.Join('\n', result.Errors), StringComparison.Ordinal);
         Assert.False(fixture.Skeleton.HasNode("Head/Viewpoint"));
     }
 
@@ -185,7 +185,7 @@ public sealed class CharacterInstallerIntegrationTests
 
         Assert.False(result.Succeeded);
         string errors = string.Join('\n', result.Errors);
-        Assert.Contains(nameof(CharacterInstallationContext), errors, StringComparison.Ordinal);
+        Assert.Contains(nameof(RigInstallationContext), errors, StringComparison.Ordinal);
         Assert.False(fixture.Skeleton.HasNode("DynamicPhysicalRig"));
     }
 
@@ -212,7 +212,7 @@ public sealed class CharacterInstallerIntegrationTests
             InstallMode = TemplateInstallMode.SelectedNode,
             Enabled = false,
         };
-        CharacterInstallationContext context = CreateCharacterContext(fixture, templateRoot);
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
 
         SceneInstallationResult first = installer.Install(context);
         SceneInstallationResult second = installer.Install(context);
@@ -231,7 +231,7 @@ public sealed class CharacterInstallerIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterRoleTemplateSceneInstaller_WithMultipleSkeletonsFailsBeforeChildrenRun()
+    public void RigRoleTemplateSceneInstaller_WithMultipleSkeletonsFailsBeforeChildrenRun()
     {
         using CharacterFixture fixture = CreateAliceFixture();
         var legacyNamedSkeleton = new Skeleton3D
@@ -240,12 +240,12 @@ public sealed class CharacterInstallerIntegrationTests
         };
         fixture.Root.AddChild(legacyNamedSkeleton);
         legacyNamedSkeleton.Owner = fixture.Root;
-        using var installer = new CharacterRoleTemplateSceneInstaller
+        using var installer = new RigRoleTemplateSceneInstaller
         {
             Template = LoadPackedScene(ReferenceFemaleScenePath),
             Installers =
             [
-                new CharacterTemplateSubtreeInstaller
+                new RigTemplateSubtreeInstaller
                 {
                     InstallMode = TemplateInstallMode.SelectedNodeChildren,
                     SourcePath = new NodePath("Female/GeneralSkeleton"),
@@ -274,19 +274,19 @@ public sealed class CharacterInstallerIntegrationTests
         using CharacterFixture fixture = CreateAliceFixture();
         using Node attachmentsTemplateRoot = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
         using Node targetsTemplateRoot = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
-        using var attachmentInstaller = new CharacterTemplateSubtreeInstaller
+        using var attachmentInstaller = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.SelectedNodeChildren,
             SourcePath = new NodePath("Female/GeneralSkeleton"),
             TargetSkeleton = true,
         };
-        using var targetInstaller = new CharacterTemplateSubtreeInstaller
+        using var targetInstaller = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.SelectedNode,
             SourcePath = new NodePath("IKTargets"),
         };
-        CharacterInstallationContext context = CreateCharacterContext(fixture, attachmentsTemplateRoot);
-        CharacterInstallationContext targetsContext = CreateCharacterContext(fixture, targetsTemplateRoot);
+        RigInstallationContext context = CreateCharacterContext(fixture, attachmentsTemplateRoot);
+        RigInstallationContext targetsContext = CreateCharacterContext(fixture, targetsTemplateRoot);
 
         SceneInstallationResult targetFirst = targetInstaller.Install(targetsContext);
         SceneInstallationResult first = attachmentInstaller.Install(context);
@@ -331,7 +331,7 @@ public sealed class CharacterInstallerIntegrationTests
         string installerText = ReadProjectFile(PlayerInstallerPath);
 
         Assert.Contains(ReferenceFemalePlayerTemplatePath, installerText, StringComparison.Ordinal);
-        Assert.Contains("CharacterRoleTemplateSceneInstaller.cs", installerText, StringComparison.Ordinal);
+        Assert.Contains("RigRoleTemplateSceneInstaller.cs", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateRootSubtreesInstaller", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateSkeletonSubtreesInstaller", installerText, StringComparison.Ordinal);
         Assert.DoesNotContain("AnimationTreeRootOverride", installerText, StringComparison.Ordinal);
@@ -354,11 +354,11 @@ public sealed class CharacterInstallerIntegrationTests
         using Node instance = moduleScene.Instantiate();
 
         Assert.Equal("PlayerCharacterInstaller", instance.Name);
-        AssertInstallerType(instance, typeof(CharacterRoleTemplateSceneInstaller));
+        AssertInstallerType(instance, typeof(RigRoleTemplateSceneInstaller));
         object[] installers = GetInstallerArray(instance);
         Assert.Equal(6, installers.Length);
-        AssertInstallerType(installers[0], typeof(CharacterTemplateSubtreeInstaller));
-        AssertInstallerType(installers[1], typeof(CharacterTemplateSkeletonSubtreeInstaller));
+        AssertInstallerType(installers[0], typeof(RigTemplateSubtreeInstaller));
+        AssertInstallerType(installers[1], typeof(RigTemplateSkeletonSubtreeInstaller));
         AssertInstallerType(installers[2], typeof(BodyPartsInstaller));
         AssertInstallerType(installers[3], typeof(DynamicPhysicalRigTemplateInstaller));
         AssertInstallerType(installers[4], typeof(CharacterRuntimeSubsystemInstaller));
@@ -376,7 +376,7 @@ public sealed class CharacterInstallerIntegrationTests
         string installerText = ReadProjectFile(NpcInstallerPath);
 
         Assert.Contains(ReferenceFemaleNpcTemplatePath, installerText, StringComparison.Ordinal);
-        Assert.Contains("CharacterRoleTemplateSceneInstaller.cs", installerText, StringComparison.Ordinal);
+        Assert.Contains("RigRoleTemplateSceneInstaller.cs", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateRootSubtreesInstaller", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateSkeletonSubtreesInstaller", installerText, StringComparison.Ordinal);
         Assert.Contains("CharacterIKSubsystemInstaller.cs", installerText, StringComparison.Ordinal);
@@ -395,11 +395,11 @@ public sealed class CharacterInstallerIntegrationTests
         using Node instance = LoadPackedScene(NpcInstallerPath).Instantiate();
 
         Assert.Equal("NPCCharacterInstaller", instance.Name);
-        AssertInstallerType(instance, typeof(CharacterRoleTemplateSceneInstaller));
+        AssertInstallerType(instance, typeof(RigRoleTemplateSceneInstaller));
         object[] installers = GetInstallerArray(instance);
         Assert.Equal(6, installers.Length);
-        AssertInstallerType(installers[0], typeof(CharacterTemplateSubtreeInstaller));
-        AssertInstallerType(installers[1], typeof(CharacterTemplateSkeletonSubtreeInstaller));
+        AssertInstallerType(installers[0], typeof(RigTemplateSubtreeInstaller));
+        AssertInstallerType(installers[1], typeof(RigTemplateSkeletonSubtreeInstaller));
         AssertInstallerType(installers[2], typeof(BodyPartsInstaller));
         AssertInstallerType(installers[3], typeof(DynamicPhysicalRigTemplateInstaller));
         AssertInstallerType(installers[4], typeof(CharacterRuntimeSubsystemInstaller));
@@ -424,7 +424,7 @@ public sealed class CharacterInstallerIntegrationTests
         Assert.DoesNotContain("OpenAITranscriber", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("PlayerController.cs", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenAITranscriber.cs", playerSceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("CharacterRoleTemplateSceneInstaller.cs", playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("RigRoleTemplateSceneInstaller.cs", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("BaseCharacterInstaller", playerSceneText, StringComparison.Ordinal);
 
         string[] forbiddenMarkers =
@@ -587,7 +587,7 @@ public sealed class CharacterInstallerIntegrationTests
 
         object result = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller/PlayerRigInstaller"), playerRoot);
 
-        AssertLoadedInstallFailedContaining(result, "Character installer");
+        AssertLoadedInstallFailedContaining(result, "Rig installer");
     }
 
     /// <summary>
@@ -604,7 +604,7 @@ public sealed class CharacterInstallerIntegrationTests
 
         object result = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller/PlayerRigInstaller"), playerRoot);
 
-        AssertLoadedInstallFailedContaining(result, "Character installer");
+        AssertLoadedInstallFailedContaining(result, "Rig installer");
     }
 
     /// <summary>
@@ -680,13 +680,13 @@ public sealed class CharacterInstallerIntegrationTests
     {
         using CharacterFixture fixture = CreateAliceFixture();
         using Node templateRoot = LoadPackedScene(ReferenceFemaleNpcTemplatePath).Instantiate();
-        CharacterInstallationContext context = CreateCharacterContext(fixture, templateRoot);
-        using var rootInstaller = new CharacterTemplateSubtreeInstaller
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
+        using var rootInstaller = new RigTemplateSubtreeInstaller
         {
             Name = "TemplateRootSubtreesInstaller",
             InstallMode = TemplateInstallMode.TemplateRootChildren,
         };
-        using var skeletonInstaller = new CharacterTemplateSubtreeInstaller
+        using var skeletonInstaller = new RigTemplateSubtreeInstaller
         {
             Name = "TemplateSkeletonSubtreesInstaller",
             TargetSkeleton = true,
@@ -781,9 +781,9 @@ public sealed class CharacterInstallerIntegrationTests
     [Fact]
     public void ReferenceFemalePath_IsConfinedToAssetConfiguration()
     {
-        Assert.DoesNotContain("Female/GeneralSkeleton", ReadProjectFile("res://src/Character/Installer/CharacterSceneInstaller.cs"),
+        Assert.DoesNotContain("Female/GeneralSkeleton", ReadProjectFile("res://src/Rigging/Installation/RigSceneInstaller.cs"),
             StringComparison.Ordinal);
-        Assert.DoesNotContain("Female/GeneralSkeleton", ReadProjectFile("res://src/Body/DynamicPhysicalRigTemplateInstaller.cs"),
+        Assert.DoesNotContain("Female/GeneralSkeleton", ReadProjectFile("res://src/Rigging/Physics/DynamicPhysicalRigTemplateInstaller.cs"),
             StringComparison.Ordinal);
     }
 
@@ -795,7 +795,7 @@ public sealed class CharacterInstallerIntegrationTests
     public void RoleCriticalInstallerSources_DoNotHardCodeReusableTemplateTopologyNames()
     {
         string playerRigSource = ReadProjectFile("res://src/IK/PlayerRigInstaller.cs");
-        string runtimeInstallerSource = ReadProjectFile("res://src/Character/Runtime/CharacterRuntimeSubsystemInstaller.cs");
+        string runtimeInstallerSource = ReadProjectFile("res://src/Character/CharacterRuntimeSubsystemInstaller.cs");
 
         Assert.DoesNotContain("\"HipReconciliationModifier\"", playerRigSource, StringComparison.Ordinal);
         Assert.DoesNotContain("\"FootTargetSyncController\"", playerRigSource, StringComparison.Ordinal);
@@ -831,8 +831,8 @@ public sealed class CharacterInstallerIntegrationTests
         Assert.False(fixture.Skeleton.HasNode("Head/Viewpoint"));
         Assert.False(fixture.Root.HasNode("IKTargets"));
         Assert.False(fixture.Skeleton.HasNode("RightArmIKController"));
-        Assert.Contains(nameof(CharacterInstallationContext), bodyPartsError.Message, StringComparison.Ordinal);
-        Assert.Contains(nameof(CharacterInstallationContext), ikError.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(RigInstallationContext), bodyPartsError.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(RigInstallationContext), ikError.Message, StringComparison.Ordinal);
         Assert.False(HasGodotProperty(bodyParts, "AttachmentsTemplate"));
         Assert.False(HasGodotProperty(ik, "IKTargetsTemplate"));
     }
@@ -855,8 +855,8 @@ public sealed class CharacterInstallerIntegrationTests
         InvalidOperationException ikError = Assert.Throws<InvalidOperationException>(() => RefreshIndividually(ik));
 
         Skeleton3D skeleton = character.GetNode<Skeleton3D>("Female/GeneralSkeleton");
-        Assert.Contains(nameof(CharacterInstallationContext), bodyPartsError.Message, StringComparison.Ordinal);
-        Assert.Contains(nameof(CharacterInstallationContext), ikError.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(RigInstallationContext), bodyPartsError.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(RigInstallationContext), ikError.Message, StringComparison.Ordinal);
         Assert.True(character.HasNode("IKTargets/RightHand"));
         Assert.True(skeleton.HasNode("Head/Viewpoint"));
         Assert.True(skeleton.HasNode("RightArmIKController"));
@@ -885,15 +885,15 @@ public sealed class CharacterInstallerIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterTemplateSubtreeInstaller_RootTemplateInstall_IsIdempotent()
+    public void RigTemplateSubtreeInstaller_RootTemplateInstall_IsIdempotent()
     {
         using CharacterFixture fixture = CreateAliceFixture();
         using Node templateRoot = CreatePackedTemplateRoot(new Node3D { Name = "ReusableModule" }, root => root.AddChild(new Marker3D { Name = "AuthoredMarker" })).Instantiate();
-        using var installer = new CharacterTemplateSubtreeInstaller
+        using var installer = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.TemplateRoot,
         };
-        CharacterInstallationContext context = CreateCharacterContext(fixture, templateRoot);
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
 
         SceneInstallationResult first = installer.Install(context);
         SceneInstallationResult second = installer.Install(context);
@@ -911,7 +911,7 @@ public sealed class CharacterInstallerIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterTemplateSubtreeInstaller_SkeletonChildTemplateInstall_IsIdempotent()
+    public void RigTemplateSubtreeInstaller_SkeletonChildTemplateInstall_IsIdempotent()
     {
         using CharacterFixture fixture = CreateAliceFixture();
         using Node templateRoot = CreatePackedTemplateRoot(new Node { Name = "TemplateInventory" }, root =>
@@ -919,12 +919,12 @@ public sealed class CharacterInstallerIntegrationTests
             root.AddChild(new Marker3D { Name = "CustomPole" });
             root.AddChild(new Node3D { Name = "CustomTarget" });
         }).Instantiate();
-        using var installer = new CharacterTemplateSubtreeInstaller
+        using var installer = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.TemplateRootChildren,
             TargetSkeleton = true,
         };
-        CharacterInstallationContext context = CreateCharacterContext(fixture, templateRoot);
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
 
         SceneInstallationResult first = installer.Install(context);
         SceneInstallationResult second = installer.Install(context);
@@ -942,16 +942,16 @@ public sealed class CharacterInstallerIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterTemplateSubtreeInstaller_WrongExistingType_FailsClearly()
+    public void RigTemplateSubtreeInstaller_WrongExistingType_FailsClearly()
     {
         using CharacterFixture fixture = CreateAliceFixture();
         fixture.Root.AddChild(new Node3D { Name = "ReusableModule" });
         using Node templateRoot = CreatePackedTemplateRoot(new Marker3D { Name = "ReusableModule" }).Instantiate();
-        using var installer = new CharacterTemplateSubtreeInstaller
+        using var installer = new RigTemplateSubtreeInstaller
         {
             InstallMode = TemplateInstallMode.TemplateRoot,
         };
-        CharacterInstallationContext context = CreateCharacterContext(fixture, templateRoot);
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
 
         SceneInstallationResult result = installer.Install(context);
 
@@ -972,7 +972,7 @@ public sealed class CharacterInstallerIntegrationTests
         string[] reusableInstallerSources =
         [
             "res://src/Core/Installer/TemplateSceneInstallation.cs",
-            "res://src/Character/Installer/CharacterTemplateSubtreeInstaller.cs",
+            "res://src/Rigging/Installation/RigTemplateSubtreeInstaller.cs",
         ];
         string[] forbiddenInventoryNames = ["RightElbow", "HeadSolve", "Female/GeneralSkeleton"];
 
@@ -1108,7 +1108,7 @@ public sealed class CharacterInstallerIntegrationTests
     {
         string sceneText = ReadProjectFile(scenePath);
         Assert.DoesNotContain(templatePath, sceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("CharacterRoleTemplateSceneInstaller.cs", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("RigRoleTemplateSceneInstaller.cs", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("instance=ExtResource(\"1_reference\")", sceneText, StringComparison.Ordinal);
         AssertNoEmbeddedMeshData(sceneText);
 
@@ -1171,7 +1171,7 @@ public sealed class CharacterInstallerIntegrationTests
 
     private static object[] GetInstallerArray(object composite)
     {
-        object? installers = composite.GetType().GetProperty(nameof(CharacterRoleTemplateSceneInstaller.Installers))?.GetValue(composite);
+        object? installers = composite.GetType().GetProperty(nameof(RigRoleTemplateSceneInstaller.Installers))?.GetValue(composite);
         Assert.NotNull(installers);
         return [.. Assert.IsAssignableFrom<Array>(installers).Cast<object>()];
     }
@@ -1252,12 +1252,12 @@ public sealed class CharacterInstallerIntegrationTests
     private static object InvokeLoadedInstaller(object installer, Node targetRoot)
     {
         Type installerType = installer.GetType();
-        if (HasInstallerType(installer, typeof(CharacterSceneInstaller)) && TryResolveSingleSkeleton(targetRoot, out Skeleton3D? skeleton))
+        if (HasInstallerType(installer, typeof(RigSceneInstaller)) && TryResolveSingleSkeleton(targetRoot, out Skeleton3D? skeleton))
         {
             Skeleton3D resolvedSkeleton = skeleton
-                ?? throw new InvalidOperationException("Expected a resolved skeleton for loaded character installer invocation.");
-            Type characterContextType = installerType.Assembly.GetType(typeof(CharacterInstallationContext).FullName!)
-                ?? throw new InvalidOperationException("Failed to resolve loaded CharacterInstallationContext type.");
+                ?? throw new InvalidOperationException("Expected a resolved skeleton for loaded rig installer invocation.");
+            Type characterContextType = installerType.Assembly.GetType(typeof(RigInstallationContext).FullName!)
+                ?? throw new InvalidOperationException("Failed to resolve loaded RigInstallationContext type.");
             object characterContext = Activator.CreateInstance(
                 characterContextType,
                 targetRoot,
@@ -1373,12 +1373,12 @@ public sealed class CharacterInstallerIntegrationTests
         return count;
     }
 
-    private static CharacterInstallationContext CreateCharacterContext(CharacterFixture fixture, Node templateRoot)
+    private static RigInstallationContext CreateCharacterContext(CharacterFixture fixture, Node templateRoot)
     {
         Skeleton3D templateSkeleton;
         try
         {
-            templateSkeleton = CharacterInstallationContext.ResolveSkeleton(templateRoot, null, "template");
+            templateSkeleton = RigInstallationContext.ResolveSkeleton(templateRoot, null, "template");
         }
         catch (InvalidOperationException)
         {

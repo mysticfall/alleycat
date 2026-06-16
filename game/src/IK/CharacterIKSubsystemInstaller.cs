@@ -1,6 +1,6 @@
 using AlleyCat.Body.Hands;
-using AlleyCat.Character.Installer;
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Installation;
 using Godot;
 using BodyLimbSide = AlleyCat.Body.LimbSide;
 
@@ -11,7 +11,7 @@ namespace AlleyCat.IK;
 /// </summary>
 [Tool]
 [GlobalClass]
-public partial class CharacterIKSubsystemInstaller : CharacterSubsystemInstaller
+public partial class CharacterIKSubsystemInstaller : RigSubsystemInstaller
 {
     /// <summary>
     /// Gets or sets the conventional IK node name under the character root.
@@ -32,13 +32,13 @@ public partial class CharacterIKSubsystemInstaller : CharacterSubsystemInstaller
     public bool BindHandGrabProviders { get; set; } = true;
 
     /// <inheritdoc />
-    public override SceneInstallationResult Install(CharacterInstallationContext context)
+    public override SceneInstallationResult Install(RigInstallationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         try
         {
-            CharacterTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);
+            RigTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);
             if (BindCharacterIKNode)
             {
                 CharacterIK ik = ResolveIKNode(context.TargetRoot);

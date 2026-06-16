@@ -33,6 +33,9 @@ through explicit force-transfer channels.
 
 ## Technical Requirements
 
+Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalInteractionReceipt` remains in
+`AlleyCat.Body`.
+
 1. `BodyColliderProfile` shall be a `[Tool]`, editor-visible Godot `Resource`
    that references a configurable collider source `PackedScene` and exposes
    query descriptors for authored shapes by source bone/name.
@@ -310,11 +313,11 @@ through explicit force-transfer channels.
 
 - [BODY-002: Character Physical Response System](../002-character-physical-response/index.md)
 - [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../ik/004-vrik-pose-state-machine/index.md)
-- [DynamicPhysicalRig Implementation](@game/src/Body/DynamicPhysicalRig.cs)
-- [BodyColliderProfile Implementation](@game/src/Body/BodyColliderProfile.cs)
+- [DynamicPhysicalRig Implementation](@game/src/Rigging/Physics/DynamicPhysicalRig.cs)
+- [BodyColliderProfile Implementation](@game/src/Rigging/Physics/BodyColliderProfile.cs)
 - [HandDynamicBodyInteractionController Implementation](@game/src/IK/HandDynamicBodyInteractionController.cs)
 - [IKTargetAnimatableActuator Implementation](@game/src/IK/IKTargetAnimatableActuator.cs)
 - [PlayerVRIK Implementation](@game/src/IK/PlayerVRIK.cs)
-- [DynamicPhysicalRig Integration Tests](@integration-tests/src/Body/DynamicPhysicalRigIntegrationTests.cs)
+- [DynamicPhysicalRig Integration Tests](@integration-tests/src/Rigging/Physics/DynamicPhysicalRigIntegrationTests.cs)
 - [Hand Tests](@integration-tests/src/IK/HandDynamicBodyInteractionControllerIntegrationTests.cs)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)

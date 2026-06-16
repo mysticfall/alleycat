@@ -3,13 +3,14 @@ using AlleyCat.Body;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK;
 using AlleyCat.Interaction.Physical;
+using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
-namespace AlleyCat.IntegrationTests.Body;
+namespace AlleyCat.IntegrationTests.Rigging.Physics;
 
 /// <summary>
 /// Integration coverage for physics-timed IK target following and generated proxy collision rigging.

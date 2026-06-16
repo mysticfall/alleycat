@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
-using AlleyCat.Body;
 using AlleyCat.IK.Pose;
+using AlleyCat.Rigging.Physics;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;

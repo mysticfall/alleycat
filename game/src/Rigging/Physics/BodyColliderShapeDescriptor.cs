@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Body;
+namespace AlleyCat.Rigging.Physics;
 
 /// <summary>
 /// Immutable query descriptor for a collision shape authored under a source bone attachment.

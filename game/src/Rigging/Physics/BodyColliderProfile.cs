@@ -1,6 +1,6 @@
 using Godot;
 
-namespace AlleyCat.Body;
+namespace AlleyCat.Rigging.Physics;
 
 /// <summary>
 /// Reusable resource that queries body collider descriptors from an authored collider scene.

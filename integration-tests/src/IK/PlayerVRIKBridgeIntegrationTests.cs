@@ -6,6 +6,7 @@ using AlleyCat.XR;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
+using DynamicPhysicalRig = AlleyCat.Rigging.Physics.DynamicPhysicalRig;
 
 namespace AlleyCat.IntegrationTests.IK;
 
@@ -19,7 +20,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string PlayerVRIKScriptPath = "res://src/IK/PlayerVRIK.cs";
     private const string CharacterIKScriptPath = "res://src/IK/CharacterIK.cs";
-    private const string DynamicPhysicalRigScriptPath = "res://src/Body/DynamicPhysicalRig.cs";
+    private const string DynamicPhysicalRigScriptPath = "res://src/Rigging/Physics/DynamicPhysicalRig.cs";
     private static NodePath ExpectedPlayerPhysicalRigPath => new("../Female/GeneralSkeleton/DynamicPhysicalRig");
     private static NodePath ExpectedFemaleReferenceNPCPhysicalRigPath => new("../Female/GeneralSkeleton/DynamicPhysicalRig");
 
@@ -1947,7 +1948,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         skeleton.SetBoneRest(headBoneIndex, new Transform3D(Basis.Identity, new Vector3(0.0f, 1.55f, 0.0f)));
         skeleton.SetBonePosePosition(headBoneIndex, new Vector3(0.0f, -0.15f, 0.0f));
 
-        AlleyCat.Body.DynamicPhysicalRig physicalRig = new()
+        DynamicPhysicalRig physicalRig = new()
         {
             Name = "DynamicPhysicalRig",
             Enabled = false,
@@ -2260,7 +2261,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         skeleton.SetBoneRest(rightFootBoneIndex, new Transform3D(Basis.Identity, new Vector3(0.15f, 0.05f, 0.02f)));
         skeleton.SetBonePosePosition(rightFootBoneIndex, new Vector3(0.05f, 0.02f, 0.01f));
 
-        AlleyCat.Body.DynamicPhysicalRig physicalRig = new()
+        DynamicPhysicalRig physicalRig = new()
         {
             Name = "DynamicPhysicalRig",
             Enabled = false,

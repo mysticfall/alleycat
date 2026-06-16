@@ -1,5 +1,5 @@
-using AlleyCat.Character.Installer;
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Installation;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -141,25 +141,25 @@ public sealed class TemplateSceneInstallationIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterRoleTemplateSceneInstaller_ChildInstaller_ConsumesTemplateContext()
+    public void RigRoleTemplateSceneInstaller_ChildInstaller_ConsumesTemplateContext()
     {
         using var target = new Node { Name = "Target" };
         target.AddChild(new Skeleton3D { Name = "CharacterSkeleton" });
         using PackedScene template = CreateTemplate();
-        using var visualInstaller = new CharacterTemplateSubtreeInstaller
+        using var visualInstaller = new RigTemplateSubtreeInstaller
         {
             Name = "VisualRootInstaller",
             InstallMode = TemplateInstallMode.SelectedNode,
             SourcePath = new NodePath("VisualRoot"),
         };
-        using var childInstaller = new CharacterTemplateSubtreeInstaller
+        using var childInstaller = new RigTemplateSubtreeInstaller
         {
             Name = "ChildModuleInstaller",
             InstallMode = TemplateInstallMode.SelectedNode,
             SourcePath = new NodePath("Modules/ModuleB"),
             TargetParentPath = new NodePath("VisualRoot"),
         };
-        using var roleInstaller = new CharacterRoleTemplateSceneInstaller
+        using var roleInstaller = new RigRoleTemplateSceneInstaller
         {
             Name = "RoleTemplateInstaller",
             Template = template,

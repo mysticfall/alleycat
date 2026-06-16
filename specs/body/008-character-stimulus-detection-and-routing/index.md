@@ -46,6 +46,9 @@ future work.
 
 ## Technical Requirements
 
+Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalInteractionReceipt` remains in
+`AlleyCat.Body`.
+
 1. Shared interaction API source files shall live under `game/src/Interaction/Physical/` and use the
    `AlleyCat.Interaction.Physical` namespace. Shared reusable metadata-tag contracts shall live under
    `game/src/Common/` and use `AlleyCat.Common`.
@@ -153,8 +156,8 @@ future work.
 
 - [BODY-002: Character Physical Response System](../002-character-physical-response/index.md)
 - [BODY-005: IK Target Pipeline Foundation](../005-ik-target-pipeline-foundation/index.md)
-- [DynamicPhysicalRig Implementation](../../../game/src/Body/DynamicPhysicalRig.cs)
-- [PhysicalBodyPart3D Implementation](../../../game/src/Body/PhysicalBodyPart3D.cs)
+- [DynamicPhysicalRig Implementation](../../../game/src/Rigging/Physics/DynamicPhysicalRig.cs)
+- [PhysicalBodyPart3D Implementation](../../../game/src/Rigging/Physics/PhysicalBodyPart3D.cs)
 - [IPhysicalInteractionSource Implementation](../../../game/src/Interaction/Physical/IPhysicalInteractionSource.cs)
 - [IPhysicalInteractionReceiver Implementation](../../../game/src/Interaction/Physical/IPhysicalInteractionReceiver.cs)
 - [HandDynamicBodyInteractionController](../../../game/src/IK/HandDynamicBodyInteractionController.cs)

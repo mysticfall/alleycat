@@ -1,18 +1,18 @@
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
-using AlleyCat.Character.Installer;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Installation;
 using Godot;
 
-namespace AlleyCat.Character.Runtime;
+namespace AlleyCat.Character;
 
 /// <summary>
 /// Validates and activates shared humanoid runtime components copied from the role template.
 /// </summary>
 [Tool]
 [GlobalClass]
-public partial class CharacterRuntimeSubsystemInstaller : CharacterSubsystemInstaller
+public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 {
     private static readonly StringName _eyesLibraryName = new("eyes");
     private static readonly StringName[] _requiredEyeAnimationNames =
@@ -39,13 +39,13 @@ public partial class CharacterRuntimeSubsystemInstaller : CharacterSubsystemInst
     };
 
     /// <inheritdoc />
-    public override SceneInstallationResult Install(CharacterInstallationContext context)
+    public override SceneInstallationResult Install(RigInstallationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         try
         {
-            CharacterTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);
+            RigTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);
 
             AnimationTree animationTree = FindSingleDescendant<AnimationTree>(context.TargetRoot)
                 ?? throw new InvalidOperationException("Character runtime subsystem installer requires an authored AnimationTree copied from the role template.");

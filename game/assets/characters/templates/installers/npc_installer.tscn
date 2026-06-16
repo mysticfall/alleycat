@@ -1,14 +1,14 @@
 [gd_scene format=3 uid="uid://dxao507r2dgb2"]
 
-[ext_resource type="Script" uid="uid://cnc3kfkhjn7qf" path="res://src/Character/Installer/CharacterRoleTemplateSceneInstaller.cs" id="1_role"]
+[ext_resource type="Script" uid="uid://cnc3kfkhjn7qf" path="res://src/Rigging/Installation/RigRoleTemplateSceneInstaller.cs" id="1_role"]
 [ext_resource type="PackedScene" uid="uid://bibq37gjbxvhn" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="2_template"]
-[ext_resource type="Script" uid="uid://31cfhn1u2aw1" path="res://src/Body/BodyPartsInstaller.cs" id="3_body"]
-[ext_resource type="Script" uid="uid://btv3tfkqsrnpy" path="res://src/Body/DynamicPhysicalRigTemplateInstaller.cs" id="4_rig"]
+[ext_resource type="Script" uid="uid://31cfhn1u2aw1" path="res://src/Rigging/Physics/BodyPartsInstaller.cs" id="3_body"]
+[ext_resource type="Script" uid="uid://btv3tfkqsrnpy" path="res://src/Rigging/Physics/DynamicPhysicalRigTemplateInstaller.cs" id="4_rig"]
 [ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="5_profile"]
-[ext_resource type="Script" uid="uid://b1tn7xw1iaug7" path="res://src/Character/Runtime/CharacterRuntimeSubsystemInstaller.cs" id="7_runtime"]
-[ext_resource type="Script" uid="uid://b6purqid0hate" path="res://src/Character/Installer/CharacterTemplateSubtreeInstaller.cs" id="8_ayxlm"]
+[ext_resource type="Script" uid="uid://b1tn7xw1iaug7" path="res://src/Character/CharacterRuntimeSubsystemInstaller.cs" id="7_runtime"]
+[ext_resource type="Script" uid="uid://b6purqid0hate" path="res://src/Rigging/Installation/RigTemplateSubtreeInstaller.cs" id="8_ayxlm"]
 [ext_resource type="Script" uid="uid://dvp6p78xyaa28" path="res://src/IK/CharacterIKSubsystemInstaller.cs" id="8_iksubsys"]
-[ext_resource type="Script" uid="uid://dfuyjv41fcmsi" path="res://src/Character/Installer/CharacterTemplateSkeletonSubtreeInstaller.cs" id="10_skeleton"]
+[ext_resource type="Script" uid="uid://dfuyjv41fcmsi" path="res://src/Rigging/Installation/RigTemplateSkeletonSubtreeInstaller.cs" id="10_skeleton"]
 
 [node name="NPCCharacterInstaller" type="Node" unique_id=532609475 node_paths=PackedStringArray("Installers")]
 script = ExtResource("1_role")

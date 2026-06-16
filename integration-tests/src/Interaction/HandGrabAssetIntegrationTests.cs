@@ -4,6 +4,7 @@ using AlleyCat.Body;
 using AlleyCat.Body.Hands;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Interaction;
+using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;

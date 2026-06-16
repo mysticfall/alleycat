@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="BodyColliderProfile" format=3 uid="uid://dpisik0mj8f6a"]
 
 [ext_resource type="PackedScene" uid="uid://dcm8wf2r1xlx5" path="res://assets/characters/reference/female/reference_female_colliders.tscn" id="1_lhlib"]
-[ext_resource type="Script" uid="uid://b8s5do8qyysss" path="res://src/Body/BodyColliderProfile.cs" id="2_xmhmt"]
+[ext_resource type="Script" uid="uid://b8s5do8qyysss" path="res://src/Rigging/Physics/BodyColliderProfile.cs" id="2_xmhmt"]
 
 [resource]
 script = ExtResource("2_xmhmt")

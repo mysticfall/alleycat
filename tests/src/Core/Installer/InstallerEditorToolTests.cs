@@ -1,7 +1,7 @@
 using System.Reflection;
-using AlleyCat.Body;
-using AlleyCat.Character.Installer;
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Installation;
+using AlleyCat.Rigging.Physics;
 using Godot;
 using Xunit;
 
@@ -21,8 +21,8 @@ public sealed class InstallerEditorToolTests
         Type[] installerTypes =
         [
             typeof(SceneInstaller),
-            typeof(CharacterRoleTemplateSceneInstaller),
-            typeof(CharacterTemplateSubtreeInstaller),
+            typeof(RigRoleTemplateSceneInstaller),
+            typeof(RigTemplateSubtreeInstaller),
             typeof(DynamicPhysicalRigTemplateInstaller),
         ];
 
@@ -55,20 +55,20 @@ public sealed class InstallerEditorToolTests
     public void InstallerInterfaces_ExposeTypedContextPathForTemplateAndCharacterInstallers()
     {
         Assert.Contains(
-            typeof(ISceneInstaller<CharacterInstallationContext>),
-            typeof(CharacterSceneInstaller).GetInterfaces());
-        Assert.True(typeof(CharacterInstallationContext).IsSubclassOf(typeof(TemplateSceneInstallationContext)));
+            typeof(ISceneInstaller<RigInstallationContext>),
+            typeof(RigSceneInstaller).GetInterfaces());
+        Assert.True(typeof(RigInstallationContext).IsSubclassOf(typeof(TemplateSceneInstallationContext)));
         Assert.NotNull(typeof(TemplateSceneInstallationContext).GetProperty(nameof(TemplateSceneInstallationContext.TemplateRoot)));
-        Assert.NotNull(typeof(CharacterInstallationContext).GetProperty(nameof(CharacterInstallationContext.Skeleton)));
+        Assert.NotNull(typeof(RigInstallationContext).GetProperty(nameof(RigInstallationContext.Skeleton)));
     }
 
     /// <summary>
     /// Automatic runtime installation is kept on root/coordinator installers instead of duplicated by child subsystem bases.
     /// </summary>
     [Fact]
-    public void AutoInstallOnReady_IsNotDuplicatedByCharacterSubsystemInstallers()
+    public void AutoInstallOnReady_IsNotDuplicatedByRigSubsystemInstallers()
     {
-        Assert.Null(typeof(CharacterSubsystemInstaller).GetProperty("AutoInstallOnReady"));
-        Assert.NotNull(typeof(CharacterRoleTemplateSceneInstaller).GetProperty("AutoInstallOnReady"));
+        Assert.Null(typeof(RigSubsystemInstaller).GetProperty("AutoInstallOnReady"));
+        Assert.NotNull(typeof(RigRoleTemplateSceneInstaller).GetProperty("AutoInstallOnReady"));
     }
 }

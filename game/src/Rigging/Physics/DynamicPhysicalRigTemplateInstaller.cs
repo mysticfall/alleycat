@@ -1,15 +1,15 @@
-using AlleyCat.Character.Installer;
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Installation;
 using Godot;
 
-namespace AlleyCat.Body;
+namespace AlleyCat.Rigging.Physics;
 
 /// <summary>
 /// Installs a visible dynamic physical rig template under the resolved skeleton and applies reference-specific rig configuration.
 /// </summary>
 [Tool]
 [GlobalClass]
-public partial class DynamicPhysicalRigTemplateInstaller : CharacterTemplateSubtreeInstaller
+public partial class DynamicPhysicalRigTemplateInstaller : RigTemplateSubtreeInstaller
 {
     /// <summary>
     /// Creates an installer that consumes the root-resolved skeleton context by default.
@@ -43,7 +43,7 @@ public partial class DynamicPhysicalRigTemplateInstaller : CharacterTemplateSubt
     public bool Enabled { get; set; } = true;
 
     /// <inheritdoc />
-    public override SceneInstallationResult Install(CharacterInstallationContext context)
+    public override SceneInstallationResult Install(RigInstallationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -94,7 +94,7 @@ public partial class DynamicPhysicalRigTemplateInstaller : CharacterTemplateSubt
     }
 
     /// <inheritdoc />
-    protected override NodePath ResolveSourcePath(CharacterInstallationContext context)
+    protected override NodePath ResolveSourcePath(RigInstallationContext context)
     {
         if (!string.IsNullOrWhiteSpace(SourcePath.ToString()))
         {
