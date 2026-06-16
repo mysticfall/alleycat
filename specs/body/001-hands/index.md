@@ -71,7 +71,8 @@ Provide a reusable hand component system that:
 
 ## Technical Requirements
 
-1. Define `LimbSide` enum in `AlleyCat.Body` (`Left = 0`, `Right = 1`).
+1. Use the shared `AlleyCat.Rigging.LimbSide` enum from `game/src/Rigging/LimbSide.cs`
+   (`Left = 0`, `Right = 1`).
 2. Define `IHand : IComponent` capability interface in `AlleyCat.Body.Hands`:
    - `Side: LimbSide` — identifies the hand side.
    - `CurrentGrabbed: IGrabbable?` — currently held object, null if none.
@@ -152,7 +153,7 @@ Provide a reusable hand component system that:
 
 ## In Scope
 
-- `LimbSide` enum in `AlleyCat.Body`.
+- Shared `AlleyCat.Rigging.LimbSide` enum from `game/src/Rigging/LimbSide.cs`.
 - `IHand` component capability interface including grab/release methods.
 - `IHasHands` holder trait with `TryGetHand` and `RequireHand` methods.
 - `HandPoseBehaviour` Godot node facade exposing the hand-pose API.
@@ -184,8 +185,8 @@ Provide a reusable hand component system that:
 
 | ID | Requirement Layer | Criterion |
 |----|-------------------|-----------|
-| 1  | Technical         | `LimbSide` enum is defined in `AlleyCat.Body` with `Left = 0`, |
-|    |                   | `Right = 1`. |
+| 1  | Technical         | `LimbSide` enum is defined in `AlleyCat.Rigging` with `Left = 0`, |
+|    |                   | `Right = 1`; Body and IK namespaces do not define replacement enums. |
 | 2  | Technical         | `IHand : IComponent` interface defines `Side`, `CurrentGrabbed`, |
 |    |                   | `Grab()`, and `Release()`; it does not expose `Pose`, |
 |    |                   | `PoseWeight`, `CurrentPose`, `SetPose`, or `ClearPose`. |
@@ -254,7 +255,7 @@ Provide a reusable hand component system that:
 - [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
 - [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md)
 - [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
-- `game/src/Body/LimbSide.cs`
+- `game/src/Rigging/LimbSide.cs`
 - `game/src/Body/Hands/IHand.cs`
 - `game/src/Body/Hands/IHasHands.cs`
 - `game/src/Body/Hands/HandPoseBehaviour.cs`

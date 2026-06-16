@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Reflection;
-using AlleyCat.Body;
 using AlleyCat.Body.Hands;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Interaction;
+using AlleyCat.Rigging;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
 using Godot;

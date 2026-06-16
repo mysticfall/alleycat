@@ -1,7 +1,7 @@
-using AlleyCat.Body;
 using AlleyCat.Body.Hands;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
+using AlleyCat.Rigging;
 using Godot;
 using Xunit;
 

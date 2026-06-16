@@ -1,3 +1,4 @@
+using AlleyCat.Rigging;
 using Godot;
 
 namespace AlleyCat.IK.Anchors.Authoring;

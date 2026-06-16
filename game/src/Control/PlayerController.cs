@@ -1,6 +1,6 @@
-using AlleyCat.Body;
 using AlleyCat.Body.Hands;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Rigging;
 using AlleyCat.XR;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;

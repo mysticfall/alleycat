@@ -1,3 +1,4 @@
+using AlleyCat.Rigging;
 using AlleyCat.XR;
 using Godot;
 

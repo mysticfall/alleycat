@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using AlleyCat.Rigging;
 using Godot;
 
 namespace AlleyCat.Body.Hands;

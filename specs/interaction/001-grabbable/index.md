@@ -75,8 +75,8 @@ Provide a reusable grabbable interface that:
    by the holder and the object state is unchanged, and completes or
    rejects gracefully.
 8. Configurable reach distance and angle thresholds per grab-point component.
-9. Define `LimbSide` enum in `AlleyCat.Body` (`Left = 0`, `Right = 1`),
-   unifying existing hand-side representations.
+9. Use the shared `AlleyCat.Rigging.LimbSide` enum from `game/src/Rigging/LimbSide.cs`
+   (`Left = 0`, `Right = 1`), unifying hand-side representations.
 10. Multiple grab-point components per holder are supported; query order is
     deterministic as defined by the holder. This deterministic order only acts
     as a tie-breaker when two or more eligible candidates are equally close.
@@ -156,7 +156,8 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 |    |                   | returning `null` when no component yields an eligible pose. |
 | 6  | Technical         | `Grab` validates source component is still |
 |    |                   | owned and object state unchanged. |
-| 7  | Technical         | `LimbSide` enum exists in `AlleyCat.Body`. |
+| 7  | Technical         | `LimbSide` enum exists in `AlleyCat.Rigging` with `Left = 0`, |
+|    |                   | `Right = 1`; Body and IK namespaces do not define replacement enums. |
 | 8  | Technical         | Multiple grab-point components per holder are |
 |    |                   | all queried, with the closest eligible candidate selected. |
 | 9  | Technical         | Equal-distance eligible candidates keep holder |
@@ -180,7 +181,7 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [IK-002: Arm And Shoulder IK System](../../ik/002-arm-shoulder-ik/index.md)
 - [IK-003: Leg And Feet IK System](../../ik/003-leg-feet-ik/index.md)
-- `game/src/Body/LimbSide.cs`
+- `game/src/Rigging/LimbSide.cs`
 - `game/src/Interaction/IGrabbable.cs`
 - `game/src/Interaction/IGrabPoint.cs`
 - `game/src/Interaction/GrabPointCandidate.cs`

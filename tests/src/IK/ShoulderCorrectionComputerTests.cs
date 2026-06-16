@@ -1,4 +1,5 @@
 using AlleyCat.IK;
+using AlleyCat.Rigging;
 using Godot;
 using Xunit;
 

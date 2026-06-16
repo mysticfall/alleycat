@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using AlleyCat.Rigging;
 using Godot;
 
 namespace AlleyCat.IK.Anchors;

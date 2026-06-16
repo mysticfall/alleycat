@@ -1,6 +1,6 @@
-using AlleyCat.Body;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Interaction;
+using AlleyCat.Rigging;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;

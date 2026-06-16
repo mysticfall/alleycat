@@ -1,4 +1,5 @@
 using AlleyCat.IK.Anchors;
+using AlleyCat.Rigging;
 using Godot;
 
 namespace AlleyCat.IK;

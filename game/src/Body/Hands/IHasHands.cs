@@ -1,5 +1,7 @@
 using AlleyCat.Core;
 
+using AlleyCat.Rigging;
+
 namespace AlleyCat.Body.Hands;
 
 /// <summary>

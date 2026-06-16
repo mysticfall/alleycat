@@ -1,5 +1,5 @@
-using AlleyCat.Body;
 using AlleyCat.Body.Hands;
+using AlleyCat.Rigging;
 using Xunit;
 
 namespace AlleyCat.Tests.Body.Hands;

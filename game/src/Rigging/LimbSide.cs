@@ -1,4 +1,4 @@
-namespace AlleyCat.Body;
+namespace AlleyCat.Rigging;
 
 /// <summary>
 /// Identifies the left or right side of a paired limb.

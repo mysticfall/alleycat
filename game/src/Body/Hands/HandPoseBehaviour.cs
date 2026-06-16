@@ -1,5 +1,6 @@
 using AlleyCat.IK;
 using AlleyCat.Interaction;
+using AlleyCat.Rigging;
 using AlleyCat.Rigging.Physics;
 using Godot;
 

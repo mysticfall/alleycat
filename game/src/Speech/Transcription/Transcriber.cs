@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using AlleyCat.Body;
 using AlleyCat.Diagnostics;
+using AlleyCat.Rigging;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;

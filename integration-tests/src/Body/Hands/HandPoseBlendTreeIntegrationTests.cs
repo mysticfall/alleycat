@@ -1,7 +1,7 @@
-using AlleyCat.Body;
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Rigging;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;

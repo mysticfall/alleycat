@@ -1,6 +1,8 @@
 using AlleyCat.Core;
 using AlleyCat.Interaction;
 
+using AlleyCat.Rigging;
+
 namespace AlleyCat.Body.Hands;
 
 /// <summary>

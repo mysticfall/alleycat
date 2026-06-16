@@ -1,8 +1,8 @@
 using AlleyCat.Body.Hands;
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
 using Godot;
-using BodyLimbSide = AlleyCat.Body.LimbSide;
 
 namespace AlleyCat.IK;
 
@@ -156,10 +156,10 @@ public partial class CharacterIKSubsystemInstaller : RigSubsystemInstaller
         {
             switch (hand.Side)
             {
-                case BodyLimbSide.Right:
+                case LimbSide.Right:
                     hand.GrabTargetProvider = ik.RightHandIKTargetIntentProvider as HandGrabTargetProvider;
                     break;
-                case BodyLimbSide.Left:
+                case LimbSide.Left:
                     hand.GrabTargetProvider = ik.LeftHandIKTargetIntentProvider as HandGrabTargetProvider;
                     break;
                 default:

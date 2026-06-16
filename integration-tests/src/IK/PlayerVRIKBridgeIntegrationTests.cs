@@ -1,6 +1,7 @@
 using System.Reflection;
 using AlleyCat.IK;
 using AlleyCat.IK.Pose;
+using AlleyCat.Rigging;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
 using Godot;
