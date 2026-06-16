@@ -45,12 +45,12 @@ public sealed class MirrorRoomIntegrationTests
 
     private static readonly string[] _expectedAllyLipSyncMeshPaths =
     [
-        "../../Female/Female/GeneralSkeleton/Female_body",
-        "../../Female/Female/GeneralSkeleton/Female_eyebrow006",
-        "../../Female/Female/GeneralSkeleton/Female_eyelashes01",
-        "../../Female/Female/GeneralSkeleton/Female_high-poly",
-        "../../Female/Female/GeneralSkeleton/Female_teeth_shape01",
-        "../../Female/Female/GeneralSkeleton/Female_tongue01",
+        "../../Female/GeneralSkeleton/Female_body",
+        "../../Female/GeneralSkeleton/Female_eyebrow006",
+        "../../Female/GeneralSkeleton/Female_eyelashes01",
+        "../../Female/GeneralSkeleton/Female_high-poly",
+        "../../Female/GeneralSkeleton/Female_teeth_shape01",
+        "../../Female/GeneralSkeleton/Female_tongue01",
     ];
 
     /// <summary>

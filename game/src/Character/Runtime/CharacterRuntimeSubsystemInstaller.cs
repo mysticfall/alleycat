@@ -14,7 +14,29 @@ namespace AlleyCat.Character.Runtime;
 [GlobalClass]
 public partial class CharacterRuntimeSubsystemInstaller : CharacterSubsystemInstaller
 {
-    private const string EyeAnimationLibraryPath = "res://assets/characters/reference/female/animations/eyes/eyes.tres";
+    private static readonly StringName _eyesLibraryName = new("eyes");
+    private static readonly StringName[] _requiredEyeAnimationNames =
+    [
+        new(EyesAnimationTreePaths.BlinkAnimationName),
+        new(EyesAnimationTreePaths.HorizontalLookAnimationName),
+        new(EyesAnimationTreePaths.VerticalLookAnimationName),
+    ];
+
+    private static readonly IReadOnlySet<string> _horizontalLookBlendShapeNames = new HashSet<string>(StringComparer.Ordinal)
+    {
+        EyesAnimationTreePaths.EyeLookInRightBlendShapeName,
+        EyesAnimationTreePaths.EyeLookInLeftBlendShapeName,
+        EyesAnimationTreePaths.EyeLookOutRightBlendShapeName,
+        EyesAnimationTreePaths.EyeLookOutLeftBlendShapeName,
+    };
+
+    private static readonly IReadOnlySet<string> _verticalLookBlendShapeNames = new HashSet<string>(StringComparer.Ordinal)
+    {
+        EyesAnimationTreePaths.EyeLookUpRightBlendShapeName,
+        EyesAnimationTreePaths.EyeLookUpLeftBlendShapeName,
+        EyesAnimationTreePaths.EyeLookDownRightBlendShapeName,
+        EyesAnimationTreePaths.EyeLookDownLeftBlendShapeName,
+    };
 
     /// <inheritdoc />
     public override SceneInstallationResult Install(CharacterInstallationContext context)
@@ -31,7 +53,7 @@ public partial class CharacterRuntimeSubsystemInstaller : CharacterSubsystemInst
                 ?? throw new InvalidOperationException("Character runtime subsystem installer requires an authored AnimationPlayer copied from the role template.");
 
             RebaseAnimationMixerRoots(animationTree, animationPlayer, context.Skeleton);
-            EnsureEyeAnimationLibrary(animationPlayer);
+            ValidateEyeAnimationLibrary(animationPlayer);
             ValidateEyes(context.TargetRoot);
             ValidateHands(context.TargetRoot);
             ValidateLocomotion(context.TargetRoot);
@@ -54,23 +76,133 @@ public partial class CharacterRuntimeSubsystemInstaller : CharacterSubsystemInst
         animationPlayer.RootNode = animationPlayer.GetPathTo(modelRoot);
     }
 
-    private static void EnsureEyeAnimationLibrary(AnimationPlayer animationPlayer)
+    private static void ValidateEyeAnimationLibrary(AnimationPlayer animationPlayer)
     {
-        StringName libraryName = new("eyes");
-        if (animationPlayer.HasAnimationLibrary(libraryName))
-        {
-            return;
-        }
-
-        AnimationLibrary eyeLibrary = ResourceLoader.Load<AnimationLibrary>(EyeAnimationLibraryPath)
-            ?? throw new InvalidOperationException(
-                $"Character runtime subsystem installer could not load eye animation library '{EyeAnimationLibraryPath}'.");
-        Error result = animationPlayer.AddAnimationLibrary(libraryName, eyeLibrary);
-        if (result != Error.Ok)
+        if (!animationPlayer.HasAnimationLibrary(_eyesLibraryName))
         {
             throw new InvalidOperationException(
-                $"Character runtime subsystem installer could not add eye animation library '{EyeAnimationLibraryPath}' to '{animationPlayer.GetPath()}': {result}.");
+                $"Character runtime subsystem installer requires imported AnimationLibrary '{_eyesLibraryName}' on '{animationPlayer.GetPath()}'. Reimport the character source with the eye animation import script configured.");
         }
+
+        foreach (StringName animationName in _requiredEyeAnimationNames)
+        {
+            if (!animationPlayer.HasAnimation(animationName))
+            {
+                throw new InvalidOperationException(
+                    $"Character runtime subsystem installer requires imported eye animation '{animationName}' on '{animationPlayer.GetPath()}'. Reimport the character source with the eye animation import script configured.");
+            }
+
+            Animation animation = animationPlayer.GetAnimation(animationName);
+            HashSet<string> blendShapeNames = ValidateBlendShapeTrackTargets(animationPlayer, animationName, animation);
+            ValidateRequiredEyeAnimationTracks(animationName, blendShapeNames);
+        }
+    }
+
+    private static HashSet<string> ValidateBlendShapeTrackTargets(AnimationPlayer animationPlayer, StringName animationName, Animation animation)
+    {
+        Node rootNode = animationPlayer.GetNodeOrNull(animationPlayer.RootNode)
+            ?? throw new InvalidOperationException(
+                $"Character runtime subsystem installer could not resolve AnimationPlayer root '{animationPlayer.RootNode}' for '{animationPlayer.GetPath()}'.");
+
+        HashSet<string> blendShapeNames = new(StringComparer.Ordinal);
+
+        for (int trackIndex = 0; trackIndex < animation.GetTrackCount(); trackIndex++)
+        {
+            if (animation.TrackGetType(trackIndex) != Animation.TrackType.BlendShape)
+            {
+                throw new InvalidOperationException(
+                    $"Character runtime subsystem installer requires imported eye animation '{animationName}' to contain only blend-shape tracks, but track {trackIndex} is '{animation.TrackGetType(trackIndex)}'.");
+            }
+
+            string trackPath = animation.TrackGetPath(trackIndex).ToString();
+            int subnameSeparator = trackPath.IndexOf(':', StringComparison.Ordinal);
+            if (subnameSeparator <= 0 || subnameSeparator == trackPath.Length - 1)
+            {
+                throw new InvalidOperationException(
+                    $"Character runtime subsystem installer requires blend-shape track '{animationName}'[{trackIndex}] to target '<mesh>:<blend_shape>', but found '{trackPath}'.");
+            }
+
+            string meshPath = trackPath[..subnameSeparator];
+            string blendShapeName = trackPath[(subnameSeparator + 1)..];
+            MeshInstance3D meshInstance = rootNode.GetNodeOrNull<MeshInstance3D>(new NodePath(meshPath))
+                ?? throw new InvalidOperationException(
+                    $"Character runtime subsystem installer could not resolve eye animation track '{animationName}'[{trackIndex}] mesh '{meshPath}' from root '{rootNode.GetPath()}'.");
+
+            if (!MeshHasBlendShape(meshInstance, blendShapeName))
+            {
+                throw new InvalidOperationException(
+                    $"Character runtime subsystem installer could not resolve eye animation track '{animationName}'[{trackIndex}] blend shape '{blendShapeName}' on mesh '{meshInstance.GetPath()}'.");
+            }
+
+            _ = blendShapeNames.Add(blendShapeName);
+        }
+
+        return blendShapeNames.Count == 0
+            ? throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires imported eye animation '{animationName}' to contain at least one blend-shape track.")
+            : blendShapeNames;
+    }
+
+    private static void ValidateRequiredEyeAnimationTracks(StringName animationName, IReadOnlySet<string> blendShapeNames)
+    {
+        string animationNameString = animationName.ToString();
+        switch (animationNameString)
+        {
+            case EyesAnimationTreePaths.BlinkAnimationName:
+                RequireBlendShape(animationName, blendShapeNames, EyesAnimationTreePaths.EyeBlinkLeftBlendShapeName);
+                RequireBlendShape(animationName, blendShapeNames, EyesAnimationTreePaths.EyeBlinkRightBlendShapeName);
+                break;
+            case EyesAnimationTreePaths.HorizontalLookAnimationName:
+                RequireAnyBlendShape(animationName, blendShapeNames, _horizontalLookBlendShapeNames, "horizontal look");
+                break;
+            case EyesAnimationTreePaths.VerticalLookAnimationName:
+                RequireAnyBlendShape(animationName, blendShapeNames, _verticalLookBlendShapeNames, "vertical look");
+                break;
+            default:
+                break;
+        }
+    }
+
+    private static void RequireBlendShape(StringName animationName, IReadOnlySet<string> blendShapeNames, string requiredBlendShapeName)
+    {
+        if (!blendShapeNames.Contains(requiredBlendShapeName))
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires imported eye animation '{animationName}' to include blend-shape track target '{requiredBlendShapeName}'.");
+        }
+    }
+
+    private static void RequireAnyBlendShape(
+        StringName animationName,
+        IReadOnlySet<string> blendShapeNames,
+        IReadOnlySet<string> allowedBlendShapeNames,
+        string description)
+    {
+        // The runtime only needs at least one axis-specific look target to keep partial one-eye rigs valid,
+        // but rejecting unrelated eye tracks catches importer/library mismatches before the AnimationTree silently stalls.
+        if (!blendShapeNames.Any(allowedBlendShapeNames.Contains))
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires imported eye animation '{animationName}' to include at least one {description} blend-shape track target.");
+        }
+    }
+
+    private static bool MeshHasBlendShape(MeshInstance3D meshInstance, string blendShapeName)
+    {
+        if (meshInstance.Mesh is not ArrayMesh mesh)
+        {
+            return false;
+        }
+
+        for (int blendShapeIndex = 0; blendShapeIndex < mesh.GetBlendShapeCount(); blendShapeIndex++)
+        {
+            if (string.Equals(mesh.GetBlendShapeName(blendShapeIndex).ToString(), blendShapeName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void ValidateEyes(Node targetRoot)
