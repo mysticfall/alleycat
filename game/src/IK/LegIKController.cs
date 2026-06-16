@@ -11,6 +11,8 @@ namespace AlleyCat.IK;
 public partial class LegIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-6f;
+    private const float AmbiguousPlanePreferenceThreshold = 0.02f;
+    private const float AmbiguousPlaneOrientationBias = 0.8f;
 
     /// <summary>
     /// The foot IK goal consumed by downstream solvers.
@@ -117,6 +119,12 @@ public partial class LegIKController : SkeletonModifier3D
             return;
         }
 
+        Vector3 legDirection = desiredFootPosition - upperLegPosition;
+        if (TryNormalise(legDirection, out Vector3 normalisedLegDirection))
+        {
+            poleDirection = ResolveAmbiguousPolePlane(poleDirection, normalisedLegDirection);
+        }
+
         float currentLegLength = (o1 - upperLegPosition).Length() * 2.0f;
         float ratioBasedOffset = currentLegLength * PoleOffsetRatio;
         float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
@@ -126,6 +134,42 @@ public partial class LegIKController : SkeletonModifier3D
         offset = Mathf.Max(offset, floorOffset);
 
         PoleTarget.GlobalPosition = o2 + (poleDirection * offset);
+    }
+
+    private Vector3 ResolveAmbiguousPolePlane(Vector3 poleDirection, Vector3 legDirection)
+    {
+        Basis footBasis = FootTarget!.GlobalTransform.Basis.Orthonormalized();
+        Vector3 footForward = footBasis.Column2;
+        Vector3 footUp = footBasis.Column1;
+        Vector3 skeletonUp = _skeleton!.GlobalTransform.Basis.Orthonormalized().Column1.Normalized();
+
+        if (footUp.Dot(-skeletonUp) < 0.9f)
+        {
+            return poleDirection;
+        }
+
+        if (!TryProjectAndNormalise(footForward, legDirection, out Vector3 forwardProjected)
+            || !TryProjectAndNormalise(footUp, legDirection, out Vector3 upProjected))
+        {
+            return poleDirection;
+        }
+
+        float planePreference = Mathf.Abs(poleDirection.Dot(forwardProjected))
+            - Mathf.Abs(poleDirection.Dot(upProjected));
+
+        if (planePreference >= AmbiguousPlanePreferenceThreshold)
+        {
+            return poleDirection;
+        }
+
+        Vector3 biasedForward = forwardProjected.Dot(poleDirection) < 0.0f
+            ? -forwardProjected
+            : forwardProjected;
+        Vector3 biasedDirection = poleDirection.Lerp(biasedForward, AmbiguousPlaneOrientationBias);
+
+        return TryNormalise(biasedDirection, out Vector3 normalisedBiasedDirection)
+            ? normalisedBiasedDirection
+            : poleDirection;
     }
 
     private bool TryResolveBones()
@@ -174,6 +218,20 @@ public partial class LegIKController : SkeletonModifier3D
         }
 
         normalised = value.Normalized();
+        return true;
+    }
+
+    private static bool TryProjectAndNormalise(Vector3 value, Vector3 normal, out Vector3 projected)
+    {
+        projected = value - (value.Dot(normal) * normal);
+
+        if (projected.LengthSquared() <= DegenerateThreshold)
+        {
+            projected = Vector3.Zero;
+            return false;
+        }
+
+        projected = projected.Normalized();
         return true;
     }
 }
