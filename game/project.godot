@@ -11,19 +11,19 @@ config_version=5
 [application]
 
 config/name="AlleyCat"
-run/main_scene="uid://c032bhk77f3xx"
+run/main_scene="res://assets/scenes/empty.tscn"
 config/features=PackedStringArray("4.6", "C#", "Forward Plus")
 boot_splash/show_image=false
-config/icon="uid://pxfkxvp2stfj"
+config/icon="res://icon.png"
 
 [audio]
 
-buses/default_bus_layout="uid://db1tdailluj7o"
+buses/default_bus_layout="res://default_bus_layout.tres"
 driver/enable_input=true
 
 [autoload]
 
-Global="*uid://bkrvnimi5hm7a"
+Global="*res://assets/scenes/global.tscn"
 TestRuntimeRunner="*res://src/Testing/TestRuntimeRunner.cs"
 
 [display]
@@ -46,7 +46,7 @@ Player="The player actor."
 
 [gui]
 
-theme/custom="uid://do64jkako8k5e"
+theme/custom="res://assets/ui/themes/default.tres"
 
 [layer_names]
 

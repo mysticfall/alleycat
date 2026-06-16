@@ -22,7 +22,7 @@ Keep both layers explicit and separate.
 Specifications should supplement the code, not mirror it. Capture design purpose, intent, constraints, and context
 that are not immediately obvious from reading the implementation or interface alone.
 
-Default starting point: `@specs/templates/feature-spec-template.md`.
+Default starting point: `@specs/template/feature-spec-template.md`.
 
 ## Required Specification Shape
 

@@ -223,5 +223,5 @@ Provide a contract for composing scene setup logic through modular installers. T
 - `@game/src/Core/Installer/` — Installer system types
 - `@game/src/Core/Installer/TemplateSceneReferenceRebaser.cs` — Template-root to target-root reference rebasing
 - [CORE-003: Component/Trait System](../003-component-system/index.md) — Potential component-holder integration
-- [CHAR-000: Character Skeleton Profile](../../characters/000-character-skeleton/index.md)
+- [CHAR-001: Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - [Character Generator](../../tooling/character-generator/index.md)

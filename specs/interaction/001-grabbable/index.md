@@ -178,8 +178,8 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 - [Project Specifications Index](../../index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
-- [IK-002: Arm And Shoulder IK System](../../characters/ik/002-arm-shoulder-ik/index.md)
-- [IK-003: Leg And Feet IK System](../../characters/ik/003-leg-feet-ik/index.md)
+- [IK-002: Arm And Shoulder IK System](../../ik/002-arm-shoulder-ik/index.md)
+- [IK-003: Leg And Feet IK System](../../ik/003-leg-feet-ik/index.md)
 - `game/src/Body/LimbSide.cs`
 - `game/src/Interaction/IGrabbable.cs`
 - `game/src/Interaction/IGrabPoint.cs`

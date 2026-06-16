@@ -247,13 +247,13 @@ Provide a reusable hand component system that:
 
 - [Project Specifications Index](../../index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
-- [IK-002: Arm And Shoulder IK System](../../characters/ik/002-arm-shoulder-ik/index.md)
-- [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../characters/ik/004-vrik-pose-state-machine/index.md)
+- [IK-002: Arm And Shoulder IK System](../../ik/002-arm-shoulder-ik/index.md)
+- [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../ik/004-vrik-pose-state-machine/index.md)
 - [INTR-001: Grabbable Interface](../../interaction/001-grabbable/index.md)
 - [INTR-001-A: Spherical Grab Point](../../interaction/001-grabbable/spherical-grab-point.md)
 - [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
-- [CTRL-002: Hand Grab Input](../../characters/ctrl/002-hand-grab-input/index.md)
-- [Character Skeleton Profile](../../characters/000-character-skeleton/index.md)
+- [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md)
+- [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/src/Body/LimbSide.cs`
 - `game/src/Body/Hands/IHand.cs`
 - `game/src/Body/Hands/IHasHands.cs`

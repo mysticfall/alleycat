@@ -134,7 +134,7 @@ Provide a reusable eye component system that:
 - [BODY-001: Hands](../001-hands/index.md)
 - [BODY-002: Character Physical Response System](../002-character-physical-response/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
-- [Character Skeleton Profile](../../characters/000-character-skeleton/index.md)
+- [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/assets/characters/import/eye_animation_library_import.gd`
 - `game/src/Body/Eyes/IEyes.cs`
 - `game/src/Body/Eyes/IEyesHolder.cs`

@@ -106,4 +106,4 @@ When writing tests for skeleton-local calculations, use a rig with the actual or
 ## References
 
 - This project's skeleton axis mapping is encoded in `HipLimitSemanticFrame` (`game/src/IK/Pose/HipLimitFrame.cs`).
-- For IK-specific conventions, see the IK contract specs in `specs/characters/ik/`.
+- For IK-specific conventions, see the IK contract specs in `specs/ik/`.

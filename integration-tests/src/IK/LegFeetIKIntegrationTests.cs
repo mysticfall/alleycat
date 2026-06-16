@@ -10,7 +10,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed class LegFeetIKIntegrationTests
 {
-    private const string VerificationScenePath = "res://tests/characters/ik/leg_feet_ik_test.tscn";
+    private const string VerificationScenePath = "res://tests/ik/leg_feet_ik_test.tscn";
 
     private const string LeftFootTargetPath = "Markers/LeftFootTarget";
     private const string RightFootTargetPath = "Markers/RightFootTarget";

@@ -13,7 +13,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed class PoseStateMachineIntegrationTests
 {
-    private const string VerificationScenePath = "res://tests/characters/ik/pose_state_machine_test.tscn";
+    private const string VerificationScenePath = "res://tests/ik/pose_state_machine_test.tscn";
     private const string DriverPath = "PoseStateMachineDriver";
     private const string ScenarioMarkersRootPath = "Markers/PoseStateMachine/Scenarios";
     private const string HeadRestMarkerPath = "Markers/PoseStateMachine/RestHeadTarget";

@@ -11,7 +11,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed class HeadTrackingHipProfileIntegrationTests
 {
-    private const string VerificationScenePath = "res://tests/characters/ik/head_tracking_hip_profile_test.tscn";
+    private const string VerificationScenePath = "res://tests/ik/head_tracking_hip_profile_test.tscn";
     private const string SubjectPath = "Subject/Female";
     private const string DriverPath = "PoseStateMachineDriver";
     private const string HipModifierPath = "Subject/Female/Female/GeneralSkeleton/HipReconciliationModifier";

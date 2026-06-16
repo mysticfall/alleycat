@@ -79,7 +79,7 @@ syntax decision.
 
 ## References
 
-- [TMPL-001: Templating System](../../tmpl/001-templating-system/index.md)
+- [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [AI System](../index.md)
 - `game/src/Templating/ITemplate.cs`
 - `game/src/Templating/ITemplateCompiler.cs`

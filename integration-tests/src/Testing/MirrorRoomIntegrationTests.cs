@@ -198,7 +198,7 @@ public sealed class MirrorRoomIntegrationTests
                 ally.GetNodeOrNull("Voice/AudioStreamPlayer3D"),
                 exactMatch: false);
 
-            Assert.Equal("alley", GetPropertyValue<string>(voice, "Id"));
+            Assert.Equal("Elena.wav", GetPropertyValue<string>(voice, "Id"));
             Assert.Same(speechGenerator, GetPropertyValue<Node>(voice, "SpeechGenerator"));
             Assert.Same(lipSyncPlayer, GetPropertyValue<Node>(voice, "LipSyncPlayer"));
             Assert.Same(voice, GetPropertyValue<Node>(mind, "Voice"));

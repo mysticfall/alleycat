@@ -309,7 +309,7 @@ through explicit force-transfer channels.
 ## References
 
 - [BODY-002: Character Physical Response System](../002-character-physical-response/index.md)
-- [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../characters/ik/004-vrik-pose-state-machine/index.md)
+- [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../ik/004-vrik-pose-state-machine/index.md)
 - [DynamicPhysicalRig Implementation](@game/src/Body/DynamicPhysicalRig.cs)
 - [BodyColliderProfile Implementation](@game/src/Body/BodyColliderProfile.cs)
 - [HandDynamicBodyInteractionController Implementation](@game/src/IK/HandDynamicBodyInteractionController.cs)

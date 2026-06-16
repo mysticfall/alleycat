@@ -14,7 +14,7 @@ public sealed class PhysicsChainIntegrationTests
     private const string ChainScenePath = "res://assets/items/chain/physics_chain.tscn";
     private const string ChainLinkScenePath = "res://assets/items/chain/chain_link.tscn";
     private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
-    private const string VisualTestScenePath = "res://tests/items/chain/physics_chain_visual_test.tscn";
+    private const string VisualTestScenePath = "res://tests/item/chain/physics_chain_visual_test.tscn";
     private const string ChainNodePath = "Subject/Chain";
     private const string LinksContainerPath = "Links";
     private const string JointsContainerPath = "Joints";

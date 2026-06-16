@@ -100,5 +100,5 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Wrapper script: `tools/generate_character.sh`
 - Test configuration: `game/assets/characters/test/Female.character.json`
 - Collider generation: `tools/generate_body_colliders.py`
-- Portable character contract: @specs/characters/000-character-skeleton/index.md
+- Portable character contract: @specs/character/001-character-skeleton/index.md
 - Scene Installer System: @specs/core/005-scene-installer-system/index.md

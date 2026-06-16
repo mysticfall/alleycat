@@ -113,4 +113,4 @@ interfaces per component, and deterministic query ordering.
 - `@game/src/Common/NodeExtensions.cs` — Reference for extension method style
 - [CORE-001: Global Scene](../001-global-scene/index.md)
 - [CORE-002: Configuration API](../002-configuration-api/index.md)
-- [CTRL-001: Locomotion](../characters/ctrl/001-locomotion/index.md)
+- [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)

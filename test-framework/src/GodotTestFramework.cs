@@ -21,11 +21,13 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private const string RuntimeContextEnvironmentVariable = "ALLEYCAT_RUNTIME_CONTEXT";
     private const string RuntimeContextIntegrationTestValue = "integration-test";
     private const int DefaultPreflightTimeoutMs = 30_000;
+    private const int DefaultImportTimeoutMs = 120_000;
     private const int DefaultRunFactTimeoutMs = 120_000;
     private const int DefaultCleanupTimeoutMs = 5_000;
     private const int StructuredResultExitGraceTimeoutMs = 500;
     private const string GodotBinaryEnvironmentVariable = "GODOT_PATH";
     private const string GodotPreflightTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_PREFLIGHT_TIMEOUT_MS";
+    private const string GodotImportTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS";
     private const string GodotRunFactTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS";
     private const string GodotCleanupTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS";
 
@@ -35,6 +37,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private readonly string _godotBinaryPath;
     private readonly string _workspaceRootPath;
     private readonly int _preflightTimeoutMs;
+    private readonly int _importTimeoutMs;
     private readonly int _runFactTimeoutMs;
     private readonly int _cleanupTimeoutMs;
     private readonly bool _headlessOverride;
@@ -67,6 +70,9 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         _preflightTimeoutMs = ResolveTimeout(
             GodotPreflightTimeoutEnvironmentVariable,
             DefaultPreflightTimeoutMs);
+        _importTimeoutMs = ResolveTimeout(
+            GodotImportTimeoutEnvironmentVariable,
+            DefaultImportTimeoutMs);
         _runFactTimeoutMs = ResolveTimeout(
             GodotRunFactTimeoutEnvironmentVariable,
             DefaultRunFactTimeoutMs);
@@ -222,6 +228,18 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)
     {
+        GodotProcessRunResult importResult = await RunGodotProcessAsync(CreateImportArguments(), _importTimeoutMs, cancellationToken);
+        if (importResult.FailureException is not null)
+        {
+            return importResult.FailureException;
+        }
+
+        if (importResult.ExitCode != 0)
+        {
+            return new InvalidOperationException(
+                $"Godot integration import preflight failed. ExitCode={importResult.ExitCode}. {BuildOutputSummary(importResult)}");
+        }
+
         GodotProcessRunResult runResult = await RunGodotProcessAsync(CreateProbeArguments(), _preflightTimeoutMs, cancellationToken);
 
         return runResult.FailureException is not null
@@ -232,6 +250,16 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
             : (Exception)new InvalidOperationException(
             $"Godot integration preflight failed. ExitCode={runResult.ExitCode}. {BuildOutputSummary(runResult)}");
     }
+
+    private static IReadOnlyList<string> CreateImportArguments() =>
+    [
+        "--headless",
+        "--xr-mode",
+        "off",
+        "--path",
+        "game",
+        "--import",
+    ];
 
     private async Task<RunFactExecutionResult> RunFactAsync(MethodInfo method, CancellationToken cancellationToken)
     {

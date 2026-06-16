@@ -9,7 +9,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed class NeckSpineIKIntegrationTests
 {
-    private const string VerificationScenePath = "res://tests/characters/ik/neck_spine_ccdik_test.tscn";
+    private const string VerificationScenePath = "res://tests/ik/neck_spine_ccdik_test.tscn";
     private const string ReusableIkScenePath = "res://assets/characters/templates/ik/neck_spine_ccdik.tscn";
     private const string MarkersRootPath = "Markers";
     private const string HeadTargetPath = "Markers/HeadTarget";

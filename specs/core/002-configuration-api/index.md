@@ -122,8 +122,8 @@ and technical requirement (merge implementation) layers.
 
 ### Related Specs
 
-- [SPCH-003: Transcriber Component](../speech/003-transcription/index.md)
-- [SPCH-004: Speech Generator Component](../speech/004-speech-generation/index.md)
+- [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
+- [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 
 ### Configuration Files
 

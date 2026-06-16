@@ -13,7 +13,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed class ArmShoulderIKIntegrationTests
 {
-    private const string VerificationScenePath = "res://tests/characters/ik/arm_shoulder_ik_test.tscn";
+    private const string VerificationScenePath = "res://tests/ik/arm_shoulder_ik_test.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string NPCScenePath = "res://assets/characters/reference/ally.tscn";
     private const string HandTargetPosesPath = "Markers/HandTargetPoses";

@@ -8,7 +8,7 @@ Use these patterns to create and run photobooth-based verification scenes.
 extends SceneTree
 
 const BASE_SCENE := "res://assets/characters/reference/female/photobooth/full_body_5_cams.tscn"
-const OUTPUT_SCENE := "res://tests/characters/example/example_pose_test.tscn"
+const OUTPUT_SCENE := "res://tests/ik/example/example_pose_test.tscn"
 
 
 func _init() -> void:
@@ -36,7 +36,7 @@ func _init() -> void:
 ```gdscript
 extends SceneTree
 
-const TEST_SCENE := "res://tests/characters/example/example_pose_test.tscn"
+const TEST_SCENE := "res://tests/ik/example/example_pose_test.tscn"
 
 
 func _init() -> void:
@@ -64,7 +64,7 @@ func _init() -> void:
 ```gdscript
 extends SceneTree
 
-const TEST_SCENE := "res://tests/characters/example/example_pose_test.tscn"
+const TEST_SCENE := "res://tests/ik/example/example_pose_test.tscn"
 # NOTE: The test scene should contain all IK/modifier setup.
 # This runner only handles scenario iteration and screenshot capture.
 

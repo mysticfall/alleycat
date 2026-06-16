@@ -2,7 +2,7 @@
 
 ## Specification Authoring
 
-- [Feature Specification Template](templates/feature-spec-template.md)
+- [Feature Specification Template](template/feature-spec-template.md)
 
 ## Core Systems
 
@@ -20,9 +20,9 @@
 - [AI-003: Prompt API](ai/003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](ai/004-lore-backstory/index.md)
 
-## TMPL
+## Templating
 
-- [TMPL-001: Templating System](tmpl/001-templating-system/index.md)
+- [TMPL-001: Templating System](templating/001-templating-system/index.md)
 
 ## XR
 
@@ -39,25 +39,31 @@
 - [BODY-004: Eyes](body/004-eyes/index.md)
 - [BODY-006: Voice Component](body/006-voice/index.md)
 
-## Characters
+## Character
 
-- [CHAR-000: Character Skeleton Profile](characters/000-character-skeleton/index.md)
-- [CTRL: Player Character Control System](characters/ctrl/index.md)
-  - [CTRL-001: Locomotion](characters/ctrl/001-locomotion/index.md)
-  - [CTRL-002: Hand Grab Input](characters/ctrl/002-hand-grab-input/index.md)
-- [IK: VRIK System](characters/ik/index.md)
-  - [IK Implementation Notes](characters/ik/implementation-notes.md)
-  - [IK-001: Reusable Neck-Spine CCDIK Setup](characters/ik/001-neck-spine-ik/index.md)
-  - [IK-002: Arm And Shoulder IK System](characters/ik/002-arm-shoulder-ik/index.md)
-    - [Arm IK Contract](characters/ik/002-arm-shoulder-ik/arm-ik-contract.md)
-    - [Shoulder Correction Contract](characters/ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
-    - [Hand-Rotation Elbow Correction Contract](characters/ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
-  - [IK-003: Leg And Feet IK System](characters/ik/003-leg-feet-ik/index.md)
-    - [Leg-Feet IK Contract](characters/ik/003-leg-feet-ik/leg-feet-ik-contract.md)
-    - [Leg-Feet IK Test Setup Contract](characters/ik/003-leg-feet-ik/test-setup-contract.md)
-  - [IK-004: VRIK Pose State Machine And Hip Reconciliation](characters/ik/004-vrik-pose-state-machine/index.md)
-    - [Pose State Machine Contract](characters/ik/004-vrik-pose-state-machine/pose-state-machine-contract.md)
-    - [Hip Reconciliation Contract](characters/ik/004-vrik-pose-state-machine/hip-reconciliation-contract.md)
+- [CHAR-001: Character Skeleton Profile](character/001-character-skeleton/index.md)
+
+## Character Control
+
+- [CTRL: Player Character Control System](ctrl/index.md)
+  - [CTRL-001: Locomotion](ctrl/001-locomotion/index.md)
+  - [CTRL-002: Hand Grab Input](ctrl/002-hand-grab-input/index.md)
+
+## IK
+
+- [IK: VRIK System](ik/index.md)
+  - [IK Implementation Notes](ik/implementation-notes.md)
+  - [IK-001: Reusable Neck-Spine CCDIK Setup](ik/001-neck-spine-ik/index.md)
+  - [IK-002: Arm And Shoulder IK System](ik/002-arm-shoulder-ik/index.md)
+    - [Arm IK Contract](ik/002-arm-shoulder-ik/arm-ik-contract.md)
+    - [Shoulder Correction Contract](ik/002-arm-shoulder-ik/shoulder-adjustment-contract.md)
+    - [Hand-Rotation Elbow Correction Contract](ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
+  - [IK-003: Leg And Feet IK System](ik/003-leg-feet-ik/index.md)
+    - [Leg-Feet IK Contract](ik/003-leg-feet-ik/leg-feet-ik-contract.md)
+    - [Leg-Feet IK Test Setup Contract](ik/003-leg-feet-ik/test-setup-contract.md)
+  - [IK-004: VRIK Pose State Machine And Hip Reconciliation](ik/004-vrik-pose-state-machine/index.md)
+    - [Pose State Machine Contract](ik/004-vrik-pose-state-machine/pose-state-machine-contract.md)
+    - [Hip Reconciliation Contract](ik/004-vrik-pose-state-machine/hip-reconciliation-contract.md)
 
 ## UI
 
@@ -65,9 +71,9 @@
 - [UI-002: Loading Screen](ui/002-loading-screen/index.md)
 - [UI-003: UI Overlay](ui/003-ui-overlay/index.md)
 
-## Items
+## Item
 
-- [ITEM-001: Physics Chain Asset](items/001-physics-chain/index.md)
+- [ITEM-001: Physics Chain Asset](item/001-physics-chain/index.md)
 
 ## Interaction
 

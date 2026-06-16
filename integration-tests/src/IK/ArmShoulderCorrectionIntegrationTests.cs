@@ -9,7 +9,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed class ArmShoulderCorrectionIntegrationTests
 {
-    private const string VerificationScenePath = "res://tests/characters/ik/arm_shoulder_ik_test.tscn";
+    private const string VerificationScenePath = "res://tests/ik/arm_shoulder_ik_test.tscn";
     private const string HandTargetPosesPath = "Markers/HandTargetPoses";
     private const string LeftHandTargetPath = "Markers/LeftHandTarget";
     private const string RightHandTargetPath = "Markers/RightHandTarget";

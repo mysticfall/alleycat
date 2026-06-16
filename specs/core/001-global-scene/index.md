@@ -15,7 +15,7 @@ scenes. It serves as the foundational layer for VR support and UI rendering.
 The Global Scene must provide:
 
 1. Global autoload availability for session-wide systems
-2. XR runtime wiring via XRManager (see [XR-001: XRManager](../xr/001-xr-manager/index.md))
+2. XR runtime wiring via XRManager (see [XR-001: XRManager](../../xr/001-xr-manager/index.md))
 3. A dedicated SubViewport for rendering full-screen UI and overlays
 4. Game entry point with startup scene exports for runtime loading
 
@@ -35,7 +35,7 @@ from startup.
 
 1. `global.tscn` must remain an autoload scene available for the full game session.
 2. XR runtime wiring must be delegated through `XRManager` as defined in
-   [XR-001: XRManager](../xr/001-xr-manager/index.md).
+   [XR-001: XRManager](../../xr/001-xr-manager/index.md).
 3. A dedicated `SubViewport` must be provided for full-screen UI/overlay rendering with
    transparent background support.
 4. Integration points consumed by other systems must be stable and discoverable from the
@@ -57,7 +57,7 @@ from startup.
 ## Out Of Scope
 
 - Splash screen flow behaviour, timing, and skip flag handling. These are specified in
-  [UI-001: Splash Screen](../ui/001-splash-screen/index.md).
+  [UI-001: Splash Screen](../../ui/001-splash-screen/index.md).
 - Loading screen flow behaviour and timing contracts.
 - XR runtime internals beyond the `XRManager` contract.
 - Gameplay-specific logic that does not belong to session-wide infrastructure.
@@ -67,7 +67,7 @@ from startup.
 ### XR Runtime Integration
 
 Global Scene integrates XRManager and hosts XR runtime composition. The XRManager contract
-is specified in [XR-001: XRManager](../xr/001-xr-manager/index.md).
+is specified in [XR-001: XRManager](../../xr/001-xr-manager/index.md).
 
 ### SubViewport
 
@@ -91,7 +91,7 @@ properties for scene loading:
 | `SplashScreenScene` | `PackedScene` | Splash scene for dynamic instantiation at startup |
 
 Note: Runtime splash behaviour (including `--skip-splash` handling) is defined in
-[UI-001: Splash Screen](../ui/001-splash-screen/index.md).
+[UI-001: Splash Screen](../../ui/001-splash-screen/index.md).
 
 ## Architecture
 
@@ -107,7 +107,7 @@ when the game starts and persists throughout the entire session. This provides:
 
 1. `@game/assets/scenes/global.tscn` is configured as an autoload and available session-wide.
 2. The global scene hosts `XRManager` integration in line with
-   [XR-001: XRManager](../xr/001-xr-manager/index.md).
+   [XR-001: XRManager](../../xr/001-xr-manager/index.md).
 3. A dedicated UI `SubViewport` exists with transparent background enabled and configured
    size of `1800 × 1200`.
 4. The `Game` node exports `StartScenePath` as a string path to the start scene.
@@ -126,5 +126,5 @@ when the game starts and persists throughout the entire session. This provides:
 
 ### Related Specs
 
-- [XR-001: XRManager](../xr/001-xr-manager/index.md)
-- [UI-001: Splash Screen](../ui/001-splash-screen/index.md)
+- [XR-001: XRManager](../../xr/001-xr-manager/index.md)
+- [UI-001: Splash Screen](../../ui/001-splash-screen/index.md)
