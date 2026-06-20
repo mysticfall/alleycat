@@ -1,10 +1,61 @@
 [gd_scene format=3 uid="uid://bibq37gjbxvhn"]
 
 [ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_vf6rf"]
+[ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="2_c3wu4"]
 [ext_resource type="Script" uid="uid://bxb7ysth4n1du" path="res://src/IK/CharacterIK.cs" id="2_charik"]
+[ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="3_04drg"]
 [ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="3_mgn5w"]
+[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_db11o"]
+[ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="7_xyj0a"]
+[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="8_eovco"]
+[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="9_beijb"]
+[ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="10_v2tt5"]
+[ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="11_u8xcn"]
 
-[node name="Female" unique_id=1792987446 instance=ExtResource("1_vf6rf")]
+[sub_resource type="Resource" id="Resource_agentic_system_text_section"]
+script = ExtResource("8_eovco")
+Text = "You are Alley, a warm, observant person standing with the player in a VR room.
+Reply naturally and briefly, as if speaking aloud in real time.
+You must not answer with normal chat text. For every response, call the speak tool exactly once with the
+words Alley should say aloud. Do not describe tool use and do not include stage directions."
+Name = "Instructions"
+
+[sub_resource type="Resource" id="Resource_pt7qm"]
+script = ExtResource("9_beijb")
+Sections = [SubResource("Resource_agentic_system_text_section")]
+
+[sub_resource type="Resource" id="Resource_agentic_speech_tool"]
+script = ExtResource("11_u8xcn")
+ToolName = "speak"
+ToolDescription = "Speak the supplied text aloud through the configured voice."
+
+[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Voice") instance=ExtResource("1_vf6rf")]
+Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
+
+[node name="Voice" type="Node3D" parent="Female/GeneralSkeleton/Head" index="1" unique_id=1804649546 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2221888e-05, -0.035407424, 0.08069722)
+script = ExtResource("2_c3wu4")
+SpeechGenerator = NodePath("SpeechGenerator")
+LipSyncPlayer = NodePath("LipSyncPlayer")
+Id = "Elena.wav"
+metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
+
+[node name="SpeechGenerator" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="0" unique_id=1308210533]
+script = ExtResource("3_04drg")
+VoiceOverride = "Elena.wav"
+TargetSampleRate = 16000
+metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
+
+[node name="LipSyncPlayer" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="1" unique_id=440077666 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+script = ExtResource("4_db11o")
+InputStrength = 0.6
+ConstantNoise = true
+EyeRotationToBlendshapeScale = 0.15
+Meshes = [NodePath("../../../Female_body"), NodePath("../../../Female_eyebrow006"), NodePath("../../../Female_eyelashes01"), NodePath("../../../Female_high-poly"), NodePath("../../../Female_teeth_shape01"), NodePath("../../../Female_tongue01")]
+AudioPlayer = NodePath("../AudioStreamPlayer3D")
+metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Female/GeneralSkeleton/Head/Voice" index="2" unique_id=1163782006]
 
 [node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
 script = ExtResource("2_charik")
@@ -16,12 +67,12 @@ LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
 RightFootIKTarget = NodePath("../IKTargets/RightFoot")
 LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
 PhysicalRig = NodePath("../Female/GeneralSkeleton/DynamicPhysicalRig")
+RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
+LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
 HeadModifierGroup = [NodePath("../Female/GeneralSkeleton/NeckSpineIK"), NodePath("../Female/GeneralSkeleton/HeadCopyRotation"), NodePath("../Female/GeneralSkeleton/NeckTwistDisperser")]
 RightHandModifierGroup = [NodePath("../Female/GeneralSkeleton/RightArmIKController"), NodePath("../Female/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/RightHandCopyRotation")]
 LeftHandModifierGroup = [NodePath("../Female/GeneralSkeleton/LeftArmIKController"), NodePath("../Female/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/LeftHandCopyRotation")]
 RightFootModifierGroup = [NodePath("../Female/GeneralSkeleton/RightLegIKController"), NodePath("../Female/GeneralSkeleton/RightLegTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/CopyRightFootRotation")]
-RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
-LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
 LeftFootModifierGroup = [NodePath("../Female/GeneralSkeleton/LeftLegIKController"), NodePath("../Female/GeneralSkeleton/LeftLegTwoBoneIKController"), NodePath("../Female/GeneralSkeleton/CopyLeftFootRotation")]
 metadata/_custom_type_script = "uid://bxb7ysth4n1du"
 
@@ -33,3 +84,9 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 script = ExtResource("3_mgn5w")
 metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 
+[node name="Mind" type="Node" parent="." index="9" unique_id=917502219 node_paths=PackedStringArray("Voice")]
+script = ExtResource("7_xyj0a")
+SystemInstruction = SubResource("Resource_pt7qm")
+Tools = Array[ExtResource("10_v2tt5")]([SubResource("Resource_agentic_speech_tool")])
+Voice = NodePath("../Female/GeneralSkeleton/Head/Voice")
+metadata/_custom_type_script = "uid://hadsjgek6b2p"

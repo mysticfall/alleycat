@@ -15,7 +15,7 @@ dest_files=["res://.godot/imported/reference_female.blend-13a31033fa54f5c1c948a0
 
 nodes/root_type="CharacterBody3D"
 nodes/root_name="Female"
-nodes/root_script=null
+nodes/root_script=Resource("uid://bh2t1kkfwpvbf", "res://src/Character/Character.cs")
 nodes/apply_root_scale=true
 nodes/root_scale=1.0
 nodes/import_as_skeleton_bones=false

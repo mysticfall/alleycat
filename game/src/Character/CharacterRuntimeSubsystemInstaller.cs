@@ -45,6 +45,17 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 
         try
         {
+            Character targetCharacter = ValidateCharacterHub(context.TargetRoot);
+            Character templateCharacter = ValidateTemplateCharacterHub(context.TemplateRoot);
+
+            TemplateSceneReferenceRebaser.CopyExportedPropertyValues(
+                templateCharacter,
+                targetCharacter,
+                context.TemplateRoot,
+                context.TargetRoot,
+                this,
+                failOnUnresolved: true);
+
             RigTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);
 
             AnimationTree animationTree = FindSingleDescendant<AnimationTree>(context.TargetRoot)
@@ -54,9 +65,10 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 
             RebaseAnimationMixerRoots(animationTree, animationPlayer, context.Skeleton);
             ValidateEyeAnimationLibrary(animationPlayer);
-            ValidateEyes(context.TargetRoot);
-            ValidateHands(context.TargetRoot);
-            ValidateLocomotion(context.TargetRoot);
+            ValidateEyes(targetCharacter.Eyes);
+            ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
+            ValidateLocomotion(targetCharacter.Locomotion, context.TargetRoot);
+            targetCharacter.RefreshComponents();
 
             return SceneInstallationResult.Successful();
         }
@@ -205,9 +217,8 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         return false;
     }
 
-    private static void ValidateEyes(Node targetRoot)
+    private static void ValidateEyes(EyesBehaviour? eyes)
     {
-        EyesBehaviour? eyes = FindSingleDescendant<EyesBehaviour>(targetRoot, required: false);
         if (eyes is null)
         {
             return;
@@ -217,10 +228,15 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         RequireAssigned(eyes.EyeOrigin, eyes, nameof(EyesBehaviour.EyeOrigin));
     }
 
-    private static void ValidateHands(Node targetRoot)
+    private static void ValidateHands(params HandPoseBehaviour?[] hands)
     {
-        foreach (HandPoseBehaviour hand in FindDescendants<HandPoseBehaviour>(targetRoot))
+        foreach (HandPoseBehaviour? hand in hands)
         {
+            if (hand is null)
+            {
+                continue;
+            }
+
             RequireAssigned(hand.AnimationTree, hand, nameof(HandPoseBehaviour.AnimationTree));
             RequireAssigned(hand.HandTargetNode, hand, nameof(HandPoseBehaviour.HandTargetNode));
             RequireAssigned(hand.HandBoneAttachment, hand, nameof(HandPoseBehaviour.HandBoneAttachment));
@@ -229,9 +245,8 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         }
     }
 
-    private static void ValidateLocomotion(Node targetRoot)
+    private static void ValidateLocomotion(CharacterLocomotion? locomotion, Node targetRoot)
     {
-        CharacterLocomotion? locomotion = FindSingleDescendant<CharacterLocomotion>(targetRoot, required: false);
         if (locomotion is null)
         {
             return;
@@ -243,6 +258,20 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         RequireAssigned(locomotion.AnimationTree, locomotion, nameof(CharacterLocomotion.AnimationTree));
         RequireAssigned(locomotion.RootMotionReference, locomotion, nameof(CharacterLocomotion.RootMotionReference));
     }
+
+    internal static Character ValidateCharacterHub(Node targetRoot)
+    {
+        return targetRoot is not Character character
+            ? throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires target root '{targetRoot.GetPath()}' to be an {typeof(Character).FullName} CharacterBody3D root with the Character.cs script assigned.")
+            : character;
+    }
+
+    internal static Character ValidateTemplateCharacterHub(Node templateRoot)
+        => templateRoot is Character character
+            ? character
+            : throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires template root '{templateRoot.GetPath()}' to be an {typeof(Character).FullName} CharacterBody3D root with the Character.cs script assigned.");
 
     private static T? FindSingleDescendant<T>(Node node, bool required = true)
         where T : Node

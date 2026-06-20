@@ -1086,7 +1086,11 @@ public sealed class PoseStateMachineIntegrationTests
         driver.Set("AnimationTree", animationTree);
         driver.Set("Skeleton", skeleton);
         _ = driver.GetType().GetMethod("_Ready")?.Invoke(driver, []);
+        // Rebuilding the AnimationTree root at runtime leaves the nested state-machine playback cache stale until
+        // the tree advances; seed the rebuilt playback object, then commit the start request before assertions.
+        animationTree.Advance(0.0);
         ResolvePlayback(animationTree).Start(new StringName("StandingCrouching"), true);
+        animationTree.Advance(0.0);
         TickScenario(sceneRoot, driver, "Standing");
 
         Assert.True((bool)driver.Call("IsAnimationTreeBound"), "Expected marker driver to bind AnimationTree after runtime installation.");

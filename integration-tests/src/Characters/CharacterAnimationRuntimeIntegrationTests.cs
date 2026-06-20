@@ -1,14 +1,18 @@
 using System.Reflection;
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
+using AlleyCat.Body.Voice;
 using AlleyCat.Character;
+using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
+using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
+using CharacterHub = AlleyCat.Character.Character;
 
 namespace AlleyCat.IntegrationTests.Characters;
 
@@ -250,13 +254,13 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
 
     private sealed class RuntimeEyeAnimationFixture : IDisposable
     {
-        private readonly CharacterBody3D _targetRoot;
+        private readonly CharacterHub _targetRoot;
         private readonly Node3D _templateRoot;
         private readonly Skeleton3D _templateSkeleton;
         private readonly AnimationLibrary _eyeAnimationLibrary;
 
         private RuntimeEyeAnimationFixture(
-            CharacterBody3D targetRoot,
+            CharacterHub targetRoot,
             Node3D templateRoot,
             Skeleton3D templateSkeleton,
             MeshInstance3D faceMesh,
@@ -276,14 +280,11 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
 
         public static RuntimeEyeAnimationFixture CreateValid()
         {
-            CharacterBody3D targetRoot = new()
+            CharacterHub targetRoot = new()
             {
                 Name = "Character"
             };
-            AnimationTree animationTree = new()
-            {
-                Name = "AnimationTree"
-            };
+            AnimationTree animationTree = CreateAnimationTreeFixture();
             targetRoot.AddChild(animationTree);
 
             AnimationPlayer animationPlayer = new()
@@ -311,7 +312,9 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             };
             modelRoot.AddChild(faceMesh);
 
-            Node3D templateRoot = new()
+            AddCharacterRuntimeComponentFixture(targetRoot, animationTree, modelRoot, LimbSide.Right);
+
+            CharacterHub templateRoot = new()
             {
                 Name = "Template"
             };
@@ -320,6 +323,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
                 Name = "Skeleton"
             };
             templateRoot.AddChild(templateSkeleton);
+            AddCharacterRuntimeComponentFixture(templateRoot, CreateAnimationTreeFixture(), new Node3D { Name = "Model" }, LimbSide.Right);
 
             AnimationLibrary eyeAnimationLibrary = new();
             RuntimeEyeAnimationFixture fixture = new(
@@ -392,6 +396,132 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             }
 
             return mesh;
+        }
+
+        private static AnimationTree CreateAnimationTreeFixture()
+        {
+            AnimationNodeBlendTree treeRoot = new();
+            treeRoot.AddNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(LimbSide.Left), new AnimationNodeAnimation());
+            treeRoot.AddNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(LimbSide.Right), new AnimationNodeAnimation());
+
+            return new AnimationTree
+            {
+                Name = "AnimationTree",
+                TreeRoot = treeRoot,
+            };
+        }
+
+        private static void AddCharacterRuntimeComponentFixture(
+            CharacterHub root,
+            AnimationTree animationTree,
+            Node3D rootMotionReference,
+            LimbSide rightHandSide)
+        {
+            if (animationTree.GetParent() is null)
+            {
+                root.AddChild(animationTree);
+            }
+
+            if (rootMotionReference.GetParent() is null)
+            {
+                root.AddChild(rootMotionReference);
+            }
+
+            CharacterLocomotion locomotion = new()
+            {
+                Name = "Locomotion",
+                AnimationTree = animationTree,
+                RootMotionReference = rootMotionReference,
+            };
+            root.AddChild(locomotion);
+
+            Node3D eyeOrigin = new()
+            {
+                Name = "EyeOrigin",
+            };
+            root.AddChild(eyeOrigin);
+            EyesBehaviour eyes = new()
+            {
+                Name = "Eyes",
+                AnimationTree = animationTree,
+                EyeOrigin = eyeOrigin,
+            };
+            root.AddChild(eyes);
+
+            PlayerVoice voice = new()
+            {
+                Name = "Voice",
+                Id = "fixture",
+            };
+            root.AddChild(voice);
+
+            DynamicPhysicalRig physicalRig = new()
+            {
+                Name = "DynamicPhysicalRig",
+            };
+            root.AddChild(physicalRig);
+
+            Node3D rightTarget = new()
+            {
+                Name = "RightHandTarget",
+            };
+            root.AddChild(rightTarget);
+            Node3D leftTarget = new()
+            {
+                Name = "LeftHandTarget",
+            };
+            root.AddChild(leftTarget);
+
+            BoneAttachment3D rightAttachment = new()
+            {
+                Name = "RightHandAttachment",
+            };
+            root.AddChild(rightAttachment);
+            BoneAttachment3D leftAttachment = new()
+            {
+                Name = "LeftHandAttachment",
+            };
+            root.AddChild(leftAttachment);
+
+            StaticBody3D rightCollision = new()
+            {
+                Name = "RightHeldCollision",
+            };
+            root.AddChild(rightCollision);
+            StaticBody3D leftCollision = new()
+            {
+                Name = "LeftHeldCollision",
+            };
+            root.AddChild(leftCollision);
+
+            HandPoseBehaviour rightHand = new()
+            {
+                Name = "RightHand",
+                AnimationTree = animationTree,
+                Side = rightHandSide,
+                HandTargetNode = rightTarget,
+                HandBoneAttachment = rightAttachment,
+                HeldCollisionTarget = rightCollision,
+                PhysicalRig = physicalRig,
+            };
+            root.AddChild(rightHand);
+            HandPoseBehaviour leftHand = new()
+            {
+                Name = "LeftHand",
+                AnimationTree = animationTree,
+                Side = LimbSide.Left,
+                HandTargetNode = leftTarget,
+                HandBoneAttachment = leftAttachment,
+                HeldCollisionTarget = leftCollision,
+                PhysicalRig = physicalRig,
+            };
+            root.AddChild(leftHand);
+
+            root.Locomotion = locomotion;
+            root.Eyes = eyes;
+            root.Voice = voice;
+            root.RightHand = rightHand;
+            root.LeftHand = leftHand;
         }
 
         private static StringName StripEyesLibraryPrefix(string animationName)

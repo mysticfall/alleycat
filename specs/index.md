@@ -42,6 +42,7 @@
 ## Character
 
 - [CHAR-001: Character Skeleton Profile](character/001-character-skeleton/index.md)
+- [CHAR-002: Character Root](character/002-character-root/index.md)
 
 ## Character Control
 

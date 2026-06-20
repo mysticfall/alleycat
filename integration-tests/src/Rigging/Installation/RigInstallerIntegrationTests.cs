@@ -482,7 +482,8 @@ public sealed class RigInstallerIntegrationTests
         Assert.Contains("PoseStateMachine = NodePath(\"PoseStateMachine\")", playerTemplateText, StringComparison.Ordinal);
         Assert.Contains("HeadFallbackIntentProvider = NodePath(\"HeadFallbackIntentProvider\")", playerTemplateText, StringComparison.Ordinal);
         Assert.Contains("RightFootFallbackIntentProvider = NodePath(\"RightFootFallbackIntentProvider\")", playerTemplateText, StringComparison.Ordinal);
-        Assert.Contains("AnimationTree = NodePath(\"../../AnimationTree\")", playerTemplateText, StringComparison.Ordinal);
+        string baseTemplateText = ReadProjectFile(ReferenceFemaleScenePath);
+        Assert.Contains("AnimationTree = NodePath(\"../../AnimationTree\")", baseTemplateText, StringComparison.Ordinal);
         Assert.DoesNotContain("animation_tree_root_player.tres", playerRigInstallerSource, StringComparison.Ordinal);
         Assert.DoesNotContain("ResourceLoader.Load", playerRigInstallerSource, StringComparison.Ordinal);
 
