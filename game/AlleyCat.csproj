@@ -1,4 +1,4 @@
-<Project Sdk="Godot.NET.Sdk/4.6.3">
+<Project Sdk="Godot.NET.Sdk/4.7.0">
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -11,7 +11,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Update="GodotSharp" Version="4.6.3" />
+        <PackageReference Update="GodotSharp" Version="4.7.0" />
         <PackageReference Include="Handlebars.Net" Version="2.1.6" />
         <PackageReference Include="Microsoft.Agents.AI" Version="1.8.0" />
         <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />

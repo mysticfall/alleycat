@@ -12,13 +12,12 @@ config_version=5
 
 config/name="AlleyCat"
 run/main_scene="res://assets/scenes/empty.tscn"
-config/features=PackedStringArray("4.6", "C#", "Forward Plus")
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 boot_splash/show_image=false
 config/icon="res://icon.png"
 
 [audio]
 
-buses/default_bus_layout="res://default_bus_layout.tres"
 driver/enable_input=true
 
 [autoload]
