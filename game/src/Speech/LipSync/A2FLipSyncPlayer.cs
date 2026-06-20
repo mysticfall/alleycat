@@ -94,7 +94,7 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     {
         get;
         set;
-    } = true;
+    }
 
     /// <summary>
     /// Number of retry attempts when probing /health.
