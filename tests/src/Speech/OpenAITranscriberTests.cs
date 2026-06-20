@@ -1,6 +1,7 @@
-using AlleyCat.Core;
+using AlleyCat.Core.Configuration;
 using AlleyCat.Speech.Transcription;
 using Godot;
+using Microsoft.Extensions.Configuration;
 using OpenAI.Audio;
 using Xunit;
 
@@ -117,7 +118,7 @@ public sealed class OpenAITranscriberTests
     /// Merged configuration must preserve base values while allowing user overrides for STT settings.
     /// </summary>
     [Fact]
-    public void Load_MergedConfigProvider_UsesMergedSttValues()
+    public void Load_MergedConfiguration_UsesMergedSttValues()
     {
         Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
         {
@@ -137,10 +138,10 @@ public sealed class OpenAITranscriberTests
             },
         };
 
-        var configProvider = ConfigProvider.FromSections(baseSections, overrideSections);
+        IConfiguration configuration = CreateConfiguration(baseSections, overrideSections);
 
         var settings =
-            OpenAITranscriber.OpenAITranscriberSettings.Load(configProvider, "merged-test-config");
+            OpenAITranscriber.OpenAITranscriberSettings.Load(configuration, "merged-test-config");
 
         Assert.Equal("https://base.example/v1", settings.Host);
         Assert.Equal("whisper-1", settings.Model);
@@ -175,13 +176,13 @@ public sealed class OpenAITranscriberTests
         bool mergedLoaderCalled = false;
 
         var settings = OpenAITranscriber.OpenAITranscriberSettings.Load(
-            ConfigProvider.DefaultBaseConfigPath,
-            mergedConfigLoader: () =>
+            GameConfiguration.DefaultBaseConfigPath,
+            defaultConfigurationLoader: () =>
             {
                 mergedLoaderCalled = true;
-                return ConfigProvider.FromSections(baseSections, overrideSections);
+                return CreateConfiguration(baseSections, overrideSections);
             },
-            singleConfigLoader: _ => throw new Xunit.Sdk.XunitException(
+            customConfigurationLoader: _ => throw new Xunit.Sdk.XunitException(
                 "Single-file loader should not be used for the default config path."));
 
         Assert.True(mergedLoaderCalled);
@@ -196,7 +197,7 @@ public sealed class OpenAITranscriberTests
     [Fact]
     public void Load_CustomConfigPath_UsesDirectConfigRoutingWithoutImplicitMerge()
     {
-        const string customConfigPath = "res://custom-stt.cfg";
+        const string customConfigPath = "res://custom-stt.json";
         Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
         {
             ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -210,12 +211,12 @@ public sealed class OpenAITranscriberTests
 
         var settings = OpenAITranscriber.OpenAITranscriberSettings.Load(
             customConfigPath,
-            mergedConfigLoader: () => throw new Xunit.Sdk.XunitException(
+            defaultConfigurationLoader: () => throw new Xunit.Sdk.XunitException(
                 "Merged loader should not be used for a custom config path."),
-            singleConfigLoader: path =>
+            customConfigurationLoader: path =>
             {
                 loadedPath = path;
-                return ConfigProvider.FromSections(baseSections);
+                return CreateConfiguration(baseSections);
             });
 
         Assert.Equal(customConfigPath, loadedPath);
@@ -332,5 +333,32 @@ public sealed class OpenAITranscriberTests
         Assert.Equal("en", request.Options.Language);
         Assert.Equal("Transcribe clearly.", request.Options.Prompt);
         Assert.Equal(0.35f, request.Options.Temperature);
+    }
+
+    private static IConfiguration CreateConfiguration(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> baseSections,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? overrideSections = null)
+    {
+        Dictionary<string, string?> values = new(StringComparer.Ordinal);
+        AddSections(values, baseSections);
+        if (overrideSections is not null)
+        {
+            AddSections(values, overrideSections);
+        }
+
+        return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+    }
+
+    private static void AddSections(
+        Dictionary<string, string?> values,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> sections)
+    {
+        foreach ((string section, IReadOnlyDictionary<string, string> sectionValues) in sections)
+        {
+            foreach ((string key, string value) in sectionValues)
+            {
+                values[$"{section}:{key}"] = value;
+            }
+        }
     }
 }

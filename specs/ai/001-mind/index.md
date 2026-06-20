@@ -50,7 +50,8 @@ reply aloud as an embodied character.
     execute against that instance.
 17. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
 18. Player listening must remain paused for a short cooldown after the NPC starts speaking.
-19. OpenAI-compatible backend settings must load from the merged configuration API under an `[AI]` section.
+19. OpenAI-compatible backend settings must bind/read subsystem-owned AI options from CORE-006 `IConfiguration`, or
+    build a local custom-path JSON configuration when an explicit path is supplied.
 20. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
     checks.
 21. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
@@ -71,7 +72,7 @@ while keeping backend failures contained to logged errors.
 - Mirror-room Alley prompt assignment through an AI-003 `PromptStack` with one `TextPromptSection`.
 - Replaceable Agent Framework client provider Resource for chat-client creation.
 - Microsoft Agent Framework prototype backend.
-- OpenAI-compatible chat configuration.
+- OpenAI-compatible chat configuration from subsystem-owned AI options.
 - Editor-selectable OpenAI chat-completions and responses client adapters.
 - Mirror-room scene wiring for manual conversation testing.
 
@@ -92,7 +93,7 @@ while keeping backend failures contained to logged errors.
 4. The OpenAI-compatible client provider supplies the chat client used by the default Agent Framework adapter.
 5. Agent Framework turn execution and session state caching are owned by `AgenticMind`.
 6. Exported tool resources are delivered per turn through `ChatOptions` under the AI-002 runtime contract.
-7. The client provider loads `[AI]` Host, optional ApiKey, Model, and Timeout settings through the merged config API.
+7. The client provider owns binding/loading for Host, optional ApiKey, Model, and Timeout settings.
 8. The client provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
 9. AgenticMind ignores further `speak` tool calls and player voice input until the current reply turn completes.
 10. Tool invocation uses an `IServiceProvider` context that contains the calling AgenticMind and configured `IVoice`
@@ -118,14 +119,14 @@ while keeping backend failures contained to logged errors.
 - game/src/Mind/AI/Provider/ClientProvider.cs
 - game/src/Mind/AI/Provider/OpenAIClientProvider.cs
 - game/assets/testing/mirror_room/mirror_room.tscn
-- game/AlleyCat.cfg
+- game/AlleyCat.json
 
 ### Related Specs
 
 - BODY-006: Voice Component
 - SPCH-003: Transcriber Component
 - SPCH-004: Speech Generator Component
-- CORE-002: Configuration API
+- CORE-006: Microsoft Configuration Integration
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 
 ### External Dependencies

@@ -1,11 +1,14 @@
 using System.ClientModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
-using AlleyCat.Core;
+using AlleyCat.Core.Configuration;
+using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
 using AlleyCat.UI;
 using Godot;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenAI;
 using OpenAI.Audio;
 
@@ -18,17 +21,18 @@ namespace AlleyCat.Speech.Transcription;
 public partial class OpenAITranscriber : Transcriber
 {
     private const string ConfigSection = "STT";
-    private const string DefaultConfigPath = ConfigProvider.DefaultBaseConfigPath;
+    private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
     private const string DefaultModel = "whisper-1";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
     private const string ConfigLoadFailureNotification = "Speech transcription is unavailable. Please check the STT configuration.";
 
     private OpenAITranscriberSettings? _settings;
+    private ILogger<OpenAITranscriber>? _logger;
 
     /// <summary>
     /// Config file used to resolve OpenAI-compatible speech settings.
     /// </summary>
-    [Export(PropertyHint.File, "*.cfg")]
+    [Export(PropertyHint.File, "*.json")]
     public string ConfigPath
     {
         get;
@@ -49,6 +53,7 @@ public partial class OpenAITranscriber : Transcriber
     public override void _Ready()
     {
         base._Ready();
+        _logger = GameLoggerResolver.ResolveRequired<OpenAITranscriber>();
 
         try
         {
@@ -56,7 +61,7 @@ public partial class OpenAITranscriber : Transcriber
         }
         catch (Exception ex)
         {
-            GD.PushError(ex.ToString());
+            _logger?.LogError(ex, "Failed to load STT configuration from {ConfigPath}.", ConfigPath);
             _ = this.PostNotification(ConfigLoadFailureNotification);
             _settings = null;
         }
@@ -71,15 +76,22 @@ public partial class OpenAITranscriber : Transcriber
         Stopwatch preparationStopwatch = AIPipelineDebugLog.StartTimer();
         using PreparedTranscriptionRequest request = await PrepareTranscriptionRequestAsync(recordedAudio, settings)
             .ConfigureAwait(false);
-        await LogLatencyOnGodotThreadAsync("STT request prepared in", preparationStopwatch, $"model {settings.Model}")
-            .ConfigureAwait(false);
+        if (AIPipelineDebugLog.IsEnabled)
+        {
+            await LogLatencyOnGodotThreadAsync("STT request prepared in", preparationStopwatch, $"model {settings.Model}")
+                .ConfigureAwait(false);
+        }
 
         Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
         AudioTranscription response = await request.Client
             .TranscribeAudioAsync(request.WavStream, "alleycat-recording.wav", request.Options)
             .ConfigureAwait(false);
-        await LogLatencyOnGodotThreadAsync("STT backend returned in", backendStopwatch, $"model {settings.Model}")
-            .ConfigureAwait(false);
+        if (AIPipelineDebugLog.IsEnabled)
+        {
+            await LogLatencyOnGodotThreadAsync("STT backend returned in", backendStopwatch, $"model {settings.Model}")
+                .ConfigureAwait(false);
+        }
+
         return GetTranscriptionTextOrThrow(response);
     }
 
@@ -313,67 +325,63 @@ public partial class OpenAITranscriber : Transcriber
         } = DefaultConfigPath;
 
         public static OpenAITranscriberSettings Load(string configPath)
-            => Load(configPath, () => ConfigProvider.LoadMerged(), ConfigProvider.Load);
+            => Load(LoadConfiguration(configPath), configPath);
 
-        internal static OpenAITranscriberSettings Load(
-            string configPath,
-            Func<ConfigProvider> mergedConfigLoader,
-            Func<string, ConfigProvider> singleConfigLoader)
-            => Load(LoadConfigProvider(configPath, mergedConfigLoader, singleConfigLoader), configPath);
-
-        internal static OpenAITranscriberSettings Load(ConfigProvider configProvider, string configPathDescription)
+        internal static OpenAITranscriberSettings Load(STTOptions options, string configPathDescription = DefaultConfigPath)
         {
+            ArgumentNullException.ThrowIfNull(options);
+
             return new OpenAITranscriberSettings(
-                GetString(configProvider, nameof(Host)),
-                GetOptionalString(configProvider, nameof(ApiKey)),
-                GetOptionalString(configProvider, nameof(Model)) ?? DefaultModel,
-                GetOptionalString(configProvider, nameof(Language)),
-                GetOptionalString(configProvider, nameof(Prompt)),
-                GetOptionalFloat(configProvider, nameof(Temperature)),
-                GetOptionalInt(configProvider, "Timeout"))
+                Clean(options.Host) ?? string.Empty,
+                Clean(options.ApiKey),
+                Clean(options.Model) ?? DefaultModel,
+                Clean(options.Language),
+                Clean(options.Prompt),
+                options.Temperature,
+                options.Timeout)
             {
                 ConfigPathDescription = configPathDescription,
             };
         }
 
-        private static ConfigProvider LoadConfigProvider(
+        internal static OpenAITranscriberSettings Load(
             string configPath,
-            Func<ConfigProvider> mergedConfigLoader,
-            Func<string, ConfigProvider> singleConfigLoader)
-            => string.Equals(configPath, DefaultConfigPath, StringComparison.Ordinal)
-                ? mergedConfigLoader()
-                : singleConfigLoader(configPath);
+            Func<IConfiguration> defaultConfigurationLoader,
+            Func<string, IConfiguration> customConfigurationLoader)
+            => Load(LoadConfiguration(configPath, defaultConfigurationLoader, customConfigurationLoader), configPath);
 
-        private static string GetString(ConfigProvider configProvider, string key)
-            => GetOptionalString(configProvider, key) ?? string.Empty;
-
-        private static string? GetOptionalString(ConfigProvider configProvider, string key)
+        internal static OpenAITranscriberSettings Load(IConfiguration configuration, string configPathDescription)
         {
-            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            STTOptions options = new();
+            configuration.GetSection(ConfigSection).Bind(options);
+            return Load(options, configPathDescription);
+        }
+
+        private static IConfiguration LoadConfiguration(string configPath)
+            => LoadConfiguration(
+                configPath,
+                ResolveDefaultConfiguration,
+                path => GameConfiguration.BuildFile(new GodotPathResolver(), path));
+
+        private static IConfiguration ResolveDefaultConfiguration()
+            => Game.Instance.GetRequiredService<IConfiguration>();
+
+        private static IConfiguration LoadConfiguration(
+            string configPath,
+            Func<IConfiguration> defaultConfigurationLoader,
+            Func<string, IConfiguration> customConfigurationLoader)
+            => string.Equals(configPath, DefaultConfigPath, StringComparison.Ordinal)
+                ? defaultConfigurationLoader()
+                : customConfigurationLoader(configPath);
+
+        private static string? Clean(string? value)
+        {
+            string? text = value?.Trim();
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
 
-        private static float? GetOptionalFloat(ConfigProvider configProvider, string key)
-        {
-            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
-            return string.IsNullOrWhiteSpace(text)
-                ? null
-                : float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)
-                    ? parsed
-                    : throw new InvalidOperationException(
-                        $"Config key '{ConfigSection}/{key}' must be a valid float. Got '{text}'.");
-        }
-
-        private static int? GetOptionalInt(ConfigProvider configProvider, string key)
-        {
-            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
-            return string.IsNullOrWhiteSpace(text)
-                ? null
-                : int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
-                    ? parsed
-                    : throw new InvalidOperationException(
-                        $"Config key '{ConfigSection}/{key}' must be a valid integer. Got '{text}'.");
-        }
     }
 
     internal readonly record struct RecordedAudioData(

@@ -78,7 +78,7 @@ the real-world expectation that a voice belongs to a speaker and originates from
 - Audio compatibility contract for `AudioStreamWav` (PCM 16-bit, 16 kHz, mono).
 - Synchronisation contract via `LipSyncPlayer.Play()` initiation path.
 - Signal contract for generation/conversion failures.
-- Error handling contract using `GD.PushError` for raw errors.
+- Error handling contract using `ILogger` for raw diagnostics.
 - Implementation under `@game/src/Body/Voice/` using the `AlleyCat.Body.Voice` namespace.
 - Manual test scene under `@game/tests/body/voice/voice_test.tscn`.
 - Unit and integration tests using mocks/fakes for voice, transcription, generation, and lip-sync dependencies.
@@ -130,7 +130,7 @@ the real-world expectation that a voice belongs to a speaker and originates from
 3. Convert `byte[]` to `AudioStreamWav` with PCM 16-bit, 16 kHz, mono format.
 4. Invoke `LipSyncPlayer.Play(audioStream)` as one coordinated playback and lip-sync boundary.
 5. Invoke the inherited hook after successful playback handoff only, passing the speech to listeners.
-6. On generation, conversion, or missing dependency failure, log via `GD.PushError` and emit `SpeechFailed`.
+6. On generation, conversion, or missing dependency failure, log via `ILogger` and emit `SpeechFailed`.
 7. The spec does not require notification after audio playback finishes.
 
 ## PlayerVoice Implementation Contract
@@ -183,7 +183,7 @@ The `AIVoice` implementation must ensure audio passed to `LipSyncPlayer.Play(Aud
 9. Audio compatibility contract is explicitly defined: generated audio must be convertible to PCM 16-bit, 16 kHz, mono
    WAV for `LipSyncPlayer.Play(AudioStreamWav)`.
 10. Synchronisation contract is explicitly defined: all playback timing is governed by `LipSyncPlayer.Play()`.
-11. Error handling contract uses `GD.PushError` for raw errors and emits `SpeechFailed` signal.
+11. Error handling contract uses `ILogger` for raw diagnostics and emits `SpeechFailed` signal.
 12. Manual test scene using a character head attachment as the voice origin is specified.
 13. Visual verification/testing is explicitly out of scope.
 14. Implementation path `@game/src/Body/Voice/`, namespace `AlleyCat.Body.Voice`, and test path
@@ -213,3 +213,4 @@ The `AIVoice` implementation must ensure audio passed to `LipSyncPlayer.Play(Aud
 - [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
+- [CORE-007: Microsoft Logging Integration](../../core/007-microsoft-logging-integration/index.md)

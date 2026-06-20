@@ -1,6 +1,7 @@
 using System.Text;
 using AlleyCat.Body.Voice;
 using AlleyCat.Core;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using AlleyCat.Speech.Transcription;
@@ -14,8 +15,14 @@ namespace AlleyCat.IntegrationTests.Speech;
 /// <summary>
 /// Runtime coverage for AI voice orchestration without backend dependencies.
 /// </summary>
-public sealed partial class AIVoiceIntegrationTests
+public sealed partial class AIVoiceIntegrationTests : IDisposable
 {
+    private readonly AIPipelineDebugLogFixture _debugLogFixture = new();
+
+    /// <summary>
+    /// Clears the isolated AI pipeline logger override after each test.
+    /// </summary>
+    public void Dispose() => _debugLogFixture.Dispose();
 
     /// <summary>
     /// The abstract base voice contract must remain locatable in 3D space and expose an authoring Id through subclasses.

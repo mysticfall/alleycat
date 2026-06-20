@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
 using AlleyCat.Rigging;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Speech.Transcription;
 
@@ -27,6 +29,7 @@ public abstract partial class Transcriber : Node
     private bool _isBound;
     private bool _deferredGodotActionFlushQueued;
     private Stopwatch? _recordingStopwatch;
+    private ILogger<Transcriber>? _logger;
 
     /// <summary>
     /// Emitted when a transcription request completes successfully.
@@ -406,7 +409,10 @@ public abstract partial class Transcriber : Node
 
         StopRecordingInternal();
         AudioStreamWav recording = recordEffect.GetRecording();
-        AIPipelineDebugLog.Stage("STT recording captured", $"{GetRecordingByteCount(recording)} bytes");
+        if (AIPipelineDebugLog.IsEnabled)
+        {
+            AIPipelineDebugLog.Stage("STT recording captured", $"{GetRecordingByteCount(recording)} bytes");
+        }
         await InvokeTranscriptionAsync(recording);
     }
 
@@ -426,7 +432,10 @@ public abstract partial class Transcriber : Node
         {
             IsTranscribing = true;
             string text = await Transcribe(recording);
-            AIPipelineDebugLog.Latency("STT completed in", stopwatch, $"{text.Length} chars");
+            if (AIPipelineDebugLog.IsEnabled)
+            {
+                AIPipelineDebugLog.Latency("STT completed in", stopwatch, $"{text.Length} chars");
+            }
             await DispatchGodotActionAsync(() => HandleTranscriptionSuccess(text));
         }
         catch (Exception ex)
@@ -503,7 +512,20 @@ public abstract partial class Transcriber : Node
 
     private void HandleTranscriptionFailure(Exception ex)
     {
-        GD.PushError(ex.ToString());
+        // Failure UX and signal emission must still run in isolated integration scenes without the Game provider;
+        // diagnostics are explicitly optional only for this recovery path.
+        if (_logger is null && GameLoggerResolver.TryResolve(out ILogger<Transcriber>? logger))
+        {
+            _logger = logger;
+        }
+
+        if (_logger is { } resolvedLogger)
+        {
+            resolvedLogger.LogError(
+                ex,
+                "Voice transcription failed while processing recorded microphone audio.");
+        }
+
         _ = EmitSignal(SignalName.TranscriptionFailed, ex.Message);
         _ = this.PostNotification(DefaultFriendlyErrorMessage);
     }

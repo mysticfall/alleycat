@@ -1,0 +1,29 @@
+{
+  "STT": {
+    "Host": "http://localhost:8000/v1",
+    "Model": "Systran/faster-whisper-small.en",
+    "Language": "en",
+    "Prompt": "Transcribe the player's speech clearly.",
+    "Temperature": 0.0,
+    "Timeout": 30
+  },
+  "TTS": {
+    "Host": "http://localhost:8004/v1",
+    "Model": "tts-1",
+    "Voice": "alloy",
+    "Format": "wav",
+    "SpeedRatio": 1.0,
+    "Timeout": 30
+  },
+  "AI": {
+    "Host": "https://openrouter.ai/api/v1",
+    "Model": "google/gemma-4-31b-it",
+    "Timeout": 30
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning"
+    }
+  }
+}

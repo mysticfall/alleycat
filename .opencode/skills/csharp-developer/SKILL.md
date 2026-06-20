@@ -213,6 +213,23 @@ Use short, descriptive group names that reflect the logical role of the properti
 - Before handoff for a rename/move refactor, search for both the old symbol/namespace and the old directory or
   resource path across product, unit-test, integration-test, specs, scenes/resources, and workflow docs.
 
+## Diagnostics And Logging
+
+- Coding agents must always use `ILogger` or `ILogger<T>` for diagnostics and debug logging.
+- Do not add new `GD.Print`, `GD.PushWarning`, or `GD.PushError` diagnostics; migrate touched diagnostics to `ILogger`.
+- Use the unified core logging resolver for Godot nodes or services that cannot receive loggers through constructor
+  injection.
+- Logger resolution must fail clearly when logging infrastructure is required; do not silently suppress missing loggers.
+- Use structured message templates and appropriate levels: `Trace`, `Debug`, `Information`, `Warning`, `Error`, or
+  `Critical`.
+- Add comprehensive debug messages where they clarify state transitions, external calls, configuration decisions, or
+  failure paths.
+- Guard interpolated or expensive log-message/detail construction with `IsEnabled` or an equivalent helper before
+  constructing the interpolated or expensive value.
+- Structured logging calls with cheap arguments do not need an extra guard.
+- Keep exceptions explicit for protocol output, intentional UI notifications, and Godot API calls that are not
+  diagnostics.
+
 ## Integration Tests (Godot Runtime)
 
 - Add Godot-dependent integration tests under `integration-tests/src/`.

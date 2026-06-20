@@ -1,10 +1,12 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
+using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using Godot;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Body.Voice;
 
@@ -22,6 +24,7 @@ public partial class AIVoice : Voice
 
     private readonly Lock _generationStateLock = new();
     private bool _isGenerating;
+    private ILogger<AIVoice>? _logger;
 
     /// <summary>
     /// Speech generator used to create spoken audio bytes.
@@ -64,7 +67,10 @@ public partial class AIVoice : Voice
 
         try
         {
-            AIPipelineDebugLog.Stage("TTS request received", $"{speech.Trim().Length} chars");
+            if (AIPipelineDebugLog.IsEnabled)
+            {
+                AIPipelineDebugLog.Stage("TTS request received", $"{speech.Trim().Length} chars");
+            }
 
             if (SpeechGenerator is null)
             {
@@ -80,15 +86,27 @@ public partial class AIVoice : Voice
 
             Stopwatch generationStopwatch = AIPipelineDebugLog.StartTimer();
             byte[] generatedAudio = await GenerateSpeechAudioAsync(speech);
-            AIPipelineDebugLog.Latency("TTS audio generated in", generationStopwatch, $"{generatedAudio.Length} bytes");
+            if (AIPipelineDebugLog.IsEnabled)
+            {
+                AIPipelineDebugLog.Latency("TTS audio generated in", generationStopwatch, $"{generatedAudio.Length} bytes");
+            }
 
             Stopwatch parseStopwatch = AIPipelineDebugLog.StartTimer();
             AudioStreamWav speechStream = CreatePlayableSpeech(generatedAudio);
-            AIPipelineDebugLog.Latency("TTS audio parsed in", parseStopwatch, $"{speechStream.Data.Length} PCM bytes");
+            if (AIPipelineDebugLog.IsEnabled)
+            {
+                AIPipelineDebugLog.Latency("TTS audio parsed in", parseStopwatch, $"{speechStream.Data.Length} PCM bytes");
+            }
 
             Stopwatch lipSyncStopwatch = AIPipelineDebugLog.StartTimer();
             LipSyncPlayer.PreparedPlayback preparedPlayback = await PrepareGeneratedSpeechAsync(speechStream);
-            AIPipelineDebugLog.Latency("TTS lip-sync prepared in", lipSyncStopwatch, $"{preparedPlayback.Frames.Length} frames");
+            if (AIPipelineDebugLog.IsEnabled)
+            {
+                AIPipelineDebugLog.Latency(
+                    "TTS lip-sync prepared in",
+                    lipSyncStopwatch,
+                    $"{preparedPlayback.Frames.Length} frames");
+            }
 
             await DispatchDeferredGodotActionAsync(() =>
             {
@@ -100,12 +118,12 @@ public partial class AIVoice : Voice
         catch (AudioConversionException ex)
         {
             AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
-            await FailSpeechAsync(AudioFormatIncompatibleMessage, $"Audio conversion failed: {ex.Message}");
+            await FailSpeechAsync(AudioFormatIncompatibleMessage, ex);
         }
         catch (Exception ex)
         {
             AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
-            await FailSpeechAsync(ex.Message, ex.ToString());
+            await FailSpeechAsync(ex.Message, ex);
         }
         finally
         {
@@ -246,11 +264,8 @@ public partial class AIVoice : Voice
         return true;
     }
 
-    private async Task FailSpeechAsync(string emittedError, string? loggedError = null)
-    {
-        string errorToLog = string.IsNullOrWhiteSpace(loggedError) ? emittedError : loggedError;
-        await DispatchDeferredGodotActionAsync(() => ReportSpeechFailure(emittedError, errorToLog));
-    }
+    private Task FailSpeechAsync(string emittedError, Exception? exception = null)
+        => DispatchDeferredGodotActionAsync(() => ReportSpeechFailure(emittedError, exception));
 
     /// <summary>
     /// Generates raw speech audio bytes for the supplied speech text.
@@ -275,9 +290,27 @@ public partial class AIVoice : Voice
     protected virtual void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
         => LipSyncPlayer!.PlayPrepared(preparedPlayback);
 
-    private void ReportSpeechFailure(string emittedError, string loggedError)
+    private void ReportSpeechFailure(string emittedError, Exception? exception)
     {
-        GD.PushError(loggedError);
+        // Failure signal emission must still run in isolated integration scenes without the Game provider;
+        // diagnostics are explicitly optional only for this recovery path.
+        if (_logger is null && GameLoggerResolver.TryResolve(out ILogger<AIVoice>? logger))
+        {
+            _logger = logger;
+        }
+
+        if (_logger is { } resolvedLogger)
+        {
+            if (exception is null)
+            {
+                resolvedLogger.LogError("AI voice speech failed: {Error}", emittedError);
+            }
+            else
+            {
+                resolvedLogger.LogError(exception, "AI voice speech failed: {Error}", emittedError);
+            }
+        }
+
         EmitSpeechFailedSignal(emittedError);
     }
 

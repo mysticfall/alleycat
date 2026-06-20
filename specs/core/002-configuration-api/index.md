@@ -7,49 +7,37 @@ title: Configuration API
 
 ## Requirement
 
-Provide a configuration API that merges project defaults from `res://AlleyCat.cfg`
-with per-user overrides from `user://AlleyCat.cfg`.
-Individual settings must be overrideable without duplicating the entire configuration file.
-The API must be accessible to any game subsystem.
+Retire the legacy `ConfigProvider` configuration API. Project-wide runtime configuration is defined by
+[CORE-006: Microsoft Configuration Integration](../006-microsoft-configuration-integration/index.md), and backward
+compatibility with the removed bridge is not required.
 
 ## Goal
 
-Enable flexible runtime configuration by providing a merged view of project defaults and user overrides.
-The project defaults file must remain the source of truth for available configuration keys.
+Keep configuration ownership clear: core provides Microsoft configuration infrastructure, while subsystems read or bind
+their own option sections.
 
 ## User Requirements
 
-1. Developers must be able to configure game subsystems using a simple key-value lookup API.
-2. Users must be able to override specific configuration values without modifying the shipped defaults.
-3. The system must gracefully handle missing override files by falling back to project defaults.
-4. Configuration must be accessible from any game subsystem.
+1. Developers have one supported runtime configuration path through CORE-006.
+2. Removed legacy configuration APIs do not create a second source of truth.
+3. Subsystems can still support explicit custom JSON paths when they own that loading behaviour locally.
 
 ## Technical Requirements
 
-1. A configuration helper class must be defined in `@game/src/Core/ConfigProvider.cs`.
-2. The API must load base configuration from `res://AlleyCat.cfg`.
-3. The API must load override configuration from `user://AlleyCat.cfg` if it exists.
-4. Merge semantics must apply per-section and per-key overlay.
-5. Sections and keys present only in the base file must remain in the merged result.
-6. Sections and keys present only in the override file must be added to the merged result.
-7. When the override file is absent, the API must return the base configuration unchanged.
-8. When a required configuration value is missing after merge, the API must return a sentinel value.
-The caller must handle the missing value explicitly.
-9. The API must expose a method to retrieve a single value with an optional default.
-10. The API must expose a method to retrieve all key-value pairs for a given section.
-11. The API must not require the override file to duplicate the entire base configuration.
-12. The API must be callable from any Node or script without autoload registration.
+1. `ConfigProvider` must not be restored or required as a compatibility bridge.
+2. Core configuration registration must expose `IConfiguration` using CORE-006 source ordering and paths.
+3. Core configuration code must not bind or reference concrete subsystem option APIs such as `AIOptions`, `STTOptions`,
+   or `TTSOptions`.
+4. Subsystems that need typed settings must bind/read their own option sections from core-provided `IConfiguration`.
+5. Subsystems that need a single explicit custom JSON path must build that Microsoft configuration source locally.
+6. The shared configuration helper is `GameConfiguration`; the old `AlleyCatConfiguration` name must not be used.
 
 ## In Scope
 
-- Configuration helper class with merge semantics.
-- Base configuration file path: `res://AlleyCat.cfg`.
-- Override configuration file path: `user://AlleyCat.cfg`.
-- Per-section and per-key value overlay merge strategy.
-- Fallback behaviour when override file is absent.
-- Error behaviour when required values are missing after merge.
-- API surface for key lookup and section enumeration.
-- Support for future subsystems beyond speech.
+- Removal of normative `ConfigProvider` compatibility requirements.
+- CORE-006 as the only core-owned runtime configuration integration.
+- Subsystem-owned option binding from `IConfiguration`.
+- Subsystem-owned explicit custom JSON path loading when a subsystem requires it.
 
 ## Out Of Scope
 
@@ -58,74 +46,60 @@ The caller must handle the missing value explicitly.
 - Configuration UI for editing user overrides.
 - Remote configuration or cloud-based settings.
 - Encryption or obfuscation of configuration values.
+- Backward compatibility for removed `ConfigProvider` callers.
 
 ## Contract
 
-### Merge Semantics
+### Runtime Configuration Path
 
-The configuration API must implement the following merge strategy:
-
-| Scenario | Behaviour |
-|----------|-----------|
-| Override file absent | Return base configuration unchanged. |
-| Section and key match | Override value replaces base value. |
-| Key exists only in base | Base value retained. |
-| Key exists only in override | Override value added. |
-| Section exists only in override | New section added. |
-
-### File Paths
+CORE-006 defines the normative default runtime files:
 
 | File | Purpose | Access |
 |------|---------|-------|
-| `res://AlleyCat.cfg` | Project defaults (shipped with game) | Read-only |
-| `user://AlleyCat.cfg` | User overrides (persisted in user data directory) | Read-write |
+| `res://AlleyCat.json` | Project defaults (shipped with game) | Read-only |
+| `user://AlleyCat.json` | User overrides (persisted in user data directory) | Read-write |
 
-### API Surface
+The repository source for `res://AlleyCat.json` is `@game/AlleyCat.json`.
 
-The configuration provider must expose methods to:
+### Ownership Boundary
 
-- Retrieve a single value with an optional default.
-- Retrieve all key-value pairs for a given section.
-- Check if a section or key exists.
+Core owns:
 
-Exact method signatures are defined in the implementation.
+- `GameConfiguration` as the shared Microsoft configuration builder.
+- `IConfiguration` registration with shipped defaults and optional user overrides.
+- Path resolution and logging infrastructure needed for configuration startup.
 
-### Missing Value Handling
+Subsystems own:
 
-- When a value is requested with no default and the key does not exist, the method must return `null`.
-- Callers must handle `null` returns explicitly for required values.
-- The implementation must not throw unhandled exceptions for missing keys.
+- Option models and section binding for their own settings.
+- Validation and missing-value behaviour for subsystem-specific required settings.
+- Any explicit custom-path JSON configuration loading required by editor or test scenarios.
 
-### Example Configuration
-
-Base file defines defaults; override file specifies user changes.
-For example, if the base contains `[STT]` with an empty `ApiKey`.
-The override contains `[STT]` with `ApiKey=sk-user-key-123`, so the merged result uses the override value.
-Other base keys like `Model` and `Host` are preserved in the merged result.
+Core must not reference concrete subsystem option classes.
 
 ## Acceptance Criteria
 
-1. The spec defines both user-visible configuration flexibility outcomes and technical implementation contracts.
-2. The merge semantics are explicitly defined.
-This includes base path, override path, precedence, absent file behaviour, and missing value behaviour.
-3. The API is specified as a library/helper class, not as a global autoload service.
-4. The spec explicitly allows usage by future subsystems beyond speech.
+1. The spec defines the user outcome of a single supported runtime configuration path.
+2. The spec states that `ConfigProvider` compatibility is removed and not required.
+3. Core configuration ownership is limited to `GameConfiguration`, `IConfiguration`, paths, and infrastructure.
+4. Subsystem option models, binding, validation, and custom-path loading are assigned to owning subsystems.
 5. The spec does not exclude mandatory implementation contracts through `Out Of Scope`.
-6. Acceptance criteria verify both the user requirement (configuration flexibility)
-and technical requirement (merge implementation) layers.
+6. Acceptance criteria verify both user requirements and technical requirements.
+
+**Traceability Map:** User Requirements 1-3 -> AC-1, AC-2; Technical Requirements 1-6 -> AC-3, AC-4, AC-5, AC-6.
 
 ## References
 
 ### Implementation
 
-- `@game/src/Core/ConfigProvider.cs` - Configuration helper class
+- `@game/src/Core/Configuration/GameConfiguration.cs` - Microsoft configuration helper
+- `@game/src/Core/Configuration/ConfigurationServiceCollectionExtensions.cs` - Core configuration registration
 
 ### Related Specs
 
-- [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
-- [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
+- [CORE-006: Microsoft Configuration Integration](../006-microsoft-configuration-integration/index.md)
 
 ### Configuration Files
 
-- `@game/AlleyCat.cfg` - Project defaults (base configuration)
-- `user://AlleyCat.cfg` - User override configuration
+- `res://AlleyCat.json` (`@game/AlleyCat.json`) - Project defaults for CORE-006 runtime configuration
+- `user://AlleyCat.json` - User override configuration for CORE-006 runtime configuration

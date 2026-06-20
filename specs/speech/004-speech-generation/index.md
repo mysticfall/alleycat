@@ -48,8 +48,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 8. An exported TargetSampleRate property must allow configuration of output sample
    rate. When greater than 0, audio must be resampled before emission. Default: 0
    (no resampling). Recommended: 16000.
-9. On generation failure, errors must be logged via GD.PushError and a failure
-   signal emitted.
+9. On generation failure, errors must be logged via `ILogger` and a failure signal emitted.
 10. On resampling failure, errors must be logged and the failure signal emitted
    instead of completion.
 11. The concrete OpenAISpeechGenerator implementation must use the official OpenAI
@@ -58,9 +57,9 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
    dispatched on the Godot thread through the deferred action pattern.
 13. Enabled and single in-flight generation behaviour must apply to the streaming
    dispatch path as well as the full-response path.
-14. Configuration must be loaded from the merged configuration API. The [TTS]
-   section must contain Host (full endpoint URL), ApiKey (optional API key), and
-   additional API-supported properties.
+14. Configuration must bind/read subsystem-owned TTS options from CORE-006 `IConfiguration`, or build a local
+    custom-path JSON configuration when an explicit path is supplied. Options include Host (full endpoint URL), ApiKey
+    (optional API key), and additional API-supported properties.
 15. Implementation must be under game/src/Speech/Generation/.
 16. Integration tests must be under integration-tests/src/.
 
@@ -70,9 +69,9 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 - Async Generate method returning full-response byte[].
 - Signal contracts for completion and failure.
 - Streaming chunk API and signal contract.
-- Error handling using GD.PushError.
+- Error handling using `ILogger`.
 - OpenAISpeechGenerator using OpenAI .NET SDK.
-- Configuration from merged API.
+- Subsystem-owned configuration from CORE-006 `IConfiguration` or explicit custom-path JSON loading.
 - Audio resampling via TargetSampleRate property.
 
 ## Out Of Scope
@@ -91,9 +90,8 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
    implementation contracts.
 2. The abstract SpeechGenerator class defines Enabled, Generate, streaming chunk
    API, and signal contracts.
-3. Error handling uses GD.PushError for raw errors.
-4. OpenAISpeechGenerator uses the official OpenAI .NET SDK and loads configuration
-   from the merged configuration API.
+3. Error handling uses `ILogger` for raw diagnostics.
+4. OpenAISpeechGenerator uses the official OpenAI .NET SDK and owns its TTS option binding/loading.
 5. Runtime integration boundaries (config, signals, lifecycle) are explicitly
    defined.
 6. Implementation path and test path are specified.
@@ -111,7 +109,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 
 - game/src/Speech/Generation/SpeechGenerator.cs
 - game/src/Speech/Generation/OpenAISpeechGenerator.cs
-- game/AlleyCat.cfg
+- game/AlleyCat.json
 
 ### Related Specs
 
@@ -119,7 +117,8 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 - SPCH-002: Audio2Face LipSync Player
 - SPCH-003: Transcriber Component
 - BODY-006: Voice Component
-- CORE-002: Configuration API
+- CORE-006: Microsoft Configuration Integration
+- CORE-007: Microsoft Logging Integration
 
 ### External Dependencies
 

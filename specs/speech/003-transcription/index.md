@@ -36,14 +36,12 @@ backends.
 3. Use Godot microphone API to capture audio and produce `AudioStreamWav`.
 4. Define abstract method `Transcribe(AudioStreamWav)` as `async Task<string>`.
 5. Emit signal `TranscriptionCompleted(string text)` on success.
-6. On failure: log raw error via `GD.PushError`, display a user-friendly
-   message via `@game/src/UI/NotificationUIExtensions.cs`, and emit signal
-   `TranscriptionFailed(string error)`.
+6. On failure: log raw diagnostic detail via `ILogger`, display a user-friendly message via
+   `@game/src/UI/NotificationUIExtensions.cs`, and emit signal `TranscriptionFailed(string error)`.
 7. Implement `OpenAITranscriber` using the official OpenAI .NET SDK.
-8. Load configuration from the merged configuration API
-   ([CORE-002](../../core/002-configuration-api/index.md)) [STT] section
-   containing `Host`, optional `ApiKey`, and additional model/timeout
-   settings.
+8. Bind/read subsystem-owned STT options from CORE-006 `IConfiguration`, or build a local custom-path JSON
+   configuration when an explicit path is supplied. Options include `Host`, optional `ApiKey`, and additional
+   model/timeout settings.
 9. Specify runtime integration: XR binding, microphone prerequisites,
    config contract, signal contract, and lifecycle.
 
@@ -52,9 +50,9 @@ backends.
 - Abstract `Transcriber` class with XR input binding and microphone recording.
 - Abstract `Transcribe(AudioStreamWav)` async method contract.
 - Signal contract for transcription completion and failure.
-- Error handling contract using `GD.PushError` and `NotificationUIExtensions`.
+- Error handling contract using `ILogger` and `NotificationUIExtensions`.
 - `OpenAITranscriber` implementation using OpenAI .NET SDK.
-- Configuration contract from merged configuration API.
+- Subsystem-owned configuration contract using CORE-006 `IConfiguration` or explicit custom-path JSON loading.
 - Implementation under `@game/src/Speech/Transcription/`.
 - Integration tests under `@integration-tests/src/`.
 
@@ -77,14 +75,14 @@ input and avoids extra confirmation steps.
 
 ### Error Dual-Channel Pattern
 
-Failures emit both a raw `GD.PushError` (for diagnostics) and a
+Failures emit both an `ILogger` error (for diagnostics) and a
 player-facing notification (for usability). Both are emitted; the notification
 supplies a static user-friendly message while the signal carries the raw detail
 for listeners that need it.
 
 ### No-Auth Backend Compatibility
 
-`ApiKey` is optional in the [STT] config section. When omitted and the SDK
+`ApiKey` is optional in the `STT` config section. When omitted and the SDK
 requires a non-empty value, a dummy credential is used only if the target
 backend accepts unauthenticated requests. This avoids hard-coding credentials
 for compatible services.
@@ -94,8 +92,8 @@ for compatible services.
 1. UR-1–UR-5 covered: player can record, auto-stop works, success/failure
    messages reach the player.
 2. TR-1–TR-9 covered: abstract class, XR binding, microphone capture, async
-   contract, signals, dual-channel error handling, SDK implementation, config
-   loading, and runtime integration specified.
+   contract, signals, dual-channel error handling, SDK implementation, subsystem-owned config loading, and runtime
+   integration specified.
 3. `Out Of Scope` excludes only optional/unrelated work; no mandatory contract
    omitted.
 
@@ -115,6 +113,8 @@ for compatible services.
 - [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
+- [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)
+- [CORE-007: Microsoft Logging Integration](../../core/007-microsoft-logging-integration/index.md)
 
 ### External Dependencies
 

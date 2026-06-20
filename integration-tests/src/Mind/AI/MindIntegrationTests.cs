@@ -18,8 +18,15 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 /// Isolated runtime coverage for the migrated AgenticMind speech path without reference character assets or backend calls.
 /// </summary>
 [Headless]
-public sealed partial class MindIntegrationTests
+public sealed partial class MindIntegrationTests : IDisposable
 {
+    private readonly AIPipelineDebugLogFixture _debugLogFixture = new();
+
+    /// <summary>
+    /// Clears the isolated AI pipeline logger override after each test.
+    /// </summary>
+    public void Dispose() => _debugLogFixture.Dispose();
+
     /// <summary>
     /// Player speech should become a runtime turn whose fake speak-tool call routes exactly once to the NPC voice.
     /// </summary>

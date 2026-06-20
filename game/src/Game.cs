@@ -1,10 +1,13 @@
 using AlleyCat.Common;
 using AlleyCat.Core;
+using AlleyCat.Core.Configuration;
+using AlleyCat.Core.Logging;
 using AlleyCat.Testing;
 using AlleyCat.UI;
 using AlleyCat.XR;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat;
 
@@ -59,6 +62,7 @@ public partial class Game : Node, IServiceProvider
         SetInstance();
         if (_serviceProvider is null)
         {
+            RegisterInfrastructureServices(_services);
             RegisterServices(_services);
             RegisterConfiguredServices(_services);
             RegisterSceneOwnedServices(_services);
@@ -116,6 +120,12 @@ public partial class Game : Node, IServiceProvider
     /// <param name="services">Service collection to populate.</param>
     protected virtual void RegisterServices(IServiceCollection services)
     {
+    }
+
+    private void RegisterInfrastructureServices(IServiceCollection services)
+    {
+        ILogNotificationSink notificationSink = new GodotUINotificationSink(this);
+        _ = services.AddGameConfiguration(notificationSink: notificationSink);
     }
 
     private void RegisterConfiguredServices(IServiceCollection services)
@@ -236,7 +246,7 @@ public partial class Game : Node, IServiceProvider
         bool xrInitialised = await _xrInitialisationCompletionSource.Task;
         if (!xrInitialised)
         {
-            GD.PushError("XR initialisation failed. Quitting the game.");
+            GetService<ILogger<Game>>()?.LogError("XR initialisation failed. Quitting the game.");
             QuitGame(1);
             return;
         }
@@ -260,7 +270,10 @@ public partial class Game : Node, IServiceProvider
         Error loadStartError = _loadingScreen.LoadSceneAsync(StartScenePath);
         if (loadStartError != Error.Ok)
         {
-            GD.PushError($"Failed to start loading start scene '{StartScenePath}' with error '{loadStartError}'. Quitting the game.");
+            GetService<ILogger<Game>>()?.LogError(
+                "Failed to start loading start scene {StartScenePath} with error {LoadStartError}. Quitting the game.",
+                StartScenePath,
+                loadStartError);
             QuitGame(1);
         }
     }

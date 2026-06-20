@@ -49,6 +49,8 @@ game and replacing ad-hoc static accessors.
 9. After `BuildServiceProvider()` is called, `Game` must resolve required
    startup services from the built provider to perform post-construction
    initialisation.
+10. `Game` must register core configuration and logging services before the
+    provider is built; their normative contracts live in CORE-006 and CORE-007.
 
 ## In Scope
 
@@ -60,6 +62,7 @@ game and replacing ad-hoc static accessors.
 - Recursive deterministic registrar discovery before `BuildServiceProvider()`.
 - `XRManager` self-registration via the registrar interface.
 - Post-construction resolution of required startup services from DI.
+- Startup registration boundary for configuration and logging infrastructure.
 
 ## Service Registrar Interface Contract
 
@@ -85,8 +88,10 @@ hard-coded node paths or names.
 
 ## Out Of Scope
 
-- Configuration binding to services (see [CORE-002: Configuration API](../002-configuration-api/index.md)).
-- Logging infrastructure wiring.
+- Details of configuration source ordering and typed option contracts (see
+  [CORE-006: Microsoft Configuration Integration](../006-microsoft-configuration-integration/index.md)).
+- Details of logging provider behaviour and call-site conventions (see
+  [CORE-007: Microsoft Logging Integration](../007-microsoft-logging-integration/index.md)).
 - Scoped service lifetimes.
 - Service collections registered after `BuildServiceProvider()`.
 - Autoload availability timing guarantees unrelated to service resolution.
@@ -113,6 +118,8 @@ hard-coded node paths or names.
    consumers (User Requirement 3).
 8. `Out Of Scope` does not exclude mandatory service registration or
    resolution contracts needed for CORE-004 and dependent specs.
+9. Configuration and logging registrations are present before provider build,
+   with detailed behaviour delegated to CORE-006 and CORE-007.
 
 ## References
 
@@ -126,6 +133,8 @@ hard-coded node paths or names.
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [CORE-001: Global Scene](../001-global-scene/index.md)
 - [CORE-002: Configuration API](../002-configuration-api/index.md)
+- [CORE-006: Microsoft Configuration Integration](../006-microsoft-configuration-integration/index.md)
+- [CORE-007: Microsoft Logging Integration](../007-microsoft-logging-integration/index.md)
 
 ### External
 

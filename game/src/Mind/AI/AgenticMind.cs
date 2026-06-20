@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AlleyCat.Body.Voice;
+using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
@@ -8,6 +9,7 @@ using AlleyCat.Templating;
 using Godot;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 using MindBase = AlleyCat.Mind.Mind;
 using SpeechObservation = AlleyCat.Mind.Observation.SpeechObservation;
@@ -71,7 +73,11 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
 
         string trimmedSpeech = speech.Trim();
-        AIPipelineDebugLog.Stage("LLM observation received", $"{trimmedSpeech.Length} chars");
+        if (AIPipelineDebugLog.IsEnabled)
+        {
+            AIPipelineDebugLog.Stage("LLM observation received", $"{trimmedSpeech.Length} chars");
+        }
+
         _ = Observe(new SpeechObservation(source.Id, trimmedSpeech));
     }
 
@@ -117,19 +123,19 @@ public partial class AgenticMind : MindBase, IServiceProvider
         {
             if (Voice is null)
             {
-                GD.PushError("AgenticMind requires a configured NPC Voice.");
+                GameLoggerResolver.ResolveRequired<AgenticMind>().LogError("AgenticMind requires a configured NPC Voice.");
                 return;
             }
 
             if (ClientProvider is null)
             {
-                GD.PushError("AgenticMind requires a configured ClientProvider.");
+                GameLoggerResolver.ResolveRequired<AgenticMind>().LogError("AgenticMind requires a configured ClientProvider.");
                 return;
             }
 
             if (SystemInstruction is null)
             {
-                GD.PushError("AgenticMind requires a configured SystemInstruction prompt stack.");
+                GameLoggerResolver.ResolveRequired<AgenticMind>().LogError("AgenticMind requires a configured SystemInstruction prompt stack.");
                 return;
             }
 
@@ -141,7 +147,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
         catch (Exception ex)
         {
-            GD.PushError(ex.ToString());
+            GameLoggerResolver.ResolveRequired<AgenticMind>().LogError(ex, "AgenticMind response failed.");
         }
         finally
         {
@@ -163,13 +169,19 @@ public partial class AgenticMind : MindBase, IServiceProvider
             return false;
         }
 
-        AIPipelineDebugLog.Latency("LLM first speak tool call after", turn.Stopwatch, $"{turn.SpokenSpeech.Length} chars");
+        if (AIPipelineDebugLog.IsEnabled)
+        {
+            AIPipelineDebugLog.Latency("LLM first speak tool call after", turn.Stopwatch, $"{turn.SpokenSpeech.Length} chars");
+        }
+
         _ = SpeakAsync(speech, CancellationToken.None).ContinueWith(
             task =>
             {
                 if (task.IsFaulted)
                 {
-                    GD.PushError(task.Exception?.GetBaseException().ToString());
+                    GameLoggerResolver.ResolveRequired<AgenticMind>().LogError(
+                        task.Exception?.GetBaseException(),
+                        "AgenticMind speech dispatch failed.");
                     return;
                 }
 
@@ -279,7 +291,10 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
         finally
         {
-            AIPipelineDebugLog.Latency("LLM turn returned in", runStopwatch, $"{observations.Count} observation(s)");
+            if (AIPipelineDebugLog.IsEnabled)
+            {
+                AIPipelineDebugLog.Latency("LLM turn returned in", runStopwatch, $"{observations.Count} observation(s)");
+            }
         }
     }
 

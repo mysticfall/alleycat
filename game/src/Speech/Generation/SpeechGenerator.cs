@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using System.Text;
+using AlleyCat.Core.Logging;
 using AlleyCat.UI;
 using Godot;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Speech.Generation;
 
@@ -16,6 +18,7 @@ public abstract partial class SpeechGenerator : Node
     private readonly Lock _deferredGodotActionsLock = new();
     private readonly Lock _generationStateLock = new();
     private bool _deferredGodotActionFlushQueued;
+    private ILogger<SpeechGenerator>? _logger;
 
     /// <summary>
     /// Emitted when a speech-generation request completes successfully.
@@ -285,7 +288,20 @@ public abstract partial class SpeechGenerator : Node
 
     private void HandleGenerationFailure(Exception ex)
     {
-        GD.PushError(ex.ToString());
+        // Failure UX and signal emission must still run in isolated integration scenes without the Game provider;
+        // diagnostics are explicitly optional only for this recovery path.
+        if (_logger is null && GameLoggerResolver.TryResolve(out ILogger<SpeechGenerator>? logger))
+        {
+            _logger = logger;
+        }
+
+        if (_logger is { } resolvedLogger)
+        {
+            resolvedLogger.LogError(
+                ex,
+                "Speech generation failed while synthesising requested text.");
+        }
+
         _ = EmitSignal(SignalName.SpeechGenerationFailed, ex.Message);
         _ = this.PostNotification(DefaultFriendlyErrorMessage);
         OnSpeechGenerationFailed(ex.Message);

@@ -11,6 +11,8 @@
 - [CORE-003: Component/Trait System](core/003-component-system/index.md)
 - [CORE-004: Global Service Resolution](core/004-global-service-resolution/index.md)
 - [CORE-005: Scene Installer System](core/005-scene-installer-system/index.md)
+- [CORE-006: Microsoft Configuration Integration](core/006-microsoft-configuration-integration/index.md)
+- [CORE-007: Microsoft Logging Integration](core/007-microsoft-logging-integration/index.md)
 
 ## AI
 

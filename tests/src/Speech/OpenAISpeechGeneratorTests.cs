@@ -1,6 +1,7 @@
 using System.Text.Json;
-using AlleyCat.Core;
+using AlleyCat.Core.Configuration;
 using AlleyCat.Speech.Generation;
+using Microsoft.Extensions.Configuration;
 using OpenAI.Audio;
 using Xunit;
 
@@ -216,7 +217,7 @@ public sealed class OpenAISpeechGeneratorTests
     /// Merged configuration must preserve base values while allowing user overrides for TTS settings.
     /// </summary>
     [Fact]
-    public void Load_MergedConfigProvider_UsesMergedTtsValues()
+    public void Load_MergedConfiguration_UsesMergedTtsValues()
     {
         Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
         {
@@ -237,10 +238,10 @@ public sealed class OpenAISpeechGeneratorTests
             },
         };
 
-        var configProvider = ConfigProvider.FromSections(baseSections, overrideSections);
+        IConfiguration configuration = CreateConfiguration(baseSections, overrideSections);
 
         var settings =
-            OpenAISpeechGenerator.OpenAISpeechGeneratorSettings.Load(configProvider, "merged-test-config");
+            OpenAISpeechGenerator.OpenAISpeechGeneratorSettings.Load(configuration, "merged-test-config");
 
         Assert.Equal("https://base.example/v1", settings.Host);
         Assert.Equal("tts-1", settings.Model);
@@ -278,13 +279,13 @@ public sealed class OpenAISpeechGeneratorTests
         bool mergedLoaderCalled = false;
 
         var settings = OpenAISpeechGenerator.OpenAISpeechGeneratorSettings.Load(
-            ConfigProvider.DefaultBaseConfigPath,
-            mergedConfigLoader: () =>
+            GameConfiguration.DefaultBaseConfigPath,
+            defaultConfigurationLoader: () =>
             {
                 mergedLoaderCalled = true;
-                return ConfigProvider.FromSections(baseSections, overrideSections);
+                return CreateConfiguration(baseSections, overrideSections);
             },
-            singleConfigLoader: _ => throw new Xunit.Sdk.XunitException(
+            customConfigurationLoader: _ => throw new Xunit.Sdk.XunitException(
                 "Single-file loader should not be used for the default config path."));
 
         Assert.True(mergedLoaderCalled);
@@ -300,7 +301,7 @@ public sealed class OpenAISpeechGeneratorTests
     [Fact]
     public void Load_CustomConfigPath_UsesDirectConfigRoutingWithoutImplicitMerge()
     {
-        const string customConfigPath = "res://custom-tts.cfg";
+        const string customConfigPath = "res://custom-tts.json";
         Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
         {
             ["TTS"] = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -315,12 +316,12 @@ public sealed class OpenAISpeechGeneratorTests
 
         var settings = OpenAISpeechGenerator.OpenAISpeechGeneratorSettings.Load(
             customConfigPath,
-            mergedConfigLoader: () => throw new Xunit.Sdk.XunitException(
+            defaultConfigurationLoader: () => throw new Xunit.Sdk.XunitException(
                 "Merged loader should not be used for a custom config path."),
-            singleConfigLoader: path =>
+            customConfigurationLoader: path =>
             {
                 loadedPath = path;
-                return ConfigProvider.FromSections(baseSections);
+                return CreateConfiguration(baseSections);
             });
 
         Assert.Equal(customConfigPath, loadedPath);
@@ -390,5 +391,32 @@ public sealed class OpenAISpeechGeneratorTests
         string voice = settings.ResolveVoiceName(" ");
 
         Assert.Equal("vendor-default", voice);
+    }
+
+    private static IConfiguration CreateConfiguration(
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> baseSections,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? overrideSections = null)
+    {
+        Dictionary<string, string?> values = new(StringComparer.Ordinal);
+        AddSections(values, baseSections);
+        if (overrideSections is not null)
+        {
+            AddSections(values, overrideSections);
+        }
+
+        return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+    }
+
+    private static void AddSections(
+        Dictionary<string, string?> values,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> sections)
+    {
+        foreach ((string section, IReadOnlyDictionary<string, string> sectionValues) in sections)
+        {
+            foreach ((string key, string value) in sectionValues)
+            {
+                values[$"{section}:{key}"] = value;
+            }
+        }
     }
 }

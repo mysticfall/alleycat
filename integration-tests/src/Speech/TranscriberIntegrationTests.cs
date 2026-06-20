@@ -1,4 +1,5 @@
 using System.Reflection;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Speech.Transcription;
 using AlleyCat.UI;
 using AlleyCat.XR;
@@ -11,13 +12,19 @@ namespace AlleyCat.IntegrationTests.Speech;
 /// <summary>
 /// Runtime coverage for transcription completion and failure orchestration.
 /// </summary>
-public sealed partial class TranscriberIntegrationTests
+public sealed partial class TranscriberIntegrationTests : IDisposable
 {
     private const string FriendlyFailureMessage = "Voice transcription failed. Please try again.";
+    private readonly AIPipelineDebugLogFixture _debugLogFixture = new();
 
     private static readonly MethodInfo _invokeTranscriptionAsyncMethod = typeof(Transcriber)
         .GetMethod("InvokeTranscriptionAsync", BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new InvalidOperationException("Expected Transcriber.InvokeTranscriptionAsync for runtime speech tests.");
+
+    /// <summary>
+    /// Clears the isolated AI pipeline logger override after each test.
+    /// </summary>
+    public void Dispose() => _debugLogFixture.Dispose();
 
     /// <summary>
     /// Verifies successful transcription emits the completion signal, posts the transcript, and clears the in-flight state.

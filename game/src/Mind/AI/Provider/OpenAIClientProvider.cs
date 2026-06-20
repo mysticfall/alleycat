@@ -1,8 +1,9 @@
 using System.ClientModel;
-using System.Globalization;
-using AlleyCat.Core;
+using AlleyCat.Core.Configuration;
 using Godot;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using OpenAI;
 using OpenAI.Chat;
 using OpenAI.Responses;
@@ -32,7 +33,7 @@ public enum OpenAIChatClientKind
 public partial class OpenAIClientProvider : ClientProvider
 {
     private const string ConfigSection = "AI";
-    private const string DefaultConfigPath = ConfigProvider.DefaultBaseConfigPath;
+    private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
     private const string DefaultModel = "gpt-4o-mini";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
 
@@ -41,7 +42,7 @@ public partial class OpenAIClientProvider : ClientProvider
     /// <summary>
     /// Config file used to resolve OpenAI-compatible AI settings.
     /// </summary>
-    [Export(PropertyHint.File, "*.cfg")]
+    [Export(PropertyHint.File, "*.json")]
     public string ConfigPath { get; set; } = DefaultConfigPath;
 
     /// <summary>
@@ -127,52 +128,59 @@ public partial class OpenAIClientProvider : ClientProvider
         private string ConfigPathDescription { get; init; } = DefaultConfigPath;
 
         public static OpenAIClientProviderSettings Load(string configPath)
-            => Load(configPath, () => ConfigProvider.LoadMerged(), ConfigProvider.Load);
+            => Load(LoadConfiguration(configPath), configPath);
 
-        internal static OpenAIClientProviderSettings Load(
-            string configPath,
-            Func<ConfigProvider> mergedConfigLoader,
-            Func<string, ConfigProvider> singleConfigLoader)
-            => Load(LoadConfigProvider(configPath, mergedConfigLoader, singleConfigLoader), configPath);
-
-        internal static OpenAIClientProviderSettings Load(ConfigProvider configProvider, string configPathDescription)
+        internal static OpenAIClientProviderSettings Load(AIOptions options, string configPathDescription = DefaultConfigPath)
         {
+            ArgumentNullException.ThrowIfNull(options);
+
             return new OpenAIClientProviderSettings(
-                GetString(configProvider, nameof(Host)),
-                GetOptionalString(configProvider, nameof(ApiKey)),
-                GetOptionalString(configProvider, nameof(Model)) ?? DefaultModel,
-                GetOptionalInt(configProvider, "Timeout"))
+                Clean(options.Host) ?? string.Empty,
+                Clean(options.ApiKey),
+                Clean(options.Model) ?? DefaultModel,
+                options.Timeout)
             {
                 ConfigPathDescription = configPathDescription,
             };
         }
 
-        private static ConfigProvider LoadConfigProvider(
+        internal static OpenAIClientProviderSettings Load(
             string configPath,
-            Func<ConfigProvider> mergedConfigLoader,
-            Func<string, ConfigProvider> singleConfigLoader)
-            => string.Equals(configPath, DefaultConfigPath, StringComparison.Ordinal)
-                ? mergedConfigLoader()
-                : singleConfigLoader(configPath);
+            Func<IConfiguration> defaultConfigurationLoader,
+            Func<string, IConfiguration> customConfigurationLoader)
+            => Load(LoadConfiguration(configPath, defaultConfigurationLoader, customConfigurationLoader), configPath);
 
-        private static string GetString(ConfigProvider configProvider, string key)
-            => GetOptionalString(configProvider, key) ?? string.Empty;
-
-        private static string? GetOptionalString(ConfigProvider configProvider, string key)
+        internal static OpenAIClientProviderSettings Load(IConfiguration configuration, string configPathDescription)
         {
-            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            AIOptions options = new();
+            configuration.GetSection(ConfigSection).Bind(options);
+            return Load(options, configPathDescription);
+        }
+
+        private static IConfiguration LoadConfiguration(string configPath)
+            => LoadConfiguration(
+                configPath,
+                ResolveDefaultConfiguration,
+                path => GameConfiguration.BuildFile(new GodotPathResolver(), path));
+
+        private static IConfiguration ResolveDefaultConfiguration()
+            => Game.Instance.GetRequiredService<IConfiguration>();
+
+        private static IConfiguration LoadConfiguration(
+            string configPath,
+            Func<IConfiguration> defaultConfigurationLoader,
+            Func<string, IConfiguration> customConfigurationLoader)
+            => string.Equals(configPath, DefaultConfigPath, StringComparison.Ordinal)
+                ? defaultConfigurationLoader()
+                : customConfigurationLoader(configPath);
+
+        private static string? Clean(string? value)
+        {
+            string? text = value?.Trim();
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
 
-        private static int? GetOptionalInt(ConfigProvider configProvider, string key)
-        {
-            string? text = configProvider.GetValue(ConfigSection, key)?.Trim();
-            return string.IsNullOrWhiteSpace(text)
-                ? null
-                : int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
-                    ? parsed
-                    : throw new InvalidOperationException(
-                        $"Config key '{ConfigSection}/{key}' must be a valid integer. Got '{text}'.");
-        }
     }
 }

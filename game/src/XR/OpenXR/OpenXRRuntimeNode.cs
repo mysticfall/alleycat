@@ -1,5 +1,7 @@
 using AlleyCat.Common;
+using AlleyCat.Core.Logging;
 using Godot;
+using Microsoft.Extensions.Logging;
 using Array = Godot.Collections.Array;
 
 namespace AlleyCat.XR.OpenXR;
@@ -54,11 +56,12 @@ public partial class OpenXRRuntimeNode : XROrigin3D, IXRRuntime, IXROrigin
 
         if (_xr == null || !_xr.IsInitialized())
         {
-            GD.PushError("OpenXR not initialised, please check if your headset is connected.");
+            GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogError(
+                "OpenXR not initialised, please check if your headset is connected.");
             return false;
         }
 
-        GD.Print("Initialising OpenXR.");
+        GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogInformation("Initialising OpenXR.");
 
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
 
@@ -73,7 +76,8 @@ public partial class OpenXRRuntimeNode : XROrigin3D, IXRRuntime, IXROrigin
         }
         else if ((int)ProjectSettings.GetSetting("xr/openxr/foveation_level") == 0)
         {
-            GD.PushWarning("OpenXR: Recommend setting Foveation level to High in Project Settings");
+            GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogWarning(
+                "OpenXR: Recommend setting Foveation level to High in Project Settings.");
         }
 
         _xr.SessionBegun += OnOpenXRSessionBegun;
@@ -107,9 +111,16 @@ public partial class OpenXRRuntimeNode : XROrigin3D, IXRRuntime, IXROrigin
 
         float currentRefreshRate = _xr.DisplayRefreshRate;
 
-        GD.Print(currentRefreshRate > 0.0F
-            ? $"OpenXR: Refresh rate reported as {currentRefreshRate}"
-            : "OpenXR: No refresh rate given by XR runtime");
+        if (currentRefreshRate > 0.0F)
+        {
+            GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogInformation(
+                "OpenXR: Refresh rate reported as {RefreshRate}.",
+                currentRefreshRate);
+        }
+        else
+        {
+            GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogInformation("OpenXR: No refresh rate given by XR runtime.");
+        }
 
         float newRate = currentRefreshRate;
 
@@ -118,13 +129,16 @@ public partial class OpenXRRuntimeNode : XROrigin3D, IXRRuntime, IXROrigin
         switch (availableRates.Count)
         {
             case 0:
-                GD.Print("OpenXR: Target does not support refresh rate extension");
+                GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogInformation(
+                    "OpenXR: Target does not support refresh rate extension.");
                 break;
             case 1:
                 newRate = (float)availableRates[0];
                 break;
             default:
-                GD.Print("OpenXR: Available refresh rates: ", availableRates);
+                GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogInformation(
+                    "OpenXR: Available refresh rates: {AvailableRates}.",
+                    availableRates);
 
                 foreach (Variant rate in availableRates)
                 {
@@ -141,13 +155,15 @@ public partial class OpenXRRuntimeNode : XROrigin3D, IXRRuntime, IXROrigin
 
         if (Math.Abs(currentRefreshRate - newRate) > Mathf.Epsilon)
         {
-            GD.Print($"OpenXR: Setting refresh rate to {newRate}");
+            GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogInformation(
+                "OpenXR: Setting refresh rate to {RefreshRate}.",
+                newRate);
             _xr.DisplayRefreshRate = newRate;
             currentRefreshRate = newRate;
         }
 
         Engine.PhysicsTicksPerSecond = (int)currentRefreshRate;
 
-        GD.Print("OpenXR session started.");
+        GameLoggerResolver.ResolveRequired<OpenXRRuntimeNode>().LogInformation("OpenXR session started.");
     }
 }
