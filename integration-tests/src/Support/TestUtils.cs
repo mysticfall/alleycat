@@ -80,6 +80,21 @@ public static class TestUtils
             ?? throw new InvalidOperationException($"Failed to load packed scene at path '{path}'.");
 
     /// <summary>
+    /// Resolves the NPC actor from the mirror-room scene, preferring the current authored Ally path while accepting
+    /// older Female-authored fixtures for compatibility.
+    /// </summary>
+    public static Node GetMirrorRoomAllyActor(Node mirrorRoom)
+        => mirrorRoom.GetNodeOrNull("Actors/Ally")
+            ?? mirrorRoom.GetNodeOrNull("Actors/Female")
+            ?? throw new Xunit.Sdk.XunitException("Expected mirror-room scene to contain an NPC actor at 'Actors/Ally'.");
+
+    /// <summary>
+    /// Resolves the NPC actor from the mirror-room scene as a <see cref="Node3D"/>.
+    /// </summary>
+    public static Node3D GetMirrorRoomAllyActor3D(Node mirrorRoom)
+        => Assert.IsAssignableFrom<Node3D>(GetMirrorRoomAllyActor(mirrorRoom));
+
+    /// <summary>
     /// Ensures an installer-driven runtime character scene has materialised its template-owned nodes.
     /// </summary>
     public static void EnsureCharacterRuntimeInstalled(Node characterRoot)

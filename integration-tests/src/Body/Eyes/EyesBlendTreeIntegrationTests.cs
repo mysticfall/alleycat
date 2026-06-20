@@ -244,10 +244,8 @@ public sealed class EyesBlendTreeIntegrationTests
         {
             TreeRoot = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(PlayerAnimationTreeRootPath), exactMatch: false),
         };
-        var target = new Node3D();
         EyesController controller = new(tree)
         {
-            LookTarget = target,
             EyeOriginGlobalTransform = new Transform3D(Basis.Identity, new Vector3(-1f, 0f, 1f)),
             LookSmoothingTime = 0f,
             MinimumBlinkInterval = 0f,
@@ -255,7 +253,7 @@ public sealed class EyesBlendTreeIntegrationTests
             BlinkDuration = 0.2f,
         };
 
-        controller.Update(10.0);
+        controller.Update(10.0, Vector3.Zero);
 
         Assert.Equal(0f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookSeekParameter()).AsSingle());
         Assert.Equal(0.5f, tree.Get(EyesAnimationTreePaths.GetVerticalLookSeekParameter()).AsSingle());
@@ -268,11 +266,109 @@ public sealed class EyesBlendTreeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the mirror-room inherited scene override reaches the runtime controller and drives look seek values.
+    /// Verifies behaviour-level gaze resolution uses the assigned target and falls back to eye-origin forward.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task MirrorRoomFemaleEyesBehaviour_SceneAssignedLookTargetDrivesSeekTimes()
+    public async Task EyesBehaviour_ResolveWorldLookPoint_UsesTargetThenEyeForwardFallback()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        var root = new Node3D();
+        var eyeOrigin = new Node3D();
+        var target = new Node3D();
+        var eyes = new TestEyesBehaviour
+        {
+            EyeOrigin = eyeOrigin,
+        };
+        root.AddChild(eyeOrigin);
+        root.AddChild(target);
+        root.AddChild(eyes);
+
+        try
+        {
+            await AddChildToRootAsync(sceneTree, root);
+            await WaitForFramesAsync(sceneTree, 2);
+
+            var eyeTransform = new Transform3D(
+                new Basis(Vector3.Up, Mathf.Pi / 2f),
+                new Vector3(2f, 3f, 4f));
+            eyeOrigin.GlobalTransform = eyeTransform;
+            target.GlobalPosition = new Vector3(-3f, 5f, 7f);
+
+            eyes.SetLookTarget(target);
+            Assert.Equal(target.GlobalPosition, eyes.ResolveWorldLookPointForTest());
+
+            eyes.ClearLookTarget();
+            Vector3 actualFallback = eyes.ResolveWorldLookPointForTest();
+            Vector3 expectedFallback = eyeTransform.Origin - eyeTransform.Basis.Z.Normalized();
+            Assert.Equal(expectedFallback.X, actualFallback.X, precision: 5);
+            Assert.Equal(expectedFallback.Y, actualFallback.Y, precision: 5);
+            Assert.Equal(expectedFallback.Z, actualFallback.Z, precision: 5);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies behaviour-owned saccades remain bounded around assigned and fallback gaze anchors.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task EyesBehaviour_SaccadedLookPoint_RemainsBoundedAroundAssignedAndFallbackAnchors()
+    {
+        const float saccadeAmplitude = 0.05f;
+        SceneTree sceneTree = GetSceneTree();
+        var root = new Node3D();
+        var eyeOrigin = new Node3D();
+        var target = new Node3D();
+        var eyes = new TestEyesBehaviour
+        {
+            EyeOrigin = eyeOrigin,
+            SaccadeAmplitude = saccadeAmplitude,
+            SaccadeSpeed = 10f,
+            SaccadeInterval = 1f,
+        };
+        root.AddChild(eyeOrigin);
+        root.AddChild(target);
+        root.AddChild(eyes);
+
+        try
+        {
+            await AddChildToRootAsync(sceneTree, root);
+            await WaitForFramesAsync(sceneTree, 2);
+
+            eyeOrigin.GlobalPosition = new Vector3(1f, 2f, 3f);
+            target.GlobalPosition = new Vector3(3f, 4f, -5f);
+            eyes.SetLookTarget(target);
+
+            Vector3 assignedLookPoint = eyes.ResolveSaccadedLookPointForTesting(1.0);
+            Assert.True(
+                assignedLookPoint.DistanceTo(target.GlobalPosition) <= saccadeAmplitude + 0.0001f,
+                "Assigned-target saccade offset exceeded configured amplitude.");
+
+            eyes.ClearLookTarget();
+            Vector3 fallbackAnchor = eyes.ResolveWorldLookPointForTest();
+            Vector3 fallbackLookPoint = eyes.ResolveSaccadedLookPointForTesting(1.0);
+            Assert.True(
+                fallbackLookPoint.DistanceTo(fallbackAnchor) <= saccadeAmplitude + 0.0001f,
+                "Fallback saccade offset exceeded configured amplitude.");
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForNextFrameAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a runtime-assigned mirror-room look target reaches the runtime controller and drives look seek values.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task MirrorRoomFemaleEyesBehaviour_RuntimeAssignedLookTargetDrivesSeekTimes()
     {
         SceneTree sceneTree = GetSceneTree();
         PackedScene scene = LoadPackedScene(MirrorRoomScenePath);
@@ -283,11 +379,23 @@ public sealed class EyesBlendTreeIntegrationTests
             await AddChildToRootAsync(sceneTree, root);
             await WaitForFramesAsync(sceneTree, 12);
 
-            Node eyes = root.GetNode("Actors/Female/Eyes");
-            Node3D lookTarget = root.GetNode<Node3D>("Actors/Female/LookTarget");
+            Node eyes = Assert.IsType<Node>(root.GetNodeOrNull("Actors/Ally/Eyes"), exactMatch: false);
+            Node3D eyeOrigin = new()
+            {
+                Name = "RuntimeEyesOrigin",
+                TopLevel = true,
+            };
+            Node3D lookTarget = new()
+            {
+                Name = "RuntimeEyesLookTarget",
+                TopLevel = true,
+            };
+            root.AddChild(eyeOrigin);
+            root.AddChild(lookTarget);
 
             eyes.Set("LookSmoothingTime", 0f);
-            lookTarget.GlobalPosition = new Vector3(10f, 10f, -10f);
+            eyes.Set("EyeOrigin", eyeOrigin);
+            lookTarget.GlobalPosition = eyeOrigin.GlobalTransform * new Vector3(10f, 10f, -10f);
             eyes.Set("LookTarget", lookTarget);
             _ = eyes.Call("RefreshLookParametersDeferred");
             await WaitForFramesAsync(sceneTree, 2);
@@ -308,11 +416,11 @@ public sealed class EyesBlendTreeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the mirror-room target keeps the eye look overlays enabled after scene overrides are applied.
+    /// Verifies mirror-room eye look overlays stay enabled for forward fallback and runtime target paths.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task MirrorRoomFemaleEyesBehaviour_PlayerFaceTargetKeepsLookBlendsEnabled()
+    public async Task MirrorRoomFemaleEyesBehaviour_FallbackAndRuntimeTargetKeepLookBlendsEnabled()
     {
         SceneTree sceneTree = GetSceneTree();
         PackedScene scene = LoadPackedScene(MirrorRoomScenePath);
@@ -323,21 +431,39 @@ public sealed class EyesBlendTreeIntegrationTests
             await AddChildToRootAsync(sceneTree, root);
             await WaitForFramesAsync(sceneTree, 4);
 
-            Node eyes = root.GetNode("Actors/Female/Eyes");
-            AnimationTree tree = root.GetNode<AnimationTree>("Actors/Female/AnimationTree");
-            Node3D eyeOrigin = Assert.IsType<Node3D>(eyes.Get("EyeOrigin").AsGodotObject(), exactMatch: false);
-            Node3D lookTarget = Assert.IsType<Node3D>(eyes.Get("LookTarget").AsGodotObject(), exactMatch: false);
+            Node eyes = Assert.IsType<Node>(root.GetNodeOrNull("Actors/Ally/Eyes"), exactMatch: false);
+            AnimationTree tree = Assert.IsType<AnimationTree>(root.GetNodeOrNull("Actors/Ally/AnimationTree"), exactMatch: false);
+            Node3D eyeOrigin = new()
+            {
+                Name = "RuntimeEyesOrigin",
+                TopLevel = true,
+            };
+            Node3D lookTarget = new()
+            {
+                Name = "RuntimeEyesLookTarget",
+                TopLevel = true,
+            };
+            root.AddChild(eyeOrigin);
+            root.AddChild(lookTarget);
 
             eyes.Set("LookSmoothingTime", 0f);
+            eyes.Set("EyeOrigin", eyeOrigin);
+            eyes.Set("SaccadeAmplitude", 0f);
+            eyes.Set("SaccadeInterval", 0f);
+            _ = eyes.Call("ClearLookTarget");
+            _ = eyes.Call("RefreshLookParametersDeferred");
             await WaitForFramesAsync(sceneTree, 6);
 
+            Assert.False(eyes.Call("HasRuntimeLookTarget").AsBool());
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
 
-            lookTarget.TopLevel = true;
             lookTarget.GlobalPosition = eyeOrigin.GlobalTransform * new Vector3(10f, 10f, -10f);
+            eyes.Set("LookTarget", lookTarget);
+            _ = eyes.Call("RefreshLookParametersDeferred");
             await WaitForFramesAsync(sceneTree, 6);
 
+            Assert.True(eyes.Call("HasRuntimeLookTarget").AsBool());
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetHorizontalLookBlendParameter()).AsSingle(), precision: 5);
             Assert.Equal(1f, tree.Get(EyesAnimationTreePaths.GetVerticalLookBlendParameter()).AsSingle(), precision: 5);
         }
@@ -459,5 +585,10 @@ public sealed class EyesBlendTreeIntegrationTests
 
         throw new Xunit.Sdk.XunitException(
             $"Expected connection {inputNode}[{inputIndex}] <- {outputNode} in {tree.ResourceName}.");
+    }
+
+    private sealed partial class TestEyesBehaviour : EyesBehaviour
+    {
+        public Vector3 ResolveWorldLookPointForTest() => ResolveWorldLookPoint();
     }
 }

@@ -72,12 +72,12 @@ public sealed class MirrorRoomIntegrationTests
         {
             sceneTree.Root.AddChild(mirrorRoom);
             EnsureCharacterRuntimeInstalled(mirrorRoom.GetNode("Actors/Player"));
-            EnsureCharacterRuntimeInstalled(mirrorRoom.GetNode("Actors/Female"));
+            EnsureCharacterRuntimeInstalled(GetMirrorRoomAllyActor(mirrorRoom));
             await WaitForFramesAsync(sceneTree, 8);
 
             Node3D playerRoot = mirrorRoom.GetNode<Node3D>("Actors/Player");
             Assert.True(playerRoot.HasNode("IKTargets"), "Expected mirror-room player installer to materialise IKTargets.");
-            Node3D allyRoot = mirrorRoom.GetNode<Node3D>("Actors/Female");
+            Node3D allyRoot = GetMirrorRoomAllyActor3D(mirrorRoom);
 
             AssertActorRootTransform(
                 "player",

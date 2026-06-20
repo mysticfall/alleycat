@@ -1,4 +1,5 @@
 [gd_scene format=3 uid="uid://baut876fuyk5c"]
+
 [ext_resource type="PackedScene" uid="uid://dei4vqs1pclk8" path="res://assets/testing/test_mirror.tscn" id="1_70tdi"]
 [ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/player.tscn" id="2_o5j6c"]
 [ext_resource type="PackedScene" uid="uid://bx2i1qev0800s" path="res://assets/testing/test_environment.tscn" id="3_shmn4"]
@@ -6,57 +7,76 @@
 [ext_resource type="PackedScene" uid="uid://doedwhsg5x0o0" path="res://assets/items/chain/physics_chain.tscn" id="4_3ounv"]
 [ext_resource type="PackedScene" uid="uid://df4i6mqjgm16e" path="res://assets/items/test_ball.tscn" id="6_dk4eq"]
 [ext_resource type="PackedScene" uid="uid://c45lomd35erjb" path="res://assets/items/test_stick.tscn" id="7_yh5d4"]
+
 [sub_resource type="PlaneMesh" id="PlaneMesh_0r23o"]
 size = Vector2(10, 10)
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_shmn4"]
 size = Vector3(10, 0.01, 10)
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_ui8dj"]
 size = Vector3(0.06, 0.12, 0.06)
+
 [sub_resource type="BoxMesh" id="BoxMesh_tl84k"]
 size = Vector3(0.06, 0.12, 0.06)
+
 [sub_resource type="SphereShape3D" id="SphereShape3D_dk4eq"]
 radius = 0.075
+
 [sub_resource type="SphereMesh" id="SphereMesh_yh5d4"]
 radius = 0.075
 height = 0.15
+
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_ui8dj"]
 height = 1.0
 radius = 0.3
+
 [sub_resource type="CylinderMesh" id="CylinderMesh_ui8dj"]
 top_radius = 0.3
 bottom_radius = 0.3
 height = 1.0
+
 [node name="MirrorRoom" type="Node3D" unique_id=973335562]
+
 [node name="Mirrors" type="Node3D" parent="." unique_id=770923602]
+
 [node name="FrontMirror" parent="Mirrors" unique_id=916837440 instance=ExtResource("1_70tdi")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -2)
 size = Vector2(4, 2)
+
 [node name="BackMirror" parent="Mirrors" unique_id=1697368584 instance=ExtResource("1_70tdi")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 2)
 size = Vector2(4, 2)
+
 [node name="RightMirror" parent="Mirrors" unique_id=1095035094 instance=ExtResource("1_70tdi")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -2, 1, 0)
 size = Vector2(4, 2)
+
 [node name="LeftMirror" parent="Mirrors" unique_id=740348980 instance=ExtResource("1_70tdi")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 2, 1, 0)
 size = Vector2(4, 2)
+
 [node name="Floor" type="MeshInstance3D" parent="." unique_id=732614940]
 mesh = SubResource("PlaneMesh_0r23o")
+
 [node name="StaticBody3D" type="StaticBody3D" parent="Floor" unique_id=597068289]
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor/StaticBody3D" unique_id=1376618379]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.005, 0)
 shape = SubResource("BoxShape3D_shmn4")
+
 [node name="Actors" type="Node3D" parent="." unique_id=1775714844]
+
 [node name="Player" parent="Actors" unique_id=1792987446 instance=ExtResource("2_o5j6c")]
-[node name="Female" parent="Actors" unique_id=781997941 instance=ExtResource("3_ui8dj")]
+
+[node name="Ally" parent="Actors" unique_id=781997941 instance=ExtResource("3_ui8dj")]
 transform = Transform3D(-0.7993387, 0, -0.6008807, 0, 1, 0, 0.6008807, 0, -0.7993387, -1.324, 0, -0.868)
-[node name="LookTarget" type="Marker3D" parent="Actors/Female" index="1" unique_id=149871830]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 10, -10)
-[node name="FemaleEyeLookTarget" type="Marker3D" parent="Actors" unique_id=109095476]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 10, -10)
+
 [node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_shmn4")]
+
 [node name="Items" type="Node3D" parent="." unique_id=1247114236]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7552289, -0.6124832)
+
 [node name="Chain" parent="Items" unique_id=1490776132 node_paths=PackedStringArray("StartAttachedBody", "StartAttachedBodyAnchor", "EndAttachedBody", "EndAttachedBodyAnchor") instance=ExtResource("4_3ounv")]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 1.2, 0)
 LinkCount = 32
@@ -64,6 +84,7 @@ StartAttachedBody = NodePath("../StartAnchor")
 StartAttachedBodyAnchor = NodePath("../StartAnchor/AttachmentPoint")
 EndAttachedBody = NodePath("../EndWeight")
 EndAttachedBodyAnchor = NodePath("../EndWeight/AttachmentPoint")
+
 [node name="StartAnchor" type="RigidBody3D" parent="Items" unique_id=920795106 groups=["hand_dynamic_interaction_body"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2707611, 0)
 collision_layer = 2
@@ -71,12 +92,16 @@ collision_mask = 11
 mass = 5.0
 gravity_scale = 0.0
 freeze = true
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Items/StartAnchor" unique_id=1491942265]
 shape = SubResource("BoxShape3D_ui8dj")
+
 [node name="Mesh" type="MeshInstance3D" parent="Items/StartAnchor" unique_id=1363968189]
 mesh = SubResource("BoxMesh_tl84k")
+
 [node name="AttachmentPoint" type="Marker3D" parent="Items/StartAnchor" unique_id=162430268]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, 0)
+
 [node name="EndWeight" type="RigidBody3D" parent="Items" unique_id=585176685 groups=["hand_dynamic_interaction_body"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35450745, 5.9604645e-08)
 collision_layer = 2
@@ -84,23 +109,30 @@ collision_mask = 11
 mass = 0.6
 linear_damp = 0.02
 angular_damp = 0.05
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Items/EndWeight" unique_id=898110529]
 shape = SubResource("SphereShape3D_dk4eq")
+
 [node name="Mesh" type="MeshInstance3D" parent="Items/EndWeight" unique_id=1151649996]
 mesh = SubResource("SphereMesh_yh5d4")
+
 [node name="AttachmentPoint" type="Marker3D" parent="Items/EndWeight" unique_id=490933954]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
+
 [node name="Table" type="StaticBody3D" parent="Items" unique_id=977064214]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.72102123, -0.25, 0.31848186)
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Items/Table" unique_id=1840040471]
 shape = SubResource("CylinderShape3D_ui8dj")
+
 [node name="Mesh" type="MeshInstance3D" parent="Items/Table" unique_id=1268389928]
 mesh = SubResource("CylinderMesh_ui8dj")
-[node name="Ball" parent="Items" unique_id=440488605 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("6_dk4eq")]
+
+[node name="Ball" parent="Items" unique_id=440488605 instance=ExtResource("6_dk4eq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6710081, 0.30162144, 0.47307545)
-[node name="Ball2" parent="Items" unique_id=2033382056 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("6_dk4eq")]
+
+[node name="Ball2" parent="Items" unique_id=2033382056 instance=ExtResource("6_dk4eq")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8016772, 0.30162144, 0.3634836)
-[node name="Stick" parent="Items" unique_id=362015970 groups=["grabbable", "hand_dynamic_interaction_body"] instance=ExtResource("7_yh5d4")]
+
+[node name="Stick" parent="Items" unique_id=362015970 instance=ExtResource("7_yh5d4")]
 transform = Transform3D(0.73521054, -0.67783904, 2.9629284e-08, 0, -4.371139e-08, -1, 0.67783904, 0.73521054, -3.213707e-08, 0.51545995, 0.26368403, 0.34847197)
-[editable path="Actors/Player"]
-[editable path="Actors/Female"]

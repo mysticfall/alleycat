@@ -15,15 +15,18 @@ const MAX_HORIZONTAL_ANGLE_RADIANS := deg_to_rad(35.0)
 const MAX_VERTICAL_ANGLE_RADIANS := deg_to_rad(25.0)
 const STRONG_HORIZONTAL_ANGLE_RADIANS := deg_to_rad(70.0)
 const PARAMETER_TOLERANCE := 0.025
+const SACCADE_SEEK_TOLERANCE := 0.2
 const ONE_SHOT_REQUEST_ABORT := 2
 
 const SCENARIOS := [
-	{"name": "01_neutral", "local_target": Vector3(0.0, 0.0, -1.0), "blink": false, "horizontal_seek": 0.5, "vertical_seek": 0.5},
+	{"name": "01_fallback_neutral", "local_target": Vector3(0.0, 0.0, -1.0), "clear_target": true, "blink": false, "horizontal_seek": 0.5, "vertical_seek": 0.5},
 	{"name": "02_look_left", "local_target": Vector3(-tan(STRONG_HORIZONTAL_ANGLE_RADIANS), 0.0, -1.0), "blink": false, "horizontal_seek": 1.0, "vertical_seek": 0.5},
 	{"name": "03_look_right", "local_target": Vector3(tan(STRONG_HORIZONTAL_ANGLE_RADIANS), 0.0, -1.0), "blink": false, "horizontal_seek": 0.0, "vertical_seek": 0.5},
 	{"name": "04_up", "local_target": Vector3(0.0, tan(MAX_VERTICAL_ANGLE_RADIANS), -1.0), "blink": false, "horizontal_seek": 0.5, "vertical_seek": 0.0},
 	{"name": "05_down", "local_target": Vector3(0.0, -tan(MAX_VERTICAL_ANGLE_RADIANS), -1.0), "blink": false, "horizontal_seek": 0.5, "vertical_seek": 1.0},
 	{"name": "06_blink_closed", "local_target": Vector3(0.0, 0.0, -1.0), "blink": true, "horizontal_seek": 0.5, "vertical_seek": 0.5},
+	{"name": "07_default_saccade_anchor_right_sample_a", "local_target": Vector3(tan(MAX_HORIZONTAL_ANGLE_RADIANS * 0.5), 0.0, -1.0), "blink": false, "default_saccade": true, "horizontal_seek": 0.25, "vertical_seek": 0.5, "wait_seconds": 0.16},
+	{"name": "08_default_saccade_anchor_right_sample_b", "local_target": Vector3(tan(MAX_HORIZONTAL_ANGLE_RADIANS * 0.5), 0.0, -1.0), "blink": false, "default_saccade": true, "horizontal_seek": 0.25, "vertical_seek": 0.5, "wait_seconds": 0.28},
 ]
 
 
@@ -46,7 +49,7 @@ func _run() -> void:
 	_validate_camera_rig(photobooth)
 
 	var female: Node3D = SceneUtils.require_node(photobooth, ^"Subject/Female") as Node3D
-	var viewpoint: Node3D = SceneUtils.require_node(female, ^"Female_export/GeneralSkeleton/Head/Viewpoint") as Node3D
+	var viewpoint: Node3D = SceneUtils.require_node(female, ^"Female/GeneralSkeleton/Head/Viewpoint") as Node3D
 	if female == null or viewpoint == null:
 		SceneUtils.fatal_error_and_quit("BODY-004 eyes runner: failed to resolve female subject or viewpoint")
 		return
@@ -77,6 +80,8 @@ func _run() -> void:
 		_apply_scenario(viewpoint, look_target, marker, animation_tree, eyes_behaviour, scenario)
 		if scenario["blink"] as bool:
 			await SceneUtils.wait_seconds(self, BLINK_RUNTIME_DURATION_SECONDS * 0.5)
+		elif scenario.get("default_saccade", false) as bool:
+			await SceneUtils.wait_seconds(self, scenario.get("wait_seconds", 0.16) as float)
 		else:
 			await SceneUtils.wait_frames(self, 8)
 			await SceneUtils.wait_seconds(self, 0.05)
@@ -84,7 +89,11 @@ func _run() -> void:
 		await photobooth.capture_screenshots("%s/scenarios/%s.jpg" % [OUTPUT_ROOT, scenario["name"]])
 
 	print("BODY004_EYES_VISUAL_GATE_PASS artefact_root=%s" % OUTPUT_ROOT)
-	quit(0)
+	var main_loop: SceneTree = Engine.get_main_loop() as SceneTree
+	if main_loop != null:
+		main_loop.quit(0)
+	else:
+		quit(0)
 
 
 func _validate_camera_rig(photobooth: Photobooth) -> void:
@@ -114,10 +123,11 @@ func _assert_scenario_parameters(animation_tree: AnimationTree, scenario: Dictio
 	var vertical_seek: float = animation_tree.get(VERTICAL_SEEK_PARAM)
 	var expected_horizontal: float = scenario["horizontal_seek"] as float
 	var expected_vertical: float = scenario["vertical_seek"] as float
-	if not (scenario["blink"] as bool) and absf(horizontal_seek - expected_horizontal) > PARAMETER_TOLERANCE:
+	var tolerance := SACCADE_SEEK_TOLERANCE if (scenario.get("default_saccade", false) as bool) else PARAMETER_TOLERANCE
+	if not (scenario["blink"] as bool) and absf(horizontal_seek - expected_horizontal) > tolerance:
 		SceneUtils.fatal_error_and_quit("BODY-004 eyes runner: %s horizontal seek %.4f did not match %.4f" % [scenario["name"], horizontal_seek, expected_horizontal])
 		return
-	if not (scenario["blink"] as bool) and absf(vertical_seek - expected_vertical) > PARAMETER_TOLERANCE:
+	if not (scenario["blink"] as bool) and absf(vertical_seek - expected_vertical) > tolerance:
 		SceneUtils.fatal_error_and_quit("BODY-004 eyes runner: %s vertical seek %.4f did not match %.4f" % [scenario["name"], vertical_seek, expected_vertical])
 		return
 	print(
@@ -159,6 +169,7 @@ func _attach_eyes_behaviour(animation_tree: AnimationTree, viewpoint: Node3D, lo
 	eyes_behaviour.set("MinimumBlinkInterval", 99.0)
 	eyes_behaviour.set("MaximumBlinkInterval", 99.0)
 	eyes_behaviour.set("BlinkDuration", BLINK_RUNTIME_DURATION_SECONDS)
+	eyes_behaviour.set("SaccadeAmplitude", 0.0)
 	eyes_behaviour.set("LookTarget", look_target)
 	animation_tree.add_child(eyes_behaviour)
 	return eyes_behaviour
@@ -167,6 +178,18 @@ func _attach_eyes_behaviour(animation_tree: AnimationTree, viewpoint: Node3D, lo
 func _apply_scenario(viewpoint: Node3D, look_target: Node3D, marker: Node3D, animation_tree: AnimationTree, eyes_behaviour: Node, scenario: Dictionary) -> void:
 	eyes_behaviour.set_process(true)
 	_set_target_from_local(viewpoint, look_target, marker, scenario["local_target"] as Vector3)
+	if scenario.get("default_saccade", false) as bool:
+		eyes_behaviour.set("SaccadeInterval", _get_default_property_value(eyes_behaviour, "SaccadeInterval"))
+		eyes_behaviour.set("SaccadeSpeed", _get_default_property_value(eyes_behaviour, "SaccadeSpeed"))
+		eyes_behaviour.set("SaccadeAmplitude", _get_default_property_value(eyes_behaviour, "SaccadeAmplitude"))
+	else:
+		eyes_behaviour.set("SaccadeInterval", 0.0)
+		eyes_behaviour.set("SaccadeAmplitude", 0.0)
+	if scenario.get("clear_target", false) as bool:
+		eyes_behaviour.call("ClearLookTarget")
+	else:
+		eyes_behaviour.call("ClearLookTarget")
+		eyes_behaviour.set("LookTarget", look_target)
 	if scenario["blink"] as bool:
 		eyes_behaviour.call("TriggerBlink")
 	else:
@@ -181,3 +204,15 @@ func _set_target_from_local(viewpoint: Node3D, look_target: Node3D, marker: Node
 	var target_position: Vector3 = viewpoint.global_transform * local_target
 	look_target.global_position = target_position
 	marker.global_position = target_position
+
+
+func _get_default_property_value(instance: Object, property_name: StringName) -> Variant:
+	var script: Script = instance.get_script() as Script
+	if script == null:
+		SceneUtils.fatal_error_and_quit("BODY-004 eyes runner: failed to resolve script defaults for %s" % property_name)
+		return null
+
+	var default_instance: Object = script.new()
+	var default_value: Variant = default_instance.get(property_name)
+	default_instance.free()
+	return default_value

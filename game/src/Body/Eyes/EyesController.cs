@@ -40,14 +40,6 @@ public sealed class EyesController
     }
 
     /// <summary>
-    /// Gets or sets the optional target node the eyes should look towards.
-    /// </summary>
-    public Node3D? LookTarget
-    {
-        get; set;
-    }
-
-    /// <summary>
     /// Gets or sets the world transform used as the eye/viewpoint origin.
     /// </summary>
     public Transform3D EyeOriginGlobalTransform
@@ -101,27 +93,20 @@ public sealed class EyesController
     /// <summary>
     /// Advances look smoothing and autonomous blinking.
     /// </summary>
-    public void Update(double deltaSeconds)
+    public void Update(double deltaSeconds, Vector3 lookPointGlobalPosition)
     {
         float delta = (float)Math.Max(0.0, deltaSeconds);
         WriteLookBlendAmounts();
-        ResolveTargetLookWeights();
+        ResolveTargetLookWeights(lookPointGlobalPosition);
         UpdateLook(delta);
         UpdateBlink(delta);
     }
 
-    private void ResolveTargetLookWeights()
+    private void ResolveTargetLookWeights(Vector3 lookPointGlobalPosition)
     {
-        if (LookTarget is null)
-        {
-            _targetHorizontalSeekTime = EyesLookMath.NeutralSeekTimeSeconds;
-            _targetVerticalSeekTime = EyesLookMath.NeutralSeekTimeSeconds;
-            return;
-        }
-
         Vector2 seekTimes = EyesLookMath.ResolveLookSeekTimes(
             EyeOriginGlobalTransform,
-            LookTarget.GlobalPosition,
+            lookPointGlobalPosition,
             Mathf.DegToRad(Mathf.Max(0.1f, MaxHorizontalAngleDegrees)),
             Mathf.DegToRad(Mathf.Max(0.1f, MaxVerticalAngleDegrees)));
 

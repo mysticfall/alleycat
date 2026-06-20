@@ -6,12 +6,22 @@ namespace AlleyCat.Body.Eyes;
 /// Godot node facade exposing BODY-004 Eyes look and blink control to scene consumers.
 /// </summary>
 [GlobalClass]
-public sealed partial class EyesBehaviour : Node, IEyes
+public partial class EyesBehaviour : Node, IEyes
 {
+    private const float DefaultSaccadeIntervalSeconds = 1f;
+    private const float DefaultSaccadeSpeedMetresPerSecond = 0.6f;
+    private const float DefaultSaccadeAmplitudeMetres = 0.075f;
+
     private EyesController? _controller;
     private Node3D? _lookTarget;
     private bool _lookTargetExplicitlyAssigned;
     private bool _deferredRefreshScheduled;
+    private readonly RandomNumberGenerator _saccadeRandom = new();
+    private Vector3 _saccadeAnchorGlobalPosition = new(0f, 0f, -1f);
+    private Vector3 _currentSaccadeOffsetGlobal;
+    private Vector3 _targetSaccadeOffsetGlobal;
+    private float _timeUntilSaccadeAnchorPoll;
+    private bool _hasSaccadeAnchor;
 
     /// <summary>
     /// Gets or sets the animation tree controlled by this behaviour.
@@ -53,9 +63,48 @@ public sealed partial class EyesBehaviour : Node, IEyes
     [Export]
     public Node3D? LookTarget
     {
-        get => _controller?.LookTarget ?? _lookTarget;
+        get => _lookTarget;
         set => SetLookTarget(value);
     }
+
+    /// <summary>
+    /// Gets or sets how often the gaze anchor is re-polled for saccades, in seconds.
+    /// </summary>
+    [ExportGroup("Saccades")]
+    [Export(PropertyHint.Range, "0,10,0.05,or_greater")]
+    public float SaccadeInterval
+    {
+        get;
+        set => field = Mathf.Max(0f, value);
+    } = DefaultSaccadeIntervalSeconds;
+
+    /// <summary>
+    /// Gets or sets how quickly the active saccade offset moves towards a new offset, in metres per second.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.005,or_greater")]
+    public float SaccadeSpeed
+    {
+        get;
+        set => field = Mathf.Max(0f, value);
+    } = DefaultSaccadeSpeedMetresPerSecond;
+
+    /// <summary>
+    /// Gets or sets the maximum saccade offset amplitude around the gaze anchor, in metres.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,0.25,0.001,or_greater")]
+    public float SaccadeAmplitude
+    {
+        get;
+        set
+        {
+            field = Mathf.Max(0f, value);
+            if (Mathf.IsZeroApprox(field))
+            {
+                _currentSaccadeOffsetGlobal = Vector3.Zero;
+                _targetSaccadeOffsetGlobal = Vector3.Zero;
+            }
+        }
+    } = DefaultSaccadeAmplitudeMetres;
 
     /// <summary>
     /// Gets or sets the maximum horizontal eye angle in degrees.
@@ -186,6 +235,7 @@ public sealed partial class EyesBehaviour : Node, IEyes
     /// <inheritdoc />
     public override void _Ready()
     {
+        _saccadeRandom.Randomize();
         AnimationTree ??= GetParentOrNull<AnimationTree>();
         EyeOrigin ??= GetParentOrNull<Node3D>();
         TryInitialiseController();
@@ -204,7 +254,11 @@ public sealed partial class EyesBehaviour : Node, IEyes
         {
             if (!IsValidNode(AnimationTree))
             {
-                AnimationTree = GetNodeOrNull<AnimationTree>("../AnimationTree");
+                AnimationTree? resolvedAnimationTree = GetNodeOrNull<AnimationTree>("../AnimationTree");
+                if (resolvedAnimationTree is not null)
+                {
+                    AnimationTree = resolvedAnimationTree;
+                }
             }
 
             if (!IsValidNode(EyeOrigin))
@@ -231,7 +285,6 @@ public sealed partial class EyesBehaviour : Node, IEyes
 
         _controller = new EyesController(animationTree)
         {
-            LookTarget = _lookTarget,
             MaxHorizontalAngleDegrees = _maxHorizontalAngleDegrees,
             MaxVerticalAngleDegrees = _maxVerticalAngleDegrees,
             LookSmoothingTime = _lookSmoothingTime,
@@ -267,8 +320,70 @@ public sealed partial class EyesBehaviour : Node, IEyes
                 : Transform3D.Identity;
         }
 
-        _controller.Update(delta);
+        Vector3 lookPoint = UpdateSaccadeLookPoint(delta);
+        _controller.Update(delta, lookPoint);
     }
+
+    /// <summary>
+    /// Resolves the current gaze anchor in world space before presentation saccade offsets are applied.
+    /// </summary>
+    protected virtual Vector3 ResolveWorldLookPoint()
+    {
+        if (_lookTarget is Node3D lookTarget && IsValidNode(lookTarget) && lookTarget.IsInsideTree())
+        {
+            return lookTarget.GlobalPosition;
+        }
+
+        Transform3D eyeOriginTransform = ResolveEyeOriginGlobalTransform();
+        return eyeOriginTransform.Origin - eyeOriginTransform.Basis.Z.Normalized();
+    }
+
+    private Vector3 UpdateSaccadeLookPoint(double deltaSeconds)
+    {
+        float delta = (float)Math.Max(0.0, deltaSeconds);
+        if (!_hasSaccadeAnchor || _timeUntilSaccadeAnchorPoll <= 0f)
+        {
+            _saccadeAnchorGlobalPosition = ResolveWorldLookPoint();
+            _hasSaccadeAnchor = true;
+            _timeUntilSaccadeAnchorPoll = SaccadeInterval;
+            _targetSaccadeOffsetGlobal = ResolveNextSaccadeOffset();
+        }
+        else
+        {
+            _timeUntilSaccadeAnchorPoll -= delta;
+        }
+
+        _currentSaccadeOffsetGlobal = SaccadeAmplitude <= 0f || SaccadeSpeed <= 0f
+            ? Vector3.Zero
+            : _currentSaccadeOffsetGlobal.MoveToward(
+                _targetSaccadeOffsetGlobal,
+                SaccadeSpeed * delta);
+
+        return _saccadeAnchorGlobalPosition + _currentSaccadeOffsetGlobal;
+    }
+
+    internal Vector3 ResolveSaccadedLookPointForTesting(double deltaSeconds) => UpdateSaccadeLookPoint(deltaSeconds);
+
+    private Vector3 ResolveNextSaccadeOffset()
+    {
+        float amplitude = SaccadeAmplitude;
+        if (amplitude <= 0f)
+        {
+            return Vector3.Zero;
+        }
+
+        float angle = _saccadeRandom.RandfRange(0f, Mathf.Tau);
+        float radius = Mathf.Sqrt(_saccadeRandom.Randf()) * amplitude;
+        Transform3D eyeOriginTransform = ResolveEyeOriginGlobalTransform();
+        Vector3 right = eyeOriginTransform.Basis.X.Normalized();
+        Vector3 up = eyeOriginTransform.Basis.Y.Normalized();
+        return (right * (Mathf.Cos(angle) * radius)) + (up * (Mathf.Sin(angle) * radius));
+    }
+
+    private Transform3D ResolveEyeOriginGlobalTransform()
+        => EyeOrigin is Node3D eyeOrigin && IsValidNode(eyeOrigin) && eyeOrigin.IsInsideTree()
+            ? eyeOrigin.GlobalTransform
+            : Transform3D.Identity;
 
     /// <inheritdoc />
     public void SetLookTarget(Node3D? target)
@@ -283,11 +398,7 @@ public sealed partial class EyesBehaviour : Node, IEyes
 
         _lookTarget = target;
         _lookTargetExplicitlyAssigned = explicitlyAssigned;
-        if (_controller is EyesController controller)
-        {
-            controller.LookTarget = target;
-        }
-
+        _hasSaccadeAnchor = false;
         ScheduleDeferredRefresh();
     }
 
@@ -394,7 +505,7 @@ public sealed partial class EyesBehaviour : Node, IEyes
         }
 
         _deferredRefreshScheduled = true;
-        RefreshLookParametersDeferred();
+        _ = CallDeferred(MethodName.RefreshLookParametersDeferred);
     }
 
     /// <summary>
@@ -420,5 +531,5 @@ public sealed partial class EyesBehaviour : Node, IEyes
     /// Gets whether the runtime controller currently has a valid look target.
     /// </summary>
     public bool HasRuntimeLookTarget()
-        => _controller?.LookTarget is Node3D target && IsValidNode(target);
+        => IsValidNode(_lookTarget);
 }
