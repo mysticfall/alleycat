@@ -7,16 +7,14 @@ title: Transcriber Component
 
 ## Requirement
 
-Provide an abstract `Transcriber` component that captures microphone audio
-via Godot's XR input system, triggers async transcription, emits completion
-and failure signals, and surfaces results and errors to the player. Deliver one
-concrete `OpenAITranscriber` implementation using the OpenAI .NET SDK.
+Provide an abstract `Transcriber` component that captures microphone audio via Godot's XR input system, triggers async
+transcription, emits completion and failure signals, and surfaces results and errors to the player. Deliver one concrete
+`OpenAITranscriber` implementation using the OpenAI .NET SDK.
 
 ## Goal
 
-Enable voice input capture and transcription in the VR experience with a
-concrete OpenAI-compatible implementation that can be extended to other STT
-backends.
+Enable voice input capture and transcription in the VR experience with a concrete OpenAI-compatible implementation that
+can be extended to other STT backends.
 
 ## User Requirements
 
@@ -26,6 +24,8 @@ backends.
 3. Transcription results surface to the player via a UI notification.
 4. Transcription failures surface as a user-friendly error message.
 5. The system uses OpenAI-compatible API endpoints for transcription.
+6. Transcript notifications appear promptly after transcription completes and are not delayed by downstream signal
+   listeners, AI processing, or response generation.
 
 ## Technical Requirements
 
@@ -43,7 +43,12 @@ backends.
    configuration when an explicit path is supplied. Options include `Host`, optional `ApiKey`, and additional
    model/timeout settings.
 9. Specify runtime integration: XR binding, microphone prerequisites,
-   config contract, signal contract, and lifecycle.
+    config contract, signal contract, and lifecycle.
+10. On successful transcription, dispatch the player-facing transcript notification before emitting completion signals
+    or invoking other downstream completion hooks.
+11. Keep long-running transcription preparation, network calls, and other avoidable blocking work off frame-critical
+    Godot execution paths where practical; completion dispatch should stay narrow and should not front-load AI or LLM
+    setup ahead of the player-facing notification.
 
 ## In Scope
 
@@ -89,15 +94,15 @@ for compatible services.
 
 ## Acceptance Criteria
 
-1. UR-1–UR-5 covered: player can record, auto-stop works, success/failure
-   messages reach the player.
-2. TR-1–TR-9 covered: abstract class, XR binding, microphone capture, async
-   contract, signals, dual-channel error handling, SDK implementation, subsystem-owned config loading, and runtime
-   integration specified.
+1. UR-1–UR-6 covered: player can record, auto-stop works, success/failure messages reach the player, and successful
+   transcript notifications are not delayed by downstream processing.
+2. TR-1–TR-11 covered: abstract class, XR binding, microphone capture, async contract, signals, dual-channel error
+   handling, SDK implementation, subsystem-owned config loading, runtime integration, success notification ordering,
+   and non-blocking completion boundaries are specified.
 3. `Out Of Scope` excludes only optional/unrelated work; no mandatory contract
    omitted.
 
-**Traceability map:** UR-1–UR-5 → AC-1; TR-1–TR-9 → AC-2; OOS guard → AC-3.
+**Traceability map:** UR-1–UR-6 → AC-1; TR-1–TR-11 → AC-2; OOS guard → AC-3.
 
 ## References
 

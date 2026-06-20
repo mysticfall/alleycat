@@ -78,6 +78,48 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies the player-facing transcript notification is posted before synchronous completion listeners run.
+    /// </summary>
+    [Fact]
+    public async Task InvokeTranscriptionAsync_OnSuccess_PostsTranscriptBeforeCompletionSignalListeners()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        ExistingGlobalScope existingGlobalScope = await ExistingGlobalScope.CreateAsync(sceneTree);
+        (Node global, NotificationWidget notificationWidget) = await CreateNotificationHostAsync(sceneTree);
+        FakeTranscriber transcriber = new()
+        {
+            NextResultFactory = _ => Task.FromResult("Prompt Transcript"),
+        };
+
+        sceneTree.Root.AddChild(transcriber);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        bool notificationPostedBeforeListener = false;
+        _ = transcriber.Connect(
+            Transcriber.SignalName.TranscriptionCompleted,
+            Callable.From<string>(_ =>
+            {
+                notificationPostedBeforeListener = HasNotification(notificationWidget, "Prompt Transcript");
+                Thread.Sleep(50);
+            }));
+
+        try
+        {
+            await InvokeTranscriptionAsync(transcriber);
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.True(notificationPostedBeforeListener);
+            Assert.True(notificationWidget.Visible);
+            Assert.Equal("Prompt Transcript", GetNewestNotificationText(notificationWidget));
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, transcriber, global);
+            await existingGlobalScope.DisposeAsync();
+        }
+    }
+
+    /// <summary>
     /// Verifies failed transcription emits the failure signal, posts the friendly fallback message, and clears the in-flight state.
     /// </summary>
     [Fact]

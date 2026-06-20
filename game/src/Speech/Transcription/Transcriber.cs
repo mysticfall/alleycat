@@ -505,8 +505,8 @@ public abstract partial class Transcriber : Node
 
     private void HandleTranscriptionSuccess(string text)
     {
-        _ = EmitSignal(SignalName.TranscriptionCompleted, text);
         _ = this.PostNotification(text);
+        _ = EmitSignal(SignalName.TranscriptionCompleted, text);
         OnTranscriptionCompleted(text);
     }
 
