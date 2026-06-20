@@ -2,6 +2,7 @@ using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
+using AlleyCat.Common;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
@@ -23,6 +24,7 @@ public sealed class ICharacterTests
     public void ICharacter_AggregatesFullyEmbodiedHumanoidHolderTraits()
     {
         Assert.True(typeof(IComponentHolder).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(IEntity).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasHands).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IEyesHolder).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasVoice).IsAssignableFrom(typeof(ICharacter)));
@@ -55,6 +57,11 @@ public sealed class ICharacterTests
 
     private sealed class FakeCharacter(params IComponent[] components) : ICharacter
     {
+        public string Id
+        {
+            get; set;
+        } = "FakeCharacter";
+
         public IReadOnlyList<IComponent> Components { get; } = components;
     }
 

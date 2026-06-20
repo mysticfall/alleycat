@@ -16,6 +16,13 @@ public partial class Character : CharacterBody3D, ICharacter
 {
     private IComponent[] _components = [];
 
+    /// <inheritdoc />
+    [Export]
+    public string Id
+    {
+        get; set;
+    } = string.Empty;
+
     /// <summary>
     /// Gets or sets the template-authored locomotion capability reference.
     /// </summary>

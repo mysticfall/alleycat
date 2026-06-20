@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://deek4lix763je" path="res://assets/characters/templates/installers/player_installer.tscn" id="2_installer"]
 
 [node name="Player" groups=["Player"] instance=ExtResource("1_blend")]
+Id = "Player"
 
 [node name="Female" parent="." index="0"]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)

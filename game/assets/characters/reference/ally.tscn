@@ -4,5 +4,6 @@
 [ext_resource type="PackedScene" uid="uid://dxao507r2dgb2" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_installer"]
 
 [node name="Ally" unique_id=58109474 groups=["Actors"] instance=ExtResource("1_blend")]
+Id = "Ally"
 
 [node name="NPCCharacterInstaller" parent="." index="2" unique_id=1740368386 instance=ExtResource("2_installer")]
