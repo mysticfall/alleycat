@@ -14,7 +14,6 @@ namespace AlleyCat.IntegrationTests.Speech;
 /// </summary>
 public sealed partial class TranscriberIntegrationTests : IDisposable
 {
-    private const string FriendlyFailureMessage = "Voice transcription failed. Please try again.";
     private readonly AIPipelineDebugLogFixture _debugLogFixture = new();
 
     private static readonly MethodInfo _invokeTranscriptionAsyncMethod = typeof(Transcriber)
@@ -27,10 +26,10 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
     public void Dispose() => _debugLogFixture.Dispose();
 
     /// <summary>
-    /// Verifies successful transcription emits the completion signal, posts the transcript, and clears the in-flight state.
+    /// Verifies successful transcription emits the completion signal without posting transcript notifications by default.
     /// </summary>
     [Fact]
-    public async Task InvokeTranscriptionAsync_OnSuccess_EmitsCompletionSignal_PostsTranscript_AndResetsLifecycleState()
+    public async Task InvokeTranscriptionAsync_OnSuccess_EmitsCompletionSignal_DoesNotPostTranscriptByDefault_AndResetsLifecycleState()
     {
         SceneTree sceneTree = GetSceneTree();
         ExistingGlobalScope existingGlobalScope = await ExistingGlobalScope.CreateAsync(sceneTree);
@@ -67,8 +66,8 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
             Assert.Equal(1, completedCount);
             Assert.Equal("Transcript Ready", completedText);
             Assert.Equal(0, failedCount);
-            Assert.True(notificationWidget.Visible);
-            Assert.Equal("Transcript Ready", GetNewestNotificationText(notificationWidget));
+            Assert.False(notificationWidget.Visible);
+            Assert.Empty(GetNotificationTexts(notificationWidget));
         }
         finally
         {
@@ -78,7 +77,7 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Verifies the player-facing transcript notification is posted before synchronous completion listeners run.
+    /// Verifies opt-in transcript notifications are posted before synchronous completion listeners run.
     /// </summary>
     [Fact]
     public async Task InvokeTranscriptionAsync_OnSuccess_PostsTranscriptBeforeCompletionSignalListeners()
@@ -89,6 +88,7 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
         FakeTranscriber transcriber = new()
         {
             NextResultFactory = _ => Task.FromResult("Prompt Transcript"),
+            TranscriptNotificationEnabled = true,
         };
 
         sceneTree.Root.AddChild(transcriber);
@@ -120,10 +120,10 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Verifies failed transcription emits the failure signal, posts the friendly fallback message, and clears the in-flight state.
+    /// Verifies failed transcription emits the failure signal without posting a direct UI notification.
     /// </summary>
     [Fact]
-    public async Task InvokeTranscriptionAsync_OnFailure_EmitsFailureSignal_PostsFriendlyMessage_AndResetsLifecycleState()
+    public async Task InvokeTranscriptionAsync_OnFailure_EmitsFailureSignal_DoesNotPostNotification_AndResetsLifecycleState()
     {
         SceneTree sceneTree = GetSceneTree();
         ExistingGlobalScope existingGlobalScope = await ExistingGlobalScope.CreateAsync(sceneTree);
@@ -168,8 +168,8 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
             Assert.Equal(1, failedCount);
             Assert.Equal("Backend unavailable", failureText);
             Assert.Equal(dispatchingThreadId, failureSignalThreadId);
-            Assert.True(notificationWidget.Visible);
-            Assert.Equal(FriendlyFailureMessage, GetNewestNotificationText(notificationWidget));
+            Assert.False(notificationWidget.Visible);
+            Assert.Empty(GetNotificationTexts(notificationWidget));
         }
         finally
         {
@@ -337,10 +337,10 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Verifies OpenAI transcriber debug output posts start, stop, and result notifications without breaking lifecycle flow.
+    /// Verifies OpenAI transcriber recording flow no longer posts pipeline debug notifications.
     /// </summary>
     [Fact]
-    public async Task OpenAITranscriber_DebugNotificationsEnabled_PostsStartStopAndResultMessages()
+    public async Task OpenAITranscriber_RecordingLifecycle_DoesNotPostPipelineDebugNotifications_AndCompletes()
     {
         SceneTree sceneTree = GetSceneTree();
         ExistingGlobalScope existingGlobalScope = await ExistingGlobalScope.CreateAsync(sceneTree);
@@ -349,7 +349,6 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
         FakeOpenAITranscriber transcriber = new()
         {
             Name = "Transcriber",
-            DebugNotificationOutputEnabled = true,
             NextResultFactory = async _ => await Task.Run(() =>
                 {
                     backgroundThreadId = System.Environment.CurrentManagedThreadId;
@@ -376,21 +375,16 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
             fixture.Transcriber.RecordButton = new StringName("speech_record");
 
             fixture.LeftController.TriggerActionButtonPressed("speech_record");
-            await WaitUntilAsync(
-                sceneTree,
-                () => GetNotificationTexts(fixture.NotificationWidget)
-                    .Contains("Speech debug: Recording started.", StringComparer.Ordinal),
-                maxFrames: 30);
+            await WaitForNextFrameAsync(sceneTree);
+            Assert.True(fixture.Transcriber.IsRecording);
+            Assert.Empty(GetNotificationTexts(fixture.NotificationWidget));
 
             fixture.LeftController.TriggerActionButtonReleased("speech_record");
             await WaitUntilAsync(
                 sceneTree,
                 () => !fixture.Transcriber.IsRecording
                     && !fixture.Transcriber.IsTranscribing
-                    && transcriber.TranscribeCallCount == 1
-                     && HasNotification(fixture.NotificationWidget, "Speech debug: Recording stopped.")
-                     && HasNotification(fixture.NotificationWidget, "XR Debug Transcript")
-                     && HasNotification(fixture.NotificationWidget, "Speech debug: Transcription result: XR Debug Transcript"),
+                    && transcriber.TranscribeCallCount == 1,
                 maxFrames: 60);
 
             Assert.True(backgroundThreadId.HasValue);
@@ -398,10 +392,7 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
             Assert.False(fixture.Transcriber.IsRecording);
             Assert.False(fixture.Transcriber.IsTranscribing);
             Assert.Equal(1, transcriber.TranscribeCallCount);
-            Assert.True(HasNotification(fixture.NotificationWidget, "Speech debug: Recording started."));
-            Assert.True(HasNotification(fixture.NotificationWidget, "Speech debug: Recording stopped."));
-            Assert.True(HasNotification(fixture.NotificationWidget, "XR Debug Transcript"));
-            Assert.True(HasNotification(fixture.NotificationWidget, "Speech debug: Transcription result: XR Debug Transcript"));
+            Assert.Empty(GetNotificationTexts(fixture.NotificationWidget));
             Assert.Equal(1, completedCount);
             Assert.Equal("XR Debug Transcript", completedText);
             Assert.Equal(dispatchingThreadId, completionSignalThreadId);

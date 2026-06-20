@@ -4,7 +4,6 @@ using System.Text;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
-using AlleyCat.UI;
 using Godot;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +23,6 @@ public partial class OpenAITranscriber : Transcriber
     private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
     private const string DefaultModel = "whisper-1";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
-    private const string ConfigLoadFailureNotification = "Speech transcription is unavailable. Please check the STT configuration.";
 
     private OpenAITranscriberSettings? _settings;
     private ILogger<OpenAITranscriber>? _logger;
@@ -39,16 +37,6 @@ public partial class OpenAITranscriber : Transcriber
         set;
     } = DefaultConfigPath;
 
-    /// <summary>
-    /// When enabled, posts speech lifecycle debug notifications to the player UI.
-    /// </summary>
-    [Export]
-    public bool DebugNotificationOutputEnabled
-    {
-        get;
-        set;
-    }
-
     /// <inheritdoc />
     public override void _Ready()
     {
@@ -62,7 +50,6 @@ public partial class OpenAITranscriber : Transcriber
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to load STT configuration from {ConfigPath}.", ConfigPath);
-            _ = this.PostNotification(ConfigLoadFailureNotification);
             _settings = null;
         }
     }
@@ -94,18 +81,6 @@ public partial class OpenAITranscriber : Transcriber
 
         return GetTranscriptionTextOrThrow(response);
     }
-
-    /// <inheritdoc />
-    protected override void OnRecordingStarted()
-        => PostDebugNotification("Speech debug: Recording started.");
-
-    /// <inheritdoc />
-    protected override void OnRecordingStopped()
-        => PostDebugNotification("Speech debug: Recording stopped.");
-
-    /// <inheritdoc />
-    protected override void OnTranscriptionCompleted(string text)
-        => PostDebugNotification($"Speech debug: Transcription result: {FormatDebugTranscript(text)}");
 
     internal static byte[] CreateWaveFileBytes(AudioStreamWav audioStream)
     {
@@ -248,21 +223,8 @@ public partial class OpenAITranscriber : Transcriber
         }
     }
 
-    private void PostDebugNotification(string message)
-    {
-        if (!DebugNotificationOutputEnabled)
-        {
-            return;
-        }
-
-        _ = DispatchDeferredGodotActionAsync(() => _ = this.PostNotification(message));
-    }
-
     private Task LogLatencyOnGodotThreadAsync(string stage, Stopwatch stopwatch, string detail)
         => DispatchDeferredGodotActionAsync(() => AIPipelineDebugLog.Latency(stage, stopwatch, detail));
-
-    private static string FormatDebugTranscript(string text)
-        => string.IsNullOrWhiteSpace(text) ? "<empty>" : text.Trim();
 
     internal sealed record OpenAITranscriberSettings(
         string Host,

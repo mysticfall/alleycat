@@ -16,8 +16,6 @@ namespace AlleyCat.Speech.Transcription;
 public abstract partial class Transcriber : Node
 {
     private const string DefaultRecordingBusName = "SpeechRecord";
-    private const string DefaultFriendlyErrorMessage = "Voice transcription failed. Please try again.";
-
     private XRManager? _xrManager;
     private IXRHandController? _recordController;
     private AudioEffectRecord? _recordEffect;
@@ -92,6 +90,16 @@ public abstract partial class Transcriber : Node
         get;
         set;
     } = true;
+
+    /// <summary>
+    /// Enables posting successful transcript text to the notification UI for debugging and opt-in diagnostics.
+    /// </summary>
+    [Export]
+    public bool TranscriptNotificationEnabled
+    {
+        get;
+        set;
+    }
 
     /// <summary>
     /// Indicates whether microphone capture is active.
@@ -505,7 +513,11 @@ public abstract partial class Transcriber : Node
 
     private void HandleTranscriptionSuccess(string text)
     {
-        _ = this.PostNotification(text);
+        if (TranscriptNotificationEnabled)
+        {
+            _ = this.PostNotification(text);
+        }
+
         _ = EmitSignal(SignalName.TranscriptionCompleted, text);
         OnTranscriptionCompleted(text);
     }
@@ -527,7 +539,6 @@ public abstract partial class Transcriber : Node
         }
 
         _ = EmitSignal(SignalName.TranscriptionFailed, ex.Message);
-        _ = this.PostNotification(DefaultFriendlyErrorMessage);
     }
 
     private sealed class DeferredGodotAction(Action action, TaskCompletionSource completionSource)

@@ -8,8 +8,8 @@ title: Transcriber Component
 ## Requirement
 
 Provide an abstract `Transcriber` component that captures microphone audio via Godot's XR input system, triggers async
-transcription, emits completion and failure signals, and surfaces results and errors to the player. Deliver one concrete
-`OpenAITranscriber` implementation using the OpenAI .NET SDK.
+transcription, emits completion and failure signals, and can optionally surface transcript text as a debug-oriented UI
+notification. Deliver one concrete `OpenAITranscriber` implementation using the OpenAI .NET SDK.
 
 ## Goal
 
@@ -21,11 +21,13 @@ can be extended to other STT backends.
 1. Players initiate voice recording via a configurable XR input button
    (default: left trigger).
 2. Recording auto-stops on button release or maximum duration.
-3. Transcription results surface to the player via a UI notification.
-4. Transcription failures surface as a user-friendly error message.
-5. The system uses OpenAI-compatible API endpoints for transcription.
-6. Transcript notifications appear promptly after transcription completes and are not delayed by downstream signal
-   listeners, AI processing, or response generation.
+3. Transcription results are delivered to gameplay through the completion signal.
+4. Transcript UI notifications are optional/debug-oriented and disabled by default.
+5. Transcription failures are reported through diagnostics and the failure signal; downstream listeners may decide
+   whether to surface user-facing messaging.
+6. The system uses OpenAI-compatible API endpoints for transcription.
+7. When transcript notifications are explicitly enabled, they appear promptly after transcription completes and are not
+   delayed by downstream signal listeners, AI processing, or response generation.
 
 ## Technical Requirements
 
@@ -36,26 +38,29 @@ can be extended to other STT backends.
 3. Use Godot microphone API to capture audio and produce `AudioStreamWav`.
 4. Define abstract method `Transcribe(AudioStreamWav)` as `async Task<string>`.
 5. Emit signal `TranscriptionCompleted(string text)` on success.
-6. On failure: log raw diagnostic detail via `ILogger`, display a user-friendly message via
-   `@game/src/UI/NotificationUIExtensions.cs`, and emit signal `TranscriptionFailed(string error)`.
+6. On failure: log raw diagnostic detail via `ILogger` and emit signal `TranscriptionFailed(string error)` without
+   posting a transcriber-pipeline UI notification directly through `NotificationUIExtensions` or `PostNotification`.
 7. Implement `OpenAITranscriber` using the official OpenAI .NET SDK.
 8. Bind/read subsystem-owned STT options from CORE-006 `IConfiguration`, or build a local custom-path JSON
    configuration when an explicit path is supplied. Options include `Host`, optional `ApiKey`, and additional
    model/timeout settings.
 9. Specify runtime integration: XR binding, microphone prerequisites,
     config contract, signal contract, and lifecycle.
-10. On successful transcription, dispatch the player-facing transcript notification before emitting completion signals
-    or invoking other downstream completion hooks.
-11. Keep long-running transcription preparation, network calls, and other avoidable blocking work off frame-critical
+10. Export `TranscriptNotificationEnabled` on `Transcriber`; it defaults to `false` and controls only the successful
+    transcript text notification.
+11. On successful transcription with `TranscriptNotificationEnabled` enabled, dispatch the transcript notification
+    before emitting completion signals or invoking other downstream completion hooks.
+12. Keep long-running transcription preparation, network calls, and other avoidable blocking work off frame-critical
     Godot execution paths where practical; completion dispatch should stay narrow and should not front-load AI or LLM
-    setup ahead of the player-facing notification.
+    setup ahead of the optional transcript notification.
 
 ## In Scope
 
 - Abstract `Transcriber` class with XR input binding and microphone recording.
 - Abstract `Transcribe(AudioStreamWav)` async method contract.
 - Signal contract for transcription completion and failure.
-- Error handling contract using `ILogger` and `NotificationUIExtensions`.
+- Error handling contract using `ILogger` and the failure signal.
+- Optional transcript notification toggle for diagnostics and debug builds.
 - `OpenAITranscriber` implementation using OpenAI .NET SDK.
 - Subsystem-owned configuration contract using CORE-006 `IConfiguration` or explicit custom-path JSON loading.
 - Implementation under `@game/src/Speech/Transcription/`.
@@ -78,12 +83,18 @@ Recording starts when the XR action value exceeds 0.5 and stops on release
 or timeout. This matches the natural hold-to-speak idiom common in VR voice
 input and avoids extra confirmation steps.
 
-### Error Dual-Channel Pattern
+### Error Diagnostics Pattern
 
-Failures emit both an `ILogger` error (for diagnostics) and a
-player-facing notification (for usability). Both are emitted; the notification
-supplies a static user-friendly message while the signal carries the raw detail
-for listeners that need it.
+Failures emit an `ILogger` error for diagnostics and `TranscriptionFailed` for runtime listeners. The transcriber
+pipeline does not call `NotificationUIExtensions` or `PostNotification` for failures. If general logging configuration
+routes error logs to a notification sink, that is outside the transcriber boundary and should not require
+transcriber-specific logger category suppression.
+
+### Optional Transcript Notification
+
+Successful transcript notifications are debug-oriented and opt-in through `TranscriptNotificationEnabled`. When enabled,
+the transcript notification is posted before completion signal listeners run so slow downstream AI processing cannot
+delay visible diagnostic feedback.
 
 ### No-Auth Backend Compatibility
 
@@ -94,15 +105,16 @@ for compatible services.
 
 ## Acceptance Criteria
 
-1. UR-1–UR-6 covered: player can record, auto-stop works, success/failure messages reach the player, and successful
-   transcript notifications are not delayed by downstream processing.
-2. TR-1–TR-11 covered: abstract class, XR binding, microphone capture, async contract, signals, dual-channel error
-   handling, SDK implementation, subsystem-owned config loading, runtime integration, success notification ordering,
-   and non-blocking completion boundaries are specified.
+1. UR-1–UR-7 covered: player can record, auto-stop works, completion/failure signals deliver results, transcript
+   notifications are off by default but can be enabled, failures use diagnostics and signals rather than direct UI
+   notification calls, and enabled transcript notifications are not delayed by downstream processing.
+2. TR-1–TR-12 covered: abstract class, XR binding, microphone capture, async contract, signals, logger-and-signal error
+   handling, SDK implementation, subsystem-owned config loading, runtime integration, transcript notification toggle and
+   conditional ordering, and non-blocking completion boundaries are specified.
 3. `Out Of Scope` excludes only optional/unrelated work; no mandatory contract
    omitted.
 
-**Traceability map:** UR-1–UR-6 → AC-1; TR-1–TR-11 → AC-2; OOS guard → AC-3.
+**Traceability map:** UR-1–UR-7 → AC-1; TR-1–TR-12 → AC-2; OOS guard → AC-3.
 
 ## References
 
