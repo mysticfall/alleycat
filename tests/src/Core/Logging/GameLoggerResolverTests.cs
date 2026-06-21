@@ -32,4 +32,28 @@ public sealed class GameLoggerResolverTests
         Assert.False(resolved);
         Assert.Null(logger);
     }
+
+    /// <summary>
+    /// Required factory resolution should still fail clearly for callers that need logging infrastructure.
+    /// </summary>
+    [Fact]
+    public void ResolveFactoryRequired_WhenGameSingletonUnavailable_ThrowsClearError()
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            GameLoggerResolver.ResolveFactoryRequired);
+
+        Assert.Contains("Unable to resolve required logger factory", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Optional factory resolution lets diagnostic-only listeners no-op in isolated test scenes.
+    /// </summary>
+    [Fact]
+    public void TryResolveFactory_WhenGameSingletonUnavailable_ReturnsFalse()
+    {
+        bool resolved = GameLoggerResolver.TryResolveFactory(out ILoggerFactory? loggerFactory);
+
+        Assert.False(resolved);
+        Assert.Null(loggerFactory);
+    }
 }

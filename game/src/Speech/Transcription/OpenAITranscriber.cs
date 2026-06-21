@@ -96,8 +96,9 @@ public partial class OpenAITranscriber : Transcriber
 
     internal static Task<PreparedTranscriptionRequest> PrepareTranscriptionRequestAsync(
         RecordedAudioData recordedAudio,
-        OpenAITranscriberSettings settings)
-        => Task.Run(() => PrepareTranscriptionRequest(recordedAudio, settings));
+        OpenAITranscriberSettings settings,
+        ILoggerFactory? loggerFactory = null)
+        => Task.Run(() => PrepareTranscriptionRequest(recordedAudio, settings, loggerFactory));
 
     internal static byte[] CreateWaveFileBytes(
         byte[] data,
@@ -199,7 +200,8 @@ public partial class OpenAITranscriber : Transcriber
 
     private static PreparedTranscriptionRequest PrepareTranscriptionRequest(
         RecordedAudioData recordedAudio,
-        OpenAITranscriberSettings settings)
+        OpenAITranscriberSettings settings,
+        ILoggerFactory? loggerFactory)
     {
         MemoryStream? wavStream = null;
 
@@ -213,7 +215,7 @@ public partial class OpenAITranscriber : Transcriber
 
             return new PreparedTranscriptionRequest(
                 wavStream,
-                settings.CreateAudioClient(),
+                loggerFactory is null ? settings.CreateAudioClient() : settings.CreateAudioClient(loggerFactory),
                 CreateTranscriptionOptions(settings));
         }
         catch
@@ -241,6 +243,9 @@ public partial class OpenAITranscriber : Transcriber
         public AudioClient CreateAudioClient()
             => new(Model, new ApiKeyCredential(GetApiKeyOrDefault()), CreateClientOptions());
 
+        internal AudioClient CreateAudioClient(ILoggerFactory loggerFactory)
+            => new(Model, new ApiKeyCredential(GetApiKeyOrDefault()), CreateClientOptions(loggerFactory));
+
         public Uri CreateEndpointUri()
         {
             string endpointUrl = Host.Trim();
@@ -266,19 +271,10 @@ public partial class OpenAITranscriber : Transcriber
         }
 
         private OpenAIClientOptions CreateClientOptions()
-        {
-            OpenAIClientOptions options = new()
-            {
-                Endpoint = CreateEndpointUri(),
-            };
+            => OpenAIClientOptionsFactory.Create(CreateEndpointUri(), TimeoutSeconds);
 
-            if (TimeoutSeconds is int timeoutSeconds)
-            {
-                options.NetworkTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-            }
-
-            return options;
-        }
+        private OpenAIClientOptions CreateClientOptions(ILoggerFactory loggerFactory)
+            => OpenAIClientOptionsFactory.Create(CreateEndpointUri(), TimeoutSeconds, loggerFactory);
 
         private string ConfigPathDescription
         {

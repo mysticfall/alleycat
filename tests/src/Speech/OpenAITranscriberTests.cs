@@ -2,6 +2,7 @@ using AlleyCat.Core.Configuration;
 using AlleyCat.Speech.Transcription;
 using Godot;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using OpenAI.Audio;
 using Xunit;
 
@@ -319,8 +320,9 @@ public sealed class OpenAITranscriberTests
             Temperature: 0.35f,
             TimeoutSeconds: 30);
 
+        using ILoggerFactory loggerFactory = new TestLoggerFactory();
         using OpenAITranscriber.PreparedTranscriptionRequest request =
-            await OpenAITranscriber.PrepareTranscriptionRequestAsync(recordedAudio, settings);
+            await OpenAITranscriber.PrepareTranscriptionRequestAsync(recordedAudio, settings, loggerFactory);
         byte[] bytes = request.WavStream.ToArray();
 
         Assert.NotNull(request.Client);
@@ -360,5 +362,36 @@ public sealed class OpenAITranscriberTests
                 values[$"{section}:{key}"] = value;
             }
         }
+    }
+
+    private sealed class TestLoggerFactory : ILoggerFactory
+    {
+        public void AddProvider(ILoggerProvider provider)
+            => ArgumentNullException.ThrowIfNull(provider);
+
+        public ILogger CreateLogger(string categoryName)
+            => new TestLogger();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class TestLogger : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel)
+            => false;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => ArgumentNullException.ThrowIfNull(formatter);
     }
 }

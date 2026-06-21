@@ -28,7 +28,10 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private ResponseTurn? _activeTurn;
     private ClientProvider? _clientProviderForAgent;
     private PromptStack? _systemInstructionForAgent;
-    private ChatClientAgent? _agent;
+    private bool _enableRequestResponseDiagnosticsForAgent;
+    private bool _agentRequestResponseDiagnosticsEnabled;
+    private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
+    private AIAgent? _agent;
     private AgentSession? _session;
     private bool _deferredGodotActionFlushQueued;
     private bool _isResponding;
@@ -99,7 +102,9 @@ public partial class AgenticMind : MindBase, IServiceProvider
             }
 
             _isResponding = true;
-            _activeTurn = new ResponseTurn();
+            AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
+            _enableRequestResponseDiagnosticsForAgent = diagnosticsSettings.EnableRequestResponseLogging;
+            _activeTurn = new ResponseTurn(diagnosticsSettings.EnableRequestResponseLogging);
             return _activeTurn;
         }
     }
@@ -143,11 +148,11 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
         catch (OperationCanceledException) when (turn.HasSpoken)
         {
-            // The turn is cancelled after the first speak tool call so the prototype cannot keep talking to itself.
+            // Treat cancellation after accepted speech as a completed response; duplicate speak calls remain ignored separately.
         }
         catch (Exception ex)
         {
-            GameLoggerResolver.ResolveRequired<AgenticMind>().LogError(ex, "AgenticMind response failed.");
+            LogOptionalResponseFailure(ex);
         }
         finally
         {
@@ -157,21 +162,30 @@ public partial class AgenticMind : MindBase, IServiceProvider
     }
 
     private bool TrySpeakFromTool(string speech)
+        => TrySpeakFromToolForTool(speech) == SpeakToolResult.Spoken;
+
+    internal SpeakToolResult TrySpeakFromToolForTool(string speech)
     {
         ResponseTurn? turn = GetActiveTurn();
         if (turn is null)
         {
-            return false;
+            return SpeakToolResult.NoActiveTurn;
         }
 
         if (!turn.TrySetSpokenSpeech(speech))
         {
-            return false;
+            LogOptionalDuplicateSpeakIgnored();
+            return SpeakToolResult.DuplicateIgnored;
         }
 
         if (AIPipelineDebugLog.IsEnabled)
         {
             AIPipelineDebugLog.Latency("LLM first speak tool call after", turn.Stopwatch, $"{turn.SpokenSpeech.Length} chars");
+        }
+
+        if (!turn.AllowRunCompletionAfterFirstSpeak)
+        {
+            turn.CancellationTokenSource.Cancel();
         }
 
         _ = SpeakAsync(speech, CancellationToken.None).ContinueWith(
@@ -191,9 +205,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
 
-        turn.CancellationTokenSource.Cancel();
-
-        return true;
+        return SpeakToolResult.Spoken;
     }
 
     private ResponseTurn? GetActiveTurn()
@@ -271,11 +283,17 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
     private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
     {
-        ChatClientAgent agent = EnsureAgent();
+        AIAgent agent = EnsureAgent();
+        bool enableRequestResponseDiagnostics = _enableRequestResponseDiagnosticsForAgent;
+        if (enableRequestResponseDiagnostics)
+        {
+            StartTemporaryActivityLogListenerIfAvailable();
+        }
+
         if (_session is null)
         {
             Stopwatch sessionStopwatch = AIPipelineDebugLog.StartTimer();
-            _session = await agent.CreateSessionAsync();
+            _session = await agent.CreateSessionAsync(cancellationToken);
             AIPipelineDebugLog.Latency("LLM session created in", sessionStopwatch);
         }
 
@@ -287,7 +305,8 @@ public partial class AgenticMind : MindBase, IServiceProvider
                 Tools = CreateTurnTools(),
             });
 
-            _ = await agent.RunAsync(RenderObservationSummary(observations), _session, options, cancellationToken);
+            AgentResponse response = await agent.RunAsync(RenderObservationSummary(observations), _session, options, cancellationToken);
+            LogSensitiveTrialAgentResponse(response, enableRequestResponseDiagnostics);
         }
         finally
         {
@@ -298,11 +317,92 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
     }
 
-    private ChatClientAgent EnsureAgent()
+    private static void StartTemporaryActivityLogListenerIfAvailable()
     {
+        // Sensitive development/debug diagnostics only: starts an in-process listener that writes Agent Framework
+        // OpenTelemetry tags/events/baggage, including prompt/response/tool payloads, into the AlleyCat runtime log
+        // when Diagnostics:AI:EnableRequestResponseLogging is enabled. Missing logging infrastructure is intentionally
+        // tolerated here so isolated AgenticMind tests/runtime contexts keep their existing backend failure containment
+        // behaviour.
+        if (GameLoggerResolver.TryResolveFactory(out ILoggerFactory? loggerFactory) && loggerFactory is not null)
+        {
+            AgenticMindActivityLogListener.Start(loggerFactory);
+        }
+    }
+
+    private static void LogOptionalResponseFailure(Exception exception)
+    {
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
+        {
+            logger.LogError(exception, "AgenticMind response failed.");
+        }
+    }
+
+    private static void LogOptionalDuplicateSpeakIgnored()
+    {
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
+        {
+            logger.LogWarning(
+                "AgenticMind ignored an additional speak tool call in the same turn after first speech was accepted.");
+        }
+    }
+
+    private static void LogSensitiveTrialAgentResponse(AgentResponse response, bool enableRequestResponseDiagnostics)
+    {
+        string? diagnostics = CreateSensitiveAgentResponseDiagnosticsOrDefault(response, enableRequestResponseDiagnostics);
+        if (diagnostics is null)
+        {
+            return;
+        }
+
+        // Sensitive development/debug diagnostics only: records Agent Framework response payloads through the general
+        // AgentResponse result path rather than relying on the speak tool argument as the primary response source.
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger)
+            && logger is not null
+            && logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Sensitive development-only Agent Framework response diagnostics: {AgentResponseDiagnostics}",
+                diagnostics);
+        }
+    }
+
+    internal static string? CreateSensitiveAgentResponseDiagnosticsOrDefault(
+        AgentResponse response,
+        bool enableRequestResponseDiagnostics)
+        => enableRequestResponseDiagnostics ? CreateSensitiveTrialAgentResponseDiagnostics(response) : null;
+
+    internal static string CreateSensitiveTrialAgentResponseDiagnostics(AgentResponse response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        List<string> diagnostics =
+        [
+            $"Text={FormatDiagnosticValue(response.Text)}",
+            $"Messages={response.Messages.Count}",
+        ];
+
+        for (int index = 0; index < response.Messages.Count; index++)
+        {
+            ChatMessage message = response.Messages[index];
+            diagnostics.Add($"Message[{index}].Role={message.Role}");
+            diagnostics.Add($"Message[{index}].Text={FormatDiagnosticValue(message.Text)}");
+            diagnostics.Add($"Message[{index}].Contents={message.Contents.Count}");
+        }
+
+        return string.Join("; ", diagnostics);
+    }
+
+    private static string FormatDiagnosticValue(string? value)
+        => string.IsNullOrEmpty(value) ? "<empty>" : value;
+
+    private AIAgent EnsureAgent()
+    {
+        AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
         if (_agent is not null
             && ReferenceEquals(_clientProviderForAgent, ClientProvider)
-            && ReferenceEquals(_systemInstructionForAgent, SystemInstruction))
+            && ReferenceEquals(_systemInstructionForAgent, SystemInstruction)
+            && _agentRequestResponseDiagnosticsEnabled == diagnosticsSettings.EnableRequestResponseLogging)
         {
             return _agent;
         }
@@ -321,12 +421,42 @@ public partial class AgenticMind : MindBase, IServiceProvider
         _session = null;
         _clientProviderForAgent = ClientProvider;
         _systemInstructionForAgent = SystemInstruction;
-        _agent = ClientProvider.CreateChatClient().AsAIAgent(
+        _enableRequestResponseDiagnosticsForAgent = diagnosticsSettings.EnableRequestResponseLogging;
+        _agentRequestResponseDiagnosticsEnabled = diagnosticsSettings.EnableRequestResponseLogging;
+        ChatClientAgent agent = ClientProvider.CreateChatClient().AsAIAgent(
             instructions: definition.Instructions,
             name: definition.Name,
             description: definition.Description);
+        _agent = ConfigureAgentDiagnostics(agent, this, diagnosticsSettings.EnableRequestResponseLogging);
 
         return _agent;
+    }
+
+    internal static AIAgent ConfigureAgentDiagnostics(
+        ChatClientAgent agent,
+        IServiceProvider serviceProvider,
+        bool enableRequestResponseDiagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        return enableRequestResponseDiagnostics
+            ? agent
+                .AsBuilder()
+                .UseOpenTelemetry(
+                    AgenticMindActivityLogListener.DefaultActivitySourceName,
+                    // Sensitive development/debug content capture: emits prompts, responses, and tool data to subscribed
+                    // OpenTelemetry listeners/exporters only when Diagnostics:AI:EnableRequestResponseLogging is enabled.
+                    static telemetryAgent => telemetryAgent.EnableSensitiveData = true)
+                .Build(serviceProvider)
+            : agent;
+    }
+
+    internal void SetDiagnosticsSettingsLoaderForTesting(Func<AIDiagnosticsSettings> diagnosticsSettingsLoader)
+    {
+        ArgumentNullException.ThrowIfNull(diagnosticsSettingsLoader);
+
+        _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
 
     private static string RenderObservationSummary(IReadOnlyList<AgentObservation> observations)
@@ -426,6 +556,13 @@ public partial class AgenticMind : MindBase, IServiceProvider
         string Name,
         string Description);
 
+    internal enum SpeakToolResult
+    {
+        Spoken,
+        DuplicateIgnored,
+        NoActiveTurn,
+    }
+
     private sealed class DeferredGodotAction(Action action, TaskCompletionSource completionSource)
     {
         public Action Action { get; } = action;
@@ -433,11 +570,13 @@ public partial class AgenticMind : MindBase, IServiceProvider
         public TaskCompletionSource CompletionSource { get; } = completionSource;
     }
 
-    private sealed class ResponseTurn
+    private sealed class ResponseTurn(bool allowRunCompletionAfterFirstSpeak)
     {
         private readonly Lock _lock = new();
 
         public CancellationTokenSource CancellationTokenSource { get; } = new();
+
+        public bool AllowRunCompletionAfterFirstSpeak { get; } = allowRunCompletionAfterFirstSpeak;
 
         public Stopwatch Stopwatch { get; } = AIPipelineDebugLog.StartTimer();
 

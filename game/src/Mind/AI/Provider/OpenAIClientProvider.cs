@@ -1,5 +1,6 @@
 using System.ClientModel;
 using AlleyCat.Core.Configuration;
+using AlleyCat.Core.Logging;
 using Godot;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -111,19 +112,7 @@ public partial class OpenAIClientProvider : ClientProvider
         }
 
         private OpenAIClientOptions CreateClientOptions()
-        {
-            OpenAIClientOptions options = new()
-            {
-                Endpoint = CreateEndpointUri(),
-            };
-
-            if (TimeoutSeconds is int timeoutSeconds)
-            {
-                options.NetworkTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-            }
-
-            return options;
-        }
+            => OpenAIClientOptionsFactory.Create(CreateEndpointUri(), TimeoutSeconds);
 
         private string ConfigPathDescription { get; init; } = DefaultConfigPath;
 

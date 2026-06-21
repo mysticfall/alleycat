@@ -344,19 +344,7 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
         }
 
         private OpenAIClientOptions CreateClientOptions()
-        {
-            OpenAIClientOptions options = new()
-            {
-                Endpoint = CreateEndpointUri(),
-            };
-
-            if (TimeoutSeconds is int timeoutSeconds)
-            {
-                options.NetworkTimeout = TimeSpan.FromSeconds(timeoutSeconds);
-            }
-
-            return options;
-        }
+            => OpenAIClientOptionsFactory.Create(CreateEndpointUri(), TimeoutSeconds);
 
         private string ConfigPathDescription
         {

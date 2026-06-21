@@ -31,6 +31,17 @@ public partial class SpeechTool : AgentTool
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (services.GetService(typeof(AgenticMind)) is AgenticMind mind)
+        {
+            return Task.FromResult(mind.TrySpeakFromToolForTool(speech) switch
+            {
+                AgenticMind.SpeakToolResult.Spoken => "Spoken through the configured voice.",
+                AgenticMind.SpeakToolResult.DuplicateIgnored => "Ignored because this turn already accepted a speak request.",
+                AgenticMind.SpeakToolResult.NoActiveTurn => "Unable to speak because no active response turn is available.",
+                _ => "Unable to speak because the speech request could not be accepted.",
+            });
+        }
+
         if (services.GetService(typeof(IVoice)) is not IVoice voice)
         {
             return Task.FromResult("Unable to speak because voice context is unavailable.");

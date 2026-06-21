@@ -20,10 +20,17 @@
     "Model": "google/gemma-4-31b-it",
     "Timeout": 30
   },
+  "Diagnostics": {
+    "AI": {
+      "EnableRequestResponseLogging": false
+    }
+  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",
-      "Microsoft": "Warning"
+      "Microsoft": "Warning",
+      "System.ClientModel.Primitives.MessageLoggingPolicy": "Warning",
+      "System.ClientModel.Primitives.PipelineTransport": "Warning"
     }
   }
 }

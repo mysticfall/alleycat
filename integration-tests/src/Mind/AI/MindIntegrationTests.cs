@@ -7,6 +7,7 @@ using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.TestFramework;
 using Godot;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
@@ -28,10 +29,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     public void Dispose() => _debugLogFixture.Dispose();
 
     /// <summary>
-    /// Player speech should become a runtime turn whose fake speak-tool call routes exactly once to the NPC voice.
+    /// Player speech should become a runtime turn whose first speak-tool call cancels the backend run when diagnostics are disabled.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_PlayerSpeech_RunsMigratedRuntimeAndRoutesOneSpeakTool()
+    public async Task ReceiveVoice_WhenRequestResponseDiagnosticsDisabled_CancelsRunAfterFirstAcceptedSpeak()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -45,7 +46,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         FakeClientProvider clientProvider = new()
         {
             FirstSpeech = "First reply.",
-            SecondSpeech = "Second reply should be ignored.",
+            SecondSpeech = "Second reply should not be attempted.",
         };
         AgenticMind mind = new()
         {
@@ -57,6 +58,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             PostReplyListenCooldownSeconds = 0f,
             Tools = [new SpeechTool()],
         };
+        mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(EnableRequestResponseLogging: false));
 
         clientProvider.AfterFirstSpeakAsync = () =>
         {
@@ -86,8 +88,75 @@ public sealed partial class MindIntegrationTests : IDisposable
             Assert.Equal(1, client.RunCount);
             Assert.Contains("- Speech from player: hello Alley", Assert.Single(client.Prompts));
             Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
-            Assert.Equal("Spoken through the configured voice.", client.SecondSpeakResult);
+            Assert.True(client.CancellationObservedAfterFirstSpeak);
+            Assert.False(client.ReturnedResponse);
+            Assert.Equal("Ignored because this turn already accepted a speak request.", client.SecondSpeakResult);
             Assert.Equal(["First reply."], npcVoice.SpokenLines);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, mind, playerVoice, npcVoice);
+        }
+    }
+
+    /// <summary>
+    /// Request/response diagnostics should keep the backend run alive so AgentResponse diagnostics can inspect the result.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WhenRequestResponseDiagnosticsEnabled_AllowsRunCompletionAndDuplicateSpeakProtection()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecordingVoice npcVoice = new()
+        {
+            Id = "alley",
+        };
+        RecordingVoice playerVoice = new()
+        {
+            Id = "player",
+        };
+        FakeClientProvider clientProvider = new()
+        {
+            FirstSpeech = "First diagnostic reply.",
+            SecondSpeech = "Second diagnostic reply should be ignored.",
+            ResponseText = "general agent response diagnostics text",
+        };
+        AgenticMind mind = new()
+        {
+            ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
+            Voice = npcVoice,
+            MaxObservationWaitSeconds = 0.05f,
+            ObservationWeightThreshold = 1f,
+            PostReplyListenCooldownSeconds = 0f,
+            Tools = [new SpeechTool()],
+        };
+        mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(EnableRequestResponseLogging: true));
+
+        AddTestNode(sceneTree, npcVoice);
+        AddTestNode(sceneTree, playerVoice);
+        AddTestNode(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("hello with diagnostics", playerVoice);
+
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { Completed: true }, maxFrames: 120);
+            await TestUtils.WaitForFramesAsync(sceneTree, 4);
+
+            Assert.NotNull(clientProvider.Client);
+            FakeChatClient client = clientProvider.Client;
+            Assert.Equal(1, client.RunCount);
+            Assert.False(client.CancellationObservedAfterFirstSpeak);
+            Assert.True(client.ReturnedResponse);
+            Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
+            Assert.Equal("Ignored because this turn already accepted a speak request.", client.SecondSpeakResult);
+            Assert.Equal(["First diagnostic reply."], npcVoice.SpokenLines);
+
+            string diagnostics = AgenticMind.CreateSensitiveTrialAgentResponseDiagnostics(
+                new AgentResponse(new ChatMessage(ChatRole.Assistant, client.ResponseText)));
+            Assert.Contains("Text=general agent response diagnostics text", diagnostics, StringComparison.Ordinal);
+            Assert.Contains("Messages=1", diagnostics, StringComparison.Ordinal);
         }
         finally
         {
@@ -497,6 +566,8 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public string SecondSpeech { get; init; } = string.Empty;
 
+        public string ResponseText { get; init; } = string.Empty;
+
         public Func<Task>? AfterFirstSpeakAsync
         {
             get;
@@ -511,7 +582,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public override IChatClient CreateChatClient()
         {
-            Client = new FakeChatClient(FirstSpeech, SecondSpeech, AfterFirstSpeakAsync);
+            Client = new FakeChatClient(FirstSpeech, SecondSpeech, ResponseText, AfterFirstSpeakAsync);
             return Client;
         }
     }
@@ -534,6 +605,7 @@ public sealed partial class MindIntegrationTests : IDisposable
     private sealed class FakeChatClient(
         string firstSpeech,
         string secondSpeech,
+        string responseText,
         Func<Task>? afterFirstSpeakAsync) : IChatClient
     {
         public int RunCount
@@ -551,6 +623,20 @@ public sealed partial class MindIntegrationTests : IDisposable
         public List<string> Prompts { get; } = [];
 
         public List<string> ToolNamesByRun { get; } = [];
+
+        public string ResponseText => responseText;
+
+        public bool CancellationObservedAfterFirstSpeak
+        {
+            get;
+            private set;
+        }
+
+        public bool ReturnedResponse
+        {
+            get;
+            private set;
+        }
 
         public string? FirstSpeakResult
         {
@@ -594,7 +680,14 @@ public sealed partial class MindIntegrationTests : IDisposable
 
                 SecondSpeakResult = await InvokeSpeakAsync(toolFunction, secondSpeech, CancellationToken.None);
 
-                return new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty));
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    CancellationObservedAfterFirstSpeak = true;
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                ReturnedResponse = true;
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, responseText));
             }
             finally
             {
