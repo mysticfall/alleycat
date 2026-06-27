@@ -21,6 +21,7 @@
 - [AI-002: Agent Runtime](ai/002-agent-runtime/index.md)
 - [AI-003: Prompt API](ai/003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](ai/004-lore-backstory/index.md)
+- [AI-005: Context Provider API](ai/005-context-provider-api/index.md)
 
 ## Templating
 
