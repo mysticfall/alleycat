@@ -13,11 +13,13 @@ description: Use this skill when preparing and creating Git commits.
 - Do not commit without explicit confirmation.
 - Ensure the commit title includes punctuation.
 - Do not hard-wrap the commit body.
+- Include a commit body unless the purpose is already obvious from the title.
 
 ## Commit Message Format
 
 - Title: short, specific, and punctuated.
-- Body: optional; explain why the change exists.
+- Body: explain why the change exists unless the intention and purpose are already obvious from the title.
+- Focus the body on intention, purpose, and context rather than merely enumerating changed files or implementation steps.
 
 Example title format:
 
