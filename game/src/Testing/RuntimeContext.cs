@@ -8,6 +8,7 @@ namespace AlleyCat.Testing;
 public static class RuntimeContext
 {
     private const string TestScenePrefix = "res://tests/";
+    private const string TestScriptPrefix = "tests/";
 
     /// <summary>
     /// Environment variable carrying the explicit runtime-context value.
@@ -27,7 +28,8 @@ public static class RuntimeContext
     /// </summary>
     public static bool IsIntegrationTest() => IsIntegrationTest(
         System.Environment.GetEnvironmentVariable(IntegrationTestContextEnvironmentVariable),
-        System.Environment.GetCommandLineArgs());
+        System.Environment.GetCommandLineArgs())
+        || IsIntegrationTest(null, OS.GetCmdlineArgs());
 
     /// <summary>
     /// Returns <c>true</c> when global startup should be bypassed for the active scene.
@@ -37,7 +39,7 @@ public static class RuntimeContext
         string configuredMainScenePath = ResolveMainScenePath(ProjectSettings.GetSetting("application/run/main_scene").AsString());
         return ShouldBypassGlobalStartup(
             System.Environment.GetEnvironmentVariable(IntegrationTestContextEnvironmentVariable),
-            System.Environment.GetCommandLineArgs(),
+            [.. System.Environment.GetCommandLineArgs(), .. OS.GetCmdlineArgs()],
             ResolveStartupScenePath(tree, configuredMainScenePath),
             configuredMainScenePath);
     }
@@ -62,6 +64,12 @@ public static class RuntimeContext
             string argument = commandLineArguments[index];
             if (string.Equals(argument, ProbeCommandArg, StringComparison.Ordinal)
                 || string.Equals(argument, RunFactCommandArg, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (argument.StartsWith(TestScenePrefix, StringComparison.Ordinal)
+                || argument.StartsWith(TestScriptPrefix, StringComparison.Ordinal))
             {
                 return true;
             }

@@ -22,11 +22,89 @@ public partial class TestRuntimeRunner : Node
     private const string TestFailMarker = "ALLEYCAT_INTEGRATION_TEST_FAIL";
     private const int ProbeReadyFrameLimit = 5;
     private const string TestResultMarkerPrefix = "ALLEYCAT_INTEGRATION_TEST_RESULT:";
+    private static readonly Lock _dispatchSync = new();
+    private static TestRuntimeRunner? _activeRunner;
+
+    /// <summary>
+    /// Gets the managed thread ID that executed the active test runner's Godot <see cref="_Ready"/> callback.
+    /// </summary>
+    public static int? MainThreadId
+    {
+        get; private set;
+    }
+
+    /// <summary>
+    /// Gets whether the current managed thread is the thread that executed the active runner's Godot callbacks.
+    /// </summary>
+    public static bool IsOnMainThread => MainThreadId == System.Environment.CurrentManagedThreadId;
 
     /// <summary>
     /// Starts the probe only when probe arguments are provided.
     /// </summary>
-    public override void _Ready() => _ = RunCommandIfRequestedAsync();
+    public override void _Ready()
+    {
+        lock (_dispatchSync)
+        {
+            _activeRunner = this;
+            MainThreadId = System.Environment.CurrentManagedThreadId;
+        }
+
+        _ = RunCommandIfRequestedAsync();
+    }
+
+    /// <summary>
+    /// Runs the provided action through Godot's deferred-call queue when the caller is not already on the runner thread.
+    /// </summary>
+    /// <param name="action">The action to execute on the Godot runner thread.</param>
+    /// <param name="forceDeferred">Whether to enqueue the action even when already on the runner thread.</param>
+    /// <returns>A task that completes when the action has run.</returns>
+    public static Task RunOnMainThreadAsync(Action action, bool forceDeferred = false)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        if (IsOnMainThread && !forceDeferred)
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        TestRuntimeRunner runner;
+        lock (_dispatchSync)
+        {
+            runner = _activeRunner
+                ?? throw new InvalidOperationException("Godot test main-thread dispatcher is not available before TestRuntimeRunner._Ready().");
+        }
+
+        TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var callable = Callable.From(() =>
+        {
+            try
+            {
+                action();
+                completion.SetResult();
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+        });
+
+        _ = runner.CallDeferred(nameof(InvokeDeferredCallback), callable);
+        return completion.Task;
+    }
+
+    /// <summary>
+    /// Invokes a deferred C# callback scheduled by <see cref="RunOnMainThreadAsync"/>.
+    /// </summary>
+    public void InvokeDeferredCallback(Callable callable)
+    {
+        if (!IsInsideTree())
+        {
+            throw new InvalidOperationException("Deferred test callback reached a runner outside the SceneTree.");
+        }
+
+        _ = callable.Call();
+    }
 
     private async Task RunCommandIfRequestedAsync()
     {
@@ -74,6 +152,11 @@ public partial class TestRuntimeRunner : Node
 
             Assembly? OnResolving(AssemblyLoadContext context, AssemblyName assemblyName)
             {
+                if (TryGetLoadedAssembly(assemblyName, out Assembly? loadedAssembly))
+                {
+                    return loadedAssembly;
+                }
+
                 if (AssemblyName.ReferenceMatchesDefinition(typeof(Node).Assembly.GetName(), assemblyName))
                 {
                     return typeof(Node).Assembly;
@@ -146,6 +229,8 @@ public partial class TestRuntimeRunner : Node
 
         try
         {
+            await RemoveRuntimeGlobalAutoloadForIntegrationTestAsync(typeName);
+
             var godotLoadContext = AssemblyLoadContext.GetLoadContext(typeof(Node).Assembly);
             if (godotLoadContext is null)
             {
@@ -159,8 +244,15 @@ public partial class TestRuntimeRunner : Node
                 return;
             }
 
+            EnsureRuntimeAssemblyReferencesLoaded(typeof(Game).Assembly);
+
             Assembly? OnResolving(AssemblyLoadContext context, AssemblyName assemblyName)
             {
+                if (TryGetLoadedAssembly(assemblyName, out Assembly? loadedAssembly))
+                {
+                    return loadedAssembly;
+                }
+
                 if (AssemblyName.ReferenceMatchesDefinition(typeof(Node).Assembly.GetName(), assemblyName))
                 {
                     return typeof(Node).Assembly;
@@ -216,6 +308,30 @@ public partial class TestRuntimeRunner : Node
         }
     }
 
+    private async Task RemoveRuntimeGlobalAutoloadForIntegrationTestAsync(string testTypeName)
+    {
+        if (!RuntimeContext.IsIntegrationTest() || !RequiresIsolatedGameSingleton(testTypeName))
+        {
+            return;
+        }
+
+        Node? global = GetTree().Root.GetNodeOrNull<Node>("Global");
+        if (global is null)
+        {
+            return;
+        }
+
+        global.QueueFree();
+        _ = await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    private static bool RequiresIsolatedGameSingleton(string testTypeName)
+        => testTypeName is "AlleyCat.IntegrationTests.GameStartupIntegrationTests"
+            or "AlleyCat.IntegrationTests.UI.UIOverlayIntegrationTests"
+            or "AlleyCat.IntegrationTests.UI.LoadingScreenIntegrationTests"
+            or "AlleyCat.IntegrationTests.Speech.TranscriberIntegrationTests"
+            or "AlleyCat.IntegrationTests.Control.PlayerControllerGrabInputIntegrationTests";
+
     private static bool TryGetLoadTarget(string assemblyPath,
         out string absoluteAssemblyPath,
         out AssemblyDependencyResolver? dependencyResolver)
@@ -231,6 +347,35 @@ public partial class TestRuntimeRunner : Node
         dependencyResolver = new AssemblyDependencyResolver(absoluteAssemblyPath);
 
         return true;
+    }
+
+    private static void EnsureRuntimeAssemblyReferencesLoaded(Assembly assembly)
+    {
+        foreach (AssemblyName referenceName in assembly.GetReferencedAssemblies())
+        {
+            if (TryGetLoadedAssembly(referenceName, out _))
+            {
+                continue;
+            }
+
+            try
+            {
+                _ = AssemblyLoadContext.GetLoadContext(assembly)?.LoadFromAssemblyName(referenceName)
+                    ?? Assembly.Load(referenceName);
+            }
+            catch
+            {
+                // The dynamic test assembly resolver will report a concrete load failure if this dependency is required.
+            }
+        }
+    }
+
+    private static bool TryGetLoadedAssembly(AssemblyName requestedAssemblyName, out Assembly? loadedAssembly)
+    {
+        loadedAssembly = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(assembly => AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), requestedAssemblyName));
+
+        return loadedAssembly is not null;
     }
 
     private static string? GetArgumentValue(IReadOnlyList<string> args, string argumentName)

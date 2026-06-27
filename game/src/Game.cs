@@ -230,6 +230,14 @@ public partial class Game : Node, IServiceProvider
     {
         if (_instance is not null && !ReferenceEquals(_instance, this))
         {
+            if (RuntimeContext.IsIntegrationTest()
+                && _instance.Name.ToString().StartsWith("Global", StringComparison.Ordinal)
+                && !string.Equals(Name, "Global", StringComparison.Ordinal))
+            {
+                _instance = this;
+                return;
+            }
+
             throw new InvalidOperationException("Only one Game instance can be active at a time.");
         }
 
