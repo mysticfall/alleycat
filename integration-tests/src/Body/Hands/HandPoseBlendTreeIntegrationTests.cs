@@ -480,10 +480,6 @@ public sealed class HandPoseBlendTreeIntegrationTests
             Skeleton3D skeleton = root.GetNode<Skeleton3D>("Female/GeneralSkeleton");
             Animation grabBall = Assert.IsType<Animation>(ResourceLoader.Load(GrabBallAnimationPath), exactMatch: false);
             Animation reset = Assert.IsType<Animation>(ResourceLoader.Load(ResetAnimationPath), exactMatch: false);
-            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
-            AnimationNodeAnimation poseNode = Assert.IsType<AnimationNodeAnimation>(
-                rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(side)),
-                exactMatch: false);
             NodePath fingerTrackPath = new($"%GeneralSkeleton:{fingerBoneName}");
             int resetTrackIndex = RequireRotationTrack(reset, fingerTrackPath);
             int grabTrackIndex = RequireRotationTrack(grabBall, fingerTrackPath);
@@ -499,6 +495,10 @@ public sealed class HandPoseBlendTreeIntegrationTests
             controller.ClearHandPose(side, immediate: true);
 
             controller.SetHandPose(side, grabBall, weight: 1f, immediate: true);
+            AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
+            AnimationNodeAnimation poseNode = Assert.IsType<AnimationNodeAnimation>(
+                rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(side)),
+                exactMatch: false);
             float blend = tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(side)).AsSingle();
             Quaternion resetPose = reset.RotationTrackInterpolate(resetTrackIndex, 0.0, backward: false);
             Quaternion grabPose = grabBall.RotationTrackInterpolate(grabTrackIndex, 0.0, backward: false);

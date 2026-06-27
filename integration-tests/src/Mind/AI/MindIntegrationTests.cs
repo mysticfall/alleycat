@@ -560,7 +560,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         public override string ToPromptString() => Prompt;
     }
 
-    private sealed partial class FakeClientProvider : ClientProvider
+    private sealed class FakeClientProvider : ClientProvider
     {
         public string FirstSpeech { get; init; } = string.Empty;
 
@@ -587,7 +587,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
     }
 
-    private sealed partial class ThrowingClientProvider : ClientProvider
+    private sealed class ThrowingClientProvider : ClientProvider
     {
         public int CreateChatClientCallCount
         {
