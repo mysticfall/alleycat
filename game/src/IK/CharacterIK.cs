@@ -946,18 +946,24 @@ public partial class CharacterIK : Node3D
         {
             Name = "CharacterIKBeginStage",
             Callback = OnBeginStage,
+            Active = true,
+            Influence = 1.0f,
         };
 
         FootProviderStageModifier footProviderModifier = new()
         {
             Name = "CharacterIKFootProviderStage",
             CharacterIK = this,
+            Active = true,
+            Influence = 1.0f,
         };
 
         StageModifier endModifier = new()
         {
             Name = "CharacterIKEndStage",
             Callback = OnEndStage,
+            Active = true,
+            Influence = 1.0f,
         };
 
         skeleton.AddChild(beginModifier);
