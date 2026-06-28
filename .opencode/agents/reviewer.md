@@ -15,8 +15,10 @@ handoff readiness for gameplay, systems, and tooling changes.
   commands and outcomes in `Verified checks` or `Blocking issues`, except for tooling-only tasks where those suites are
   unrelated (for example creating a Blender script).
 - Use the full-suite commands `dotnet test tests/AlleyCat.Tests.csproj` and
-  `dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj`; do not rely only on the coder's filtered test
-  evidence for final readiness.
+  `dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj`; the integration test framework launches
+  Godot with `--xr-mode off` automatically. Do not rely only on the coder's filtered test evidence for final readiness.
+  Do not add `--headless` to the full integration-suite gate unless an explicit test-framework contract says the whole
+  selected run is headless-compatible.
 
 ### Escalate Immediately When
 
@@ -69,8 +71,7 @@ When visual verification screenshots exist as verification artefacts:
 - [ ] Exported properties/resources/scene refs are serialisation-safe and editor-friendly.
 - [ ] When a node class has many exported properties, related properties are grouped using `[ExportGroup]` for editor clarity.
 - [ ] Per-frame and VR-critical paths avoid blocking work and avoidable allocations.
-- [ ] Automated integration test evidence uses headless execution (or equivalent enforced mechanism such as
-  `[Headless]`) to avoid manual UI/OpenXR intervention.
+- [ ] Automated integration test evidence keeps `--headless` opt-in only for tests known to be headless-compatible.
 - [ ] Scene and resource changes use the GDScript API approach (not hand-editing `.tscn`/`.tres` files).
 - [ ] For inherited scenes, proper handling of `editable path` and `parent_id_path` when accessing internal nodes.
 - [ ] Custom type script metadata is set correctly when assigning C# scripts to nodes in scenes.

@@ -16,15 +16,18 @@ Godot engine.
 - Run relevant checks/tests and note manual verification for gameplay behaviour.
 - Always run task-scoped unit and integration tests with the narrowest appropriate filters for the current change. Use
   `dotnet test tests/AlleyCat.Tests.csproj --filter FullyQualifiedName~Namespace.TypeOrMethod` for unit tests and the
-  integration-test filters from the `csharp-developer` skill, for example
+  integration-test filters from the `godot-integration-testing` skill, for example
   `dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- --test-class Fully.Qualified.TypeName` or
   `--test-method Fully.Qualified.TypeName.MethodName`.
-- Do not run the full unit or integration suite by default while implementing; leave full-suite verification for the
-  reviewer/final hand-off gate unless explicitly requested.
+- Do not run the full integration suite while implementing; full integration-suite verification is reserved for the
+  reviewer/final hand-off gate unless the invoking agent or user explicitly requests an exception. Do not run the full
+  unit suite by default either; prefer filtered unit tests while iterating.
 - If no focused automated test exists for the changed behaviour, run the closest affected filtered test set and report the
   coverage gap in `Validation`.
-- For automated integration test runs, default to headless execution flags to prevent OpenXR/UI-dialog interruptions
-  unless non-headless mode is explicitly required.
+- For automated integration test runs, do **not** default to `--headless`. Use `--headless` only when the selected test is
+  known to be headless-compatible through its spec, test contract, or `[Headless]` annotation. The integration test
+  framework already launches Godot with `--xr-mode off`; direct `godot-mono` commands must pass `--xr-mode off`
+  explicitly.
 
 ## Visual Verification Tasks
 
