@@ -1,18 +1,19 @@
 ---
 id: CORE-001
+title: Global Singleton
 ---
 
-# Global Scene
+# Global Singleton
 
 ## Overview
 
-The Global Scene (`@game/assets/scenes/global.tscn`) is an automatically loaded Godot
+The global singleton (`@game/assets/scenes/global.tscn`) is an automatically loaded Godot
 autoload that provides global services and shared rendering infrastructure to all loaded
 scenes. It serves as the foundational layer for VR support and UI rendering.
 
 ## Requirement
 
-The Global Scene must provide:
+The global singleton must provide:
 
 1. Global autoload availability for session-wide systems
 2. XR runtime wiring via XRManager (see [XR-001: XRManager](../../xr/001-xr-manager/index.md))
@@ -66,7 +67,7 @@ from startup.
 
 ### XR Runtime Integration
 
-Global Scene integrates XRManager and hosts XR runtime composition. The XRManager contract
+The global singleton integrates XRManager and hosts XR runtime composition. The XRManager contract
 is specified in [XR-001: XRManager](../../xr/001-xr-manager/index.md).
 
 ### SubViewport
@@ -82,7 +83,7 @@ The layer is configured to render content from the SubViewport to the VR display
 
 ### Game Startup Exports
 
-The Global Scene hosts the `Game` node as its root script, which provides export
+The global singleton hosts the `Game` node as its root script, which provides export
 properties for scene loading:
 
 | Export Property | Type | Purpose |
@@ -95,7 +96,7 @@ Note: Runtime splash behaviour (including `--skip-splash` handling) is defined i
 
 ## Architecture
 
-The Global Scene implements the autoload pattern, meaning it is automatically instantiated
+The global singleton implements the autoload pattern, meaning it is automatically instantiated
 when the game starts and persists throughout the entire session. This provides:
 
 - Global accessibility to XR services

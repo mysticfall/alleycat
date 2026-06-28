@@ -1,5 +1,6 @@
 using System.Reflection;
 using AlleyCat.Core;
+using AlleyCat.Scene;
 using AlleyCat.Templating;
 using AlleyCat.Testing;
 using AlleyCat.UI;
@@ -240,9 +241,11 @@ public sealed partial class GameStartupIntegrationTests
             _ = Assert.IsAssignableFrom<IServiceProvider>(fixture.Game);
 
             XRManager resolvedXRManager = Game.Instance.GetRequiredService<XRManager>();
+            ISceneContextProvider sceneContextProvider = Game.Instance.GetRequiredService<ISceneContextProvider>();
 
             Assert.Same(fixture.XRManager, resolvedXRManager);
             Assert.Same(fixture.XRManager, Game.Instance.GetService<XRManager>());
+            _ = Assert.IsType<SceneContextProvider>(sceneContextProvider);
         }
         finally
         {

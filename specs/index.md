@@ -6,7 +6,7 @@
 
 ## Core Systems
 
-- [CORE-001: Global Scene](core/001-global-scene/index.md)
+- [CORE-001: Global Singleton](core/001-global-scene/index.md)
 - [CORE-002: Configuration API](core/002-configuration-api/index.md)
 - [CORE-003: Component/Trait System](core/003-component-system/index.md)
 - [CORE-004: Global Service Resolution](core/004-global-service-resolution/index.md)
@@ -22,6 +22,10 @@
 - [AI-003: Prompt API](ai/003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](ai/004-lore-backstory/index.md)
 - [AI-005: Context Provider API](ai/005-context-provider-api/index.md)
+
+## Scene
+
+- [SCN-001: Scene Context API](scene/001-scene-context-api/index.md)
 
 ## Templating
 

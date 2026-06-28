@@ -131,7 +131,7 @@ hard-coded node paths or names.
 ### Related Specs
 
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
-- [CORE-001: Global Scene](../001-global-scene/index.md)
+- [CORE-001: Global Singleton](../001-global-scene/index.md)
 - [CORE-002: Configuration API](../002-configuration-api/index.md)
 - [CORE-006: Microsoft Configuration Integration](../006-microsoft-configuration-integration/index.md)
 - [CORE-007: Microsoft Logging Integration](../007-microsoft-logging-integration/index.md)

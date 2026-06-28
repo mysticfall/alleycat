@@ -79,6 +79,9 @@ exists.
     duplicate where unique, or unrebasable.
 23. Character installers should use the root `Character` as the dependency hub where this reduces node-path coupling.
 24. The contract does not introduce optional future character kinds or non-humanoid trait sets.
+25. Character roots that should appear in scene context must be authored into the Godot `Actors` group.
+26. `Actors` is reserved for strict character discovery; every member must implement `ICharacter`.
+27. Items and other non-character nodes must not be added to `Actors`.
 
 ## In Scope
 
@@ -92,6 +95,7 @@ exists.
 - Deterministic `Components` projection from explicit required capability references.
 - Installer validation, reference rebase, refresh, and dependency-hub usage for character scene assembly.
 - Name conflict and alias guidance for the concrete `Character` type.
+- Character-root membership in the `Actors` group for SCN-001 scene-context discovery.
 
 ## Out Of Scope
 
@@ -102,6 +106,7 @@ exists.
 - Final component ordering beyond deterministic holder-defined ordering required by CORE-003.
 - Migration support for legacy no-root or near-root character scenes beyond clearly failing validation.
 - Optional capability discovery systems beyond the explicit required humanoid capability references.
+- Item or non-human actor discovery through `Actors`.
 
 ## Acceptance Criteria
 
@@ -141,6 +146,8 @@ exists.
 14. Validation paths cover root identity, import root script settings, reference refresh or rebase, and clear failures.
 15. The implementation preserves existing subsystem contracts instead of moving hands, eyes, voice, or locomotion APIs
     into the character root.
+16. Character roots intended for scene context are members of `Actors`, and no item or non-`ICharacter` node is accepted
+    as valid `Actors` membership.
 
 ## References
 
@@ -151,3 +158,4 @@ exists.
 - [BODY-004: Eyes](../../body/004-eyes/index.md)
 - [BODY-006: Voice Component](../../body/006-voice/index.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

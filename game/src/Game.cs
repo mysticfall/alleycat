@@ -2,6 +2,7 @@ using AlleyCat.Common;
 using AlleyCat.Core;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
+using AlleyCat.Scene;
 using AlleyCat.Testing;
 using AlleyCat.UI;
 using AlleyCat.XR;
@@ -119,8 +120,7 @@ public partial class Game : Node, IServiceProvider
     /// </summary>
     /// <param name="services">Service collection to populate.</param>
     protected virtual void RegisterServices(IServiceCollection services)
-    {
-    }
+        => _ = services.AddSingleton<ISceneContextProvider>(_ => new SceneContextProvider(this));
 
     private void RegisterInfrastructureServices(IServiceCollection services)
     {
