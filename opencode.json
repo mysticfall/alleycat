@@ -33,7 +33,8 @@
         "{env:BLENDER_MCP_HOME}",
         "run",
         "blender-mcp"
-      ]
+      ],
+      "enabled": false
     }
   }
 }
