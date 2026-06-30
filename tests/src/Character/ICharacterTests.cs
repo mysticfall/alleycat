@@ -3,10 +3,12 @@ using AlleyCat.Body.Hands;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Common;
+using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
 using AlleyCat.Rigging;
+using AlleyCat.Scene;
 using Godot;
 using Xunit;
 
@@ -29,6 +31,7 @@ public sealed class ICharacterTests
         Assert.True(typeof(IEyesHolder).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasVoice).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(IContextual).IsAssignableFrom(typeof(ICharacter)));
     }
 
     /// <summary>
@@ -63,6 +66,9 @@ public sealed class ICharacterTests
         } = "FakeCharacter";
 
         public IReadOnlyList<IComponent> Components { get; } = components;
+
+        public IReadOnlyCollection<ContextData> GetContext(ISceneContext scene, ICharacter? observer)
+            => [];
     }
 
     private sealed class FakeHand(LimbSide side) : IHand

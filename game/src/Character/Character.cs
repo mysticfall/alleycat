@@ -1,9 +1,11 @@
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.Body.Voice;
+using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Rigging;
+using AlleyCat.Scene;
 using Godot;
 
 namespace AlleyCat.Character;
@@ -68,6 +70,15 @@ public partial class Character : CharacterBody3D, ICharacter
         get; set;
     }
 
+    /// <summary>
+    /// Gets or sets context sources in deterministic aggregation order.
+    /// </summary>
+    [Export]
+    public ContextSource[] ContextSources
+    {
+        get; set;
+    } = [];
+
     /// <inheritdoc />
     public IReadOnlyList<IComponent> Components => _components;
 
@@ -97,6 +108,32 @@ public partial class Character : CharacterBody3D, ICharacter
         ValidateDistinctReferences(components);
 
         _components = components;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<ContextData> GetContext(ISceneContext scene, ICharacter? observer)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+
+        return ContextSources.Length switch
+        {
+            0 => [],
+            1 => ContextSources[0].GetContext(this, scene, observer),
+            _ => AggregateContextSources(scene, observer),
+        };
+    }
+
+    private IReadOnlyCollection<ContextData> AggregateContextSources(
+        ISceneContext scene,
+        ICharacter? observer)
+    {
+        List<ContextData> context = [];
+        foreach (IContextSource source in ContextSources)
+        {
+            context.AddRange(source.GetContext(this, scene, observer));
+        }
+
+        return context;
     }
 
     private IHand RequireHandReference(HandPoseBehaviour? hand, LimbSide expectedSide, string propertyName)

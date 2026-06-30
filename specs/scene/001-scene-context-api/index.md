@@ -53,7 +53,7 @@ through dependency injection while character and Godot node objects remain live.
 ## Out Of Scope
 
 - AI-specific request semantics, prompt placement, requesting character identity, and interaction-target selection.
-- Memory, perception, relationship, inventory, lore, or RAG context provider contracts.
+- Contextual information retrieval, memory, perception, relationship, inventory, lore, or RAG provider contracts.
 - Static convenience accessors or `Game` properties for scene-context access.
 - Treating items as actors.
 - Non-human actor support before the `ICharacter` model is revisited.
@@ -83,4 +83,4 @@ through dependency injection while character and Godot node objects remain live.
 
 - [CORE-004: Global Service Resolution](../../core/004-global-service-resolution/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
-- [AI-005: Context Provider API](../../ai/005-context-provider-api/index.md)
+- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)

@@ -29,8 +29,8 @@ roleplay without breaking immersion or performance.
    easily; AI must retrieve relevant information by conceptual relationships
    (not only tags/keywords) with efficiency for latency and token count;
    authored content must be able to evolve as in-game events unfold.
-4. Context: AI characters must be able to access scene membership from SCN-001, plus short- and long-term memory,
-   environmental and self sensory information (including emotion, pain, pleasure), and spatial relationships.
+4. Context: AI characters must be able to access scene membership from SCN-001 and contextual information from CTX-001,
+   plus short- and long-term memory, environmental and self sensory information, and spatial relationships.
 5. Performance: The system must provide low latency for real-time interaction,
    support parallel/multi-agent workflows, implement an AI budget with
    prioritisation/queueing/configurable settings, allow less important
@@ -51,8 +51,8 @@ roleplay without breaking immersion or performance.
 3. Knowledge/Memory Model: Specify a model for storing and retrieving lore/backstory
    by conceptual relationships, optimised for latency and token count, with
    support for evolving content.
-4. Context Provider Interface: Define AI-specific context provider interfaces for memory, sensory data, and spatial
-   relationships, using SCN-001 for current scene character membership.
+4. Context Provider Interface: Use CTX-001 for top-level contextual information retrieval and define only AI-specific
+   provider interfaces for memory, sensory data, and spatial relationships.
 5. Budget/Scheduler: Establish a system for AI resource allocation with
    prioritisation, queueing, and configurable settings, allowing fallback to
    cheaper/slower/non-AI control for less important characters.
@@ -65,8 +65,9 @@ roleplay without breaking immersion or performance.
 ## In Scope
 
 - Parent index for AI character behaviour specifications.
-- Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory
-  Source Compilation, and the AI-005: Context Provider API spec-preparation agenda.
+- Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, and the AI-004: Lore And 
+  Backstory Source Compilation.
+- CTX-001 as the normative top-level contextual information API used by AI and non-AI consumers.
 - High-level contracts covering the six requirement themes above, with scene membership delegated to SCN-001.
 - Extensibility points for lore, actions, and context providers.
 
@@ -83,7 +84,8 @@ roleplay without breaking immersion or performance.
    - Realtime Interaction: AI agents act without player input and handle timeouts.
    - Non-Dialogue Interaction: Outputs manifest as world changes, not chat.
    - Lore and Backstory: Retrieval uses conceptual relationships and remains efficient and updatable.
-   - Context: Agents access SCN-001 scene membership plus memory, sensory, and spatial data.
+   - Context: Agents access SCN-001 scene membership, CTX-001 contextual information, plus memory, sensory, and spatial
+     data.
    - Performance: System maintains low latency with multiple agents, supports priority queues, budget defaults, and
      cheaper fallback control.
    - Extensibility: New lore, actions, and context providers can be added externally without scene/code changes.
@@ -91,14 +93,13 @@ roleplay without breaking immersion or performance.
    - Existence of event/time-driven loop contracts.
    - Sensing/action integration interfaces defined.
    - Knowledge/memory model specified.
-   - Context provider interface defined without redefining SCN-001 scene membership.
+   - CTX-001 top-level contextual information API used without redefining SCN-001 scene membership.
    - Budget/scheduler mechanism described.
    - Parallel workflow expectation stated.
    - Extensibility contracts for external data and pluggable components.
 3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, and AI-004: Lore And Backstory Source
    Compilation are identified as current normative child contracts for their respective scopes.
-4. AI-005: Context Provider API is discoverable as a spec-preparation agenda that depends on SCN-001 for scene
-   membership, not as the final API contract.
+4. CTX-001 is discoverable as the normative top-level contextual information API.
 
 ## Specifications
 
@@ -106,7 +107,7 @@ roleplay without breaking immersion or performance.
 - [AI-002: Agent Runtime](002-agent-runtime/index.md)
 - [AI-003: Prompt API](003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](004-lore-backstory/index.md)
-- [AI-005: Context Provider API](005-context-provider-api/index.md)
+- [CTX-001: Contextual Information API](../context/001-contextual-information-api/index.md)
 - [SCN-001: Scene Context API](../scene/001-scene-context-api/index.md)
 
 ## References
@@ -115,5 +116,5 @@ roleplay without breaking immersion or performance.
 - AI-002: Agent Runtime
 - AI-003: Prompt API
 - AI-004: Lore And Backstory Source Compilation
-- AI-005: Context Provider API spec-preparation agenda
+- CTX-001: Contextual Information API
 - SCN-001: Scene Context API
