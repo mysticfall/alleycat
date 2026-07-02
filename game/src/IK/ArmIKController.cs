@@ -668,7 +668,6 @@ public partial class ArmIKController : SkeletonModifier3D
             ? _skeleton.GetBoneGlobalPose(shoulderParentBoneIndex).Basis
             : Basis.Identity;
         Basis targetShoulderLocalBasis = (parentGlobalBasis.Inverse() * targetShoulderGlobalBasis).Orthonormalized();
-
         _skeleton.SetBonePoseRotation(
             _shoulderIdx,
             targetShoulderLocalBasis.GetRotationQuaternion().Normalized());

@@ -24,6 +24,9 @@ public sealed class ArmShoulderCorrectionIntegrationTests
     private const float MinimumForwardGainOverLoweredRadians = 0.01f;
     private const float MinimumOverheadGainOverForwardRadians = 0.01f;
     private const float MinimumShoulderWeightResponsivenessRadians = 0.03f;
+    private const float MaximumNeutralOverrideErrorRadians = 0.18f;
+    private const float MinimumRoundedBaselineReductionRatio = 0.5f;
+    private const float MinimumAnimatedShoulderOriginDelta = 0.04f;
 
     private readonly record struct ArmRigData(
         string SideLabel,
@@ -145,6 +148,109 @@ public sealed class ArmShoulderCorrectionIntegrationTests
         AssertShoulderWeightResponsiveness("right", rightOverheadChange, rightOverheadZeroElevation);
     }
 
+    /// <summary>
+    /// Verifies the modifier resolves its body frame from the current animated shoulder span, so an active shoulder
+    /// override can replace a rounded animation baseline instead of using a stale rest-shoulder frame.
+    /// </summary>
+    [Fact]
+    public async Task ArmShoulderCorrection_ActiveOverrideReplacesRoundedAnimationBaselineInPoseFrame()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+
+        Node3D handTargetPoses = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HandTargetPosesPath), exactMatch: false);
+        Node3D leftHandTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftHandTargetPath), exactMatch: false);
+        Node3D rightHandTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandTargetPath), exactMatch: false);
+        Node leftController = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(LeftArmControllerPath), exactMatch: false);
+        Node rightController = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(RightArmControllerPath), exactMatch: false);
+        Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
+            ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in the verification scene.");
+
+        int leftShoulderIndex = RequireBone(skeleton, "LeftShoulder");
+        int rightShoulderIndex = RequireBone(skeleton, "RightShoulder");
+        int hipsIndex = RequireBone(skeleton, "Hips");
+        int neckIndex = RequireBone(skeleton, "Neck");
+
+        float leftDefaultShoulderWeight = leftController.Get("ShoulderWeight").AsSingle();
+        float rightDefaultShoulderWeight = rightController.Get("ShoulderWeight").AsSingle();
+        leftController.Set("ShoulderWeight", 0f);
+        rightController.Set("ShoulderWeight", 0f);
+
+        try
+        {
+            Basis restBodyBasis = BuildBodyBasisFromRest(skeleton, hipsIndex, neckIndex, leftShoulderIndex, rightShoulderIndex);
+            Basis leftRestBasisInBody = (restBodyBasis.Inverse() * skeleton.GetBoneGlobalRest(leftShoulderIndex).Basis)
+                .Orthonormalized();
+            Basis rightRestBasisInBody = (restBodyBasis.Inverse() * skeleton.GetBoneGlobalRest(rightShoulderIndex).Basis)
+                .Orthonormalized();
+
+            // Emulate an animated clip/body baseline where the clavicle origins swing the shoulder span forward/back.
+            // The previous bug used rest shoulder origins here, so the zero-weight override was evaluated in the wrong
+            // body frame even though the active pose's shoulders had moved away from rest.
+            skeleton.SetBonePosePosition(leftShoulderIndex, new Vector3(0f, 0f, 0.08f));
+            skeleton.SetBonePosePosition(rightShoulderIndex, new Vector3(0f, 0f, -0.08f));
+
+            Quaternion leftRoundedBaseline = new(Vector3.Up, Mathf.DegToRad(28f));
+            Quaternion rightRoundedBaseline = leftRoundedBaseline.Inverse();
+            skeleton.SetBonePoseRotation(leftShoulderIndex, leftRoundedBaseline);
+            skeleton.SetBonePoseRotation(rightShoulderIndex, rightRoundedBaseline);
+
+            AssertShoulderOriginsDifferFromRest(skeleton, leftShoulderIndex, rightShoulderIndex);
+
+            Basis currentBodyBasis = BuildBodyBasisFromPose(skeleton, hipsIndex, neckIndex, leftShoulderIndex, rightShoulderIndex);
+            Quaternion expectedLeftPoseFrameNeutral = (currentBodyBasis * leftRestBasisInBody)
+                .Orthonormalized()
+                .GetRotationQuaternion()
+                .Normalized();
+            Quaternion expectedRightPoseFrameNeutral = (currentBodyBasis * rightRestBasisInBody)
+                .Orthonormalized()
+                .GetRotationQuaternion()
+                .Normalized();
+            float leftRoundedBaselineError = ShoulderPoseFrameNeutralError(
+                skeleton,
+                leftShoulderIndex,
+                expectedLeftPoseFrameNeutral);
+            float rightRoundedBaselineError = ShoulderPoseFrameNeutralError(
+                skeleton,
+                rightShoulderIndex,
+                expectedRightPoseFrameNeutral);
+
+            await ApplyPoseAndSettleAsync(
+                sceneTree,
+                skeleton,
+                leftHandTarget,
+                rightHandTarget,
+                RequirePoseMarker(handTargetPoses, "LeftLowered"),
+                RequirePoseMarker(handTargetPoses, "RightLowered"));
+
+            AssertShoulderPoseFrameNeutralOverride(
+                skeleton,
+                leftShoulderIndex,
+                expectedLeftPoseFrameNeutral,
+                leftRoundedBaselineError,
+                "left");
+            AssertShoulderPoseFrameNeutralOverride(
+                skeleton,
+                rightShoulderIndex,
+                expectedRightPoseFrameNeutral,
+                rightRoundedBaselineError,
+                "right");
+        }
+        finally
+        {
+            leftController.Set("ShoulderWeight", leftDefaultShoulderWeight);
+            rightController.Set("ShoulderWeight", rightDefaultShoulderWeight);
+        }
+    }
+
     private static async Task ApplyPoseAndSettleAsync(
         SceneTree sceneTree,
         Skeleton3D skeleton,
@@ -218,6 +324,92 @@ public sealed class ArmShoulderCorrectionIntegrationTests
             $"Overhead pose ({sideLabel}) should produce more shoulder correction than forward pose. " +
             $"Forward: {forwardChange:F6} rad, overhead: {overheadChange:F6} rad, " +
             $"minimum gain: {MinimumOverheadGainOverForwardRadians:F6} rad.");
+    }
+
+    private static void AssertShoulderOriginsDifferFromRest(
+        Skeleton3D skeleton,
+        int leftShoulderIndex,
+        int rightShoulderIndex)
+    {
+        float leftOriginDelta = skeleton.GetBoneGlobalPose(leftShoulderIndex).Origin
+            .DistanceTo(skeleton.GetBoneGlobalRest(leftShoulderIndex).Origin);
+        float rightOriginDelta = skeleton.GetBoneGlobalPose(rightShoulderIndex).Origin
+            .DistanceTo(skeleton.GetBoneGlobalRest(rightShoulderIndex).Origin);
+
+        Assert.True(
+            leftOriginDelta >= MinimumAnimatedShoulderOriginDelta,
+            $"Synthetic animated left shoulder origin should differ from rest enough to expose stale-rest-frame bugs. " +
+            $"Observed delta: {leftOriginDelta:F6}, minimum: {MinimumAnimatedShoulderOriginDelta:F6}.");
+        Assert.True(
+            rightOriginDelta >= MinimumAnimatedShoulderOriginDelta,
+            $"Synthetic animated right shoulder origin should differ from rest enough to expose stale-rest-frame bugs. " +
+            $"Observed delta: {rightOriginDelta:F6}, minimum: {MinimumAnimatedShoulderOriginDelta:F6}.");
+    }
+
+    private static void AssertShoulderPoseFrameNeutralOverride(
+        Skeleton3D skeleton,
+        int shoulderBoneIndex,
+        Quaternion expectedPoseFrameNeutral,
+        float roundedBaselineError,
+        string sideLabel)
+    {
+        float angularError = ShoulderPoseFrameNeutralError(skeleton, shoulderBoneIndex, expectedPoseFrameNeutral);
+
+        Assert.True(
+            angularError <= MaximumNeutralOverrideErrorRadians,
+            $"Active {sideLabel} shoulder override with zero correction weight should resolve to the current-pose " +
+            "body-frame neutral orientation after replacing the rounded animation baseline. " +
+            $"Angular error: {angularError:F6} rad, tolerance: {MaximumNeutralOverrideErrorRadians:F6} rad.");
+        Assert.True(
+            angularError <= roundedBaselineError * MinimumRoundedBaselineReductionRatio,
+            $"Active {sideLabel} shoulder override should materially reduce the rounded animation baseline. " +
+            $"Baseline error: {roundedBaselineError:F6} rad, final error: {angularError:F6} rad, " +
+            $"required ratio: {MinimumRoundedBaselineReductionRatio:F3}.");
+    }
+
+    private static float ShoulderPoseFrameNeutralError(
+        Skeleton3D skeleton,
+        int shoulderBoneIndex,
+        Quaternion expectedPoseFrameNeutral)
+    {
+        Quaternion actual = skeleton.GetBoneGlobalPose(shoulderBoneIndex).Basis.GetRotationQuaternion().Normalized();
+        return QuaternionAngularDistance(expectedPoseFrameNeutral, actual);
+    }
+
+    private static Basis BuildBodyBasisFromRest(
+        Skeleton3D skeleton,
+        int hipsIndex,
+        int neckIndex,
+        int leftShoulderIndex,
+        int rightShoulderIndex) => BuildBodyBasis(
+            skeleton.GetBoneGlobalRest(hipsIndex).Origin,
+            skeleton.GetBoneGlobalRest(neckIndex).Origin,
+            skeleton.GetBoneGlobalRest(leftShoulderIndex).Origin,
+            skeleton.GetBoneGlobalRest(rightShoulderIndex).Origin);
+
+    private static Basis BuildBodyBasisFromPose(
+        Skeleton3D skeleton,
+        int hipsIndex,
+        int neckIndex,
+        int leftShoulderIndex,
+        int rightShoulderIndex) => BuildBodyBasis(
+            skeleton.GetBoneGlobalPose(hipsIndex).Origin,
+            skeleton.GetBoneGlobalPose(neckIndex).Origin,
+            skeleton.GetBoneGlobalPose(leftShoulderIndex).Origin,
+            skeleton.GetBoneGlobalPose(rightShoulderIndex).Origin);
+
+    private static Basis BuildBodyBasis(
+        Vector3 hipsPosition,
+        Vector3 neckPosition,
+        Vector3 leftShoulderPosition,
+        Vector3 rightShoulderPosition)
+    {
+        Vector3 bodyUp = (neckPosition - hipsPosition).Normalized();
+        Vector3 shoulderSpan = rightShoulderPosition - leftShoulderPosition;
+        Vector3 bodyRight = (shoulderSpan - (shoulderSpan.Dot(bodyUp) * bodyUp)).Normalized();
+        Vector3 bodyForward = bodyRight.Cross(bodyUp).Normalized();
+
+        return new Basis(bodyRight, bodyUp, bodyForward).Orthonormalized();
     }
 
     private static async Task AssertShoulderDeterminismAsync(
