@@ -2,11 +2,20 @@
 extends EditorScenePostImport
 
 const EYES_LIBRARY_NAME := &"eyes"
+const EYE_ANIMATION_CONTRACT_PLACEHOLDER_NAME := "EyeAnimationContractPlaceholder"
 const BLINK_ANIMATION_NAME := &"Eyes Blink"
 const HORIZONTAL_LOOK_ANIMATION_NAME := &"Eyes Right Left"
 const VERTICAL_LOOK_ANIMATION_NAME := &"Eyes Up Down"
 
 const BLINK_BLEND_SHAPES := [&"eyeBlinkLeft", &"eyeBlinkRight"]
+const REQUIRED_EYE_BLEND_SHAPES := [
+	&"eyeBlinkLeft",
+	&"eyeBlinkRight",
+	&"eyeLookInRight",
+	&"eyeLookInLeft",
+	&"eyeLookUpRight",
+	&"eyeLookDownRight",
+]
 const HORIZONTAL_LOOK_BLEND_SHAPES := {
 	# Matches the legacy normalised 0.0 -> left, 0.5 -> neutral, 1.0 -> right
 	# timeline used by the AnimationTree time-seek controller.
@@ -26,26 +35,24 @@ const VERTICAL_LOOK_BLEND_SHAPES := {
 
 
 func _post_import(scene: Node) -> Node:
-	var animation_player := _find_first_node_of_type(scene, "AnimationPlayer") as AnimationPlayer
-	if animation_player == null:
-		push_warning("Eye animation import skipped: imported scene has no AnimationPlayer.")
-		return scene
+	var animation_player := _ensure_animation_player(scene)
 
 	var skeleton := _find_first_node_of_type(scene, "Skeleton3D") as Skeleton3D
+	var eye_tracks: Array[Dictionary] = []
 	if skeleton == null or skeleton.get_parent() == null:
-		push_warning("Eye animation import skipped: imported scene has no Skeleton3D with a model root parent.")
-		return scene
+		push_warning("Eye animation import created an empty '%s' AnimationLibrary because the imported scene has no Skeleton3D with a model root parent." % EYES_LIBRARY_NAME)
+	else:
+		var model_root := skeleton.get_parent()
+		# Runtime installation rebases the AnimationPlayer to this same model root so
+		# generated blend-shape tracks are resolvable both in imported/inherited scenes
+		# and after installer materialisation.
+		animation_player.root_node = animation_player.get_path_to(model_root)
 
-	var model_root := skeleton.get_parent()
-	# Runtime installation rebases the AnimationPlayer to this same model root so
-	# generated blend-shape tracks are resolvable both in imported/inherited scenes
-	# and after installer materialisation.
-	animation_player.root_node = animation_player.get_path_to(model_root)
-
-	var eye_tracks := _collect_eye_tracks(model_root)
-	if eye_tracks.is_empty():
-		push_warning("Eye animation import skipped: no relevant eye blend shapes were found below '%s'." % model_root.name)
-		return scene
+		eye_tracks = _collect_eye_tracks(model_root)
+		if eye_tracks.is_empty():
+			_create_eye_animation_contract_placeholder(scene, model_root)
+			eye_tracks = _collect_eye_tracks(model_root)
+			push_warning("Eye animation import created placeholder eye blend-shape tracks for '%s' because no relevant eye blend shapes were found below '%s'." % [EYES_LIBRARY_NAME, model_root.name])
 
 	var library := AnimationLibrary.new()
 	library.add_animation(BLINK_ANIMATION_NAME, _build_blink_animation(eye_tracks))
@@ -60,6 +67,58 @@ func _post_import(scene: Node) -> Node:
 		push_error("Eye animation import failed to add AnimationLibrary '%s': %s" % [EYES_LIBRARY_NAME, result])
 
 	return scene
+
+
+func _create_eye_animation_contract_placeholder(scene: Node, model_root: Node) -> void:
+	var existing_placeholder := model_root.get_node_or_null(EYE_ANIMATION_CONTRACT_PLACEHOLDER_NAME)
+	if existing_placeholder != null:
+		existing_placeholder.queue_free()
+		model_root.remove_child(existing_placeholder)
+
+	var placeholder := MeshInstance3D.new()
+	placeholder.name = EYE_ANIMATION_CONTRACT_PLACEHOLDER_NAME
+	placeholder.visible = false
+	placeholder.mesh = _create_eye_animation_contract_mesh()
+	model_root.add_child(placeholder)
+	placeholder.owner = scene
+
+
+func _create_eye_animation_contract_mesh() -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	for blend_shape_name in REQUIRED_EYE_BLEND_SHAPES:
+		mesh.add_blend_shape(blend_shape_name)
+
+	var vertices := PackedVector3Array([
+		Vector3.ZERO,
+		Vector3.ZERO,
+		Vector3.ZERO,
+	])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+
+	var blend_shapes: Array[Array] = []
+	for _blend_shape_name in REQUIRED_EYE_BLEND_SHAPES:
+		var blend_shape_arrays := []
+		blend_shape_arrays.resize(Mesh.ARRAY_MAX)
+		blend_shape_arrays[Mesh.ARRAY_VERTEX] = vertices
+		blend_shapes.append(blend_shape_arrays)
+
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, blend_shapes)
+	return mesh
+
+
+func _ensure_animation_player(scene: Node) -> AnimationPlayer:
+	var animation_player := _find_first_node_of_type(scene, "AnimationPlayer") as AnimationPlayer
+	if animation_player != null:
+		return animation_player
+
+	animation_player = AnimationPlayer.new()
+	animation_player.name = "AnimationPlayer"
+	scene.add_child(animation_player)
+	animation_player.owner = scene
+	push_warning("Eye animation import created missing AnimationPlayer on imported scene '%s'." % scene.name)
+	return animation_player
 
 
 func _collect_eye_tracks(model_root: Node) -> Array[Dictionary]:

@@ -73,18 +73,23 @@ Provide a reusable eye component system that:
    facial animations and does not override unrelated facial tracks.
 9. The controller keeps horizontal and vertical look blend amounts enabled at runtime
    so inherited scene overrides cannot disable target-driven eye movement.
-10. Imported character sources generate an `eyes` AnimationLibrary during import.
-11. The generated `eyes` library must contain these animations:
+10. Imported character sources must have an `AnimationPlayer` after import; the import
+    script creates an empty one when the source scene does not provide it.
+11. Imported character sources generate or replace an `eyes` AnimationLibrary during
+    import.
+12. The generated `eyes` library must contain these animations:
     - `Eyes Blink`.
     - `Eyes Right Left`.
     - `Eyes Up Down`.
-12. Generated blend-shape track paths must be discovered from the imported model topology
+13. Generated blend-shape track paths must be discovered from the imported model topology
     relative to the model root and AnimationPlayer root.
-13. Eye animation resources for imported characters must not depend on hard-coded
+14. If no recognised eye blend shapes exist, import creates an invisible placeholder mesh
+    and no-op tracks so runtime validation can rely on the required eye animation contract.
+15. Eye animation resources for imported characters must not depend on hard-coded
     reference-female mesh paths or a pre-authored reference-female `eyes.tres` asset.
-14. Runtime character installation validates that the imported `eyes` library, required
+16. Runtime character installation validates that the imported `eyes` library, required
     animations, and blend-shape track targets are present before enabling eye behaviour.
-15. Player and NPC AnimationTree roots include the eye partial blend setup.
+17. Player and NPC AnimationTree roots include the eye partial blend setup.
 
 ## In Scope
 
@@ -95,8 +100,10 @@ Provide a reusable eye component system that:
 - TimeSeek-driven saccades anchored around the resolved look point.
 - OneShot-driven randomised blinking with configurable cadence.
 - AnimationTree partial blending for eyes.
-- Import-time generation of the `eyes` AnimationLibrary from discovered eye blend
-  shapes.
+- Import-time creation of a missing `AnimationPlayer`.
+- Import-time generation or replacement of the `eyes` AnimationLibrary.
+- Import-time generation of eye tracks from discovered eye blend shapes, or invisible
+  placeholder/no-op tracks when no recognised eye blend shapes exist.
 - Per-character AnimationTree integration.
 
 ## Out Of Scope
@@ -136,27 +143,31 @@ Provide a reusable eye component system that:
 | 13 | User              | Eye animations blend with facial animations without overriding unrelated |
 |    |                   | facial tracks. |
 | 14 | Technical         | Player and NPC AnimationTree roots include the eye partial blend setup. |
-| 15 | Technical         | Imported characters provide an `eyes` AnimationLibrary with `Eyes Blink`, |
+| 15 | Technical         | Import creates an empty `AnimationPlayer` when the imported character scene |
+|    |                   | does not provide one. |
+| 16 | Technical         | Imported characters provide an `eyes` AnimationLibrary with `Eyes Blink`, |
 |    |                   | `Eyes Right Left`, and `Eyes Up Down`. |
-| 16 | Technical         | Generated eye animation track paths are derived from discovered eye blend |
+| 17 | Technical         | Generated eye animation track paths are derived from discovered eye blend |
 |    |                   | shapes relative to the imported model root and AnimationPlayer root. |
-| 17 | Technical         | Runtime installation rejects missing eye libraries, required animations, or |
+| 18 | Technical         | When no recognised eye blend shapes exist, import creates invisible |
+|    |                   | placeholder/no-op tracks that satisfy runtime validation. |
+| 19 | Technical         | Runtime installation rejects missing eye libraries, required animations, or |
 |    |                   | invalid blend-shape track targets before enabling eye behaviour. |
-| 18 | Technical         | Eye animation resources for imported characters do not depend on hard-coded |
+| 20 | Technical         | Eye animation resources for imported characters do not depend on hard-coded |
 |    |                   | reference-female mesh paths or hard-loading a reference-female `eyes.tres`. |
-| 19 | Technical         | Implementation does not depend on perception, sight AI, collision, or network |
+| 21 | Technical         | Implementation does not depend on perception, sight AI, collision, or network |
 |    |                   | systems. |
-| 20 | Technical         | Tests verify the eyes component is discoverable via `IEyesHolder`. |
-| 21 | Technical         | Tests verify fallback target resolution and bounded saccade offsets around |
+| 22 | Technical         | Tests verify the eyes component is discoverable via `IEyesHolder`. |
+| 23 | Technical         | Tests verify fallback target resolution and bounded saccade offsets around |
 |    |                   | assigned and fallback gaze anchors. |
-| 22 | Technical         | Tests verify that eye movement output writes only TimeSeek seek requests and |
+| 24 | Technical         | Tests verify that eye movement output writes only TimeSeek seek requests and |
 |    |                   | never applies direct eye transform rotation. |
-| 23 | Technical         | Tests verify that TimeSeek seek position 0.5 corresponds to neutral eye |
+| 25 | Technical         | Tests verify that TimeSeek seek position 0.5 corresponds to neutral eye |
 |    |                   | position (forward-facing). |
-| 24 | Technical         | Tests verify that blink playback uses an `AnimationNodeOneShot` request, |
+| 26 | Technical         | Tests verify that blink playback uses an `AnimationNodeOneShot` request, |
 |    |                   | while horizontal and vertical look remain `AnimationNodeTimeSeek` nodes. |
-| 25 | Technical         | Mirror-room tests verify that look blend overrides remain enabled at runtime. |
-| 26 | User              | Visual verification confirms: (a) neutral eyes face forward at 0.5s seek, |
+| 27 | Technical         | Mirror-room tests verify that look blend overrides remain enabled at runtime. |
+| 28 | User              | Visual verification confirms: (a) neutral eyes face forward at 0.5s seek, |
 |    |                   | (b) directional look animates correctly for up/down/left/right, |
 |    |                   | (c) saccades remain bounded around the anchor, and |
 |    |                   | (d) blink animation opens and closes eyes. |
