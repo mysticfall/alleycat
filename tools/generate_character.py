@@ -26,6 +26,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import generate_body_colliders
+import update_character_import_retarget_metadata
 
 
 USAGE = (
@@ -44,6 +45,8 @@ RIGIFY_POLE_VECTOR_PARENT_BONES = (
 GENERATED_RIG_RETARGET_PRESET_NAME = "MakeHuman__GameEngine.py"
 RIGIFY_RETARGET_PRESET_NAME = "Rigify_Deform.py"
 ACTION_CLEAN_THRESHOLD = 0.001
+ACTION_VARIATION_THRESHOLD = 0.0001
+BAKED_ACTION_COLLISION_SUFFIX = ".baked"
 
 
 class ScriptError(Exception):
@@ -1039,6 +1042,29 @@ def rigify_animation_object_name(character_name: str) -> str:
     return f"{character_name}{RIGIFY_ANIMATION_OBJECT_SUFFIX}"
 
 
+def select_rigify_animation_object_name(object_names: list[str], character_name: str) -> str | None:
+    """Return the Rigify source object name from a source blend object-name list."""
+
+    expected_object_name = rigify_animation_object_name(character_name)
+    if expected_object_name in object_names:
+        return expected_object_name
+
+    rigify_object_names = sorted(
+        name for name in object_names if name.endswith(RIGIFY_ANIMATION_OBJECT_SUFFIX)
+    )
+    if not rigify_object_names:
+        return None
+    if len(rigify_object_names) > 1:
+        object_list = ", ".join(rigify_object_names)
+        raise ScriptError(
+            "Rigify animation source detection failed because the source Blender file contains "
+            "multiple Rigify armature candidates and none match the configured character name "
+            f'"{expected_object_name}": {object_list}.'
+        )
+
+    return rigify_object_names[0]
+
+
 def nla_reference_name(action: bpy.types.Action) -> str:
     """Return a deterministic NLA track and strip name for a persisted action reference."""
 
@@ -1155,14 +1181,12 @@ def animation_source_contains_rigify_object(source_blend_path: Path, character_n
             f'"{source_blend_path}".'
         )
 
-    expected_object_name = rigify_animation_object_name(character_name)
-
     try:
         with bpy.data.libraries.load(
             str(source_blend_path), link=False, relative=False
         ) as (data_from, _data_to):
-            object_names = {action_name(obj) for obj in data_from.objects}
-            return expected_object_name in object_names
+            object_names = [action_name(obj) for obj in data_from.objects]
+            return select_rigify_animation_object_name(object_names, character_name) is not None
     except Exception as exc:
         raise ScriptError(
             "Animation source detection failed because Blender could not inspect source "
@@ -1191,14 +1215,16 @@ def append_rigify_animation_object(
             str(source_blend_path), link=False, relative=False
         ) as (data_from, data_to):
             object_names = [action_name(obj) for obj in data_from.objects]
-            if expected_object_name not in object_names:
+            rigify_object_name = select_rigify_animation_object_name(object_names, character_name)
+            if rigify_object_name is None:
                 raise ScriptError(
                     "Rigify animation source setup failed because the source Blender file does "
-                    f'not contain object "{expected_object_name}": '
+                    f'not contain object "{expected_object_name}" or any unique '
+                    f'"*{RIGIFY_ANIMATION_OBJECT_SUFFIX}" object: '
                     f'"{source_blend_path}".'
                 )
 
-            data_to.objects = [expected_object_name]
+            data_to.objects = [rigify_object_name]
 
         appended_objects = [
             cast(bpy.types.Object, obj) for obj in data_to.objects if obj is not None
@@ -1341,7 +1367,13 @@ def append_rigify_animation_actions(
     animation_owner: bpy.types.Object,
     failure_context: str = "Rigify animation action append",
 ) -> list[bpy.types.Action]:
-    """Append every Rigify action locally and persist it on the Rigify armature."""
+    """Acquire every Rigify action locally and persist it on the Rigify armature.
+
+    Appending the Rigify armature also appends the NLA-referenced source actions from
+    the source file. Reuse those exact local actions when present so a subsequent
+    action acquisition pass does not create Blender duplicate names such as
+    ``Idle-loop.001``.
+    """
 
     if not source_blend_path.is_file():
         raise ScriptError(
@@ -1350,6 +1382,7 @@ def append_rigify_animation_actions(
         )
 
     requested_action_names: list[str] = []
+    acquired_actions: list[bpy.types.Action] = []
     appended_actions: list[bpy.types.Action] = []
 
     try:
@@ -1364,7 +1397,10 @@ def append_rigify_animation_actions(
                 )
 
             requested_action_names = list(action_names)
-            data_to.actions = list(action_names)
+            missing_action_names = [
+                name for name in requested_action_names if bpy.data.actions.get(name) is None
+            ]
+            data_to.actions = list(missing_action_names)
 
         appended_actions = [
             cast(bpy.types.Action, action) for action in data_to.actions if action is not None
@@ -1377,60 +1413,83 @@ def append_rigify_animation_actions(
             f'"{source_blend_path}": {exc}'
         ) from exc
 
-    if not appended_actions:
+    actions_by_name = {action.name: action for action in appended_actions}
+    for action_name_to_acquire in requested_action_names:
+        action = bpy.data.actions.get(action_name_to_acquire)
+        if action is None:
+            action = actions_by_name.get(action_name_to_acquire)
+        if action is None:
+            continue
+        acquired_actions.append(cast(bpy.types.Action, action))
+
+    if not acquired_actions:
         raise ScriptError(
-            f"{failure_context} failed because no local Rigify actions were appended from "
+            f"{failure_context} failed because no local Rigify actions were acquired from "
             f'"{source_blend_path}".'
         )
 
-    if len(appended_actions) != len(requested_action_names):
-        appended_list = ", ".join(action.name for action in appended_actions) or "none"
+    if len(acquired_actions) != len(requested_action_names):
+        acquired_list = ", ".join(action.name for action in acquired_actions) or "none"
         requested_list = ", ".join(requested_action_names) or "none"
         raise ScriptError(
-            f"{failure_context} failed because only a partial set of Rigify actions was appended "
-            f'from "{source_blend_path}". Requested: {requested_list}. Appended: '
-            f"{appended_list}."
+            f"{failure_context} failed because only a partial set of Rigify actions was acquired "
+            f'from "{source_blend_path}". Requested: {requested_list}. Acquired: '
+            f"{acquired_list}."
         )
 
-    linked_actions = [action.name for action in appended_actions if action.library is not None]
+    renamed_actions = [
+        f"{requested}:{actual.name}"
+        for requested, actual in zip(requested_action_names, acquired_actions, strict=True)
+        if actual.name != requested
+    ]
+    if renamed_actions:
+        action_list = ", ".join(renamed_actions)
+        raise ScriptError(
+            f"{failure_context} failed because acquired Rigify actions must keep source names; "
+            f"found renamed actions: {action_list}."
+        )
+
+    linked_actions = [action.name for action in acquired_actions if action.library is not None]
     if linked_actions:
         action_list = ", ".join(linked_actions)
         raise ScriptError(
-            f"{failure_context} failed because appended Rigify actions were not local: "
+            f"{failure_context} failed because acquired Rigify actions were not local: "
             f"{action_list}."
         )
 
-    for action in appended_actions:
+    for action in acquired_actions:
         action.use_fake_user = True
+        validate_action_multiframe_non_static(
+            action,
+            failure_context,
+            "Rigify source action",
+        )
 
-    non_persistable_actions = [action.name for action in appended_actions if not action.use_fake_user]
+    non_persistable_actions = [action.name for action in acquired_actions if not action.use_fake_user]
     if non_persistable_actions:
         action_list = ", ".join(non_persistable_actions)
         raise ScriptError(
-            f"{failure_context} failed because appended Rigify actions could not be marked for "
+            f"{failure_context} failed because acquired Rigify actions could not be marked for "
             f"persistence before saving: {action_list}."
         )
 
     create_persistent_action_users(
-        appended_actions,
+        acquired_actions,
         animation_owner,
         failure_context,
-        "appended Rigify actions",
+        "acquired Rigify actions",
     )
 
-    return appended_actions
+    return acquired_actions
 
 
 def baked_action_name(source_action: bpy.types.Action) -> str:
     """Return the generated-rig action name for a Rigify source action."""
 
-    if not source_action.name.endswith(RIGIFY_SOURCE_ACTION_SUFFIX):
-        raise ScriptError(
-            "Rigify animation bake failed because source action "
-            f'"{source_action.name}" does not end with "{RIGIFY_SOURCE_ACTION_SUFFIX}".'
-        )
+    target_name = source_action.name
+    if source_action.name.endswith(RIGIFY_SOURCE_ACTION_SUFFIX):
+        target_name = source_action.name[: -len(RIGIFY_SOURCE_ACTION_SUFFIX)]
 
-    target_name = source_action.name[: -len(RIGIFY_SOURCE_ACTION_SUFFIX)]
     if not target_name:
         raise ScriptError(
             "Rigify animation bake failed because source action "
@@ -1438,6 +1497,29 @@ def baked_action_name(source_action: bpy.types.Action) -> str:
         )
 
     return target_name
+
+
+def transient_baked_action_name(target_name: str, source_action: bpy.types.Action) -> str:
+    """Return a bake action name that cannot collide with an appended source action."""
+
+    existing_action = bpy.data.actions.get(target_name)
+    if existing_action is None:
+        return target_name
+    if existing_action != source_action:
+        raise ScriptError(
+            "Rigify animation bake failed because an action named "
+            f'"{target_name}" already exists before baking source action '
+            f'"{source_action.name}".'
+        )
+
+    base_name = f"{target_name}{BAKED_ACTION_COLLISION_SUFFIX}"
+    candidate_name = base_name
+    suffix = 1
+    while bpy.data.actions.get(candidate_name) is not None:
+        candidate_name = f"{base_name}.{suffix:03d}"
+        suffix += 1
+
+    return candidate_name
 
 
 def select_generated_armature_for_bake(generated_armature: bpy.types.Object) -> None:
@@ -1554,6 +1636,48 @@ def action_has_keyed_fcurves(action: bpy.types.Action) -> bool:
                     return True
 
     return False
+
+
+def action_frame_span(action: bpy.types.Action) -> float:
+    frame_range = getattr(action, "frame_range", (0.0, 0.0))
+    return float(frame_range[1]) - float(frame_range[0])
+
+
+def action_has_varying_fcurve(action: bpy.types.Action) -> bool:
+    for fcurve in iter_action_fcurves(action):
+        keyframe_points = getattr(fcurve, "keyframe_points", None)
+        if keyframe_points is None or len(keyframe_points) < 2:
+            continue
+
+        values = [float(point.co.y) for point in keyframe_points]
+        if max(values) - min(values) > ACTION_VARIATION_THRESHOLD:
+            return True
+
+    return False
+
+
+def validate_action_multiframe_non_static(
+    action: bpy.types.Action,
+    failure_context: str,
+    action_label: str,
+) -> None:
+    """Reject actions that would bake/import as single-frame rest-pose clips."""
+
+    if action_frame_span(action) < 1.0:
+        raise ScriptError(
+            f'{failure_context} failed because {action_label} "{action.name}" is not '
+            f'multi-frame; frame range is {tuple(action.frame_range)}.'
+        )
+    if not action_has_keyed_fcurves(action):
+        raise ScriptError(
+            f'{failure_context} failed because {action_label} "{action.name}" has no '
+            "f-curves/keyframes."
+        )
+    if not action_has_varying_fcurve(action):
+        raise ScriptError(
+            f'{failure_context} failed because {action_label} "{action.name}" has no '
+            "varying keyframes and appears static/rest-pose-only."
+        )
 
 
 def iter_action_fcurves(action: bpy.types.Action):
@@ -1777,11 +1901,11 @@ def validate_baked_action(action: bpy.types.Action, source_action: bpy.types.Act
             "Rigify animation bake failed because baked action retained the source suffix: "
             f'"{action.name}".'
         )
-    if not action_has_keyed_fcurves(action):
-        raise ScriptError(
-            "Rigify animation bake failed because baked action "
-            f'"{action.name}" from source "{source_action.name}" has no f-curves/keyframes.'
-        )
+    validate_action_multiframe_non_static(
+        action,
+        "Rigify animation bake",
+        f'baked action from source "{source_action.name}"',
+    )
 
 
 def clean_baked_action(
@@ -1837,16 +1961,48 @@ def validate_baked_actions_persistable(
             or current_action.library is not None
             or not current_action.use_fake_user
             or current_action.name.endswith(RIGIFY_SOURCE_ACTION_SUFFIX)
+            or action_frame_span(current_action) < 1.0
             or not action_has_keyed_fcurves(current_action)
+            or not action_has_varying_fcurve(current_action)
         ):
             invalid_actions.append(action.name)
 
     if invalid_actions:
         action_list = ", ".join(sorted(invalid_actions))
         raise ScriptError(
-            f"{failure_context} failed because baked actions are not present as keyed local "
-            f"fake-user actions: {action_list}."
+            f"{failure_context} failed because baked actions are not present as multi-frame, "
+            f"non-static, keyed local fake-user actions: {action_list}."
         )
+
+
+def finalise_baked_action_names(
+    actions: list[bpy.types.Action], failure_context: str = "Rigify animation bake"
+) -> None:
+    """Rename transient baked actions to their final exported action names."""
+
+    for action in actions:
+        target_name = action.get("alleycat_baked_action_name")
+        if not isinstance(target_name, str) or not target_name:
+            continue
+        if action.name == target_name:
+            del action["alleycat_baked_action_name"]
+            continue
+
+        existing_action = bpy.data.actions.get(target_name)
+        if existing_action is not None and existing_action != action:
+            raise ScriptError(
+                f'{failure_context} failed because baked action "{action.name}" cannot be '
+                f'renamed to "{target_name}" while another action with that name remains.'
+            )
+
+        previous_name = action.name
+        action.name = target_name
+        if action.name != target_name:
+            raise ScriptError(
+                f'{failure_context} failed because Blender renamed baked action '
+                f'"{previous_name}" to "{action.name}" instead of final name "{target_name}".'
+            )
+        del action["alleycat_baked_action_name"]
 
 
 def validate_appended_actions_persistable(
@@ -1930,17 +2086,18 @@ def bake_rigify_actions_to_generated_rig(
                 "Rigify animation bake failed because source action "
                 f'"{source_action.name}" is linked, not local.'
             )
+        validate_action_multiframe_non_static(
+            source_action,
+            "Rigify animation bake",
+            "Rigify source action",
+        )
 
         target_name = baked_action_name(source_action)
-        if bpy.data.actions.get(target_name) is not None:
-            raise ScriptError(
-                "Rigify animation bake failed because an action named "
-                f'"{target_name}" already exists before baking source action '
-                f'"{source_action.name}".'
-            )
+        transient_target_name = transient_baked_action_name(target_name, source_action)
 
-        target_action = bpy.data.actions.new(target_name)
+        target_action = bpy.data.actions.new(transient_target_name)
         target_action.use_fake_user = True
+        target_action["alleycat_baked_action_name"] = target_name
         generated_animation_data.action = target_action
         rigify_animation_data.action = source_action
 
@@ -1966,7 +2123,7 @@ def bake_rigify_actions_to_generated_rig(
         except Exception as exc:
             raise ScriptError(
                 "Rigify animation bake failed because Blender could not bake source action "
-                f'"{source_action.name}" to generated action "{target_name}": {exc}'
+                f'"{source_action.name}" to generated action "{transient_target_name}": {exc}'
             ) from exc
 
         if "CANCELLED" in result:
@@ -1980,7 +2137,7 @@ def bake_rigify_actions_to_generated_rig(
             actual_name = getattr(baked_action, "name", "none")
             raise ScriptError(
                 "Rigify animation bake failed because Blender did not keep the requested current "
-                f'action "{target_name}" after baking source action "{source_action.name}"; '
+                f'action "{transient_target_name}" after baking source action "{source_action.name}"; '
                 f'current action is "{actual_name}".'
             )
 
@@ -2016,7 +2173,7 @@ def validate_rigify_cleanup(
     rigify_armature: bpy.types.Object,
     rigify_armature_name: str,
     appended_object_names: set[str],
-    source_action_names: list[str],
+    source_action_ids: set[int],
     appended_mpfb_actions: list[bpy.types.Action],
     baked_actions: list[bpy.types.Action],
 ) -> None:
@@ -2031,7 +2188,9 @@ def validate_rigify_cleanup(
         )
 
     remaining_source_actions = [
-        name for name in source_action_names if bpy.data.actions.get(name) is not None
+        action.name
+        for action in bpy.data.actions
+        if id(action) in source_action_ids
     ]
     if remaining_source_actions:
         action_list = ", ".join(sorted(remaining_source_actions))
@@ -2090,6 +2249,28 @@ def validate_rigify_cleanup(
         )
 
 
+def validate_removed_rigify_source_actions(
+    source_action_names: list[str],
+    ignored_actions: list[bpy.types.Action],
+    failure_context: str = "Rigify animation source cleanup",
+) -> None:
+    """Validate that no Rigify source action datablocks remain before final renames."""
+
+    ignored_action_ids = {id(action) for action in ignored_actions}
+    source_name_bases = {normalised_export_name(action_name) for action_name in source_action_names}
+    remaining_actions = [
+        action.name
+        for action in bpy.data.actions
+        if id(action) not in ignored_action_ids and normalised_export_name(action.name) in source_name_bases
+    ]
+    if remaining_actions:
+        action_list = ", ".join(sorted(remaining_actions))
+        raise ScriptError(
+            f"{failure_context} failed because Rigify source actions remain before baked "
+            f"action finalisation: {action_list}."
+        )
+
+
 def retarget_animation_source(
     scene: bpy.types.Scene,
     output_path: Path,
@@ -2108,6 +2289,8 @@ def retarget_animation_source(
         rigify_animation_owner,
         "Rigify animation action append",
     )
+    rigify_source_action_names = [action.name for action in rigify_source_actions]
+    rigify_source_action_ids = {id(action) for action in rigify_source_actions}
     apply_retarget_preset(
         exported_animation_owner,
         GENERATED_RIG_RETARGET_PRESET_NAME,
@@ -2125,6 +2308,19 @@ def retarget_animation_source(
         rigify_animation_owner,
         rigify_source_actions,
     )
+    rigify_animation_owner_name = rigify_animation_owner.name
+    rigify_appended_object_names = {obj.name for obj in rigify_appended_objects}
+    remove_generated_retarget_constraints(exported_animation_owner, rigify_animation_owner)
+    cleanup_rigify_animation_source(
+        rigify_animation_owner,
+        rigify_appended_objects,
+        rigify_source_actions,
+    )
+    validate_removed_rigify_source_actions(
+        rigify_source_action_names,
+        [*mpfb_appended_actions, *baked_rigify_actions],
+    )
+    finalise_baked_action_names(baked_rigify_actions)
     create_persistent_action_users(
         mpfb_appended_actions,
         exported_animation_owner,
@@ -2139,21 +2335,12 @@ def retarget_animation_source(
         "baked Rigify actions",
     )
     validate_baked_actions_persistable(baked_rigify_actions)
-    rigify_animation_owner_name = rigify_animation_owner.name
-    rigify_appended_object_names = {obj.name for obj in rigify_appended_objects}
-    rigify_source_action_names = [action.name for action in rigify_source_actions]
-    remove_generated_retarget_constraints(exported_animation_owner, rigify_animation_owner)
-    cleanup_rigify_animation_source(
-        rigify_animation_owner,
-        rigify_appended_objects,
-        rigify_source_actions,
-    )
     validate_rigify_cleanup(
         exported_animation_owner,
         rigify_animation_owner,
         rigify_animation_owner_name,
         rigify_appended_object_names,
-        rigify_source_action_names,
+        rigify_source_action_ids,
         mpfb_appended_actions,
         baked_rigify_actions,
     )
@@ -2294,6 +2481,11 @@ def generate_character(config: CharacterConfig) -> Path:
                 )
 
     bpy.ops.wm.save_as_mainfile(filepath=str(output_path), check_existing=False)
+    for message in update_character_import_retarget_metadata.update_existing_character_sidecars(
+        output_path,
+        character_name,
+    ):
+        print(message)
 
     return output_path
 
