@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using AlleyCat.Speech.Transcription;
 using Godot;
 
@@ -9,6 +10,8 @@ namespace AlleyCat.Body.Voice;
 [GlobalClass]
 public partial class PlayerVoice : Voice
 {
+    [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Transcriber setter keeps the runtime signal subscription in sync.")]
+    private Transcriber? _transcriber;
     private Transcriber? _connectedTranscriber;
     private readonly Transcriber.TranscriptionCompletedEventHandler _transcriptionCompletedHandler;
 
@@ -18,8 +21,22 @@ public partial class PlayerVoice : Voice
     [Export]
     public Transcriber? Transcriber
     {
-        get;
-        set;
+        get => _transcriber;
+        set
+        {
+            if (ReferenceEquals(_transcriber, value))
+            {
+                return;
+            }
+
+            if (_connectedTranscriber is not null)
+            {
+                DisconnectTranscriber();
+            }
+
+            _transcriber = value;
+            ConnectTranscriber();
+        }
     }
 
     /// <summary>
