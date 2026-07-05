@@ -60,7 +60,7 @@ public partial class DynamicPhysicalRigTemplateInstaller : RigTemplateSubtreeIns
                     $"Dynamic physical rig template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(this)}' "
                     + $"could not find installed rig '{RigName}' under skeleton '{context.Skeleton.GetPath()}'.");
 
-            rig.ColliderProfile = ColliderProfile ?? rig.ColliderProfile;
+            rig.ColliderProfile = context.ColliderProfile ?? ColliderProfile ?? rig.ColliderProfile;
             rig.Enabled = Enabled;
             rig.RegenerateNow();
             SceneInstallationMetadata.MarkInstalled(rig, context, this);

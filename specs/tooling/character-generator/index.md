@@ -27,7 +27,10 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Collider generation follows the body mesh and maintains proper orientation.
 - Existing Godot import sidecars keep the MakeHuman retarget metadata needed for generated skeleton imports.
 - Existing main Godot import sidecars keep or regain the `CharacterBody3D` root import contract required by CHAR-002.
-- Generated characters import with the eye animation support required by runtime eye and face systems.
+- Generated characters import through a modular Godot post-import pipeline that assembles deterministic companion
+  assets.
+- Generated characters keep the eye animation support required by runtime eye and face systems.
+- Generated characters with ready collider imports receive refreshed body collider wrapper/profile assets automatically.
 - When Godot has not created import sidecars yet, users receive a clear rerun workflow instead of fabricated data.
 - Configuration uses a simple JSON schema with `preset`, `name`, `outputFile`, and `amimations` fields.
 
@@ -73,11 +76,19 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - The main import sidecar must set `nodes/root_type="CharacterBody3D"`, `nodes/root_name` to the configured character
   name, and `nodes/root_script` to the UID-backed `res://src/Character/Character.cs` reference required by CHAR-002.
 - The main import sidecar must preserve or apply
-  `import_script/path="res://assets/characters/import/eye_animation_library_import.gd"` so Godot post-import adds the
-  required `eyes` `AnimationLibrary` for runtime validation.
+  `import_script/path="res://assets/characters/import/character_import.gd"` so Godot runs the modular character
+  post-import pipeline.
+- `character_import.gd` orchestrates focused post-import modules and must preserve existing eye animation library
+  generation through `character_eye_animation_import.gd`.
+- When `<stem>.colliders.blend` has an imported scene ready, the post-import pipeline must create or refresh:
+  - `<stem>_colliders.tscn` as the character collider wrapper scene;
+  - `body_collider_profile.tres` as the body collider profile resource for the generated character.
+- Collider wrapper/profile asset generation must be deterministic and idempotent across repeated imports.
+- Blender/Python generation and sidecar update tooling must not directly serialise Godot scenes/resources or fabricate
+  Godot UID, remap, dependency, import, or imported-scene metadata.
 - Root import metadata updates must apply only to the main `.blend.import` sidecar, never to the
   `<stem>.colliders.blend.import` sidecar.
-- Collider `.blend.import` sidecars must not receive the eye animation import script by default.
+- Collider `.blend.import` sidecars must not receive the character post-import script by default.
 - The main import sidecar must detect existing `_subresources.nodes` entries ending in `/Skeleton3D` and apply
   MakeHuman retarget metadata to those actual imported skeleton paths.
 - If the main import sidecar has no existing skeleton node entry, it must fall back to
@@ -89,7 +100,9 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   `retarget/rest_fixer/fix_silhouette/filter`, matching the reference female import sidecars.
 - Missing sidecars must be reported with instructions to run Godot import and rerun the helper or generator.
   Tooling must not fabricate Godot UID or imported scene metadata.
-- Godot scene assembly is performed by downstream Scene Installer System (CORE-005) workflows that:
+- Root role installer scene/profile assignment remains a separate Scene Installer System (CORE-005) workflow unless a
+  dedicated role-scene workflow handles it.
+- Godot role scene assembly is performed by downstream Scene Installer System (CORE-005) workflows that:
   - create or refresh the visual/import root node used as the scene root;
   - delegate skeleton, animation, collider, and gameplay setup to module installers;
   - keep reusable topology visible in template scenes/assets for inspection and testing.
@@ -105,14 +118,17 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Ensuring generated source assets provide names and collider outputs required by portable scene assembly.
 - Preserving and applying Godot import retarget metadata sidecars for generated character `.blend` outputs.
 - Preserving and applying the CHAR-002 main character root import metadata for generated character `.blend` outputs.
-- Preserving and applying the eye animation import-script sidecar contract for generated character `.blend` outputs.
+- Preserving and applying the modular character import-script sidecar contract for generated character `.blend` outputs.
+- Godot post-import generation of eye animation libraries and collider wrapper/profile companion assets.
 
 ## Out Of Scope
 - Creating new character presets or modifying existing ones.
 - Manual character sculpting or mesh editing.
 - Animation creation or keyframe editing outside of baking.
-- Direct Godot scene generation or installer execution from this Blender generation script.
+- Direct Godot scene/resource serialisation or installer execution from this Blender generation script.
 - Creating first-import Godot UID, remap, dependency, or imported `.scn` sidecar data before Godot has imported assets.
+- Patching root role installer scenes or assigning generated body collider profiles to role installer roots during the
+  first modular post-import asset generation pass.
 - User interface for configuration (strictly JSON-driven).
 - Support for other character generation systems beyond MPFB/MakeHuman.
 - Real-time viewport rendering or interactive feedback during generation.
@@ -136,7 +152,12 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] Generated assets can be consumed by downstream portable scene assembly without mesh or rig renaming.
   - [ ] Existing Godot import sidecars keep or receive the MakeHuman retarget metadata after generation.
   - [ ] Existing main Godot import sidecars keep or receive the CHAR-002 character root metadata after generation.
+  - [ ] Generated characters import through the modular character post-import pipeline, not an eye-only import script.
   - [ ] Generated characters import with the required `eyes` animation library for runtime eye and face systems.
+  - [ ] When the matching collider import is ready, generated characters receive refreshed collider wrapper/profile
+        assets without a manually invoked Godot script.
+  - [ ] Root role installer scene/profile assignment remains handled by the role scene workflow, not by the first
+        post-import asset generation pass.
   - [ ] Missing sidecars produce a clear instruction to run Godot import and rerun the helper or generator.
 - Technical Requirements:
   - [ ] Configuration schema validation requires exactly preset, name, outputFile, and amimations fields.
@@ -158,20 +179,32 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] Sidecar updates merge into empty and populated `_subresources` blocks without dropping unrelated import data.
   - [ ] The main sidecar contains `nodes/root_type="CharacterBody3D"`, `nodes/root_name` matching the configured
         character name, and the UID-backed `Character.cs` `nodes/root_script` reference.
-  - [ ] The main sidecar contains the `eye_animation_library_import.gd` import-script path without dropping unrelated
+  - [ ] The main sidecar contains the `character_import.gd` import-script path without dropping unrelated
         import metadata.
   - [ ] Collider sidecar updates do not receive main character root metadata.
-  - [ ] Collider sidecar updates do not receive the eye animation import-script path unless explicitly required.
+  - [ ] Collider sidecar updates do not receive the character post-import script path unless explicitly required.
+  - [ ] The modular post-import pipeline invokes the eye animation import module and preserves generated `eyes`
+        `AnimationLibrary` output.
+  - [ ] The modular post-import pipeline creates or refreshes `<stem>_colliders.tscn` and `body_collider_profile.tres`
+        from the `<stem>.colliders.blend` convention only when collider import output is available.
+  - [ ] Repeated imports refresh the generated wrapper/profile assets deterministically without requiring manual Godot
+        script execution.
   - [ ] Existing main `Skeleton3D` node entries, or the generated-name fallback when absent, and the collider
         `Skeleton3D` entry contain the reference MakeHuman bone map and silhouette settings.
   - [ ] Missing sidecars are reported without writing synthetic Godot remap, UID, dependency, or `.scn` data.
-  - [ ] Godot installer-backed scene generation is handled by CORE-005 workflows, not this Blender script.
+  - [ ] Blender/Python tooling does not serialise Godot scenes/resources or fabricate Godot UID, remap, dependency,
+        import, or imported-scene metadata.
+  - [ ] Godot installer-backed role scene generation is handled by CORE-005 workflows, not this Blender script.
 
 ## References
 - Source script: `tools/generate_character.py`
 - Wrapper script: `tools/generate_character.sh`
 - Test configuration: `game/assets/characters/test/Female.character.json`
 - Collider generation: `tools/generate_body_colliders.py`
+- Godot character post-import pipeline: `game/assets/characters/import/character_import.gd`
+- Eye animation post-import module: `game/assets/characters/import/character_eye_animation_import.gd`
+- Collider profile post-import module: `game/assets/characters/import/character_collider_profile_import.gd`
+- Import sidecar metadata updater: `tools/update_character_import_retarget_metadata.py`
 - Portable character contract: @specs/character/001-character-skeleton/index.md
 - Character root import contract: @specs/character/002-character-root/index.md
 - Scene Installer System: @specs/core/005-scene-installer-system/index.md

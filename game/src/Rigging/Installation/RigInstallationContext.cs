@@ -1,4 +1,5 @@
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Physics;
 using Godot;
 
 namespace AlleyCat.Rigging.Installation;
@@ -12,13 +13,15 @@ namespace AlleyCat.Rigging.Installation;
 /// <param name="targetSkeleton">The target character skeleton.</param>
 /// <param name="templateSkeleton">The template character skeleton.</param>
 /// <param name="templateBaselineRoot">The optional instantiated baseline scene used to ignore inherited template content.</param>
+/// <param name="colliderProfile">The optional character-level body collider profile override.</param>
 public sealed class RigInstallationContext(
     Node targetRoot,
     string metadataNamespace,
     Node templateRoot,
     Skeleton3D targetSkeleton,
     Skeleton3D templateSkeleton,
-    Node? templateBaselineRoot = null)
+    Node? templateBaselineRoot = null,
+    BodyColliderProfile? colliderProfile = null)
     : TemplateSceneInstallationContext(targetRoot, metadataNamespace, templateRoot, templateBaselineRoot)
 {
     /// <summary>
@@ -38,10 +41,15 @@ public sealed class RigInstallationContext(
     } = templateSkeleton ?? throw new ArgumentNullException(nameof(templateSkeleton));
 
     /// <summary>
+    /// Gets the optional character-level body collider profile override.
+    /// </summary>
+    public BodyColliderProfile? ColliderProfile { get; } = colliderProfile;
+
+    /// <summary>
     /// Creates a copy of the context with a different target root while preserving template and skeleton dependencies.
     /// </summary>
     public override RigInstallationContext WithTargetRoot(Node targetRoot)
-        => new(targetRoot, MetadataNamespace, TemplateRoot, Skeleton, TemplateSkeleton, TemplateBaselineRoot);
+        => new(targetRoot, MetadataNamespace, TemplateRoot, Skeleton, TemplateSkeleton, TemplateBaselineRoot, ColliderProfile);
 
     /// <summary>
     /// Creates a copy of the context targeting the resolved skeleton.

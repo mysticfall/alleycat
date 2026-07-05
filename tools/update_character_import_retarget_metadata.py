@@ -16,7 +16,7 @@ BONE_MAP_RESOURCE = (
 )
 CHARACTER_ROOT_TYPE = '"CharacterBody3D"'
 CHARACTER_ROOT_SCRIPT = 'Resource("uid://bh2t1kkfwpvbf", "res://src/Character/Character.cs")'
-EYE_ANIMATION_IMPORT_SCRIPT = '"res://assets/characters/import/eye_animation_library_import.gd"'
+CHARACTER_IMPORT_SCRIPT = '"res://assets/characters/import/character_import.gd"'
 SILHOUETTE_FILTER = (
     '[&"Head", &"Neck", &"UpperChest", &"Chest", &"Spine", &"Hips", '
     '&"RightThumbMetacarpal", &"RightThumbProximal", &"RightThumbDistal", '
@@ -246,7 +246,7 @@ def _apply_character_root_metadata_to_text(text: str, character_name: str) -> st
         _godot_string_literal(character_name),
     )
     updated_text = _replace_or_insert_param(updated_text, "nodes/root_script", CHARACTER_ROOT_SCRIPT)
-    return _replace_or_insert_param(updated_text, "import_script/path", EYE_ANIMATION_IMPORT_SCRIPT)
+    return _replace_or_insert_param(updated_text, "import_script/path", CHARACTER_IMPORT_SCRIPT)
 
 
 def apply_retarget_metadata(import_sidecar_path: Path, skeleton_path: str) -> bool:

@@ -1,4 +1,5 @@
 using AlleyCat.Core.Installer;
+using AlleyCat.Rigging.Physics;
 using Godot;
 
 namespace AlleyCat.Rigging.Installation;
@@ -46,6 +47,16 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
     /// </summary>
     [Export]
     public NodePath TemplateSkeletonPath { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets an optional character-level body collider profile override shared with physical rig installers.
+    /// </summary>
+    [ExportGroup("Character Physics")]
+    [Export]
+    public BodyColliderProfile? ColliderProfile
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Gets or sets the explicit rig module installers run in order for this role.
@@ -131,7 +142,8 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
             templateRoot,
             targetSkeleton,
             templateSkeleton,
-            ownedTemplateBaselineRoot);
+            ownedTemplateBaselineRoot,
+            ColliderProfile);
 
         try
         {

@@ -41,6 +41,21 @@ public sealed class RigInstallerIntegrationTests
     private const string PlayerScenePath =
         "res://assets/characters/reference/player.tscn";
 
+    private const string AyanaPlayerScenePath =
+        "res://assets/characters/ayana/ayana_player.tscn";
+
+    private const string AyanaNpcScenePath =
+        "res://assets/characters/ayana/ayana_npc.tscn";
+
+    private const string AyanaBodyColliderProfilePath =
+        "res://assets/characters/ayana/body_collider_profile.tres";
+
+    private const string AyanaColliderWrapperPath =
+        "res://assets/characters/ayana/ayana_colliders.tscn";
+
+    private const string AyanaColliderBlendPath =
+        "res://assets/characters/ayana/ayana.colliders.blend";
+
     private const string PlayerVRIKTemplatePath =
         "res://assets/characters/templates/ik/vrik.tscn";
 
@@ -227,6 +242,91 @@ public sealed class RigInstallerIntegrationTests
         Assert.False(rig.Enabled);
         Assert.True(SceneInstallationMetadata.HasInstalled(rig, context, installer));
         Assert.Equal(1, CountDirectChildren(fixture.Skeleton, "DynamicPhysicalRig"));
+    }
+
+    /// <summary>
+    /// Root role collider profile context overrides child installer defaults without mutating child installer configuration.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRigTemplateInstaller_ColliderProfile_UsesRootContextBeforeChildDefaultAndTemplateCopy()
+    {
+        using CharacterFixture fixture = CreateAliceFixture();
+        using var copiedProfile = new BodyColliderProfile();
+        using var childDefaultProfile = new BodyColliderProfile();
+        using var rootOverrideProfile = new BodyColliderProfile();
+        using Node templateRoot = CreatePackedTemplateRoot(
+            new Node { Name = "TemplateRoot" },
+            root =>
+            {
+                var templateSkeleton = new Skeleton3D { Name = "TemplateSkeleton" };
+                templateSkeleton.AddChild(new DynamicPhysicalRig
+                {
+                    Name = "DynamicPhysicalRig",
+                    ColliderProfile = copiedProfile,
+                });
+                root.AddChild(templateSkeleton);
+            }).Instantiate();
+        using var installer = new DynamicPhysicalRigTemplateInstaller
+        {
+            Name = "DynamicPhysicalRigInstaller",
+            TargetSkeleton = true,
+            InstallMode = TemplateInstallMode.SelectedNode,
+            Enabled = false,
+            ColliderProfile = childDefaultProfile,
+        };
+        RigInstallationContext context = CreateCharacterContext(fixture, templateRoot, rootOverrideProfile);
+
+        SceneInstallationResult result = installer.Install(context.WithTargetRoot(fixture.Root));
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        DynamicPhysicalRig rig = fixture.Skeleton.GetNode<DynamicPhysicalRig>("DynamicPhysicalRig");
+        Assert.Same(rootOverrideProfile, rig.ColliderProfile);
+        Assert.Same(childDefaultProfile, installer.ColliderProfile);
+    }
+
+    /// <summary>
+    /// Dynamic physical rig collider profile selection falls back to the child installer default and then to the copied rig profile.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void DynamicPhysicalRigTemplateInstaller_ColliderProfile_DefaultsToChildThenTemplateCopy()
+    {
+        using var childDefaultProfile = new BodyColliderProfile();
+        using var copiedProfile = new BodyColliderProfile();
+
+        using CharacterFixture childDefaultFixture = CreateAliceFixture();
+        using Node childDefaultTemplateRoot = CreateDynamicRigTemplateRoot(copiedProfile).Instantiate();
+        using var childDefaultInstaller = new DynamicPhysicalRigTemplateInstaller
+        {
+            TargetSkeleton = true,
+            InstallMode = TemplateInstallMode.SelectedNode,
+            Enabled = false,
+            ColliderProfile = childDefaultProfile,
+        };
+        RigInstallationContext childDefaultContext = CreateCharacterContext(childDefaultFixture, childDefaultTemplateRoot);
+
+        SceneInstallationResult childDefaultResult = childDefaultInstaller.Install(childDefaultContext);
+
+        Assert.True(childDefaultResult.Succeeded, string.Join('\n', childDefaultResult.Errors));
+        Assert.Same(
+            childDefaultProfile,
+            childDefaultFixture.Skeleton.GetNode<DynamicPhysicalRig>("DynamicPhysicalRig").ColliderProfile);
+
+        using CharacterFixture copiedFixture = CreateAliceFixture();
+        using Node copiedTemplateRoot = CreateDynamicRigTemplateRoot(copiedProfile).Instantiate();
+        using var copiedInstaller = new DynamicPhysicalRigTemplateInstaller
+        {
+            TargetSkeleton = true,
+            InstallMode = TemplateInstallMode.SelectedNode,
+            Enabled = false,
+        };
+        RigInstallationContext copiedContext = CreateCharacterContext(copiedFixture, copiedTemplateRoot);
+
+        SceneInstallationResult copiedResult = copiedInstaller.Install(copiedContext);
+
+        Assert.True(copiedResult.Succeeded, string.Join('\n', copiedResult.Errors));
+        Assert.Same(copiedProfile, copiedFixture.Skeleton.GetNode<DynamicPhysicalRig>("DynamicPhysicalRig").ColliderProfile);
     }
 
     /// <summary>
@@ -767,6 +867,30 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
+    /// Ayana role scenes configure character-specific collider profiles on the inherited root installer boundary.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void AyanaRoleScenes_ExposeColliderProfileOnRootInstaller()
+    {
+        AssertAyanaRoleSceneUsesRootColliderProfile(AyanaPlayerScenePath, "PlayerCharacterInstaller");
+        AssertAyanaRoleSceneUsesRootColliderProfile(AyanaNpcScenePath, "NPCCharacterInstaller");
+
+        string profileText = ReadProjectFile(AyanaBodyColliderProfilePath);
+        string wrapperText = ReadProjectFile(AyanaColliderWrapperPath);
+        Assert.Contains(AyanaColliderWrapperPath, profileText, StringComparison.Ordinal);
+        Assert.Contains(AyanaColliderBlendPath, wrapperText, StringComparison.Ordinal);
+
+        BodyColliderProfile profile = ResourceLoader.Load<BodyColliderProfile>(AyanaBodyColliderProfilePath);
+        Assert.NotNull(profile);
+        Assert.Equal(AyanaColliderWrapperPath, profile.SourceScene?.ResourcePath);
+        Assert.Contains(
+            AyanaColliderBlendPath,
+            ReadProjectFile(profile.SourceScene!.ResourcePath),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Role installer children expose no child-owned template asset properties.
     /// </summary>
     [Headless]
@@ -1171,6 +1295,20 @@ public sealed class RigInstallerIntegrationTests
         return packedScene;
     }
 
+    private static PackedScene CreateDynamicRigTemplateRoot(BodyColliderProfile copiedProfile)
+        => CreatePackedTemplateRoot(
+            new Node { Name = "TemplateRoot" },
+            root =>
+            {
+                var templateSkeleton = new Skeleton3D { Name = "TemplateSkeleton" };
+                templateSkeleton.AddChild(new DynamicPhysicalRig
+                {
+                    Name = "DynamicPhysicalRig",
+                    ColliderProfile = copiedProfile,
+                });
+                root.AddChild(templateSkeleton);
+            });
+
     private static void AssignTemplateOwnerRecursively(Node owner, Node node)
     {
         foreach (Node child in node.GetChildren())
@@ -1219,6 +1357,23 @@ public sealed class RigInstallerIntegrationTests
                     $"Role child installer '{child.Name}' must not expose template asset property '{propertyName}'.");
             }
         }
+    }
+
+    private static void AssertAyanaRoleSceneUsesRootColliderProfile(string scenePath, string installerName)
+    {
+        string sceneText = ReadProjectFile(scenePath);
+
+        Assert.Contains(AyanaBodyColliderProfilePath, sceneText, StringComparison.Ordinal);
+        Assert.Contains("ColliderProfile = ExtResource", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("DynamicPhysicalRigInstaller", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("assets/characters/reference/female/body_collider_profile.tres", sceneText, StringComparison.Ordinal);
+
+        using Node scene = LoadPackedScene(scenePath).Instantiate();
+        Node installer = scene.GetNode(installerName);
+        object? profile = GetPropertyValue(installer, nameof(RigRoleTemplateSceneInstaller.ColliderProfile));
+        BodyColliderProfile colliderProfile = Assert.IsType<BodyColliderProfile>(profile);
+        Assert.Equal(AyanaBodyColliderProfilePath, colliderProfile.ResourcePath);
+        Assert.Equal(AyanaColliderWrapperPath, colliderProfile.SourceScene?.ResourcePath);
     }
 
     private static bool HasGodotProperty(Node node, string propertyName)
@@ -1387,7 +1542,10 @@ public sealed class RigInstallerIntegrationTests
         return count;
     }
 
-    private static RigInstallationContext CreateCharacterContext(CharacterFixture fixture, Node templateRoot)
+    private static RigInstallationContext CreateCharacterContext(
+        CharacterFixture fixture,
+        Node templateRoot,
+        BodyColliderProfile? colliderProfile = null)
     {
         Skeleton3D templateSkeleton;
         try
@@ -1404,7 +1562,9 @@ public sealed class RigInstallerIntegrationTests
             SceneInstallationMetadata.DefaultNamespace,
             templateRoot,
             fixture.Skeleton,
-            templateSkeleton);
+            templateSkeleton,
+            null,
+            colliderProfile);
     }
 
     private static CharacterFixture CreateAliceFixture()

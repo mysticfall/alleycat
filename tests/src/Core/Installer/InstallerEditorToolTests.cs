@@ -60,6 +60,9 @@ public sealed class InstallerEditorToolTests
         Assert.True(typeof(RigInstallationContext).IsSubclassOf(typeof(TemplateSceneInstallationContext)));
         Assert.NotNull(typeof(TemplateSceneInstallationContext).GetProperty(nameof(TemplateSceneInstallationContext.TemplateRoot)));
         Assert.NotNull(typeof(RigInstallationContext).GetProperty(nameof(RigInstallationContext.Skeleton)));
+        Assert.NotNull(typeof(RigInstallationContext).GetProperty(nameof(RigInstallationContext.ColliderProfile)));
+        Assert.Null(typeof(RigInstallationContext).GetMethod("WithService"));
+        Assert.Null(typeof(RigInstallationContext).GetMethod("TryGetService"));
     }
 
     /// <summary>

@@ -14,6 +14,10 @@ namespace AlleyCat.IntegrationTests.Characters;
 public sealed class CharacterRootImportIntegrationTests
 {
     private const string CharacterScriptPath = "res://src/Character/Character.cs";
+    private const string CharacterImportScriptPath = "res://assets/characters/import/character_import.gd";
+    private const string CharacterEyeImportScriptPath = "res://assets/characters/import/character_eye_animation_import.gd";
+    private const string CharacterColliderImportScriptPath = "res://assets/characters/import/character_collider_profile_import.gd";
+    private const string LegacyEyeImportScriptPath = "res://assets/characters/import/eye_animation_library_import.gd";
     private const string ReferenceFemaleBlendPath = "res://assets/characters/reference/female/reference_female.blend";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string AllyScenePath = "res://assets/characters/reference/ally.tscn";
@@ -36,6 +40,19 @@ public sealed class CharacterRootImportIntegrationTests
         {
             root.QueueFree();
         }
+    }
+
+    /// <summary>
+    /// Verifies the modular character post-import scripts and the legacy eye wrapper remain loadable by Godot.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void CharacterPostImportScripts_LoadAsGodotScripts()
+    {
+        AssertScriptLoads(CharacterImportScriptPath);
+        AssertScriptLoads(CharacterEyeImportScriptPath);
+        AssertScriptLoads(CharacterColliderImportScriptPath);
+        AssertScriptLoads(LegacyEyeImportScriptPath);
     }
 
     /// <summary>
@@ -81,5 +98,11 @@ public sealed class CharacterRootImportIntegrationTests
 
         Script script = Assert.IsType<Script>(root.GetScript().AsGodotObject(), exactMatch: false);
         Assert.Equal(CharacterScriptPath, script.ResourcePath);
+    }
+
+    private static void AssertScriptLoads(string scriptPath)
+    {
+        Script script = Assert.IsType<Script>(ResourceLoader.Load(scriptPath), exactMatch: false);
+        Assert.Equal(scriptPath, script.ResourcePath);
     }
 }

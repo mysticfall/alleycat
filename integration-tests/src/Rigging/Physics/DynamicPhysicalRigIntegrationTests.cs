@@ -18,6 +18,7 @@ namespace AlleyCat.IntegrationTests.Rigging.Physics;
 public sealed class DynamicPhysicalRigIntegrationTests
 {
     private const string CollidersScenePath = "res://assets/characters/reference/female/reference_female_colliders.tscn";
+    private const string ColliderSourceScenePath = "res://assets/characters/reference/female/reference_female.colliders.blend";
     private const string ColliderProfilePath = "res://assets/characters/reference/female/body_collider_profile.tres";
     private const string ColliderProfileUID = "uid://dpisik0mj8f6a";
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally.tscn";
@@ -418,6 +419,22 @@ public sealed class DynamicPhysicalRigIntegrationTests
         Assert.Contains(descriptors, descriptor => descriptor.SourceBoneName == "Hips");
         Assert.Contains(descriptors, descriptor => descriptor.SourceBoneName == "LeftHand");
         Assert.Contains(descriptors, descriptor => descriptor.SourceBoneName == "breast_r");
+    }
+
+    /// <summary>
+    /// Verifies generated collider wrapper/profile assets keep the post-import source chain reloadable.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void BodyColliderProfile_GeneratedWrapperReferencesImportedColliderBlend()
+    {
+        _ = LoadPackedScene(CollidersScenePath);
+        BodyColliderProfile colliderProfile = Assert.IsType<BodyColliderProfile>(LoadResource(ColliderProfilePath), exactMatch: false);
+        PackedScene profileSourceScene = Assert.IsType<PackedScene>(colliderProfile.SourceScene, exactMatch: false);
+        string wrapperText = ReadTextResource(CollidersScenePath);
+
+        Assert.Contains($"path=\"{ColliderSourceScenePath}\"", wrapperText, StringComparison.Ordinal);
+        Assert.Equal(CollidersScenePath, profileSourceScene.ResourcePath);
     }
 
     /// <summary>
@@ -1672,6 +1689,12 @@ public sealed class DynamicPhysicalRigIntegrationTests
     private static Resource LoadResource(string resourcePath)
         => ResourceLoader.Load<Resource>(resourcePath)
            ?? throw new Xunit.Sdk.XunitException($"Expected resource '{resourcePath}' to load.");
+
+    private static string ReadTextResource(string resourcePath)
+    {
+        string projectPath = ProjectSettings.GlobalizePath(resourcePath);
+        return File.ReadAllText(projectPath);
+    }
 
     private static BodyColliderProfile CreateColliderProfile(PackedScene sourceScene)
         => new()

@@ -50,7 +50,7 @@ class CharacterImportRetargetMetadataTests(unittest.TestCase):
         self.assertIn('nodes/root_type="CharacterBody3D"', text)
         self.assertIn('nodes/root_name="Ayana"', text)
         self.assertIn('nodes/root_script=' + import_metadata.CHARACTER_ROOT_SCRIPT, text)
-        self.assertIn('import_script/path=' + import_metadata.EYE_ANIMATION_IMPORT_SCRIPT, text)
+        self.assertIn('import_script/path=' + import_metadata.CHARACTER_IMPORT_SCRIPT, text)
         self.assertIn('"PATH:Ayana/Skeleton3D": {', text)
         self.assertIn(import_metadata.BONE_MAP_RESOURCE, text)
 
@@ -104,7 +104,7 @@ blender/nodes/visible=0
         self.assertIn('nodes/root_type="CharacterBody3D"', text)
         self.assertIn('nodes/root_name="Ayana"', text)
         self.assertIn('nodes/root_script=' + import_metadata.CHARACTER_ROOT_SCRIPT, text)
-        self.assertIn('import_script/path=' + import_metadata.EYE_ANIMATION_IMPORT_SCRIPT, text)
+        self.assertIn('import_script/path=' + import_metadata.CHARACTER_IMPORT_SCRIPT, text)
 
     def test_collider_sidecar_retarget_update_does_not_apply_character_root_metadata(self) -> None:
         with TemporaryDirectory() as temp_dir:
