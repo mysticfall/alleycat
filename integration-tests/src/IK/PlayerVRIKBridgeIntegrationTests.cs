@@ -18,7 +18,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 {
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string FemaleReferenceNPCScenePath = "res://assets/characters/reference/ally.tscn";
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
+    private const string ReferencePlayerFixtureScenePath = "res://assets/testing/reference_player_fixture/reference_player_fixture.tscn";
     private const string PlayerVRIKScriptPath = "res://src/IK/PlayerVRIK.cs";
     private const string CharacterIKScriptPath = "res://src/IK/CharacterIK.cs";
     private const string DynamicPhysicalRigScriptPath = "res://src/Rigging/Physics/DynamicPhysicalRig.cs";
@@ -152,35 +152,35 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the mirror-room runtime scene path resolves player/NPC IK viewpoints and NPC eye-tracking bindings.
+    /// Verifies a reference-player fixture resolves player/NPC IK viewpoints and NPC eye-tracking bindings.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task MirrorRoomScene_RuntimeInstallers_BindIKViewpointsAndNpcEyeTracking()
+    public async Task ReferencePlayerFixture_RuntimeInstallers_BindIKViewpointsAndNpcEyeTracking()
     {
         SceneTree sceneTree = GetSceneTree();
-        Node mirrorRoom = LoadPackedScene(MirrorRoomScenePath).Instantiate();
-        sceneTree.Root.AddChild(mirrorRoom);
+        Node fixture = LoadPackedScene(ReferencePlayerFixtureScenePath).Instantiate();
+        sceneTree.Root.AddChild(fixture);
         await WaitForFramesAsync(sceneTree, 10);
         await WaitForPhysicsFramesAsync(sceneTree, 2);
-        EnsureRuntimeRoleInstalled(mirrorRoom.GetNode("Actors/Player"));
-        EnsureRuntimeRoleInstalled(GetMirrorRoomAllyActor(mirrorRoom));
+        EnsureRuntimeRoleInstalled(fixture.GetNode("Actors/Player"));
+        EnsureRuntimeRoleInstalled(GetMirrorRoomAllyActor(fixture));
 
         try
         {
-            Node player = mirrorRoom.GetNode("Actors/Player");
+            Node player = fixture.GetNode("Actors/Player");
             Node playerVRIK = player.GetNode<Node>("VRIK");
             Marker3D playerViewpoint = player.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
-            Node npc = GetMirrorRoomAllyActor(mirrorRoom);
+            Node npc = GetMirrorRoomAllyActor(fixture);
             Node npcIK = npc.GetNode<Node>("CharacterIK");
             Marker3D npcViewpoint = npc.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
             Node npcEyes = npc.GetNode<Node>("Eyes");
             GodotObject playerConfiguredViewpoint = GetGodotNodeProperty(playerVRIK, nameof(CharacterIK.Viewpoint), "viewpoint")
-                ?? throw new Xunit.Sdk.XunitException("Expected mirror-room player VRIK Viewpoint to resolve to a marker.");
+                ?? throw new Xunit.Sdk.XunitException("Expected reference-player fixture player VRIK Viewpoint to resolve to a marker.");
             GodotObject npcConfiguredViewpoint = GetGodotNodeProperty(npcIK, nameof(CharacterIK.Viewpoint), "viewpoint")
-                ?? throw new Xunit.Sdk.XunitException("Expected mirror-room NPC CharacterIK Viewpoint to resolve to a marker.");
+                ?? throw new Xunit.Sdk.XunitException("Expected reference-player fixture NPC CharacterIK Viewpoint to resolve to a marker.");
             GodotObject npcEyeOrigin = GetGodotNodeProperty(npcEyes, "EyeOrigin", "eye_origin")
-                ?? throw new Xunit.Sdk.XunitException("Expected mirror-room NPC Eyes EyeOrigin to resolve to a marker.");
+                ?? throw new Xunit.Sdk.XunitException("Expected reference-player fixture NPC Eyes EyeOrigin to resolve to a marker.");
 
             Assert.Equal(playerViewpoint.GetInstanceId(), playerConfiguredViewpoint.GetInstanceId());
             Assert.Equal(npcViewpoint.GetInstanceId(), npcConfiguredViewpoint.GetInstanceId());
@@ -188,7 +188,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         }
         finally
         {
-            mirrorRoom.QueueFree();
+            fixture.QueueFree();
             await WaitForNextFrameAsync(sceneTree);
         }
     }

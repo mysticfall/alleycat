@@ -27,6 +27,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     private const float TestPipeReachDistanceMetres = 0.08f;
     private const string TestBallScenePath = "res://assets/items/test_ball.tscn";
     private const string TestStickScenePath = "res://assets/items/test_stick.tscn";
+    private const string ReferencePlayerFixtureScenePath = "res://assets/testing/reference_player_fixture/reference_player_fixture.tscn";
     private static readonly Vector3 _testBallGrabPositionOffsetFromHand = new(0.001f, 0.071f, 0.049f);
     private static readonly Vector3 _testBallGrabRotationOffsetFromHand = new(-0.00048048052f, 0.011107354f, -1.5504136f);
     private static readonly StringName _pendingGrabGroupName = new("pending_grab_test_grabbable");
@@ -545,13 +546,13 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the mirror room player hands keep their authored hand-pose behaviour and collision targets.
+    /// Verifies the reference-player fixture hands keep their authored hand-pose behaviour and collision targets.
     /// </summary>
     [Headless]
     [Fact]
-    public void MirrorRoom_PlayerHandsUseAuthoredHandPoseBehaviourAndCollisionTargets()
+    public void ReferencePlayerFixture_PlayerHandsUseAuthoredHandPoseBehaviourAndCollisionTargets()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/testing/mirror_room/mirror_room.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(ReferencePlayerFixtureScenePath);
         Node root = scene.Instantiate();
 
         try
@@ -572,13 +573,13 @@ public sealed partial class HandGrabAssetIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the template-installed mirror-room player can drive a real hand grab into provider state and commit it.
+    /// Verifies the template-installed reference player can drive a real hand grab into provider state and commit it.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task MirrorRoom_PlayerRightHandGrabActivatesProviderAndCommitsTestBall()
+    public async Task ReferencePlayerFixture_PlayerRightHandGrabActivatesProviderAndCommitsTestBall()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/testing/mirror_room/mirror_room.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>(ReferencePlayerFixtureScenePath);
         Node root = scene.Instantiate();
         SceneTree sceneTree = TestUtils.GetSceneTree();
         _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
