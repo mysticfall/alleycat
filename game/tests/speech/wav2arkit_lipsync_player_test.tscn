@@ -28,9 +28,9 @@ size = 2.0
 near = 0.01
 far = 100.0
 
-[node name="LipSyncPlayer" type="Node" parent="." index="5" unique_id=1360000702 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+[node name="LipSyncPlayer" type="Node" parent="." index="5" unique_id=1360000702 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
 script = ExtResource("2_iggym")
-Meshes = [NodePath("../Subject/Female/Female/GeneralSkeleton/Female_body"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyebrow006"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyelashes01"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_high-poly"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_tongue01")]
+Skeleton = NodePath("../Subject/Female/Female/GeneralSkeleton")
 AudioPlayer = NodePath("../Subject/Female/Female/GeneralSkeleton/HeadBone/AudioStreamPlayer3D")
 LoopPlayback = true
 metadata/_custom_type_script = "uid://d1owchc86h8g8"

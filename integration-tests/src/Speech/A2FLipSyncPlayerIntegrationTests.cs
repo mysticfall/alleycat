@@ -27,10 +27,15 @@ public sealed partial class A2FLipSyncPlayerIntegrationTests
         {
             Name = "AudioStreamPlayer3D",
         };
+        Skeleton3D skeleton = new()
+        {
+            Name = "Skeleton3D",
+        };
         A2FLipSyncPlayer player = new()
         {
             Name = "A2FLipSyncPlayer",
             AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
             EndpointUrl = "http://127.0.0.1:1/blendshapes",
             ProbeHealthRetries = 1,
             ProbeHealthRetryDelayMs = 10,
@@ -40,6 +45,7 @@ public sealed partial class A2FLipSyncPlayerIntegrationTests
         {
             _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
             _ = root.CallDeferred(Node.MethodName.AddChild, audioPlayer);
+            _ = root.CallDeferred(Node.MethodName.AddChild, skeleton);
             _ = root.CallDeferred(Node.MethodName.AddChild, player);
             await WaitForFramesAsync(sceneTree, 2);
 
@@ -70,10 +76,15 @@ public sealed partial class A2FLipSyncPlayerIntegrationTests
         {
             Name = "AudioStreamPlayer3D",
         };
+        Skeleton3D skeleton = new()
+        {
+            Name = "Skeleton3D",
+        };
         A2FLipSyncPlayer player = new()
         {
             Name = "A2FLipSyncPlayer",
             AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
             EndpointUrl = "http://127.0.0.1:1/blendshapes",
             ProbeHealthOnInitialise = true,
             ProbeHealthRetries = 1,
@@ -85,6 +96,7 @@ public sealed partial class A2FLipSyncPlayerIntegrationTests
         {
             _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, root);
             _ = root.CallDeferred(Node.MethodName.AddChild, audioPlayer);
+            _ = root.CallDeferred(Node.MethodName.AddChild, skeleton);
             _ = root.CallDeferred(Node.MethodName.AddChild, player);
             await WaitForFramesAsync(sceneTree, 2);
 

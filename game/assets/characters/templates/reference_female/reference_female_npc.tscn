@@ -46,12 +46,12 @@ VoiceOverride = "Elena.wav"
 TargetSampleRate = 16000
 metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
 
-[node name="LipSyncPlayer" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="1" unique_id=440077666 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+[node name="LipSyncPlayer" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="1" unique_id=440077666 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
 script = ExtResource("4_db11o")
 InputStrength = 0.6
 ConstantNoise = true
 EyeRotationToBlendshapeScale = 0.15
-Meshes = [NodePath("../../../Female_body"), NodePath("../../../Female_eyebrow006"), NodePath("../../../Female_eyelashes01"), NodePath("../../../Female_high-poly"), NodePath("../../../Female_teeth_shape01"), NodePath("../../../Female_tongue01")]
+Skeleton = NodePath("../../..")
 AudioPlayer = NodePath("../AudioStreamPlayer3D")
 metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
 

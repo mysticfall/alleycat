@@ -9,14 +9,14 @@ namespace AlleyCat.Speech.LipSync;
 public abstract partial class LipSyncPlayer : Node
 {
     /// <summary>
-    /// List of meshes to drive.
+    /// Skeleton whose descendants contain the blendshape-capable meshes to drive.
     /// </summary>
     [Export]
-    public MeshInstance3D[] Meshes
+    public Skeleton3D? Skeleton
     {
         get;
         set;
-    } = [];
+    }
 
     /// <summary>
     /// Optional audio player for synchronised audio/blendshape playback.
@@ -350,6 +350,8 @@ public abstract partial class LipSyncPlayer : Node
             throw new InvalidOperationException("LipSyncPlayer: AudioPlayer is not assigned.");
         }
 
+        _ = GetConfiguredSkeleton();
+
         ResetPlaybackMetrics();
         ResetPlaybackTiming();
         ClearPreparedPlayback();
@@ -478,7 +480,7 @@ public abstract partial class LipSyncPlayer : Node
 
         bool[] hasGlobalMapping = new bool[blendshapeNames.Count];
 
-        foreach (MeshInstance3D mesh in Meshes)
+        foreach (MeshInstance3D mesh in EnumerateDescendantMeshes(GetConfiguredSkeleton()))
         {
             if (mesh.Mesh is null)
             {
@@ -528,6 +530,33 @@ public abstract partial class LipSyncPlayer : Node
         if (missingNames is { Count: > 0 })
         {
             GD.PushWarning($"LipSyncPlayer: unmapped blendshapes ({missingNames.Count}): {string.Join(", ", missingNames)}");
+        }
+    }
+
+    private Skeleton3D GetConfiguredSkeleton()
+    {
+        Skeleton3D skeleton = Skeleton
+            ?? throw new InvalidOperationException("LipSyncPlayer: Skeleton is not assigned.");
+
+        return IsInstanceValid(skeleton)
+            ? skeleton
+            : throw new InvalidOperationException("LipSyncPlayer: configured Skeleton is no longer valid.");
+    }
+
+    private static IEnumerable<MeshInstance3D> EnumerateDescendantMeshes(Node root)
+    {
+        for (int childIndex = 0; childIndex < root.GetChildCount(); childIndex++)
+        {
+            Node child = root.GetChild(childIndex);
+            if (child is MeshInstance3D mesh)
+            {
+                yield return mesh;
+            }
+
+            foreach (MeshInstance3D descendant in EnumerateDescendantMeshes(child))
+            {
+                yield return descendant;
+            }
         }
     }
 

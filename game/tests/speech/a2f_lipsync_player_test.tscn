@@ -28,13 +28,13 @@ size = 2.0
 near = 0.01
 far = 100.0
 
-[node name="LipSyncPlayer" type="Node" parent="." index="5" unique_id=2145656943 node_paths=PackedStringArray("Meshes", "AudioPlayer")]
+[node name="LipSyncPlayer" type="Node" parent="." index="5" unique_id=2145656943 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
 script = ExtResource("2_hm21w")
 InputStrength = 0.6
 ConstantNoise = true
 EyeRotationToBlendshapeScale = 0.15
 EyeRotationSmoothingFactor = 0.15000000000000002
-Meshes = [NodePath("../Subject/Female/Female/GeneralSkeleton/Female_body"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyebrow006"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_eyelashes01"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_high-poly"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_tongue01"), NodePath("../Subject/Female/Female/GeneralSkeleton/Female_teeth_shape01")]
+Skeleton = NodePath("../Subject/Female/Female/GeneralSkeleton")
 AudioPlayer = NodePath("../Subject/Female/Female/GeneralSkeleton/HeadBone/AudioStreamPlayer3D")
 LoopPlayback = true
 metadata/_custom_type_script = "uid://cjjllyn8qs4nk"

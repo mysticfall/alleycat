@@ -22,16 +22,6 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private const string OpenAITranscriberTypeName = "AlleyCat.Speech.Transcription.OpenAITranscriber";
     private const string PlayerVoiceTypeName = "AlleyCat.Body.Voice.PlayerVoice";
 
-    private static readonly string[] _expectedAllyLipSyncMeshPaths =
-    [
-        "../../../Female_body",
-        "../../../Female_eyebrow006",
-        "../../../Female_eyelashes01",
-        "../../../Female_high-poly",
-        "../../../Female_teeth_shape01",
-        "../../../Female_tongue01",
-    ];
-
     /// <summary>
     /// Voice and mind components live with the reference-female player/NPC character scenes.
     /// </summary>
@@ -108,10 +98,8 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.DoesNotContain("AlleyVoice", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("../../../Female/Female/GeneralSkeleton", sceneText, StringComparison.Ordinal);
 
-        foreach (string meshPath in _expectedAllyLipSyncMeshPaths)
-        {
-            Assert.Contains($"NodePath(\"{meshPath}\")", sceneText, StringComparison.Ordinal);
-        }
+        Assert.Contains("Skeleton = NodePath(\"../../..\")", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Meshes = [NodePath", sceneText, StringComparison.Ordinal);
 
         Node ally = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate();
         try
@@ -134,7 +122,9 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Equal(0.6f, GetPropertyValue<float>(lipSyncPlayer, "InputStrength"), 4);
             Assert.True(GetPropertyValue<bool>(lipSyncPlayer, "ConstantNoise"));
             Assert.Equal(0.15f, GetPropertyValue<float>(lipSyncPlayer, "EyeRotationToBlendshapeScale"), 4);
+            Assert.Same(ally.GetNode<Skeleton3D>("Female/GeneralSkeleton"), GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton"));
             Assert.Same(audioPlayer, GetPropertyValue<AudioStreamPlayer3D>(lipSyncPlayer, "AudioPlayer"));
+            Assert.Equal(new NodePath("../../.."), lipSyncPlayer.GetPathTo(GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton")));
             Assert.Equal(new NodePath("../AudioStreamPlayer3D"), lipSyncPlayer.GetPathTo(audioPlayer));
             AssertAllyMindPromptAndTools(mind);
         }
