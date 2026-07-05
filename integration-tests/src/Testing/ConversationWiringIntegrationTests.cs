@@ -12,30 +12,34 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.Testing;
 
 /// <summary>
-/// Regression coverage for the mirror-room conversation path after the scene switched to Ayana role scenes.
+/// Regression coverage for focused player-to-NPC conversation wiring.
 /// </summary>
 [Headless]
-public sealed class MirrorRoomConversationWiringIntegrationTests
+public sealed class ConversationWiringIntegrationTests
 {
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
+    private const string ReferenceFemalePlayerScenePath =
+        "res://assets/characters/templates/reference_female/reference_female_player.tscn";
+
+    private const string ReferenceFemaleNpcScenePath =
+        "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
 
     /// <summary>
-    /// The Ayana mirror room keeps the player transcriber, player voice, NPC listener, mind voice, prompt, and tools wired.
+    /// The focused reference-female fixture keeps the player transcriber, player voice, NPC listener, mind voice, prompt, and tools wired.
     /// </summary>
     [Fact]
-    public async Task AyanaMirrorRoom_TranscriptionSignal_ReachesNpcMindResponsePath()
+    public async Task ReferenceFemaleConversationFixture_TranscriptionSignal_ReachesNpcMindResponsePath()
     {
         SceneTree sceneTree = GetSceneTree();
-        Node mirrorRoom = LoadPackedScene(MirrorRoomScenePath).Instantiate();
+        Node fixture = CreateConversationFixture();
         RecordingClientProvider clientProvider = new();
 
-        AddTestNode(sceneTree, mirrorRoom);
+        AddTestNode(sceneTree, fixture);
         await WaitForFramesAsync(sceneTree, 16);
 
         try
         {
-            Node player = mirrorRoom.GetNode("Actors/Player");
-            Node npc = mirrorRoom.GetNode("Actors/Ayana");
+            Node player = fixture.GetNode("Actors/Player");
+            Node npc = fixture.GetNode("Actors/NPC");
             PlayerVoice playerVoice = FindSingleDescendant<PlayerVoice>(player);
             Transcriber transcriber = FindSingleDescendant<Transcriber>(player);
             AgenticMind mind = FindSingleDescendant<AgenticMind>(npc);
@@ -57,19 +61,42 @@ public sealed class MirrorRoomConversationWiringIntegrationTests
             mind.ClientProvider = clientProvider;
             mind.PostReplyListenCooldownSeconds = 0f;
 
-            _ = transcriber.EmitSignal(Transcriber.SignalName.TranscriptionCompleted, "  hello Ayana  ");
+            _ = transcriber.EmitSignal(Transcriber.SignalName.TranscriptionCompleted, "  hello reference friend  ");
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 1 }, maxFrames: 180);
 
             RecordingChatClient client = Assert.IsType<RecordingChatClient>(clientProvider.Client);
-            Assert.Contains("- Speech from player: hello Ayana", Assert.Single(client.Prompts), StringComparison.Ordinal);
+            Assert.Contains("- Speech from player: hello reference friend", Assert.Single(client.Prompts), StringComparison.Ordinal);
             Assert.Equal(["speak"], client.ToolNamesByRun);
         }
         finally
         {
-            mirrorRoom.QueueFree();
+            fixture.QueueFree();
             await WaitForFramesAsync(sceneTree, 2);
         }
+    }
+
+    private static Node CreateConversationFixture()
+    {
+        var fixture = new Node
+        {
+            Name = "ConversationWiringFixture",
+        };
+        var actors = new Node
+        {
+            Name = "Actors",
+        };
+
+        Node player = LoadPackedScene(ReferenceFemalePlayerScenePath).Instantiate();
+        player.Name = "Player";
+        Node npc = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate();
+        npc.Name = "NPC";
+
+        fixture.AddChild(actors);
+        actors.AddChild(player);
+        actors.AddChild(npc);
+
+        return fixture;
     }
 
     private static void AddTestNode(SceneTree sceneTree, Node node)

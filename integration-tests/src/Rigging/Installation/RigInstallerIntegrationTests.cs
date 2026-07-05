@@ -41,20 +41,14 @@ public sealed class RigInstallerIntegrationTests
     private const string PlayerScenePath =
         "res://assets/characters/reference/player.tscn";
 
-    private const string AyanaPlayerScenePath =
-        "res://assets/characters/ayana/ayana_player.tscn";
+    private const string ReferenceFemaleBodyColliderProfilePath =
+        "res://assets/characters/reference/female/body_collider_profile.tres";
 
-    private const string AyanaNpcScenePath =
-        "res://assets/characters/ayana/ayana_npc.tscn";
+    private const string ReferenceFemaleColliderWrapperPath =
+        "res://assets/characters/reference/female/reference_female_colliders.tscn";
 
-    private const string AyanaBodyColliderProfilePath =
-        "res://assets/characters/ayana/body_collider_profile.tres";
-
-    private const string AyanaColliderWrapperPath =
-        "res://assets/characters/ayana/ayana_colliders.tscn";
-
-    private const string AyanaColliderBlendPath =
-        "res://assets/characters/ayana/ayana.colliders.blend";
+    private const string ReferenceFemaleColliderBlendPath =
+        "res://assets/characters/reference/female/reference_female.colliders.blend";
 
     private const string PlayerVRIKTemplatePath =
         "res://assets/characters/templates/ik/vrik.tscn";
@@ -867,25 +861,25 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
-    /// Ayana role scenes configure character-specific collider profiles on the inherited root installer boundary.
+    /// Reference-female role installers configure the shared collider profile on the dynamic physical rig boundary.
     /// </summary>
     [Headless]
     [Fact]
-    public void AyanaRoleScenes_ExposeColliderProfileOnRootInstaller()
+    public void ReferenceFemaleRoleInstallers_ExposeColliderProfileOnDynamicPhysicalRigInstaller()
     {
-        AssertAyanaRoleSceneUsesRootColliderProfile(AyanaPlayerScenePath, "PlayerCharacterInstaller");
-        AssertAyanaRoleSceneUsesRootColliderProfile(AyanaNpcScenePath, "NPCCharacterInstaller");
+        AssertReferenceFemaleRoleInstallerUsesColliderProfile(PlayerInstallerPath);
+        AssertReferenceFemaleRoleInstallerUsesColliderProfile(NpcInstallerPath);
 
-        string profileText = ReadProjectFile(AyanaBodyColliderProfilePath);
-        string wrapperText = ReadProjectFile(AyanaColliderWrapperPath);
-        Assert.Contains(AyanaColliderWrapperPath, profileText, StringComparison.Ordinal);
-        Assert.Contains(AyanaColliderBlendPath, wrapperText, StringComparison.Ordinal);
+        string profileText = ReadProjectFile(ReferenceFemaleBodyColliderProfilePath);
+        string wrapperText = ReadProjectFile(ReferenceFemaleColliderWrapperPath);
+        Assert.Contains(ReferenceFemaleColliderWrapperPath, profileText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleColliderBlendPath, wrapperText, StringComparison.Ordinal);
 
-        BodyColliderProfile profile = ResourceLoader.Load<BodyColliderProfile>(AyanaBodyColliderProfilePath);
+        BodyColliderProfile profile = ResourceLoader.Load<BodyColliderProfile>(ReferenceFemaleBodyColliderProfilePath);
         Assert.NotNull(profile);
-        Assert.Equal(AyanaColliderWrapperPath, profile.SourceScene?.ResourcePath);
+        Assert.Equal(ReferenceFemaleColliderWrapperPath, profile.SourceScene?.ResourcePath);
         Assert.Contains(
-            AyanaColliderBlendPath,
+            ReferenceFemaleColliderBlendPath,
             ReadProjectFile(profile.SourceScene!.ResourcePath),
             StringComparison.Ordinal);
     }
@@ -1359,21 +1353,22 @@ public sealed class RigInstallerIntegrationTests
         }
     }
 
-    private static void AssertAyanaRoleSceneUsesRootColliderProfile(string scenePath, string installerName)
+    private static void AssertReferenceFemaleRoleInstallerUsesColliderProfile(string scenePath)
     {
         string sceneText = ReadProjectFile(scenePath);
 
-        Assert.Contains(AyanaBodyColliderProfilePath, sceneText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleBodyColliderProfilePath, sceneText, StringComparison.Ordinal);
         Assert.Contains("ColliderProfile = ExtResource", sceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("DynamicPhysicalRigInstaller", sceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("assets/characters/reference/female/body_collider_profile.tres", sceneText, StringComparison.Ordinal);
 
-        using Node scene = LoadPackedScene(scenePath).Instantiate();
-        Node installer = scene.GetNode(installerName);
+        using Node installer = LoadPackedScene(scenePath).Instantiate();
+        Node dynamicPhysicalRigInstaller = installer.GetNode("DynamicPhysicalRigInstaller");
         object? profile = GetPropertyValue(installer, nameof(RigRoleTemplateSceneInstaller.ColliderProfile));
+        Assert.Null(profile);
+
+        profile = GetPropertyValue(dynamicPhysicalRigInstaller, nameof(DynamicPhysicalRigTemplateInstaller.ColliderProfile));
         BodyColliderProfile colliderProfile = Assert.IsType<BodyColliderProfile>(profile);
-        Assert.Equal(AyanaBodyColliderProfilePath, colliderProfile.ResourcePath);
-        Assert.Equal(AyanaColliderWrapperPath, colliderProfile.SourceScene?.ResourcePath);
+        Assert.Equal(ReferenceFemaleBodyColliderProfilePath, colliderProfile.ResourcePath);
+        Assert.Equal(ReferenceFemaleColliderWrapperPath, colliderProfile.SourceScene?.ResourcePath);
     }
 
     private static bool HasGodotProperty(Node node, string propertyName)

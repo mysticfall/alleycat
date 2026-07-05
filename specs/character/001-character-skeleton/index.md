@@ -252,7 +252,7 @@ template contents without requiring generators to know internal node placement.
 - @game/assets/characters/templates/animation/
 - @game/assets/characters/reference/player.tscn
 - @game/assets/characters/reference/ally.tscn
-- @game/assets/characters/ayana/body_collider_profile.tres
+- @game/assets/characters/reference/female/body_collider_profile.tres
 - @game/assets/characters/reference/female/reference_female.blend
 - @game/assets/characters/reference/female/animations/
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)

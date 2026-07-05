@@ -16,7 +16,6 @@ public sealed class EyesBlendTreeIntegrationTests
     private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string ReferencePlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string ReferenceNpcScenePath = "res://assets/characters/reference/ally.tscn";
-    private const string AyanaNpcScenePath = "res://assets/characters/ayana/ayana_npc.tscn";
     private const string EyesPhotoboothScenePath = "res://tests/body/eyes/eyes_visual_test.tscn";
     private const string HorizontalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_right_left.tres";
     private const string VerticalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_up_down.tres";
@@ -126,14 +125,14 @@ public sealed class EyesBlendTreeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies generated-character runtime installation derives eye filters from the character's imported tracks.
+    /// Verifies reference-female runtime installation derives eye filters from the character's imported tracks.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task GeneratedCharacterNpcScene_RuntimeInstall_UsesImportedEyeTrackFilters()
+    public async Task ReferenceFemaleNpcScene_RuntimeInstall_UsesImportedEyeTrackFilters()
     {
         SceneTree sceneTree = GetSceneTree();
-        PackedScene scene = LoadPackedScene(AyanaNpcScenePath);
+        PackedScene scene = LoadPackedScene(ReferenceNpcScenePath);
         Node root = scene.Instantiate();
 
         try
@@ -149,15 +148,18 @@ public sealed class EyesBlendTreeIntegrationTests
             AssertEyeBlendFiltersExactly(
                 treeRoot,
                 EyesAnimationTreePaths.HorizontalLookBlendNode,
-                GetAnimationTrackPaths(player, EyesAnimationTreePaths.HorizontalLookAnimationName));
+                GetAnimationTrackPaths(player, EyesAnimationTreePaths.HorizontalLookAnimationName),
+                assertNoReferenceFemaleFilter: false);
             AssertEyeBlendFiltersExactly(
                 treeRoot,
                 EyesAnimationTreePaths.VerticalLookBlendNode,
-                GetAnimationTrackPaths(player, EyesAnimationTreePaths.VerticalLookAnimationName));
+                GetAnimationTrackPaths(player, EyesAnimationTreePaths.VerticalLookAnimationName),
+                assertNoReferenceFemaleFilter: false);
             AssertEyeBlendFiltersExactly(
                 treeRoot,
                 EyesAnimationTreePaths.BlinkOneShotNode,
-                GetAnimationTrackPaths(player, EyesAnimationTreePaths.BlinkAnimationName));
+                GetAnimationTrackPaths(player, EyesAnimationTreePaths.BlinkAnimationName),
+                assertNoReferenceFemaleFilter: false);
         }
         finally
         {
@@ -563,7 +565,7 @@ public sealed class EyesBlendTreeIntegrationTests
         {
             Assert.False(
                 node.IsPathFiltered(new NodePath("GeneralSkeleton/Female_body:eyeBlinkLeft")),
-                $"Expected generated-character {nodeName} filters not to retain reference-female paths.");
+                $"Expected runtime-installed {nodeName} filters not to retain unrelated reference-female paths.");
         }
     }
 
