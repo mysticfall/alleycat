@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://cnc3kfkhjn7qf" path="res://src/Rigging/Installation/RigRoleTemplateSceneInstaller.cs" id="1_role"]
 [ext_resource type="PackedScene" uid="uid://bibq37gjbxvhn" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="2_template"]
 [ext_resource type="Script" uid="uid://31cfhn1u2aw1" path="res://src/Rigging/Physics/BodyPartsInstaller.cs" id="3_body"]
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="3_qfiv1"]
 [ext_resource type="Script" uid="uid://btv3tfkqsrnpy" path="res://src/Rigging/Physics/DynamicPhysicalRigTemplateInstaller.cs" id="4_rig"]
 [ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="5_profile"]
 [ext_resource type="Script" uid="uid://b1tn7xw1iaug7" path="res://src/Character/CharacterRuntimeSubsystemInstaller.cs" id="7_runtime"]
@@ -13,6 +14,7 @@
 [node name="NPCCharacterInstaller" type="Node" unique_id=532609475 node_paths=PackedStringArray("Installers")]
 script = ExtResource("1_role")
 Template = ExtResource("2_template")
+TemplateBaseline = ExtResource("3_qfiv1")
 Installers = [NodePath("TemplateRootSubtreesInstaller"), NodePath("TemplateSkeletonSubtreesInstaller"), NodePath("BodyPartsInstaller"), NodePath("DynamicPhysicalRigInstaller"), NodePath("ReferenceFemaleRuntimeSubsystemInstaller"), NodePath("NPCIKSubsystemInstaller")]
 AutoInstallOnReady = true
 metadata/_custom_type_script = "uid://cnc3kfkhjn7qf"
@@ -42,4 +44,5 @@ metadata/_custom_type_script = "uid://b6purqid0hate"
 
 [node name="TemplateSkeletonSubtreesInstaller" type="Node" parent="." unique_id=2006540934]
 script = ExtResource("10_skeleton")
+InstallMode = 3
 metadata/_custom_type_script = "uid://dfuyjv41fcmsi"

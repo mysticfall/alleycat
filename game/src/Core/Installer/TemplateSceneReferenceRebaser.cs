@@ -170,12 +170,87 @@ public static class TemplateSceneReferenceRebaser
         }
 
         NodePath relativePath = templateRoot.GetPathTo(node);
-        Node? rebased = targetRoot.GetNodeOrNull(relativePath);
+        Node? rebased = targetRoot.GetNodeOrNull(relativePath)
+            ?? TryRebaseViaEquivalentTargetRootChild(targetRoot, relativePath);
         return rebased ?? (failOnUnresolved
             ? throw new InvalidOperationException(
                 $"Template installer '{SceneInstallationMetadata.GetEffectiveInstallerKey(installer)}' could not rebase "
                 + $"exported node reference '{relativePath}' for '{owner.GetPath()}' into target root '{targetRoot.GetPath()}'.")
             : node);
+    }
+
+    private static Node? TryRebaseViaEquivalentTargetRootChild(Node targetRoot, NodePath relativePath)
+    {
+        string pathText = relativePath.ToString();
+        int separatorIndex = pathText.IndexOf('/');
+        if (separatorIndex < 0)
+        {
+            return TryResolveUniqueSkeletonBearingRootChild(targetRoot);
+        }
+
+        if (separatorIndex == pathText.Length - 1)
+        {
+            return null;
+        }
+
+        var suffixPath = new NodePath(pathText[(separatorIndex + 1)..]);
+        Node? uniqueCandidate = null;
+        foreach (Node targetChild in targetRoot.GetChildren())
+        {
+            Node? candidate = targetChild.GetNodeOrNull(suffixPath);
+            if (candidate is null)
+            {
+                continue;
+            }
+
+            if (uniqueCandidate is not null)
+            {
+                return null;
+            }
+
+            uniqueCandidate = candidate;
+        }
+
+        return uniqueCandidate;
+    }
+
+    private static Node? TryResolveUniqueSkeletonBearingRootChild(Node targetRoot)
+    {
+        Node? uniqueCandidate = null;
+        foreach (Node targetChild in targetRoot.GetChildren())
+        {
+            if (!HasSkeletonDescendant(targetChild))
+            {
+                continue;
+            }
+
+            if (uniqueCandidate is not null)
+            {
+                return null;
+            }
+
+            uniqueCandidate = targetChild;
+        }
+
+        return uniqueCandidate;
+    }
+
+    private static bool HasSkeletonDescendant(Node node)
+    {
+        if (node is Skeleton3D)
+        {
+            return true;
+        }
+
+        foreach (Node child in node.GetChildren())
+        {
+            if (HasSkeletonDescendant(child))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Node? TryMapSourceNode(Node node, IReadOnlyDictionary<Node, Node>? sourceNodeMap)

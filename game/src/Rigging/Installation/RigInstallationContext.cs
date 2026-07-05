@@ -11,13 +11,15 @@ namespace AlleyCat.Rigging.Installation;
 /// <param name="templateRoot">The instantiated role template root.</param>
 /// <param name="targetSkeleton">The target character skeleton.</param>
 /// <param name="templateSkeleton">The template character skeleton.</param>
+/// <param name="templateBaselineRoot">The optional instantiated baseline scene used to ignore inherited template content.</param>
 public sealed class RigInstallationContext(
     Node targetRoot,
     string metadataNamespace,
     Node templateRoot,
     Skeleton3D targetSkeleton,
-    Skeleton3D templateSkeleton)
-    : TemplateSceneInstallationContext(targetRoot, metadataNamespace, templateRoot)
+    Skeleton3D templateSkeleton,
+    Node? templateBaselineRoot = null)
+    : TemplateSceneInstallationContext(targetRoot, metadataNamespace, templateRoot, templateBaselineRoot)
 {
     /// <summary>
     /// Gets the resolved skeleton for skeleton-bound rig modules.
@@ -39,7 +41,7 @@ public sealed class RigInstallationContext(
     /// Creates a copy of the context with a different target root while preserving template and skeleton dependencies.
     /// </summary>
     public override RigInstallationContext WithTargetRoot(Node targetRoot)
-        => new(targetRoot, MetadataNamespace, TemplateRoot, Skeleton, TemplateSkeleton);
+        => new(targetRoot, MetadataNamespace, TemplateRoot, Skeleton, TemplateSkeleton, TemplateBaselineRoot);
 
     /// <summary>
     /// Creates a copy of the context targeting the resolved skeleton.

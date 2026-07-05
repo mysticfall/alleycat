@@ -33,6 +33,8 @@ template contents without requiring generators to know internal node placement.
    propagate to installed scenes without C# source changes when they stay within authored installer boundaries.
 7. Player and NPC templates can replace scenes derived from them, including nested descendants under reused template
    subtrees.
+8. Generated characters receive shared role/runtime capabilities without a visible duplicate reference character or
+   duplicate skeleton from the imported base scene.
 
 ## Technical Requirements
 
@@ -69,48 +71,56 @@ template contents without requiring generators to know internal node placement.
 12. `game/assets/characters/templates/installers/npc_installer.tscn` has the template-aware installer type as its root
     and references `templates/reference_female/reference_female_npc.tscn` through exported `PackedScene Template`.
 13. `game/assets/characters/templates/installers/player_installer.tscn` has the template-aware installer type as its
-    root and references `templates/reference_female/reference_female_player.tscn` through exported
-    `PackedScene Template`.
-14. The role installer scene root is `RigRoleTemplateSceneInstaller` from `AlleyCat.Rigging.Installation`,
-     implements `ISceneInstaller.Install`, loads the configured template as a `PackedScene`, resolves target and
-     template character skeletons once, creates template
-     context, and delegates to child installers.
-15. The role installer scene root does not copy or install the visual/import root or any other template node itself.
-16. The role installer scene root does not own placement properties such as `InstallMode`, `SourcePath`, or
-    `TargetParentPath`.
-17. Role templates are authoritative exemplars for serialisable exported node references, component wiring, and reusable
-    player/NPC topology.
-18. Child installers copy explicit template subtrees from `context.TemplateRoot` into the target actual scene, such as
-     `game/assets/characters/reference/ally.tscn`, without requiring the actual scene root to be template-aware.
-19. Child installers own source subtree path, target parent path or resolver, selected-node versus
-     selected-node-children mode, binding, metadata, and idempotency.
-20. Child installers in role installer scenes do not expose `PackedScene Template` or equivalent template/resource
-     asset properties, including animation tree root overrides; they select and clone from the template provided by the
-     role installer scene root.
-21. Optional skeleton path configuration lives only on the role installer scene root; child installer scenes do not
-     serialise skeleton source paths, `TargetSkeleton`, or equivalent per-child skeleton target configuration.
-22. Child installers in role installer scenes do not expose or serialise per-child skeleton assignments; any child that
-     needs target or template skeletons consumes them from the role installer root's install context.
-23. `AlleyCat.Rigging.Installation` template subtree installers expose context-driven source/target placement only.
-    They do not expose standalone `PackedScene` fallback properties or manual skeleton assignment properties.
-24. Exported node references copied from role templates are rebased from the template root to the target scene root when
-     they refer to corresponding imported model, skeleton, or target-subtree nodes.
-25. Reused template subtrees are reconciled against the current template on reinstall: missing nested descendants are
-    added and template-authored references are refreshed, while installer-owned output and sibling installer output are
-    preserved.
-26. Rebase and validation logic may recognise required target boundaries, but reusable wiring remains authored in the
-     role templates rather than hard-coded in C#.
-27. Legacy metadata bindings may remain for migration or escape-hatch cases, but role templates are the preferred
-     primary wiring mechanism.
-28. The mirror room instances actual runtime player and ally scenes, not template-only sources.
-29. Integration and visual verification scenes use specialised minimal fixtures where appropriate; production role or
-      mirror-room scenes are used only when testing production assembly.
-30. Base template content remains role-neutral; player-only VRIK, pose, and hip reconciliation stay out of base/NPC
-      templates, and NPC `CharacterIK`/provider setup stays out of base/player templates.
-31. The player template owns player animation-tree root selection by overriding the inherited `AnimationTree` resource;
-      player subsystem installers bind that authored node/resource instead of loading hidden role resources from C#.
-32. Animation tree templates live under `game/assets/characters/templates/animation/`.
-33. `game/assets/characters/reference/female/animations/` remains source/reference animation-library data.
+     root and references `templates/reference_female/reference_female_player.tscn` through exported
+     `PackedScene Template`.
+14. When a role template extends or inherits from an imported base character scene, the role installer root configures
+     exported `PackedScene TemplateBaseline` to that imported base scene.
+15. `npc_installer.tscn` and `player_installer.tscn` set `TemplateBaseline` to
+     `res://assets/characters/reference/female/reference_female.blend`.
+16. Baseline-aware template subtree installers skip root or selected-node content that is equivalent to
+     `TemplateBaseline`; they copy only nodes/components explicitly added by the role template above the imported base.
+17. Baseline-aware installation prevents generated scenes from receiving copied reference-female base subtrees or
+     duplicate skeletons while preserving role-authored additions.
+18. The role installer scene root is `RigRoleTemplateSceneInstaller` from `AlleyCat.Rigging.Installation`,
+      implements `ISceneInstaller.Install`, loads the configured template as a `PackedScene`, resolves target and
+      template character skeletons once, creates template
+      context, and delegates to child installers.
+19. The role installer scene root does not copy or install the visual/import root or any other template node itself.
+20. The role installer scene root does not own placement properties such as `InstallMode`, `SourcePath`, or
+     `TargetParentPath`.
+21. Role templates are authoritative exemplars for serialisable exported node references, component wiring, and reusable
+     player/NPC topology.
+22. Child installers copy explicit template subtrees from `context.TemplateRoot` into the target actual scene, such as
+      `game/assets/characters/reference/ally.tscn`, without requiring the actual scene root to be template-aware.
+23. Child installers own source subtree path, target parent path or resolver, selected-node versus
+      selected-node-children mode, binding, metadata, and idempotency.
+24. Child installers in role installer scenes do not expose `PackedScene Template` or equivalent template/resource
+      asset properties, including animation tree root overrides; they select and clone from the template provided by the
+      role installer scene root.
+25. Optional skeleton path configuration lives only on the role installer scene root; child installer scenes do not
+      serialise skeleton source paths, `TargetSkeleton`, or equivalent per-child skeleton target configuration.
+26. Child installers in role installer scenes do not expose or serialise per-child skeleton assignments; any child that
+      needs target or template skeletons consumes them from the role installer root's install context.
+27. `AlleyCat.Rigging.Installation` template subtree installers expose context-driven source/target placement only.
+     They do not expose standalone `PackedScene` fallback properties or manual skeleton assignment properties.
+28. Exported node references copied from role templates are rebased from the template root to the target scene root when
+      they refer to corresponding imported model, skeleton, or target-subtree nodes.
+29. Reused template subtrees are reconciled against the current template on reinstall: missing nested descendants are
+     added and template-authored references are refreshed, while installer-owned output and sibling installer output are
+     preserved.
+30. Rebase and validation logic may recognise required target boundaries, but reusable wiring remains authored in the
+      role templates rather than hard-coded in C#.
+31. Legacy metadata bindings may remain for migration or escape-hatch cases, but role templates are the preferred
+      primary wiring mechanism.
+32. The mirror room instances actual runtime player and ally scenes, not template-only sources.
+33. Integration and visual verification scenes use specialised minimal fixtures where appropriate; production role or
+       mirror-room scenes are used only when testing production assembly.
+34. Base template content remains role-neutral; player-only VRIK, pose, and hip reconciliation stay out of base/NPC
+       templates, and NPC `CharacterIK`/provider setup stays out of base/player templates.
+35. The player template owns player animation-tree root selection by overriding the inherited `AnimationTree` resource;
+       player subsystem installers bind that authored node/resource instead of loading hidden role resources from C#.
+36. Animation tree templates live under `game/assets/characters/templates/animation/`.
+37. `game/assets/characters/reference/female/animations/` remains source/reference animation-library data.
 
 ## In Scope
 
@@ -126,6 +136,7 @@ template contents without requiring generators to know internal node placement.
 - Removal of obsolete wrapper scenes under `game/assets/characters/reference/female/`.
 - Separation between template-only reference female sources, role installer scenes, and actual runtime role scenes.
 - Template-authoritative exported node references, rebase, and validation for copied character wiring.
+- Baseline-aware role template installation for templates that inherit from imported base character scenes.
 - Reconciliation for reused template subtrees, including nested descendant installation and reference refresh.
 - Mirror-room and verification-scene consumption rules for actual scenes versus specialised fixtures.
 
@@ -152,6 +163,8 @@ template contents without requiring generators to know internal node placement.
     - Blank imported character scenes can be assembled through the matching role installer and template.
     - Template edits within authored installer boundaries propagate to installed role scenes without C# source changes.
     - Nested descendants added under reused player/NPC template subtrees are installed automatically.
+    - Generated characters receive role/runtime capabilities without a visible copied reference-female base character or
+        duplicate skeleton.
 
 2. Technical Requirements:
     - Canonical hierarchy references `SkeletonProfileHumanoid` with documented bone structure.
@@ -174,7 +187,13 @@ template contents without requiring generators to know internal node placement.
     - Actual role scene roots do not own `RigRoleTemplateSceneInstaller` directly and do not use active base-scene
         inheritance from template-only role sources.
     - `npc_installer.tscn` and `player_installer.tscn` use the template-aware role coordinator as their root and
-        reference the matching template-only role source through exported `PackedScene Template`.
+         reference the matching template-only role source through exported `PackedScene Template`.
+    - Role installer roots configure `TemplateBaseline` whenever the configured template extends or inherits from an
+        imported base character scene.
+    - `npc_installer.tscn` and `player_installer.tscn` serialise `TemplateBaseline` as
+        `res://assets/characters/reference/female/reference_female.blend`.
+    - Baseline-aware child installers skip baseline-equivalent root or selected-node content and copy only role-authored
+        nodes/components above the imported base.
     - Role installer scene roots implement `ISceneInstaller.Install`, load the configured template `PackedScene`,
         resolve target and template skeletons once, create template context, and delegate to child installers.
     - Role installer scene roots do not copy template nodes themselves and do not own install mode, source path, or
@@ -217,5 +236,6 @@ template contents without requiring generators to know internal node placement.
 - @game/assets/characters/templates/animation/
 - @game/assets/characters/reference/player.tscn
 - @game/assets/characters/reference/ally.tscn
+- @game/assets/characters/reference/female/reference_female.blend
 - @game/assets/characters/reference/female/animations/
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)

@@ -71,6 +71,11 @@ public static class TemplateSceneInstallation
         List<(Node Source, Node Candidate)> templateChildren = [];
         foreach (Node child in templateRoot.GetChildren())
         {
+            if (HasBaselineEquivalent(child, context))
+            {
+                continue;
+            }
+
             templateChildren.Add((child, DuplicateInstallCandidate(child)));
         }
 
@@ -99,10 +104,39 @@ public static class TemplateSceneInstallation
         List<(Node Source, Node Candidate)> selectedChildren = [];
         foreach (Node child in selectedNode.GetChildren())
         {
+            if (HasBaselineEquivalent(child, context))
+            {
+                continue;
+            }
+
             selectedChildren.Add((child, DuplicateInstallCandidate(child)));
         }
 
         InstallNodes(targetParent, selectedChildren, context, installer);
+    }
+
+    private static bool HasBaselineEquivalent(Node templateNode, TemplateSceneInstallationContext context)
+    {
+        Node? baselineRoot = context.TemplateBaselineRoot;
+        if (baselineRoot is null || !GodotObject.IsInstanceValid(baselineRoot))
+        {
+            return false;
+        }
+
+        NodePath relativePath = context.TemplateRoot.GetPathTo(templateNode);
+        Node? baselineNode = string.IsNullOrWhiteSpace(relativePath.ToString())
+            ? baselineRoot
+            : baselineRoot.GetNodeOrNull(relativePath);
+        return baselineNode is not null
+            && baselineNode.Name == templateNode.Name
+            && NodesHaveCompatibleTypes(templateNode, baselineNode);
+    }
+
+    private static bool NodesHaveCompatibleTypes(Node templateNode, Node baselineNode)
+    {
+        Type templateType = templateNode.GetType();
+        Type baselineType = baselineNode.GetType();
+        return templateType.IsAssignableFrom(baselineType) || baselineType.IsAssignableFrom(templateType);
     }
 
     private static Node ResolveSelectedSource(Node templateRoot, ISceneInstaller installer, NodePath? sourcePath)

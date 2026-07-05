@@ -71,6 +71,61 @@ public sealed class TemplateSceneInstallationIntegrationTests
     }
 
     /// <summary>
+    /// Template-root-children mode ignores root children already supplied by the configured baseline scene.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_TemplateRootChildren_WithBaseline_CopiesOnlyTemplateAddedChildren()
+    {
+        using var target = new Node { Name = "Target" };
+        using Node templateRoot = CreateBaselineDiffTemplateRoot();
+        using Node baselineRoot = CreateBaselineRoot();
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.TemplateRootChildren,
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.False(target.HasNode("ReferenceVisual"));
+        Assert.True(target.HasNode("RuntimeModule"));
+    }
+
+    /// <summary>
+    /// Selected-node-children mode ignores children already supplied by the corresponding baseline source node.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_SelectedNodeChildren_WithBaseline_CopiesOnlyTemplateAddedChildren()
+    {
+        using var target = new Node { Name = "Target" };
+        using Node templateRoot = CreateBaselineDiffTemplateRoot();
+        using Node baselineRoot = CreateBaselineRoot();
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            InstallMode = TemplateInstallMode.SelectedNodeChildren,
+            SourcePath = new NodePath("ReferenceVisual/Skeleton"),
+        };
+        var context = new TemplateSceneInstallationContext(
+            target,
+            SceneInstallationMetadata.DefaultNamespace,
+            templateRoot,
+            baselineRoot);
+
+        SceneInstallationResult result = installer.Install(context);
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        Assert.False(target.HasNode("BaselineAttachment"));
+        Assert.True(target.HasNode("TemplateAttachment"));
+    }
+
+    /// <summary>
     /// Repeated selected-subtree installation reuses same-name/type nodes and preserves sibling installer output.
     /// </summary>
     [Headless]
@@ -405,6 +460,25 @@ public sealed class TemplateSceneInstallationIntegrationTests
         var probe = new ReadyReferenceProbe { Name = "Probe", Target = reference };
         root.AddChild(probe);
         root.AddChild(reference);
+        return root;
+    }
+
+    private static Node CreateBaselineRoot()
+    {
+        var root = new Node { Name = "TemplateRoot" };
+        var visual = new Node3D { Name = "ReferenceVisual" };
+        var skeleton = new Skeleton3D { Name = "Skeleton" };
+        skeleton.AddChild(new Marker3D { Name = "BaselineAttachment" });
+        visual.AddChild(skeleton);
+        root.AddChild(visual);
+        return root;
+    }
+
+    private static Node CreateBaselineDiffTemplateRoot()
+    {
+        Node root = CreateBaselineRoot();
+        root.GetNode("ReferenceVisual/Skeleton").AddChild(new Marker3D { Name = "TemplateAttachment" });
+        root.AddChild(new Node3D { Name = "RuntimeModule" });
         return root;
     }
 

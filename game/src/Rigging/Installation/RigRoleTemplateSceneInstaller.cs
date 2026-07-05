@@ -26,6 +26,16 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
     }
 
     /// <summary>
+    /// Gets or sets the baseline scene inherited by the role template. When assigned, template subtree installers copy
+    /// only nodes that the role template adds above this baseline, preventing full reference-character duplication.
+    /// </summary>
+    [Export]
+    public PackedScene? TemplateBaseline
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Gets or sets an optional path to the skeleton inside the target character root.
     /// </summary>
     [Export]
@@ -101,6 +111,7 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
         Skeleton3D targetSkeleton;
         Skeleton3D templateSkeleton;
         Node ownedTemplateRoot = Template.Instantiate();
+        Node? ownedTemplateBaselineRoot = TemplateBaseline?.Instantiate();
         Node templateRoot = ownedTemplateRoot;
         try
         {
@@ -109,6 +120,7 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
         }
         catch (InvalidOperationException ex)
         {
+            ownedTemplateBaselineRoot?.Free();
             ownedTemplateRoot.Free();
             return SceneInstallationResult.Failed(ex.Message);
         }
@@ -118,7 +130,8 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
             context.MetadataNamespace,
             templateRoot,
             targetSkeleton,
-            templateSkeleton);
+            templateSkeleton,
+            ownedTemplateBaselineRoot);
 
         try
         {
@@ -126,6 +139,7 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
         }
         finally
         {
+            ownedTemplateBaselineRoot?.Free();
             ownedTemplateRoot.Free();
         }
     }
