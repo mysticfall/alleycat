@@ -57,6 +57,23 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.Same(fixture.TargetLeftHand, character.RequireHand(LimbSide.Left));
         Assert.Same(fixture.TargetRightHand, character.RequireHand(LimbSide.Right));
         Assert.Same(fixture.TargetLocomotion, targetRoot.RequireComponent<ILocomotion>());
+        AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
+        Assert.NotSame(fixture.OriginalAnimationTreeRoot, fixture.TargetAnimationTree!.TreeRoot);
+    }
+
+    /// <summary>
+    /// Generated character installation replaces template reference-female eye filters with imported track targets.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_GeneratedCharacterEyeTracks_RebasesAnimationTreeEyeFilters()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+        AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
     }
 
     /// <summary>
@@ -166,6 +183,41 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         }
     }
 
+    private static void AssertGeneratedEyeFilters(AnimationTree animationTree)
+    {
+        AnimationNodeBlendTree root = Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false);
+        AssertOnlyFilters(
+            root,
+            EyesAnimationTreePaths.BlinkOneShotNode,
+            new NodePath("Face:eyeBlinkLeft"),
+            new NodePath("Face:eyeBlinkRight"));
+        AssertOnlyFilters(
+            root,
+            EyesAnimationTreePaths.HorizontalLookBlendNode,
+            new NodePath("Face:eyeLookInLeft"));
+        AssertOnlyFilters(
+            root,
+            EyesAnimationTreePaths.VerticalLookBlendNode,
+            new NodePath("Face:eyeLookUpLeft"));
+    }
+
+    private static void AssertOnlyFilters(AnimationNodeBlendTree root, string nodeName, params NodePath[] expectedFilters)
+    {
+        AnimationNode node = Assert.IsType<AnimationNode>(root.GetNode(nodeName), exactMatch: false);
+        Assert.True(node.FilterEnabled);
+
+        Godot.Collections.Array actualFilters = node.Get("filters").AsGodotArray();
+        Assert.Equal(expectedFilters.Length, actualFilters.Count);
+        foreach (NodePath filterPath in expectedFilters)
+        {
+            Assert.True(node.IsPathFiltered(filterPath), $"Expected {nodeName} to filter {filterPath}.");
+        }
+
+        Assert.False(
+            node.IsPathFiltered(new NodePath("GeneralSkeleton/Female_body:eyeBlinkLeft")),
+            $"Expected {nodeName} to remove stale reference-female filters.");
+    }
+
     private sealed class RuntimeInstallFixture : IDisposable
     {
         private readonly Node3D _templateRoot;
@@ -193,6 +245,16 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         }
 
         public CharacterLocomotion? TargetLocomotion
+        {
+            get; private init;
+        }
+
+        public AnimationTree? TargetAnimationTree
+        {
+            get; private init;
+        }
+
+        public AnimationNodeBlendTree? OriginalAnimationTreeRoot
         {
             get; private init;
         }
@@ -236,6 +298,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                 Name = "AnimationTree",
                 TreeRoot = CreateHandPoseBlendTree(),
             };
+            var originalAnimationTreeRoot = (AnimationNodeBlendTree)animationTree.TreeRoot;
             targetRoot.AddChild(animationTree);
 
             var animationPlayer = new AnimationPlayer { Name = "AnimationPlayer" };
@@ -289,6 +352,8 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                     templateSkeleton,
                     faceMesh)
                 {
+                    TargetAnimationTree = animationTree,
+                    OriginalAnimationTreeRoot = originalAnimationTreeRoot,
                     TargetLocomotion = targetCapabilities.Locomotion,
                     TargetEyes = targetCapabilities.Eyes,
                     TargetVoice = targetCapabilities.Voice,
@@ -355,6 +420,15 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         private static AnimationNodeBlendTree CreateHandPoseBlendTree()
         {
             var tree = new AnimationNodeBlendTree();
+            var blink = new AnimationNodeOneShot();
+            var horizontal = new AnimationNodeBlend2();
+            var vertical = new AnimationNodeBlend2();
+            blink.SetFilterPath(new NodePath("GeneralSkeleton/Female_body:eyeBlinkLeft"), true);
+            horizontal.SetFilterPath(new NodePath("GeneralSkeleton/Female_body:eyeLookInLeft"), true);
+            vertical.SetFilterPath(new NodePath("GeneralSkeleton/Female_body:eyeLookUpLeft"), true);
+            tree.AddNode(EyesAnimationTreePaths.BlinkOneShotNode, blink);
+            tree.AddNode(EyesAnimationTreePaths.HorizontalLookBlendNode, horizontal);
+            tree.AddNode(EyesAnimationTreePaths.VerticalLookBlendNode, vertical);
             tree.AddNode(HandPoseAnimationTreePaths.LeftHandPoseNode, new AnimationNodeAnimation());
             tree.AddNode(HandPoseAnimationTreePaths.RightHandPoseNode, new AnimationNodeAnimation());
             tree.AddNode(HandPoseAnimationTreePaths.LeftHandBlendNode, new AnimationNodeBlend2());

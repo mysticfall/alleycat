@@ -825,7 +825,7 @@ public sealed partial class CharacterLocomotionIntegrationTests
                 AnimationTree animationTree = animationTrees.FirstOrDefault(tree => GetTreeRootUID(tree) == expectedTree.TreeRootUID)
                     ?? throw new Xunit.Sdk.XunitException(
                         $"Expected an AnimationTree with root UID {expectedTree.TreeRootUID} in {scenePath}. Found: "
-                        + string.Join(", ", animationTrees.Select(tree => $"{tree.GetPath()}={GetTreeRootUID(tree)} path={tree.TreeRoot?.ResourcePath}")));
+                        + string.Join(", ", animationTrees.Select(tree => $"{tree.GetPath()}={GetTreeRootUID(tree)} path={GetAuthoredTreeRootResourcePath(tree)}")));
 
                 Assert.True(animationTree.Active, $"Expected {scenePath} AnimationTree {expectedTree.TreeRootUID} to be active.");
                 Assert.NotEqual(Variant.Type.Nil, animationTree.Get("parameters/States/Walking/blend_position").VariantType);
@@ -902,10 +902,21 @@ public sealed partial class CharacterLocomotionIntegrationTests
 
     private static string GetTreeRootUID(AnimationTree animationTree)
     {
-        AnimationRootNode treeRoot = animationTree.TreeRoot
-            ?? throw new Xunit.Sdk.XunitException($"AnimationTree {animationTree.GetPath()} has no tree root.");
-        long resourceUID = ResourceLoader.GetResourceUid(treeRoot.ResourcePath);
+        if (animationTree.TreeRoot is null)
+        {
+            throw new Xunit.Sdk.XunitException($"AnimationTree {animationTree.GetPath()} has no tree root.");
+        }
+
+        long resourceUID = ResourceLoader.GetResourceUid(GetAuthoredTreeRootResourcePath(animationTree));
         return ResourceUid.IdToText(resourceUID);
+    }
+
+    private static string GetAuthoredTreeRootResourcePath(AnimationTree animationTree)
+    {
+        string? resourcePath = animationTree.TreeRoot?.ResourcePath;
+        return !string.IsNullOrEmpty(resourcePath)
+            ? resourcePath
+            : animationTree.GetMeta("authored_tree_root_resource_path").AsString();
     }
 
     private static void AssertStateTransition(AnimationNodeStateMachine stateMachine, string from, string to)

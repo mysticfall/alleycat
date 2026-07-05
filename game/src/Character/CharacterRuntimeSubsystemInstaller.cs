@@ -15,6 +15,7 @@ namespace AlleyCat.Character;
 public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 {
     private static readonly StringName _eyesLibraryName = new("eyes");
+    private static readonly StringName _authoredTreeRootResourcePathMeta = new("authored_tree_root_resource_path");
     private static readonly StringName[] _requiredEyeAnimationNames =
     [
         new(EyesAnimationTreePaths.BlinkAnimationName),
@@ -64,7 +65,8 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
                 ?? throw new InvalidOperationException("Character runtime subsystem installer requires an authored AnimationPlayer copied from the role template.");
 
             RebaseAnimationMixerRoots(animationTree, animationPlayer, context.Skeleton);
-            ValidateEyeAnimationLibrary(animationPlayer);
+            EyeAnimationTreeFilterTargets eyeFilterTargets = ValidateEyeAnimationLibrary(animationPlayer);
+            ConfigureEyeAnimationTreeFilters(animationTree, eyeFilterTargets);
             ValidateEyes(targetCharacter.Eyes);
             ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
             ValidateLocomotion(targetCharacter.Locomotion, context.TargetRoot);
@@ -88,13 +90,17 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         animationPlayer.RootNode = animationPlayer.GetPathTo(modelRoot);
     }
 
-    private static void ValidateEyeAnimationLibrary(AnimationPlayer animationPlayer)
+    private static EyeAnimationTreeFilterTargets ValidateEyeAnimationLibrary(AnimationPlayer animationPlayer)
     {
         if (!animationPlayer.HasAnimationLibrary(_eyesLibraryName))
         {
             throw new InvalidOperationException(
                 $"Character runtime subsystem installer requires imported AnimationLibrary '{_eyesLibraryName}' on '{animationPlayer.GetPath()}'. Reimport the character source with the eye animation import script configured.");
         }
+
+        IReadOnlyList<NodePath>? blinkFilterPaths = null;
+        IReadOnlyList<NodePath>? horizontalFilterPaths = null;
+        IReadOnlyList<NodePath>? verticalFilterPaths = null;
 
         foreach (StringName animationName in _requiredEyeAnimationNames)
         {
@@ -105,18 +111,42 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             }
 
             Animation animation = animationPlayer.GetAnimation(animationName);
-            HashSet<string> blendShapeNames = ValidateBlendShapeTrackTargets(animationPlayer, animationName, animation);
+            EyeAnimationTrackTargets trackTargets = ValidateBlendShapeTrackTargets(animationPlayer, animationName, animation);
+            HashSet<string> blendShapeNames = trackTargets.BlendShapeNames;
             ValidateRequiredEyeAnimationTracks(animationName, blendShapeNames);
+
+            string animationNameString = animationName.ToString();
+            switch (animationNameString)
+            {
+                case EyesAnimationTreePaths.BlinkAnimationName:
+                    blinkFilterPaths = trackTargets.FilterPaths;
+                    break;
+                case EyesAnimationTreePaths.HorizontalLookAnimationName:
+                    horizontalFilterPaths = trackTargets.FilterPaths;
+                    break;
+                case EyesAnimationTreePaths.VerticalLookAnimationName:
+                    verticalFilterPaths = trackTargets.FilterPaths;
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Character runtime subsystem installer does not recognise required eye animation '{animationName}'.");
+            }
         }
+
+        return new EyeAnimationTreeFilterTargets(
+            blinkFilterPaths ?? throw new InvalidOperationException("Character runtime subsystem installer could not resolve blink eye filter targets."),
+            horizontalFilterPaths ?? throw new InvalidOperationException("Character runtime subsystem installer could not resolve horizontal eye filter targets."),
+            verticalFilterPaths ?? throw new InvalidOperationException("Character runtime subsystem installer could not resolve vertical eye filter targets."));
     }
 
-    private static HashSet<string> ValidateBlendShapeTrackTargets(AnimationPlayer animationPlayer, StringName animationName, Animation animation)
+    private static EyeAnimationTrackTargets ValidateBlendShapeTrackTargets(AnimationPlayer animationPlayer, StringName animationName, Animation animation)
     {
         Node rootNode = animationPlayer.GetNodeOrNull(animationPlayer.RootNode)
             ?? throw new InvalidOperationException(
                 $"Character runtime subsystem installer could not resolve AnimationPlayer root '{animationPlayer.RootNode}' for '{animationPlayer.GetPath()}'.");
 
         HashSet<string> blendShapeNames = new(StringComparer.Ordinal);
+        var filterPaths = new List<NodePath>(animation.GetTrackCount());
 
         for (int trackIndex = 0; trackIndex < animation.GetTrackCount(); trackIndex++)
         {
@@ -147,12 +177,139 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             }
 
             _ = blendShapeNames.Add(blendShapeName);
+            filterPaths.Add(animation.TrackGetPath(trackIndex));
         }
 
         return blendShapeNames.Count == 0
             ? throw new InvalidOperationException(
                 $"Character runtime subsystem installer requires imported eye animation '{animationName}' to contain at least one blend-shape track.")
-            : blendShapeNames;
+            : new EyeAnimationTrackTargets(blendShapeNames, filterPaths);
+    }
+
+    private static void ConfigureEyeAnimationTreeFilters(AnimationTree animationTree, EyeAnimationTreeFilterTargets filterTargets)
+    {
+        AnimationNodeBlendTree treeRoot = animationTree.TreeRoot as AnimationNodeBlendTree
+            ?? throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires '{animationTree.GetPath()}' to use an AnimationNodeBlendTree root for eye filter setup.");
+        string authoredTreeRootResourcePath = treeRoot.ResourcePath;
+        if (!string.IsNullOrEmpty(authoredTreeRootResourcePath))
+        {
+            animationTree.SetMeta(_authoredTreeRootResourcePathMeta, authoredTreeRootResourcePath);
+        }
+
+        AnimationNodeBlendTree instanceTreeRoot = RequiresPerCharacterEyeFilterInstance(treeRoot, filterTargets)
+            ? treeRoot.Duplicate(true) as AnimationNodeBlendTree
+                ?? throw new InvalidOperationException(
+                    $"Character runtime subsystem installer could not duplicate AnimationTree root for per-character eye filter setup on '{animationTree.GetPath()}'.")
+            : treeRoot;
+
+        if (!ReferenceEquals(instanceTreeRoot, treeRoot))
+        {
+            animationTree.TreeRoot = instanceTreeRoot;
+        }
+
+        ConfigureFilteredNode<AnimationNodeBlend2>(
+            instanceTreeRoot,
+            EyesAnimationTreePaths.HorizontalLookBlendNode,
+            filterTargets.HorizontalLookFilterPaths);
+        ConfigureFilteredNode<AnimationNodeBlend2>(
+            instanceTreeRoot,
+            EyesAnimationTreePaths.VerticalLookBlendNode,
+            filterTargets.VerticalLookFilterPaths);
+        ConfigureFilteredNode<AnimationNodeOneShot>(
+            instanceTreeRoot,
+            EyesAnimationTreePaths.BlinkOneShotNode,
+            filterTargets.BlinkFilterPaths);
+    }
+
+    private static bool RequiresPerCharacterEyeFilterInstance(
+        AnimationNodeBlendTree treeRoot,
+        EyeAnimationTreeFilterTargets filterTargets)
+        => !HasRequiredFilters<AnimationNodeBlend2>(
+                treeRoot,
+                EyesAnimationTreePaths.HorizontalLookBlendNode,
+                filterTargets.HorizontalLookFilterPaths)
+            || !HasRequiredFilters<AnimationNodeBlend2>(
+                treeRoot,
+                EyesAnimationTreePaths.VerticalLookBlendNode,
+                filterTargets.VerticalLookFilterPaths)
+            || !HasRequiredFilters<AnimationNodeOneShot>(
+                treeRoot,
+                EyesAnimationTreePaths.BlinkOneShotNode,
+                filterTargets.BlinkFilterPaths);
+
+    private static bool HasRequiredFilters<T>(AnimationNodeBlendTree treeRoot, string nodeName, IReadOnlyList<NodePath> expectedFilterPaths)
+        where T : AnimationNode
+    {
+        T node = treeRoot.GetNode(nodeName) as T
+            ?? throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires AnimationTree eye node '{nodeName}' to be {typeof(T).Name}.");
+
+        if (!node.FilterEnabled)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < expectedFilterPaths.Count; index++)
+        {
+            if (!node.IsPathFiltered(expectedFilterPaths[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void ConfigureFilteredNode<T>(AnimationNodeBlendTree treeRoot, string nodeName, IReadOnlyList<NodePath> filterPaths)
+        where T : AnimationNode
+    {
+        T node = treeRoot.GetNode(nodeName) as T
+            ?? throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires AnimationTree eye node '{nodeName}' to be {typeof(T).Name}.");
+
+        ClearExistingFilters(node);
+        node.FilterEnabled = true;
+
+        for (int index = 0; index < filterPaths.Count; index++)
+        {
+            node.SetFilterPath(filterPaths[index], true);
+        }
+
+        ValidateConfiguredFilters(nodeName, node, filterPaths);
+    }
+
+    private static void ClearExistingFilters(AnimationNode node)
+    {
+        Godot.Collections.Array filters = node.Get("filters").AsGodotArray();
+        var existingFilters = new NodePath[filters.Count];
+        for (int index = 0; index < filters.Count; index++)
+        {
+            existingFilters[index] = filters[index].AsNodePath();
+        }
+
+        for (int index = 0; index < existingFilters.Length; index++)
+        {
+            node.SetFilterPath(existingFilters[index], false);
+        }
+    }
+
+    private static void ValidateConfiguredFilters(string nodeName, AnimationNode node, IReadOnlyList<NodePath> expectedFilterPaths)
+    {
+        if (!node.FilterEnabled)
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires AnimationTree eye node '{nodeName}' to have filtering enabled.");
+        }
+
+        for (int index = 0; index < expectedFilterPaths.Count; index++)
+        {
+            if (!node.IsPathFiltered(expectedFilterPaths[index]))
+            {
+                throw new InvalidOperationException(
+                    $"Character runtime subsystem installer failed to configure AnimationTree eye node '{nodeName}' filter '{expectedFilterPaths[index]}'.");
+            }
+        }
     }
 
     private static void ValidateRequiredEyeAnimationTracks(StringName animationName, IReadOnlySet<string> blendShapeNames)
@@ -319,4 +476,13 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
                 $"Character runtime subsystem installer requires template-authored '{propertyName}' on '{owner.GetPath()}'.");
         }
     }
+
+    private sealed record EyeAnimationTrackTargets(
+        HashSet<string> BlendShapeNames,
+        IReadOnlyList<NodePath> FilterPaths);
+
+    private sealed record EyeAnimationTreeFilterTargets(
+        IReadOnlyList<NodePath> BlinkFilterPaths,
+        IReadOnlyList<NodePath> HorizontalLookFilterPaths,
+        IReadOnlyList<NodePath> VerticalLookFilterPaths);
 }

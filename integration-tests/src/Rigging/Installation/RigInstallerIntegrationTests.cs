@@ -1057,7 +1057,7 @@ public sealed class RigInstallerIntegrationTests
         AnimationTree animationTree,
         bool expectPlaybackCurrentState)
     {
-        Assert.Equal("res://assets/characters/templates/animation/animation_tree_root_player.tres", animationTree.TreeRoot.ResourcePath);
+        Assert.Equal("res://assets/characters/templates/animation/animation_tree_root_player.tres", GetAuthoredTreeRootResourcePath(animationTree));
         AnimationNodeBlendTree root = Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false);
         Assert.NotNull(root.GetNode("LeftHandBlend"));
         Assert.NotNull(root.GetNode("RightHandBlend"));
@@ -1080,6 +1080,14 @@ public sealed class RigInstallerIntegrationTests
         Node locomotion = playerRoot.GetNode("Locomotion");
         Assert.Contains(typeof(CharacterLocomotion).FullName, GetTypeHierarchyNames(locomotion.GetType()), StringComparer.Ordinal);
         Assert.Equal("StandingCrouching", GetPropertyValue(locomotion, nameof(CharacterLocomotion.IdleAnimationStateName))?.ToString());
+    }
+
+    private static string GetAuthoredTreeRootResourcePath(AnimationTree animationTree)
+    {
+        string resourcePath = animationTree.TreeRoot.ResourcePath;
+        return !string.IsNullOrEmpty(resourcePath)
+            ? resourcePath
+            : animationTree.GetMeta("authored_tree_root_resource_path").AsString();
     }
 
     private static void EnsureReferenceFemaleInventoryInstalled(Node character)
