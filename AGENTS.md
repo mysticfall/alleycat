@@ -54,17 +54,10 @@ README.md                         # Repository overview and developer onboarding
 - For pre-handoff verification, also run `dotnet format --verify-no-changes AlleyCat.sln` and
   `dotnet build AlleyCat.sln -warnaserror`.
 
-## Integration Test Execution Rules
+## Integration Testing
 
-- Coder agents should run only targeted integration tests for the affected component or behaviour, using the narrowest
-  suitable `--test-class` or `--test-method` filter.
-- Only reviewer agents should run the full integration suite as the final handoff gate.
-- Integration test runs must launch Godot with `--xr-mode off` to prevent OpenXR warning dialogs from blocking unattended
-  runs. The integration test framework applies this to its Godot subprocesses automatically; direct `godot-mono` commands
-  must pass it explicitly.
-- Use `--headless` only when the selected test is known to be compatible with headless execution, for example through its
-  spec, test contract, or `[Headless]` annotation. Do not use headless mode as a default substitute for windowed
-  integration validation.
+- Load the `godot-integration-testing` skill before authoring, running, triaging, or reporting integration tests.
+- Keep execution and fixture-authoring rules in that dedicated skill so this global entrypoint stays lean.
 
 ## Language
 

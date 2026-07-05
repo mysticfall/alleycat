@@ -15,7 +15,6 @@ public sealed partial class CharacterLocomotionIntegrationTests
     private const float Tolerance = 1e-4f;
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string PlayerAnimationTreeRootUID = "uid://bge48ng374i85";
     private const string NpcAnimationTreeRootUID = "uid://c485owf86etdu";
 
@@ -174,12 +173,6 @@ public sealed partial class CharacterLocomotionIntegrationTests
             PlayerScenePath,
             [new ExpectedAnimationTree(PlayerAnimationTreeRootUID, "StandingCrouching")]);
 
-        await AssertReferenceSceneAnimationTreesAsync(
-            MirrorRoomScenePath,
-            [
-                new ExpectedAnimationTree(PlayerAnimationTreeRootUID, "StandingCrouching"),
-                new ExpectedAnimationTree(NpcAnimationTreeRootUID, "Idle"),
-            ]);
     }
 
     /// <summary>

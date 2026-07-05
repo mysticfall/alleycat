@@ -16,7 +16,6 @@ public sealed class EyesBlendTreeIntegrationTests
     private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string ReferencePlayerScenePath = "res://assets/characters/reference/player.tscn";
     private const string ReferenceNpcScenePath = "res://assets/characters/reference/ally.tscn";
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string EyesPhotoboothScenePath = "res://tests/body/eyes/eyes_visual_test.tscn";
     private const string HorizontalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_right_left.tres";
     private const string VerticalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_up_down.tres";
@@ -364,14 +363,14 @@ public sealed class EyesBlendTreeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies a runtime-assigned mirror-room look target reaches the runtime controller and drives look seek values.
+    /// Verifies a runtime-assigned reference NPC look target reaches the runtime controller and drives look seek values.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task MirrorRoomFemaleEyesBehaviour_RuntimeAssignedLookTargetDrivesSeekTimes()
+    public async Task ReferenceFemaleNpcEyesBehaviour_RuntimeAssignedLookTargetDrivesSeekTimes()
     {
         SceneTree sceneTree = GetSceneTree();
-        PackedScene scene = LoadPackedScene(MirrorRoomScenePath);
+        PackedScene scene = LoadPackedScene(ReferenceNpcScenePath);
         Node root = scene.Instantiate();
 
         try
@@ -379,7 +378,8 @@ public sealed class EyesBlendTreeIntegrationTests
             await AddChildToRootAsync(sceneTree, root);
             await WaitForFramesAsync(sceneTree, 12);
 
-            Node eyes = Assert.IsType<Node>(root.GetNodeOrNull("Actors/Ally/Eyes"), exactMatch: false);
+            EnsureCharacterRuntimeInstalled(root);
+            Node eyes = Assert.IsType<Node>(root.GetNodeOrNull("Eyes"), exactMatch: false);
             Node3D eyeOrigin = new()
             {
                 Name = "RuntimeEyesOrigin",
@@ -416,14 +416,14 @@ public sealed class EyesBlendTreeIntegrationTests
     }
 
     /// <summary>
-    /// Verifies mirror-room eye look overlays stay enabled for forward fallback and runtime target paths.
+    /// Verifies reference NPC eye look overlays stay enabled for forward fallback and runtime target paths.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task MirrorRoomFemaleEyesBehaviour_FallbackAndRuntimeTargetKeepLookBlendsEnabled()
+    public async Task ReferenceFemaleNpcEyesBehaviour_FallbackAndRuntimeTargetKeepLookBlendsEnabled()
     {
         SceneTree sceneTree = GetSceneTree();
-        PackedScene scene = LoadPackedScene(MirrorRoomScenePath);
+        PackedScene scene = LoadPackedScene(ReferenceNpcScenePath);
         Node root = scene.Instantiate();
 
         try
@@ -431,8 +431,9 @@ public sealed class EyesBlendTreeIntegrationTests
             await AddChildToRootAsync(sceneTree, root);
             await WaitForFramesAsync(sceneTree, 4);
 
-            Node eyes = Assert.IsType<Node>(root.GetNodeOrNull("Actors/Ally/Eyes"), exactMatch: false);
-            AnimationTree tree = Assert.IsType<AnimationTree>(root.GetNodeOrNull("Actors/Ally/AnimationTree"), exactMatch: false);
+            EnsureCharacterRuntimeInstalled(root);
+            Node eyes = Assert.IsType<Node>(root.GetNodeOrNull("Eyes"), exactMatch: false);
+            AnimationTree tree = Assert.IsType<AnimationTree>(root.GetNodeOrNull("AnimationTree"), exactMatch: false);
             Node3D eyeOrigin = new()
             {
                 Name = "RuntimeEyesOrigin",

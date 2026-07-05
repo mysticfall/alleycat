@@ -26,6 +26,9 @@ public sealed class RigInstallerIntegrationTests
     private const string ReferenceFemaleScenePath =
         "res://assets/characters/templates/reference_female/reference_female_base.tscn";
 
+    private const string ReferenceFemaleModelScenePath =
+        "res://assets/characters/reference/female/reference_female.blend";
+
     private const string ReferenceFemaleNpcTemplatePath =
         "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
 
@@ -331,6 +334,7 @@ public sealed class RigInstallerIntegrationTests
         string installerText = ReadProjectFile(PlayerInstallerPath);
 
         Assert.Contains(ReferenceFemalePlayerTemplatePath, installerText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleModelScenePath, installerText, StringComparison.Ordinal);
         Assert.Contains("RigRoleTemplateSceneInstaller.cs", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateRootSubtreesInstaller", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateSkeletonSubtreesInstaller", installerText, StringComparison.Ordinal);
@@ -376,6 +380,7 @@ public sealed class RigInstallerIntegrationTests
         string installerText = ReadProjectFile(NpcInstallerPath);
 
         Assert.Contains(ReferenceFemaleNpcTemplatePath, installerText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleModelScenePath, installerText, StringComparison.Ordinal);
         Assert.Contains("RigRoleTemplateSceneInstaller.cs", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateRootSubtreesInstaller", installerText, StringComparison.Ordinal);
         Assert.Contains("TemplateSkeletonSubtreesInstaller", installerText, StringComparison.Ordinal);

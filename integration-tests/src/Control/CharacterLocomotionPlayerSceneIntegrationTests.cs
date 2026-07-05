@@ -18,7 +18,6 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
     private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string ReferenceFemalePlayerTemplatePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
     private const string PlayerInstallerScenePath = "res://assets/characters/templates/installers/player_installer.tscn";
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
     private const string PlayerAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_player.tres";
     private const string CharacterLocomotionScriptPath = "res://src/Control/Locomotion/CharacterLocomotion.cs";
     private const string PlayerControllerScriptPath = "res://src/Control/PlayerController.cs";
@@ -111,34 +110,6 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
         _ = Assert.IsType<SkeletonModifier3D>(
             sceneRoot.GetNodeOrNull("Female/GeneralSkeleton/HipReconciliationModifier"),
             exactMatch: false);
-    }
-
-    /// <summary>
-    /// Verifies the mirror-room test scene can instantiate the nested player scene and resolve CharacterLocomotion at runtime.
-    /// </summary>
-    [Headless]
-    [Fact]
-    public async Task MirrorRoom_RuntimeInstantiation_ResolvesNestedCharacterLocomotionNode()
-    {
-        SceneTree sceneTree = GetSceneTree();
-        await WaitForFramesAsync(sceneTree, 2);
-
-        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(MirrorRoomScenePath));
-        Assert.Equal(Error.Ok, changeSceneError);
-
-        await WaitForFramesAsync(sceneTree, 2);
-
-        Node sceneRoot = sceneTree.CurrentScene
-            ?? throw new Xunit.Sdk.XunitException("Expected mirror-room scene to become current scene.");
-
-        _ = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull("Actors/Player"), exactMatch: false);
-        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/PlayerController"), exactMatch: false);
-        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/Locomotion"), exactMatch: false);
-        _ = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull("Actors/Player/AnimationTree"), exactMatch: false);
-        _ = Assert.IsType<Node>(sceneRoot.GetNodeOrNull("Actors/Player/VRIK/PoseStateMachine"), exactMatch: false);
-
-        Script locomotionScript = LoadScript(CharacterLocomotionScriptPath);
-        Assert.Equal(CharacterLocomotionScriptPath, locomotionScript.ResourcePath);
     }
 
     private static Script LoadScript(string path)

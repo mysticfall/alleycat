@@ -164,14 +164,14 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         await WaitForFramesAsync(sceneTree, 10);
         await WaitForPhysicsFramesAsync(sceneTree, 2);
         EnsureRuntimeRoleInstalled(fixture.GetNode("Actors/Player"));
-        EnsureRuntimeRoleInstalled(GetMirrorRoomAllyActor(fixture));
+        EnsureRuntimeRoleInstalled(fixture.GetNode("Actors/Ally"));
 
         try
         {
             Node player = fixture.GetNode("Actors/Player");
             Node playerVRIK = player.GetNode<Node>("VRIK");
             Marker3D playerViewpoint = player.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
-            Node npc = GetMirrorRoomAllyActor(fixture);
+            Node npc = fixture.GetNode("Actors/Ally");
             Node npcIK = npc.GetNode<Node>("CharacterIK");
             Marker3D npcViewpoint = npc.GetNode<Marker3D>("Female/GeneralSkeleton/Head/Viewpoint");
             Node npcEyes = npc.GetNode<Node>("Eyes");

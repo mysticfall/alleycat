@@ -1,11 +1,11 @@
 ---
 name: godot-integration-testing
-description: Use for running, triaging, or reporting integration tests, especially before final handoff.
+description: Use for authoring, running, triaging, or reporting Godot integration tests, especially before final handoff.
 ---
 
 # Godot Integration Testing
 
-Use this skill when you need to run or interpret `integration-tests/AlleyCat.IntegrationTests.csproj`.
+Use this skill when you need to author, run, triage, or report `integration-tests/AlleyCat.IntegrationTests.csproj`.
 
 ## Core Rule
 
@@ -58,6 +58,18 @@ dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
 ```
 
 If both filters are supplied, `--test-method` takes precedence over `--test-class`.
+
+## Fixture Authoring
+
+- Integration tests must not depend on broad production or content scenes, including temporary playtest environments.
+- Use focused fixtures that mimic only the production wiring relevant to the behaviour under test.
+- Include only relevant components and wiring unless the test explicitly validates component conflicts or interaction
+  between multiple systems.
+- Character fixtures should reference only the reference female character.
+- Avoid production role installers in component fixtures; use installers only for installer tests or dedicated
+  complete-character wiring/runtime-scene tests.
+- Component, IK, pose, hand, eye, and locomotion tests should use minimal authored fixtures or direct resource setup so
+  each test focuses on the code under test and is not affected by unrelated runtime wiring.
 
 ## Timeouts and Triage
 

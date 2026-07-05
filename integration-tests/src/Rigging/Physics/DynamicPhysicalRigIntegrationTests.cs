@@ -21,7 +21,9 @@ public sealed class DynamicPhysicalRigIntegrationTests
     private const string ColliderProfilePath = "res://assets/characters/reference/female/body_collider_profile.tres";
     private const string ColliderProfileUID = "uid://dpisik0mj8f6a";
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally.tscn";
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
+    private const string ReferencePlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string TestBallScenePath = "res://assets/items/test_ball.tscn";
+    private const string TestStickScenePath = "res://assets/items/test_stick.tscn";
     private const float PositionToleranceMetres = 0.001f;
     private static readonly Transform3D _rotatedSourceAttachmentTransform = new(
         Basis.FromEuler(new Vector3(0.17f, -0.29f, 0.13f)),
@@ -37,7 +39,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
     /// Verifies runtime setup builds generated proxy bodies that inherit generated attachment transforms directly.
     /// </summary>
     [Headless]
-    [Fact(Skip = "Mirror-room pose overrides must be reauthored after the template-only/actual runtime scene split.")]
+    [Fact(Skip = "Pose override fixture must be reauthored after the template-only/actual runtime scene split.")]
     public async Task DynamicPhysicalRig_RuntimeSetup_BuildsExpectedInheritedProxyTopology()
     {
         SceneTree sceneTree = GetSceneTree();
@@ -504,40 +506,36 @@ public sealed class DynamicPhysicalRigIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the mirror-room scene delegates prop-impact wiring to instanced assets instead of owning source nodes.
+    /// Verifies reference player and dynamic prop assets keep impact wiring local to reusable item scenes.
     /// </summary>
     [Headless]
     [Fact]
-    public void MirrorRoom_DoesNotOwnDirectImpactRelayOrSourceResources()
+    public void DynamicPropAssets_PlayerDoesNotOwnDirectImpactRelayOrSourceResources()
     {
-        PackedScene mirrorRoomScene = LoadPackedScene(MirrorRoomScenePath);
-        Node sceneRoot = mirrorRoomScene.Instantiate();
+        PackedScene playerScene = LoadPackedScene(ReferencePlayerScenePath);
+        Node player = playerScene.Instantiate();
+        Node ball = LoadPackedScene(TestBallScenePath).Instantiate();
+        Node stick = LoadPackedScene(TestStickScenePath).Instantiate();
 
         try
         {
-            Node player = sceneRoot.GetNodeOrNull("Actors/Player")
-                ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance the player scene.");
-            Node ball = sceneRoot.GetNodeOrNull("Items/Ball")
-                ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance test_ball.tscn.");
-            Node stick = sceneRoot.GetNodeOrNull("Items/Stick")
-                ?? throw new Xunit.Sdk.XunitException("Expected mirror room to instance test_stick.tscn.");
-
             Assert.Null(player.GetNodeOrNull("IKTargets/RightHand/ImpactSource"));
             Assert.Null(player.GetNodeOrNull("Female/GeneralSkeleton/RightHand/PhysicalImpactRelay"));
-            Assert.Null(sceneRoot.GetNodeOrNull("Actors/Player/Female/GeneralSkeleton/RightHand/MirrorRoomPhysicalImpactRelay"));
-            _ = AssertMirrorRoomDynamicPropContract(ball, "test_ball.tscn");
-            _ = AssertMirrorRoomDynamicPropContract(stick, "test_stick.tscn");
-            Assert.DoesNotContain(GetPackedSceneDependencyPaths(mirrorRoomScene), path =>
+            _ = AssertDynamicPropContract(ball, "test_ball.tscn");
+            _ = AssertDynamicPropContract(stick, "test_stick.tscn");
+            Assert.DoesNotContain(GetPackedSceneDependencyPaths(playerScene), path =>
                 path.EndsWith("PhysicalInteractionCollisionRelay3D.cs", StringComparison.Ordinal)
                 || path.EndsWith("PhysicalInteractionImpactSource3D.cs", StringComparison.Ordinal));
         }
         finally
         {
-            sceneRoot.Free();
+            player.Free();
+            ball.Free();
+            stick.Free();
         }
     }
 
-    private static Node AssertMirrorRoomDynamicPropContract(Node prop, string sceneName)
+    private static Node AssertDynamicPropContract(Node prop, string sceneName)
     {
         RigidBody3D propBody = Assert.IsType<RigidBody3D>(prop, exactMatch: false);
         Assert.True(propBody.IsInGroup("hand_dynamic_interaction_body"));
@@ -806,71 +804,6 @@ public sealed class DynamicPhysicalRigIntegrationTests
         {
             await fixture.DisposeAsync(sceneTree);
         }
-    }
-
-    /// <summary>
-    /// Verifies the mirror-room NPC generated proxies follow the NPC skeleton pose overrides at runtime.
-    /// </summary>
-    [Headless]
-    [Fact(Skip = "Mirror-room pose overrides must be reauthored after the template-only/actual runtime scene split.")]
-    public async Task DynamicPhysicalRig_MirrorRoomFemale_ProxiesFollowNpcPoseOverrides()
-    {
-        if (System.Environment.GetEnvironmentVariable("ALLEY_CAT_REAUTHOR_MIRROR_POSE_OVERRIDES") is not "1")
-        {
-            return;
-        }
-
-        SceneTree sceneTree = GetSceneTree();
-        await WaitForFramesAsync(sceneTree, 2);
-
-        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(MirrorRoomScenePath));
-        Assert.Equal(Error.Ok, changeSceneError);
-
-        await WaitForFramesAsync(sceneTree, 4);
-        await WaitForPhysicsFramesAsync(sceneTree, 4);
-
-        Node sceneRoot = sceneTree.CurrentScene
-            ?? throw new Xunit.Sdk.XunitException("Expected mirror-room scene to become current scene.");
-        Node rig = Assert.IsType<Node>(
-            sceneRoot.GetNodeOrNull("Actors/Female/Female/GeneralSkeleton/DynamicPhysicalRig"),
-            exactMatch: false);
-        Skeleton3D skeleton = Assert.IsAssignableFrom<Skeleton3D>(rig.GetParent());
-        _ = rig.GetType().GetMethod(nameof(DynamicPhysicalRig.RegenerateNow))?.Invoke(rig, null);
-        await WaitForFramesAsync(sceneTree, 1);
-
-        Assert.True(ReadProperty<int>(rig, nameof(DynamicPhysicalRig.GeneratedProxyCount)) > 0, "Mirror-room NPC rig should generate runtime proxy bodies.");
-        Assert.False(rig.IsPhysicsProcessing(), "Mirror-room NPC rig should inherit generated attachment transforms without per-frame processing.");
-
-        const string boneName = "LeftHand";
-        int boneIndex = skeleton.FindBone(boneName);
-        Assert.True(boneIndex >= 0, $"Expected NPC skeleton to contain bone '{boneName}'.");
-        AnimatableBody3D proxy = FindGeneratedProxyBody(skeleton, boneName);
-        BoneAttachment3D attachment = FindGeneratedAttachment(skeleton, boneName);
-        Transform3D attachmentGlobalTransform = ResolveNodeGlobalTransform(attachment);
-        Transform3D proxyGlobalTransform = ResolveNodeGlobalTransform(proxy);
-        CollisionShape3D proxyShape = Assert.IsAssignableFrom<CollisionShape3D>(proxy.GetChild(0));
-        BodyColliderProfile colliderProfile = CreateColliderProfile(LoadPackedScene(CollidersScenePath));
-        BodyColliderShapeDescriptor descriptor = Assert.Single(colliderProfile.QueryShapeDescriptorsForBone(boneName));
-        Transform3D expectedAttachmentGlobalTransform = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(boneIndex);
-        Transform3D restAttachmentGlobalTransform = skeleton.GlobalTransform * skeleton.GetBoneGlobalRest(boneIndex);
-
-        AssertTransformApproximately(expectedAttachmentGlobalTransform, attachmentGlobalTransform, PositionToleranceMetres);
-        AssertTransformApproximately(Transform3D.Identity, proxy.Transform, PositionToleranceMetres);
-        AssertTransformApproximately(attachmentGlobalTransform, proxyGlobalTransform, PositionToleranceMetres);
-        AssertTransformApproximately(descriptor.LocalTransform, proxyShape.Transform, PositionToleranceMetres);
-        AssertTransformApproximately(attachmentGlobalTransform * descriptor.LocalTransform, ResolveNodeGlobalTransform(proxyShape), PositionToleranceMetres);
-        Assert.True(
-            attachmentGlobalTransform.Origin.DistanceTo(restAttachmentGlobalTransform.Origin) > 0.01f,
-            "Mirror-room NPC attachment should reflect the overridden runtime pose rather than the imported rest pose.");
-
-        Quaternion initialRotation = skeleton.GetBonePoseRotation(boneIndex);
-        skeleton.SetBonePoseRotation(boneIndex, (new Quaternion(Vector3.Up, 0.25f) * initialRotation).Normalized());
-        await WaitForFramesAsync(sceneTree, 1);
-        await WaitForPhysicsFramesAsync(sceneTree, 1);
-
-        Transform3D movedAttachmentGlobalTransform = ResolveNodeGlobalTransform(attachment);
-        AssertTransformApproximately(movedAttachmentGlobalTransform, ResolveNodeGlobalTransform(proxy), PositionToleranceMetres);
-        AssertTransformApproximately(movedAttachmentGlobalTransform * descriptor.LocalTransform, ResolveNodeGlobalTransform(proxyShape), PositionToleranceMetres);
     }
 
     /// <summary>

@@ -235,15 +235,8 @@ Use short, descriptive group names that reflect the logical role of the properti
 - Add Godot-dependent integration tests under `integration-tests/src/`.
 - Use the `AlleyCat.IntegrationTests` namespace for integration test code.
 - Author integration tests as parameterless `[Fact]` methods so they are discovered reliably.
-- Keep component-style fixtures isolated from unrelated production wiring. Avoid production role installers in
-  component fixtures; use installers only for installer tests or dedicated complete-character wiring/runtime-scene
-  tests. Component, IK, pose, hand, eye, and locomotion tests should use minimal authored fixtures or direct resource
-  setup so each test focuses on the code under test and is not affected by unrelated runtime wiring.
-- Load the `godot-integration-testing` skill before running, triaging, or reporting integration test results.
-- While implementing, run only targeted integration tests with `--test-class` or `--test-method`; leave full integration
-  suite execution to the reviewer final handoff gate unless explicitly requested otherwise.
-- Do not default integration tests to `--headless`; use it only for tests known to be headless-compatible. The integration
-  test framework automatically launches Godot with `--xr-mode off`.
+- Load the `godot-integration-testing` skill before authoring, running, triaging, or reporting integration tests; it is
+  the source of truth for fixture-authoring and execution rules.
 
 ## Pre-Handoff Formatting Check
 

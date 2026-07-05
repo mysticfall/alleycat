@@ -17,7 +17,7 @@ namespace AlleyCat.IntegrationTests.Control;
 /// </summary>
 public sealed class PlayerControllerGrabInputIntegrationTests
 {
-    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
 
     /// <summary>
     /// Verifies analogue grip input drives the same hand grab/release path as XR button clicks.
@@ -57,14 +57,14 @@ public sealed class PlayerControllerGrabInputIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the installed mirror-room player resolves its template-installed hand holder before live grab input is routed.
+    /// Verifies the installed reference player resolves its template-installed hand holder before live grab input is routed.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task MirrorRoomPlayer_GripInput_ResolvesTemplateInstalledHandsForRouting()
+    public async Task ReferencePlayer_GripInput_ResolvesTemplateInstalledHandsForRouting()
     {
         SceneTree sceneTree = GetSceneTree();
-        MirrorRoomGrabInputFixture fixture = await CreateMirrorRoomFixtureAsync(sceneTree);
+        ReferencePlayerGrabInputFixture fixture = await CreateReferencePlayerFixtureAsync(sceneTree);
 
         try
         {
@@ -152,7 +152,7 @@ public sealed class PlayerControllerGrabInputIntegrationTests
         return new RuntimeGrabInputFixture(global, xrManager, controller, rightHand, leftHand);
     }
 
-    private static async Task<MirrorRoomGrabInputFixture> CreateMirrorRoomFixtureAsync(SceneTree sceneTree)
+    private static async Task<ReferencePlayerGrabInputFixture> CreateReferencePlayerFixtureAsync(SceneTree sceneTree)
     {
         Game global = new()
         {
@@ -164,21 +164,20 @@ public sealed class PlayerControllerGrabInputIntegrationTests
             Name = "XR",
         };
 
-        Node mirrorRoom = LoadPackedScene(MirrorRoomScenePath).Instantiate();
+        Node player = LoadPackedScene(PlayerScenePath).Instantiate();
 
         global.AddChild(xrManager);
-        global.AddChild(mirrorRoom);
+        global.AddChild(player);
         global._EnterTree();
         sceneTree.Root.AddChild(global);
 
-        Node player = mirrorRoom.GetNode("Actors/Player");
         EnsureCharacterRuntimeInstalled(player);
         await WaitForFramesAsync(sceneTree, 8);
 
         Node controller = player.GetNode<Node>("PlayerController");
         await WaitForFramesAsync(sceneTree, 2);
 
-        return new MirrorRoomGrabInputFixture(
+        return new ReferencePlayerGrabInputFixture(
             global,
             xrManager,
             controller,
@@ -201,7 +200,7 @@ public sealed class PlayerControllerGrabInputIntegrationTests
         public bool ControllerIsBound => (bool)(_isBoundField.GetValue(Controller) ?? false);
     }
 
-    private sealed record MirrorRoomGrabInputFixture(
+    private sealed record ReferencePlayerGrabInputFixture(
         Game Global,
         FakeXRManager XRManager,
         Node Controller,
