@@ -6,4 +6,7 @@
 [node name="Ally" unique_id=58109474 groups=["Actors"] instance=ExtResource("1_blend")]
 Id = "Ally"
 
+[node name="Female" parent="." index="0" unique_id=2142305244]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+
 [node name="NPCCharacterInstaller" parent="." index="2" unique_id=1740368386 instance=ExtResource("2_installer")]
