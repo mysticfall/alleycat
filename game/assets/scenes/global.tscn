@@ -15,7 +15,7 @@ script = ExtResource("3_b10sw")
 
 [node name="Game" type="Node" unique_id=1021390965]
 script = ExtResource("1_4obgp")
-StartScenePath = "uid://baut876fuyk5c"
+FallbackStartScene = "uid://baut876fuyk5c"
 SplashScreenScene = ExtResource("1_axcyo")
 ServiceRegistrars = Array[Resource]([SubResource("Resource_template_compiler")])
 metadata/_custom_type_script = "uid://dnifm5vgeh8bn"

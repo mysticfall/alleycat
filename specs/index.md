@@ -13,6 +13,7 @@
 - [CORE-005: Scene Installer System](core/005-scene-installer-system/index.md)
 - [CORE-006: Microsoft Configuration Integration](core/006-microsoft-configuration-integration/index.md)
 - [CORE-007: Microsoft Logging Integration](core/007-microsoft-logging-integration/index.md)
+- [CORE-008: Content Pack Resolution](core/008-content-pack-resolution/index.md)
 
 ## AI
 

@@ -4,6 +4,7 @@
 game/addons/*
 !game/addons/alleycat_editor/
 !game/addons/alleycat_editor/**
+game/content/
 android/
 
 # JetBrains IDE

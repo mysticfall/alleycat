@@ -19,7 +19,7 @@ public sealed partial class GameStartupIntegrationTests
 {
     private const string EditorRunStartupBypassScenePath = "res://tests/startup/startup_bypass_runtime_test.tscn";
     private const string GlobalScenePath = "res://assets/scenes/global.tscn";
-    private const string StartScenePath = "res://assets/scenes/empty.tscn";
+    private const string FallbackStartScene = "res://assets/scenes/empty.tscn";
 
     private static readonly FieldInfo _splashScreenField = typeof(Game)
         .GetField("_splashScreen", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -87,7 +87,7 @@ public sealed partial class GameStartupIntegrationTests
 
             Assert.Equal([1], fixture.Game.QuitRequests);
             Assert.Equal(1, fixture.LoadingScreen.LoadSceneAsyncCallCount);
-            Assert.Equal(StartScenePath, fixture.LoadingScreen.LastRequestedScenePath);
+            Assert.Equal(FallbackStartScene, fixture.LoadingScreen.LastRequestedScenePath);
         }
         finally
         {
@@ -117,7 +117,7 @@ public sealed partial class GameStartupIntegrationTests
 
             Assert.Empty(fixture.Game.QuitRequests);
             Assert.Equal(1, fixture.LoadingScreen.LoadSceneAsyncCallCount);
-            Assert.Equal(StartScenePath, fixture.LoadingScreen.LastRequestedScenePath);
+            Assert.Equal(FallbackStartScene, fixture.LoadingScreen.LastRequestedScenePath);
             Assert.True(fixture.LoadingScreen.Visible);
             Assert.Null(fixture.SplashScreen.GetParent());
 
@@ -155,7 +155,7 @@ public sealed partial class GameStartupIntegrationTests
 
             Assert.Empty(fixture.Game.QuitRequests);
             Assert.Equal(1, fixture.LoadingScreen.LoadSceneAsyncCallCount);
-            Assert.Equal(StartScenePath, fixture.LoadingScreen.LastRequestedScenePath);
+            Assert.Equal(FallbackStartScene, fixture.LoadingScreen.LastRequestedScenePath);
             Assert.True(fixture.LoadingScreen.Visible);
         }
         finally
@@ -422,7 +422,7 @@ public sealed partial class GameStartupIntegrationTests
         TestGame game = new()
         {
             Name = "Game",
-            StartScenePath = StartScenePath,
+            FallbackStartScene = FallbackStartScene,
         };
 
         TestXRManager xr = new()

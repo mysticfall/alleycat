@@ -41,7 +41,7 @@ from startup.
    transparent background support.
 4. Integration points consumed by other systems must be stable and discoverable from the
    global scene root.
-5. The `Game` node must export `StartScenePath` as a path string (`*.tscn`) identifying
+5. The `Game` node must export `FallbackStartScene` as a path string (`*.tscn`) identifying
    the scene to load after startup.
 6. The `Game` node must export `SplashScreenScene` as a `PackedScene` property for
    dynamic instantiation.
@@ -52,7 +52,7 @@ from startup.
 - XR runtime composition hosting through `XRManager`.
 - SubViewport configuration required for full-screen UI and overlay rendering.
 - Game node export properties for startup scene loading:
-  - `StartScenePath`
+  - `FallbackStartScene`
   - `SplashScreenScene`
 
 ## Out Of Scope
@@ -88,7 +88,7 @@ properties for scene loading:
 
 | Export Property | Type | Purpose |
 |---------------|------|---------|
-| `StartScenePath` | String (path `\*.tscn`) | Scene to load after startup completes |
+| `FallbackStartScene` | String (path `\*.tscn`) | Scene to load after startup completes |
 | `SplashScreenScene` | `PackedScene` | Splash scene for dynamic instantiation at startup |
 
 Note: Runtime splash behaviour (including `--skip-splash` handling) is defined in
@@ -111,7 +111,7 @@ when the game starts and persists throughout the entire session. This provides:
    [XR-001: XRManager](../../xr/001-xr-manager/index.md).
 3. A dedicated UI `SubViewport` exists with transparent background enabled and configured
    size of `1800 × 1200`.
-4. The `Game` node exports `StartScenePath` as a string path to the start scene.
+4. The `Game` node exports `FallbackStartScene` as a string path to the start scene.
 5. The `Game` node exports `SplashScreenScene` as a `PackedScene` for startup instantiation.
 6. Autoload persistence and SubViewport availability directly verify consistent XR/UI
    behaviour across scene changes (User Requirement 1).

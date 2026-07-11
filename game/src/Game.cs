@@ -1,6 +1,7 @@
 using AlleyCat.Common;
 using AlleyCat.Core;
 using AlleyCat.Core.Configuration;
+using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
 using AlleyCat.Scene;
 using AlleyCat.Testing;
@@ -23,10 +24,10 @@ public partial class Game : Node, IServiceProvider
     private readonly ServiceCollection _services = [];
 
     /// <summary>
-    /// Scene path loaded after splash and XR startup complete.
+    /// Fallback start scene used when no content pack resolves.
     /// </summary>
     [Export(PropertyHint.File, "*.tscn")]
-    public string StartScenePath { get; set; } = string.Empty;
+    public string FallbackStartScene { get; set; } = string.Empty;
 
     /// <summary>
     /// Splash scene instantiated during startup when splash is enabled.
@@ -120,7 +121,9 @@ public partial class Game : Node, IServiceProvider
     /// </summary>
     /// <param name="services">Service collection to populate.</param>
     protected virtual void RegisterServices(IServiceCollection services)
-        => _ = services.AddSingleton<ISceneContextProvider>(_ => new SceneContextProvider(this));
+        => _ = services
+            .AddSingleton<ISceneContextProvider>(_ => new SceneContextProvider(this))
+            .AddSingleton<IContentResolver, ContentResolver>();
 
     private void RegisterInfrastructureServices(IServiceCollection services)
     {
@@ -275,12 +278,15 @@ public partial class Game : Node, IServiceProvider
             _ = _loadingScreen.Connect("LoadCompleted", loadCompletedCallable);
         }
 
-        Error loadStartError = _loadingScreen.LoadSceneAsync(StartScenePath);
+        IContentResolver contentResolver = _serviceProvider!.GetRequiredService<IContentResolver>();
+        string startScenePath = contentResolver.ResolveStartScenePath(FallbackStartScene);
+
+        Error loadStartError = _loadingScreen.LoadSceneAsync(startScenePath);
         if (loadStartError != Error.Ok)
         {
             GetService<ILogger<Game>>()?.LogError(
                 "Failed to start loading start scene {StartScenePath} with error {LoadStartError}. Quitting the game.",
-                StartScenePath,
+                startScenePath,
                 loadStartError);
             QuitGame(1);
         }

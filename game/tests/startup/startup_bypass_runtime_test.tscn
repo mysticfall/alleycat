@@ -8,7 +8,7 @@
 
 [node name="Game" type="Node" unique_id=1162751682]
 script = ExtResource("1_wgf4r")
-StartScenePath = "res://assets/scenes/empty.tscn"
+FallbackStartScene = "res://assets/scenes/empty.tscn"
 
 [node name="XR" type="Node" parent="." unique_id=1277120654]
 script = ExtResource("2_2gy7c")
