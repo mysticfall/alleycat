@@ -13,6 +13,6 @@ public interface IContextual
     /// </summary>
     /// <param name="scene">Current scene membership snapshot.</param>
     /// <param name="observer">Optional observing character.</param>
-    /// <returns>Context entries in deterministic source order.</returns>
-    IReadOnlyCollection<ContextData> GetContext(ISceneContext scene, ICharacter? observer);
+    /// <returns>Context entries keyed by stable field name.</returns>
+    IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer);
 }

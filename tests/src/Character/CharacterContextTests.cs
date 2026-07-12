@@ -12,7 +12,7 @@ namespace AlleyCat.Tests.Character;
 public sealed class CharacterContextTests
 {
     /// <summary>
-    /// Characters with no authored context sources produce an empty context collection.
+    /// Characters with no authored context sources produce an empty context dictionary.
     /// </summary>
     [Fact]
     public void GetContext_WithNoSources_ReturnsNoContext()
@@ -20,25 +20,30 @@ public sealed class CharacterContextTests
         AlleyCat.Character.Character character = CreateCharacter();
         var scene = new FakeSceneContext([]);
 
-        IReadOnlyCollection<ContextData> context = character.GetContext(scene, observer: null);
+        IReadOnlyDictionary<string, object?> context = character.GetContext(scene, observer: null);
 
         Assert.Empty(context);
     }
 
     /// <summary>
-    /// Characters with one context source return that source's context data.
+    /// Characters with one context source return that source's context dictionary.
     /// </summary>
     [Fact]
     public void GetContext_WithOneSource_ReturnsSourceContext()
     {
-        AlleyCat.Character.Character character = CreateCharacter(
-            FakeContextSource.Create(new ContextData("Title", "Content")));
+        AlleyCat.Character.Character character = CreateCharacter(FakeContextSource.Create(
+            new Dictionary<string, object?>
+            {
+                ["title"] = "Title",
+                ["count"] = 3,
+            }));
         var scene = new FakeSceneContext([character]);
 
-        IReadOnlyCollection<ContextData> context = character.GetContext(scene, observer: null);
+        IReadOnlyDictionary<string, object?> context = character.GetContext(scene, observer: null);
 
-        ContextData item = Assert.Single(context);
-        Assert.Equal(new ContextData("Title", "Content"), item);
+        Assert.Equal(2, context.Count);
+        Assert.Equal("Title", context["title"]);
+        Assert.Equal(3, context["count"]);
     }
 
     /// <summary>
@@ -49,18 +54,25 @@ public sealed class CharacterContextTests
     {
         AlleyCat.Character.Character character = CreateCharacter(
             [
-                FakeContextSource.Create(new ContextData("First", "One"), new ContextData("Second", "Two")),
-                FakeContextSource.Create(new ContextData("Third", "Three")),
+                FakeContextSource.Create(new Dictionary<string, object?>
+                {
+                    ["first"] = "One",
+                    ["second"] = "Two",
+                }),
+                FakeContextSource.Create(new Dictionary<string, object?>
+                {
+                    ["third"] = "Three",
+                }),
             ]);
         var scene = new FakeSceneContext([character]);
 
-        IReadOnlyCollection<ContextData> context = character.GetContext(scene, observer: null);
+        IReadOnlyDictionary<string, object?> context = character.GetContext(scene, observer: null);
 
         Assert.Equal(
             [
-                new ContextData("First", "One"),
-                new ContextData("Second", "Two"),
-                new ContextData("Third", "Three"),
+                new KeyValuePair<string, object?>("first", "One"),
+                new KeyValuePair<string, object?>("second", "Two"),
+                new KeyValuePair<string, object?>("third", "Three"),
             ],
             context);
     }
@@ -94,12 +106,32 @@ public sealed class CharacterContextTests
         var scene = new FakeSceneContext([subject]);
         var observer = new FakeCharacter();
 
-        IReadOnlyCollection<ContextData> context = ((IContextSource)source).GetContext(subject, scene, observer);
+        IReadOnlyDictionary<string, object?> context = ((IContextSource)source).GetContext(subject, scene, observer);
 
-        Assert.Equal([new ContextData("Bridge", "Typed")], context);
+        KeyValuePair<string, object?> item = Assert.Single(context);
+        Assert.Equal(new KeyValuePair<string, object?>("bridge", "Typed"), item);
         Assert.Same(subject, source.Subject);
         Assert.Same(scene, source.Scene);
         Assert.Same(observer, source.Observer);
+    }
+
+    /// <summary>
+    /// Duplicate keys from multiple authored sources fail fast instead of overwriting earlier entries.
+    /// </summary>
+    [Fact]
+    public void GetContext_WithDuplicateSourceKeys_ThrowsClearException()
+    {
+        AlleyCat.Character.Character character = CreateCharacter(
+            [
+                FakeContextSource.Create(new Dictionary<string, object?> { ["name"] = "First" }),
+                FakeContextSource.Create(new Dictionary<string, object?> { ["name"] = "Second" }),
+            ]);
+        var scene = new FakeSceneContext([character]);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => character.GetContext(scene, observer: null));
+
+        Assert.Contains("duplicate context key 'name'", exception.Message);
     }
 
     /// <summary>
@@ -121,9 +153,9 @@ public sealed class CharacterContextTests
 
     private sealed class FakeContextSource : ContextSource, IContextSource<ICharacter>
     {
-        private ContextData[] _context = [];
+        private IReadOnlyDictionary<string, object?> _context = new Dictionary<string, object?>();
 
-        public static FakeContextSource Create(params ContextData[] context)
+        public static FakeContextSource Create(IReadOnlyDictionary<string, object?> context)
         {
             var source = (FakeContextSource)RuntimeHelpers.GetUninitializedObject(typeof(FakeContextSource));
             source._context = context;
@@ -131,13 +163,13 @@ public sealed class CharacterContextTests
             return source;
         }
 
-        public override IReadOnlyCollection<ContextData> GetContext(
+        public override IReadOnlyDictionary<string, object?> GetContext(
             IContextual subject,
             ISceneContext scene,
             ICharacter? observer)
             => GetContext(RequireCompatibleSubject<ICharacter>(subject), scene, observer);
 
-        public IReadOnlyCollection<ContextData> GetContext(
+        public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
             ICharacter? observer)
@@ -173,13 +205,13 @@ public sealed class CharacterContextTests
             get; private set;
         }
 
-        public override IReadOnlyCollection<ContextData> GetContext(
+        public override IReadOnlyDictionary<string, object?> GetContext(
             IContextual subject,
             ISceneContext scene,
             ICharacter? observer)
             => GetContext(RequireCompatibleSubject<ICharacter>(subject), scene, observer);
 
-        public IReadOnlyCollection<ContextData> GetContext(
+        public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
             ICharacter? observer)
@@ -188,7 +220,7 @@ public sealed class CharacterContextTests
             Scene = scene;
             Observer = observer;
 
-            return [];
+            return new Dictionary<string, object?>();
         }
     }
 
@@ -209,7 +241,7 @@ public sealed class CharacterContextTests
             get; private set;
         }
 
-        public IReadOnlyCollection<ContextData> GetContext(
+        public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
             ICharacter? observer)
@@ -218,7 +250,10 @@ public sealed class CharacterContextTests
             Scene = scene;
             Observer = observer;
 
-            return [new ContextData("Bridge", "Typed")];
+            return new Dictionary<string, object?>
+            {
+                ["bridge"] = "Typed",
+            };
         }
     }
 
@@ -233,13 +268,13 @@ public sealed class CharacterContextTests
 
         public IReadOnlyList<AlleyCat.Core.IComponent> Components { get; } = [];
 
-        public IReadOnlyCollection<ContextData> GetContext(ISceneContext scene, ICharacter? observer)
-            => [];
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+            => new Dictionary<string, object?>();
     }
 
     private sealed class FakeContextual : IContextual
     {
-        public IReadOnlyCollection<ContextData> GetContext(ISceneContext scene, ICharacter? observer)
-            => [];
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+            => new Dictionary<string, object?>();
     }
 }

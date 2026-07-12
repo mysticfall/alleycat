@@ -15,7 +15,7 @@ This memo is not a final specification and does not define a binding API contrac
 ## Related Specifications And Boundaries
 
 - `specs/context/001-contextual-information-api/index.md` (`CTX-001`) defines the general `AlleyCat.Context` contextual-information API.
-- CTX-001 provides `IContextual`, `ContextData` titled fragments, scene-aware requests through `ISceneContext`, and an optional observing `ICharacter`.
+- CTX-001 provides `IContextual` with non-AI-specific `IReadOnlyDictionary<string, object?>` key-value contextual data suitable for template rendering, scene-aware requests through `ISceneContext`, and an optional observing `ICharacter`.
 - CTX-001 intentionally excludes prompt placement, rendering, ranking, summarisation, AI retrieval, memory, lore, perception backends, and detailed context taxonomy.
 - `specs/ai/005-context-provider-api/index.md` was discussed as a seed direction for presentation-neutral context providers, but no final API contract is established by this memo.
 - Retrieval and presentation should remain separate axes. Presentation channels discussed include pinned context, transient turn context, and on-demand tool context.

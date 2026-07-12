@@ -67,8 +67,8 @@ public sealed class ICharacterTests
 
         public IReadOnlyList<IComponent> Components { get; } = components;
 
-        public IReadOnlyCollection<ContextData> GetContext(ISceneContext scene, ICharacter? observer)
-            => [];
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+            => new Dictionary<string, object?>();
     }
 
     private sealed class FakeHand(LimbSide side) : IHand

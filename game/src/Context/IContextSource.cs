@@ -14,8 +14,8 @@ public interface IContextSource
     /// <param name="subject">Contextual subject being described.</param>
     /// <param name="scene">Current scene membership snapshot.</param>
     /// <param name="observer">Optional observing character.</param>
-    /// <returns>Context entries contributed by this source.</returns>
-    IReadOnlyCollection<ContextData> GetContext(IContextual subject, ISceneContext scene, ICharacter? observer);
+    /// <returns>Context entries contributed by this source, keyed by stable field name.</returns>
+    IReadOnlyDictionary<string, object?> GetContext(IContextual subject, ISceneContext scene, ICharacter? observer);
 }
 
 /// <summary>
@@ -31,11 +31,11 @@ public interface IContextSource<in TContextual> : IContextSource
     /// <param name="subject">Contextual subject being described.</param>
     /// <param name="scene">Current scene membership snapshot.</param>
     /// <param name="observer">Optional observing character.</param>
-    /// <returns>Context entries contributed by this source.</returns>
-    IReadOnlyCollection<ContextData> GetContext(TContextual subject, ISceneContext scene, ICharacter? observer);
+    /// <returns>Context entries contributed by this source, keyed by stable field name.</returns>
+    IReadOnlyDictionary<string, object?> GetContext(TContextual subject, ISceneContext scene, ICharacter? observer);
 
     /// <inheritdoc />
-    IReadOnlyCollection<ContextData> IContextSource.GetContext(
+    IReadOnlyDictionary<string, object?> IContextSource.GetContext(
         IContextual subject,
         ISceneContext scene,
         ICharacter? observer)

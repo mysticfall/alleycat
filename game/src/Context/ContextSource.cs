@@ -11,7 +11,7 @@ namespace AlleyCat.Context;
 public abstract partial class ContextSource : Resource, IContextSource
 {
     /// <inheritdoc />
-    public abstract IReadOnlyCollection<ContextData> GetContext(
+    public abstract IReadOnlyDictionary<string, object?> GetContext(
         IContextual subject,
         ISceneContext scene,
         ICharacter? observer);

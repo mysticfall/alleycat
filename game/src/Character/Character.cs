@@ -111,26 +111,33 @@ public partial class Character : CharacterBody3D, ICharacter
     }
 
     /// <inheritdoc />
-    public IReadOnlyCollection<ContextData> GetContext(ISceneContext scene, ICharacter? observer)
+    public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
     {
         ArgumentNullException.ThrowIfNull(scene);
 
         return ContextSources.Length switch
         {
-            0 => [],
+            0 => new Dictionary<string, object?>(),
             1 => ContextSources[0].GetContext(this, scene, observer),
             _ => AggregateContextSources(scene, observer),
         };
     }
 
-    private IReadOnlyCollection<ContextData> AggregateContextSources(
+    private IReadOnlyDictionary<string, object?> AggregateContextSources(
         ISceneContext scene,
         ICharacter? observer)
     {
-        List<ContextData> context = [];
+        Dictionary<string, object?> context = [];
         foreach (IContextSource source in ContextSources)
         {
-            context.AddRange(source.GetContext(this, scene, observer));
+            foreach (KeyValuePair<string, object?> entry in source.GetContext(this, scene, observer))
+            {
+                if (!context.TryAdd(entry.Key, entry.Value))
+                {
+                    throw new InvalidOperationException(
+                        $"Character has duplicate context key '{entry.Key}'. Context source keys must be unique across authored sources.");
+                }
+            }
         }
 
         return context;
