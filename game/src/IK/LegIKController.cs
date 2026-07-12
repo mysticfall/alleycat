@@ -14,6 +14,10 @@ public partial class LegIKController : SkeletonModifier3D
     private const float DegenerateThreshold = 1e-6f;
     private const float AmbiguousPlanePreferenceThreshold = 0.02f;
     private const float AmbiguousPlaneOrientationBias = 1.0f;
+    private const float MinimumStableForwardPoleDot = 0.5f;
+    private const float MaximumStableSideToForwardPoleRatio = 0.5f;
+    private const float ForwardExtensionLegDot = 0.6f;
+    private const float ForwardExtensionDownDot = 0.3f;
 
     /// <summary>
     /// The foot IK goal consumed by downstream solvers.
@@ -145,42 +149,72 @@ public partial class LegIKController : SkeletonModifier3D
     {
         resolvedPoleDirection = poleDirection;
 
-        Basis footBasis = FootTarget!.GlobalTransform.Basis.Orthonormalized();
-        Vector3 footForward = footBasis.Column2;
-        Vector3 footUp = footBasis.Column1;
-        Vector3 skeletonUp = _skeleton!.GlobalTransform.Basis.Orthonormalized().Column1.Normalized();
-
-        if (!TryProjectAndNormalise(footForward, legDirection, out Vector3 forwardProjected))
+        Basis skeletonBasis = _skeleton!.GlobalTransform.Basis.Orthonormalized();
+        Vector3 avatarForward = (skeletonBasis * Vector3.Back).Normalized();
+        Vector3 skeletonUp = skeletonBasis.Column1.Normalized();
+        Vector3 avatarRight = skeletonUp.Cross(avatarForward).Normalized();
+        if (IsStableAvatarForwardPole(poleDirection, avatarForward, avatarRight, skeletonUp))
         {
             return false;
         }
 
-        if (Mathf.Abs(footUp.Dot(skeletonUp)) < 0.9f)
+        Basis footBasis = FootTarget!.GlobalTransform.Basis.Orthonormalized();
+        Vector3 footForward = footBasis.Column2;
+        Vector3 footUp = footBasis.Column1;
+        bool useStableAvatarForward = legDirection.Dot(avatarForward) >= ForwardExtensionLegDot
+            && legDirection.Dot(-skeletonUp) >= ForwardExtensionDownDot;
+        Vector3 forwardReference = useStableAvatarForward ? avatarForward : footForward;
+
+        if (!TryProjectAndNormalise(forwardReference, legDirection, out Vector3 forwardProjected))
+        {
+            return false;
+        }
+
+        if (!useStableAvatarForward && Mathf.Abs(footUp.Dot(skeletonUp)) < 0.9f)
         {
             return false;
         }
 
         Vector3 preferredForward = forwardProjected;
-        if (TryProjectAndNormalise(footUp, legDirection, out Vector3 upProjected))
+        if (TryProjectAndNormalise(skeletonUp, legDirection, out Vector3 upProjected))
         {
             float planePreference = Mathf.Abs(poleDirection.Dot(forwardProjected))
                 - Mathf.Abs(poleDirection.Dot(upProjected));
+            if (useStableAvatarForward)
+            {
+                float forwardDot = poleDirection.Dot(forwardProjected);
+                bool stableForwardHemisphere = forwardDot >= MinimumStableForwardPoleDot;
+                bool stableSideOffset = true;
 
-            if (planePreference >= AmbiguousPlanePreferenceThreshold)
+                if (TryProjectAndNormalise(avatarRight, legDirection, out Vector3 sideProjected))
+                {
+                    stableSideOffset = Mathf.Abs(poleDirection.Dot(sideProjected))
+                        <= forwardDot * MaximumStableSideToForwardPoleRatio;
+                }
+
+                if (stableForwardHemisphere
+                    && stableSideOffset
+                    && planePreference >= AmbiguousPlanePreferenceThreshold)
+                {
+                    return false;
+                }
+            }
+            else if (planePreference >= AmbiguousPlanePreferenceThreshold)
             {
                 return false;
             }
 
-            Vector3 forwardWithoutUp = forwardProjected - (forwardProjected.Dot(upProjected) * upProjected);
-            if (TryNormalise(forwardWithoutUp, out Vector3 normalisedForwardWithoutUp))
+            if (!useStableAvatarForward)
             {
-                preferredForward = normalisedForwardWithoutUp;
+                Vector3 forwardWithoutUp = forwardProjected - (forwardProjected.Dot(upProjected) * upProjected);
+                if (TryNormalise(forwardWithoutUp, out Vector3 normalisedForwardWithoutUp))
+                {
+                    preferredForward = normalisedForwardWithoutUp;
+                }
             }
         }
 
-        Vector3 biasedForward = preferredForward.Dot(poleDirection) < 0.0f
-            ? -preferredForward
-            : preferredForward;
+        Vector3 biasedForward = preferredForward;
         Vector3 biasedDirection = poleDirection.Lerp(biasedForward, AmbiguousPlaneOrientationBias);
 
         if (!TryNormalise(biasedDirection, out Vector3 normalisedBiasedDirection))
@@ -190,6 +224,18 @@ public partial class LegIKController : SkeletonModifier3D
 
         resolvedPoleDirection = normalisedBiasedDirection;
         return true;
+    }
+
+    private static bool IsStableAvatarForwardPole(
+        Vector3 poleDirection,
+        Vector3 avatarForward,
+        Vector3 avatarRight,
+        Vector3 skeletonUp)
+    {
+        float forwardDot = poleDirection.Dot(avatarForward);
+        return forwardDot >= MinimumStableForwardPoleDot
+            && Mathf.Abs(poleDirection.Dot(avatarRight)) <= forwardDot * MaximumStableSideToForwardPoleRatio
+            && Mathf.Abs(forwardDot) - Mathf.Abs(poleDirection.Dot(skeletonUp)) >= AmbiguousPlanePreferenceThreshold;
     }
 
     private bool TryResolveBones()
