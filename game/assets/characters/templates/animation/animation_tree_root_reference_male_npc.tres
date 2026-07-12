@@ -1,0 +1,120 @@
+[gd_resource type="AnimationNodeBlendTree" format=3]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_o4hka"]
+animation = &"eyes/Eyes Blink"
+
+[sub_resource type="AnimationNodeOneShot" id="AnimationNodeOneShot_k6kfg"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Male_body:eyeBlinkLeft", "GeneralSkeleton/Male_body:eyeBlinkRight", "GeneralSkeleton/Male_eyebrow002:eyeBlinkLeft", "GeneralSkeleton/Male_eyebrow002:eyeBlinkRight", "GeneralSkeleton/Male_eyelashes01:eyeBlinkLeft", "GeneralSkeleton/Male_eyelashes01:eyeBlinkRight"]
+
+[sub_resource type="AnimationNodeTimeScale" id="AnimationNodeTimeScale_6ya6n"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_i21dd"]
+animation = &"eyes/Eyes Right Left"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_2nkue"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Male_body:eyeLookInLeft", "GeneralSkeleton/Male_body:eyeLookInRight", "GeneralSkeleton/Male_eyebrow002:eyeLookInLeft", "GeneralSkeleton/Male_eyebrow002:eyeLookInRight", "GeneralSkeleton/Male_eyebrow002:eyeLookOutLeft", "GeneralSkeleton/Male_eyebrow002:eyeLookOutRight", "GeneralSkeleton/Male_eyelashes01:eyeLookInLeft", "GeneralSkeleton/Male_eyelashes01:eyeLookInRight", "GeneralSkeleton/Male_eyelashes01:eyeLookOutLeft", "GeneralSkeleton/Male_eyelashes01:eyeLookOutRight", "GeneralSkeleton/Male_high-poly:eyeLookInLeft", "GeneralSkeleton/Male_high-poly:eyeLookInRight", "GeneralSkeleton/Male_high-poly:eyeLookOutLeft", "GeneralSkeleton/Male_high-poly:eyeLookOutRight"]
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_fuio7"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_3ctyu"]
+animation = &"eyes/Eyes Up Down"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_v5n5e"]
+filter_enabled = true
+filters = ["GeneralSkeleton/Male_body:eyeLookDownRight", "GeneralSkeleton/Male_body:eyeLookUpRight", "GeneralSkeleton/Male_eyebrow002:eyeLookDownLeft", "GeneralSkeleton/Male_eyebrow002:eyeLookDownRight", "GeneralSkeleton/Male_eyebrow002:eyeLookUpLeft", "GeneralSkeleton/Male_eyebrow002:eyeLookUpRight", "GeneralSkeleton/Male_eyelashes01:eyeLookDownLeft", "GeneralSkeleton/Male_eyelashes01:eyeLookDownRight", "GeneralSkeleton/Male_eyelashes01:eyeLookUpLeft", "GeneralSkeleton/Male_eyelashes01:eyeLookUpRight", "GeneralSkeleton/Male_high-poly:eyeLookDownLeft", "GeneralSkeleton/Male_high-poly:eyeLookDownRight", "GeneralSkeleton/Male_high-poly:eyeLookUpLeft", "GeneralSkeleton/Male_high-poly:eyeLookUpRight"]
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_almfy"]
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_phbe0"]
+filter_enabled = true
+filters = ["%GeneralSkeleton:LeftIndexDistal", "%GeneralSkeleton:LeftIndexIntermediate", "%GeneralSkeleton:LeftIndexProximal", "%GeneralSkeleton:LeftLittleDistal", "%GeneralSkeleton:LeftLittleIntermediate", "%GeneralSkeleton:LeftLittleProximal", "%GeneralSkeleton:LeftMiddleDistal", "%GeneralSkeleton:LeftMiddleIntermediate", "%GeneralSkeleton:LeftMiddleProximal", "%GeneralSkeleton:LeftRingDistal", "%GeneralSkeleton:LeftRingIntermediate", "%GeneralSkeleton:LeftRingProximal", "%GeneralSkeleton:LeftThumbDistal", "%GeneralSkeleton:LeftThumbMetacarpal", "%GeneralSkeleton:LeftThumbProximal"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_sj8hd"]
+animation = &"Reset"
+
+[sub_resource type="AnimationNodeBlend2" id="AnimationNodeBlend2_us8r2"]
+filter_enabled = true
+filters = ["%GeneralSkeleton:RightIndexDistal", "%GeneralSkeleton:RightIndexIntermediate", "%GeneralSkeleton:RightIndexProximal", "%GeneralSkeleton:RightLittleDistal", "%GeneralSkeleton:RightLittleIntermediate", "%GeneralSkeleton:RightLittleProximal", "%GeneralSkeleton:RightMiddleDistal", "%GeneralSkeleton:RightMiddleIntermediate", "%GeneralSkeleton:RightMiddleProximal", "%GeneralSkeleton:RightRingDistal", "%GeneralSkeleton:RightRingIntermediate", "%GeneralSkeleton:RightRingProximal", "%GeneralSkeleton:RightThumbDistal", "%GeneralSkeleton:RightThumbMetacarpal", "%GeneralSkeleton:RightThumbProximal"]
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_mfh7s"]
+animation = &"Reset"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_ampbu"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_uvhao"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_vxmyy"]
+animation = &"Walk Forward"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_25cbj"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_1xj3r"]
+animation = &"Idle"
+
+[sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_yet0b"]
+blend_point_0/node = SubResource("AnimationNodeAnimation_uvhao")
+blend_point_0/pos = Vector2(0, 0)
+blend_point_0/name = &"0"
+blend_point_1/node = SubResource("AnimationNodeAnimation_vxmyy")
+blend_point_1/pos = Vector2(0, 1)
+blend_point_1/name = &"1"
+blend_point_2/node = SubResource("AnimationNodeAnimation_25cbj")
+blend_point_2/pos = Vector2(-1, 0)
+blend_point_2/name = &"2"
+blend_point_3/node = SubResource("AnimationNodeAnimation_1xj3r")
+blend_point_3/pos = Vector2(1, 0)
+blend_point_3/name = &"3"
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_5cx08"]
+advance_mode = 2
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_qr4d5"]
+xfade_time = 0.5
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_w5tq0"]
+xfade_time = 0.5
+
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_lt7eo"]
+states/Idle/node = SubResource("AnimationNodeAnimation_ampbu")
+states/Idle/position = Vector2(360, 100)
+states/Walking/node = SubResource("AnimationNodeBlendSpace2D_yet0b")
+states/Walking/position = Vector2(360, -33)
+transitions = ["Start", "Idle", SubResource("AnimationNodeStateMachineTransition_5cx08"), "Idle", "Walking", SubResource("AnimationNodeStateMachineTransition_qr4d5"), "Walking", "Idle", SubResource("AnimationNodeStateMachineTransition_w5tq0")]
+
+[resource]
+resource_name = "NPC Animation Tree Root"
+nodes/output/position = Vector2(640, -120)
+nodes/EyesBlinkOneShot/node = SubResource("AnimationNodeOneShot_k6kfg")
+nodes/EyesBlinkOneShot/position = Vector2(280, 340)
+nodes/EyesBlinkAnimation/node = SubResource("AnimationNodeAnimation_o4hka")
+nodes/EyesBlinkAnimation/position = Vector2(-80, 360)
+nodes/States/node = SubResource("AnimationNodeStateMachine_lt7eo")
+nodes/States/position = Vector2(-620, -140)
+nodes/EyesVerticalLookBlend/node = SubResource("AnimationNodeBlend2_v5n5e")
+nodes/EyesVerticalLookBlend/position = Vector2(220, -380)
+nodes/EyesVerticalLookAnimation/node = SubResource("AnimationNodeAnimation_3ctyu")
+nodes/EyesVerticalLookAnimation/position = Vector2(-300, 300)
+nodes/EyesVerticalLookSeek/node = SubResource("AnimationNodeTimeSeek_almfy")
+nodes/EyesVerticalLookSeek/position = Vector2(-40, 220)
+nodes/EyesHorizontalLookBlend/node = SubResource("AnimationNodeBlend2_2nkue")
+nodes/EyesHorizontalLookBlend/position = Vector2(-100, -440)
+nodes/EyesHorizontalLookAnimation/node = SubResource("AnimationNodeAnimation_i21dd")
+nodes/EyesHorizontalLookAnimation/position = Vector2(-640, 280)
+nodes/EyesHorizontalLookSeek/node = SubResource("AnimationNodeTimeSeek_fuio7")
+nodes/EyesHorizontalLookSeek/position = Vector2(-400, 200)
+nodes/RightHandBlend/node = SubResource("AnimationNodeBlend2_us8r2")
+nodes/RightHandBlend/position = Vector2(100, -160)
+nodes/LeftHandPose/node = SubResource("AnimationNodeAnimation_sj8hd")
+nodes/LeftHandPose/position = Vector2(-300, -20)
+nodes/LeftHandBlend/node = SubResource("AnimationNodeBlend2_phbe0")
+nodes/LeftHandBlend/position = Vector2(-120, -170)
+nodes/RightHandPose/node = SubResource("AnimationNodeAnimation_mfh7s")
+nodes/RightHandPose/position = Vector2(-80, 120)
+nodes/EyesBlinkTimeScale/node = SubResource("AnimationNodeTimeScale_6ya6n")
+nodes/EyesBlinkTimeScale/position = Vector2(80, 320)
+node_connections = [&"output", 0, &"EyesBlinkOneShot", &"EyesBlinkOneShot", 0, &"EyesVerticalLookBlend", &"EyesBlinkOneShot", 1, &"EyesBlinkTimeScale", &"EyesVerticalLookBlend", 0, &"EyesHorizontalLookBlend", &"EyesVerticalLookBlend", 1, &"EyesVerticalLookSeek", &"EyesVerticalLookSeek", 0, &"EyesVerticalLookAnimation", &"EyesHorizontalLookBlend", 0, &"RightHandBlend", &"EyesHorizontalLookBlend", 1, &"EyesHorizontalLookSeek", &"EyesHorizontalLookSeek", 0, &"EyesHorizontalLookAnimation", &"RightHandBlend", 0, &"LeftHandBlend", &"RightHandBlend", 1, &"RightHandPose", &"LeftHandBlend", 0, &"States", &"LeftHandBlend", 1, &"LeftHandPose", &"EyesBlinkTimeScale", 0, &"EyesBlinkAnimation"]

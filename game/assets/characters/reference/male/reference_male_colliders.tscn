@@ -1,0 +1,5 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://divb2jeax0fu1" path="res://assets/characters/reference/male/reference_male.colliders.blend" id="1_collider"]
+
+[node name="reference_male_colliders" instance=ExtResource("1_collider")]

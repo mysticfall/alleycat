@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://c06wv3etncaiq"]
+
+[ext_resource type="PackedScene" uid="uid://cktwyl5p5gfwx" path="res://assets/characters/templates/reference_male/reference_male_npc.tscn" id="1_0e151"]
+[ext_resource type="PackedScene" uid="uid://dxao507r2dgb2" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_0o8g4"]
+[ext_resource type="Resource" uid="uid://bqt323cv54sr3" path="res://assets/characters/reference/male/body_collider_profile.tres" id="3_fv6ct"]
+[ext_resource type="PackedScene" uid="uid://bsfkxbo34s5ch" path="res://assets/characters/reference/male/reference_male.blend" id="3_megh4"]
+
+[node name="Vadim" unique_id=504240789 instance=ExtResource("1_0e151")]
+Id = "Vadim"
+
+[node name="NPCCharacterInstaller" parent="." index="7" unique_id=532609475 instance=ExtResource("2_0o8g4")]
+Template = ExtResource("1_0e151")
+TemplateBaseline = ExtResource("3_megh4")
+ColliderProfile = ExtResource("3_fv6ct")

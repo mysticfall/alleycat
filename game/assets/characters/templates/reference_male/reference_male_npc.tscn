@@ -1,0 +1,91 @@
+[gd_scene format=3 uid="uid://cktwyl5p5gfwx"]
+
+[ext_resource type="PackedScene" uid="uid://baxl54fq0rpj3" path="res://assets/characters/templates/reference_male/reference_male_base.tscn" id="1_p3faa"]
+[ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="2_3qwye"]
+[ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="3_rnwpi"]
+[ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_jj16n"]
+[ext_resource type="Script" uid="uid://bxb7ysth4n1du" path="res://src/IK/CharacterIK.cs" id="5_7cm3m"]
+[ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="6_dvj2u"]
+[ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="7_dvj2u"]
+[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="8_racrb"]
+[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="9_e0v3v"]
+[ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="10_y1xmj"]
+[ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="11_vk3vc"]
+
+[sub_resource type="Resource" id="Resource_agentic_system_text_section"]
+script = ExtResource("8_racrb")
+Text = "You are Vadim, a warm, observant person standing with the player in a VR room.
+Reply naturally and briefly, as if speaking aloud in real time.
+You must not answer with normal chat text. For every response, call the speak tool exactly once with the
+words Alley should say aloud. Do not describe tool use and do not include stage directions."
+Name = "Instructions"
+
+[sub_resource type="Resource" id="Resource_y6fq2"]
+script = ExtResource("9_e0v3v")
+Sections = [SubResource("Resource_agentic_system_text_section")]
+
+[sub_resource type="Resource" id="Resource_agentic_speech_tool"]
+script = ExtResource("11_vk3vc")
+ToolName = "speak"
+ToolDescription = "Speak the supplied text aloud through the configured voice."
+
+[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Voice") instance=ExtResource("1_p3faa")]
+Voice = NodePath("Male/GeneralSkeleton/Head/Voice")
+
+[node name="Voice" type="Node3D" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1295007558 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2221888e-05, -0.035407424, 0.08069722)
+script = ExtResource("2_3qwye")
+SpeechGenerator = NodePath("SpeechGenerator")
+LipSyncPlayer = NodePath("LipSyncPlayer")
+Id = "Elena.wav"
+metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
+
+[node name="SpeechGenerator" type="Node" parent="Male/GeneralSkeleton/Head/Voice" index="0" unique_id=1402629371]
+script = ExtResource("3_rnwpi")
+VoiceOverride = "Elena.wav"
+TargetSampleRate = 16000
+metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
+
+[node name="LipSyncPlayer" type="Node" parent="Male/GeneralSkeleton/Head/Voice" index="1" unique_id=1264275691 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
+script = ExtResource("4_jj16n")
+InputStrength = 0.6
+ConstantNoise = true
+EyeRotationToBlendshapeScale = 0.15
+Skeleton = NodePath("../../..")
+AudioPlayer = NodePath("../AudioStreamPlayer3D")
+metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Male/GeneralSkeleton/Head/Voice" index="2" unique_id=1285733651]
+
+[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=980532221 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
+script = ExtResource("5_7cm3m")
+Viewpoint = NodePath("../Male/GeneralSkeleton/Head/Viewpoint")
+HeadIKTarget = NodePath("../IKTargets/Head")
+HeadIKSolveTarget = NodePath("../IKTargets/HeadSolve")
+RightHandIKTarget = NodePath("../IKTargets/RightHand")
+LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
+RightFootIKTarget = NodePath("../IKTargets/RightFoot")
+LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
+PhysicalRig = NodePath("../Male/GeneralSkeleton/DynamicPhysicalRig")
+RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
+LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
+HeadModifierGroup = [NodePath("../Male/GeneralSkeleton/NeckSpineIK"), NodePath("../Male/GeneralSkeleton/HeadCopyRotation"), NodePath("../Male/GeneralSkeleton/NeckTwistDisperser")]
+RightHandModifierGroup = [NodePath("../Male/GeneralSkeleton/RightArmIKController"), NodePath("../Male/GeneralSkeleton/RightArmTwoBoneIKController"), NodePath("../Male/GeneralSkeleton/RightHandCopyRotation")]
+LeftHandModifierGroup = [NodePath("../Male/GeneralSkeleton/LeftArmIKController"), NodePath("../Male/GeneralSkeleton/LeftArmTwoBoneIKController"), NodePath("../Male/GeneralSkeleton/LeftHandCopyRotation")]
+RightFootModifierGroup = [NodePath("../Male/GeneralSkeleton/RightLegIKController"), NodePath("../Male/GeneralSkeleton/RightLegTwoBoneIKController"), NodePath("../Male/GeneralSkeleton/CopyRightFootRotation")]
+LeftFootModifierGroup = [NodePath("../Male/GeneralSkeleton/LeftLegIKController"), NodePath("../Male/GeneralSkeleton/LeftLegTwoBoneIKController"), NodePath("../Male/GeneralSkeleton/CopyLeftFootRotation")]
+metadata/_custom_type_script = "uid://bxb7ysth4n1du"
+
+[node name="RightHandGrabProvider" type="Node" parent="CharacterIK" index="0" unique_id=1366308435]
+script = ExtResource("6_dvj2u")
+metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
+
+[node name="LeftHandGrabProvider" type="Node" parent="CharacterIK" index="1" unique_id=1193906899]
+script = ExtResource("6_dvj2u")
+metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
+
+[node name="Mind" type="Node" parent="." index="8" unique_id=2028818158]
+script = ExtResource("7_dvj2u")
+SystemInstruction = SubResource("Resource_y6fq2")
+Tools = Array[ExtResource("10_y1xmj")]([SubResource("Resource_agentic_speech_tool")])
+metadata/_custom_type_script = "uid://hadsjgek6b2p"

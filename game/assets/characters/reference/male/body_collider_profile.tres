@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="BodyColliderProfile" format=3 uid="uid://bqt323cv54sr3"]
+
+[ext_resource type="PackedScene" path="res://assets/characters/reference/male/reference_male_colliders.tscn" id="1_wy1a5"]
+[ext_resource type="Script" uid="uid://b8s5do8qyysss" path="res://src/Rigging/Physics/BodyColliderProfile.cs" id="2_5p8j3"]
+
+[resource]
+script = ExtResource("2_5p8j3")
+SourceScene = ExtResource("1_wy1a5")

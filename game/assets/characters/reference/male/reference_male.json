@@ -1,0 +1,8 @@
+{
+  "preset": "Male",
+  "name": "Male",
+  "outputFile": "assets/characters/reference/male/reference_male.blend",
+  "amimations": [
+    "assets/characters/reference/male/animations/source/animations.blend"
+  ]
+}
