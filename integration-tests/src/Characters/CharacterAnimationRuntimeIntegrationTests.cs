@@ -22,7 +22,9 @@ namespace AlleyCat.IntegrationTests.Characters;
 public sealed partial class CharacterAnimationRuntimeIntegrationTests
 {
     private const string AllyScenePath = "res://assets/characters/reference/ally.tscn";
+    private const string VadimScenePath = "res://assets/characters/reference/vadim.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string MaleNpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres";
     private static readonly StringName _eyesLibraryName = new("eyes");
 
     /// <summary>
@@ -55,6 +57,40 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             string[] animationNames = animationPlayer.GetAnimationList();
             Assert.Contains("Walk Forward", animationNames);
             Assert.Contains("eyes/Eyes Up Down", animationNames);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the reference male uses male eye animations and filter targets rather than the shared female set.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task VadimScene_RuntimeAnimationTree_UsesCompleteMaleBlinkTargets()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node root = LoadPackedScene(VadimScenePath).Instantiate();
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 12);
+            EnsureCharacterRuntimeInstalled(root);
+
+            AnimationTree animationTree = root.GetNode<AnimationTree>("AnimationTree");
+            AnimationPlayer animationPlayer = root.GetNode<AnimationPlayer>("AnimationPlayer");
+
+            Assert.Equal(new NodePath("../Male"), animationTree.RootNode);
+            Assert.Equal(new NodePath("../Male"), animationPlayer.RootNode);
+            Assert.Equal(MaleNpcAnimationTreeRootPath, animationTree.TreeRoot.ResourcePath);
+            AssertRuntimeEyeAnimationTracksResolve(animationPlayer);
+            AssertBlinkAnimationTargetsBodyMesh(animationPlayer, "GeneralSkeleton/Male_body");
+            AssertBodyMeshBlinkShapesDeform(animationPlayer, "GeneralSkeleton/Male_body");
+            AssertBlinkFilterTargetsMaleMeshes(animationTree);
         }
         finally
         {
@@ -196,6 +232,55 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         Assert.Contains(EyesAnimationTreePaths.EyeBlinkRightBlendShapeName, blinkShapes);
     }
 
+    private static void AssertBlinkAnimationTargetsBodyMesh(AnimationPlayer animationPlayer, string bodyMeshPath)
+    {
+        Animation blinkAnimation = animationPlayer.GetAnimation(new StringName(EyesAnimationTreePaths.BlinkAnimationName));
+        HashSet<string> trackPaths = GetTrackPaths(blinkAnimation);
+
+        Assert.Contains($"{bodyMeshPath}:{EyesAnimationTreePaths.EyeBlinkLeftBlendShapeName}", trackPaths);
+        Assert.Contains($"{bodyMeshPath}:{EyesAnimationTreePaths.EyeBlinkRightBlendShapeName}", trackPaths);
+    }
+
+    private static void AssertBodyMeshBlinkShapesDeform(AnimationPlayer animationPlayer, string bodyMeshPath)
+    {
+        Node rootNode = animationPlayer.GetNodeOrNull(animationPlayer.RootNode)
+            ?? throw new Xunit.Sdk.XunitException($"Expected AnimationPlayer root '{animationPlayer.RootNode}' to resolve.");
+        MeshInstance3D bodyMesh = rootNode.GetNodeOrNull<MeshInstance3D>(new NodePath(bodyMeshPath))
+            ?? throw new Xunit.Sdk.XunitException($"Expected body mesh '{bodyMeshPath}' to resolve from '{rootNode.GetPath()}'.");
+
+        Assert.True(
+            GetBlendShapeMaxVertexDelta(bodyMesh, EyesAnimationTreePaths.EyeBlinkLeftBlendShapeName) > 0.0f,
+            "Expected Male_body eyeBlinkLeft to contain non-zero vertex deformation, not a no-op target.");
+        Assert.True(
+            GetBlendShapeMaxVertexDelta(bodyMesh, EyesAnimationTreePaths.EyeBlinkRightBlendShapeName) > 0.0f,
+            "Expected Male_body eyeBlinkRight to contain non-zero vertex deformation, not a no-op target.");
+    }
+
+    private static void AssertBlinkFilterTargetsMaleMeshes(AnimationTree animationTree)
+    {
+        AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false);
+        AnimationNodeOneShot blinkNode = Assert.IsType<AnimationNodeOneShot>(
+            rootTree.GetNode(EyesAnimationTreePaths.BlinkOneShotNode),
+            exactMatch: false);
+
+        Assert.True(blinkNode.IsPathFiltered(new NodePath("GeneralSkeleton/Male_body:eyeBlinkLeft")));
+        Assert.True(blinkNode.IsPathFiltered(new NodePath("GeneralSkeleton/Male_body:eyeBlinkRight")));
+        Assert.True(blinkNode.IsPathFiltered(new NodePath("GeneralSkeleton/Male_eyebrow002:eyeBlinkLeft")));
+        Assert.True(blinkNode.IsPathFiltered(new NodePath("GeneralSkeleton/Male_eyelashes01:eyeBlinkRight")));
+        Assert.False(blinkNode.IsPathFiltered(new NodePath("GeneralSkeleton/Female_body:eyeBlinkLeft")));
+    }
+
+    private static HashSet<string> GetTrackPaths(Animation animation)
+    {
+        HashSet<string> paths = new(StringComparer.Ordinal);
+        for (int trackIndex = 0; trackIndex < animation.GetTrackCount(); trackIndex++)
+        {
+            _ = paths.Add(animation.TrackGetPath(trackIndex).ToString());
+        }
+
+        return paths;
+    }
+
     private static void AssertBlendShapeTracksResolve(AnimationPlayer animationPlayer, string animationName, Node rootNode)
     {
         Animation animation = animationPlayer.GetAnimation(new StringName(animationName));
@@ -250,6 +335,46 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         }
 
         return false;
+    }
+
+    private static float GetBlendShapeMaxVertexDelta(MeshInstance3D meshInstance, string blendShapeName)
+    {
+        if (meshInstance.Mesh is not ArrayMesh mesh)
+        {
+            return -1.0f;
+        }
+
+        int blendShapeIndex = -1;
+        for (int index = 0; index < mesh.GetBlendShapeCount(); index++)
+        {
+            if (string.Equals(mesh.GetBlendShapeName(index).ToString(), blendShapeName, StringComparison.Ordinal))
+            {
+                blendShapeIndex = index;
+                break;
+            }
+        }
+
+        if (blendShapeIndex < 0)
+        {
+            return -1.0f;
+        }
+
+        float maxDelta = 0.0f;
+        for (int surfaceIndex = 0; surfaceIndex < mesh.GetSurfaceCount(); surfaceIndex++)
+        {
+            Godot.Collections.Array baseArrays = mesh.SurfaceGetArrays(surfaceIndex);
+            Vector3[] baseVertices = baseArrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            Godot.Collections.Array<Godot.Collections.Array> blendShapeArrays = mesh.SurfaceGetBlendShapeArrays(surfaceIndex);
+            Godot.Collections.Array targetArrays = blendShapeArrays[blendShapeIndex];
+            Vector3[] targetVertices = targetArrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            int vertexCount = Math.Min(baseVertices.Length, targetVertices.Length);
+            for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+            {
+                maxDelta = Math.Max(maxDelta, baseVertices[vertexIndex].DistanceTo(targetVertices[vertexIndex]));
+            }
+        }
+
+        return maxDelta;
     }
 
     private sealed class RuntimeEyeAnimationFixture : IDisposable

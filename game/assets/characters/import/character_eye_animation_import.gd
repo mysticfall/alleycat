@@ -48,6 +48,7 @@ func apply(scene: Node) -> void:
 		# and after installer materialisation.
 		animation_player.root_node = animation_player.get_path_to(model_root)
 
+		_validate_body_blink_meshes(model_root)
 		eye_tracks = _collect_eye_tracks(model_root)
 		if eye_tracks.is_empty():
 			_create_eye_animation_contract_placeholder(scene, model_root)
@@ -65,6 +66,69 @@ func apply(scene: Node) -> void:
 	var result := animation_player.add_animation_library(EYES_LIBRARY_NAME, library)
 	if result != OK:
 		push_error("Eye animation import failed to add AnimationLibrary '%s': %s" % [EYES_LIBRARY_NAME, result])
+
+
+func _validate_body_blink_meshes(model_root: Node) -> void:
+	for node in _collect_visible_body_meshes(model_root):
+		var mesh_instance := node as MeshInstance3D
+		for blink_shape in BLINK_BLEND_SHAPES:
+			var max_delta := _get_blend_shape_max_vertex_delta(mesh_instance.mesh, blink_shape)
+			if max_delta < 0.0:
+				push_error("Eye animation import requires body mesh '%s' to contain source blend shape '%s'. The importer will not synthesise no-op body blink targets." % [model_root.get_path_to(mesh_instance), blink_shape])
+			elif is_zero_approx(max_delta):
+				push_error("Eye animation import requires body mesh '%s' blend shape '%s' to deform vertices. The imported target has no usable vertex deltas." % [model_root.get_path_to(mesh_instance), blink_shape])
+
+
+func _collect_visible_body_meshes(model_root: Node) -> Array[MeshInstance3D]:
+	var body_meshes: Array[MeshInstance3D] = []
+	_collect_visible_body_meshes_recursive(model_root, body_meshes)
+	return body_meshes
+
+
+func _collect_visible_body_meshes_recursive(node: Node, body_meshes: Array[MeshInstance3D]) -> void:
+	if node is MeshInstance3D and node.visible and node.mesh != null and _is_body_mesh_name(node.name):
+		body_meshes.append(node as MeshInstance3D)
+
+	for child in node.get_children():
+		_collect_visible_body_meshes_recursive(child, body_meshes)
+
+
+func _is_body_mesh_name(mesh_name: StringName) -> bool:
+	var normalised_name := String(mesh_name).to_lower()
+	return normalised_name.ends_with("_body") or normalised_name.ends_with(".body")
+
+
+func _get_blend_shape_index(mesh: Mesh, blend_shape_name: StringName) -> int:
+	if mesh == null:
+		return -1
+
+	for blend_shape_index in mesh.get_blend_shape_count():
+		if mesh.get_blend_shape_name(blend_shape_index) == blend_shape_name:
+			return blend_shape_index
+
+	return -1
+
+
+func _get_blend_shape_max_vertex_delta(mesh: Mesh, blend_shape_name: StringName) -> float:
+	var blend_shape_index := _get_blend_shape_index(mesh, blend_shape_name)
+	if blend_shape_index < 0:
+		return -1.0
+
+	var max_delta := 0.0
+	for surface_index in mesh.get_surface_count():
+		var base_arrays := mesh.surface_get_arrays(surface_index)
+		var base_vertices := base_arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+		var blend_shape_arrays := mesh.surface_get_blend_shape_arrays(surface_index)
+		if blend_shape_index >= blend_shape_arrays.size():
+			continue
+
+		var target_arrays := blend_shape_arrays[blend_shape_index] as Array
+		var target_vertices := target_arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+		var vertex_count: int = min(base_vertices.size(), target_vertices.size())
+		for vertex_index in vertex_count:
+			max_delta = max(max_delta, base_vertices[vertex_index].distance_to(target_vertices[vertex_index]))
+
+	return max_delta
 
 
 func _create_eye_animation_contract_placeholder(scene: Node, model_root: Node) -> void:
