@@ -23,7 +23,7 @@ public sealed class ContentResolverTests
             requestedPackId: "req",
             defaultPackId: "def",
             isIntegrationTest: true,
-            sceneExists: _ => true,
+            sceneExists: _ => throw new InvalidOperationException("Integration-test bypass should not probe content."),
             fallbackStartScenePath: Fallback,
             contentRoot: ContentRoot);
 
@@ -82,20 +82,21 @@ public sealed class ContentResolverTests
     }
 
     /// <summary>
-    /// A requested pack whose scene is missing must fall through to the default pack.
+    /// A requested pack whose scene is missing must fail explicitly instead of falling through.
     /// </summary>
     [Fact]
-    public void SelectStartScenePath_FallsThroughToDefault_WhenRequestedPackSceneMissing()
+    public void SelectStartScenePath_Throws_WhenRequestedPackSceneMissing()
     {
-        string result = ContentResolver.SelectStartScenePath(
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => ContentResolver.SelectStartScenePath(
             requestedPackId: "req",
             defaultPackId: "def",
             isIntegrationTest: false,
             sceneExists: p => p == DefaultPath,
             fallbackStartScenePath: Fallback,
-            contentRoot: ContentRoot);
+            contentRoot: ContentRoot));
 
-        Assert.Equal(DefaultPath, result);
+        Assert.Contains("req", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(RequestedPath, exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

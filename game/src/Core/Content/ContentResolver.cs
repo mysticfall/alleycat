@@ -9,14 +9,20 @@ namespace AlleyCat.Core.Content;
 /// Resolves the start scene path from the active content pack, the default pack,
 /// or a configured fallback.
 /// </summary>
-/// <remarks>
-/// Initialises a new <see cref="ContentResolver"/>, loading the content manifest if present.
-/// </remarks>
-/// <param name="logger">Optional logger; defaults to a no-op logger.</param>
-public partial class ContentResolver(ILogger<ContentResolver>? logger = null) : IContentResolver
+public partial class ContentResolver : IContentResolver
 {
-    private readonly ContentManifest? _manifest = GD.Load<ContentManifest>(ContentPaths.ManifestPath);
-    private readonly ILogger<ContentResolver> _logger = logger ?? NullLogger<ContentResolver>.Instance;
+    private readonly ILogger<ContentResolver> _logger;
+    private readonly ContentManifest? _manifest;
+
+    /// <summary>
+    /// Initialises a new <see cref="ContentResolver"/>, loading the content manifest if present.
+    /// </summary>
+    /// <param name="logger">Optional logger; defaults to a no-op logger.</param>
+    public ContentResolver(ILogger<ContentResolver>? logger = null)
+    {
+        _logger = logger ?? NullLogger<ContentResolver>.Instance;
+        _manifest = LoadManifestIfPresent(_logger);
+    }
 
     /// <inheritdoc />
     public string ResolveStartScenePath(string fallbackStartScenePath)
@@ -62,10 +68,9 @@ public partial class ContentResolver(ILogger<ContentResolver>? logger = null) : 
         if (!string.IsNullOrEmpty(requestedPackId))
         {
             string path = contentRoot + requestedPackId + "/" + startSceneFileName;
-            if (sceneExists(path))
-            {
-                return path;
-            }
+            return sceneExists(path)
+                ? path
+                : throw CreateMissingRequestedPackSceneException(requestedPackId, path);
         }
 
         if (!string.IsNullOrEmpty(defaultPackId))
@@ -78,6 +83,25 @@ public partial class ContentResolver(ILogger<ContentResolver>? logger = null) : 
         }
 
         return fallbackStartScenePath;
+    }
+
+    private static InvalidOperationException CreateMissingRequestedPackSceneException(
+        string requestedPackId,
+        string expectedScenePath)
+        => new(
+            $"Requested content pack '{requestedPackId}' does not provide the expected start scene '{expectedScenePath}'.");
+
+    private static ContentManifest? LoadManifestIfPresent(ILogger<ContentResolver> logger)
+    {
+        if (!ResourceLoader.Exists(ContentPaths.ManifestPath))
+        {
+            logger.LogInformation(
+                "User content manifest {ManifestPath} is missing; fallback start-scene resolution will continue.",
+                ContentPaths.ManifestPath);
+            return null;
+        }
+
+        return GD.Load<ContentManifest>(ContentPaths.ManifestPath);
     }
 
     private static string? ReadRequestedPackId()
