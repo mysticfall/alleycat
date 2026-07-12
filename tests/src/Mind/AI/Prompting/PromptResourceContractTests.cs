@@ -19,14 +19,22 @@ public sealed class PromptResourceContractTests
         AssertResourceContract<PromptSection>();
         AssertResourceContract<TextPromptSection>();
         AssertResourceContract<FilePromptSection>();
+        AssertResourceContract<PseudoXmlPromptWriter>(expectTool: true);
     }
 
-    private static void AssertResourceContract<T>()
+    private static void AssertResourceContract<T>(bool expectTool = false)
         where T : Resource
     {
         Assert.True(typeof(Resource).IsAssignableFrom(typeof(T)));
         Assert.NotNull(typeof(T).GetCustomAttributes(typeof(GlobalClassAttribute), inherit: true).SingleOrDefault());
-        Assert.Null(typeof(T).GetCustomAttributes(typeof(ToolAttribute), inherit: true).SingleOrDefault());
+        if (expectTool)
+        {
+            Assert.NotNull(typeof(T).GetCustomAttributes(typeof(ToolAttribute), inherit: true).SingleOrDefault());
+        }
+        else
+        {
+            Assert.Null(typeof(T).GetCustomAttributes(typeof(ToolAttribute), inherit: true).SingleOrDefault());
+        }
         if (!typeof(T).IsAbstract)
         {
             Assert.NotNull(typeof(T).GetConstructor(Type.EmptyTypes));

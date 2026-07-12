@@ -1,6 +1,7 @@
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Templating;
 using AlleyCat.TestFramework;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
@@ -26,13 +27,18 @@ public sealed partial class PromptStackIntegrationTests
     }
 
     /// <summary>
-    /// Prompt stacks concatenate sections in order and return the compiler result.
+    /// Prompt stacks delegate source writing through services and return the compiler result.
     /// </summary>
     [Fact]
-    public void CompileConcatenatesSectionsInOrderAndReturnsCompilerResult()
+    public void CompileResolvesWriterAndCompilerFromServiceProvider()
     {
         RecordingTemplate expectedTemplate = new();
         RecordingCompiler compiler = new(expectedTemplate);
+        RecordingPromptWriter writer = new("  compiled source  ");
+        using ServiceProvider services = new ServiceCollection()
+            .AddSingleton<IPromptWriter>(writer)
+            .AddSingleton<ITemplateCompiler>(compiler)
+            .BuildServiceProvider();
         PromptStack stack = new()
         {
             Sections =
@@ -50,18 +56,11 @@ public sealed partial class PromptStackIntegrationTests
             ],
         };
 
-        ITemplate template = stack.Compile(compiler);
+        ITemplate template = stack.Compile(services);
 
         Assert.Same(expectedTemplate, template);
-        Assert.Equal(
-            "<system_instructions>\n" +
-            "Be kind.\n" +
-            "</system_instructions>\n" +
-            "\n" +
-            "<player_context>\n" +
-            "Player is nearby.\n" +
-            "</player_context>",
-            compiler.Source);
+        Assert.Same(stack.Sections, writer.Sections);
+        Assert.Equal("compiled source", compiler.Source);
     }
 
     /// <summary>
@@ -71,6 +70,10 @@ public sealed partial class PromptStackIntegrationTests
     public void CompileTrimsCompleteSourceBeforeCompilation()
     {
         RecordingCompiler compiler = new(new RecordingTemplate());
+        using ServiceProvider services = new ServiceCollection()
+            .AddSingleton<IPromptWriter>(new RecordingPromptWriter("\n  complete source  \n"))
+            .AddSingleton<ITemplateCompiler>(compiler)
+            .BuildServiceProvider();
         PromptStack stack = new()
         {
             Sections =
@@ -83,53 +86,9 @@ public sealed partial class PromptStackIntegrationTests
             ],
         };
 
-        _ = stack.Compile(compiler);
+        _ = stack.Compile(services);
 
-        Assert.Equal(
-            "<trimmed_section>\n" +
-            "  content with intentional padding  \n" +
-            "</trimmed_section>",
-            compiler.Source);
-    }
-
-    /// <summary>
-    /// Section names are normalised to snake-case tag names with acronym-aware boundaries.
-    /// </summary>
-    [Fact]
-    public void CompileNormalisesSectionNamesToSnakeCaseTags()
-    {
-        (string SectionName, string ExpectedTagName)[] cases =
-        [
-            ("HTTP Response", "http_response"),
-            ("NPCVoiceID", "npc_voice_id"),
-            ("already_snake_case", "already_snake_case"),
-            ("Player   Context", "player_context"),
-            ("Line\tBreak", "line_break"),
-            ("Model2D Target", "model_2_d_target"),
-            ("agent.APIResponse", "agent_api_response"),
-        ];
-
-        foreach ((string sectionName, string expectedTagName) in cases)
-        {
-            RecordingCompiler compiler = new(new RecordingTemplate());
-            PromptStack stack = new()
-            {
-                Sections =
-            [
-                new TextPromptSection
-                {
-                    Name = sectionName,
-                    Text = "content",
-                },
-            ],
-            };
-
-            _ = stack.Compile(compiler);
-
-            Assert.Equal(
-                $"<{expectedTagName}>\ncontent\n</{expectedTagName}>",
-                compiler.Source);
-        }
+        Assert.Equal("complete source", compiler.Source);
     }
 
     /// <summary>
@@ -138,72 +97,43 @@ public sealed partial class PromptStackIntegrationTests
     [Fact]
     public void CompileTreatsNullSectionsArrayAsEmptyPromptSource()
     {
+        RecordingPromptWriter writer = new("source");
         RecordingCompiler compiler = new(new RecordingTemplate());
+        using ServiceProvider services = new ServiceCollection()
+            .AddSingleton<IPromptWriter>(writer)
+            .AddSingleton<ITemplateCompiler>(compiler)
+            .BuildServiceProvider();
         PromptStack stack = new()
         {
             Sections = null!,
         };
 
-        _ = stack.Compile(compiler);
+        _ = stack.Compile(services);
 
-        Assert.Equal(string.Empty, compiler.Source);
+        Assert.Empty(writer.Sections ?? throw new InvalidOperationException("Writer was not invoked."));
     }
 
     /// <summary>
-    /// Null entries inside the section array fail as clear authoring errors.
+    /// Compile requires a non-null service provider.
     /// </summary>
     [Fact]
-    public void CompileRejectsNullSectionEntriesClearly()
-    {
-        PromptStack stack = new()
-        {
-            Sections = [null!],
-        };
-
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            stack.Compile(new RecordingCompiler(new RecordingTemplate())));
-
-        Assert.Contains("null section", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Empty or punctuation-only section names fail clearly before compilation.
-    /// </summary>
-    [Fact]
-    public void CompileRejectsEmptySectionNamesClearly()
-    {
-        string[] cases = [string.Empty, "   ", "---"];
-
-        foreach (string sectionName in cases)
-        {
-            PromptStack stack = new()
-            {
-                Sections =
-            [
-                new TextPromptSection
-                {
-                    Name = sectionName,
-                    Text = "content",
-                },
-            ],
-            };
-
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-                stack.Compile(new RecordingCompiler(new RecordingTemplate())));
-
-            Assert.Contains("section", exception.Message, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    /// <summary>
-    /// Compile requires a non-null template compiler.
-    /// </summary>
-    [Fact]
-    public void CompileRequiresCompiler()
+    public void CompileRequiresServiceProvider()
     {
         PromptStack stack = new();
 
         _ = Assert.Throws<ArgumentNullException>(() => stack.Compile(null!));
+    }
+
+    /// <summary>
+    /// Missing services fail through normal dependency injection behaviour.
+    /// </summary>
+    [Fact]
+    public void CompileRequiresRegisteredPromptServices()
+    {
+        PromptStack stack = new();
+        using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
+
+        _ = Assert.Throws<InvalidOperationException>(() => stack.Compile(services));
     }
 
     private sealed class RecordingCompiler(ITemplate template) : ITemplateCompiler
@@ -225,5 +155,19 @@ public sealed partial class PromptStackIntegrationTests
     private sealed class RecordingTemplate : ITemplate
     {
         public string Render(IReadOnlyDictionary<string, object?> context) => string.Empty;
+    }
+
+    private sealed class RecordingPromptWriter(string source) : IPromptWriter
+    {
+        public IReadOnlyCollection<PromptSection>? Sections
+        {
+            get; private set;
+        }
+
+        public string Write(IReadOnlyCollection<PromptSection> sections)
+        {
+            Sections = sections;
+            return source;
+        }
     }
 }

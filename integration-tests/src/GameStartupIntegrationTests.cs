@@ -1,5 +1,6 @@
 using System.Reflection;
 using AlleyCat.Core;
+using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using AlleyCat.Testing;
@@ -353,10 +354,10 @@ public sealed partial class GameStartupIntegrationTests
     }
 
     /// <summary>
-    /// Verifies the authored global startup scene contains the configured template compiler resource.
+    /// Verifies the authored global startup scene contains the configured resource registrars.
     /// </summary>
     [Fact]
-    public async Task GlobalSceneEnterTree_ContainsConfiguredTemplateCompilerResourceRegistrar()
+    public async Task GlobalSceneEnterTree_ContainsConfiguredResourceRegistrars()
     {
         SceneTree sceneTree = GetSceneTree();
         Node game = LoadPackedScene(GlobalScenePath).Instantiate();
@@ -369,15 +370,26 @@ public sealed partial class GameStartupIntegrationTests
 
             Godot.Collections.Array<Resource> serviceRegistrars = Assert.IsType<Godot.Collections.Array<Resource>>(
                 game.Get("ServiceRegistrars").AsGodotArray<Resource>());
-            Resource configuredRegistrar = Assert.Single(serviceRegistrars);
-            Type templateCompilerInterface = configuredRegistrar.GetType().GetInterface("AlleyCat.Templating.ITemplateCompiler")
-                ?? throw new InvalidOperationException("Configured registrar must implement ITemplateCompiler.");
-            Type serviceRegistrarInterface = configuredRegistrar.GetType().GetInterface("AlleyCat.Core.IServiceRegistrar")
-                ?? throw new InvalidOperationException("Configured registrar must implement IServiceRegistrar.");
+            Assert.Equal(2, serviceRegistrars.Count);
 
-            Assert.Equal("AlleyCat.Templating.HandlebarsTemplateCompiler", configuredRegistrar.GetType().FullName);
+            Resource templateCompilerRegistrar = Assert.IsType<HandlebarsTemplateCompiler>(serviceRegistrars[0]);
+            Resource promptWriterRegistrar = Assert.IsType<PseudoXmlPromptWriter>(serviceRegistrars[1]);
+
+            Type templateCompilerInterface = templateCompilerRegistrar.GetType().GetInterface("AlleyCat.Templating.ITemplateCompiler")
+                ?? throw new InvalidOperationException("Configured registrar must implement ITemplateCompiler.");
+            Type templateServiceRegistrarInterface = templateCompilerRegistrar.GetType().GetInterface("AlleyCat.Core.IServiceRegistrar")
+                ?? throw new InvalidOperationException("Template compiler registrar must implement IServiceRegistrar.");
+            Type promptWriterInterface = promptWriterRegistrar.GetType().GetInterface("AlleyCat.Mind.AI.Prompting.IPromptWriter")
+                ?? throw new InvalidOperationException("Configured registrar must implement IPromptWriter.");
+            Type promptServiceRegistrarInterface = promptWriterRegistrar.GetType().GetInterface("AlleyCat.Core.IServiceRegistrar")
+                ?? throw new InvalidOperationException("Prompt writer registrar must implement IServiceRegistrar.");
+
+            Assert.Equal("AlleyCat.Templating.HandlebarsTemplateCompiler", templateCompilerRegistrar.GetType().FullName);
             Assert.Equal("AlleyCat.Templating.ITemplateCompiler", templateCompilerInterface.FullName);
-            Assert.Equal("AlleyCat.Core.IServiceRegistrar", serviceRegistrarInterface.FullName);
+            Assert.Equal("AlleyCat.Core.IServiceRegistrar", templateServiceRegistrarInterface.FullName);
+            Assert.Equal("AlleyCat.Mind.AI.Prompting.PseudoXmlPromptWriter", promptWriterRegistrar.GetType().FullName);
+            Assert.Equal("AlleyCat.Mind.AI.Prompting.IPromptWriter", promptWriterInterface.FullName);
+            Assert.Equal("AlleyCat.Core.IServiceRegistrar", promptServiceRegistrarInterface.FullName);
         }
         finally
         {
@@ -404,6 +416,23 @@ public sealed partial class GameStartupIntegrationTests
         ITemplateCompiler resolvedCompiler = provider.GetRequiredService<ITemplateCompiler>();
 
         Assert.Same(compiler, resolvedCompiler);
+    }
+
+    /// <summary>
+    /// Verifies the Godot resource registrar directly registers itself as the prompt writer service.
+    /// </summary>
+    [Fact]
+    public void PseudoXmlPromptWriterRegisterServices_RegistersSelfAsPromptWriter()
+    {
+        PseudoXmlPromptWriter writer = new();
+        ServiceCollection services = new();
+
+        writer.RegisterServices(services);
+
+        using ServiceProvider provider = services.BuildServiceProvider();
+        IPromptWriter resolvedWriter = provider.GetRequiredService<IPromptWriter>();
+
+        Assert.Same(writer, resolvedWriter);
     }
 
     private static bool ReadBooleanProperty(object instance, string propertyName)

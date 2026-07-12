@@ -255,7 +255,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
         string instructions = systemInstruction
-            .Compile(new HandlebarsTemplateCompiler())
+            .Compile(new PromptCompilationServices())
             .Render(new Dictionary<string, object?>());
 
         return new AgentDefinition(
@@ -611,6 +611,21 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return serviceType.IsInstanceOfType(this)
             ? this
             : serviceType == typeof(IVoice) ? new ToolVoice(this) : null;
+    }
+
+    private sealed class PromptCompilationServices : IServiceProvider
+    {
+        private readonly HandlebarsTemplateCompiler _compiler = new();
+        private readonly PseudoXmlPromptWriter _writer = new();
+
+        public object? GetService(Type serviceType)
+        {
+            ArgumentNullException.ThrowIfNull(serviceType);
+
+            return serviceType == typeof(ITemplateCompiler)
+                ? _compiler
+                : serviceType == typeof(IPromptWriter) ? _writer : null;
+        }
     }
 
     private sealed class ToolVoice(AgenticMind mind) : IVoice
