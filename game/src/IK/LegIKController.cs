@@ -13,7 +13,7 @@ public partial class LegIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-6f;
     private const float AmbiguousPlanePreferenceThreshold = 0.02f;
-    private const float AmbiguousPlaneOrientationBias = 0.8f;
+    private const float AmbiguousPlaneOrientationBias = 1.0f;
 
     /// <summary>
     /// The foot IK goal consumed by downstream solvers.

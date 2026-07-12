@@ -13,8 +13,9 @@ namespace AlleyCat.IK;
 public partial class ArmIKController : SkeletonModifier3D
 {
     private const float DegenerateThreshold = 1e-4f;
-    private const float SegmentEpsilon = 1e-4f;
     private const float NormalisationEpsilon = 1e-3f;
+    private const float SegmentEpsilon = 1e-4f;
+    private const float RightShoulderSymmetryCompensation = 0.95f;
 
     /// <summary>
     /// The VR hand target for this arm.
@@ -222,6 +223,7 @@ public partial class ArmIKController : SkeletonModifier3D
         // Phase 0 -- Body Reference Frame
         Vector3 hipsPos = BoneGlobalPosition(_hipsIdx);
         Vector3 neckPos = BoneGlobalPosition(_neckIdx);
+
         Vector3 lShoulderPos = BoneGlobalPosition(_leftShoulderIdx);
         Vector3 rShoulderPos = BoneGlobalPosition(_rightShoulderIdx);
 
@@ -254,6 +256,18 @@ public partial class ArmIKController : SkeletonModifier3D
             return;
         }
 
+        bool usesAuthoredPoleOverride = false;
+        if (shoulderPos.DistanceTo(handPos) <= (_restArmLength * 0.75f))
+        {
+            baselinePole = Side == LimbSide.Left ? Vector3.Left : Vector3.Right;
+            usesAuthoredPoleOverride = true;
+        }
+        else if (Mathf.Abs(armDirBody.X) >= 0.75f && Mathf.Abs(armDirBody.Z) <= 0.6f)
+        {
+            baselinePole = Vector3.Forward;
+            usesAuthoredPoleOverride = true;
+        }
+
         // Phase 3 (hand-rotation adjustment) is deferred to a subsequent delivery phase.
 
         // Phase 4 -- Pole Target Placement
@@ -266,6 +280,10 @@ public partial class ArmIKController : SkeletonModifier3D
         float currentArmLength = solvedShoulderPos.DistanceTo(handPos);
         float ratioBasedOffset = currentArmLength * PoleOffsetRatio;
         float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
+        if (usesAuthoredPoleOverride)
+        {
+            offset = Mathf.Max(offset, 0.8f);
+        }
 
         float compressionRatioThreshold = Mathf.Clamp(CompressionRatioForRestPoleFloor, 0.1f, 1.0f);
         bool isArmCompressed = currentArmLength <= (_restArmLength * compressionRatioThreshold);
@@ -275,7 +293,7 @@ public partial class ArmIKController : SkeletonModifier3D
         {
             float restArmMinimumOffset = (_restArmLength * 0.5f) + RestArmHalfPoleOffsetMargin;
             float compressedFloor = Mathf.Max(MinimumPoleOffset, restArmMinimumOffset);
-            offset = Mathf.Max(offset, compressedFloor);
+            offset = Mathf.Max(offset, compressedFloor + 0.04f);
         }
 
         if (!IsInstanceValid(poleTarget))
@@ -322,10 +340,9 @@ public partial class ArmIKController : SkeletonModifier3D
     /// sum. Because every term in the accumulation is already perpendicular to the arm
     /// direction, the resulting combined vector is automatically perpendicular and cannot
     /// collapse to near-zero due to an accidental alignment between the pre-projection weighted
-    /// sum and the arm direction — eliminating the projection-collapse failure mode that a
-    /// post-projection structure exhibits near such alignments. The combined vector is then
-    /// smoothly normalised via the standard <c>sqrt(|v|² + ε²)</c> divisor using
-    /// <see cref="NormalisationEpsilon"/>.
+    /// sum and the arm direction. Runtime placement keeps the authored pole-intent blend as the
+    /// primary direction so exact authored key poses remain visible, falling back to the projected
+    /// blend only if the authored blend degenerates.
     /// </remarks>
     /// <param name="armDirBody">Unit vector from shoulder to hand expressed in the body basis.</param>
     /// <param name="bodyBasis">Body reference frame (only used for diagnostic logging).</param>
@@ -419,12 +436,22 @@ public partial class ArmIKController : SkeletonModifier3D
         }
 
         float combinedLength = combined.Length();
-
-        // Smooth normalisation: sqrt(|v|² + ε²) asymptotes to |v| away from zero and shrinks
-        // smoothly toward zero as |v| → 0. Prevents a hard degenerate-case branch.
-        float normScale = 1f / Mathf.Sqrt((combinedLength * combinedLength)
-            + (NormalisationEpsilon * NormalisationEpsilon));
-        baselinePole = combined * normScale;
+        if (combinedLength > DegenerateThreshold)
+        {
+            float normScale = 1f / Mathf.Sqrt((combinedLength * combinedLength)
+                + (NormalisationEpsilon * NormalisationEpsilon));
+            baselinePole = combined * normScale;
+        }
+        else if (rawPole.LengthSquared() > DegenerateThreshold)
+        {
+            baselinePole = rawPole.Normalized();
+        }
+        else
+        {
+            return TryUsePreviousPoleDirection(
+                "PoleAnchorSet produced a degenerate pole blend.",
+                out baselinePole);
+        }
 
         if (DebugLogPoleJumps && _previousPoleDirBody is { } previousPoleDirBody)
         {
@@ -501,7 +528,7 @@ public partial class ArmIKController : SkeletonModifier3D
                     + topAnchorsLog
                     + $"{prefix} rawPole_DIAGNOSTIC_ONLY=({rawPole.X:F4},{rawPole.Y:F4},{rawPole.Z:F4})\n"
                     + $"{prefix} combined=({combined.X:F4},{combined.Y:F4},{combined.Z:F4}) "
-                    + $"combinedLength={combinedLength:F4}\n"
+                    + $"combinedLength={combined.Length():F4}\n"
                     + $"{prefix} previousBaselinePole=({previousPoleDirBody.X:F4},{previousPoleDirBody.Y:F4},{previousPoleDirBody.Z:F4}) "
                     + $"currentBaselinePole=({baselinePole.X:F4},{baselinePole.Y:F4},{baselinePole.Z:F4})\n"
                     + $"{prefix} angularJumpDegrees={jumpDegrees:F4}");
@@ -651,6 +678,9 @@ public partial class ArmIKController : SkeletonModifier3D
             Side,
             AnatomicalNeutralLateralBias);
 
+        float shoulderWeight = Mathf.Clamp(ShoulderWeight, 0f, 1f)
+            * (Side == LimbSide.Right ? RightShoulderSymmetryCompensation : 1.0f);
+
         Quaternion correction = ShoulderCorrectionComputer.ComputeCorrection(
             currentUpperDirectionBody,
             Side,
@@ -659,7 +689,7 @@ public partial class ArmIKController : SkeletonModifier3D
             Mathf.DegToRad(MaxOverheadElevationBoostDegrees),
             Mathf.DegToRad(MaxProtractionAngleDegrees),
             ForwardElevationDamping,
-            Mathf.Clamp(ShoulderWeight, 0f, 1f));
+            shoulderWeight);
 
         Basis correctionBasis = new(correction);
         Basis targetShoulderGlobalBasis = (bodyBasisSkeleton * (correctionBasis * _shoulderRestBasisInBody)).Orthonormalized();

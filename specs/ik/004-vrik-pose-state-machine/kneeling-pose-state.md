@@ -18,8 +18,8 @@ Deliver kneeling behaviour: armed-then-retreat trigger model, transition constra
 1. Players must be able to transition from crouching to kneeling using an armed-then-retreat trigger model.
 2. The Standing→Kneeling transition must require a crouch-depth gate before kneeling becomes reachable.
 3. After kneeling, both transition directions stay locked until forward-axis returns to baseline.
-4. Players must have movement restricted while in the kneeling pose (rotation remains allowed).
-5. Players must retain rotation capability while kneeling.
+4. Players must have movement restricted while in the kneeling pose.
+5. Players may express rotational locomotion intent while kneeling where compatible kneeling clips exist.
 
 ## Technical Requirements
 
@@ -43,13 +43,15 @@ Deliver kneeling behaviour: armed-then-retreat trigger model, transition constra
 
 ### Locomotion Permissions
 
-9. Kneeling returns `LocomotionPermissions.RotationOnly`: blocks movement, allows rotation.
-10. The pose-state-machine exposes locomotion permissions by delegating to the active pose state.
+9. Kneeling returns `LocomotionPermissions.RotationOnly`: blocks movement and permits rotational root-motion intent and
+   selection where compatible kneeling clips exist.
+10. `RotationOnly` must not provide direct body yaw when no compatible selected root-motion clip exists.
+11. The pose-state-machine exposes locomotion permissions by delegating to the active pose state.
 
 ### Parameters
 
-11. Tunable parameters use flexible ratios (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
-12. Configuration parameters include:
+12. Tunable parameters use flexible ratios (for example `0.85 × RestHeadHeight`) rather than fixed absolute values.
+13. Configuration parameters include:
     - Armed threshold for forward travel
     - Retreat threshold for firing
     - Neutral return max offset ratio for transition lockout
@@ -61,7 +63,7 @@ Deliver kneeling behaviour: armed-then-retreat trigger model, transition constra
 - Armed-then-retreat transition model from standing (covering standing-to-crouching continuum).
 - Crouch-depth gate requirement before kneeling transition becomes reachable.
 - Transition lockout after kneeling until forward-axis returns to baseline.
-- Locomotion permission output (rotation-only for kneeling).
+- Locomotion permission output (rotation-only intent for kneeling, without direct body-yaw fallback).
 - Bidirectional standing↔kneeling transitions.
 
 ## Out Of Scope
@@ -78,7 +80,7 @@ Deliver kneeling behaviour: armed-then-retreat trigger model, transition constra
 | AC-K-01 | Standing→Kneeling uses armed-then-retreat trigger model from full-crouch baseline. | User + Technical |
 | AC-K-02 | Crouch-depth gate must be satisfied before kneeling transition triggers. | User + Technical |
 | AC-K-03 | Transition lockout persists until forward-axis returns to baseline. | User + Technical |
-| AC-K-04 | Kneeling returns `LocomotionPermissions.RotationOnly`. | User + Technical |
+| AC-K-04 | Kneeling returns `RotationOnly` intent permissions without direct body-yaw fallback. | User + Technical |
 | AC-K-05 | Kneeling animation uses AnimationTree state-machine with authored auto-advance. | Technical |
 | AC-K-06 | Transition thresholds use normalised ratios from rest-pose body measures. | Technical |
 | AC-K-07 | Players can transition from kneeling back to standing using armed-then-retreat model. | User |

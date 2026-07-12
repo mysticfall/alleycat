@@ -35,6 +35,7 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     private float? _snapshotRotationCompensationScale;
     private HipLimitEnvelope? _snapshotHipOffsetEnvelope;
     private Vector3? _snapshotReferenceHipLocalPosition;
+    private HipTranslationAuthority? _snapshotHipTranslationAuthority;
 
     /// <summary>
     /// Canonical identifier used by <see cref="StandingPoseState"/>.
@@ -159,6 +160,39 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     } = 0.5f;
 
     /// <summary>
+    /// Horizontal hip-translation authority at the upright end of the standing continuum. Values
+    /// near zero let locomotion clips keep their authored hip sway and travel in the semantic
+    /// lateral/forward plane while the vertical crouch solve remains authoritative.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float UprightHorizontalHipTranslationAuthority
+    {
+        get;
+        set;
+    } = 0f;
+
+    /// <summary>
+    /// Horizontal hip-translation authority at full crouch inside the standing continuum.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float FullCrouchHorizontalHipTranslationAuthority
+    {
+        get;
+        set;
+    } = 0f;
+
+    /// <summary>
+    /// Vertical hip-translation authority throughout the standing continuum so XR head height can
+    /// continue to drive crouch depth while moving.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float VerticalHipTranslationAuthority
+    {
+        get;
+        set;
+    } = 1f;
+
+    /// <summary>
     /// Initialises the state and seeds <see cref="PoseState.Id"/> with <see cref="DefaultId"/>.
     /// </summary>
     public StandingPoseState()
@@ -210,6 +244,7 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
             _snapshotRotationCompensationScale = source.GetEffectiveRotationCompensationScale(context);
             _snapshotHipOffsetEnvelope = source.GetEffectiveHipOffsetEnvelope(context);
             _snapshotReferenceHipLocalPosition = source.GetEffectiveReferenceHipLocalPosition(context);
+            _snapshotHipTranslationAuthority = source.GetEffectiveHipTranslationAuthority(context);
         }
         else
         {
@@ -217,6 +252,7 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
             _snapshotRotationCompensationScale = null;
             _snapshotHipOffsetEnvelope = null;
             _snapshotReferenceHipLocalPosition = null;
+            _snapshotHipTranslationAuthority = null;
         }
     }
 
@@ -366,6 +402,23 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     }
 
     /// <inheritdoc />
+    public override HipTranslationAuthority ResolveHipTranslationAuthority(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        HipTranslationAuthority standingAuthority = ComputeHipTranslationAuthority(
+            ComputePoseBlend(context),
+            UprightHorizontalHipTranslationAuthority,
+            FullCrouchHorizontalHipTranslationAuthority,
+            VerticalHipTranslationAuthority);
+        float transitionBlend = ComputeTransitionBlend();
+
+        return _snapshotHipTranslationAuthority is null || transitionBlend >= 1.0f
+            ? standingAuthority
+            : HipTranslationAuthority.Lerp(_snapshotHipTranslationAuthority.Value, standingAuthority, transitionBlend);
+    }
+
+    /// <inheritdoc />
     protected override void ApplyAnimation(PoseStateContext context)
     {
         if (context.AnimationTree == null)
@@ -490,6 +543,26 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
             1f,
             Mathf.Clamp(fullCrouchRotationCompensationScale, 0f, 1f),
             Mathf.Clamp(poseBlend, 0f, 1f));
+
+    /// <summary>
+    /// Computes standing-continuum hip-translation authority independently of locomotion state.
+    /// </summary>
+    public static HipTranslationAuthority ComputeHipTranslationAuthority(
+        float poseBlend,
+        float uprightHorizontalAuthority,
+        float fullCrouchHorizontalAuthority,
+        float verticalAuthority)
+    {
+        float horizontalAuthority = Mathf.Lerp(
+            Mathf.Clamp(uprightHorizontalAuthority, 0f, 1f),
+            Mathf.Clamp(fullCrouchHorizontalAuthority, 0f, 1f),
+            Mathf.Clamp(poseBlend, 0f, 1f));
+
+        return new HipTranslationAuthority(
+            horizontalAuthority,
+            Mathf.Clamp(verticalAuthority, 0f, 1f),
+            horizontalAuthority);
+    }
 
     private static Vector3 TryNormaliseAxis(Vector3 axis, Vector3 fallback)
         => axis.LengthSquared() > Mathf.Epsilon
@@ -864,6 +937,10 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     /// <inheritdoc />
     public Vector3 GetEffectiveReferenceHipLocalPosition(PoseStateContext context)
         => BuildHipLimitFrame(context).ReferenceHipLocalPosition;
+
+    /// <inheritdoc />
+    public HipTranslationAuthority GetEffectiveHipTranslationAuthority(PoseStateContext context)
+        => ResolveHipTranslationAuthority(context);
 
     private float ComputeStandingRotationCompensationScale(PoseStateContext context)
         => ComputeRotationCompensationScale(

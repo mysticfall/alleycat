@@ -27,8 +27,7 @@ and the default hip reconciliation profile.
    vertical crouch response.
 4. Movement is allowed only when near fully upright; crouching restricts
    movement.
-5. Rotation capability remains available across the full standing-to-crouching
-   continuum.
+5. Rotational locomotion intent remains available across the full standing-to-crouching continuum.
 6. Players are protected from extreme hip deformation via configurable
    state-defined limits.
 
@@ -81,7 +80,8 @@ and the default hip reconciliation profile.
 14. StandingPoseState allows movement only when the standing/crouching
     blend is at or below a configurable threshold, defaulting to near fully
     upright.
-15. Rotation is allowed in all cases for the standing family.
+15. Rotational locomotion intent is allowed in all cases for the standing family. Motion-matching locomotion still uses
+    selected root-motion yaw rather than direct body rotation.
 
 ### Hip Offset Limits
 

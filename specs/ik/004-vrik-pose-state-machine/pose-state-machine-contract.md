@@ -62,7 +62,7 @@ gating for non-standing poses.
     the pose must automatically transition back to Standing pose.
 13. Movement must be restricted when the player is in a pose
     that does not support walking.
-14. Rotation must remain available across all poses for MVP.
+14. Rotational locomotion intent may remain available across poses where compatible pose-specific clips exist.
 
 ## Technical Requirements
 
@@ -212,7 +212,8 @@ gating for non-standing poses.
     crawl hold uses standard animation playback.
 41. **AllFours locomotion permissions**: `transitioning` returns
     `RotationOnly`; `crawling` returns `Allowed` for root-motion-driven
-    locomotion.
+    locomotion. `RotationOnly` permits rotational root-motion intent and
+    selection when compatible pose-specific clips exist, not direct body yaw.
 42. **AllFours locomotion animation-state target**: `crawling` returns
     `LocomotionStateTarget(AllFours, AllFoursForward)`; `transitioning`
     returns `null`.
@@ -226,23 +227,25 @@ gating for non-standing poses.
     with default returning `RotationOnly`.
 45. Standing pose family permissions: allows movement only
     when standing/crouching blend is at or below configurable
-    threshold; allows rotation always.
+    threshold; allows rotational locomotion intent always.
 46. Non-standing pose permissions: kneeling, sitting, stooping,
     AllFours transitioning return `RotationOnly`; AllFours crawling
     returns `Allowed`.
-47. External systems aggregate permissions using logical AND.
-48. Runtime query exposes `ILocomotionPermissionSource.LocomotionPermissions`
+47. `RotationOnly` must not provide a direct body-yaw fallback when no
+    compatible selected root-motion clip exists.
+48. External systems aggregate permissions using logical AND.
+49. Runtime query exposes `ILocomotionPermissionSource.LocomotionPermissions`
     to consumers.
 
 ### Locomotion Animation-State Override
 
-49. The pose-state-machine must implement `ILocomotionAnimationSource`
+50. The pose-state-machine must implement `ILocomotionAnimationSource`
     to provide locomotion animation-state targets.
-50. Each pose state may optionally return a locomotion
+51. Each pose state may optionally return a locomotion
     animation-state target via `GetLocomotionStateTarget`.
-51. Interface contract defines `IPoseState.GetLocomotionStateTarget`
+52. Interface contract defines `IPoseState.GetLocomotionStateTarget`
     and `ILocomotionAnimationSource.LocomotionStateTarget`.
-52. Implementation delegates to the active pose state each tick.
+53. Implementation delegates to the active pose state each tick.
 
 ## In Scope
 
@@ -281,7 +284,7 @@ gating for non-standing poses.
 | AC-27 | AllFoursPoseState includes transitioning and crawling sub-states. | Technical |
 | AC-30 | Pose-state-machine implements ILocomotionPermissionSource. | Technical |
 | AC-31 | Each pose state provides GetLocomotionPermissions. | Technical |
-| AC-32 | Non-standing poses return RotationOnly. | User + Technical |
+| AC-32 | Non-standing poses return RotationOnly intent without direct body-yaw fallback. | User + Technical |
 | AC-32a | AllFours Crawling sub-state permits movement. | User + Technical |
 | AC-33 | Standing pose family allows movement below configurable threshold. | User + Technical |
 | AC-34 | Movement permission threshold is configurable. | Technical |

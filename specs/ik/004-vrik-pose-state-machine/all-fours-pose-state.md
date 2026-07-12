@@ -24,9 +24,8 @@ state machine, head-driven animation seeking, and return transitions.
    position to the crawling hold pose, driven by head position.
 4. While crawling on all fours, if the player raises their head vertically
    above a threshold, they must transition to prepare for return to standing.
-5. Players must have forward movement restricted while in the AllFours pose,
-   but rotation remains allowed.
-6. Players must retain rotation capability while crawling.
+5. Players must have forward movement restricted while in the AllFours transitioning phase.
+6. Players may express rotational locomotion intent where compatible all-fours clips exist.
 
 ## Technical Requirements
 
@@ -55,8 +54,9 @@ from the skeleton-local origin and mapped to an animation seek window.
 
 ### Locomotion Permissions
 
-The AllFours pose returns `LocomotionPermissions.RotationOnly` (blocks
-movement, allows rotation).
+The AllFours transitioning phase returns `LocomotionPermissions.RotationOnly`: blocks movement and permits rotational
+root-motion intent and selection where compatible all-fours clips exist. `RotationOnly` must not provide direct body yaw
+when no compatible selected root-motion clip exists.
 
 ## In Scope
 
@@ -85,7 +85,7 @@ movement, allows rotation).
 | AC-AF-04 | AllFours reachable from both Standing and Kneeling poses. | User + Technical |
 | AC-AF-05 | Return to Standing when forward offset drops below threshold. | User + Technical |
 | AC-AF-06 | Return to transitioning when vertical offset exceeds threshold. | User + Technical |
-| AC-AF-07 | AllFours returns LocomotionPermissions.RotationOnly. | User + Technical |
+| AC-AF-07 | AllFours transitioning returns RotationOnly intent without direct body-yaw fallback. | User + Technical |
 | AC-AF-08 | Threshold parameters are configurable. | Technical |
 | AC-AF-09 | Players experience smooth entry animation driven by head position. | User |
 

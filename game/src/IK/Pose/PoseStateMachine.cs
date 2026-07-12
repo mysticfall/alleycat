@@ -26,6 +26,7 @@ public partial class PoseStateMachine : Node, ILocomotionPermissionSource, ILoco
     private PoseStateMachineTickResult _lastTickResult = new(
         ActiveState: null,
         HipLocalPosition: null,
+        HipTranslationAuthority: HipTranslationAuthority.Full,
         LimitedHeadTargetTransform: null,
         ResidualHipOffset: Vector3.Zero,
         Context: new PoseStateContext());
@@ -191,11 +192,13 @@ public partial class PoseStateMachine : Node, ILocomotionPermissionSource, ILoco
 
         PoseStateContext enrichedContext = tickResult.Context;
         HipReconciliationTickResult? hipTickResult = activePoseState.ResolveHipReconciliation(enrichedContext);
+        HipTranslationAuthority hipTranslationAuthority = activePoseState.ResolveHipTranslationAuthority(enrichedContext);
         _lastTickResult = hipTickResult is null
-            ? new PoseStateMachineTickResult(activePoseState, null, null, Vector3.Zero, enrichedContext)
+            ? new PoseStateMachineTickResult(activePoseState, null, hipTranslationAuthority, null, Vector3.Zero, enrichedContext)
             : new PoseStateMachineTickResult(
                 activePoseState,
                 hipTickResult.AppliedHipLocalPosition,
+                hipTranslationAuthority,
                 hipTickResult.LimitedHeadTargetTransform,
                 hipTickResult.ResidualFinalHipOffset,
                 enrichedContext);
@@ -212,6 +215,18 @@ public partial class PoseStateMachine : Node, ILocomotionPermissionSource, ILoco
         }
 
         hipLocalPosition = Vector3.Zero;
+        return false;
+    }
+
+    internal bool TryGetLatestHipTranslationAuthority(out HipTranslationAuthority authority)
+    {
+        if (_lastTickResult.HipLocalPosition.HasValue)
+        {
+            authority = _lastTickResult.HipTranslationAuthority;
+            return true;
+        }
+
+        authority = HipTranslationAuthority.Full;
         return false;
     }
 
@@ -308,6 +323,7 @@ public partial class PoseStateMachine : Node, ILocomotionPermissionSource, ILoco
 public readonly record struct PoseStateMachineTickResult(
     PoseState? ActiveState,
     Vector3? HipLocalPosition,
+    HipTranslationAuthority HipTranslationAuthority,
     Transform3D? LimitedHeadTargetTransform,
     Vector3 ResidualHipOffset,
     PoseStateContext Context);

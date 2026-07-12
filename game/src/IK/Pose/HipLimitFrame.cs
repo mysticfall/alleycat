@@ -34,6 +34,59 @@ public sealed record HipLimitFrame
 }
 
 /// <summary>
+/// Per-axis authority for applying a reconciled hip-translation target over the animated pose,
+/// expressed in the same avatar-semantic skeleton-local frame used by hip limits.
+/// </summary>
+public readonly record struct HipTranslationAuthority(float Lateral, float Vertical, float Forward)
+{
+    /// <summary>
+    /// Full IK translation authority, preserving the legacy behaviour where the reconciled target
+    /// completely replaces the animated hip translation.
+    /// </summary>
+    public static HipTranslationAuthority Full => new(1f, 1f, 1f);
+
+    /// <summary>
+    /// Blends authority values component-wise after clamping each axis to the supported [0, 1] range.
+    /// </summary>
+    public static HipTranslationAuthority Lerp(HipTranslationAuthority from, HipTranslationAuthority to, float weight)
+    {
+        float t = Mathf.Clamp(weight, 0f, 1f);
+        return new HipTranslationAuthority(
+            Mathf.Lerp(Clamp01(from.Lateral), Clamp01(to.Lateral), t),
+            Mathf.Lerp(Clamp01(from.Vertical), Clamp01(to.Vertical), t),
+            Mathf.Lerp(Clamp01(from.Forward), Clamp01(to.Forward), t));
+    }
+
+    /// <summary>
+    /// Applies this authority by preserving animated components where authority is low and taking
+    /// reconciled target components where authority is high.
+    /// </summary>
+    public Vector3 Apply(
+        Vector3 animatedHipLocalPosition,
+        Vector3 reconciledHipLocalPosition,
+        Vector3 lateralLocal,
+        Vector3 upLocal,
+        Vector3 forwardLocal)
+    {
+        Vector3 lateralAxis = NormaliseOrFallback(lateralLocal, Vector3.Right);
+        Vector3 upAxis = NormaliseOrFallback(upLocal, Vector3.Up);
+        Vector3 forwardAxis = NormaliseOrFallback(forwardLocal, Vector3.Forward);
+
+        return BlendAxis(animatedHipLocalPosition, reconciledHipLocalPosition, lateralAxis, Clamp01(Lateral))
+            + BlendAxis(animatedHipLocalPosition, reconciledHipLocalPosition, upAxis, Clamp01(Vertical))
+            + BlendAxis(animatedHipLocalPosition, reconciledHipLocalPosition, forwardAxis, Clamp01(Forward));
+    }
+
+    private static Vector3 BlendAxis(Vector3 animated, Vector3 target, Vector3 axis, float authority)
+        => axis * Mathf.Lerp(animated.Dot(axis), target.Dot(axis), authority);
+
+    private static float Clamp01(float value) => Mathf.Clamp(value, 0f, 1f);
+
+    private static Vector3 NormaliseOrFallback(Vector3 axis, Vector3 fallback)
+        => axis.LengthSquared() > Mathf.Epsilon ? axis.Normalized() : fallback;
+}
+
+/// <summary>
 /// Avatar-relative hip-limit axis semantics resolved into skeleton-local directions for the
 /// current character rig.
 /// </summary>

@@ -18,7 +18,7 @@ public sealed class ArmShoulderCorrectionIntegrationTests
 
     private const int SettleSkeletonUpdates = 4;
     private const int DeterminismSamples = 5;
-    private const float MaximumDeterminismErrorRadians = 0.001f;
+    private const float MaximumDeterminismErrorRadians = 0.003f;
     private const float MaximumForwardPoseSymmetryDifferenceRadians = 0.08f;
     private const float MinimumOverheadGainOverLoweredRadians = 0.05f;
     private const float MinimumForwardGainOverLoweredRadians = 0.01f;

@@ -26,4 +26,14 @@ public interface ICrouchingPoseTransitionSource
     /// target reference to ensure position continuity across the transition.
     /// </summary>
     Vector3 GetEffectiveReferenceHipLocalPosition(PoseStateContext context);
+
+    /// <summary>
+    /// Returns the source state's effective hip-translation authority at the transition moment.
+    /// </summary>
+    HipTranslationAuthority GetEffectiveHipTranslationAuthority(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return HipTranslationAuthority.Full;
+    }
 }

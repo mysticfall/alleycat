@@ -214,6 +214,17 @@ public abstract partial class PoseState : Resource, IPoseState
     }
 
     /// <summary>
+    /// Resolves how strongly the reconciled hip translation should override the animated hip pose
+    /// for each semantic axis at the modifier boundary.
+    /// </summary>
+    public virtual HipTranslationAuthority ResolveHipTranslationAuthority(PoseStateContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return HipTranslationAuthority.Full;
+    }
+
+    /// <summary>
     /// Applies this state's default hip-limit behaviour to the supplied profile result.
     /// </summary>
     protected virtual HipReconciliationTickResult ApplyHipReconciliation(

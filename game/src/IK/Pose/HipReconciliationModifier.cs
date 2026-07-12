@@ -15,11 +15,13 @@ namespace AlleyCat.IK.Pose;
 /// XR-to-IK.
 /// </para>
 /// <para>
-/// The pending value is an <em>absolute</em> hip target in skeleton-local space: it replaces
-/// the animated hip position rather than adding to it. This is deliberate — mixing a delta
-/// with the currently animated hip bone would create a feedback loop with the <c>TimeSeek</c>
-/// crouch scrubbing and manifest as visible spine flicker. A <see langword="null"/> value
-/// means "no override for this tick" and the modifier leaves the animated hip pose alone.
+/// The pending value is an <em>absolute</em> hip target in skeleton-local space. The pose
+/// state's hip translation authority decides per semantic axis whether that target replaces
+/// the animated hip position at full authority, blends with it at partial authority, or leaves
+/// it unchanged at zero authority. This is deliberately not an additive delta — adding to the
+/// currently animated hip bone would create a feedback loop with the <c>TimeSeek</c> crouch
+/// scrubbing and manifest as visible spine flicker. A <see langword="null"/> value means "no
+/// override for this tick" and the modifier leaves the animated hip pose alone.
 /// </para>
 /// <para>
 /// Place this modifier as a direct child of the target <see cref="Skeleton3D"/> ordered after
@@ -74,6 +76,8 @@ public partial class HipReconciliationModifier : SkeletonModifier3D
             return;
         }
 
+        _ = stateMachine.TryGetLatestHipTranslationAuthority(out HipTranslationAuthority authority);
+
         Skeleton3D? skeleton = GetSkeleton();
         if (skeleton is null)
         {
@@ -91,6 +95,15 @@ public partial class HipReconciliationModifier : SkeletonModifier3D
             _hipBoneResolved = true;
         }
 
-        skeleton.SetBonePosePosition(_hipBoneIndex, target);
+        Vector3 animatedHipLocalPosition = skeleton.GetBonePosePosition(_hipBoneIndex);
+        HipLimitSemanticFrame semanticFrame = HipLimitSemanticFrame.ReferenceRig;
+        Vector3 appliedHipLocalPosition = authority.Apply(
+            animatedHipLocalPosition,
+            target,
+            semanticFrame.AvatarRightLocal,
+            semanticFrame.UpLocal,
+            semanticFrame.AvatarForwardLocal);
+
+        skeleton.SetBonePosePosition(_hipBoneIndex, appliedHipLocalPosition);
     }
 }

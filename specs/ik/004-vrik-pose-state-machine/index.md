@@ -28,7 +28,7 @@ permission outputs that gate player movement in non-standing poses.
 7. Players must be protected from extreme hip deformation beyond configurable state-defined limits.
 8. Players must have movement restricted in poses that do not support walking.
 9. Players must have movement permitted during the all-fours crawling phase.
-10. Players must retain rotation capability across all poses for MVP.
+10. Players may express rotational locomotion intent across all poses where compatible clips exist.
 
 ## Technical Requirements
 
@@ -45,7 +45,10 @@ permission outputs that gate player movement in non-standing poses.
 8. State selection must be inferred from IK-target transforms and animation or runtime signals.
 9. The state machine must evaluate per tick from an immutable read-only context snapshot.
 10. The pose-state-machine must expose locomotion permissions to external consumers as a single permission source that
-    delegates to the active pose state. Non-standing poses return rotation-only permissions except all-fours crawling.
+    delegates to the active pose state. Non-standing poses return rotation-only intent permissions except all-fours
+    crawling.
+    - `RotationOnly` permits rotational root-motion intent and selection only when compatible pose-specific clips exist.
+    - `RotationOnly` must not provide a direct body-yaw fallback when no compatible selected clip exists.
 11. The pose-state-machine must expose locomotion animation-state targets by delegating to the active pose state each
     tick, with all-fours crawling returning the forward movement target.
 12. Provider influence gating (for example disabling arm IK when provider influence is 0) must not interfere with
@@ -80,7 +83,7 @@ permission outputs that gate player movement in non-standing poses.
 | AC-03 | Pose states and transitions are specified as extensible `Resource`-driven contracts. | Technical |
 | AC-30 | The pose-state-machine serves as a locomotion permission provider. | Technical |
 | AC-31 | Each pose state provides locomotion permissions appropriate for that pose. | Technical |
-| AC-32 | Non-standing poses return rotation-only permissions. | User + Technical |
+| AC-32 | Non-standing poses return rotation-only intent without direct body-yaw fallback. | User + Technical |
 | AC-32a | AllFours crawling sub-state permits movement. | User + Technical |
 | AC-33 | Standing pose family allows movement only when blend is below a configurable threshold. | User + Technical |
 | AC-34 | Movement permission threshold is configurable on `StandingPoseState`. | Technical |
