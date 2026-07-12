@@ -121,9 +121,13 @@ public partial class LegIKController : SkeletonModifier3D
         }
 
         Vector3 legDirection = desiredFootPosition - upperLegPosition;
+        bool useDesiredFootPoleOrigin = false;
         if (TryNormalise(legDirection, out Vector3 normalisedLegDirection))
         {
-            poleDirection = ResolveAmbiguousPolePlane(poleDirection, normalisedLegDirection);
+            useDesiredFootPoleOrigin = TryResolveAmbiguousPolePlane(
+                poleDirection,
+                normalisedLegDirection,
+                out poleDirection);
         }
 
         float currentLegLength = (o1 - upperLegPosition).Length() * 2.0f;
@@ -133,44 +137,59 @@ public partial class LegIKController : SkeletonModifier3D
         float restLegMinimumOffset = (_restLegLength * 0.5f) + RestLegHalfPoleOffsetMargin;
         float floorOffset = Mathf.Max(MinimumPoleOffset, restLegMinimumOffset);
         offset = Mathf.Max(offset, floorOffset);
-
-        PoleTarget.GlobalPosition = o2 + (poleDirection * offset);
+        Vector3 poleOrigin = useDesiredFootPoleOrigin ? o1 : o2;
+        PoleTarget.GlobalPosition = poleOrigin + (poleDirection * offset);
     }
 
-    private Vector3 ResolveAmbiguousPolePlane(Vector3 poleDirection, Vector3 legDirection)
+    private bool TryResolveAmbiguousPolePlane(Vector3 poleDirection, Vector3 legDirection, out Vector3 resolvedPoleDirection)
     {
+        resolvedPoleDirection = poleDirection;
+
         Basis footBasis = FootTarget!.GlobalTransform.Basis.Orthonormalized();
         Vector3 footForward = footBasis.Column2;
         Vector3 footUp = footBasis.Column1;
         Vector3 skeletonUp = _skeleton!.GlobalTransform.Basis.Orthonormalized().Column1.Normalized();
 
-        if (footUp.Dot(-skeletonUp) < 0.9f)
+        if (!TryProjectAndNormalise(footForward, legDirection, out Vector3 forwardProjected))
         {
-            return poleDirection;
+            return false;
         }
 
-        if (!TryProjectAndNormalise(footForward, legDirection, out Vector3 forwardProjected)
-            || !TryProjectAndNormalise(footUp, legDirection, out Vector3 upProjected))
+        if (Mathf.Abs(footUp.Dot(skeletonUp)) < 0.9f)
         {
-            return poleDirection;
+            return false;
         }
 
-        float planePreference = Mathf.Abs(poleDirection.Dot(forwardProjected))
-            - Mathf.Abs(poleDirection.Dot(upProjected));
-
-        if (planePreference >= AmbiguousPlanePreferenceThreshold)
+        Vector3 preferredForward = forwardProjected;
+        if (TryProjectAndNormalise(footUp, legDirection, out Vector3 upProjected))
         {
-            return poleDirection;
+            float planePreference = Mathf.Abs(poleDirection.Dot(forwardProjected))
+                - Mathf.Abs(poleDirection.Dot(upProjected));
+
+            if (planePreference >= AmbiguousPlanePreferenceThreshold)
+            {
+                return false;
+            }
+
+            Vector3 forwardWithoutUp = forwardProjected - (forwardProjected.Dot(upProjected) * upProjected);
+            if (TryNormalise(forwardWithoutUp, out Vector3 normalisedForwardWithoutUp))
+            {
+                preferredForward = normalisedForwardWithoutUp;
+            }
         }
 
-        Vector3 biasedForward = forwardProjected.Dot(poleDirection) < 0.0f
-            ? -forwardProjected
-            : forwardProjected;
+        Vector3 biasedForward = preferredForward.Dot(poleDirection) < 0.0f
+            ? -preferredForward
+            : preferredForward;
         Vector3 biasedDirection = poleDirection.Lerp(biasedForward, AmbiguousPlaneOrientationBias);
 
-        return TryNormalise(biasedDirection, out Vector3 normalisedBiasedDirection)
-            ? normalisedBiasedDirection
-            : poleDirection;
+        if (!TryNormalise(biasedDirection, out Vector3 normalisedBiasedDirection))
+        {
+            return false;
+        }
+
+        resolvedPoleDirection = normalisedBiasedDirection;
+        return true;
     }
 
     private bool TryResolveBones()
