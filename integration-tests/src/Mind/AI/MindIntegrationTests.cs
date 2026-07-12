@@ -1,10 +1,13 @@
 using System.Runtime.CompilerServices;
 using AlleyCat.Body.Voice;
+using AlleyCat.Character;
+using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Agents.AI;
@@ -73,7 +76,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         AddTestNode(sceneTree, npcVoice);
         AddTestNode(sceneTree, playerVoice);
-        AddTestNode(sceneTree, mind);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -86,6 +89,9 @@ public sealed partial class MindIntegrationTests : IDisposable
             Assert.NotNull(clientProvider.Client);
             FakeChatClient client = clientProvider.Client;
             Assert.Equal(1, client.RunCount);
+            Assert.True(character.ContextRequestCount >= 1);
+            Assert.NotNull(character.ReceivedScene);
+            Assert.Null(character.ReceivedObserver);
             Assert.Contains("- Speech from player: hello Alley", Assert.Single(client.Prompts));
             Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
             Assert.True(client.CancellationObservedAfterFirstSpeak);
@@ -95,7 +101,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind, playerVoice, npcVoice);
+            await DestroyFixtureAsync(sceneTree, character, playerVoice, npcVoice);
         }
     }
 
@@ -134,7 +140,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         AddTestNode(sceneTree, npcVoice);
         AddTestNode(sceneTree, playerVoice);
-        AddTestNode(sceneTree, mind);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -160,7 +166,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind, playerVoice, npcVoice);
+            await DestroyFixtureAsync(sceneTree, character, playerVoice, npcVoice);
         }
     }
 
@@ -193,7 +199,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         AddTestNode(sceneTree, npcVoice);
         AddTestNode(sceneTree, playerVoice);
-        AddTestNode(sceneTree, mind);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -214,7 +220,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind, playerVoice, npcVoice);
+            await DestroyFixtureAsync(sceneTree, character, playerVoice, npcVoice);
         }
     }
 
@@ -247,7 +253,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         AddTestNode(sceneTree, npcVoice);
         AddTestNode(sceneTree, playerVoice);
-        AddTestNode(sceneTree, mind);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -261,7 +267,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind, playerVoice, npcVoice);
+            await DestroyFixtureAsync(sceneTree, character, playerVoice, npcVoice);
         }
     }
 
@@ -293,7 +299,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
 
         AddTestNode(sceneTree, npcVoice);
-        AddTestNode(sceneTree, mind);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -309,7 +315,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind, npcVoice);
+            await DestroyFixtureAsync(sceneTree, character, npcVoice);
         }
     }
 
@@ -345,7 +351,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         AddTestNode(sceneTree, npcVoice);
         AddTestNode(sceneTree, playerVoice);
-        AddTestNode(sceneTree, mind);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -360,7 +366,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind, playerVoice, npcVoice);
+            await DestroyFixtureAsync(sceneTree, character, playerVoice, npcVoice);
         }
     }
 
@@ -458,7 +464,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
 
         AddTestNode(sceneTree, npcVoice);
-        AddTestNode(sceneTree, mind);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -472,8 +478,28 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind, npcVoice);
+            await DestroyFixtureAsync(sceneTree, character, npcVoice);
         }
+    }
+
+    private static TestCharacter AddAgenticMindFixture(
+        SceneTree sceneTree,
+        AgenticMind mind,
+        IReadOnlyDictionary<string, object?>? context = null)
+    {
+        TestCharacter character = new(context ?? new Dictionary<string, object?>
+        {
+            ["displayName"] = "Integration Alley",
+        })
+        {
+            Name = "AgenticMindFixtureCharacter",
+            Id = "agentic-mind-fixture-character",
+        };
+
+        character.AddChild(mind);
+        AddTestNode(sceneTree, character);
+
+        return character;
     }
 
     private static void AddTestNode(SceneTree sceneTree, Node node)
@@ -489,7 +515,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             new TextPromptSection
             {
                 Name = "Test Instructions",
-                Text = "Run the integration test turn.",
+                Text = "CTX display name: {{displayName}}. Run the integration test turn.",
             },
         ],
     };
@@ -558,6 +584,37 @@ public sealed partial class MindIntegrationTests : IDisposable
     private sealed record TestObservation(float Importance, string Prompt) : AgentObservation(Importance)
     {
         public override string ToPromptString() => Prompt;
+    }
+
+    private sealed partial class TestCharacter(IReadOnlyDictionary<string, object?> context) : Node, ICharacter
+    {
+        public string Id { get; set; } = string.Empty;
+
+        public IReadOnlyList<IComponent> Components { get; } = [];
+
+        public int ContextRequestCount
+        {
+            get; private set;
+        }
+
+        public ISceneContext? ReceivedScene
+        {
+            get; private set;
+        }
+
+        public ICharacter? ReceivedObserver
+        {
+            get; private set;
+        }
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        {
+            ContextRequestCount++;
+            ReceivedScene = scene;
+            ReceivedObserver = observer;
+
+            return context;
+        }
     }
 
     private sealed class FakeClientProvider : ClientProvider
@@ -656,7 +713,8 @@ public sealed partial class MindIntegrationTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             RunCount++;
-            Prompts.Add(messages.Last().Text);
+            ChatMessage[] messageSnapshot = [.. messages];
+            Prompts.Add(messageSnapshot.Last().Text);
 
             try
             {

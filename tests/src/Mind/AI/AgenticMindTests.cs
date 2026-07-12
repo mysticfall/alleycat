@@ -1,5 +1,9 @@
+using AlleyCat.Character;
+using AlleyCat.Core;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.Observation;
+using AlleyCat.Scene;
+using AlleyCat.Templating;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -124,5 +128,81 @@ public sealed class AgenticMindTests
         var settings = AIDiagnosticsSettings.Load(configuration);
 
         Assert.True(settings.EnableRequestResponseLogging);
+    }
+
+    /// <summary>
+    /// AgenticMind must pass the CTX-001 dictionary directly to system-instruction template rendering.
+    /// </summary>
+    [Fact]
+    public void RenderSystemInstruction_PassesContextDictionaryToTemplate()
+    {
+        Dictionary<string, object?> context = new()
+        {
+            ["displayName"] = "Alley",
+        };
+        CapturingTemplate template = new();
+
+        string result = AgenticMind.RenderSystemInstruction(template, context);
+
+        Assert.Equal("Hello Alley", result);
+        Assert.Same(context, template.ReceivedContext);
+    }
+
+    /// <summary>
+    /// AgenticMind obtains CTX-001 data from the associated character with the current scene and no observer.
+    /// </summary>
+    [Fact]
+    public void CreateSystemInstructionContext_UsesAssociatedCharacterContext()
+    {
+        Dictionary<string, object?> context = new()
+        {
+            ["displayName"] = "Alley",
+        };
+        SceneContext scene = new([]);
+        FakeCharacter character = new(context);
+
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateSystemInstructionContext(character, scene);
+
+        Assert.Same(context, result);
+        Assert.Same(scene, character.ReceivedScene);
+        Assert.Null(character.ReceivedObserver);
+    }
+
+    private sealed class CapturingTemplate : ITemplate
+    {
+        public IReadOnlyDictionary<string, object?>? ReceivedContext
+        {
+            get; private set;
+        }
+
+        public string Render(IReadOnlyDictionary<string, object?> context)
+        {
+            ReceivedContext = context;
+            return $"Hello {context["displayName"]}";
+        }
+    }
+
+    private sealed class FakeCharacter(IReadOnlyDictionary<string, object?> context) : ICharacter
+    {
+        public string Id { get; set; } = "fake-character";
+
+        public IReadOnlyList<IComponent> Components { get; } = [];
+
+        public ISceneContext? ReceivedScene
+        {
+            get; private set;
+        }
+
+        public ICharacter? ReceivedObserver
+        {
+            get; private set;
+        }
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        {
+            ReceivedScene = scene;
+            ReceivedObserver = observer;
+            return context;
+        }
     }
 }

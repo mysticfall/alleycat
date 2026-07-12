@@ -1,14 +1,17 @@
 using System.Diagnostics;
 using AlleyCat.Body.Voice;
+using AlleyCat.Character;
 using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Scene;
 using AlleyCat.Templating;
 using Godot;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 using MindBase = AlleyCat.Mind.Mind;
@@ -28,6 +31,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private ResponseTurn? _activeTurn;
     private ClientProvider? _clientProviderForAgent;
     private PromptStack? _systemInstructionForAgent;
+    private string? _instructionsForAgent;
     private bool _enableRequestResponseDiagnosticsForAgent;
     private bool _agentRequestResponseDiagnosticsEnabled;
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
@@ -249,14 +253,14 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return characterCount / 12d;
     }
 
-    private AgentDefinition CreateAgentDefinition()
+    private AgentDefinition CreateAgentDefinition(IReadOnlyDictionary<string, object?> systemInstructionContext)
     {
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
-        string instructions = systemInstruction
-            .Compile(new PromptCompilationServices())
-            .Render(new Dictionary<string, object?>());
+        string instructions = RenderSystemInstruction(
+            systemInstruction.Compile(new PromptCompilationServices()),
+            systemInstructionContext);
 
         return new AgentDefinition(
             instructions,
@@ -283,7 +287,8 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
     private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
     {
-        AIAgent agent = EnsureAgent();
+        IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext();
+        AIAgent agent = EnsureAgent(systemInstructionContext);
         bool enableRequestResponseDiagnostics = _enableRequestResponseDiagnosticsForAgent;
         if (enableRequestResponseDiagnostics)
         {
@@ -396,12 +401,17 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private static string FormatDiagnosticValue(string? value)
         => string.IsNullOrEmpty(value) ? "<empty>" : value;
 
-    private AIAgent EnsureAgent()
+    private AIAgent EnsureAgent(IReadOnlyDictionary<string, object?> systemInstructionContext)
     {
+        ArgumentNullException.ThrowIfNull(systemInstructionContext);
+
         AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
+        AgentDefinition definition = CreateAgentDefinition(systemInstructionContext);
+
         if (_agent is not null
             && ReferenceEquals(_clientProviderForAgent, ClientProvider)
             && ReferenceEquals(_systemInstructionForAgent, SystemInstruction)
+            && string.Equals(_instructionsForAgent, definition.Instructions, StringComparison.Ordinal)
             && _agentRequestResponseDiagnosticsEnabled == diagnosticsSettings.EnableRequestResponseLogging)
         {
             return _agent;
@@ -417,10 +427,10 @@ public partial class AgenticMind : MindBase, IServiceProvider
             throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
         }
 
-        AgentDefinition definition = CreateAgentDefinition();
         _session = null;
         _clientProviderForAgent = ClientProvider;
         _systemInstructionForAgent = SystemInstruction;
+        _instructionsForAgent = definition.Instructions;
         _enableRequestResponseDiagnosticsForAgent = diagnosticsSettings.EnableRequestResponseLogging;
         _agentRequestResponseDiagnosticsEnabled = diagnosticsSettings.EnableRequestResponseLogging;
         ChatClientAgent agent = ClientProvider.CreateChatClient().AsAIAgent(
@@ -430,6 +440,47 @@ public partial class AgenticMind : MindBase, IServiceProvider
         _agent = ConfigureAgentDiagnostics(agent, this, diagnosticsSettings.EnableRequestResponseLogging);
 
         return _agent;
+    }
+
+    private IReadOnlyDictionary<string, object?> CreateSystemInstructionContext()
+    {
+        ICharacter character = ResolveAssociatedCharacter();
+        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+        return CreateSystemInstructionContext(character, scene);
+    }
+
+    internal static IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(
+        ICharacter character,
+        ISceneContext scene)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        ArgumentNullException.ThrowIfNull(scene);
+
+        return character.GetContext(scene, observer: null);
+    }
+
+    private ICharacter ResolveAssociatedCharacter()
+    {
+        for (Node? current = GetParent(); current is not null; current = current.GetParent())
+        {
+            if (current is ICharacter character)
+            {
+                return character;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"AgenticMind node '{Name}' requires an ancestor that implements {typeof(ICharacter).FullName} to provide CTX-001 system-instruction context.");
+    }
+
+    internal static string RenderSystemInstruction(
+        ITemplate template,
+        IReadOnlyDictionary<string, object?> context)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(context);
+
+        return template.Render(context);
     }
 
     internal static AIAgent ConfigureAgentDiagnostics(

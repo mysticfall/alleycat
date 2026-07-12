@@ -20,7 +20,8 @@ reply aloud as an embodied character.
 2. The NPC must answer as Alley in the mirror-room test scene.
 3. The NPC response must be spoken through the in-world voice component, not displayed as normal chat text.
 4. The NPC must provide one reply to each player utterance, then wait for the player's next speech.
-5. If the backend is unavailable or misconfigured, the scene must fail gracefully with logged errors.
+5. NPC replies must be generated from system instructions rendered with the NPC's current character context.
+6. If the backend is unavailable or misconfigured, the scene must fail gracefully with logged errors.
 
 ## Technical Requirements
 
@@ -43,18 +44,22 @@ reply aloud as an embodied character.
 12. AgenticMind must export `SystemInstruction` as a `PromptStack` compatible with
     [AI-003](../003-prompt-api/index.md).
 13. AgenticMind must compile and render `SystemInstruction` into Agent Framework instructions for each agent turn.
-14. The mirror-room AgenticMind scene configuration must provide the Alley prompt through `SystemInstruction` as one
+14. For each turn, AgenticMind must obtain its associated character's CTX-001 context dictionary and pass that
+    dictionary directly to the `PromptStack`/`ITemplate` render operation for `SystemInstruction`.
+15. AgenticMind must consume CTX-001 dictionaries without adding any dependency from `AlleyCat.Context` to AI,
+    prompt, or templating APIs.
+16. The mirror-room AgenticMind scene configuration must provide the Alley prompt through `SystemInstruction` as one
     `TextPromptSection` named `Instructions`.
-15. The `speak` tool must invoke AgenticMind's configured `IVoice` output rather than returning visible text.
-16. Tool invocation services must include the calling AgenticMind and its configured `IVoice` so Resource tools can
+17. The `speak` tool must invoke AgenticMind's configured `IVoice` output rather than returning visible text.
+18. Tool invocation services must include the calling AgenticMind and its configured `IVoice` so Resource tools can
     execute against that instance.
-17. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
-18. Player listening must remain paused for a short cooldown after the NPC starts speaking.
-19. OpenAI-compatible backend settings must bind/read subsystem-owned AI options from CORE-006 `IConfiguration`, or
+19. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
+20. Player listening must remain paused for a short cooldown after the NPC starts speaking.
+21. OpenAI-compatible backend settings must bind/read subsystem-owned AI options from CORE-006 `IConfiguration`, or
     build a local custom-path JSON configuration when an explicit path is supplied.
-20. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
+22. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
     checks.
-21. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
+23. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
 
 ### AI-002 Runtime Sync Note
 
@@ -69,6 +74,7 @@ while keeping backend failures contained to logged errors.
 - AgenticMind node component for player-speech-triggered NPC responses.
 - AgenticMind-owned prompt-stack system instructions, exported tool selection, client-provider wiring, and Agent
   Framework turn orchestration.
+- Per-turn AgenticMind rendering of `SystemInstruction` with the associated character's CTX-001 dictionary.
 - Mirror-room Alley prompt assignment through an AI-003 `PromptStack` with one `TextPromptSection`.
 - Replaceable Agent Framework client provider Resource for chat-client creation.
 - Microsoft Agent Framework prototype backend.
@@ -83,30 +89,34 @@ while keeping backend failures contained to logged errors.
 - Behaviour or animation planning beyond spoken response output.
 - Streaming token or streaming speech playback.
 - Final persona authoring tools, prompt previews, or dynamic character prompts beyond the mandatory exported
-  `SystemInstruction` prompt-stack integration.
+  `SystemInstruction` prompt-stack and character-context render integration.
 
 ## Acceptance Criteria
 
 1. An AgenticMind node in the mirror room receives speech from a voice whose ID is `player`.
 2. Player speech is queued as an observation by Mind and orchestrated by AgenticMind into an Agent Framework turn.
 3. The mirror-room NPC answers as Alley through spoken in-world voice output.
-4. The OpenAI-compatible client provider supplies the chat client used by the default Agent Framework adapter.
-5. Agent Framework turn execution and session state caching are owned by `AgenticMind`.
-6. Exported tool resources are delivered per turn through `ChatOptions` under the AI-002 runtime contract.
-7. The client provider owns binding/loading for Host, optional ApiKey, Model, and Timeout settings.
-8. The client provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
-9. AgenticMind ignores further `speak` tool calls and player voice input until the current reply turn completes.
-10. Tool invocation uses an `IServiceProvider` context that contains the calling AgenticMind and configured `IVoice`
+4. Character context values are available to the rendered system instructions used for the NPC reply.
+5. The OpenAI-compatible client provider supplies the chat client used by the default Agent Framework adapter.
+6. Agent Framework turn execution and session state caching are owned by `AgenticMind`.
+7. Exported tool resources are delivered per turn through `ChatOptions` under the AI-002 runtime contract.
+8. The client provider owns binding/loading for Host, optional ApiKey, Model, and Timeout settings.
+9. The client provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
+10. AgenticMind ignores further `speak` tool calls and player voice input until the current reply turn completes.
+11. Tool invocation uses an `IServiceProvider` context that contains the calling AgenticMind and configured `IVoice`
     for that turn.
-11. Observation prompt formatting is verified through the observation contract without concrete-type switches in
-   AgenticMind or provider code.
-12. `AgenticMind.SystemInstruction` is an exported `PromptStack` compiled and rendered into Agent Framework
+12. Observation prompt formatting is verified through the observation contract without concrete-type switches in
+    AgenticMind or provider code.
+13. `AgenticMind.SystemInstruction` is an exported `PromptStack` compiled and rendered into Agent Framework
     instructions instead of hard-coded production persona text.
-13. The mirror-room AgenticMind node assigns the Alley prompt as one `TextPromptSection` named `Instructions` on
+14. Each AgenticMind turn renders `SystemInstruction` by passing the associated character's CTX-001
+    `IReadOnlyDictionary<string, object?>` context directly into the `PromptStack`/`ITemplate` render operation.
+15. CTX-001 remains independent from AI, prompt, and templating APIs, and no `ContextData` type is reintroduced.
+16. The mirror-room AgenticMind node assigns the Alley prompt as one `TextPromptSection` named `Instructions` on
     `SystemInstruction`.
-14. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
-15. Missing voice/backend configuration and backend failures are logged without crashing the scene.
-16. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
+17. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
+18. Missing voice/backend configuration and backend failures are logged without crashing the scene.
+19. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
 
 ## References
 
@@ -128,6 +138,8 @@ while keeping backend failures contained to logged errors.
 - SPCH-004: Speech Generator Component
 - CORE-006: Microsoft Configuration Integration
 - [AI-003: Prompt API](../003-prompt-api/index.md)
+- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
+- [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 
 ### External Dependencies
 
