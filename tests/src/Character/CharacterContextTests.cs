@@ -257,7 +257,10 @@ public sealed class CharacterContextTests
         }
     }
 
-    private sealed record FakeSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext;
+    private sealed record FakeSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
+    {
+        public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
+    }
 
     private sealed class FakeCharacter : ICharacter
     {

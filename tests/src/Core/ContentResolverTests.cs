@@ -28,6 +28,14 @@ public sealed class ContentResolverTests
             contentRoot: ContentRoot);
 
         Assert.Equal(Fallback, result);
+        ContentContext context = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: "req",
+            defaultPackId: "def",
+            isIntegrationTest: true,
+            sceneExists: _ => throw new InvalidOperationException("Integration-test bypass should not probe content."),
+            contentRoot: ContentRoot);
+        Assert.Equal("default", context.ContentID);
+        Assert.Equal("res://", context.RootPath);
     }
 
     /// <summary>
@@ -45,6 +53,14 @@ public sealed class ContentResolverTests
             contentRoot: ContentRoot);
 
         Assert.Equal(RequestedPath, result);
+        ContentContext context = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: "req",
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            sceneExists: p => p == RequestedPath,
+            contentRoot: ContentRoot);
+        Assert.Equal("req", context.ContentID);
+        Assert.Equal("res://content/req/", context.RootPath);
     }
 
     /// <summary>
@@ -62,6 +78,14 @@ public sealed class ContentResolverTests
             contentRoot: ContentRoot);
 
         Assert.Equal(DefaultPath, result);
+        ContentContext context = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: null,
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            sceneExists: p => p == DefaultPath,
+            contentRoot: ContentRoot);
+        Assert.Equal("def", context.ContentID);
+        Assert.Equal("res://content/def/", context.RootPath);
     }
 
     /// <summary>
@@ -79,6 +103,14 @@ public sealed class ContentResolverTests
             contentRoot: ContentRoot);
 
         Assert.Equal(Fallback, result);
+        ContentContext context = ContentResolver.SelectCurrentContentContext(
+            requestedPackId: null,
+            defaultPackId: null,
+            isIntegrationTest: false,
+            sceneExists: _ => false,
+            contentRoot: ContentRoot);
+        Assert.Equal("default", context.ContentID);
+        Assert.Equal("res://", context.RootPath);
     }
 
     /// <summary>
@@ -97,6 +129,12 @@ public sealed class ContentResolverTests
 
         Assert.Contains("req", exception.Message, StringComparison.Ordinal);
         Assert.Contains(RequestedPath, exception.Message, StringComparison.Ordinal);
+        _ = Assert.Throws<InvalidOperationException>(() => ContentResolver.SelectCurrentContentContext(
+            requestedPackId: "req",
+            defaultPackId: "def",
+            isIntegrationTest: false,
+            sceneExists: p => p == DefaultPath,
+            contentRoot: ContentRoot));
     }
 
     /// <summary>

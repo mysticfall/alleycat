@@ -5,6 +5,12 @@ namespace AlleyCat.Core.Content;
 /// </summary>
 public static class ContentPaths
 {
+    /// <summary>Identity of the built-in fallback content.</summary>
+    public const string DefaultContentID = "default";
+
+    /// <summary>Root path of the built-in fallback content.</summary>
+    public const string DefaultRootPath = "res://";
+
     /// <summary>Root directory holding all content packs, each in its own sub-folder.</summary>
     public const string ContentRoot = "res://content/";
 
@@ -16,4 +22,9 @@ public static class ContentPaths
 
     /// <summary>Command-line argument used to request a specific content pack.</summary>
     public const string CommandLineArgument = "--content-pack";
+
+    /// <summary>
+    /// Returns the root resource path for an optional content pack.
+    /// </summary>
+    public static string GetPackRootPath(string packID) => ContentRoot + packID + "/";
 }

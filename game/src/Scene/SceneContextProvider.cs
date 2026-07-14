@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Core.Content;
 using Godot;
 
 namespace AlleyCat.Scene;
@@ -7,7 +8,8 @@ namespace AlleyCat.Scene;
 /// Builds scene contexts from the live Godot scene tree.
 /// </summary>
 /// <param name="treeOwner">Node used to resolve the current scene tree.</param>
-public sealed class SceneContextProvider(Node treeOwner) : ISceneContextProvider
+/// <param name="contentResolver">CORE content resolver used to expose active content context.</param>
+public sealed class SceneContextProvider(Node treeOwner, IContentResolver? contentResolver = null) : ISceneContextProvider
 {
     private static readonly StringName _actorsGroup = "Actors";
 
@@ -25,7 +27,7 @@ public sealed class SceneContextProvider(Node treeOwner) : ISceneContextProvider
                     $"Scene authoring error: node '{actorNode.Name}' ({actorNode.GetPath()}) is in the Actors group but does not implement {typeof(ICharacter).FullName}.");
         }
 
-        return new SceneContext(characters);
+        return new SceneContext(characters, (contentResolver ?? new ContentResolver()).GetCurrentContentContext());
     }
 
     private Godot.Collections.Array<Node> GetActorNodes()

@@ -48,6 +48,30 @@ public partial class ContentResolver : IContentResolver
         return resolved;
     }
 
+    /// <inheritdoc />
+    public ContentContext GetCurrentContentContext()
+    {
+        bool isIntegrationTest = RuntimeContext.IsIntegrationTest();
+        string? requestedPackId = ReadRequestedPackId();
+        string? defaultPackId = _manifest?.DefaultPackId;
+
+        ContentContext context = SelectCurrentContentContext(
+            requestedPackId,
+            defaultPackId,
+            isIntegrationTest,
+            p => ResourceLoader.Exists(p));
+
+        _logger.LogDebug(
+            "Resolved content context {ContentID} at {RootPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}).",
+            context.ContentID,
+            context.RootPath,
+            requestedPackId,
+            defaultPackId,
+            isIntegrationTest);
+
+        return context;
+    }
+
     /// <summary>
     /// Pure, Godot-free selection logic used to pick the start scene path.
     /// </summary>
@@ -83,6 +107,44 @@ public partial class ContentResolver : IContentResolver
         }
 
         return fallbackStartScenePath;
+    }
+
+    /// <summary>
+    /// Pure, Godot-free selection logic used to resolve the active content context.
+    /// </summary>
+    public static ContentContext SelectCurrentContentContext(
+        string? requestedPackId,
+        string? defaultPackId,
+        bool isIntegrationTest,
+        Func<string, bool> sceneExists,
+        string contentRoot = ContentPaths.ContentRoot,
+        string startSceneFileName = ContentPaths.StartSceneFileName)
+    {
+        ArgumentNullException.ThrowIfNull(sceneExists);
+
+        if (isIntegrationTest)
+        {
+            return ContentContext.Default;
+        }
+
+        if (!string.IsNullOrEmpty(requestedPackId))
+        {
+            string path = contentRoot + requestedPackId + "/" + startSceneFileName;
+            return sceneExists(path)
+                ? new ContentContext(requestedPackId, contentRoot + requestedPackId + "/")
+                : throw CreateMissingRequestedPackSceneException(requestedPackId, path);
+        }
+
+        if (!string.IsNullOrEmpty(defaultPackId))
+        {
+            string path = contentRoot + defaultPackId + "/" + startSceneFileName;
+            if (sceneExists(path))
+            {
+                return new ContentContext(defaultPackId, contentRoot + defaultPackId + "/");
+            }
+        }
+
+        return ContentContext.Default;
     }
 
     private static InvalidOperationException CreateMissingRequestedPackSceneException(

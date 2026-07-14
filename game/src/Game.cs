@@ -3,6 +3,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
+using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Scene;
 using AlleyCat.Testing;
 using AlleyCat.UI;
@@ -122,8 +123,12 @@ public partial class Game : Node, IServiceProvider
     /// <param name="services">Service collection to populate.</param>
     protected virtual void RegisterServices(IServiceCollection services)
         => _ = services
-            .AddSingleton<ISceneContextProvider>(_ => new SceneContextProvider(this))
-            .AddSingleton<IContentResolver, ContentResolver>();
+            .AddSingleton<IContentResolver, ContentResolver>()
+            .AddSingleton<ISceneContextProvider>(provider => new SceneContextProvider(
+                this,
+                provider.GetRequiredService<IContentResolver>()))
+            .AddSingleton<ILoreQueryService, MarkdownLoreQueryService>()
+            .AddSingleton<ILorePromptFormatter, PseudoXmlLorePromptFormatter>();
 
     private void RegisterInfrastructureServices(IServiceCollection services)
     {

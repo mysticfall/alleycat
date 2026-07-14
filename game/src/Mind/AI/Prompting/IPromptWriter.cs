@@ -9,6 +9,11 @@ public interface IPromptWriter
     /// Writes the supplied prompt sections in their collection enumeration order.
     /// </summary>
     /// <param name="sections">Prompt sections to write.</param>
+    /// <param name="buildContext">Services and scene state for prompt-section construction.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous prompt building.</param>
     /// <returns>Serialised prompt source text.</returns>
-    string Write(IReadOnlyCollection<PromptSection> sections);
+    Task<string> WriteAsync(
+        IReadOnlyCollection<PromptSection> sections,
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken = default);
 }

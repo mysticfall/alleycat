@@ -6,6 +6,11 @@ namespace AlleyCat.Core.Content;
 public interface IContentResolver
 {
     /// <summary>
+    /// Resolves the current active content identity and root path.
+    /// </summary>
+    ContentContext GetCurrentContentContext();
+
+    /// <summary>
     /// Resolves the start scene path. Never returns null; returns
     /// <paramref name="fallbackStartScenePath"/> when no content pack applies.
     /// </summary>

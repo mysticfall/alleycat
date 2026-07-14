@@ -1,6 +1,7 @@
 using System.Reflection;
 using AlleyCat.Core;
 using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,13 +19,13 @@ public sealed partial class PseudoXmlPromptWriterIntegrationTests
     /// Sections are emitted in order with one blank line between pseudo-XML blocks.
     /// </summary>
     [Fact]
-    public void FormatWritesSectionsWithBlankLineBetweenEntries()
+    public async Task FormatWritesSectionsWithBlankLineBetweenEntries()
     {
-        string result = PseudoXmlPromptWriter.Format(
+        string result = await PseudoXmlPromptWriter.FormatAsync(
         [
             new TextPromptSection { Name = "System Instructions", Text = "Be kind." },
             new TextPromptSection { Name = "Player Context", Text = "Player is nearby." },
-        ]);
+        ], CreateBuildContext());
 
         Assert.Equal(
             "<System Instructions>\n" +
@@ -42,12 +43,12 @@ public sealed partial class PseudoXmlPromptWriterIntegrationTests
     /// Section content is preserved while authored names are preserved in prompt tags.
     /// </summary>
     [Fact]
-    public void FormatPreservesContentPaddingAndAuthoredSectionNames()
+    public async Task FormatPreservesContentPaddingAndAuthoredSectionNames()
     {
-        string result = PseudoXmlPromptWriter.Format(
+        string result = await PseudoXmlPromptWriter.FormatAsync(
         [
             new TextPromptSection { Name = "  NPCVoiceID  ", Text = "  keep padding  \n" },
-        ]);
+        ], CreateBuildContext());
 
         Assert.Equal("<  NPCVoiceID  >\n  keep padding  \n</  NPCVoiceID  >\n\n", result);
     }
@@ -56,7 +57,7 @@ public sealed partial class PseudoXmlPromptWriterIntegrationTests
     /// Tag names preserve lax authored punctuation and replace only tag delimiter characters.
     /// </summary>
     [Fact]
-    public void FormatWritesLaxSectionNamesAsPseudoXmlTags()
+    public async Task FormatWritesLaxSectionNamesAsPseudoXmlTags()
     {
         (string SectionName, string ExpectedTagName)[] cases =
         [
@@ -73,8 +74,9 @@ public sealed partial class PseudoXmlPromptWriterIntegrationTests
 
         foreach ((string sectionName, string expectedTagName) in cases)
         {
-            string result = PseudoXmlPromptWriter.Format(
-                [new TextPromptSection { Name = sectionName, Text = "content" }]);
+            string result = await PseudoXmlPromptWriter.FormatAsync(
+                [new TextPromptSection { Name = sectionName, Text = "content" }],
+                CreateBuildContext());
 
             Assert.Equal($"<{expectedTagName}>\ncontent\n</{expectedTagName}>\n\n", result);
         }
@@ -84,12 +86,12 @@ public sealed partial class PseudoXmlPromptWriterIntegrationTests
     /// Prompt content is not escaped, including slash characters that are special in tag names.
     /// </summary>
     [Fact]
-    public void FormatPreservesSlashCharactersInContent()
+    public async Task FormatPreservesSlashCharactersInContent()
     {
-        string result = PseudoXmlPromptWriter.Format(
+        string result = await PseudoXmlPromptWriter.FormatAsync(
         [
             new TextPromptSection { Name = "Test Fixture", Text = "Line including / here" },
-        ]);
+        ], CreateBuildContext());
 
         Assert.Equal("<Test Fixture>\nLine including / here\n</Test Fixture>\n\n", result);
     }
@@ -98,19 +100,24 @@ public sealed partial class PseudoXmlPromptWriterIntegrationTests
     /// Invalid authored section entries fail with clear exceptions.
     /// </summary>
     [Fact]
-    public void FormatRejectsNullEntriesAndInvalidNamesClearly()
+    public async Task FormatRejectsNullEntriesAndInvalidNamesClearly()
     {
-        InvalidOperationException nullException = Assert.Throws<InvalidOperationException>(() =>
-            PseudoXmlPromptWriter.Format([null!]));
+        InvalidOperationException nullException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            PseudoXmlPromptWriter.FormatAsync([null!], CreateBuildContext()));
         Assert.Contains("null section", nullException.Message, StringComparison.OrdinalIgnoreCase);
 
         foreach (string sectionName in new[] { string.Empty, "   " })
         {
-            InvalidOperationException nameException = Assert.Throws<InvalidOperationException>(() =>
-                PseudoXmlPromptWriter.Format([new TextPromptSection { Name = sectionName, Text = "content" }]));
+            InvalidOperationException nameException = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                PseudoXmlPromptWriter.FormatAsync(
+                    [new TextPromptSection { Name = sectionName, Text = "content" }],
+                    CreateBuildContext()));
             Assert.Contains("section", nameException.Message, StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    private static PromptSectionBuildContext CreateBuildContext()
+        => new(new ServiceCollection().BuildServiceProvider(), new SceneContext([]));
 
     /// <summary>
     /// The default prompt writer is an authorable Godot resource and service registrar.

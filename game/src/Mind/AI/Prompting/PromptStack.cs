@@ -19,15 +19,18 @@ public partial class PromptStack : Resource
     /// <summary>
     /// Builds the prompt source and compiles it through services resolved from the supplied provider.
     /// </summary>
-    /// <param name="serviceProvider">Service provider used to resolve prompt writer and template compiler.</param>
+    /// <param name="buildContext">Build context used to resolve services and runtime-backed section content.</param>
+    /// <param name="cancellationToken">Cancellation token for asynchronous prompt building.</param>
     /// <returns>The compiled template returned by the resolved template compiler.</returns>
-    public ITemplate Compile(IServiceProvider serviceProvider)
+    public async Task<ITemplate> CompileAsync(
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(buildContext);
 
-        IPromptWriter writer = serviceProvider.GetRequiredService<IPromptWriter>();
-        ITemplateCompiler compiler = serviceProvider.GetRequiredService<ITemplateCompiler>();
-        string source = writer.Write(Sections ?? []).Trim();
+        IPromptWriter writer = buildContext.Services.GetRequiredService<IPromptWriter>();
+        ITemplateCompiler compiler = buildContext.Services.GetRequiredService<ITemplateCompiler>();
+        string source = (await writer.WriteAsync(Sections ?? [], buildContext, cancellationToken)).Trim();
         return compiler.Compile(source);
     }
 }

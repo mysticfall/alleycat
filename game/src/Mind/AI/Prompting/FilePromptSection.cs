@@ -15,8 +15,13 @@ public partial class FilePromptSection : PromptSection
     public string FilePath { get; set; } = string.Empty;
 
     /// <inheritdoc />
-    public override string GetContent()
+    public override Task<string> GetContentAsync(
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(buildContext);
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(FilePath))
         {
             throw new InvalidOperationException("File prompt section requires a non-empty Godot resource path.");
@@ -30,6 +35,6 @@ public partial class FilePromptSection : PromptSection
                 $"Could not read prompt file '{FilePath}'. Godot FileAccess error: {error}.");
         }
 
-        return file.GetAsText();
+        return Task.FromResult(file.GetAsText());
     }
 }

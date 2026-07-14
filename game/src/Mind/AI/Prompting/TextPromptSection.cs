@@ -15,5 +15,12 @@ public partial class TextPromptSection : PromptSection
     public string Text { get; set; } = string.Empty;
 
     /// <inheritdoc />
-    public override string GetContent() => Text ?? string.Empty;
+    public override Task<string> GetContentAsync(
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(buildContext);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(Text ?? string.Empty);
+    }
 }

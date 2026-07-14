@@ -1,4 +1,5 @@
 using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Scene;
 using AlleyCat.Templating;
 using AlleyCat.TestFramework;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,21 +17,21 @@ public sealed partial class PromptStackIntegrationTests
     /// Inline sections return their configured text content.
     /// </summary>
     [Fact]
-    public void TextPromptSectionReturnsConfiguredText()
+    public async Task TextPromptSectionReturnsConfiguredText()
     {
         TextPromptSection section = new()
         {
             Text = "Inline prompt text.",
         };
 
-        Assert.Equal("Inline prompt text.", section.GetContent());
+        Assert.Equal("Inline prompt text.", await section.GetContentAsync(CreateBuildContext(new ServiceCollection().BuildServiceProvider())));
     }
 
     /// <summary>
     /// Prompt stacks delegate source writing through services and return the compiler result.
     /// </summary>
     [Fact]
-    public void CompileResolvesWriterAndCompilerFromServiceProvider()
+    public async Task CompileResolvesWriterAndCompilerFromServiceProvider()
     {
         RecordingTemplate expectedTemplate = new();
         RecordingCompiler compiler = new(expectedTemplate);
@@ -56,7 +57,7 @@ public sealed partial class PromptStackIntegrationTests
             ],
         };
 
-        ITemplate template = stack.Compile(services);
+        ITemplate template = await stack.CompileAsync(CreateBuildContext(services));
 
         Assert.Same(expectedTemplate, template);
         Assert.Same(stack.Sections, writer.Sections);
@@ -67,7 +68,7 @@ public sealed partial class PromptStackIntegrationTests
     /// Prompt stacks trim the complete generated source before compilation.
     /// </summary>
     [Fact]
-    public void CompileTrimsCompleteSourceBeforeCompilation()
+    public async Task CompileTrimsCompleteSourceBeforeCompilation()
     {
         RecordingCompiler compiler = new(new RecordingTemplate());
         using ServiceProvider services = new ServiceCollection()
@@ -86,7 +87,7 @@ public sealed partial class PromptStackIntegrationTests
             ],
         };
 
-        _ = stack.Compile(services);
+        _ = await stack.CompileAsync(CreateBuildContext(services));
 
         Assert.Equal("complete source", compiler.Source);
     }
@@ -95,7 +96,7 @@ public sealed partial class PromptStackIntegrationTests
     /// Null section arrays are treated as an empty authored stack.
     /// </summary>
     [Fact]
-    public void CompileTreatsNullSectionsArrayAsEmptyPromptSource()
+    public async Task CompileTreatsNullSectionsArrayAsEmptyPromptSource()
     {
         RecordingPromptWriter writer = new("source");
         RecordingCompiler compiler = new(new RecordingTemplate());
@@ -108,7 +109,7 @@ public sealed partial class PromptStackIntegrationTests
             Sections = null!,
         };
 
-        _ = stack.Compile(services);
+        _ = await stack.CompileAsync(CreateBuildContext(services));
 
         Assert.Empty(writer.Sections ?? throw new InvalidOperationException("Writer was not invoked."));
     }
@@ -117,24 +118,27 @@ public sealed partial class PromptStackIntegrationTests
     /// Compile requires a non-null service provider.
     /// </summary>
     [Fact]
-    public void CompileRequiresServiceProvider()
+    public async Task CompileRequiresBuildContext()
     {
         PromptStack stack = new();
 
-        _ = Assert.Throws<ArgumentNullException>(() => stack.Compile(null!));
+        _ = await Assert.ThrowsAsync<ArgumentNullException>(() => stack.CompileAsync(null!));
     }
 
     /// <summary>
     /// Missing services fail through normal dependency injection behaviour.
     /// </summary>
     [Fact]
-    public void CompileRequiresRegisteredPromptServices()
+    public async Task CompileRequiresRegisteredPromptServices()
     {
         PromptStack stack = new();
         using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
 
-        _ = Assert.Throws<InvalidOperationException>(() => stack.Compile(services));
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => stack.CompileAsync(CreateBuildContext(services)));
     }
+
+    private static PromptSectionBuildContext CreateBuildContext(IServiceProvider services)
+        => new(services, new SceneContext([]));
 
     private sealed class RecordingCompiler(ITemplate template) : ITemplateCompiler
     {
@@ -164,10 +168,13 @@ public sealed partial class PromptStackIntegrationTests
             get; private set;
         }
 
-        public string Write(IReadOnlyCollection<PromptSection> sections)
+        public Task<string> WriteAsync(
+            IReadOnlyCollection<PromptSection> sections,
+            PromptSectionBuildContext buildContext,
+            CancellationToken cancellationToken = default)
         {
             Sections = sections;
-            return source;
+            return Task.FromResult(source);
         }
     }
 }

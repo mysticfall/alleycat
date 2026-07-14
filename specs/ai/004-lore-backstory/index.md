@@ -7,69 +7,80 @@ title: Lore And Backstory Source Compilation
 
 ## Requirement
 
-The project must support per-game local Markdown lore roots as the human source of truth for lore and backstory, with
-deterministic incremental compilation into graph-compatible derived artefacts under `lore/<game>`.
+The current implementation slice must support content-scoped Markdown lore roots as the human source of truth for
+essential lore, with runtime loading and prompt injection for pages marked as essential.
 
 ## Goal
 
-Authors should be able to brainstorm and curate lore in ordinary Markdown while giving AI tooling enough structure to
-validate concepts, relationships, aliases, and unresolved suggestions without taking over canon decisions.
+Authors should be able to mark baseline canon in ordinary Markdown so AI prompts receive stable essential context for
+the active content, without requiring graph compilation or broader lore-management workflows in this slice.
 
 ## User Requirements
 
 1. Authors can write lore/backstory as local Markdown pages with prose, frontmatter, aliases, tags, and wiki links.
-2. Authors can start with unstructured notes and receive suggestions for concept pages, relationships, duplicate merges,
-   and missing stubs before those suggestions become canon.
-3. Authors can define game-specific node and relation types without changing runtime code or OpenCode instructions.
-4. Re-running compilation against unchanged source must keep derived graph output stable and reviewable.
-5. Canon remains controlled by the human-authored wiki and approved ontology files, not by generated graph artefacts.
-6. Lore-management agents must always know which game lore root they are working on before reading or changing lore.
+2. Authors can mark lore pages as essential so static baseline canon is injected into AI prompts for the active content.
+3. Prompt consumers receive deterministic essential-lore text with each entry clearly demarcated by its title.
+4. Canon remains controlled by the human-authored wiki, not by generated graph artefacts.
+5. Future dynamic lore retrieval should use the same query abstraction as static essential-lore injection.
 
 ## Technical Requirements
 
-1. Lore roots live under `lore/<game>`, where `<game>` is a subdirectory name selected for the current task.
-2. If the game context is not specified, lore-management agents must enumerate subdirectories under `lore` and ask the
-   user to choose with the `question` tool before continuing.
-3. The `lore-graph-compiler` skill is the normative location for lore-root directory roles and source file conventions.
-4. Wiki pages may include frontmatter fields such as `id`, `type`, `title`, `aliases`, `tags`, and typed `links`.
-5. The compiler must preserve stable IDs, stable ordering, and unchanged output for unchanged source and ontology input.
-6. Compilation must be incremental by default: update only artefacts affected by changed source, ontology, or dependency
-   metadata rather than regenerating the entire graph.
-7. The compiler must validate duplicate IDs, missing link targets, invalid relation types, invalid node types, and
-   unresolved wiki links.
-8. AI extraction is advisory: inferred nodes, relation changes, duplicate merges, and ontology additions must stay as
-   suggestions unless the user explicitly approves canonical edits.
-9. OpenCode lore-management agents must classify compiler output as `accepted`, `follow-up`, or `escalated` before
-    continuing with further delegated work.
+1. Lore roots are resolved from the current CORE content context.
+2. The fallback `default` content id has lore root `res://lore`, committed as `game/lore/`.
+3. Optional content packs use lore root `res://content/<content-id>/lore`, committed under
+   `game/content/<content-id>/lore/` when present.
+4. Runtime lore access must go through an asynchronous query service that accepts the current content context and query
+   intent, including an essential-lore query for pages marked `essential: true`.
+5. Wiki pages may include frontmatter fields such as `id`, `type`, `title`, `aliases`, `tags`, `essential`, and typed
+   `links`, but only `essential` is required by the current runtime slice.
+6. A top-level frontmatter field `essential: true` marks a lore page for static essential-lore prompt injection.
+7. `essential`, when present, must be parsed and validated as a boolean.
+8. Essential-lore injection must keep selection separate from presentation by querying essential lore through the lore
+   query abstraction and delegating output shape to a lore formatter.
+9. `EssentialLorePromptSection` must be runtime-backed through the PromptSection async build contract in AI-003 and must
+    query through the lore abstraction rather than hardcoding paths in prompt code.
+10. The current default lore formatter emits pseudo-XML-compatible entry blocks using each entry title as the tag and
+    the trimmed body as the tag content, delegating block formatting to the shared pseudo-XML utility used by the prompt
+    writer.
+11. The initial query service may read canonical Markdown source directly behind the query abstraction.
+12. Canonical lore source remains Markdown, and graph/compiler artefacts remain future derived outputs.
+13. Future dynamic lore retrieval must use the same asynchronous query service abstraction, adding query intents or
+     filters rather than introducing a separate retrieval pathway.
 
 ## In Scope
 
-- Per-game lore repositories rooted at `lore/<game>`, including the example game at `lore/example`.
-- Markdown wiki authoring conventions for graph-compilable lore pages.
-- Extensible ontology files for node and relation types.
-- Deterministic, incremental graph-compatible derived artefacts.
-- Validation and suggestion flows for AI-assisted extraction.
-- OpenCode harness instructions for a `loremaster` primary agent and lore compilation delegation.
+- Content-scoped lore repositories rooted at `game/lore/` for `default` and `game/content/<content-id>/lore/` for packs.
+- Markdown wiki authoring conventions needed by essential-lore runtime loading.
+- Top-level `essential: true` frontmatter for static essential-lore prompt injection.
+- Async runtime lore query and presentation-agnostic formatting contracts for essential lore.
+- A fallback sample wiki page under `game/lore/wiki/` for content id `default`.
 
 ## Out Of Scope
 
-- Runtime querying, retrieval ranking, token-budgeted prompt projection, or vector indexes.
+- Graph compiler artefacts, including `compiled/` output and deterministic graph sync.
+- Ontology authoring or validation, including required `ontology/` files for the `default` runtime sample root.
+- AI suggestions workflow, including required `suggestions/` files or agent classification of suggestions.
+- Full content-pack lore authoring workflow beyond keeping the content-root mapping stable.
+- Dynamic retrieval ranking, token-budgeted prompt projection, or vector indexes beyond essential-lore formatting.
 - Episodic memory, relationship state, or model-directed lore mutation during gameplay.
 - Mandatory external graph databases or embedding stores.
 - Final production lore content beyond the small example set.
-- A complete compiler implementation; this spec defines the source/derived-data contract and workflow first.
 
 ## Acceptance Criteria
 
-1. `lore/example` contains sample content conforming to the lore-root contract in the `lore-graph-compiler` skill.
-2. At least one wiki page demonstrates frontmatter metadata, aliases, tags, and a typed relationship link.
-3. At least one ontology file defines extensible node or relation types used by the example wiki pages.
-4. Compiled artefacts state that they are derived and are ordered deterministically by stable ID.
-5. Suggestions are separated from canonical wiki and compiled graph data.
-6. OpenCode agent instructions require explicit game context and use the `question` tool if it is missing.
-7. OpenCode agent instructions identify the Markdown wiki as canonical, require incremental sync, and forbid broad
-   regeneration when source input did not change.
-8. OpenCode agent instructions require compiler responses to be classified as `accepted`, `follow-up`, or `escalated`.
+1. `game/lore/wiki/` contains at least one fallback sample Markdown page for content id `default`.
+2. The fallback sample page demonstrates frontmatter metadata, aliases, tags, wiki prose, and top-level
+   `essential: true`.
+3. Runtime loading resolves `default` to `game/lore` / `res://lore` and optional content id `<id>` to
+   `game/content/<id>/lore` / `res://content/<id>/lore`.
+4. Runtime loading reads essential lore from Markdown through the asynchronous query service, not from hardcoded
+   prompt-section paths.
+5. The default lore formatter produces deterministic pseudo-XML-compatible prompt blocks using each loaded page title as
+   the tag and body as the content, without wrapper or child title/body/source tags.
+6. `EssentialLorePromptSection` uses the AI-003 async prompt-section build contract and queries the lore abstraction.
+7. Frontmatter parsing accepts `essential: true` and validates any present `essential` value as a boolean.
+8. The implementation does not require ontology files, compiled graph artefacts, suggestions directories, dynamic
+   retrieval ranking, token-budget projection, or full content-pack lore authoring workflow for this slice.
 9. This spec is linked from the AI specification index and the project specification index.
 
 ## References
@@ -78,7 +89,9 @@ validate concepts, relationships, aliases, and unresolved suggestions without ta
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
-- `lore/example`
+- [CORE-008: Content Pack Resolution](../../core/008-content-pack-resolution/index.md)
+- `game/lore`
+- `game/content/<content-id>/lore`
 - `.opencode/agents/loremaster.md`
 - `.opencode/agents/lore-compiler.md`
 - `.opencode/skills/lore-graph-compiler/SKILL.md`

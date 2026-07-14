@@ -1,4 +1,5 @@
 using System.Text;
+using AlleyCat.Common;
 using AlleyCat.Core;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,15 +14,23 @@ namespace AlleyCat.Mind.AI.Prompting;
 public sealed partial class PseudoXmlPromptWriter : Resource, IPromptWriter, IServiceRegistrar
 {
     /// <inheritdoc />
-    public string Write(IReadOnlyCollection<PromptSection> sections) => Format(sections);
+    public Task<string> WriteAsync(
+        IReadOnlyCollection<PromptSection> sections,
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken = default)
+        => FormatAsync(sections, buildContext, cancellationToken);
 
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection services)
         => services.AddSingleton<IPromptWriter>(this);
 
-    internal static string Format(IReadOnlyCollection<PromptSection> sections)
+    internal static async Task<string> FormatAsync(
+        IReadOnlyCollection<PromptSection> sections,
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(sections);
+        ArgumentNullException.ThrowIfNull(buildContext);
 
         if (sections.Count == 0)
         {
@@ -36,35 +45,20 @@ public sealed partial class PseudoXmlPromptWriter : Resource, IPromptWriter, ISe
                 throw new InvalidOperationException("Prompt writer cannot serialise a null section entry.");
             }
 
-            AppendSection(builder, section);
+            await AppendSectionAsync(builder, section, buildContext, cancellationToken);
         }
 
         return builder.ToString();
     }
 
-    private static void AppendSection(StringBuilder builder, PromptSection section)
+    private static async Task AppendSectionAsync(
+        StringBuilder builder,
+        PromptSection section,
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken)
     {
-        string tagName = FormatSectionTagName(section.Name);
-        string content = section.GetContent() ?? string.Empty;
+        string content = await section.GetContentAsync(buildContext, cancellationToken) ?? string.Empty;
 
-        _ = builder.Append('<').Append(tagName).AppendLine(">");
-        _ = builder.Append(content);
-        if (content.Length == 0 || content[^1] != '\n')
-        {
-            _ = builder.AppendLine();
-        }
-
-        _ = builder.Append("</").Append(tagName).AppendLine(">");
-        _ = builder.AppendLine();
-    }
-
-    private static string FormatSectionTagName(string? sectionName)
-    {
-        return string.IsNullOrWhiteSpace(sectionName)
-            ? throw new InvalidOperationException("Prompt sections must have a non-empty name.")
-            : sectionName
-                .Replace('<', '_')
-                .Replace('>', '_')
-                .Replace('/', '_');
+        PseudoXmlFormatter.AppendBlock(builder, section.Name, content, "Prompt sections");
     }
 }

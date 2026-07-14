@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Core.Content;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Godot;
@@ -158,6 +159,22 @@ public sealed class SceneContextIntegrationTests
         ICharacter snapshotCharacter = Assert.Single(context.Characters);
         Assert.Same(firstCharacter, snapshotCharacter);
         Assert.DoesNotContain(secondCharacter, context.Characters);
+        Assert.Equal(ContentContext.Default, context.Content);
+    }
+
+    /// <summary>
+    /// Scene contexts expose the current CORE content context for convenience without adding domain-specific paths.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Constructor_ExposesSuppliedContentContext()
+    {
+        var content = ContentContext.ForPack("story-pack");
+
+        SceneContext context = new([], content);
+
+        Assert.Equal("story-pack", context.Content.ContentID);
+        Assert.Equal("res://content/story-pack/", context.Content.RootPath);
     }
 
     /// <summary>

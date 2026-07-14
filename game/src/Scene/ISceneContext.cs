@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Core.Content;
 
 namespace AlleyCat.Scene;
 
@@ -11,6 +12,14 @@ public interface ISceneContext
     /// Gets the unordered character membership captured when this context was created.
     /// </summary>
     IReadOnlyCollection<ICharacter> Characters
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Gets the active content context sourced from CORE content resolution.
+    /// </summary>
+    ContentContext Content
     {
         get;
     }

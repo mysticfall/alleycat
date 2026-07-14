@@ -253,13 +253,18 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return characterCount / 12d;
     }
 
-    private AgentDefinition CreateAgentDefinition(IReadOnlyDictionary<string, object?> systemInstructionContext)
+    private async Task<AgentDefinition> CreateAgentDefinitionAsync(
+        ISceneContext scene,
+        IReadOnlyDictionary<string, object?> systemInstructionContext,
+        CancellationToken cancellationToken)
     {
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
+        PromptSectionBuildContext buildContext = new(Game.Instance, scene);
+        ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
         string instructions = RenderSystemInstruction(
-            systemInstruction.Compile(new PromptCompilationServices()),
+            template,
             systemInstructionContext);
 
         return new AgentDefinition(
@@ -287,8 +292,9 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
     private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
     {
-        IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext();
-        AIAgent agent = EnsureAgent(systemInstructionContext);
+        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+        IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext(scene);
+        AIAgent agent = await EnsureAgentAsync(scene, systemInstructionContext, cancellationToken);
         bool enableRequestResponseDiagnostics = _enableRequestResponseDiagnosticsForAgent;
         if (enableRequestResponseDiagnostics)
         {
@@ -401,12 +407,15 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private static string FormatDiagnosticValue(string? value)
         => string.IsNullOrEmpty(value) ? "<empty>" : value;
 
-    private AIAgent EnsureAgent(IReadOnlyDictionary<string, object?> systemInstructionContext)
+    private async Task<AIAgent> EnsureAgentAsync(
+        ISceneContext scene,
+        IReadOnlyDictionary<string, object?> systemInstructionContext,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(systemInstructionContext);
 
         AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
-        AgentDefinition definition = CreateAgentDefinition(systemInstructionContext);
+        AgentDefinition definition = await CreateAgentDefinitionAsync(scene, systemInstructionContext, cancellationToken);
 
         if (_agent is not null
             && ReferenceEquals(_clientProviderForAgent, ClientProvider)
@@ -442,10 +451,9 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return _agent;
     }
 
-    private IReadOnlyDictionary<string, object?> CreateSystemInstructionContext()
+    private IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(ISceneContext scene)
     {
         ICharacter character = ResolveAssociatedCharacter();
-        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
         return CreateSystemInstructionContext(character, scene);
     }
 
@@ -662,21 +670,6 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return serviceType.IsInstanceOfType(this)
             ? this
             : serviceType == typeof(IVoice) ? new ToolVoice(this) : null;
-    }
-
-    private sealed class PromptCompilationServices : IServiceProvider
-    {
-        private readonly HandlebarsTemplateCompiler _compiler = new();
-        private readonly PseudoXmlPromptWriter _writer = new();
-
-        public object? GetService(Type serviceType)
-        {
-            ArgumentNullException.ThrowIfNull(serviceType);
-
-            return serviceType == typeof(ITemplateCompiler)
-                ? _compiler
-                : serviceType == typeof(IPromptWriter) ? _writer : null;
-        }
     }
 
     private sealed class ToolVoice(AgenticMind mind) : IVoice
