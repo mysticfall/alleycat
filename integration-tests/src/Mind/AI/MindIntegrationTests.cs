@@ -225,6 +225,69 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
+    /// System-instruction prompt stacks should compile once per assigned resource while rendering against fresh CTX-001 data every turn.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WhenSystemInstructionResourceIsReused_ReusesCompiledTemplateAndRendersCurrentContext()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecordingVoice npcVoice = new()
+        {
+            Id = "alley",
+        };
+        PlainVoice playerVoice = new("player");
+        FakeClientProvider clientProvider = new();
+        CountingPromptSection firstSection = new("First instruction for {{displayName}}.");
+        CountingPromptSection secondSection = new("Second instruction for {{displayName}}.");
+        PromptStack firstSystemInstruction = CreateCountingSystemInstruction(firstSection);
+        PromptStack secondSystemInstruction = CreateCountingSystemInstruction(secondSection);
+        Dictionary<string, object?> context = new()
+        {
+            ["displayName"] = "First Alley",
+        };
+        AgenticMind mind = new()
+        {
+            ClientProvider = clientProvider,
+            SystemInstruction = firstSystemInstruction,
+            Voice = npcVoice,
+            MaxObservationWaitSeconds = 0.05f,
+            ObservationWeightThreshold = 1f,
+            PostReplyListenCooldownSeconds = 0f,
+            Tools = [new MarkerTool("cache_probe")],
+        };
+
+        AddTestNode(sceneTree, npcVoice);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind, context);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("first turn", playerVoice);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 1, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients[0].Completed, maxFrames: 120);
+
+            context["displayName"] = "Second Alley";
+            mind.ReceiveVoice("second turn", playerVoice);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 2, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients[1].Completed, maxFrames: 120);
+
+            mind.SystemInstruction = secondSystemInstruction;
+            context["displayName"] = "Third Alley";
+            mind.ReceiveVoice("third turn", playerVoice);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 3, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients[2].Completed, maxFrames: 120);
+
+            Assert.Equal(1, firstSection.ContentRequestCount);
+            Assert.Equal(1, secondSection.ContentRequestCount);
+            Assert.Equal(3, clientProvider.CreatedClients.Count);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, character, npcVoice);
+        }
+    }
+
+    /// <summary>
     /// Backend creation failures should be contained by AgenticMind so the scene keeps running and no NPC speech emits.
     /// </summary>
     [Fact]
@@ -520,6 +583,11 @@ public sealed partial class MindIntegrationTests : IDisposable
         ],
     };
 
+    private static PromptStack CreateCountingSystemInstruction(CountingPromptSection section) => new()
+    {
+        Sections = [section],
+    };
+
     private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames)
     {
         for (int frame = 0; frame < maxFrames; frame++)
@@ -617,6 +685,35 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
     }
 
+    private sealed partial class CountingPromptSection : PromptSection
+    {
+        private readonly string _text;
+
+        public CountingPromptSection()
+            : this(string.Empty)
+        {
+        }
+
+        public CountingPromptSection(string text)
+        {
+            _text = text;
+            Name = "Counting Instructions";
+        }
+
+        public int ContentRequestCount
+        {
+            get; private set;
+        }
+
+        public override Task<string> GetContentAsync(
+            PromptSectionBuildContext buildContext,
+            CancellationToken cancellationToken = default)
+        {
+            ContentRequestCount++;
+            return Task.FromResult(_text);
+        }
+    }
+
     private sealed class FakeClientProvider : ClientProvider
     {
         public string FirstSpeech { get; init; } = string.Empty;
@@ -637,9 +734,12 @@ public sealed partial class MindIntegrationTests : IDisposable
             private set;
         }
 
+        public List<FakeChatClient> CreatedClients { get; } = [];
+
         public override IChatClient CreateChatClient()
         {
             Client = new FakeChatClient(FirstSpeech, SecondSpeech, ResponseText, AfterFirstSpeakAsync);
+            CreatedClients.Add(Client);
             return Client;
         }
     }

@@ -43,23 +43,25 @@ reply aloud as an embodied character.
     adapters.
 12. AgenticMind must export `SystemInstruction` as a `PromptStack` compatible with
     [AI-003](../003-prompt-api/index.md).
-13. AgenticMind must compile and render `SystemInstruction` into Agent Framework instructions for each agent turn.
-14. For each turn, AgenticMind must obtain its associated character's CTX-001 context dictionary and pass that
-    dictionary directly to the `PromptStack`/`ITemplate` render operation for `SystemInstruction`.
-15. AgenticMind must consume CTX-001 dictionaries without adding any dependency from `AlleyCat.Context` to AI,
-    prompt, or templating APIs.
-16. The mirror-room AgenticMind scene configuration must provide the Alley prompt through `SystemInstruction` as one
-    `TextPromptSection` named `Instructions`.
-17. The `speak` tool must invoke AgenticMind's configured `IVoice` output rather than returning visible text.
-18. Tool invocation services must include the calling AgenticMind and its configured `IVoice` so Resource tools can
-    execute against that instance.
-19. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
-20. Player listening must remain paused for a short cooldown after the NPC starts speaking.
-21. OpenAI-compatible backend settings must bind/read subsystem-owned AI options from CORE-006 `IConfiguration`, or
-    build a local custom-path JSON configuration when an explicit path is supplied.
-22. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
-    checks.
-23. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
+13. AgenticMind should cache the compiled `ITemplate` for the currently assigned `SystemInstruction` `PromptStack`.
+14. Assigning a different `SystemInstruction` `PromptStack` must invalidate the cached compiled template.
+15. AgenticMind must render `SystemInstruction` into Agent Framework instructions for each agent turn.
+16. For each turn, AgenticMind must obtain its associated character's CTX-001 context dictionary and pass that
+     dictionary directly to the `PromptStack`/`ITemplate` render operation for `SystemInstruction`.
+17. AgenticMind must consume CTX-001 dictionaries without adding any dependency from `AlleyCat.Context` to AI,
+     prompt, or templating APIs.
+18. The mirror-room AgenticMind scene configuration must provide the Alley prompt through `SystemInstruction` as one
+     `TextPromptSection` named `Instructions`.
+19. The `speak` tool must invoke AgenticMind's configured `IVoice` output rather than returning visible text.
+20. Tool invocation services must include the calling AgenticMind and its configured `IVoice` so Resource tools can
+     execute against that instance.
+21. Each player-speech turn must accept at most one `speak` tool call before waiting for more player speech.
+22. Player listening must remain paused for a short cooldown after the NPC starts speaking.
+23. OpenAI-compatible backend settings must bind/read subsystem-owned AI options from CORE-006 `IConfiguration`, or
+     build a local custom-path JSON configuration when an explicit path is supplied.
+24. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
+     checks.
+25. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
 
 ### AI-002 Runtime Sync Note
 
@@ -74,7 +76,8 @@ while keeping backend failures contained to logged errors.
 - AgenticMind node component for player-speech-triggered NPC responses.
 - AgenticMind-owned prompt-stack system instructions, exported tool selection, client-provider wiring, and Agent
   Framework turn orchestration.
-- Per-turn AgenticMind rendering of `SystemInstruction` with the associated character's CTX-001 dictionary.
+- Cached AgenticMind compilation of the assigned `SystemInstruction` prompt stack, with invalidation on reassignment.
+- Per-turn AgenticMind rendering of the cached template with the associated character's CTX-001 dictionary.
 - Mirror-room Alley prompt assignment through an AI-003 `PromptStack` with one `TextPromptSection`.
 - Replaceable Agent Framework client provider Resource for chat-client creation.
 - Microsoft Agent Framework prototype backend.
@@ -89,7 +92,7 @@ while keeping backend failures contained to logged errors.
 - Behaviour or animation planning beyond spoken response output.
 - Streaming token or streaming speech playback.
 - Final persona authoring tools, prompt previews, or dynamic character prompts beyond the mandatory exported
-  `SystemInstruction` prompt-stack and character-context render integration.
+  `SystemInstruction` prompt-stack, compile-cache, and character-context render integration.
 
 ## Acceptance Criteria
 
@@ -107,16 +110,18 @@ while keeping backend failures contained to logged errors.
     for that turn.
 12. Observation prompt formatting is verified through the observation contract without concrete-type switches in
     AgenticMind or provider code.
-13. `AgenticMind.SystemInstruction` is an exported `PromptStack` compiled and rendered into Agent Framework
-    instructions instead of hard-coded production persona text.
-14. Each AgenticMind turn renders `SystemInstruction` by passing the associated character's CTX-001
+13. `AgenticMind.SystemInstruction` is an exported `PromptStack` compiled into a reusable `ITemplate` instead of
+    hard-coded production persona text.
+14. Reusing the same assigned `SystemInstruction` `PromptStack` reuses the cached compiled template, and assigning a
+    different prompt stack invalidates that cache before the next turn.
+15. Each AgenticMind turn renders `SystemInstruction` by passing the associated character's CTX-001
     `IReadOnlyDictionary<string, object?>` context directly into the `PromptStack`/`ITemplate` render operation.
-15. CTX-001 remains independent from AI, prompt, and templating APIs, and no `ContextData` type is reintroduced.
-16. The mirror-room AgenticMind node assigns the Alley prompt as one `TextPromptSection` named `Instructions` on
+16. CTX-001 remains independent from AI, prompt, and templating APIs, and no `ContextData` type is reintroduced.
+17. The mirror-room AgenticMind node assigns the Alley prompt as one `TextPromptSection` named `Instructions` on
     `SystemInstruction`.
-17. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
-18. Missing voice/backend configuration and backend failures are logged without crashing the scene.
-19. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
+18. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
+19. Missing voice/backend configuration and backend failures are logged without crashing the scene.
+20. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
 
 ## References
 

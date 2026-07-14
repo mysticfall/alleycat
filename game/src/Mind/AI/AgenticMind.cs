@@ -29,6 +29,8 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
     private ResponseTurn? _activeTurn;
+    private PromptStack? _compiledSystemInstructionSource;
+    private ITemplate? _compiledSystemInstructionTemplate;
     private ClientProvider? _clientProviderForAgent;
     private PromptStack? _systemInstructionForAgent;
     private string? _instructionsForAgent;
@@ -262,7 +264,10 @@ public partial class AgenticMind : MindBase, IServiceProvider
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
         PromptSectionBuildContext buildContext = new(Game.Instance, scene);
-        ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
+        ITemplate template = await GetCompiledSystemInstructionTemplateAsync(
+            systemInstruction,
+            buildContext,
+            cancellationToken);
         string instructions = RenderSystemInstruction(
             template,
             systemInstructionContext);
@@ -271,6 +276,24 @@ public partial class AgenticMind : MindBase, IServiceProvider
             instructions,
             "Alley",
             "Prototype NPC mind for in-world speech responses.");
+    }
+
+    private async Task<ITemplate> GetCompiledSystemInstructionTemplateAsync(
+        PromptStack systemInstruction,
+        PromptSectionBuildContext buildContext,
+        CancellationToken cancellationToken)
+    {
+        if (_compiledSystemInstructionTemplate is not null
+            && ReferenceEquals(_compiledSystemInstructionSource, systemInstruction))
+        {
+            return _compiledSystemInstructionTemplate;
+        }
+
+        ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
+        _compiledSystemInstructionSource = systemInstruction;
+        _compiledSystemInstructionTemplate = template;
+
+        return template;
     }
 
     private List<AITool> CreateTurnTools()
