@@ -30,6 +30,7 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
     private const string GodotImportTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_IMPORT_TIMEOUT_MS";
     private const string GodotRunFactTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_RUN_FACT_TIMEOUT_MS";
     private const string GodotCleanupTimeoutEnvironmentVariable = "ALLEYCAT_GODOT_CLEANUP_TIMEOUT_MS";
+    private const string GodotImportPreflightEnvironmentVariable = "ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT";
 
     private readonly Assembly _testAssembly;
     private readonly GodotCliTestSelector _cliSelector;
@@ -228,16 +229,19 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
 
     private async Task<Exception?> RunPreflightAsync(CancellationToken cancellationToken)
     {
-        GodotProcessRunResult importResult = await RunGodotProcessAsync(CreateImportArguments(), _importTimeoutMs, cancellationToken);
-        if (importResult.FailureException is not null)
+        if (IsImportPreflightEnabled())
         {
-            return importResult.FailureException;
-        }
+            GodotProcessRunResult importResult = await RunGodotProcessAsync(CreateImportArguments(), _importTimeoutMs, cancellationToken);
+            if (importResult.FailureException is not null)
+            {
+                return importResult.FailureException;
+            }
 
-        if (importResult.ExitCode != 0)
-        {
-            return new InvalidOperationException(
-                $"Godot integration import preflight failed. ExitCode={importResult.ExitCode}. {BuildOutputSummary(importResult)}");
+            if (importResult.ExitCode != 0)
+            {
+                return new InvalidOperationException(
+                    $"Godot integration import preflight failed. ExitCode={importResult.ExitCode}. {BuildOutputSummary(importResult)}");
+            }
         }
 
         GodotProcessRunResult runResult = await RunGodotProcessAsync(CreateProbeArguments(), _preflightTimeoutMs, cancellationToken);
@@ -259,7 +263,16 @@ internal sealed class GodotTestFramework : ITestFramework, IDataProducer
         "--path",
         "game",
         "--import",
+        "--recovery-mode",
     ];
+
+    private static bool IsImportPreflightEnabled()
+    {
+        string? rawValue = Environment.GetEnvironmentVariable(GodotImportPreflightEnvironmentVariable);
+        return string.Equals(rawValue, "1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(rawValue, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(rawValue, "yes", StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task<RunFactExecutionResult> RunFactAsync(MethodInfo method, CancellationToken cancellationToken)
     {

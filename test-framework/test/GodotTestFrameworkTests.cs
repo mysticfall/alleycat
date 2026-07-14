@@ -12,6 +12,8 @@ namespace AlleyCat.TestFramework.Tests;
 public sealed class GodotTestFrameworkTests
 {
     private const string ResultMarkerPrefix = "ALLEYCAT_INTEGRATION_TEST_RESULT:";
+    private const string ProbeSuccessMarker = "ALLEYCAT_INTEGRATION_PROBE_SUCCESS";
+    private const string ImportPreflightEnvironmentVariable = "ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT";
     private static readonly Type _godotTestFrameworkType = typeof(TestingPlatformBuilderHook).Assembly
         .GetType("AlleyCat.TestFramework.GodotTestFramework", throwOnError: true)!;
     private static readonly Lock _environmentLock = new();
@@ -278,6 +280,121 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
+    /// Ensures default preflight execution uses only the runtime integration probe.
+    /// </summary>
+    [Fact]
+    public void RunPreflightAsync_RunsProbeOnly_WhenImportPreflightIsUnset()
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, null);
+            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess());
+            object framework = CreateFrameworkInstance(factory);
+
+#pragma warning disable xUnit1031
+            Exception? preflightError = InvokePrivateInstanceAsync<Exception?>(
+                    framework,
+                    "RunPreflightAsync",
+                    CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+#pragma warning restore xUnit1031
+
+            Assert.Null(preflightError);
+            IReadOnlyList<IReadOnlyList<string>> invocations = factory.Invocations;
+            IReadOnlyList<string> probeArgs = Assert.Single(invocations);
+            Assert.DoesNotContain("--import", probeArgs);
+            Assert.Contains("--integration-probe", probeArgs);
+        }
+    }
+
+    /// <summary>
+    /// Ensures opt-in import preflight runs before the runtime integration probe.
+    /// </summary>
+    [Theory]
+    [InlineData("1")]
+    [InlineData("true")]
+    [InlineData("yes")]
+    public void RunPreflightAsync_RunsImportBeforeProbe_WhenImportPreflightIsTruthy(string configuredValue)
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, configuredValue);
+            var factory = new FakeGodotProcessFactory(
+                FakeGodotProcess.Create(outputEvents: [], naturalExitDelay: TimeSpan.Zero),
+                CreateSuccessfulProbeProcess());
+            object framework = CreateFrameworkInstance(factory);
+
+#pragma warning disable xUnit1031
+            Exception? preflightError = InvokePrivateInstanceAsync<Exception?>(
+                    framework,
+                    "RunPreflightAsync",
+                    CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+#pragma warning restore xUnit1031
+
+            Assert.Null(preflightError);
+            Assert.Equal(2, factory.Invocations.Count);
+            Assert.Contains("--import", factory.Invocations[0]);
+            Assert.Contains("--integration-probe", factory.Invocations[1]);
+        }
+    }
+
+    /// <summary>
+    /// Ensures non-truthy values do not accidentally enable import preflight.
+    /// </summary>
+    [Theory]
+    [InlineData("0")]
+    [InlineData("false")]
+    [InlineData("no")]
+    [InlineData("enabled")]
+    public void RunPreflightAsync_RunsProbeOnly_WhenImportPreflightIsNotTruthy(string configuredValue)
+    {
+        lock (_environmentLock)
+        {
+            using var _ = new EnvironmentVariableScope(ImportPreflightEnvironmentVariable, configuredValue);
+            var factory = new FakeGodotProcessFactory(CreateSuccessfulProbeProcess());
+            object framework = CreateFrameworkInstance(factory);
+
+#pragma warning disable xUnit1031
+            Exception? preflightError = InvokePrivateInstanceAsync<Exception?>(
+                    framework,
+                    "RunPreflightAsync",
+                    CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+#pragma warning restore xUnit1031
+
+            Assert.Null(preflightError);
+            IReadOnlyList<string> probeArgs = Assert.Single(factory.Invocations);
+            Assert.DoesNotContain("--import", probeArgs);
+            Assert.Contains("--integration-probe", probeArgs);
+        }
+    }
+
+    /// <summary>
+    /// Ensures opt-in import preflight uses safer editor startup arguments.
+    /// </summary>
+    [Fact]
+    public void CreateImportArguments_IncludesHeadlessXrPathImportAndRecoveryMode()
+    {
+        IReadOnlyList<string> args = InvokePrivateStatic<IReadOnlyList<string>>("CreateImportArguments");
+
+        Assert.Contains("--headless", args);
+        Assert.Contains("--import", args);
+        Assert.Contains("--recovery-mode", args);
+
+        int xrModeIndex = args.ToList().IndexOf("--xr-mode");
+        Assert.True(xrModeIndex >= 0, "Expected --xr-mode in arguments.");
+        Assert.Equal("off", args[xrModeIndex + 1]);
+
+        int pathIndex = args.ToList().IndexOf("--path");
+        Assert.True(pathIndex >= 0, "Expected --path in arguments.");
+        Assert.Equal("game", args[pathIndex + 1]);
+    }
+
+    /// <summary>
     /// Ensures process execution short-circuits once a structured run-fact line is emitted.
     /// </summary>
     [Fact]
@@ -536,9 +653,19 @@ public sealed class GodotTestFrameworkTests
         return constructor.Invoke([Assembly.GetExecutingAssembly(), selector, processFactory, headlessOverride]);
     }
 
-    private sealed class FakeGodotProcessFactory(FakeGodotProcess process) : GodotTestFramework.IGodotProcessFactory
+    private sealed class FakeGodotProcessFactory(params FakeGodotProcess[] processes) : GodotTestFramework.IGodotProcessFactory
     {
-        public GodotTestFramework.IGodotProcess Create(IReadOnlyList<string> commandLineArguments) => process;
+        private readonly Queue<FakeGodotProcess> _processes = new(processes);
+
+        public IReadOnlyList<IReadOnlyList<string>> Invocations => _invocations;
+
+        private List<IReadOnlyList<string>> _invocations { get; } = [];
+
+        public GodotTestFramework.IGodotProcess Create(IReadOnlyList<string> commandLineArguments)
+        {
+            _invocations.Add([.. commandLineArguments]);
+            return _processes.Dequeue();
+        }
     }
 
     private enum FakeOutputStream
@@ -663,6 +790,13 @@ public sealed class GodotTestFrameworkTests
 
         object? result = method.Invoke(null, args);
         return (T)result!;
+    }
+
+    private static FakeGodotProcess CreateSuccessfulProbeProcess()
+    {
+        return FakeGodotProcess.Create(
+            outputEvents: [new FakeOutputEvent(TimeSpan.Zero, Stream: FakeOutputStream.StdOut, Line: ProbeSuccessMarker)],
+            naturalExitDelay: TimeSpan.Zero);
     }
 
     private static async Task<T> InvokePrivateInstanceAsync<T>(object instance, string methodName, params object?[] args)
