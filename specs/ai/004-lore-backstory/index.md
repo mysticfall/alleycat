@@ -27,7 +27,13 @@ lore-management workflows in this slice.
    themself, scene participants, or conversation participants.
 5. Prompt consumers receive deterministic lore text with each entry clearly demarcated by its title.
 6. Authoritative lore remains controlled by the human-authored perspective wiki, not by generated graph artefacts.
-7. Future dynamic lore retrieval should use the same query abstraction as the first-slice prompt injection path.
+7. Authors do not need to duplicate every canonical subject for every character perspective.
+8. Characters receive lore only for subjects the author has made available to that observer perspective.
+9. Canonical lore remains useful for authoring consistency and future generation tooling, without acting as a runtime
+   substitute for observer knowledge in this slice.
+10. Perspective entries do not force prompt consumers to invent unstated facts when they claim the observer knows a
+    concrete detail that may affect dialogue or action.
+11. Future dynamic lore retrieval should use the same query abstraction as the first-slice prompt injection path.
 
 ## Technical Requirements
 
@@ -63,7 +69,18 @@ lore-management workflows in this slice.
     prompt writer.
 18. The initial query service may read perspective Markdown source directly behind the query abstraction.
 19. Lore source remains Markdown, and graph/compiler artefacts remain future derived outputs.
-20. Future dynamic lore retrieval must use the same asynchronous query service abstraction, adding query intents or
+20. AgenticMind prompt lore must treat perspective entries as the active character's beliefs, not canonical facts plus
+    supplemental belief overlays.
+21. When a perspective entry exists for an observer and subject, it replaces any canonical entry for AgenticMind prompt
+    use by default.
+22. Missing perspective entries mean the observer has no prompt-available contextual knowledge for that subject.
+23. The AgenticMind lore query path must not fall back to canonical entries unless a future omniscient or system context
+    channel explicitly adds that behaviour.
+24. Omniscient constraints that the LLM must obey must live in system/developer rules or a future narrator/game-master
+    channel, not in character belief lore.
+25. Perspective authoring and validation must flag claims that imply concrete prompt-usable knowledge without including
+    the value or explicitly scoping it as unknown, unavailable, or not prompt-relevant.
+26. Future dynamic lore retrieval must use the same asynchronous query service abstraction, adding query intents or
     filters rather than introducing a separate retrieval pathway.
 
 ## In Scope
@@ -76,6 +93,9 @@ lore-management workflows in this slice.
 - Optional `priority` frontmatter and deterministic ordering for retrieved entries.
 - Async runtime lore query and presentation-agnostic formatting contracts for perspective lore.
 - Read-only AgenticMind prompt consumption of perspective lore.
+- Perspective entries as the default replacement for canonical lore in AgenticMind prompt consumption.
+- Missing perspective entries as absent observer knowledge with no automatic canonical fallback.
+- Authoring guidance that prevents perspective entries from implying unstated concrete prompt-usable facts.
 
 ## Out Of Scope
 
@@ -85,8 +105,11 @@ lore-management workflows in this slice.
 - Full content-pack lore authoring workflow beyond keeping the content-root mapping stable.
 - Optional lore fragment search, dynamic retrieval ranking, token-budgeted prompt projection, or vector indexes beyond
   the first-slice query contract.
+- Omniscient/system lore channels, narrator/game-master lore channels, or canonical prompt fallback pathways beyond the
+  explicit no-fallback contract for this slice.
 - Episodic memory, relationship state, or model-directed lore mutation during gameplay.
-- Dynamic writes, save snapshots, memory curator/auditor workflows, and canonical-to-perspective conversion tooling.
+- Dynamic writes, save snapshots, memory curator/auditor workflows, and automated canonical-to-perspective conversion
+  tooling.
 - Mandatory external graph databases or embedding stores.
 - Final production lore content beyond the small example set.
 
@@ -98,20 +121,29 @@ lore-management workflows in this slice.
    collections through the asynchronous query service.
 3. AgenticMind prompt consumption requests lore for its associated character observer id and does not consume canonical
    facts as a substitute for that perspective.
-4. World entries with `essential: true` are included in baseline prompt lore for the active perspective.
-5. Location and character entries are included only when contextually relevant, not because they are marked essential.
-6. Any present `essential` value is validated as a boolean, and any present `priority` value participates in
+4. AgenticMind prompt lore presents perspective entries as the character's beliefs, not as canonical facts plus
+   supplemental belief overlays.
+5. Missing perspective entries do not trigger automatic canonical fallback in AgenticMind prompt lore.
+6. The implementation does not require every canonical entry to have a matching perspective entry for every character.
+7. Omniscient constraints required for LLM behaviour are kept out of character belief lore and represented only through
+   system/developer rules or a future narrator/game-master channel.
+8. World entries with `essential: true` are included in baseline prompt lore for the active perspective.
+9. Location and character entries are included only when contextually relevant, not because they are marked essential.
+10. Any present `essential` value is validated as a boolean, and any present `priority` value participates in
    deterministic API ordering.
-7. Entries with equal priority are ordered deterministically by stable entry id when present, then title, then source
+11. Entries with equal priority are ordered deterministically by stable entry id when present, then title, then source
    path.
-8. Runtime prompt sections query the lore abstraction, not hardcoded prompt-section paths, and do not write lore data.
-9. The default lore formatter produces deterministic pseudo-XML-compatible prompt blocks using each loaded page title as
-   the tag and body as the content, without wrapper or child title/body/source tags.
-10. `EssentialLorePromptSection` uses the AI-003 async prompt-section build contract and queries the lore abstraction.
-11. The implementation does not require ontology files, compiled graph artefacts, suggestions directories, lore fragment
-    search, dynamic writes, save snapshots, memory curator/auditor workflows, canonical-to-perspective conversion
-    tooling, token-budget projection, vector indexes, or full content-pack lore authoring workflow for this slice.
-12. This spec is linked from the AI specification index and the project specification index.
+12. Runtime prompt sections query the lore abstraction, not hardcoded prompt-section paths, and do not write lore data.
+13. The default lore formatter produces deterministic pseudo-XML-compatible prompt blocks using each loaded page title
+    as the tag and body as the content, without wrapper or child title/body/source tags.
+14. `EssentialLorePromptSection` uses the AI-003 async prompt-section build contract and queries the lore abstraction.
+15. The implementation does not require ontology files, compiled graph artefacts, suggestions directories, lore fragment
+    search, dynamic writes, save snapshots, memory curator/auditor workflows, automated canonical-to-perspective
+    conversion tooling, token-budget projection, vector indexes, or full content-pack lore authoring workflow for this
+    slice.
+16. Perspective lore reviews flag entries that claim an observer knows a concrete prompt-usable fact without stating the
+    value or scoping it as unknown, unavailable, or not prompt-relevant.
+17. This spec is linked from the AI specification index and the project specification index.
 
 ## References
 
