@@ -139,7 +139,7 @@ Do not move to user handoff while any previous blocker remains unverified.
 
 For delegated work that creates or updates files under `specs/`:
 
-1. Load skill `spec-authoring` before delegating to `writer`.
+1. Require `writer` to apply skill `writer-guide-specs` during the delegated writing task.
 2. Require explicit separation of `User Requirements` and `Technical Requirements` in delegation acceptance criteria.
 3. Classify writer output as `accepted` only when all are true:
     - Both requirement layers are present and distinct.
