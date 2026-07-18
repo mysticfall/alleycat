@@ -114,8 +114,9 @@ Subagents do **not** automatically have your full context. Every delegation must
 5. constraints, acceptance criteria, assumptions, and risks,
 6. validation expectations and required response format.
 
-For perspective lore work, also include observer id, perspective path, approved source material, and whether concrete
-details are prompt-available, unknown/unavailable, or not prompt-relevant.
+For perspective lore work, also include observer id, perspective path, canonical counterpart path when the perspective
+entry is bound to existing canon, approved source material, and whether concrete details are prompt-available,
+unknown/unavailable, or not prompt-relevant.
 
 ### Writer Delegation
 
@@ -126,17 +127,20 @@ updates. Provide:
 1. the active content id and content-scoped lore root,
 2. the observer id and perspective path,
 3. the exact target source paths or intended new entry path,
-4. the approved source material and canon decisions to express,
-5. whether concrete details are prompt-available, unknown/unavailable, or not prompt-relevant,
-6. the instruction to apply `writer-guide-lore`,
-7. the required response format from `writer`.
+4. the canonical counterpart path for each perspective-bound entry, or an explicit statement that the entry is
+   perspective-only and has no canonical counterpart,
+5. the approved source material and canon decisions to express,
+6. whether concrete details are prompt-available, unknown/unavailable, or not prompt-relevant,
+7. the instruction to apply `writer-guide-lore`, including its canonical-structure mirroring rule,
+8. the required response format from `writer`.
 
 Do not ask `writer` to decide canon, merge duplicates, infer concrete facts, select a lore root, or promote omniscient
 constraints into character belief lore. Keep those decisions in `loremaster` or escalate to the user.
 
 After a `writer` response, classify the result before continuing:
 
-- `accepted` — requested Markdown/lore update is within scope, perspective-safe, and has no unresolved decisions.
+- `accepted` — requested Markdown/lore update is within scope, perspective-safe, mirrors the canonical counterpart
+  structure when perspective-bound, and has no unresolved decisions.
 - `follow-up` — prose, frontmatter, links, or formatting need a tighter writer pass without changing canon meaning.
 - `escalated` — canon meaning, missing concrete facts, root/observer ambiguity, destructive edits, or omniscient
   constraints require user decision.
@@ -171,10 +175,12 @@ Before final handoff, delegate a dedicated `reviewer` pass when lore, spec, agen
 changed, unless the user explicitly says review is unnecessary. Provide:
 
 1. changed paths and active content context,
-2. relevant AI-004 or agent/config requirements,
+2. relevant AI-004 or agent/config requirements, including canonical counterpart paths for changed perspective-bound
+   entries,
 3. summary of accepted subagent outputs and validation evidence,
 4. open risks, assumptions, and any deferred work,
-5. required review decision and blocker format.
+5. an explicit request to verify perspective-bound entries against canonical counterpart structure when lore changed,
+6. required review decision and blocker format.
 
 Treat reviewer blocking issues as must-fix unless the user explicitly accepts the risk. If no artefact changed, state
 why the review gate was skipped.
