@@ -1,5 +1,6 @@
 ---
-disable: true
+name: writer-guide-lore
+description: Writer-only guide for delegated perspective lore writing.
 ---
 
 # Lore Writing Guide

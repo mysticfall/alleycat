@@ -1,7 +1,12 @@
+---
+name: reviewer-checklist-documentation
+description: Reviewer-only checklist for documentation and workflow-note reviews.
+---
+
 # Documentation Review Checklist
 
-Use this checklist with [Markdown Checklist](./checklist-markdown.md) when reviewing documentation, workflow notes, or
-Markdown guidance outside stricter spec, lore, or OpenCode configuration scopes.
+Use this checklist with `reviewer-checklist-markdown` when reviewing documentation, workflow notes, or Markdown guidance
+outside stricter spec, lore, or OpenCode configuration scopes.
 
 ## Source Of Truth
 

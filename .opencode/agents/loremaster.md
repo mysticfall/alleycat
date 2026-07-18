@@ -128,7 +128,7 @@ updates. Provide:
 3. the exact target source paths or intended new entry path,
 4. the approved source material and canon decisions to express,
 5. whether concrete details are prompt-available, unknown/unavailable, or not prompt-relevant,
-6. the instruction to apply `@.opencode/agents/writer/guide-lore.md`,
+6. the instruction to apply `writer-guide-lore`,
 7. the required response format from `writer`.
 
 Do not ask `writer` to decide canon, merge duplicates, infer concrete facts, select a lore root, or promote omniscient

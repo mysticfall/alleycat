@@ -1,6 +1,11 @@
+---
+name: reviewer-checklist-specs
+description: Reviewer-only checklist for specification reviews under specs/.
+---
+
 # Specification Review Checklist
 
-Use this checklist with [Markdown Checklist](./checklist-markdown.md) when reviewing changes under `specs/`.
+Use this checklist with `reviewer-checklist-markdown` when reviewing changes under `specs/`.
 
 ## Source Of Truth
 

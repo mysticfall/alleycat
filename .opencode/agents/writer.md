@@ -23,7 +23,7 @@ before editing.
 - Requested wording introduces behavioural requirements not present in approved specs.
 - Navigation/link structure changes would orphan existing docs or break expected entry paths.
 - You cannot preserve existing anchors/links without broader refactor approval.
-- A selected writer guidance file says to escalate.
+- A selected writer guidance skill says to escalate.
 
 ### Final Report Format
 
@@ -44,11 +44,11 @@ Return one concise update with:
 
 ## Writer Guidance Selection
 
-At the start of every task, identify the writing context and read the matching guidance:
+At the start of every task, identify the writing context and load the matching writer-only skill:
 
-- **Specifications under `specs/`**: [Specification Writing Guide](./writer/guide-specs.md).
+- **Specifications under `specs/`**: `writer-guide-specs`.
 - **Lore Markdown under `game/lore/` or `game/content/<content-id>/lore/`**:
-  [Lore Writing Guide](./writer/guide-lore.md).
+  `writer-guide-lore`.
 - **General documentation, workflow notes, agent instructions, skills, or commands**: use this file's core Markdown
   quality rules and any relevant source document supplied by the invoker.
 

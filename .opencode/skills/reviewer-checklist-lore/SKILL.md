@@ -1,13 +1,17 @@
+---
+name: reviewer-checklist-lore
+description: Reviewer-only checklist for lore Markdown and graph-artefact reviews.
+---
+
 # Lore Review Checklist
 
-Use this checklist with [Markdown Checklist](./checklist-markdown.md) when reviewing lore Markdown or graph-compatible
-lore artefacts.
+Use this checklist with `reviewer-checklist-markdown` when reviewing lore Markdown or graph-compatible lore artefacts.
 
 ## Source Of Truth
 
 - User-requested lore scope, active content id, and active lore root.
 - @specs/ai/004-lore-backstory/index.md
-- @.opencode/agents/writer/guide-lore.md when `writer` drafted prose or frontmatter.
+- `writer-guide-lore` when `writer` drafted prose or frontmatter.
 - `loremaster` delegation packet and any `writer` response when prose/frontmatter drafting was delegated.
 
 ## Checks

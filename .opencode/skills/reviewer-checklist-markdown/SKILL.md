@@ -1,3 +1,8 @@
+---
+name: reviewer-checklist-markdown
+description: Reviewer-only checklist for Markdown structure and navigation reviews.
+---
+
 # Markdown Review Checklist
 
 Use this checklist alongside any review that judges Markdown structure, navigability, or authoring quality.

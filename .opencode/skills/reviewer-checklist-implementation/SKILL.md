@@ -1,3 +1,8 @@
+---
+name: reviewer-checklist-implementation
+description: Reviewer-only checklist for implementation and handoff-readiness reviews.
+---
+
 # Implementation Review Checklist
 
 Use this checklist when reviewing implementation quality and handoff readiness for gameplay, systems, C# code, Godot

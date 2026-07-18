@@ -1,5 +1,6 @@
 ---
-disable: true
+name: writer-guide-specs
+description: Writer-only guide for specification writing under specs/.
 ---
 
 # Specification Writing Guide

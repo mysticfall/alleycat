@@ -20,14 +20,17 @@ checklist before judging readiness.
 
 ## Review Checklist Selection
 
-At the start of every review, identify the review context and read the matching checklist:
+At the start of every review, identify the review context and load the matching reviewer-only skill:
 
 - **Implementation, tests, tools, Godot scenes/resources, or visual acceptance**:
-  [Implementation Checklist](./reviewer/checklist-implementation.md).
-- **Specifications under `specs/`**: [Specification Checklist](./reviewer/checklist-specs.md).
-- **OpenCode agents, skills, commands, MCP, or configuration**: [OpenCode Checklist](./reviewer/checklist-opencode.md).
-- **Lore Markdown or graph artefacts**: [Lore Checklist](./reviewer/checklist-lore.md).
-- **Documentation or workflow notes**: [Documentation Checklist](./reviewer/checklist-documentation.md).
+  `reviewer-checklist-implementation`.
+- **Specifications under `specs/`**: `reviewer-checklist-specs`.
+- **OpenCode agents, skills, commands, MCP, or configuration**: `reviewer-checklist-opencode`.
+- **Lore Markdown or graph artefacts**: `reviewer-checklist-lore`.
+- **Documentation or workflow notes**: `reviewer-checklist-documentation`.
+
+When any selected checklist requires Markdown structure, navigation, or authoring-quality review, also load
+`reviewer-checklist-markdown`.
 
 If multiple contexts apply, combine the relevant checklists and make conflicts explicit in the findings.
 

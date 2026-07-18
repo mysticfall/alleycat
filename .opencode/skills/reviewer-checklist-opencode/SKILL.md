@@ -1,7 +1,12 @@
+---
+name: reviewer-checklist-opencode
+description: Reviewer-only checklist for OpenCode agent, skill, command, and config reviews.
+---
+
 # OpenCode Review Checklist
 
-Use this checklist with [Markdown Checklist](./checklist-markdown.md) when reviewing `.opencode/` Markdown files,
-`opencode.json`, agents, skills, commands, MCP configuration, or permission rules.
+Use this checklist with `reviewer-checklist-markdown` when reviewing `.opencode/` Markdown files, `opencode.json`,
+agents, skills, commands, MCP configuration, or permission rules.
 
 ## Source Of Truth
 
