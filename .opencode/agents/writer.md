@@ -61,6 +61,7 @@ If multiple contexts apply, combine the relevant guidance and make conflicts exp
 
 - Prioritise **conciseness and clarity** over descriptive prose.
 - Use short sections, explicit headings, and compact bullet lists.
+- Wrap Markdown prose so each line stays within 120 characters.
 - Avoid filler language, vague statements, and repeated content.
 
 ### Heading Consistency
@@ -112,5 +113,6 @@ A writing task is complete when:
 1. Content is accurate, concise, and unambiguous.
 2. Formatting is consistent with repository conventions.
 3. Headings follow Title Case.
-4. The result is easy for another agent to execute without extra interpretation.
-5. The selected writer guidance has been applied and cited in the final report.
+4. Markdown prose lines stay within 120 characters.
+5. The result is easy for another agent to execute without extra interpretation.
+6. The selected writer guidance has been applied and cited in the final report.

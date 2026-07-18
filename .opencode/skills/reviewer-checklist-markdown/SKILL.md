@@ -16,8 +16,10 @@ Use this checklist alongside any review that judges Markdown structure, navigabi
 ## Checks
 
 - [ ] The document has a clear audience, purpose, and consumer path.
-- [ ] The structure starts with purpose or context, then rules or requirements, then examples or checklists when helpful.
+- [ ] The structure starts with purpose or context, then rules or requirements, then examples or checklists when
+  helpful.
 - [ ] Headings use consistent Markdown levels and Title Case.
+- [ ] Markdown prose lines are wrapped to stay within 120 characters.
 - [ ] Sections are short, single-purpose, and easy for downstream agents to quote or apply.
 - [ ] Bullet lists are concise, actionable, and avoid filler, repeated content, or vague ownership.
 - [ ] Terminology, section order, and formatting remain consistent with nearby documents.
