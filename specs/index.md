@@ -27,6 +27,10 @@
 
 - [CTX-001: Contextual Information API](context/001-contextual-information-api/index.md)
 
+## Navigation
+
+- [NAV-001: NPC Navigation](nav/001-npc-navigation/index.md)
+
 ## Scene
 
 - [SCN-001: Scene Context API](scene/001-scene-context-api/index.md)
