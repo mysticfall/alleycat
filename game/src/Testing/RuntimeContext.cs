@@ -8,6 +8,7 @@ namespace AlleyCat.Testing;
 public static class RuntimeContext
 {
     private const string TestScenePrefix = "res://tests/";
+    private const string TestingAssetPrefix = "res://assets/testing/";
     private const string TestScriptPrefix = "tests/";
 
     /// <summary>
@@ -84,10 +85,33 @@ public static class RuntimeContext
         string? currentScenePath,
         string? configuredMainScenePath)
         => IsIntegrationTest(explicitContext, commandLineArguments)
+            || HasTestingAssetLaunchArgument(commandLineArguments)
             || (!string.IsNullOrWhiteSpace(currentScenePath)
                 && !string.IsNullOrWhiteSpace(configuredMainScenePath)
-                && currentScenePath.StartsWith(TestScenePrefix, StringComparison.Ordinal)
+                && IsEditorRunTestScenePath(currentScenePath)
                 && !string.Equals(currentScenePath, configuredMainScenePath, StringComparison.Ordinal));
+
+    private static bool IsEditorRunTestScenePath(string scenePath)
+        => scenePath.StartsWith(TestScenePrefix, StringComparison.Ordinal)
+            || scenePath.StartsWith(TestingAssetPrefix, StringComparison.Ordinal);
+
+    private static bool HasTestingAssetLaunchArgument(IReadOnlyList<string>? commandLineArguments)
+    {
+        if (commandLineArguments is null)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < commandLineArguments.Count; index++)
+        {
+            if (commandLineArguments[index].StartsWith(TestingAssetPrefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static string ResolveMainScenePath(string configuredMainScenePath)
         => string.IsNullOrWhiteSpace(configuredMainScenePath)
@@ -111,7 +135,7 @@ public static class RuntimeContext
 
             string sceneFilePath = child.SceneFilePath;
             if (!string.IsNullOrWhiteSpace(sceneFilePath)
-                && sceneFilePath.StartsWith(TestScenePrefix, StringComparison.Ordinal)
+                && IsEditorRunTestScenePath(sceneFilePath)
                 && !string.Equals(sceneFilePath, configuredMainScenePath, StringComparison.Ordinal))
             {
                 return sceneFilePath;

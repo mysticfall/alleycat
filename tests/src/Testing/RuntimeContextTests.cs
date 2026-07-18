@@ -10,6 +10,7 @@ public sealed class RuntimeContextTests
 {
     private const string MainScenePath = "res://assets/scenes/main.tscn";
     private const string TestScenePath = "res://tests/body/voice/voice_test.tscn";
+    private const string TestingAssetScenePath = "res://assets/testing/navigation/navigation_test.tscn";
 
     /// <summary>
     /// Ensures the explicit environment signal marks integration-test context.
@@ -104,6 +105,49 @@ public sealed class RuntimeContextTests
             configuredMainScenePath: MainScenePath);
 
         Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures editor-run manual scenes under assets/testing bypass global startup and XR initialisation.
+    /// </summary>
+    [Fact]
+    public void ShouldBypassGlobalStartup_ReturnsTrue_ForTestingAssetSceneOutsideMainScene()
+    {
+        bool result = RuntimeContext.ShouldBypassGlobalStartup(
+            explicitContext: null,
+            commandLineArguments: ["godot-mono", "--path", "game"],
+            currentScenePath: TestingAssetScenePath,
+            configuredMainScenePath: MainScenePath);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures direct launches of assets/testing scenes bypass global startup before CurrentScene is available.
+    /// </summary>
+    [Fact]
+    public void ShouldBypassGlobalStartup_ReturnsTrue_ForTestingAssetSceneCommandLineLaunch()
+    {
+        bool result = RuntimeContext.ShouldBypassGlobalStartup(
+            explicitContext: null,
+            commandLineArguments: ["godot-mono", "--path", "game", TestingAssetScenePath, "--quit-after", "2"],
+            currentScenePath: null,
+            configuredMainScenePath: MainScenePath);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
+    /// Ensures direct assets/testing launches remain a startup-bypass signal, not an integration-test signal.
+    /// </summary>
+    [Fact]
+    public void IsIntegrationTest_ReturnsFalse_ForTestingAssetSceneCommandLineLaunch()
+    {
+        bool result = RuntimeContext.IsIntegrationTest(
+            explicitContext: null,
+            commandLineArguments: ["godot-mono", "--path", "game", TestingAssetScenePath, "--quit-after", "2"]);
+
+        Assert.False(result);
     }
 
     /// <summary>

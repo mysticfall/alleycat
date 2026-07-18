@@ -1,0 +1,126 @@
+[gd_scene format=3 uid="uid://cjk7djnvnvkr"]
+
+[ext_resource type="Script" path="res://src/Navigation/DirectTransformNavigationPlaytestController.cs" uid="uid://biulhrfvdujca" id="1_tp3k7"]
+[ext_resource type="PackedScene" path="res://assets/testing/navigation/navigation_test_npc.tscn" uid="uid://dgaagcw4cvb2d" id="2_l83gb"]
+[ext_resource type="PackedScene" path="res://assets/testing/test_environment.tscn" uid="uid://bx2i1qev0800s" id="3_l83gb"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fllxo"]
+resource_name = "NavigationObstacleRedMaterial"
+albedo_color = Color(0.95, 0.04, 0.025, 1)
+roughness = 0.65
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_l83gb"]
+albedo_color = Color(0.18, 0.29, 0.18, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_d3jps"]
+size = Vector3(12, 0.1, 12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_e4sei"]
+size = Vector3(12, 0.1, 12)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_visible_ground"]
+size = Vector2(12, 12)
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_xvcmc"]
+vertices = PackedVector3Array(-5.8, 0, -5.8, -5.8, 0, 0.55, -5.8, 0, 1.23, -5.8, 0, 2.15, -5.8, 0, 2.67, -5.8, 0, 3.15, -5.8, 0, 4.9500003, -5.8, 0, 5.8, -3.8999999, 0, -5.8, -3.8999999, 0, 0.55, -3.8999999, 0, 1.23, -3.8999999, 0, 2.15, -3.8999999, 0, 2.67, -3.8999999, 0, 3.15, -3.8999999, 0, 4.9500003, -3.8999999, 0, 5.8, -2.3, 0, -5.8, -2.3, 0, 0.55, -2.3, 0, 1.23, -2.3, 0, 2.15, -2.3, 0, 2.67, -2.3, 0, 3.15, -2.3, 0, 4.9500003, -2.3, 0, 5.8, -0.45000002, 0, -5.8, -0.45000002, 0, 0.55, -0.45000002, 0, 1.23, -0.45000002, 0, 2.15, -0.45000002, 0, 2.67, -0.45000002, 0, 3.15, -0.45000002, 0, 4.9500003, -0.45000002, 0, 5.8, 1, 0, -5.8, 1, 0, 0.55, 1, 0, 1.23, 1, 0, 2.15, 1, 0, 2.67, 1, 0, 3.15, 1, 0, 4.9500003, 1, 0, 5.8, 1.35, 0, -5.8, 1.35, 0, 0.55, 1.35, 0, 1.23, 1.35, 0, 2.15, 1.35, 0, 2.67, 1.35, 0, 3.15, 1.35, 0, 4.9500003, 1.35, 0, 5.8, 3.9, 0, -5.8, 3.9, 0, 0.55, 3.9, 0, 1.23, 3.9, 0, 2.15, 3.9, 0, 2.67, 3.9, 0, 3.15, 3.9, 0, 4.9500003, 3.9, 0, 5.8, 5.8, 0, -5.8, 5.8, 0, 0.55, 5.8, 0, 1.23, 5.8, 0, 2.15, 5.8, 0, 2.67, 5.8, 0, 3.15, 5.8, 0, 4.9500003, 5.8, 0, 5.8)
+polygons = [PackedInt32Array(0, 8, 9, 1), PackedInt32Array(1, 9, 10, 2), PackedInt32Array(2, 10, 11, 3), PackedInt32Array(3, 11, 12, 4), PackedInt32Array(4, 12, 13, 5), PackedInt32Array(5, 13, 14, 6), PackedInt32Array(6, 14, 15, 7), PackedInt32Array(8, 16, 17, 9), PackedInt32Array(11, 19, 20, 12), PackedInt32Array(12, 20, 21, 13), PackedInt32Array(13, 21, 22, 14), PackedInt32Array(14, 22, 23, 15), PackedInt32Array(16, 24, 25, 17), PackedInt32Array(17, 25, 26, 18), PackedInt32Array(18, 26, 27, 19), PackedInt32Array(19, 27, 28, 20), PackedInt32Array(20, 28, 29, 21), PackedInt32Array(21, 29, 30, 22), PackedInt32Array(22, 30, 31, 23), PackedInt32Array(24, 32, 33, 25), PackedInt32Array(25, 33, 34, 26), PackedInt32Array(26, 34, 35, 27), PackedInt32Array(27, 35, 36, 28), PackedInt32Array(28, 36, 37, 29), PackedInt32Array(30, 38, 39, 31), PackedInt32Array(32, 40, 41, 33), PackedInt32Array(33, 41, 42, 34), PackedInt32Array(36, 44, 45, 37), PackedInt32Array(38, 46, 47, 39), PackedInt32Array(40, 48, 49, 41), PackedInt32Array(41, 49, 50, 42), PackedInt32Array(44, 52, 53, 45), PackedInt32Array(45, 53, 54, 46), PackedInt32Array(46, 54, 55, 47), PackedInt32Array(48, 56, 57, 49), PackedInt32Array(49, 57, 58, 50), PackedInt32Array(50, 58, 59, 51), PackedInt32Array(51, 59, 60, 52), PackedInt32Array(52, 60, 61, 53), PackedInt32Array(53, 61, 62, 54), PackedInt32Array(54, 62, 63, 55)]
+
+[sub_resource type="BoxMesh" id="BoxMesh_1fai4"]
+resource_name = "NavigationObstacleTallBoxMesh"
+size = Vector3(0.9, 1.8, 0.9)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hns3o"]
+resource_name = "NavigationObstacleTallBoxShape"
+size = Vector3(0.9, 1.8, 0.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_fwf5n"]
+resource_name = "NavigationObstacleWideBoxMesh"
+size = Vector3(2.2, 0.55, 0.75)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_4jiss"]
+resource_name = "NavigationObstacleWideBoxShape"
+size = Vector3(2.2, 0.55, 0.75)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_22lne"]
+resource_name = "NavigationObstacleCylinderMesh"
+top_radius = 0.55
+bottom_radius = 0.55
+height = 1.1
+radial_segments = 32
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_g3ujv"]
+resource_name = "NavigationObstacleCylinderShape"
+height = 1.1
+radius = 0.55
+
+[node name="DirectTransformNavigationPlaytest" type="Node3D" unique_id=1691104211 node_paths=PackedStringArray("Camera", "Navigation")]
+script = ExtResource("1_tp3k7")
+Camera = NodePath("Camera3D")
+Navigation = NodePath("NavigationTestNpc/Navigation")
+NavigationPath = NodePath("NavigationTestNpc/Navigation")
+metadata/_custom_type_script = "uid://biulhrfvdujca"
+metadata/navigation_obstacle_material = SubResource("StandardMaterial3D_fllxo")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1905382541]
+transform = Transform3D(-1, 0, 0, 0, 0.95447993, 0.29827496, 0, 0.29827496, -0.95447993, 0, 2, -4)
+current = true
+fov = 58.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=855968920]
+transform = Transform3D(0.8, 0.4115966, -0.438529, 0, 0.7295372, 0.6839411, 0.6, -0.5471529, 0.5836298, -3, 5, 4)
+light_energy = 1.2
+
+[node name="ClickTargetGround" type="StaticBody3D" parent="." unique_id=1408969861]
+collision_mask = 0
+
+[node name="GroundMesh" type="MeshInstance3D" parent="ClickTargetGround" unique_id=78112487]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+material_override = SubResource("StandardMaterial3D_l83gb")
+mesh = SubResource("BoxMesh_d3jps")
+
+[node name="GroundCollision" type="CollisionShape3D" parent="ClickTargetGround" unique_id=381567894]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.05, 0)
+shape = SubResource("BoxShape3D_e4sei")
+
+[node name="VisibleGround" type="MeshInstance3D" parent="." unique_id=1658770226]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+material_override = SubResource("StandardMaterial3D_l83gb")
+mesh = SubResource("PlaneMesh_visible_ground")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1715587127]
+navigation_mesh = SubResource("NavigationMesh_xvcmc")
+
+[node name="NavigationTestNpc" parent="." unique_id=1207481256 instance=ExtResource("2_l83gb")]
+
+[node name="TestEnvironment" parent="." unique_id=1701682303 instance=ExtResource("3_l83gb")]
+
+[node name="NavigationObstacleTallBox" type="StaticBody3D" parent="." unique_id=1768614436]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.1, 0.9, 1.35)
+
+[node name="Mesh" type="MeshInstance3D" parent="NavigationObstacleTallBox" unique_id=378800056]
+material_override = SubResource("StandardMaterial3D_fllxo")
+mesh = SubResource("BoxMesh_1fai4")
+
+[node name="Collision" type="CollisionShape3D" parent="NavigationObstacleTallBox" unique_id=1142502202]
+shape = SubResource("BoxShape3D_hns3o")
+
+[node name="NavigationObstacleWideBox" type="StaticBody3D" parent="." unique_id=1342095060]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.45, 0.275, 1.95)
+
+[node name="Mesh" type="MeshInstance3D" parent="NavigationObstacleWideBox" unique_id=1017657714]
+material_override = SubResource("StandardMaterial3D_fllxo")
+mesh = SubResource("BoxMesh_fwf5n")
+
+[node name="Collision" type="CollisionShape3D" parent="NavigationObstacleWideBox" unique_id=357966589]
+shape = SubResource("BoxShape3D_4jiss")
+
+[node name="NavigationObstacleCylinder" type="StaticBody3D" parent="." unique_id=1067875894]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.55, 4.05)
+
+[node name="Mesh" type="MeshInstance3D" parent="NavigationObstacleCylinder" unique_id=1489114577]
+material_override = SubResource("StandardMaterial3D_fllxo")
+mesh = SubResource("CylinderMesh_22lne")
+
+[node name="Collision" type="CollisionShape3D" parent="NavigationObstacleCylinder" unique_id=2059155463]
+shape = SubResource("CylinderShape3D_g3ujv")

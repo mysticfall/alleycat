@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://dgaagcw4cvb2d"]
+[ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_7xrx3"]
+[ext_resource type="PackedScene" uid="uid://dxao507r2dgb2" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_us75r"]
+[ext_resource type="Script" uid="uid://cnc3kfkhjn7qf" path="res://src/Rigging/Installation/RigRoleTemplateSceneInstaller.cs" id="3_b8r5g"]
+[ext_resource type="PackedScene" uid="uid://bibq37gjbxvhn" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="4_afur8"]
+[ext_resource type="Script" uid="uid://b6qde8hx65pcb" path="res://src/Navigation/DirectTransformNavigation.cs" id="5_pynvt"]
+[node name="NavigationTestNpc" unique_id=1488087101 instance=ExtResource("1_7xrx3")]
+Id = "NavigationTestNpc"
+[node name="Female" parent="." index="0" unique_id=2142305244]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+[node name="NPCCharacterInstaller" type="Node" parent="." index="2" unique_id=532609475 node_paths=PackedStringArray("Installers") instance=ExtResource("2_us75r")]
+script = ExtResource("3_b8r5g")
+Template = ExtResource("4_afur8")
+TemplateBaseline = ExtResource("1_7xrx3")
+Installers = [NodePath("TemplateRootSubtreesInstaller"), NodePath("TemplateSkeletonSubtreesInstaller"), NodePath("BodyPartsInstaller"), NodePath("DynamicPhysicalRigInstaller"), NodePath("ReferenceFemaleRuntimeSubsystemInstaller"), NodePath("NPCIKSubsystemInstaller")]
+AutoInstallOnReady = true
+metadata/_custom_type_script = "uid://cnc3kfkhjn7qf"
+
+[node name="Navigation" type="NavigationAgent3D" parent="." index="3" unique_id=1267577970 node_paths=PackedStringArray("Target")]
+script = ExtResource("5_pynvt")
+Target = NodePath("..")
+MovementSpeed = 2.5
+metadata/_custom_type_script = "uid://b6qde8hx65pcb"
