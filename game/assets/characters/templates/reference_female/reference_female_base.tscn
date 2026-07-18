@@ -14,12 +14,14 @@
 [ext_resource type="Script" uid="uid://ckmm3fnsp6y36" path="res://src/Body/Eyes/EyesBehaviour.cs" id="10_eyesbehaviour"]
 [ext_resource type="Script" uid="uid://clntm6ydqb54a" path="res://src/Body/Hands/HandComponentHolder.cs" id="11_jgvmf"]
 [ext_resource type="Script" uid="uid://cxh7lfqn5k3nw" path="res://src/Body/Hands/HandPoseBehaviour.cs" id="12_kqwe4"]
+[ext_resource type="Script" uid="uid://b6qde8hx65pcb" path="res://src/Navigation/DirectTransformNavigation.cs" id="13_navigation"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
 radius = 0.1
 
-[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Eyes", "LeftHand", "RightHand") groups=["Actors"] instance=ExtResource("1_5molt")]
+[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "LeftHand", "RightHand") groups=["Actors"] instance=ExtResource("1_5molt")]
 Locomotion = NodePath("Locomotion")
+Navigation = NodePath("Navigation")
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
@@ -398,3 +400,8 @@ AnimationTree = NodePath("../AnimationTree")
 RootMotionReference = NodePath("../Female")
 AnimationBlendParameter = &"parameters/States/Walking/blend_position"
 metadata/_custom_type_script = "uid://cjt48dl58j31y"
+
+[node name="Navigation" type="NavigationAgent3D" parent="." index="8" unique_id=1542837639 node_paths=PackedStringArray("Target")]
+script = ExtResource("13_navigation")
+Target = NodePath("..")
+metadata/_custom_type_script = "uid://b6qde8hx65pcb"

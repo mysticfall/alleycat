@@ -2,6 +2,7 @@ using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
+using AlleyCat.Navigation;
 using AlleyCat.Rigging.Installation;
 using Godot;
 
@@ -71,6 +72,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             ValidateEyes(targetCharacter.Eyes);
             ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
             ValidateLocomotion(targetCharacter.Locomotion, context.TargetRoot);
+            ValidateNavigation(targetCharacter.Navigation, context.TargetRoot);
             targetCharacter.RefreshComponents();
 
             return SceneInstallationResult.Successful();
@@ -415,6 +417,18 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
                 $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for locomotion binding.");
         RequireAssigned(locomotion.AnimationTree, locomotion, nameof(CharacterLocomotion.AnimationTree));
         RequireAssigned(locomotion.RootMotionReference, locomotion, nameof(CharacterLocomotion.RootMotionReference));
+    }
+
+    private static void ValidateNavigation(DirectTransformNavigation? navigation, Node targetRoot)
+    {
+        if (navigation is null)
+        {
+            return;
+        }
+
+        navigation.Target ??= targetRoot as CharacterBody3D
+            ?? throw new InvalidOperationException(
+                $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for navigation binding.");
     }
 
     internal static Character ValidateCharacterHub(Node targetRoot)

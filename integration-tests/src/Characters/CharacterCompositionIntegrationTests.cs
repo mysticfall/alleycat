@@ -2,11 +2,13 @@ using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.Body.Voice;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 
+using CharacterContract = AlleyCat.Character.ICharacter;
 using CharacterHub = AlleyCat.Character.Character;
 
 namespace AlleyCat.IntegrationTests.Characters;
@@ -16,6 +18,12 @@ namespace AlleyCat.IntegrationTests.Characters;
 /// </summary>
 public sealed class CharacterCompositionIntegrationTests
 {
+    private const string ReferenceFemaleBaseScenePath =
+        "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+
+    private const string ReferenceMaleBaseScenePath =
+        "res://assets/characters/templates/reference_male/reference_male_base.tscn";
+
     /// <summary>
     /// Imported runtime roots may enter the tree before installers copy and rebase explicit capability references.
     /// </summary>
@@ -57,12 +65,14 @@ public sealed class CharacterCompositionIntegrationTests
 
         character.RefreshComponents();
 
-        Assert.Equal(5, character.Components.Count);
+        Assert.Equal(6, character.Components.Count);
         Assert.Same(character.Locomotion, character.Components[0]);
-        Assert.Same(character.Eyes, character.Components[1]);
-        Assert.Same(character.Voice, character.Components[2]);
-        Assert.Same(character.LeftHand, character.Components[3]);
-        Assert.Same(character.RightHand, character.Components[4]);
+        Assert.Same(character.Navigation, character.Components[1]);
+        Assert.Same(character.Eyes, character.Components[2]);
+        Assert.Same(character.Voice, character.Components[3]);
+        Assert.Same(character.LeftHand, character.Components[4]);
+        Assert.Same(character.RightHand, character.Components[5]);
+        Assert.Same(character.Navigation, ((CharacterContract)character).RequireNavigation());
     }
 
     /// <summary>
@@ -155,20 +165,54 @@ public sealed class CharacterCompositionIntegrationTests
         Assert.Contains(nameof(LimbSide.Right), ex.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The reference female base template authors the NAV-001 direct-transform navigation component.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void ReferenceFemaleBaseTemplate_AuthorsDirectTransformNavigation()
+        => AssertReferenceBaseTemplateAuthorsDirectTransformNavigation(ReferenceFemaleBaseScenePath);
+
+    /// <summary>
+    /// The reference male base template authors the NAV-001 direct-transform navigation component.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void ReferenceMaleBaseTemplate_AuthorsDirectTransformNavigation()
+        => AssertReferenceBaseTemplateAuthorsDirectTransformNavigation(ReferenceMaleBaseScenePath);
+
+    private static void AssertReferenceBaseTemplateAuthorsDirectTransformNavigation(string scenePath)
+    {
+        PackedScene scene = ResourceLoader.Load<PackedScene>(scenePath);
+        CharacterHub character = Assert.IsType<CharacterHub>(scene.Instantiate(), exactMatch: false);
+        try
+        {
+            Assert.NotNull(character.Navigation);
+            Assert.Same(character, character.Navigation.Target);
+        }
+        finally
+        {
+            character.QueueFree();
+        }
+    }
+
     private static CharacterHub CreateAuthoredCharacter()
     {
         var character = new CharacterHub { Name = "CharacterRoot" };
         var locomotion = new CharacterLocomotion { Name = "locomotion" };
+        var navigation = new DirectTransformNavigation { Name = "navigation" };
         var eyes = new EyesBehaviour { Name = "eyes" };
         var voice = new TestVoice { Name = "voice", Id = "voice" };
         var leftHand = new HandPoseBehaviour { Name = "left_hand", Side = LimbSide.Left };
         var rightHand = new HandPoseBehaviour { Name = "right_hand", Side = LimbSide.Right };
         character.AddChild(locomotion);
+        character.AddChild(navigation);
         character.AddChild(eyes);
         character.AddChild(voice);
         character.AddChild(leftHand);
         character.AddChild(rightHand);
         character.Locomotion = locomotion;
+        character.Navigation = navigation;
         character.Eyes = eyes;
         character.Voice = voice;
         character.LeftHand = leftHand;

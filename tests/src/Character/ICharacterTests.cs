@@ -7,6 +7,7 @@ using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
+using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Scene;
 using Godot;
@@ -31,6 +32,7 @@ public sealed class ICharacterTests
         Assert.True(typeof(IEyesHolder).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasVoice).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(INavigator).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IContextual).IsAssignableFrom(typeof(ICharacter)));
     }
 
@@ -44,16 +46,22 @@ public sealed class ICharacterTests
         var eyes = new FakeEyes();
         var voice = new FakeVoice();
         var locomotion = new FakeLocomotion();
-        ICharacter character = new FakeCharacter(leftHand, eyes, voice, locomotion);
+        var navigation = new FakeNavigation();
+        Transform3D destination = Transform3D.Identity.Translated(new Vector3(1.0f, 0.0f, 2.0f));
+        ICharacter character = new FakeCharacter(leftHand, eyes, voice, locomotion, navigation);
 
         character.Move(new Vector2(0.5f, -0.25f));
         character.Rotate(new Vector2(-1.0f, 0.25f));
+        NavigationDestinationResult navigationResult = character.SetNavigationDestination(destination);
 
         Assert.True(character.TryGetHand(LimbSide.Left, out IHand? resolvedHand));
         Assert.Same(leftHand, resolvedHand);
         Assert.Same(eyes, character.RequireEyes());
         Assert.True(character.TryGetVoice(out IVoice? resolvedVoice));
         Assert.Same(voice, resolvedVoice);
+        Assert.Same(navigation, character.RequireNavigation());
+        Assert.Equal(NavigationDestinationResult.Accepted, navigationResult);
+        Assert.Equal(destination, navigation.Destination);
         Assert.Equal(new Vector2(0.5f, -0.25f), locomotion.LastMovementInput);
         Assert.Equal(new Vector2(-1.0f, 0.25f), locomotion.LastRotationInput);
     }
@@ -125,5 +133,67 @@ public sealed class ICharacterTests
         public void Move(Vector2 input) => LastMovementInput = input;
 
         public void Rotate(Vector2 input) => LastRotationInput = input;
+    }
+
+    private sealed class FakeNavigation : INavigation
+    {
+        public bool HasDestination
+        {
+            get; private set;
+        }
+
+        public Transform3D Destination
+        {
+            get; private set;
+        }
+
+        public bool IsNavigationRunning => HasDestination;
+
+        public bool IsNavigationFinished => !HasDestination;
+
+        public float PathDesiredDistance
+        {
+            get; set;
+        }
+
+        public float DestinationReachedDistance
+        {
+            get; set;
+        }
+
+        public bool AvoidanceEnabled
+        {
+            get; set;
+        }
+
+        public float AvoidanceRadius
+        {
+            get; set;
+        }
+
+        public float AvoidanceHeight
+        {
+            get; set;
+        }
+
+        public float AvoidanceMaxSpeed
+        {
+            get; set;
+        }
+
+        public Vector3[] CurrentPath => [];
+
+        public int CurrentPathIndex => 0;
+
+        public NavigationDestinationResult SetDestination(Transform3D destination)
+        {
+            Destination = destination;
+            HasDestination = true;
+            return NavigationDestinationResult.Accepted;
+        }
+
+        public void ClearDestination() => HasDestination = false;
+
+        public Vector3 GetNextPathPosition() => Destination.Origin;
     }
 }

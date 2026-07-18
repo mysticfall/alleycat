@@ -5,6 +5,7 @@ using AlleyCat.Character;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
+using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Rigging.Physics;
@@ -49,14 +50,17 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
 
         Assert.True(result.Succeeded, string.Join('\n', result.Errors));
-        Assert.Equal(5, targetRoot.Components.Count);
+        Assert.Equal(6, targetRoot.Components.Count);
         Assert.Same(fixture.TargetLocomotion, targetRoot.Components[0]);
+        Assert.Same(fixture.TargetNavigation, targetRoot.Components[1]);
         ICharacter character = targetRoot;
+        Assert.Same(fixture.TargetNavigation, character.RequireNavigation());
         Assert.Same(fixture.TargetEyes, character.RequireEyes());
         Assert.Same(fixture.TargetVoice, character.RequireVoice());
         Assert.Same(fixture.TargetLeftHand, character.RequireHand(LimbSide.Left));
         Assert.Same(fixture.TargetRightHand, character.RequireHand(LimbSide.Right));
         Assert.Same(fixture.TargetLocomotion, targetRoot.RequireComponent<ILocomotion>());
+        Assert.Same(targetRoot, fixture.TargetNavigation!.Target);
         AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
         Assert.NotSame(fixture.OriginalAnimationTreeRoot, fixture.TargetAnimationTree!.TreeRoot);
     }
@@ -249,6 +253,11 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
             get; private init;
         }
 
+        public DirectTransformNavigation? TargetNavigation
+        {
+            get; private init;
+        }
+
         public AnimationTree? TargetAnimationTree
         {
             get; private init;
@@ -334,12 +343,14 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                 CapabilityNodes templateCapabilities = AddCapabilityNodes(templateRoot, animationTree, "template");
 
                 targetCharacter.Locomotion = new CharacterLocomotion { Name = "StaleLocomotion" };
+                targetCharacter.Navigation = new DirectTransformNavigation { Name = "StaleNavigation" };
                 targetCharacter.Eyes = new EyesBehaviour { Name = "StaleEyes" };
                 targetCharacter.Voice = new TestVoice { Name = "StaleVoice", Id = "stale_voice" };
                 targetCharacter.LeftHand = new HandPoseBehaviour { Name = "StaleLeftHand", Side = LimbSide.Left };
                 targetCharacter.RightHand = new HandPoseBehaviour { Name = "StaleRightHand", Side = LimbSide.Right };
 
                 templateRoot.Locomotion = templateCapabilities.Locomotion;
+                templateRoot.Navigation = templateCapabilities.Navigation;
                 templateRoot.Eyes = templateCapabilities.Eyes;
                 templateRoot.Voice = templateCapabilities.Voice;
                 templateRoot.LeftHand = templateCapabilities.LeftHand;
@@ -355,6 +366,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                     TargetAnimationTree = animationTree,
                     OriginalAnimationTreeRoot = originalAnimationTreeRoot,
                     TargetLocomotion = targetCapabilities.Locomotion,
+                    TargetNavigation = targetCapabilities.Navigation,
                     TargetEyes = targetCapabilities.Eyes,
                     TargetVoice = targetCapabilities.Voice,
                     TargetLeftHand = targetCapabilities.LeftHand,
@@ -466,6 +478,10 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                 AnimationTree = animationTree,
                 RootMotionReference = rootMotion,
             };
+            var navigation = new DirectTransformNavigation
+            {
+                Name = "Navigation",
+            };
             var eyes = new EyesBehaviour
             {
                 Name = "Eyes",
@@ -494,15 +510,17 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                 PhysicalRig = physicalRig,
             };
             root.AddChild(locomotion);
+            root.AddChild(navigation);
             root.AddChild(eyes);
             root.AddChild(voice);
             root.AddChild(leftHand);
             root.AddChild(rightHand);
-            return new CapabilityNodes(locomotion, eyes, voice, leftHand, rightHand);
+            return new CapabilityNodes(locomotion, navigation, eyes, voice, leftHand, rightHand);
         }
 
         private sealed record CapabilityNodes(
             CharacterLocomotion Locomotion,
+            DirectTransformNavigation Navigation,
             EyesBehaviour Eyes,
             TestVoice Voice,
             HandPoseBehaviour LeftHand,

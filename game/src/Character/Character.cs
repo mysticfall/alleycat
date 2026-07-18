@@ -4,6 +4,7 @@ using AlleyCat.Body.Voice;
 using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
+using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Scene;
 using Godot;
@@ -30,6 +31,15 @@ public partial class Character : CharacterBody3D, ICharacter
     /// </summary>
     [Export]
     public CharacterLocomotion? Locomotion
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Gets or sets the template-authored navigation capability reference.
+    /// </summary>
+    [Export]
+    public DirectTransformNavigation? Navigation
     {
         get; set;
     }
@@ -92,13 +102,14 @@ public partial class Character : CharacterBody3D, ICharacter
 
     /// <summary>
     /// Rebuilds the deterministic component cache from explicit template-authored capability references.
-    /// The projection order is stable: locomotion, eyes, voice, left hand, right hand.
+    /// The projection order is stable: locomotion, navigation, eyes, voice, left hand, right hand.
     /// </summary>
     public void RefreshComponents()
     {
         IComponent[] components =
         [
             RequireComponentReference(Locomotion, nameof(Locomotion)),
+            RequireComponentReference(Navigation, nameof(Navigation)),
             RequireComponentReference(Eyes, nameof(Eyes)),
             RequireComponentReference(Voice, nameof(Voice)),
             RequireHandReference(LeftHand, LimbSide.Left, nameof(LeftHand)),
