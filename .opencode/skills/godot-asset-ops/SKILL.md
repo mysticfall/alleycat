@@ -54,6 +54,16 @@ SceneUtils is fail-fast for setup and capture flows: on fatal errors it logs and
 Use SceneUtils where useful, not only for visual probes. The same helpers are valid for general asset scripting
 workflows (for example, scene instantiation, required node lookup, and controlled wait steps).
 
+## Test Scene Environment
+
+For Godot test, playtest, and verification scenes, instance `res://assets/testing/test_environment.tscn` by default for
+world/environment lighting.
+
+- Do not create ad-hoc `WorldEnvironment` nodes for test scenes unless the task or spec gives a specific reason to
+  customise the environment.
+- Prefer the reusable environment to keep screenshots, lighting, and renderer-dependent checks repeatable.
+- If a custom environment is required, document why the reusable test environment is unsuitable.
+
 ## Example Scenarios
 
 ### Scene/Resource Mutation

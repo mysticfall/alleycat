@@ -63,6 +63,8 @@ If both filters are supplied, `--test-method` takes precedence over `--test-clas
 
 - Integration tests must not depend on broad production or content scenes, including temporary playtest environments.
 - Use focused fixtures that mimic only the production wiring relevant to the behaviour under test.
+- If a fixture needs world/environment lighting, instance `res://assets/testing/test_environment.tscn` by default instead
+  of creating an ad-hoc `WorldEnvironment`, unless the test contract specifically requires custom environment settings.
 - Include only relevant components and wiring unless the test explicitly validates component conflicts or interaction
   between multiple systems.
 - Character fixtures should reference only the reference female character.
