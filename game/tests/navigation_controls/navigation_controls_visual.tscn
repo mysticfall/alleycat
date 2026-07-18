@@ -1,0 +1,118 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/photobooth/photobooth.gd" id="1_ao56p"]
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/camera_rig.tscn" id="2_xnn4p"]
+[ext_resource type="Script" path="res://scripts/photobooth/camera_rig.gd" id="3_kupvj"]
+[ext_resource type="PackedScene" path="res://assets/testing/test_environment.tscn" id="4_23v2y"]
+[ext_resource type="Texture2D" path="res://assets/hdri/monochrome_studio_04_1k.exr" id="5_2ycu3"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_i0nvp"]
+resource_name = "DestinationMarkerPreviewMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(0.1, 0.55, 1, 0.72)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_v6cth"]
+resource_name = "DestinationMarkerPressedMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(1, 0.65, 0.08, 0.82)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_0ajv3"]
+resource_name = "DestinationMarkerDiscMesh"
+top_radius = 0.28
+bottom_radius = 0.28
+height = 0.025
+radial_segments = 48
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_f4gvg"]
+resource_name = "DestinationMarkerForwardMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_a6w0o"]
+resource_name = "DestinationMarkerForwardMesh"
+size = Vector3(0.12, 0.035, 0.58)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ux8bu"]
+albedo_color = Color(0.25, 0.25, 0.25, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_v8147"]
+material = SubResource("StandardMaterial3D_ux8bu")
+size = Vector2(10, 10)
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_hbact"]
+panorama = ExtResource("5_2ycu3")
+
+[sub_resource type="Sky" id="Sky_1blvp"]
+sky_material = SubResource("PanoramaSkyMaterial_hbact")
+
+[sub_resource type="Environment" id="Environment_1blvp"]
+background_mode = 1
+background_color = Color(0.90051246, 0.90051246, 0.9005124, 1)
+sky = SubResource("Sky_1blvp")
+ambient_light_source = 3
+reflected_light_source = 2
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_ux8bu"]
+
+[node name="NavigationControlsVisual" type="Node3D" unique_id=406188165]
+script = ExtResource("1_ao56p")
+metadata/_custom_type_script = "uid://eh0ilarykwv0"
+
+[node name="Subject" type="Node3D" parent="." unique_id=1460378833]
+
+[node name="DestinationMarker" type="Node3D" parent="Subject" unique_id=2012505552]
+metadata/preview_material = SubResource("StandardMaterial3D_i0nvp")
+metadata/pressed_material = SubResource("StandardMaterial3D_v6cth")
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="Subject/DestinationMarker" unique_id=2016518202]
+material_override = SubResource("StandardMaterial3D_i0nvp")
+mesh = SubResource("CylinderMesh_0ajv3")
+
+[node name="ForwardIndicator" type="MeshInstance3D" parent="Subject/DestinationMarker" unique_id=1745883763]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.045, -0.36)
+material_override = SubResource("StandardMaterial3D_f4gvg")
+mesh = SubResource("BoxMesh_a6w0o")
+
+[node name="Cameras" type="Node3D" parent="." unique_id=1601084]
+
+[node name="Overview" type="Node3D" parent="Cameras" unique_id=417711527 instance=ExtResource("2_xnn4p")]
+transform = Transform3D(1, 0, 0, 0, 0.8422714, 0.5390537, 0, -0.5390537, 0.8422714, 0, 3.2, 5)
+script = ExtResource("3_kupvj")
+projection = 0
+image_size = Vector2(1152, 648)
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="Viewport" type="SubViewport" parent="Cameras/Overview" unique_id=970152126]
+unique_name_in_owner = true
+render_target_update_mode = 0
+
+[node name="Camera" type="Camera3D" parent="Cameras/Overview/Viewport" unique_id=240776058]
+unique_name_in_owner = true
+projection = 1
+current = true
+size = 2.0
+near = 0.01
+far = 100.0
+
+[node name="RemoteTransform3D" type="RemoteTransform3D" parent="Cameras/Overview" unique_id=2065988295]
+remote_path = NodePath("../Viewport/Camera")
+
+[node name="RootCaptureCamera" type="Camera3D" parent="Cameras" unique_id=92707495]
+transform = Transform3D(1, 0, 0, 0, 0.8422714, 0.5390537, 0, -0.5390537, 0.8422714, 0, 3.2, 5)
+fov = 45.0
+
+[node name="Markers" type="Node3D" parent="." unique_id=1939127363]
+
+[node name="Floor" type="MeshInstance3D" parent="." unique_id=893667457]
+mesh = SubResource("PlaneMesh_v8147")
+
+[node name="Environment" type="WorldEnvironment" parent="." unique_id=1701682303 instance=ExtResource("4_23v2y")]
+environment = SubResource("Environment_1blvp")
+camera_attributes = SubResource("CameraAttributesPractical_ux8bu")

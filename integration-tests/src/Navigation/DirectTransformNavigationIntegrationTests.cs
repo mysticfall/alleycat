@@ -13,6 +13,7 @@ public sealed partial class DirectTransformNavigationIntegrationTests
 {
     private const float PositionTolerance = 0.05f;
     private const float BasisTolerance = 0.0001f;
+    private const float ControllerPositionTolerance = 0.08f;
 
     /// <summary>
     /// Verifies finite transform destinations are accepted and non-finite transforms are rejected without replacing the destination.
@@ -219,6 +220,252 @@ public sealed partial class DirectTransformNavigationIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies drag-to-release placement preserves the locked destination origin and applies final facing from the drag vector.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlaytestController_DragRelease_SetsDestinationWithSelectedFacing()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreatePlaytestControllerRigAsync(sceneTree);
+
+        try
+        {
+            var lockedDestination = new Vector3(1.0f, 0f, 1.0f);
+            var facingProbe = new Vector3(1.0f, 0f, -1.0f);
+            Vector3 expectedFacing = facingProbe - lockedDestination;
+            expectedFacing.Y = 0f;
+
+            rig.Controller.BeginDestinationPlacementAt(lockedDestination);
+            rig.Controller.UpdateDestinationFacingProbe(facingProbe);
+            rig.Controller.CompleteDestinationPlacementAt(facingProbe);
+
+            Assert.True(rig.Navigation.HasDestination);
+            AssertVectorClose(lockedDestination, rig.Navigation.Destination.Origin, ControllerPositionTolerance);
+            AssertBasisClose(Basis.LookingAt(expectedFacing.Normalized(), Vector3.Up), rig.Navigation.Destination.Basis);
+            Assert.Same(rig.PreviewMaterial, rig.MarkerSurface.MaterialOverride);
+        }
+        finally
+        {
+            await DestroyPlaytestControllerRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the playtest camera keeps orbiting the initial focus point instead of following the moving navigation target.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlaytestController_CameraOrbitOrigin_RemainsFixedWhenTargetMoves()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreatePlaytestControllerRigAsync(sceneTree);
+
+        try
+        {
+            Vector3 initialOrigin = rig.Controller.CameraOrbitOrigin;
+            Vector3 initialCameraPosition = rig.Controller.LastCameraOrbitPosition;
+
+            rig.Target.GlobalPosition = new Vector3(2.0f, 0f, 1.5f);
+            rig.Target.ForceUpdateTransform();
+            rig.Controller._Process(0.016);
+            await WaitForNextFrameAsync(sceneTree);
+
+            AssertVectorClose(initialOrigin, rig.Controller.CameraOrbitOrigin, ControllerPositionTolerance);
+            AssertVectorClose(initialCameraPosition, rig.Controller.LastCameraOrbitPosition, ControllerPositionTolerance);
+        }
+        finally
+        {
+            await DestroyPlaytestControllerRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies pan movement uses the inverted axes expected by the playtest controls.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlaytestController_PanCameraOrbitOrigin_MovesOriginAndCameraConsistently()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreatePlaytestControllerRigAsync(sceneTree);
+
+        try
+        {
+            Vector3 initialOrigin = rig.Controller.CameraOrbitOrigin;
+            Vector3 initialCameraPosition = rig.Controller.LastCameraOrbitPosition;
+            Vector3 cameraRight = GetHorizontalOrFallback(rig.Camera.GlobalTransform.Basis.X, Vector3.Right);
+            Vector3 cameraForward = GetHorizontalOrFallback(-rig.Camera.GlobalTransform.Basis.Z, Vector3.Forward);
+            var relativeMotion = new Vector2(10f, -5f);
+            float initialCameraDistance = initialCameraPosition.DistanceTo(initialOrigin);
+            float panScale = rig.Controller.CameraPanSensitivity * Mathf.Clamp(initialCameraDistance, rig.Controller.MinCameraDistance, rig.Controller.MaxCameraDistance);
+            Vector3 expectedDelta = ((-cameraRight * relativeMotion.X) + (cameraForward * relativeMotion.Y)) * panScale;
+
+            rig.Controller.PanCameraOrbitOrigin(relativeMotion);
+            await WaitForNextFrameAsync(sceneTree);
+
+            AssertVectorClose(initialOrigin + expectedDelta, rig.Controller.CameraOrbitOrigin, ControllerPositionTolerance);
+            AssertVectorClose(initialCameraPosition + expectedDelta, rig.Controller.LastCameraOrbitPosition, ControllerPositionTolerance);
+            Assert.InRange(Mathf.Abs(rig.Controller.CameraOrbitOrigin.Y - initialOrigin.Y), 0f, BasisTolerance);
+        }
+        finally
+        {
+            await DestroyPlaytestControllerRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies middle-button mouse drag routes to panning instead of orbiting.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlaytestController_UnhandledInput_MiddleDragPansCameraOrbitOrigin()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreatePlaytestControllerRigAsync(sceneTree);
+
+        try
+        {
+            Vector3 initialOrigin = rig.Controller.CameraOrbitOrigin;
+            Vector3 initialCameraPosition = rig.Controller.LastCameraOrbitPosition;
+
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Middle,
+                Pressed = true,
+                Position = new Vector2(100f, 100f),
+            });
+            rig.Controller._UnhandledInput(new InputEventMouseMotion
+            {
+                Position = new Vector2(112f, 92f),
+                Relative = new Vector2(12f, -8f),
+            });
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Middle,
+                Pressed = false,
+                Position = new Vector2(112f, 92f),
+            });
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.True(
+                rig.Controller.CameraOrbitOrigin.DistanceTo(initialOrigin) > ControllerPositionTolerance,
+                "Expected middle-button drag to pan the camera orbit origin.");
+            Assert.True(
+                rig.Controller.LastCameraOrbitPosition.DistanceTo(initialCameraPosition) > ControllerPositionTolerance,
+                "Expected middle-button drag to move the camera with the panned origin.");
+        }
+        finally
+        {
+            await DestroyPlaytestControllerRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies right-button mouse drag routes to orbiting instead of panning.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlaytestController_UnhandledInput_RightDragOrbitsCameraWithoutPanningOrigin()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreatePlaytestControllerRigAsync(sceneTree);
+
+        try
+        {
+            Vector3 initialOrigin = rig.Controller.CameraOrbitOrigin;
+            float initialCameraHeight = rig.Controller.LastCameraOrbitPosition.Y;
+
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Right,
+                Pressed = true,
+                Position = new Vector2(100f, 100f),
+            });
+            rig.Controller._UnhandledInput(new InputEventMouseMotion
+            {
+                Position = new Vector2(100f, 115f),
+                Relative = new Vector2(0f, 15f),
+            });
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Right,
+                Pressed = false,
+                Position = new Vector2(100f, 115f),
+            });
+            await WaitForNextFrameAsync(sceneTree);
+
+            AssertVectorClose(initialOrigin, rig.Controller.CameraOrbitOrigin, ControllerPositionTolerance);
+            Assert.True(
+                rig.Controller.LastCameraOrbitPosition.Y > initialCameraHeight,
+                $"Expected right-button vertical drag to orbit camera above {initialCameraHeight}, but camera Y was {rig.Controller.LastCameraOrbitPosition.Y}.");
+        }
+        finally
+        {
+            await DestroyPlaytestControllerRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies vertical orbit drag uses the inverted pitch sign expected by the playtest controls.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlaytestController_OrbitCamera_VerticalMotionRaisesPitchWithInvertedSign()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreatePlaytestControllerRigAsync(sceneTree);
+
+        try
+        {
+            float initialCameraHeight = rig.Controller.LastCameraOrbitPosition.Y;
+
+            rig.Controller.OrbitCamera(new Vector2(0f, 10f));
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.True(
+                rig.Controller.LastCameraOrbitPosition.Y > initialCameraHeight,
+                $"Expected positive vertical mouse motion to raise camera pitch above {initialCameraHeight}, but camera Y was {rig.Controller.LastCameraOrbitPosition.Y}.");
+        }
+        finally
+        {
+            await DestroyPlaytestControllerRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the destination marker is suppressed while navigation is active and returns once navigation stops.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task PlaytestController_DestinationMarker_HidesWhileNavigationRunsAndReturnsWhenStopped()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreatePlaytestControllerRigAsync(sceneTree);
+
+        try
+        {
+            rig.Navigation.MovementSpeed = 0.1f;
+            Assert.Equal(NavigationDestinationResult.Accepted, rig.Navigation.SetDestination(new Transform3D(Basis.Identity, new Vector3(3f, 0f, 3f))));
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+            Assert.True(rig.Navigation.IsNavigationRunning, "Fixture destination should leave navigation running for marker visibility coverage.");
+
+            rig.Controller.PreviewDestinationAt(new Vector3(0.5f, 0f, 0.5f));
+
+            Assert.False(rig.Marker.Visible);
+
+            rig.Navigation.ClearDestination();
+            rig.Controller.PreviewDestinationAt(new Vector3(0.75f, 0f, 0.75f));
+
+            Assert.True(rig.Marker.Visible);
+        }
+        finally
+        {
+            await DestroyPlaytestControllerRigAsync(sceneTree, rig);
+        }
+    }
+
     private static async Task<NavigationTestRig> CreateRigAsync(SceneTree sceneTree, bool useExplicitTarget, bool useIntermediateNode = false)
     {
         Node3D root = new()
@@ -301,6 +548,108 @@ public sealed partial class DirectTransformNavigationIntegrationTests
         };
     }
 
+    private static async Task<PlaytestControllerRig> CreatePlaytestControllerRigAsync(SceneTree sceneTree)
+    {
+        Node3D root = new()
+        {
+            Name = "PlaytestControllerRoot",
+        };
+        Node3D target = new()
+        {
+            Name = "Target",
+        };
+        DirectTransformNavigation navigation = new()
+        {
+            Name = "Navigation",
+            Target = target,
+        };
+        Camera3D camera = new()
+        {
+            Name = "Camera3D",
+            Current = true,
+            Position = new Vector3(0f, 4f, -6f),
+        };
+        StaticBody3D ground = new()
+        {
+            Name = "Ground",
+            CollisionLayer = 1U,
+            CollisionMask = 0U,
+        };
+        CollisionShape3D groundCollision = new()
+        {
+            Name = "GroundCollision",
+            Shape = new BoxShape3D { Size = new Vector3(20f, 0.1f, 20f) },
+            Position = new Vector3(0f, -0.05f, 0f),
+        };
+        Node3D marker = new()
+        {
+            Name = "DestinationMarker",
+        };
+        MeshInstance3D markerSurface = new()
+        {
+            Name = "MarkerSurface",
+        };
+        StandardMaterial3D previewMaterial = new()
+        {
+            ResourceName = "PreviewMaterial",
+        };
+        StandardMaterial3D pressedMaterial = new()
+        {
+            ResourceName = "PressedMaterial",
+        };
+        DirectTransformNavigationPlaytestController controller = new()
+        {
+            Name = "Controller",
+            Camera = camera,
+            Navigation = navigation,
+            DestinationMarker = marker,
+            DestinationMarkerSurface = markerSurface,
+            DestinationMarkerPreviewMaterial = previewMaterial,
+            DestinationMarkerPressedMaterial = pressedMaterial,
+            RayLength = 100f,
+            GroundCollisionMask = 1U,
+            MinCameraDistance = 2f,
+            MaxCameraDistance = 10f,
+            CameraZoomStep = 0.75f,
+            CameraOrbitSensitivity = 0.006f,
+            CameraPanSensitivity = 0.01f,
+        };
+
+        root.AddChild(CreateNavigationRegion());
+        root.AddChild(ground);
+        ground.AddChild(groundCollision);
+        root.AddChild(target);
+        target.AddChild(navigation);
+        root.AddChild(camera);
+        root.AddChild(marker);
+        marker.AddChild(markerSurface);
+        sceneTree.Root.AddChild(root);
+
+        camera.Position = new Vector3(0f, 4f, -6f);
+        camera.ForceUpdateTransform();
+        camera.LookAt(target.GlobalPosition, Vector3.Up);
+        root.AddChild(controller);
+        await WaitForPhysicsFramesAsync(sceneTree, 2);
+        camera.GlobalPosition = new Vector3(0f, 4f, -6f);
+        camera.ForceUpdateTransform();
+        camera.LookAt(target.GlobalPosition, Vector3.Up);
+        controller.Camera = camera;
+        controller.Navigation = navigation;
+        controller.DestinationMarker = marker;
+        controller.DestinationMarkerSurface = markerSurface;
+        controller.DestinationMarkerPreviewMaterial = previewMaterial;
+        controller.DestinationMarkerPressedMaterial = pressedMaterial;
+        controller.ReinitialiseCameraOrbit();
+
+        return new PlaytestControllerRig(root, target, navigation, camera, controller, marker, markerSurface, previewMaterial, pressedMaterial);
+    }
+
+    private static async Task DestroyPlaytestControllerRigAsync(SceneTree sceneTree, PlaytestControllerRig rig)
+    {
+        rig.Root.QueueFree();
+        await WaitForNextFrameAsync(sceneTree);
+    }
+
     private static void AssertTransformClose(Transform3D expected, Transform3D actual)
     {
         AssertVectorClose(expected.Origin, actual.Origin, BasisTolerance);
@@ -335,6 +684,12 @@ public sealed partial class DirectTransformNavigationIntegrationTests
         return false;
     }
 
+    private static Vector3 GetHorizontalOrFallback(Vector3 direction, Vector3 fallback)
+    {
+        direction.Y = 0f;
+        return direction.LengthSquared() > Mathf.Epsilon ? direction.Normalized() : fallback;
+    }
+
     private static void AssertVectorClose(Vector3 expected, Vector3 actual, float tolerance)
     {
         Assert.True(
@@ -347,4 +702,15 @@ public sealed partial class DirectTransformNavigationIntegrationTests
         Node3D Parent,
         Node3D MovedTarget,
         DirectTransformNavigation Navigation);
+
+    private sealed record PlaytestControllerRig(
+        Node3D Root,
+        Node3D Target,
+        DirectTransformNavigation Navigation,
+        Camera3D Camera,
+        DirectTransformNavigationPlaytestController Controller,
+        Node3D Marker,
+        GeometryInstance3D MarkerSurface,
+        Material PreviewMaterial,
+        Material PressedMaterial);
 }

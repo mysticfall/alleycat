@@ -54,11 +54,51 @@ resource_name = "NavigationObstacleCylinderShape"
 height = 1.1
 radius = 0.55
 
-[node name="DirectTransformNavigationPlaytest" type="Node3D" unique_id=1691104211 node_paths=PackedStringArray("Camera", "Navigation")]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_preview"]
+resource_name = "DestinationMarkerPreviewMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(0.1, 0.55, 1, 0.72)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_pressed"]
+resource_name = "DestinationMarkerPressedMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(1, 0.65, 0.08, 0.82)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_forward"]
+resource_name = "DestinationMarkerForwardMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.9)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_dest_disc"]
+resource_name = "DestinationMarkerDiscMesh"
+top_radius = 0.28
+bottom_radius = 0.28
+height = 0.025
+radial_segments = 48
+
+[sub_resource type="BoxMesh" id="BoxMesh_dest_forward"]
+resource_name = "DestinationMarkerForwardMesh"
+size = Vector3(0.12, 0.035, 0.58)
+
+[node name="DirectTransformNavigationPlaytest" type="Node3D" unique_id=1691104211 node_paths=PackedStringArray("Camera", "Navigation", "DestinationMarker", "DestinationMarkerSurface")]
 script = ExtResource("1_tp3k7")
 Camera = NodePath("Camera3D")
 Navigation = NodePath("NavigationTestNpc/Navigation")
 NavigationPath = NodePath("NavigationTestNpc/Navigation")
+DestinationMarker = NodePath("DestinationMarker")
+DestinationMarkerSurface = NodePath("DestinationMarker/MarkerDisc")
+DestinationMarkerPreviewMaterial = SubResource("StandardMaterial3D_dest_preview")
+DestinationMarkerPressedMaterial = SubResource("StandardMaterial3D_dest_pressed")
+MinCameraDistance = 2.0
+MaxCameraDistance = 10.0
+CameraZoomStep = 0.75
+CameraOrbitSensitivity = 0.006
 metadata/_custom_type_script = "uid://biulhrfvdujca"
 metadata/navigation_obstacle_material = SubResource("StandardMaterial3D_fllxo")
 
@@ -124,3 +164,16 @@ mesh = SubResource("CylinderMesh_22lne")
 
 [node name="Collision" type="CollisionShape3D" parent="NavigationObstacleCylinder" unique_id=2059155463]
 shape = SubResource("CylinderShape3D_g3ujv")
+
+[node name="DestinationMarker" type="Node3D" parent="." unique_id=1173722590]
+visible = false
+
+[node name="MarkerDisc" type="MeshInstance3D" parent="DestinationMarker" unique_id=119973335]
+material_override = SubResource("StandardMaterial3D_dest_preview")
+mesh = SubResource("CylinderMesh_dest_disc")
+
+[node name="ForwardIndicator" type="MeshInstance3D" parent="DestinationMarker" unique_id=234627151]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.045, -0.36)
+material_override = SubResource("StandardMaterial3D_dest_forward")
+mesh = SubResource("BoxMesh_dest_forward")
+
