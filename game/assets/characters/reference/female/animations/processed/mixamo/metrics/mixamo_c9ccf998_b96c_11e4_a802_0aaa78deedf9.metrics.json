@@ -1,0 +1,7245 @@
+{
+  "action": "mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9",
+  "bone_names": [
+    "Root",
+    "pelvis",
+    "head",
+    "foot_l",
+    "foot_r",
+    "ball_l",
+    "ball_r",
+    "hand_l",
+    "hand_r"
+  ],
+  "clip": {
+    "avg_root_planar_speed": 1.2580540673486118,
+    "avg_root_speed": 1.2580540626856485,
+    "duration_seconds": 0.9666666666666667,
+    "root_displacement": [
+      0.0,
+      1.2161189317703247,
+      0.0
+    ],
+    "root_path_distance": 1.2161189272627935,
+    "root_planar_displacement": 1.2161189317703247,
+    "root_planar_path_distance": 1.2161189317703247,
+    "selection": {
+      "category": "locomotion",
+      "group": "locomotion_standing",
+      "motion_class": "StandingLocomotion",
+      "tags": [
+        "walk",
+        "backward",
+        "female"
+      ]
+    }
+  },
+  "clip_head_height_norm": {
+    "max_height": 1.4109728336334229,
+    "method": "clip_minmax",
+    "min_height": 1.3723857402801514,
+    "source_bone": "head"
+  },
+  "coordinate_space": "root_relative_blender_z_up_y_forward",
+  "feature_schema": {
+    "future_trajectory_offsets_seconds": [
+      0.2,
+      0.5,
+      1.0
+    ],
+    "root_angular_velocity": "Yaw delta per frame multiplied by scene FPS.",
+    "root_local_planar_velocity": "Root-local X/Y velocity in Blender units per second.",
+    "root_relative_joint_positions": "Root-local yaw-only frame in Blender Z-up coordinates.",
+    "sample_motion_features": {
+      "coordinate_space": "root_relative_blender_z_up_y_forward",
+      "delta_window_seconds": "Previous generated sample at the clip FPS; first sample uses zero delta.",
+      "fields": [
+        "root_relative_position",
+        "root_relative_position_delta",
+        "root_relative_velocity"
+      ],
+      "joints": [
+        "root",
+        "hips",
+        "left_foot",
+        "right_foot"
+      ],
+      "schema_version": 1
+    }
+  },
+  "foot_contact": {
+    "confidence_method": "low_slow_threshold_distance_confidence",
+    "height_threshold": {
+      "left": 0.04024497020989656,
+      "right": 0.039436300955712794
+    },
+    "limitations": "Contact and phase are inferred from per-clip low/slow foot and ball thresholds; they are suitable for first-pass filtering but are not authored contact events.",
+    "method": "low_slow",
+    "speed_threshold": {
+      "left": 0.09482535606875511,
+      "right": 0.05
+    }
+  },
+  "fps": 30.0,
+  "frame_range": {
+    "end": 30,
+    "start": 1
+  },
+  "head_height_norm": {
+    "crouch_estimate_ratio_between_pelvis_and_head": 0.65,
+    "crouch_height": 1.2416219294071198,
+    "method": "target_rig_rest_estimated_crouch_from_pelvis_head_ratio",
+    "notes": "No authored standing/crouch calibration asset was available to the source pipeline; standing height uses the target rig rest head height and crouch height is a stable derived estimate between rest pelvis and head heights. Runtime tuning should replace this with authored rig calibration when available.",
+    "source_bone": "head",
+    "standing_height": 1.4594106674194336
+  },
+  "manifest": {
+    "description": "Female Walk Backwards",
+    "motion_id": "c9ccf998-b96c-11e4-a802-0aaa78deedf9",
+    "name": "Walking Backwards",
+    "type": "Motion"
+  },
+  "root_created": true,
+  "root_reconstruction": {
+    "frame_end": 30,
+    "frame_start": 1,
+    "max_non_root_angular_drift": 0.0,
+    "max_non_root_translation_drift": 3.625608998714816e-07,
+    "max_root_local_x_rotation_abs": 0.0,
+    "max_root_z_abs": 0.0,
+    "raw_root_delta_blender_root_xy": [
+      2.3283064365386963e-09,
+      1.2116737365722656
+    ],
+    "root_path_distance_after": 1.2161189317703247,
+    "root_path_distance_before": 1.2550220436958408,
+    "root_reconstruction_policy": "Moving",
+    "root_reconstruction_subtype": "StraightMoving",
+    "root_yaw_delta_after": 0.0,
+    "root_yaw_delta_before": -7.456248965476142e-09,
+    "straight_direction_source": "metadata_backward",
+    "straight_progress_source": "viewpoint_path_distance",
+    "straight_reconstructed_delta_blender_root_xy": [
+      0.0,
+      1.2161189317703247
+    ],
+    "straight_suppressed_lateral_deviation": 0.01582324132323265,
+    "suspicious_metadata_root_disagreement_flags": [],
+    "viewpoint_delta_blender_root_xy": [
+      1.4901161193847656e-08,
+      1.2116742134094238
+    ],
+    "viewpoint_path_distance": 1.2161189885134285,
+    "viewpoint_proxy": "target_head_projected_to_ground"
+  },
+  "root_source": "reconstructed_root",
+  "sample_count": 30,
+  "samples": [
+    {
+      "clip_head_height_norm": 1.0,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.12008358538150787,
+          -0.12476128339767456,
+          0.04524608328938484
+        ],
+        "ball_r": [
+          -0.059140339493751526,
+          -0.19628781080245972,
+          0.010843629017472267
+        ],
+        "foot_l": [
+          0.09287266433238983,
+          -0.04584798961877823,
+          0.13615825772285461
+        ],
+        "foot_r": [
+          -0.04999799653887749,
+          -0.08747396618127823,
+          0.06836525350809097
+        ]
+      },
+      "frame": 1,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2623293399810791
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6502206921577454
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 29,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            1.2161189317703247
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21290799975395203,
+          0.0633644238114357,
+          0.7967227101325989
+        ],
+        "hand_r": [
+          -0.1788644641637802,
+          -0.20758363604545593,
+          0.8191084265708923
+        ]
+      },
+      "head_height_norm": 0.777592568706321,
+      "head_position": [
+        0.018646258860826492,
+        -0.12114164233207703,
+        1.4109728336334229
+      ],
+      "pelvis_position": [
+        0.001606120029464364,
+        -0.01168790739029646,
+        0.8016268014907837
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.284781575202942
+      ],
+      "root_position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.12008358538150787,
+          -0.12476128339767456,
+          0.04524608328938484
+        ],
+        "ball_r": [
+          -0.059140339493751526,
+          -0.19628781080245972,
+          0.010843629017472267
+        ],
+        "foot_l": [
+          0.09287266433238983,
+          -0.04584798961877823,
+          0.13615825772285461
+        ],
+        "foot_r": [
+          -0.04999799653887749,
+          -0.08747396618127823,
+          0.06836525350809097
+        ],
+        "hand_l": [
+          0.21290799975395203,
+          0.0633644238114357,
+          0.7967227101325989
+        ],
+        "hand_r": [
+          -0.1788644641637802,
+          -0.20758363604545593,
+          0.8191084265708923
+        ],
+        "head": [
+          0.018646258860826492,
+          -0.12114164233207703,
+          1.4109728336334229
+        ],
+        "pelvis": [
+          0.001606120029464364,
+          -0.01168790739029646,
+          0.8016268014907837
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.284781575202942,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.001606120029464364,
+              -0.01168790739029646,
+              0.8016268014907837
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09287266433238983,
+              -0.04584798961877823,
+              0.13615825772285461
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04999799653887749,
+              -0.08747396618127823,
+              0.06836525350809097
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.0
+    },
+    {
+      "clip_head_height_norm": 0.9217126156964027,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.11139286309480667,
+          0.0012832635547965765,
+          0.04433821514248848
+        ],
+        "ball_r": [
+          -0.05905710160732269,
+          -0.1963071972131729,
+          0.010845482349395752
+        ],
+        "foot_l": [
+          0.09216322004795074,
+          0.07176150381565094,
+          0.1438157707452774
+        ],
+        "foot_r": [
+          -0.049914728850126266,
+          -0.08749338239431381,
+          0.06836707890033722
+        ]
+      },
+      "frame": 2,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.256880521774292
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6528258919715881
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 28,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            1.173292875289917
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21355020999908447,
+          0.1256292313337326,
+          0.8029754757881165
+        ],
+        "hand_r": [
+          -0.17186836898326874,
+          -0.17606613039970398,
+          0.8264803886413574
+        ]
+      },
+      "head_height_norm": 0.7637218670617963,
+      "head_position": [
+        0.016556372866034508,
+        -0.07836659252643585,
+        1.4079519510269165
+      ],
+      "pelvis_position": [
+        0.0025767453480511904,
+        0.026493465527892113,
+        0.7973378896713257
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2996646165847778
+      ],
+      "root_position": [
+        0.0,
+        0.042826056480407715,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.11139286309480667,
+          -0.041542794555425644,
+          0.04433821514248848
+        ],
+        "ball_r": [
+          -0.05905710160732269,
+          -0.23913325369358063,
+          0.010845482349395752
+        ],
+        "foot_l": [
+          0.09216322004795074,
+          0.028935447335243225,
+          0.1438157707452774
+        ],
+        "foot_r": [
+          -0.049914728850126266,
+          -0.13031944632530212,
+          0.06836707890033722
+        ],
+        "hand_l": [
+          0.21355020999908447,
+          0.08280317485332489,
+          0.8029754757881165
+        ],
+        "hand_r": [
+          -0.17186836898326874,
+          -0.2188921868801117,
+          0.8264803886413574
+        ],
+        "head": [
+          0.016556372866034508,
+          -0.12119264900684357,
+          1.4079519510269165
+        ],
+        "pelvis": [
+          0.0025767453480511904,
+          -0.016332590952515602,
+          0.7973378896713257
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2996646165847778,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.0025767453480511904,
+              -0.016332590952515602,
+              0.7973378896713257
+            ],
+            "root_relative_position_delta": [
+              0.0009706253185868263,
+              -0.004644683562219143,
+              -0.004288911819458008
+            ],
+            "root_relative_velocity": [
+              0.02911875955760479,
+              -0.1393405068665743,
+              -0.12866735458374023
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09216322004795074,
+              0.028935447335243225,
+              0.1438157707452774
+            ],
+            "root_relative_position_delta": [
+              -0.0007094442844390869,
+              0.07478343695402145,
+              0.0076575130224227905
+            ],
+            "root_relative_velocity": [
+              -0.021283328533172607,
+              2.2435031086206436,
+              0.22972539067268372
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.049914728850126266,
+              -0.13031944632530212,
+              0.06836707890033722
+            ],
+            "root_relative_position_delta": [
+              8.32676887512207e-05,
+              -0.042845480144023895,
+              1.8253922462463379e-06
+            ],
+            "root_relative_velocity": [
+              0.002498030662536621,
+              -1.2853644043207169,
+              5.476176738739014e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.03333333333333333
+    },
+    {
+      "clip_head_height_norm": 0.7567317079198744,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.10300155729055405,
+          0.1241549402475357,
+          0.04334799572825432
+        ],
+        "ball_r": [
+          -0.058968402445316315,
+          -0.196322962641716,
+          0.010845265351235867
+        ],
+        "foot_l": [
+          0.09443263709545135,
+          0.1850360929965973,
+          0.15036576986312866
+        ],
+        "foot_r": [
+          -0.049825992435216904,
+          -0.08750911056995392,
+          0.06836681067943573
+        ]
+      },
+      "frame": 3,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.248857319355011
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.653873085975647
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 27,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            1.1294746398925781
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21414849162101746,
+          0.18208378553390503,
+          0.8054693937301636
+        ],
+        "hand_r": [
+          -0.16646762192249298,
+          -0.14046040177345276,
+          0.8304030895233154
+        ]
+      },
+      "head_height_norm": 0.7344910916416255,
+      "head_position": [
+        0.013993049040436745,
+        -0.03462330251932144,
+        1.4015858173370361
+      ],
+      "pelvis_position": [
+        0.004435069393366575,
+        0.06432683020830154,
+        0.7897387742996216
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.3295259475708008
+      ],
+      "root_position": [
+        0.0,
+        0.08664431422948837,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10300155729055405,
+          0.03751062601804733,
+          0.04334799572825432
+        ],
+        "ball_r": [
+          -0.058968402445316315,
+          -0.2829672694206238,
+          0.010845265351235867
+        ],
+        "foot_l": [
+          0.09443263709545135,
+          0.09839177876710892,
+          0.15036576986312866
+        ],
+        "foot_r": [
+          -0.049825992435216904,
+          -0.1741534173488617,
+          0.06836681067943573
+        ],
+        "hand_l": [
+          0.21414849162101746,
+          0.09543947130441666,
+          0.8054693937301636
+        ],
+        "hand_r": [
+          -0.16646762192249298,
+          -0.22710472345352173,
+          0.8304030895233154
+        ],
+        "head": [
+          0.013993049040436745,
+          -0.12126761674880981,
+          1.4015858173370361
+        ],
+        "pelvis": [
+          0.004435069393366575,
+          -0.02231748402118683,
+          0.7897387742996216
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.3295259475708008,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.004435069393366575,
+              -0.02231748402118683,
+              0.7897387742996216
+            ],
+            "root_relative_position_delta": [
+              0.0018583240453153849,
+              -0.0059848930686712265,
+              -0.0075991153717041016
+            ],
+            "root_relative_velocity": [
+              0.055749721359461546,
+              -0.1795467920601368,
+              -0.22797346115112305
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09443263709545135,
+              0.09839177876710892,
+              0.15036576986312866
+            ],
+            "root_relative_position_delta": [
+              0.0022694170475006104,
+              0.06945633143186569,
+              0.006549999117851257
+            ],
+            "root_relative_velocity": [
+              0.06808251142501831,
+              2.0836899429559708,
+              0.19649997353553772
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.049825992435216904,
+              -0.1741534173488617,
+              0.06836681067943573
+            ],
+            "root_relative_position_delta": [
+              8.873641490936279e-05,
+              -0.04383397102355957,
+              -2.682209014892578e-07
+            ],
+            "root_relative_velocity": [
+              0.002662092447280884,
+              -1.315019130706787,
+              -8.046627044677734e-06
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.06666666666666667
+    },
+    {
+      "clip_head_height_norm": 0.5229631872273642,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.09755018353462219,
+          0.2387211173772812,
+          0.039059944450855255
+        ],
+        "ball_r": [
+          -0.05887123942375183,
+          -0.19632960855960846,
+          0.010845893062651157
+        ],
+        "foot_l": [
+          0.09742496907711029,
+          0.29026171565055847,
+          0.15120401978492737
+        ],
+        "foot_r": [
+          -0.049728866666555405,
+          -0.08751587569713593,
+          0.06836751848459244
+        ]
+      },
+      "frame": 4,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2415701299905777
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6529315114021301
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 26,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            1.0846577882766724
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21621140837669373,
+          0.22983689606189728,
+          0.8024007678031921
+        ],
+        "hand_r": [
+          -0.16303052008152008,
+          -0.09994308650493622,
+          0.829532265663147
+        ]
+      },
+      "head_height_norm": 0.6930727528728502,
+      "head_position": [
+        0.011294101364910603,
+        0.010112062096595764,
+        1.392565369606018
+      ],
+      "pelvis_position": [
+        0.007388783153146505,
+        0.10209149122238159,
+        0.7796174883842468
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.3536101579666138
+      ],
+      "root_position": [
+        0.0,
+        0.13146112859249115,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.09755018353462219,
+          0.10725998878479004,
+          0.039059944450855255
+        ],
+        "ball_r": [
+          -0.05887123942375183,
+          -0.3277907371520996,
+          0.010845893062651157
+        ],
+        "foot_l": [
+          0.09742496907711029,
+          0.15880058705806732,
+          0.15120401978492737
+        ],
+        "foot_r": [
+          -0.049728866666555405,
+          -0.21897700428962708,
+          0.06836751848459244
+        ],
+        "hand_l": [
+          0.21621140837669373,
+          0.09837576746940613,
+          0.8024007678031921
+        ],
+        "hand_r": [
+          -0.16303052008152008,
+          -0.23140421509742737,
+          0.829532265663147
+        ],
+        "head": [
+          0.011294101364910603,
+          -0.12134906649589539,
+          1.392565369606018
+        ],
+        "pelvis": [
+          0.007388783153146505,
+          -0.029369637370109558,
+          0.7796174883842468
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.3536101579666138,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.007388783153146505,
+              -0.029369637370109558,
+              0.7796174883842468
+            ],
+            "root_relative_position_delta": [
+              0.00295371375977993,
+              -0.0070521533489227295,
+              -0.010121285915374756
+            ],
+            "root_relative_velocity": [
+              0.0886114127933979,
+              -0.21156460046768188,
+              -0.3036385774612427
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09742496907711029,
+              0.15880058705806732,
+              0.15120401978492737
+            ],
+            "root_relative_position_delta": [
+              0.0029923319816589355,
+              0.060408808290958405,
+              0.0008382499217987061
+            ],
+            "root_relative_velocity": [
+              0.08976995944976807,
+              1.8122642487287521,
+              0.02514749765396118
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.049728866666555405,
+              -0.21897700428962708,
+              0.06836751848459244
+            ],
+            "root_relative_position_delta": [
+              9.712576866149902e-05,
+              -0.04482358694076538,
+              7.078051567077637e-07
+            ],
+            "root_relative_velocity": [
+              0.0029137730598449707,
+              -1.3447076082229614,
+              2.123415470123291e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.1
+    },
+    {
+      "clip_head_height_norm": 0.29016472449118297,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 0.900329413501376,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.09637346118688583,
+          0.3293558359146118,
+          0.02760765515267849
+        ],
+        "ball_r": [
+          -0.05875761806964874,
+          -0.1963433474302292,
+          0.010847371071577072
+        ],
+        "foot_l": [
+          0.09853734076023102,
+          0.3784262239933014,
+          0.1408337950706482
+        ],
+        "foot_r": [
+          -0.04961523786187172,
+          -0.08752958476543427,
+          0.06836894899606705
+        ]
+      },
+      "frame": 5,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.23689012229442596
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6500043869018555
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 25,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            1.039233922958374
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.22034835815429688,
+          0.266433984041214,
+          0.7939749956130981
+        ],
+        "hand_r": [
+          -0.16180944442749023,
+          -0.05437810719013214,
+          0.8247244954109192
+        ]
+      },
+      "head_height_norm": 0.6518262857869753,
+      "head_position": [
+        0.009053414687514305,
+        0.055480726063251495,
+        1.383582353591919
+      ],
+      "pelvis_position": [
+        0.011143139563500881,
+        0.1407768726348877,
+        0.7697197198867798
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.3452544212341309
+      ],
+      "root_position": [
+        0.0,
+        0.1768849939107895,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.09637346118688583,
+          0.15247084200382233,
+          0.02760765515267849
+        ],
+        "ball_r": [
+          -0.05875761806964874,
+          -0.3732283413410187,
+          0.010847371071577072
+        ],
+        "foot_l": [
+          0.09853734076023102,
+          0.2015412300825119,
+          0.1408337950706482
+        ],
+        "foot_r": [
+          -0.04961523786187172,
+          -0.26441457867622375,
+          0.06836894899606705
+        ],
+        "hand_l": [
+          0.22034835815429688,
+          0.0895489901304245,
+          0.7939749956130981
+        ],
+        "hand_r": [
+          -0.16180944442749023,
+          -0.23126310110092163,
+          0.8247244954109192
+        ],
+        "head": [
+          0.009053414687514305,
+          -0.121404267847538,
+          1.383582353591919
+        ],
+        "pelvis": [
+          0.011143139563500881,
+          -0.036108121275901794,
+          0.7697197198867798
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.3452544212341309,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.011143139563500881,
+              -0.036108121275901794,
+              0.7697197198867798
+            ],
+            "root_relative_position_delta": [
+              0.003754356410354376,
+              -0.006738483905792236,
+              -0.009897768497467041
+            ],
+            "root_relative_velocity": [
+              0.11263069231063128,
+              -0.2021545171737671,
+              -0.29693305492401123
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09853734076023102,
+              0.2015412300825119,
+              0.1408337950706482
+            ],
+            "root_relative_position_delta": [
+              0.0011123716831207275,
+              0.04274064302444458,
+              -0.010370224714279175
+            ],
+            "root_relative_velocity": [
+              0.033371150493621826,
+              1.2822192907333374,
+              -0.31110674142837524
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04961523786187172,
+              -0.26441457867622375,
+              0.06836894899606705
+            ],
+            "root_relative_position_delta": [
+              0.0001136288046836853,
+              -0.04543757438659668,
+              1.430511474609375e-06
+            ],
+            "root_relative_velocity": [
+              0.003408864140510559,
+              -1.3631272315979004,
+              4.291534423828125e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.13333333333333333
+    },
+    {
+      "clip_head_height_norm": 0.11596208741643291,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.09789571911096573,
+          0.3820817172527313,
+          0.011983265168964863
+        ],
+        "ball_r": [
+          -0.055909521877765656,
+          -0.19416983425617218,
+          0.027100641280412674
+        ],
+        "foot_l": [
+          0.09506645053625107,
+          0.4420638382434845,
+          0.11981125175952911
+        ],
+        "foot_r": [
+          -0.04739890620112419,
+          -0.08054196834564209,
+          0.07452474534511566
+        ]
+      },
+      "frame": 6,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2391623556613922
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6455925703048706
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 24,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.9949741363525391
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.22529715299606323,
+          0.2913399040699005,
+          0.7819547057151794
+        ],
+        "hand_r": [
+          -0.16296212375164032,
+          -0.0044280970469117165,
+          0.8176453709602356
+        ]
+      },
+      "head_height_norm": 0.6209616346551551,
+      "head_position": [
+        0.008042598143219948,
+        0.09972897917032242,
+        1.3768603801727295
+      ],
+      "pelvis_position": [
+        0.015083101578056812,
+        0.18148113787174225,
+        0.762393593788147
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2816650867462158
+      ],
+      "root_position": [
+        0.0,
+        0.22114476561546326,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.09789571911096573,
+          0.16093695163726807,
+          0.011983265168964863
+        ],
+        "ball_r": [
+          -0.055909521877765656,
+          -0.41531461477279663,
+          0.027100641280412674
+        ],
+        "foot_l": [
+          0.09506645053625107,
+          0.22091907262802124,
+          0.11981125175952911
+        ],
+        "foot_r": [
+          -0.04739890620112419,
+          -0.30168673396110535,
+          0.07452474534511566
+        ],
+        "hand_l": [
+          0.22529715299606323,
+          0.07019513845443726,
+          0.7819547057151794
+        ],
+        "hand_r": [
+          -0.16296212375164032,
+          -0.225572869181633,
+          0.8176453709602356
+        ],
+        "head": [
+          0.008042598143219948,
+          -0.12141578644514084,
+          1.3768603801727295
+        ],
+        "pelvis": [
+          0.015083101578056812,
+          -0.03966362774372101,
+          0.762393593788147
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2816650867462158,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.015083101578056812,
+              -0.03966362774372101,
+              0.762393593788147
+            ],
+            "root_relative_position_delta": [
+              0.003939962014555931,
+              -0.003555506467819214,
+              -0.0073261260986328125
+            ],
+            "root_relative_velocity": [
+              0.11819886043667793,
+              -0.10666519403457642,
+              -0.21978378295898438
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09506645053625107,
+              0.22091907262802124,
+              0.11981125175952911
+            ],
+            "root_relative_position_delta": [
+              -0.00347089022397995,
+              0.01937784254550934,
+              -0.02102254331111908
+            ],
+            "root_relative_velocity": [
+              -0.1041267067193985,
+              0.5813352763652802,
+              -0.6306762993335724
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04739890620112419,
+              -0.30168673396110535,
+              0.07452474534511566
+            ],
+            "root_relative_position_delta": [
+              0.002216331660747528,
+              -0.03727215528488159,
+              0.0061557963490486145
+            ],
+            "root_relative_velocity": [
+              0.06648994982242584,
+              -1.1181646585464478,
+              0.18467389047145844
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.16666666666666666
+    },
+    {
+      "clip_head_height_norm": 0.07169469742841961,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10043959319591522,
+          0.3980846703052521,
+          0.010244970209896564
+        ],
+        "ball_r": [
+          -0.051781393587589264,
+          -0.19102829694747925,
+          0.05149378627538681
+        ],
+        "foot_l": [
+          0.08919301629066467,
+          0.4815795421600342,
+          0.10043846070766449
+        ],
+        "foot_r": [
+          -0.04429410770535469,
+          -0.07217887789011002,
+          0.08392095565795898
+        ]
+      },
+      "frame": 7,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2471281886100769
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6406983137130737
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 23,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.9537895917892456
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.23020409047603607,
+          0.3079928755760193,
+          0.7714968323707581
+        ],
+        "hand_r": [
+          -0.1661192625761032,
+          0.05015122890472412,
+          0.8116934895515442
+        ]
+      },
+      "head_height_norm": 0.6131184838771908,
+      "head_position": [
+        0.009197746403515339,
+        0.1408972591161728,
+        1.3751522302627563
+      ],
+      "pelvis_position": [
+        0.018644830211997032,
+        0.22559617459774017,
+        0.7607756853103638
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.1784271001815796
+      ],
+      "root_position": [
+        0.0,
+        0.2623293399810791,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10043959319591522,
+          0.13575533032417297,
+          0.010244970209896564
+        ],
+        "ball_r": [
+          -0.051781393587589264,
+          -0.45335763692855835,
+          0.05149378627538681
+        ],
+        "foot_l": [
+          0.08919301629066467,
+          0.21925020217895508,
+          0.10043846070766449
+        ],
+        "foot_r": [
+          -0.04429410770535469,
+          -0.3345082104206085,
+          0.08392095565795898
+        ],
+        "hand_l": [
+          0.23020409047603607,
+          0.045663535594940186,
+          0.7714968323707581
+        ],
+        "hand_r": [
+          -0.1661192625761032,
+          -0.21217811107635498,
+          0.8116934895515442
+        ],
+        "head": [
+          0.009197746403515339,
+          -0.12143208086490631,
+          1.3751522302627563
+        ],
+        "pelvis": [
+          0.018644830211997032,
+          -0.03673316538333893,
+          0.7607756853103638
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.1784271001815796,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.018644830211997032,
+              -0.03673316538333893,
+              0.7607756853103638
+            ],
+            "root_relative_position_delta": [
+              0.00356172863394022,
+              0.00293046236038208,
+              -0.0016179084777832031
+            ],
+            "root_relative_velocity": [
+              0.1068518590182066,
+              0.0879138708114624,
+              -0.048537254333496094
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.08919301629066467,
+              0.21925020217895508,
+              0.10043846070766449
+            ],
+            "root_relative_position_delta": [
+              -0.005873434245586395,
+              -0.0016688704490661621,
+              -0.019372791051864624
+            ],
+            "root_relative_velocity": [
+              -0.17620302736759186,
+              -0.05006611347198486,
+              -0.5811837315559387
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04429410770535469,
+              -0.3345082104206085,
+              0.08392095565795898
+            ],
+            "root_relative_position_delta": [
+              0.0031047984957695007,
+              -0.032821476459503174,
+              0.009396210312843323
+            ],
+            "root_relative_velocity": [
+              0.09314395487308502,
+              -0.9846442937850952,
+              0.2818863093852997
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.2
+    },
+    {
+      "clip_head_height_norm": 0.12265363370117272,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10013164579868317,
+          0.3985618054866791,
+          0.013571335934102535
+        ],
+        "ball_r": [
+          -0.04806364327669144,
+          -0.18323931097984314,
+          0.0802256166934967
+        ],
+        "foot_l": [
+          0.08346199244260788,
+          0.49846652150154114,
+          0.08409741520881653
+        ],
+        "foot_r": [
+          -0.04152219370007515,
+          -0.06097938120365143,
+          0.09579767286777496
+        ]
+      },
+      "frame": 8,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.25809645652770996
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6371588110923767
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 22,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.916412353515625
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.23559097945690155,
+          0.3219124376773834,
+          0.7645599246025085
+        ],
+        "hand_r": [
+          -0.17030838131904602,
+          0.10968375951051712,
+          0.8068163990974426
+        ]
+      },
+      "head_height_norm": 0.6221472208499399,
+      "head_position": [
+        0.012926220893859863,
+        0.17808808386325836,
+        1.3771185874938965
+      ],
+      "pelvis_position": [
+        0.021887056529521942,
+        0.27302783727645874,
+        0.7640424370765686
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.0975844860076904
+      ],
+      "root_position": [
+        0.0,
+        0.2997065782546997,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10013164579868317,
+          0.09885522723197937,
+          0.013571335934102535
+        ],
+        "ball_r": [
+          -0.04806364327669144,
+          -0.48294588923454285,
+          0.0802256166934967
+        ],
+        "foot_l": [
+          0.08346199244260788,
+          0.19875994324684143,
+          0.08409741520881653
+        ],
+        "foot_r": [
+          -0.04152219370007515,
+          -0.36068594455718994,
+          0.09579767286777496
+        ],
+        "hand_l": [
+          0.23559097945690155,
+          0.022205859422683716,
+          0.7645599246025085
+        ],
+        "hand_r": [
+          -0.17030838131904602,
+          -0.19002282619476318,
+          0.8068163990974426
+        ],
+        "head": [
+          0.012926220893859863,
+          -0.12161849439144135,
+          1.3771185874938965
+        ],
+        "pelvis": [
+          0.021887056529521942,
+          -0.026678740978240967,
+          0.7640424370765686
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.0975844860076904,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.021887056529521942,
+              -0.026678740978240967,
+              0.7640424370765686
+            ],
+            "root_relative_position_delta": [
+              0.00324222631752491,
+              0.010054424405097961,
+              0.003266751766204834
+            ],
+            "root_relative_velocity": [
+              0.0972667895257473,
+              0.30163273215293884,
+              0.09800255298614502
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.08346199244260788,
+              0.19875994324684143,
+              0.08409741520881653
+            ],
+            "root_relative_position_delta": [
+              -0.005731023848056793,
+              -0.020490258932113647,
+              -0.01634104549884796
+            ],
+            "root_relative_velocity": [
+              -0.1719307154417038,
+              -0.6147077679634094,
+              -0.49023136496543884
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04152219370007515,
+              -0.36068594455718994,
+              0.09579767286777496
+            ],
+            "root_relative_position_delta": [
+              0.002771914005279541,
+              -0.02617773413658142,
+              0.011876717209815979
+            ],
+            "root_relative_velocity": [
+              0.08315742015838623,
+              -0.7853320240974426,
+              0.35630151629447937
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.23333333333333334
+    },
+    {
+      "clip_head_height_norm": 0.1940517529009058,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.09958914667367935,
+          0.39664506912231445,
+          0.014334524050354958
+        ],
+        "ball_r": [
+          -0.04727663844823837,
+          -0.1645193248987198,
+          0.10320039093494415
+        ],
+        "foot_l": [
+          0.08216620981693268,
+          0.5027028918266296,
+          0.07500539720058441
+        ],
+        "foot_r": [
+          -0.04067498818039894,
+          -0.04132513329386711,
+          0.10671913623809814
+        ]
+      },
+      "frame": 9,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.268950492143631
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6354467868804932
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 21,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.8806172609329224
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.24243278801441193,
+          0.3350149989128113,
+          0.7597079277038574
+        ],
+        "hand_r": [
+          -0.17414431273937225,
+          0.17379306256771088,
+          0.8013256192207336
+        ]
+      },
+      "head_height_norm": 0.6347973051286427,
+      "head_position": [
+        0.018192611634731293,
+        0.21349358558654785,
+        1.3798736333847046
+      ],
+      "pelvis_position": [
+        0.025054026395082474,
+        0.32185155153274536,
+        0.7692621946334839
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.0998700857162476
+      ],
+      "root_position": [
+        0.0,
+        0.33550164103507996,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.09958914667367935,
+          0.0611434280872345,
+          0.014334524050354958
+        ],
+        "ball_r": [
+          -0.04727663844823837,
+          -0.5000209808349609,
+          0.10320039093494415
+        ],
+        "foot_l": [
+          0.08216620981693268,
+          0.16720125079154968,
+          0.07500539720058441
+        ],
+        "foot_r": [
+          -0.04067498818039894,
+          -0.37682676315307617,
+          0.10671913623809814
+        ],
+        "hand_l": [
+          0.24243278801441193,
+          -0.00048664212226867676,
+          0.7597079277038574
+        ],
+        "hand_r": [
+          -0.17414431273937225,
+          -0.16170857846736908,
+          0.8013256192207336
+        ],
+        "head": [
+          0.018192611634731293,
+          -0.1220080554485321,
+          1.3798736333847046
+        ],
+        "pelvis": [
+          0.025054026395082474,
+          -0.013650089502334595,
+          0.7692621946334839
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.0998700857162476,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.025054026395082474,
+              -0.013650089502334595,
+              0.7692621946334839
+            ],
+            "root_relative_position_delta": [
+              0.0031669698655605316,
+              0.013028651475906372,
+              0.005219757556915283
+            ],
+            "root_relative_velocity": [
+              0.09500909596681595,
+              0.39085954427719116,
+              0.1565927267074585
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.08216620981693268,
+              0.16720125079154968,
+              0.07500539720058441
+            ],
+            "root_relative_position_delta": [
+              -0.0012957826256752014,
+              -0.03155869245529175,
+              -0.009092018008232117
+            ],
+            "root_relative_velocity": [
+              -0.03887347877025604,
+              -0.9467607736587524,
+              -0.2727605402469635
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04067498818039894,
+              -0.37682676315307617,
+              0.10671913623809814
+            ],
+            "root_relative_position_delta": [
+              0.0008472055196762085,
+              -0.01614081859588623,
+              0.010921463370323181
+            ],
+            "root_relative_velocity": [
+              0.025416165590286255,
+              -0.4842245578765869,
+              0.32764390110969543
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.26666666666666666
+    },
+    {
+      "clip_head_height_norm": 0.2691879935247087,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.09994018077850342,
+          0.3969767987728119,
+          0.015087123028934002
+        ],
+        "ball_r": [
+          -0.051226578652858734,
+          -0.12509459257125854,
+          0.10771898180246353
+        ],
+        "foot_l": [
+          0.08459039032459259,
+          0.5050758719444275,
+          0.0726349800825119
+        ],
+        "foot_r": [
+          -0.04253585264086723,
+          -0.002024139277637005,
+          0.11102038621902466
+        ]
+      },
+      "frame": 10,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2771894335746765
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6341938972473145
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 20,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.8430876731872559
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.24882552027702332,
+          0.34179821610450745,
+          0.756178081035614
+        ],
+        "hand_r": [
+          -0.176693856716156,
+          0.2406274974346161,
+          0.7949203252792358
+        ]
+      },
+      "head_height_norm": 0.6481096974847645,
+      "head_position": [
+        0.022166658192873,
+        0.25081223249435425,
+        1.3827729225158691
+      ],
+      "pelvis_position": [
+        0.02820168063044548,
+        0.3687915802001953,
+        0.7745968103408813
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.1741020679473877
+      ],
+      "root_position": [
+        0.0,
+        0.37303125858306885,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.09994018077850342,
+          0.023945540189743042,
+          0.015087123028934002
+        ],
+        "ball_r": [
+          -0.051226578652858734,
+          -0.4981258511543274,
+          0.10771898180246353
+        ],
+        "foot_l": [
+          0.08459039032459259,
+          0.13204461336135864,
+          0.0726349800825119
+        ],
+        "foot_r": [
+          -0.04253585264086723,
+          -0.3750554025173187,
+          0.11102038621902466
+        ],
+        "hand_l": [
+          0.24882552027702332,
+          -0.0312330424785614,
+          0.756178081035614
+        ],
+        "hand_r": [
+          -0.176693856716156,
+          -0.13240376114845276,
+          0.7949203252792358
+        ],
+        "head": [
+          0.022166658192873,
+          -0.1222190260887146,
+          1.3827729225158691
+        ],
+        "pelvis": [
+          0.02820168063044548,
+          -0.004239678382873535,
+          0.7745968103408813
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.1741020679473877,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.02820168063044548,
+              -0.004239678382873535,
+              0.7745968103408813
+            ],
+            "root_relative_position_delta": [
+              0.0031476542353630066,
+              0.00941041111946106,
+              0.005334615707397461
+            ],
+            "root_relative_velocity": [
+              0.0944296270608902,
+              0.2823123335838318,
+              0.16003847122192383
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.08459039032459259,
+              0.13204461336135864,
+              0.0726349800825119
+            ],
+            "root_relative_position_delta": [
+              0.002424180507659912,
+              -0.03515663743019104,
+              -0.0023704171180725098
+            ],
+            "root_relative_velocity": [
+              0.07272541522979736,
+              -1.0546991229057312,
+              -0.07111251354217529
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04253585264086723,
+              -0.3750554025173187,
+              0.11102038621902466
+            ],
+            "root_relative_position_delta": [
+              -0.0018608644604682922,
+              0.0017713606357574463,
+              0.004301249980926514
+            ],
+            "root_relative_velocity": [
+              -0.05582593381404877,
+              0.05314081907272339,
+              0.1290374994277954
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.3
+    },
+    {
+      "clip_head_height_norm": 0.35897087354645774,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10118407011032104,
+          0.39884325861930847,
+          0.012964379042387009
+        ],
+        "ball_r": [
+          -0.05899261683225632,
+          -0.05267971009016037,
+          0.09261596202850342
+        ],
+        "foot_l": [
+          0.08804551512002945,
+          0.5064922571182251,
+          0.07188662141561508
+        ],
+        "foot_r": [
+          -0.046082671731710434,
+          0.06900463253259659,
+          0.10871027410030365
+        ]
+      },
+      "frame": 11,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2818768322467804
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6326577663421631
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 19,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.8023438453674316
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.25314417481422424,
+          0.33994293212890625,
+          0.7565017938613892
+        ],
+        "hand_r": [
+          -0.17851826548576355,
+          0.3075079321861267,
+          0.7881025075912476
+        ]
+      },
+      "head_height_norm": 0.6640171333078645,
+      "head_position": [
+        0.02218087762594223,
+        0.29155609011650085,
+        1.386237382888794
+      ],
+      "pelvis_position": [
+        0.031112637370824814,
+        0.41066861152648926,
+        0.7789604067802429
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.3091378211975098
+      ],
+      "root_position": [
+        0.0,
+        0.41377511620521545,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10118407011032104,
+          -0.014931857585906982,
+          0.012964379042387009
+        ],
+        "ball_r": [
+          -0.05899261683225632,
+          -0.4664548337459564,
+          0.09261596202850342
+        ],
+        "foot_l": [
+          0.08804551512002945,
+          0.09271714091300964,
+          0.07188662141561508
+        ],
+        "foot_r": [
+          -0.046082671731710434,
+          -0.34477049112319946,
+          0.10871027410030365
+        ],
+        "hand_l": [
+          0.25314417481422424,
+          -0.0738321840763092,
+          0.7565017938613892
+        ],
+        "hand_r": [
+          -0.17851826548576355,
+          -0.10626718401908875,
+          0.7881025075912476
+        ],
+        "head": [
+          0.02218087762594223,
+          -0.1222190260887146,
+          1.386237382888794
+        ],
+        "pelvis": [
+          0.031112637370824814,
+          -0.0031065046787261963,
+          0.7789604067802429
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.3091378211975098,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.031112637370824814,
+              -0.0031065046787261963,
+              0.7789604067802429
+            ],
+            "root_relative_position_delta": [
+              0.0029109567403793335,
+              0.0011331737041473389,
+              0.004363596439361572
+            ],
+            "root_relative_velocity": [
+              0.08732870221138,
+              0.033995211124420166,
+              0.13090789318084717
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.08804551512002945,
+              0.09271714091300964,
+              0.07188662141561508
+            ],
+            "root_relative_position_delta": [
+              0.003455124795436859,
+              -0.039327472448349,
+              -0.0007483586668968201
+            ],
+            "root_relative_velocity": [
+              0.10365374386310577,
+              -1.17982417345047,
+              -0.022450760006904602
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.046082671731710434,
+              -0.34477049112319946,
+              0.10871027410030365
+            ],
+            "root_relative_position_delta": [
+              -0.0035468190908432007,
+              0.030284911394119263,
+              -0.0023101121187210083
+            ],
+            "root_relative_velocity": [
+              -0.10640457272529602,
+              0.9085473418235779,
+              -0.06930336356163025
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.3333333333333333
+    },
+    {
+      "clip_head_height_norm": 0.5270133336628647,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10261374711990356,
+          0.4002346694469452,
+          0.01190959569066763
+        ],
+        "ball_r": [
+          -0.06712985038757324,
+          0.05415002629160881,
+          0.06588917970657349
+        ],
+        "foot_l": [
+          0.09020344167947769,
+          0.5076287388801575,
+          0.07145170867443085
+        ],
+        "foot_r": [
+          -0.04919217899441719,
+          0.17080044746398926,
+          0.10199570655822754
+        ]
+      },
+      "frame": 12,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2802102565765381
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6276977062225342
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 18,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.7558118104934692
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.2545551657676697,
+          0.3364943563938141,
+          0.7650176286697388
+        ],
+        "hand_r": [
+          -0.1807481050491333,
+          0.3765816390514374,
+          0.7845422625541687
+        ]
+      },
+      "head_height_norm": 0.693790344517062,
+      "head_position": [
+        0.019122306257486343,
+        0.33798742294311523,
+        1.3927216529846191
+      ],
+      "pelvis_position": [
+        0.033221978694200516,
+        0.45046794414520264,
+        0.7845059037208557
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.4352360963821411
+      ],
+      "root_position": [
+        0.0,
+        0.46030712127685547,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10261374711990356,
+          -0.06007245182991028,
+          0.01190959569066763
+        ],
+        "ball_r": [
+          -0.06712985038757324,
+          -0.40615710616111755,
+          0.06588917970657349
+        ],
+        "foot_l": [
+          0.09020344167947769,
+          0.047321617603302,
+          0.07145170867443085
+        ],
+        "foot_r": [
+          -0.04919217899441719,
+          -0.2895066738128662,
+          0.10199570655822754
+        ],
+        "hand_l": [
+          0.2545551657676697,
+          -0.12381276488304138,
+          0.7650176286697388
+        ],
+        "hand_r": [
+          -0.1807481050491333,
+          -0.08372548222541809,
+          0.7845422625541687
+        ],
+        "head": [
+          0.019122306257486343,
+          -0.12231969833374023,
+          1.3927216529846191
+        ],
+        "pelvis": [
+          0.033221978694200516,
+          -0.009839177131652832,
+          0.7845059037208557
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.4352360963821411,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.033221978694200516,
+              -0.009839177131652832,
+              0.7845059037208557
+            ],
+            "root_relative_position_delta": [
+              0.002109341323375702,
+              -0.006732672452926636,
+              0.005545496940612793
+            ],
+            "root_relative_velocity": [
+              0.06328023970127106,
+              -0.20198017358779907,
+              0.1663649082183838
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09020344167947769,
+              0.047321617603302,
+              0.07145170867443085
+            ],
+            "root_relative_position_delta": [
+              0.002157926559448242,
+              -0.04539552330970764,
+              -0.0004349127411842346
+            ],
+            "root_relative_velocity": [
+              0.06473779678344727,
+              -1.3618656992912292,
+              -0.013047382235527039
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04919217899441719,
+              -0.2895066738128662,
+              0.10199570655822754
+            ],
+            "root_relative_position_delta": [
+              -0.0031095072627067566,
+              0.05526381731033325,
+              -0.006714567542076111
+            ],
+            "root_relative_velocity": [
+              -0.0932852178812027,
+              1.6579145193099976,
+              -0.20143702626228333
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.36666666666666664
+    },
+    {
+      "clip_head_height_norm": 0.7100515304672342,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10264222323894501,
+          0.40023547410964966,
+          0.011893076822161674
+        ],
+        "ball_r": [
+          -0.07267845422029495,
+          0.18527907133102417,
+          0.04275054857134819
+        ],
+        "foot_l": [
+          0.09023188799619675,
+          0.5076295733451843,
+          0.07143520563840866
+        ],
+        "foot_r": [
+          -0.050974201411008835,
+          0.29306331276893616,
+          0.09882413595914841
+        ]
+      },
+      "frame": 13,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.27493512630462646
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6211715340614319
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 17,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.7066614031791687
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.2526092827320099,
+          0.33681902289390564,
+          0.7787917852401733
+        ],
+        "hand_r": [
+          -0.1840246170759201,
+          0.44722551107406616,
+          0.7837087512016296
+        ]
+      },
+      "head_height_norm": 0.7262204511045999,
+      "head_position": [
+        0.01607860065996647,
+        0.3870435357093811,
+        1.3997845649719238
+      ],
+      "pelvis_position": [
+        0.034181445837020874,
+        0.48972198367118835,
+        0.789729118347168
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.4624385833740234
+      ],
+      "root_position": [
+        0.0,
+        0.509457528591156,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10264222323894501,
+          -0.10922205448150635,
+          0.011893076822161674
+        ],
+        "ball_r": [
+          -0.07267845422029495,
+          -0.32417845726013184,
+          0.04275054857134819
+        ],
+        "foot_l": [
+          0.09023188799619675,
+          -0.0018279552459716797,
+          0.07143520563840866
+        ],
+        "foot_r": [
+          -0.050974201411008835,
+          -0.21639421582221985,
+          0.09882413595914841
+        ],
+        "hand_l": [
+          0.2526092827320099,
+          -0.17263850569725037,
+          0.7787917852401733
+        ],
+        "hand_r": [
+          -0.1840246170759201,
+          -0.062232017517089844,
+          0.7837087512016296
+        ],
+        "head": [
+          0.01607860065996647,
+          -0.1224139928817749,
+          1.3997845649719238
+        ],
+        "pelvis": [
+          0.034181445837020874,
+          -0.01973554491996765,
+          0.789729118347168
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.4624385833740234,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.034181445837020874,
+              -0.01973554491996765,
+              0.789729118347168
+            ],
+            "root_relative_position_delta": [
+              0.0009594671428203583,
+              -0.00989636778831482,
+              0.005223214626312256
+            ],
+            "root_relative_velocity": [
+              0.02878401428461075,
+              -0.2968910336494446,
+              0.15669643878936768
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09023188799619675,
+              -0.0018279552459716797,
+              0.07143520563840866
+            ],
+            "root_relative_position_delta": [
+              2.8446316719055176e-05,
+              -0.04914957284927368,
+              -1.650303602218628e-05
+            ],
+            "root_relative_velocity": [
+              0.0008533895015716553,
+              -1.4744871854782104,
+              -0.0004950910806655884
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.050974201411008835,
+              -0.21639421582221985,
+              0.09882413595914841
+            ],
+            "root_relative_position_delta": [
+              -0.0017820224165916443,
+              0.07311245799064636,
+              -0.003171570599079132
+            ],
+            "root_relative_velocity": [
+              -0.05346067249774933,
+              2.193373739719391,
+              -0.09514711797237396
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.4
+    },
+    {
+      "clip_head_height_norm": 0.8446702420819792,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.1026458889245987,
+          0.4002339243888855,
+          0.011867033317685127
+        ],
+        "ball_r": [
+          -0.07415858656167984,
+          0.32509592175483704,
+          0.0308704636991024
+        ],
+        "foot_l": [
+          0.09023555368185043,
+          0.5076279640197754,
+          0.0714091807603836
+        ],
+        "foot_r": [
+          -0.0514829158782959,
+          0.4224378168582916,
+          0.10327985882759094
+        ]
+      },
+      "frame": 14,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2690863609313965
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6155872344970703
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 16,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.658315896987915
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.2475205361843109,
+          0.3430917263031006,
+          0.7937296032905579
+        ],
+        "hand_r": [
+          -0.1872706562280655,
+          0.5172548294067383,
+          0.7843247056007385
+        ]
+      },
+      "head_height_norm": 0.7500717523223955,
+      "head_position": [
+        0.01558259129524231,
+        0.4353864789009094,
+        1.4049791097640991
+      ],
+      "pelvis_position": [
+        0.03408413752913475,
+        0.5292816758155823,
+        0.7930711507797241
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.4249190092086792
+      ],
+      "root_position": [
+        0.0,
+        0.5578030347824097,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.1026458889245987,
+          -0.15756911039352417,
+          0.011867033317685127
+        ],
+        "ball_r": [
+          -0.07415858656167984,
+          -0.23270711302757263,
+          0.0308704636991024
+        ],
+        "foot_l": [
+          0.09023555368185043,
+          -0.05017507076263428,
+          0.0714091807603836
+        ],
+        "foot_r": [
+          -0.0514829158782959,
+          -0.13536521792411804,
+          0.10327985882759094
+        ],
+        "hand_l": [
+          0.2475205361843109,
+          -0.21471130847930908,
+          0.7937296032905579
+        ],
+        "hand_r": [
+          -0.1872706562280655,
+          -0.04054820537567139,
+          0.7843247056007385
+        ],
+        "head": [
+          0.01558259129524231,
+          -0.12241655588150024,
+          1.4049791097640991
+        ],
+        "pelvis": [
+          0.03408413752913475,
+          -0.028521358966827393,
+          0.7930711507797241
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.4249190092086792,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.03408413752913475,
+              -0.028521358966827393,
+              0.7930711507797241
+            ],
+            "root_relative_position_delta": [
+              -9.730830788612366e-05,
+              -0.008785814046859741,
+              0.0033420324325561523
+            ],
+            "root_relative_velocity": [
+              -0.0029192492365837097,
+              -0.26357442140579224,
+              0.10026097297668457
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09023555368185043,
+              -0.05017507076263428,
+              0.0714091807603836
+            ],
+            "root_relative_position_delta": [
+              3.6656856536865234e-06,
+              -0.0483471155166626,
+              -2.602487802505493e-05
+            ],
+            "root_relative_velocity": [
+              0.0001099705696105957,
+              -1.450413465499878,
+              -0.000780746340751648
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.0514829158782959,
+              -0.13536521792411804,
+              0.10327985882759094
+            ],
+            "root_relative_position_delta": [
+              -0.0005087144672870636,
+              0.0810289978981018,
+              0.004455722868442535
+            ],
+            "root_relative_velocity": [
+              -0.015261434018611908,
+              2.430869936943054,
+              0.13367168605327606
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.43333333333333335
+    },
+    {
+      "clip_head_height_norm": 0.8933121609431187,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10263163596391678,
+          0.4002276659011841,
+          0.01182904839515686
+        ],
+        "ball_r": [
+          -0.07148130983114243,
+          0.46283218264579773,
+          0.029245194047689438
+        ],
+        "foot_l": [
+          0.09022127091884613,
+          0.5076216459274292,
+          0.07137119770050049
+        ],
+        "foot_r": [
+          -0.05092479661107063,
+          0.549945056438446,
+          0.11422500759363174
+        ]
+      },
+      "frame": 15,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2622852325439453
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6116667985916138
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 15,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.6116667985916138
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.24039596319198608,
+          0.3553503155708313,
+          0.8076391220092773
+        ],
+        "hand_r": [
+          -0.18932397663593292,
+          0.583669900894165,
+          0.7847926020622253
+        ]
+      },
+      "head_height_norm": 0.7586899677595543,
+      "head_position": [
+        0.01779542863368988,
+        0.4819830358028412,
+        1.4068560600280762
+      ],
+      "pelvis_position": [
+        0.03323972597718239,
+        0.5690269470214844,
+        0.7933544516563416
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.3862648010253906
+      ],
+      "root_position": [
+        0.0,
+        0.6044521331787109,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10263163596391678,
+          -0.20422446727752686,
+          0.01182904839515686
+        ],
+        "ball_r": [
+          -0.07148130983114243,
+          -0.1416199505329132,
+          0.029245194047689438
+        ],
+        "foot_l": [
+          0.09022127091884613,
+          -0.09683048725128174,
+          0.07137119770050049
+        ],
+        "foot_r": [
+          -0.05092479661107063,
+          -0.05450707674026489,
+          0.11422500759363174
+        ],
+        "hand_l": [
+          0.24039596319198608,
+          -0.24910181760787964,
+          0.8076391220092773
+        ],
+        "hand_r": [
+          -0.18932397663593292,
+          -0.0207822322845459,
+          0.7847926020622253
+        ],
+        "head": [
+          0.01779542863368988,
+          -0.12246909737586975,
+          1.4068560600280762
+        ],
+        "pelvis": [
+          0.03323972597718239,
+          -0.03542518615722656,
+          0.7933544516563416
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.3862648010253906,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.03323972597718239,
+              -0.03542518615722656,
+              0.7933544516563416
+            ],
+            "root_relative_position_delta": [
+              -0.0008444115519523621,
+              -0.00690382719039917,
+              0.00028330087661743164
+            ],
+            "root_relative_velocity": [
+              -0.025332346558570862,
+              -0.2071148157119751,
+              0.00849902629852295
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09022127091884613,
+              -0.09683048725128174,
+              0.07137119770050049
+            ],
+            "root_relative_position_delta": [
+              -1.4282763004302979e-05,
+              -0.04665541648864746,
+              -3.7983059883117676e-05
+            ],
+            "root_relative_velocity": [
+              -0.00042848289012908936,
+              -1.3996624946594238,
+              -0.0011394917964935303
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.05092479661107063,
+              -0.05450707674026489,
+              0.11422500759363174
+            ],
+            "root_relative_position_delta": [
+              0.0005581192672252655,
+              0.08085814118385315,
+              0.010945148766040802
+            ],
+            "root_relative_velocity": [
+              0.016743578016757965,
+              2.4257442355155945,
+              0.32835446298122406
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.4666666666666667
+    },
+    {
+      "clip_head_height_norm": 0.8482446276089616,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10262516140937805,
+          0.40021780133247375,
+          0.011793074198067188
+        ],
+        "ball_r": [
+          -0.0657203420996666,
+          0.5951445698738098,
+          0.032847680151462555
+        ],
+        "foot_l": [
+          0.0902147889137268,
+          0.5076119303703308,
+          0.07133519649505615
+        ],
+        "foot_r": [
+          -0.049663010984659195,
+          0.6721987128257751,
+          0.12791383266448975
+        ]
+      },
+      "frame": 16,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.25280696153640747
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 14,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.5658982396125793
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 14,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.5658982396125793
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.23280933499336243,
+          0.3734842836856842,
+          0.8201496005058289
+        ],
+        "hand_r": [
+          -0.18989026546478271,
+          0.6445237398147583,
+          0.7835745811462402
+        ]
+      },
+      "head_height_norm": 0.7507050502112995,
+      "head_position": [
+        0.021337242797017097,
+        0.527614414691925,
+        1.4051170349121094
+      ],
+      "pelvis_position": [
+        0.03204837068915367,
+        0.6086201667785645,
+        0.790263831615448
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.367997169494629
+      ],
+      "root_position": [
+        0.0,
+        0.6502206921577454,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10262516140937805,
+          -0.2500028908252716,
+          0.011793074198067188
+        ],
+        "ball_r": [
+          -0.0657203420996666,
+          -0.05507612228393555,
+          0.032847680151462555
+        ],
+        "foot_l": [
+          0.0902147889137268,
+          -0.14260876178741455,
+          0.07133519649505615
+        ],
+        "foot_r": [
+          -0.049663010984659195,
+          0.021978020668029785,
+          0.12791383266448975
+        ],
+        "hand_l": [
+          0.23280933499336243,
+          -0.27673640847206116,
+          0.8201496005058289
+        ],
+        "hand_r": [
+          -0.18989026546478271,
+          -0.0056969523429870605,
+          0.7835745811462402
+        ],
+        "head": [
+          0.021337242797017097,
+          -0.12260627746582031,
+          1.4051170349121094
+        ],
+        "pelvis": [
+          0.03204837068915367,
+          -0.04160052537918091,
+          0.790263831615448
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.367997169494629,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.03204837068915367,
+              -0.04160052537918091,
+              0.790263831615448
+            ],
+            "root_relative_position_delta": [
+              -0.001191355288028717,
+              -0.006175339221954346,
+              -0.0030906200408935547
+            ],
+            "root_relative_velocity": [
+              -0.03574065864086151,
+              -0.18526017665863037,
+              -0.09271860122680664
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.0902147889137268,
+              -0.14260876178741455,
+              0.07133519649505615
+            ],
+            "root_relative_position_delta": [
+              -6.4820051193237305e-06,
+              -0.04577827453613281,
+              -3.600120544433594e-05
+            ],
+            "root_relative_velocity": [
+              -0.00019446015357971191,
+              -1.3733482360839844,
+              -0.0010800361633300781
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.049663010984659195,
+              0.021978020668029785,
+              0.12791383266448975
+            ],
+            "root_relative_position_delta": [
+              0.001261785626411438,
+              0.07648509740829468,
+              0.013688825070858002
+            ],
+            "root_relative_velocity": [
+              0.03785356879234314,
+              2.2945529222488403,
+              0.41066475212574005
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.5
+    },
+    {
+      "clip_head_height_norm": 0.7172342844432361,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10261573642492294,
+          0.40020689368247986,
+          0.011779687367379665
+        ],
+        "ball_r": [
+          -0.0591663122177124,
+          0.7223072648048401,
+          0.036059603095054626
+        ],
+        "foot_l": [
+          0.0902053713798523,
+          0.5076009631156921,
+          0.07132177799940109
+        ],
+        "foot_r": [
+          -0.04853476583957672,
+          0.7883358001708984,
+          0.13978973031044006
+        ]
+      },
+      "frame": 17,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.24121344089508057
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 13,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.5204669833183289
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 13,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.5204669833183289
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.22556442022323608,
+          0.3978714346885681,
+          0.8308253884315491
+        ],
+        "hand_r": [
+          -0.18930639326572418,
+          0.699755847454071,
+          0.7795493006706238
+        ]
+      },
+      "head_height_norm": 0.7274930678649297,
+      "head_position": [
+        0.02479405328631401,
+        0.5729140639305115,
+        1.4000617265701294
+      ],
+      "pelvis_position": [
+        0.03060869872570038,
+        0.6481598019599915,
+        0.7841287851333618
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.3544502258300781
+      ],
+      "root_position": [
+        0.0,
+        0.6956519484519958,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10261573642492294,
+          -0.295445054769516,
+          0.011779687367379665
+        ],
+        "ball_r": [
+          -0.0591663122177124,
+          0.02665531635284424,
+          0.036059603095054626
+        ],
+        "foot_l": [
+          0.0902053713798523,
+          -0.1880509853363037,
+          0.07132177799940109
+        ],
+        "foot_r": [
+          -0.04853476583957672,
+          0.09268385171890259,
+          0.13978973031044006
+        ],
+        "hand_l": [
+          0.22556442022323608,
+          -0.29778051376342773,
+          0.8308253884315491
+        ],
+        "hand_r": [
+          -0.18930639326572418,
+          0.004103899002075195,
+          0.7795493006706238
+        ],
+        "head": [
+          0.02479405328631401,
+          -0.12273788452148438,
+          1.4000617265701294
+        ],
+        "pelvis": [
+          0.03060869872570038,
+          -0.047492146492004395,
+          0.7841287851333618
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.3544502258300781,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.03060869872570038,
+              -0.047492146492004395,
+              0.7841287851333618
+            ],
+            "root_relative_position_delta": [
+              -0.0014396719634532928,
+              -0.005891621112823486,
+              -0.006135046482086182
+            ],
+            "root_relative_velocity": [
+              -0.043190158903598785,
+              -0.1767486333847046,
+              -0.18405139446258545
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.0902053713798523,
+              -0.1880509853363037,
+              0.07132177799940109
+            ],
+            "root_relative_position_delta": [
+              -9.417533874511719e-06,
+              -0.04544222354888916,
+              -1.3418495655059814e-05
+            ],
+            "root_relative_velocity": [
+              -0.00028252601623535156,
+              -1.3632667064666748,
+              -0.00040255486965179443
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04853476583957672,
+              0.09268385171890259,
+              0.13978973031044006
+            ],
+            "root_relative_position_delta": [
+              0.0011282451450824738,
+              0.0707058310508728,
+              0.011875897645950317
+            ],
+            "root_relative_velocity": [
+              0.03384735435247421,
+              2.121174931526184,
+              0.3562769293785095
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.5333333333333333
+    },
+    {
+      "clip_head_height_norm": 0.5167010615029102,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10370809584856033,
+          0.4036363363265991,
+          0.01606270857155323
+        ],
+        "ball_r": [
+          -0.054676998406648636,
+          0.8404549360275269,
+          0.03407348319888115
+        ],
+        "foot_l": [
+          0.09172184020280838,
+          0.5117230415344238,
+          0.07442677021026611
+        ],
+        "foot_r": [
+          -0.04836452379822731,
+          0.8955773711204529,
+          0.14432071149349213
+        ]
+      },
+      "frame": 18,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.23043107986450195
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 12,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.47560155391693115
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 12,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.47560155391693115
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21851402521133423,
+          0.4290209412574768,
+          0.838635265827179
+        ],
+        "hand_r": [
+          -0.18827684223651886,
+          0.7496584057807922,
+          0.772484540939331
+        ]
+      },
+      "head_height_norm": 0.6919632500026615,
+      "head_position": [
+        0.027546798810362816,
+        0.6176948547363281,
+        1.3923237323760986
+      ],
+      "pelvis_position": [
+        0.028704075142741203,
+        0.6881113648414612,
+        0.7756267189979553
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.3311104774475098
+      ],
+      "root_position": [
+        0.0,
+        0.7405173778533936,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10370809584856033,
+          -0.33688104152679443,
+          0.01606270857155323
+        ],
+        "ball_r": [
+          -0.054676998406648636,
+          0.0999375581741333,
+          0.03407348319888115
+        ],
+        "foot_l": [
+          0.09172184020280838,
+          -0.22879433631896973,
+          0.07442677021026611
+        ],
+        "foot_r": [
+          -0.04836452379822731,
+          0.15505999326705933,
+          0.14432071149349213
+        ],
+        "hand_l": [
+          0.21851402521133423,
+          -0.31149643659591675,
+          0.838635265827179
+        ],
+        "hand_r": [
+          -0.18827684223651886,
+          0.009141027927398682,
+          0.772484540939331
+        ],
+        "head": [
+          0.027546798810362816,
+          -0.12282252311706543,
+          1.3923237323760986
+        ],
+        "pelvis": [
+          0.028704075142741203,
+          -0.05240601301193237,
+          0.7756267189979553
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.3311104774475098,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.028704075142741203,
+              -0.05240601301193237,
+              0.7756267189979553
+            ],
+            "root_relative_position_delta": [
+              -0.0019046235829591751,
+              -0.0049138665199279785,
+              -0.008502066135406494
+            ],
+            "root_relative_velocity": [
+              -0.05713870748877525,
+              -0.14741599559783936,
+              -0.2550619840621948
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09172184020280838,
+              -0.22879433631896973,
+              0.07442677021026611
+            ],
+            "root_relative_position_delta": [
+              0.0015164688229560852,
+              -0.040743350982666016,
+              0.0031049922108650208
+            ],
+            "root_relative_velocity": [
+              0.045494064688682556,
+              -1.2223005294799805,
+              0.09314976632595062
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04836452379822731,
+              0.15505999326705933,
+              0.14432071149349213
+            ],
+            "root_relative_position_delta": [
+              0.000170242041349411,
+              0.06237614154815674,
+              0.004530981183052063
+            ],
+            "root_relative_velocity": [
+              0.00510726124048233,
+              1.8712842464447021,
+              0.1359294354915619
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.5666666666666667
+    },
+    {
+      "clip_head_height_norm": 0.30981921085476316,
+      "foot_contact": {
+        "left": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": true,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10330437868833542,
+          0.40548548102378845,
+          0.019615991041064262
+        ],
+        "ball_r": [
+          -0.054022446274757385,
+          0.9365095496177673,
+          0.024070220068097115
+        ],
+        "foot_l": [
+          0.0918424129486084,
+          0.51442950963974,
+          0.07647174596786499
+        ],
+        "foot_r": [
+          -0.04918448254466057,
+          0.9870947599411011,
+          0.13654446601867676
+        ]
+      },
+      "frame": 19,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.22283250093460083
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 11,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.43172627687454224
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 11,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.43172627687454224
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21115100383758545,
+          0.46711671352386475,
+          0.8441231846809387
+        ],
+        "hand_r": [
+          -0.18770374357700348,
+          0.7929783463478088,
+          0.7641817927360535
+        ]
+      },
+      "head_height_norm": 0.6553086031328759,
+      "head_position": [
+        0.028999295085668564,
+        0.661545991897583,
+        1.384340763092041
+      ],
+      "pelvis_position": [
+        0.02593776024878025,
+        0.7291162610054016,
+        0.7671210765838623
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2955801486968994
+      ],
+      "root_position": [
+        0.0,
+        0.7843926548957825,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10330437868833542,
+          -0.378907173871994,
+          0.019615991041064262
+        ],
+        "ball_r": [
+          -0.054022446274757385,
+          0.15211689472198486,
+          0.024070220068097115
+        ],
+        "foot_l": [
+          0.0918424129486084,
+          -0.2699631452560425,
+          0.07647174596786499
+        ],
+        "foot_r": [
+          -0.04918448254466057,
+          0.2027021050453186,
+          0.13654446601867676
+        ],
+        "hand_l": [
+          0.21115100383758545,
+          -0.3172759413719177,
+          0.8441231846809387
+        ],
+        "hand_r": [
+          -0.18770374357700348,
+          0.008585691452026367,
+          0.7641817927360535
+        ],
+        "head": [
+          0.028999295085668564,
+          -0.12284666299819946,
+          1.384340763092041
+        ],
+        "pelvis": [
+          0.02593776024878025,
+          -0.05527639389038086,
+          0.7671210765838623
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2955801486968994,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.02593776024878025,
+              -0.05527639389038086,
+              0.7671210765838623
+            ],
+            "root_relative_position_delta": [
+              -0.0027663148939609528,
+              -0.0028703808784484863,
+              -0.008505642414093018
+            ],
+            "root_relative_velocity": [
+              -0.08298944681882858,
+              -0.08611142635345459,
+              -0.2551692724227905
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.0918424129486084,
+              -0.2699631452560425,
+              0.07647174596786499
+            ],
+            "root_relative_position_delta": [
+              0.00012057274580001831,
+              -0.041168808937072754,
+              0.002044975757598877
+            ],
+            "root_relative_velocity": [
+              0.0036171823740005493,
+              -1.2350642681121826,
+              0.06134927272796631
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04918448254466057,
+              0.2027021050453186,
+              0.13654446601867676
+            ],
+            "root_relative_position_delta": [
+              -0.0008199587464332581,
+              0.04764211177825928,
+              -0.007776245474815369
+            ],
+            "root_relative_velocity": [
+              -0.02459876239299774,
+              1.4292633533477783,
+              -0.23328736424446106
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.6
+    },
+    {
+      "clip_head_height_norm": 0.15006240500228613,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.9887755659598644,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10193448513746262,
+          0.40762484073638916,
+          0.027493273839354515
+        ],
+        "ball_r": [
+          -0.05675528198480606,
+          0.9957038164138794,
+          0.009436300955712795
+        ],
+        "foot_l": [
+          0.09136739373207092,
+          0.5192144513130188,
+          0.07915442436933517
+        ],
+        "foot_r": [
+          -0.050158195197582245,
+          1.055163860321045,
+          0.11738865077495575
+        ]
+      },
+      "frame": 20,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.21954345703125
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 10,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.38922953605651855
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 10,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.38922953605651855
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.20385977625846863,
+          0.5120483636856079,
+          0.8472890257835388
+        ],
+        "hand_r": [
+          -0.18763208389282227,
+          0.8275513052940369,
+          0.7560816407203674
+        ]
+      },
+      "head_height_norm": 0.6270034169349492,
+      "head_position": [
+        0.02868669107556343,
+        0.7040416598320007,
+        1.378176212310791
+      ],
+      "pelvis_position": [
+        0.022190073505043983,
+        0.7721784710884094,
+        0.7606238126754761
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.235170602798462
+      ],
+      "root_position": [
+        0.0,
+        0.8268893957138062,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10193448513746262,
+          -0.419264554977417,
+          0.027493273839354515
+        ],
+        "ball_r": [
+          -0.05675528198480606,
+          0.16881442070007324,
+          0.009436300955712795
+        ],
+        "foot_l": [
+          0.09136739373207092,
+          -0.30767494440078735,
+          0.07915442436933517
+        ],
+        "foot_r": [
+          -0.050158195197582245,
+          0.22827446460723877,
+          0.11738865077495575
+        ],
+        "hand_l": [
+          0.20385977625846863,
+          -0.31484103202819824,
+          0.8472890257835388
+        ],
+        "hand_r": [
+          -0.18763208389282227,
+          0.0006619095802307129,
+          0.7560816407203674
+        ],
+        "head": [
+          0.02868669107556343,
+          -0.12284773588180542,
+          1.378176212310791
+        ],
+        "pelvis": [
+          0.022190073505043983,
+          -0.05471092462539673,
+          0.7606238126754761
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.235170602798462,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.022190073505043983,
+              -0.05471092462539673,
+              0.7606238126754761
+            ],
+            "root_relative_position_delta": [
+              -0.003747686743736267,
+              0.0005654692649841309,
+              -0.0064972639083862305
+            ],
+            "root_relative_velocity": [
+              -0.11243060231208801,
+              0.016964077949523926,
+              -0.19491791725158691
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09136739373207092,
+              -0.30767494440078735,
+              0.07915442436933517
+            ],
+            "root_relative_position_delta": [
+              -0.0004750192165374756,
+              -0.03771179914474487,
+              0.0026826784014701843
+            ],
+            "root_relative_velocity": [
+              -0.014250576496124268,
+              -1.1313539743423462,
+              0.08048035204410553
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.050158195197582245,
+              0.22827446460723877,
+              0.11738865077495575
+            ],
+            "root_relative_position_delta": [
+              -0.0009737126529216766,
+              0.025572359561920166,
+              -0.01915581524372101
+            ],
+            "root_relative_velocity": [
+              -0.0292113795876503,
+              0.767170786857605,
+              -0.5746744573116302
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.6333333333333333
+    },
+    {
+      "clip_head_height_norm": 0.06043090345142914,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.2894255445914964,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.09998705983161926,
+          0.41095003485679626,
+          0.0455697625875473
+        ],
+        "ball_r": [
+          -0.06187097728252411,
+          1.0161792039871216,
+          0.010932637378573418
+        ],
+        "foot_l": [
+          0.09061970561742783,
+          0.52773517370224,
+          0.08438030630350113
+        ],
+        "foot_r": [
+          -0.051602803170681,
+          1.0997735261917114,
+          0.10115082561969757
+        ]
+      },
+      "frame": 21,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2212674617767334
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 9,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.34938156604766846
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 9,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.34938156604766846
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.1976008266210556,
+          0.5632807016372681,
+          0.8462030291557312
+        ],
+        "hand_r": [
+          -0.1880655437707901,
+          0.8525801301002502,
+          0.7493682503700256
+        ]
+      },
+      "head_height_norm": 0.6111228018521746,
+      "head_position": [
+        0.02627822943031788,
+        0.7438168525695801,
+        1.3747175931930542
+      ],
+      "pelvis_position": [
+        0.017570625990629196,
+        0.8179436922073364,
+        0.7573720812797546
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.1420737504959106
+      ],
+      "root_position": [
+        0.0,
+        0.8667373657226562,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.09998705983161926,
+          -0.45578733086586,
+          0.0455697625875473
+        ],
+        "ball_r": [
+          -0.06187097728252411,
+          0.14944183826446533,
+          0.010932637378573418
+        ],
+        "foot_l": [
+          0.09061970561742783,
+          -0.33900219202041626,
+          0.08438030630350113
+        ],
+        "foot_r": [
+          -0.051602803170681,
+          0.23303616046905518,
+          0.10115082561969757
+        ],
+        "hand_l": [
+          0.1976008266210556,
+          -0.3034566640853882,
+          0.8462030291557312
+        ],
+        "hand_r": [
+          -0.1880655437707901,
+          -0.014157235622406006,
+          0.7493682503700256
+        ],
+        "head": [
+          0.02627822943031788,
+          -0.12292051315307617,
+          1.3747175931930542
+        ],
+        "pelvis": [
+          0.017570625990629196,
+          -0.048793673515319824,
+          0.7573720812797546
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.1420737504959106,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.017570625990629196,
+              -0.048793673515319824,
+              0.7573720812797546
+            ],
+            "root_relative_position_delta": [
+              -0.004619447514414787,
+              0.005917251110076904,
+              -0.0032517313957214355
+            ],
+            "root_relative_velocity": [
+              -0.13858342543244362,
+              0.17751753330230713,
+              -0.09755194187164307
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09061970561742783,
+              -0.33900219202041626,
+              0.08438030630350113
+            ],
+            "root_relative_position_delta": [
+              -0.0007476881146430969,
+              -0.031327247619628906,
+              0.005225881934165955
+            ],
+            "root_relative_velocity": [
+              -0.022430643439292908,
+              -0.9398174285888672,
+              0.15677645802497864
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.051602803170681,
+              0.23303616046905518,
+              0.10115082561969757
+            ],
+            "root_relative_position_delta": [
+              -0.0014446079730987549,
+              0.004761695861816406,
+              -0.01623782515525818
+            ],
+            "root_relative_velocity": [
+              -0.043338239192962646,
+              0.1428508758544922,
+              -0.48713475465774536
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.6666666666666666
+    },
+    {
+      "clip_head_height_norm": 0.019951064592266723,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.09888076782226562,
+          0.41799843311309814,
+          0.07523586601018906
+        ],
+        "ball_r": [
+          -0.06317175924777985,
+          1.018642783164978,
+          0.012091876938939095
+        ],
+        "foot_l": [
+          0.09010399132966995,
+          0.53965824842453,
+          0.09406743198633194
+        ],
+        "foot_r": [
+          -0.05130656808614731,
+          1.1178478002548218,
+          0.08455095440149307
+        ]
+      },
+      "frame": 22,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.22760140895843506
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 8,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.3130912780761719
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 8,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.3130912780761719
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.19328878819942474,
+          0.6210689544677734,
+          0.8373960256576538
+        ],
+        "hand_r": [
+          -0.18947435915470123,
+          0.8708373308181763,
+          0.7446113228797913
+        ]
+      },
+      "head_height_norm": 0.6039507169443885,
+      "head_position": [
+        0.021716099232435226,
+        0.7798191905021667,
+        1.3731555938720703
+      ],
+      "pelvis_position": [
+        0.012536467984318733,
+        0.8662539124488831,
+        0.7572356462478638
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.0519202947616577
+      ],
+      "root_position": [
+        0.0,
+        0.9030276536941528,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.09888076782226562,
+          -0.4850292205810547,
+          0.07523586601018906
+        ],
+        "ball_r": [
+          -0.06317175924777985,
+          0.1156151294708252,
+          0.012091876938939095
+        ],
+        "foot_l": [
+          0.09010399132966995,
+          -0.3633694052696228,
+          0.09406743198633194
+        ],
+        "foot_r": [
+          -0.05130656808614731,
+          0.21482014656066895,
+          0.08455095440149307
+        ],
+        "hand_l": [
+          0.19328878819942474,
+          -0.2819586992263794,
+          0.8373960256576538
+        ],
+        "hand_r": [
+          -0.18947435915470123,
+          -0.03219032287597656,
+          0.7446113228797913
+        ],
+        "head": [
+          0.021716099232435226,
+          -0.12320846319198608,
+          1.3731555938720703
+        ],
+        "pelvis": [
+          0.012536467984318733,
+          -0.036773741245269775,
+          0.7572356462478638
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.0519202947616577,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.012536467984318733,
+              -0.036773741245269775,
+              0.7572356462478638
+            ],
+            "root_relative_position_delta": [
+              -0.005034158006310463,
+              0.012019932270050049,
+              -0.00013643503189086914
+            ],
+            "root_relative_velocity": [
+              -0.1510247401893139,
+              0.36059796810150146,
+              -0.004093050956726074
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09010399132966995,
+              -0.3633694052696228,
+              0.09406743198633194
+            ],
+            "root_relative_position_delta": [
+              -0.0005157142877578735,
+              -0.024367213249206543,
+              0.00968712568283081
+            ],
+            "root_relative_velocity": [
+              -0.015471428632736206,
+              -0.7310163974761963,
+              0.2906137704849243
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.05130656808614731,
+              0.21482014656066895,
+              0.08455095440149307
+            ],
+            "root_relative_position_delta": [
+              0.0002962350845336914,
+              -0.01821601390838623,
+              -0.0165998712182045
+            ],
+            "root_relative_velocity": [
+              0.008887052536010742,
+              -0.5464804172515869,
+              -0.49799613654613495
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.7
+    },
+    {
+      "clip_head_height_norm": 0.0,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 0.47976126626700616,
+          "contact": false,
+          "phase": "swing"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": false,
+      "foot_positions": {
+        "ball_l": [
+          0.10111958533525467,
+          0.4338250160217285,
+          0.1068720892071724
+        ],
+        "ball_r": [
+          -0.06191971153020859,
+          1.0161014795303345,
+          0.011646240018308163
+        ],
+        "foot_l": [
+          0.0910358726978302,
+          0.5568326711654663,
+          0.10731181502342224
+        ],
+        "foot_r": [
+          -0.05087330564856529,
+          1.122029423713684,
+          0.07401631772518158
+        ]
+      },
+      "frame": 23,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.23652487993240356
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 7,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2792535424232483
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 7,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2792535424232483
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.1912473440170288,
+          0.6869491934776306,
+          0.8199564218521118
+        ],
+        "hand_r": [
+          -0.1919783502817154,
+          0.886345386505127,
+          0.741695761680603
+        ]
+      },
+      "head_height_norm": 0.6004158528419324,
+      "head_position": [
+        0.015349941328167915,
+        0.8130525350570679,
+        1.3723857402801514
+      ],
+      "pelvis_position": [
+        0.007832242175936699,
+        0.9155418276786804,
+        0.7593860030174255
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.0188119411468506
+      ],
+      "root_position": [
+        0.0,
+        0.9368653893470764,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10111958533525467,
+          -0.5030403733253479,
+          0.1068720892071724
+        ],
+        "ball_r": [
+          -0.06191971153020859,
+          0.07923609018325806,
+          0.011646240018308163
+        ],
+        "foot_l": [
+          0.0910358726978302,
+          -0.3800327181816101,
+          0.10731181502342224
+        ],
+        "foot_r": [
+          -0.05087330564856529,
+          0.18516403436660767,
+          0.07401631772518158
+        ],
+        "hand_l": [
+          0.1912473440170288,
+          -0.2499161958694458,
+          0.8199564218521118
+        ],
+        "hand_r": [
+          -0.1919783502817154,
+          -0.05052000284194946,
+          0.741695761680603
+        ],
+        "head": [
+          0.015349941328167915,
+          -0.12381285429000854,
+          1.3723857402801514
+        ],
+        "pelvis": [
+          0.007832242175936699,
+          -0.021323561668395996,
+          0.7593860030174255
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.0188119411468506,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.007832242175936699,
+              -0.021323561668395996,
+              0.7593860030174255
+            ],
+            "root_relative_position_delta": [
+              -0.004704225808382034,
+              0.01545017957687378,
+              0.0021503567695617676
+            ],
+            "root_relative_velocity": [
+              -0.14112677425146103,
+              0.4635053873062134,
+              0.06451070308685303
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.0910358726978302,
+              -0.3800327181816101,
+              0.10731181502342224
+            ],
+            "root_relative_position_delta": [
+              0.0009318813681602478,
+              -0.016663312911987305,
+              0.013244383037090302
+            ],
+            "root_relative_velocity": [
+              0.027956441044807434,
+              -0.49989938735961914,
+              0.39733149111270905
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.05087330564856529,
+              0.18516403436660767,
+              0.07401631772518158
+            ],
+            "root_relative_position_delta": [
+              0.000433262437582016,
+              -0.02965611219406128,
+              -0.010534636676311493
+            ],
+            "root_relative_velocity": [
+              0.01299787312746048,
+              -0.8896833658218384,
+              -0.3160391002893448
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.7333333333333333
+    },
+    {
+      "clip_head_height_norm": 0.0011492406361603006,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.10769838839769363,
+          0.4639931321144104,
+          0.12405466288328171
+        ],
+        "ball_r": [
+          -0.05926718935370445,
+          1.01541268825531,
+          0.010846355929970741
+        ],
+        "foot_l": [
+          0.09401258826255798,
+          0.5865122675895691,
+          0.11817765980958939
+        ],
+        "foot_r": [
+          -0.05012493208050728,
+          1.1242265701293945,
+          0.06836798042058945
+        ]
+      },
+      "frame": 24,
+      "future_trajectory": [
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2451704740524292
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 6,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2451704740524292
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 6,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2451704740524292
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.19136425852775574,
+          0.762057363986969,
+          0.7980608344078064
+        ],
+        "hand_r": [
+          -0.19442836940288544,
+          0.9002639651298523,
+          0.7408918142318726
+        ]
+      },
+      "head_height_norm": 0.6006194715235852,
+      "head_position": [
+        0.008611002936959267,
+        0.8464628458023071,
+        1.3724300861358643
+      ],
+      "pelvis_position": [
+        0.0040441700257360935,
+        0.9634637832641602,
+        0.7630407810211182
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.0553964376449585
+      ],
+      "root_position": [
+        0.0,
+        0.9709484577178955,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.10769838839769363,
+          -0.5069553256034851,
+          0.12405466288328171
+        ],
+        "ball_r": [
+          -0.05926718935370445,
+          0.04446423053741455,
+          0.010846355929970741
+        ],
+        "foot_l": [
+          0.09401258826255798,
+          -0.3844361901283264,
+          0.11817765980958939
+        ],
+        "foot_r": [
+          -0.05012493208050728,
+          0.15327811241149902,
+          0.06836798042058945
+        ],
+        "hand_l": [
+          0.19136425852775574,
+          -0.2088910937309265,
+          0.7980608344078064
+        ],
+        "hand_r": [
+          -0.19442836940288544,
+          -0.07068449258804321,
+          0.7408918142318726
+        ],
+        "head": [
+          0.008611002936959267,
+          -0.12448561191558838,
+          1.3724300861358643
+        ],
+        "pelvis": [
+          0.0040441700257360935,
+          -0.0074846744537353516,
+          0.7630407810211182
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.0553964376449585,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.0040441700257360935,
+              -0.0074846744537353516,
+              0.7630407810211182
+            ],
+            "root_relative_position_delta": [
+              -0.0037880721502006054,
+              0.013838887214660645,
+              0.003654778003692627
+            ],
+            "root_relative_velocity": [
+              -0.11364216450601816,
+              0.41516661643981934,
+              0.10964334011077881
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09401258826255798,
+              -0.3844361901283264,
+              0.11817765980958939
+            ],
+            "root_relative_position_delta": [
+              0.002976715564727783,
+              -0.004403471946716309,
+              0.010865844786167145
+            ],
+            "root_relative_velocity": [
+              0.0893014669418335,
+              -0.13210415840148926,
+              0.32597534358501434
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.05012493208050728,
+              0.15327811241149902,
+              0.06836798042058945
+            ],
+            "root_relative_position_delta": [
+              0.0007483735680580139,
+              -0.03188592195510864,
+              -0.005648337304592133
+            ],
+            "root_relative_velocity": [
+              0.022451207041740417,
+              -0.9565776586532593,
+              -0.16945011913776398
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.7666666666666667
+    },
+    {
+      "clip_head_height_norm": 0.041097710168926015,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.11642184108495712,
+          0.5164932608604431,
+          0.11818168312311172
+        ],
+        "ball_r": [
+          -0.058965880423784256,
+          1.0153982639312744,
+          0.01084691472351551
+        ],
+        "foot_l": [
+          0.09766235947608948,
+          0.6384433507919312,
+          0.12118551880121231
+        ],
+        "foot_r": [
+          -0.04982363060116768,
+          1.1242122650146484,
+          0.06836860626935959
+        ]
+      },
+      "frame": 25,
+      "future_trajectory": [
+        {
+          "offset_frames": 5,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2088937759399414
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 5,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2088937759399414
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 5,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.2088937759399414
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.19348911941051483,
+          0.8450824618339539,
+          0.7777620553970337
+        ],
+        "hand_r": [
+          -0.19521905481815338,
+          0.9118343591690063,
+          0.7436500191688538
+        ]
+      },
+      "head_height_norm": 0.6076974101592092,
+      "head_position": [
+        0.003843965707346797,
+        0.8824251890182495,
+        1.3739715814590454
+      ],
+      "pelvis_position": [
+        0.0013372399844229221,
+        1.0082498788833618,
+        0.7674310803413391
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.1322658061981201
+      ],
+      "root_position": [
+        0.0,
+        1.0072251558303833,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.11642184108495712,
+          -0.4907318949699402,
+          0.11818168312311172
+        ],
+        "ball_r": [
+          -0.058965880423784256,
+          0.008173108100891113,
+          0.01084691472351551
+        ],
+        "foot_l": [
+          0.09766235947608948,
+          -0.36878180503845215,
+          0.12118551880121231
+        ],
+        "foot_r": [
+          -0.04982363060116768,
+          0.11698710918426514,
+          0.06836860626935959
+        ],
+        "hand_l": [
+          0.19348911941051483,
+          -0.16214269399642944,
+          0.7777620553970337
+        ],
+        "hand_r": [
+          -0.19521905481815338,
+          -0.09539079666137695,
+          0.7436500191688538
+        ],
+        "head": [
+          0.003843965707346797,
+          -0.12479996681213379,
+          1.3739715814590454
+        ],
+        "pelvis": [
+          0.0013372399844229221,
+          0.0010247230529785156,
+          0.7674310803413391
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.1322658061981201,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.0013372399844229221,
+              0.0010247230529785156,
+              0.7674310803413391
+            ],
+            "root_relative_position_delta": [
+              -0.0027069300413131714,
+              0.008509397506713867,
+              0.004390299320220947
+            ],
+            "root_relative_velocity": [
+              -0.08120790123939514,
+              0.255281925201416,
+              0.13170897960662842
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09766235947608948,
+              -0.36878180503845215,
+              0.12118551880121231
+            ],
+            "root_relative_position_delta": [
+              0.003649771213531494,
+              0.015654385089874268,
+              0.003007858991622925
+            ],
+            "root_relative_velocity": [
+              0.10949313640594482,
+              0.469631552696228,
+              0.09023576974868774
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04982363060116768,
+              0.11698710918426514,
+              0.06836860626935959
+            ],
+            "root_relative_position_delta": [
+              0.0003013014793395996,
+              -0.03629100322723389,
+              6.258487701416016e-07
+            ],
+            "root_relative_velocity": [
+              0.009039044380187988,
+              -1.0887300968170166,
+              1.8775463104248047e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.8
+    },
+    {
+      "clip_head_height_norm": 0.15626274359576386,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.12372106313705444,
+          0.5984011292457581,
+          0.09573961794376373
+        ],
+        "ball_r": [
+          -0.05890275537967682,
+          1.0153943300247192,
+          0.010846450924873352
+        ],
+        "foot_l": [
+          0.09961509704589844,
+          0.7174065113067627,
+          0.11786165833473206
+        ],
+        "foot_r": [
+          -0.04976047948002815,
+          1.1242082118988037,
+          0.0683680921792984
+        ]
+      },
+      "frame": 26,
+      "future_trajectory": [
+        {
+          "offset_frames": 4,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.16968607902526855
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 4,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.16968607902526855
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 4,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.16968607902526855
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.19775474071502686,
+          0.9344087839126587,
+          0.7643762230873108
+        ],
+        "hand_r": [
+          -0.19387471675872803,
+          0.9229246973991394,
+          0.7524573802947998
+        ]
+      },
+      "head_height_norm": 0.6281019725641889,
+      "head_position": [
+        0.00282301870174706,
+        0.9216194152832031,
+        1.3784154653549194
+      ],
+      "pelvis_position": [
+        -0.0004121357051189989,
+        1.0500880479812622,
+        0.7731135487556458
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2116949558258057
+      ],
+      "root_position": [
+        0.0,
+        1.0464328527450562,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.12372106313705444,
+          -0.4480317234992981,
+          0.09573961794376373
+        ],
+        "ball_r": [
+          -0.05890275537967682,
+          -0.031038522720336914,
+          0.010846450924873352
+        ],
+        "foot_l": [
+          0.09961509704589844,
+          -0.32902634143829346,
+          0.11786165833473206
+        ],
+        "foot_r": [
+          -0.04976047948002815,
+          0.07777535915374756,
+          0.0683680921792984
+        ],
+        "hand_l": [
+          0.19775474071502686,
+          -0.11202406883239746,
+          0.7643762230873108
+        ],
+        "hand_r": [
+          -0.19387471675872803,
+          -0.12350815534591675,
+          0.7524573802947998
+        ],
+        "head": [
+          0.00282301870174706,
+          -0.12481343746185303,
+          1.3784154653549194
+        ],
+        "pelvis": [
+          -0.0004121357051189989,
+          0.0036551952362060547,
+          0.7731135487556458
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2116949558258057,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              -0.0004121357051189989,
+              0.0036551952362060547,
+              0.7731135487556458
+            ],
+            "root_relative_position_delta": [
+              -0.001749375689541921,
+              0.002630472183227539,
+              0.005682468414306641
+            ],
+            "root_relative_velocity": [
+              -0.05248127068625763,
+              0.07891416549682617,
+              0.17047405242919922
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09961509704589844,
+              -0.32902634143829346,
+              0.11786165833473206
+            ],
+            "root_relative_position_delta": [
+              0.00195273756980896,
+              0.03975546360015869,
+              -0.003323860466480255
+            ],
+            "root_relative_velocity": [
+              0.0585821270942688,
+              1.1926639080047607,
+              -0.09971581399440765
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04976047948002815,
+              0.07777535915374756,
+              0.0683680921792984
+            ],
+            "root_relative_position_delta": [
+              6.315112113952637e-05,
+              -0.03921175003051758,
+              -5.140900611877441e-07
+            ],
+            "root_relative_velocity": [
+              0.001894533634185791,
+              -1.1763525009155273,
+              -1.5422701835632324e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.8333333333333334
+    },
+    {
+      "clip_head_height_norm": 0.3452077901214735,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.12736177444458008,
+          0.706902027130127,
+          0.07115957140922546
+        ],
+        "ball_r": [
+          -0.05899081379175186,
+          1.015395998954773,
+          0.010846826247870922
+        ],
+        "foot_l": [
+          0.09876621514558792,
+          0.8187571167945862,
+          0.114788718521595
+        ],
+        "foot_r": [
+          -0.049848537892103195,
+          1.1242097616195679,
+          0.06836838275194168
+        ]
+      },
+      "frame": 27,
+      "future_trajectory": [
+        {
+          "offset_frames": 3,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.12811410427093506
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 3,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.12811410427093506
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 3,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.12811410427093506
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.20398560166358948,
+          1.0281333923339844,
+          0.7611033916473389
+        ],
+        "hand_r": [
+          -0.19106142222881317,
+          0.9368541836738586,
+          0.767091691493988
+        ]
+      },
+      "head_height_norm": 0.6615786353864582,
+      "head_position": [
+        0.0054280925542116165,
+        0.9631096720695496,
+        1.3857063055038452
+      ],
+      "pelvis_position": [
+        -0.001217702403664589,
+        1.089872121810913,
+        0.7802417278289795
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2629430294036865
+      ],
+      "root_position": [
+        0.0,
+        1.0880048274993896,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.12736177444458008,
+          -0.3811028003692627,
+          0.07115957140922546
+        ],
+        "ball_r": [
+          -0.05899081379175186,
+          -0.0726088285446167,
+          0.010846826247870922
+        ],
+        "foot_l": [
+          0.09876621514558792,
+          -0.26924771070480347,
+          0.114788718521595
+        ],
+        "foot_r": [
+          -0.049848537892103195,
+          0.03620493412017822,
+          0.06836838275194168
+        ],
+        "hand_l": [
+          0.20398560166358948,
+          -0.05987143516540527,
+          0.7611033916473389
+        ],
+        "hand_r": [
+          -0.19106142222881317,
+          -0.151150643825531,
+          0.767091691493988
+        ],
+        "head": [
+          0.0054280925542116165,
+          -0.12489515542984009,
+          1.3857063055038452
+        ],
+        "pelvis": [
+          -0.001217702403664589,
+          0.0018672943115234375,
+          0.7802417278289795
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2629430294036865,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              -0.001217702403664589,
+              0.0018672943115234375,
+              0.7802417278289795
+            ],
+            "root_relative_position_delta": [
+              -0.00080556669854559,
+              -0.0017879009246826172,
+              0.00712817907333374
+            ],
+            "root_relative_velocity": [
+              -0.0241670009563677,
+              -0.053637027740478516,
+              0.2138453722000122
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09876621514558792,
+              -0.26924771070480347,
+              0.114788718521595
+            ],
+            "root_relative_position_delta": [
+              -0.0008488819003105164,
+              0.05977863073348999,
+              -0.0030729398131370544
+            ],
+            "root_relative_velocity": [
+              -0.02546645700931549,
+              1.7933589220046997,
+              -0.09218819439411163
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.049848537892103195,
+              0.03620493412017822,
+              0.06836838275194168
+            ],
+            "root_relative_position_delta": [
+              -8.805841207504272e-05,
+              -0.041570425033569336,
+              2.905726432800293e-07
+            ],
+            "root_relative_velocity": [
+              -0.0026417523622512817,
+              -1.24711275100708,
+              8.717179298400879e-06
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.8666666666666667
+    },
+    {
+      "clip_head_height_norm": 0.5781607206850957,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.12718015909194946,
+          0.8307144045829773,
+          0.05435226112604141
+        ],
+        "ball_r": [
+          -0.05909135565161705,
+          1.015397548675537,
+          0.010845392011106014
+        ],
+        "foot_l": [
+          0.09614716470241547,
+          0.9324143528938293,
+          0.11701679229736328
+        ],
+        "foot_r": [
+          -0.04994905740022659,
+          1.124211311340332,
+          0.06836701929569244
+        ]
+      },
+      "frame": 28,
+      "future_trajectory": [
+        {
+          "offset_frames": 2,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.08548986911773682
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 2,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.08548986911773682
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 2,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.08548986911773682
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21072885394096375,
+          1.1204091310501099,
+          0.7686957120895386
+        ],
+        "hand_r": [
+          -0.1874420940876007,
+          0.9554390907287598,
+          0.7849116325378418
+        ]
+      },
+      "head_height_norm": 0.7028524705747057,
+      "head_position": [
+        0.010072282515466213,
+        1.0054800510406494,
+        1.3946952819824219
+      ],
+      "pelvis_position": [
+        -0.0010471318382769823,
+        1.1279782056808472,
+        0.7882859706878662
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2807815074920654
+      ],
+      "root_position": [
+        0.0,
+        1.130629062652588,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.12718015909194946,
+          -0.2999146580696106,
+          0.05435226112604141
+        ],
+        "ball_r": [
+          -0.05909135565161705,
+          -0.11523151397705078,
+          0.010845392011106014
+        ],
+        "foot_l": [
+          0.09614716470241547,
+          -0.19821470975875854,
+          0.11701679229736328
+        ],
+        "foot_r": [
+          -0.04994905740022659,
+          -0.006417751312255859,
+          0.06836701929569244
+        ],
+        "hand_l": [
+          0.21072885394096375,
+          -0.010219931602478027,
+          0.7686957120895386
+        ],
+        "hand_r": [
+          -0.1874420940876007,
+          -0.17518997192382812,
+          0.7849116325378418
+        ],
+        "head": [
+          0.010072282515466213,
+          -0.12514901161193848,
+          1.3946952819824219
+        ],
+        "pelvis": [
+          -0.0010471318382769823,
+          -0.0026508569717407227,
+          0.7882859706878662
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2807815074920654,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              -0.0010471318382769823,
+              -0.0026508569717407227,
+              0.7882859706878662
+            ],
+            "root_relative_position_delta": [
+              0.00017057056538760662,
+              -0.00451815128326416,
+              0.008044242858886719
+            ],
+            "root_relative_velocity": [
+              0.005117116961628199,
+              -0.1355445384979248,
+              0.24132728576660156
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09614716470241547,
+              -0.19821470975875854,
+              0.11701679229736328
+            ],
+            "root_relative_position_delta": [
+              -0.002619050443172455,
+              0.07103300094604492,
+              0.00222807377576828
+            ],
+            "root_relative_velocity": [
+              -0.07857151329517365,
+              2.1309900283813477,
+              0.0668422132730484
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04994905740022659,
+              -0.006417751312255859,
+              0.06836701929569244
+            ],
+            "root_relative_position_delta": [
+              -0.00010051950812339783,
+              -0.04262268543243408,
+              -1.3634562492370605e-06
+            ],
+            "root_relative_velocity": [
+              -0.003015585243701935,
+              -1.2786805629730225,
+              -4.0903687477111816e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.9
+    },
+    {
+      "clip_head_height_norm": 0.810959183421277,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.12426237761974335,
+          0.9596726894378662,
+          0.0463930182158947
+        ],
+        "ball_r": [
+          -0.05914285033941269,
+          1.0153961181640625,
+          0.010844833217561245
+        ],
+        "foot_l": [
+          0.09348367154598236,
+          1.0498218536376953,
+          0.12486956268548965
+        ],
+        "foot_r": [
+          -0.05000051483511925,
+          1.124210000038147,
+          0.06836637854576111
+        ]
+      },
+      "frame": 29,
+      "future_trajectory": [
+        {
+          "offset_frames": 1,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.04272866249084473
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 1,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.04272866249084473
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 1,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.04272866249084473
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21483658254146576,
+          1.2036060094833374,
+          0.7827287316322327
+        ],
+        "hand_r": [
+          -0.18334496021270752,
+          0.9783853888511658,
+          0.8028788566589355
+        ]
+      },
+      "head_height_norm": 0.7440989376605806,
+      "head_position": [
+        0.014883346855640411,
+        1.0479698181152344,
+        1.403678297996521
+      ],
+      "pelvis_position": [
+        -3.4195920306956396e-05,
+        1.164609670639038,
+        0.7959456443786621
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2823479175567627
+      ],
+      "root_position": [
+        0.0,
+        1.17339026927948,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.12426237761974335,
+          -0.21371757984161377,
+          0.0463930182158947
+        ],
+        "ball_r": [
+          -0.05914285033941269,
+          -0.15799415111541748,
+          0.010844833217561245
+        ],
+        "foot_l": [
+          0.09348367154598236,
+          -0.12356841564178467,
+          0.12486956268548965
+        ],
+        "foot_r": [
+          -0.05000051483511925,
+          -0.04918026924133301,
+          0.06836637854576111
+        ],
+        "hand_l": [
+          0.21483658254146576,
+          0.030215740203857422,
+          0.7827287316322327
+        ],
+        "hand_r": [
+          -0.18334496021270752,
+          -0.1950048804283142,
+          0.8028788566589355
+        ],
+        "head": [
+          0.014883346855640411,
+          -0.1254204511642456,
+          1.403678297996521
+        ],
+        "pelvis": [
+          -3.4195920306956396e-05,
+          -0.008780598640441895,
+          0.7959456443786621
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2823479175567627,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              -3.4195920306956396e-05,
+              -0.008780598640441895,
+              0.7959456443786621
+            ],
+            "root_relative_position_delta": [
+              0.001012935917970026,
+              -0.006129741668701172,
+              0.0076596736907958984
+            ],
+            "root_relative_velocity": [
+              0.030388077539100777,
+              -0.18389225006103516,
+              0.22979021072387695
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09348367154598236,
+              -0.12356841564178467,
+              0.12486956268548965
+            ],
+            "root_relative_position_delta": [
+              -0.0026634931564331055,
+              0.07464629411697388,
+              0.007852770388126373
+            ],
+            "root_relative_velocity": [
+              -0.07990479469299316,
+              2.2393888235092163,
+              0.2355831116437912
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.05000051483511925,
+              -0.04918026924133301,
+              0.06836637854576111
+            ],
+            "root_relative_position_delta": [
+              -5.145743489265442e-05,
+              -0.04276251792907715,
+              -6.407499313354492e-07
+            ],
+            "root_relative_velocity": [
+              -0.0015437230467796326,
+              -1.2828755378723145,
+              -1.9222497940063477e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.9333333333333333
+    },
+    {
+      "clip_head_height_norm": 0.9999907319303536,
+      "foot_contact": {
+        "left": {
+          "confidence": 0.0,
+          "contact": false,
+          "phase": "swing"
+        },
+        "right": {
+          "confidence": 1.0,
+          "contact": true,
+          "phase": "stance"
+        }
+      },
+      "foot_contact_l": false,
+      "foot_contact_r": true,
+      "foot_positions": {
+        "ball_l": [
+          0.12008338421583176,
+          1.0869126319885254,
+          0.04524507373571396
+        ],
+        "ball_r": [
+          -0.05914020910859108,
+          1.0153855085372925,
+          0.010843751020729542
+        ],
+        "foot_l": [
+          0.09287242591381073,
+          1.1658260822296143,
+          0.13615736365318298
+        ],
+        "foot_r": [
+          -0.04999788478016853,
+          1.1241992712020874,
+          0.06836536526679993
+        ]
+      },
+      "frame": 30,
+      "future_trajectory": [
+        {
+          "offset_frames": 0,
+          "offset_seconds": 0.2,
+          "root_local_planar_displacement": [
+            0.0,
+            0.0
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 0,
+          "offset_seconds": 0.5,
+          "root_local_planar_displacement": [
+            0.0,
+            0.0
+          ],
+          "root_yaw_delta_radians": 0.0
+        },
+        {
+          "offset_frames": 0,
+          "offset_seconds": 1.0,
+          "root_local_planar_displacement": [
+            0.0,
+            0.0
+          ],
+          "root_yaw_delta_radians": 0.0
+        }
+      ],
+      "hand_positions": {
+        "hand_l": [
+          0.21290798485279083,
+          1.275038480758667,
+          0.796722412109375
+        ],
+        "hand_r": [
+          -0.17886482179164886,
+          1.0040907859802246,
+          0.8191078901290894
+        ]
+      },
+      "head_height_norm": 0.7775909266201786,
+      "head_position": [
+        0.018646275624632835,
+        1.0905325412750244,
+        1.4109724760055542
+      ],
+      "pelvis_position": [
+        0.001606118050403893,
+        1.1999858617782593,
+        0.8016265034675598
+      ],
+      "root_angular_velocity_radians_per_second": 0.0,
+      "root_local_planar_velocity": [
+        0.0,
+        1.2818597555160522
+      ],
+      "root_position": [
+        0.0,
+        1.2161189317703247,
+        0.0
+      ],
+      "root_relative_joint_positions": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ball_l": [
+          0.12008338421583176,
+          -0.12920629978179932,
+          0.04524507373571396
+        ],
+        "ball_r": [
+          -0.05914020910859108,
+          -0.20073342323303223,
+          0.010843751020729542
+        ],
+        "foot_l": [
+          0.09287242591381073,
+          -0.05029284954071045,
+          0.13615736365318298
+        ],
+        "foot_r": [
+          -0.04999788478016853,
+          -0.0919196605682373,
+          0.06836536526679993
+        ],
+        "hand_l": [
+          0.21290798485279083,
+          0.058919548988342285,
+          0.796722412109375
+        ],
+        "hand_r": [
+          -0.17886482179164886,
+          -0.2120281457901001,
+          0.8191078901290894
+        ],
+        "head": [
+          0.018646275624632835,
+          -0.1255863904953003,
+          1.4109724760055542
+        ],
+        "pelvis": [
+          0.001606118050403893,
+          -0.01613306999206543,
+          0.8016265034675598
+        ]
+      },
+      "root_velocity": [
+        0.0,
+        1.2818597555160522,
+        0.0
+      ],
+      "root_yaw_delta_radians": 0.0,
+      "root_yaw_radians": 0.0,
+      "sample_motion_features": {
+        "coordinate_space": "root_relative_blender_z_up_y_forward",
+        "delta_window_seconds": 0.03333333333333333,
+        "joints": {
+          "hips": {
+            "root_relative_position": [
+              0.001606118050403893,
+              -0.01613306999206543,
+              0.8016265034675598
+            ],
+            "root_relative_position_delta": [
+              0.0016403139707108494,
+              -0.007352471351623535,
+              0.005680859088897705
+            ],
+            "root_relative_velocity": [
+              0.04920941912132548,
+              -0.22057414054870605,
+              0.17042577266693115
+            ],
+            "source_bone": "pelvis"
+          },
+          "left_foot": {
+            "root_relative_position": [
+              0.09287242591381073,
+              -0.05029284954071045,
+              0.13615736365318298
+            ],
+            "root_relative_position_delta": [
+              -0.0006112456321716309,
+              0.07327556610107422,
+              0.011287800967693329
+            ],
+            "root_relative_velocity": [
+              -0.018337368965148926,
+              2.1982669830322266,
+              0.33863402903079987
+            ],
+            "source_bone": "foot_l"
+          },
+          "right_foot": {
+            "root_relative_position": [
+              -0.04999788478016853,
+              -0.0919196605682373,
+              0.06836536526679993
+            ],
+            "root_relative_position_delta": [
+              2.6300549507141113e-06,
+              -0.0427393913269043,
+              -1.0132789611816406e-06
+            ],
+            "root_relative_velocity": [
+              7.890164852142334e-05,
+              -1.282181739807129,
+              -3.039836883544922e-05
+            ],
+            "source_bone": "foot_r"
+          },
+          "root": {
+            "root_relative_position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_position_delta": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "root_relative_velocity": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "source_bone": "Root"
+          }
+        },
+        "schema_version": 1
+      },
+      "time_seconds": 0.9666666666666667
+    }
+  ],
+  "schema_version": 2,
+  "selection": {
+    "category": "locomotion",
+    "create_root_motion": false,
+    "gender": "female",
+    "group": "locomotion_standing",
+    "motion_class": "StandingLocomotion",
+    "motion_id": "c9ccf998-b96c-11e4-a802-0aaa78deedf9",
+    "notes": "Walking Backwards; female backwards walk candidate replacing Slow Jog Backwards because that source lacked mapped bones for Godot generation.",
+    "tags": [
+      "walk",
+      "backward",
+      "female"
+    ]
+  },
+  "tracked_bones": [
+    "Root",
+    "pelvis",
+    "head",
+    "foot_l",
+    "foot_r",
+    "ball_l",
+    "ball_r",
+    "hand_l",
+    "hand_r"
+  ]
+}

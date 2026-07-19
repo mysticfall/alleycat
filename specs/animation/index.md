@@ -7,13 +7,13 @@ title: Animation
 
 ## Requirement
 
-Provide a discoverable entry point for the proven Mixamo source pipeline and the future content specifications that
+Provide a discoverable entry point for the proven Mixamo source pipeline and the concrete animation catalogues that
 consume its reusable outputs.
 
 ## Goal
 
-Contributors and implementation agents can reach the normative Mixamo pipeline contract directly and identify the
-future specification that owns concrete standing-locomotion content and Godot packaging.
+Contributors and implementation agents can reach the normative Mixamo pipeline contract and the standing-locomotion
+catalogue contract directly.
 
 ## User Requirements
 
@@ -26,8 +26,9 @@ future specification that owns concrete standing-locomotion content and Godot pa
 1. [ANIM-001: Animation Source Pipeline](001-animation-source-pipeline/index.md) is the normative contract for the
    working Mixamo acquisition, preview, retargeting, root-processing, batch-processing, metrics, and reusable output
    schemas.
-2. Future ANIM-003 will own the concrete standing-locomotion selection, `locomotion_standing.blend`, extracted per-clip
-   `.res` resources, and the corresponding Godot animation library.
+2. [ANIM-003: Standing Locomotion Catalogue](003-standing-locomotion-catalogue/index.md) is the normative contract for
+   the concrete standing-locomotion selection, `locomotion_standing.blend`, extracted per-clip `.res` resources,
+   reusable Godot animation library, package metadata, and content-specific validation.
 
 ## In Scope
 
@@ -36,21 +37,23 @@ future specification that owns concrete standing-locomotion content and Godot pa
 
 ## Out Of Scope
 
-- Concrete animation selections, generated standing-locomotion content, Godot libraries, and runtime behaviour.
+- Runtime animation selection, transition behaviour, player locomotion, and navigation integration.
 - Duplicating technical contracts defined by child specifications.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. The project specifications index links this page, and this page links ANIM-001.
-2. The page identifies the ownership boundary between reusable pipeline outputs and ANIM-003 content.
+1. The project specifications index links this page, and this page links ANIM-001 and ANIM-003.
+2. The page identifies the ownership boundary between reusable pipeline schemas, concrete catalogue content, and
+   runtime consumers.
 
 ### Technical Requirement Acceptance
 
 1. ANIM-001 is identified as the normative source-pipeline contract.
-2. Future ANIM-003 ownership is stated without introducing a dependency on an absent specification page.
+2. ANIM-003 is identified as the normative standing-locomotion catalogue and Godot packaging contract.
 
 ## Specifications
 
 - [ANIM-001: Animation Source Pipeline](001-animation-source-pipeline/index.md)
+- [ANIM-003: Standing Locomotion Catalogue](003-standing-locomotion-catalogue/index.md)

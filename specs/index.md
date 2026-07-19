@@ -37,7 +37,7 @@
 
 - [ANIM: Animation](animation/index.md)
   - [ANIM-001: Animation Source Pipeline](animation/001-animation-source-pipeline/index.md)
-  - ANIM-003: Standing locomotion selection and Godot packaging (future)
+  - [ANIM-003: Standing Locomotion Catalogue](animation/003-standing-locomotion-catalogue/index.md)
 
 ## Scene
 

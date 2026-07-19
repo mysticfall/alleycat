@@ -1,0 +1,1284 @@
+{
+  "metrics_schema_version": 2,
+  "motions": {
+    "c9c68c4c-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c68c4c_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Start Walking",
+        "file": "download/c9c68c4c-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Female Start Walking",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c68c4c_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c68c4c-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-09T11:04:55.896772+00:00",
+      "processor_version": 6,
+      "selection_notes": "Female Start Walking; alternate female standing-to-forward-walk start selected for small forward-start playtest coverage.",
+      "source_fbx": "c9c68c4c-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "start",
+        "forward",
+        "female"
+      ]
+    },
+    "c9c68d24-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c68d24_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Stop Walking",
+        "file": "download/c9c68d24-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Female Stop Walking",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c68d24_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c68d24-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-09T11:05:07.327065+00:00",
+      "processor_version": 6,
+      "selection_notes": "Female Stop Walking; alternate female forward walk-to-idle stop selected for start-stop transition coverage.",
+      "source_fbx": "c9c68d24-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "stop",
+        "forward",
+        "female"
+      ]
+    },
+    "c9c68dee-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c68dee_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Stop Start Walking",
+        "file": "download/c9c68dee-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Female Stop And Start Walking",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c68dee_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c68dee-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-09T11:05:24.242564+00:00",
+      "processor_version": 6,
+      "selection_notes": "Female Stop And Start Walking; alternate forward stop-start transition selected for small restart coverage.",
+      "source_fbx": "c9c68dee-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "stop",
+        "start",
+        "forward",
+        "female"
+      ]
+    },
+    "c9c7ff20-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c7ff20_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Side Step",
+        "file": "download/c9c7ff20-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Side Step",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c7ff20_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c7ff20-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-15T13:25:39.694711+00:00",
+      "processor_version": 6,
+      "selection_notes": "Side Step; preview shows generic unarmed side-to-side stepping with relaxed arms, retained as non-combat lateral adjustment coverage.",
+      "source_fbx": "c9c7ff20-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "sidestep",
+        "lateral"
+      ]
+    },
+    "c9c89530-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c89530_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Start Left Upright Strafe Walk",
+        "file": "download/c9c89530-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Strafing",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89530_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c89530-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-09T11:05:51.119131+00:00",
+      "processor_version": 6,
+      "selection_notes": "Start Left Upright Strafe Walk; left strafe-start transition selected for lateral-start coverage.",
+      "source_fbx": "c9c89530-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "left",
+        "start"
+      ]
+    },
+    "c9c89ca4-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c89ca4_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Left Upright Strafe Walk To Stop",
+        "file": "download/c9c89ca4-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Strafing",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89ca4_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c89ca4-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:03:30.778135+00:00",
+      "processor_version": 6,
+      "selection_notes": "Left Upright Strafe Walk To Stop; ordinary stop-biased left strafe transition retained.",
+      "source_fbx": "c9c89ca4-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "left",
+        "stop"
+      ]
+    },
+    "c9c89d61-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c89d61_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Start Strafe Walk Right",
+        "file": "download/c9c89d61-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Strafe Right",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89d61_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c89d61-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-09T11:06:01.469873+00:00",
+      "processor_version": 6,
+      "selection_notes": "Start Strafe Walk Right; right strafe-start transition selected for lateral-start coverage.",
+      "source_fbx": "c9c89d61-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "right",
+        "start"
+      ]
+    },
+    "c9c89f96-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c89f96_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Stop Strafe Walk Right",
+        "file": "download/c9c89f96-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Strafe Right Stop",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89f96_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c89f96-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:03:42.679130+00:00",
+      "processor_version": 6,
+      "selection_notes": "Strafe Right Stop; ordinary stop-biased right strafe transition from manifest.",
+      "source_fbx": "c9c89f96-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "right",
+        "stop"
+      ]
+    },
+    "c9c8b661-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c8b661_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking From Standing",
+        "file": "download/c9c8b661-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Start Walking",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c8b661_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c8b661-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:00:33.282603+00:00",
+      "processor_version": 6,
+      "selection_notes": "Start Walking; ordinary standing-to-forward-walk entry from external manifest.",
+      "source_fbx": "c9c8b661-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "start",
+        "forward"
+      ]
+    },
+    "c9c8d966-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c8d966_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking To Standing Idle",
+        "file": "download/c9c8d966-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Stop Walking",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c8d966_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c8d966-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:00:47.979783+00:00",
+      "processor_version": 6,
+      "selection_notes": "Stop Walking; ordinary forward walk-to-idle stop with no weapon/crouch/action terms in manifest.",
+      "source_fbx": "c9c8d966-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "stop",
+        "forward"
+      ]
+    },
+    "c9c94322-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c94322_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "45 Degree Left Turn From Idle",
+        "file": "download/c9c94322-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Left Turn 45",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c94322_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "TurnInPlace",
+      "motion_id": "c9c94322-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:04:25.680789+00:00",
+      "processor_version": 6,
+      "selection_notes": "Left Turn 45; stationary 45-degree left turn coverage.",
+      "source_fbx": "c9c94322-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "turn",
+        "in_place",
+        "left",
+        "45"
+      ]
+    },
+    "c9c96857-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c96857_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Strafe Walking To The Left",
+        "file": "download/c9c96857-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Left Strafe Walking",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96857_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c96857-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:59.282197+00:00",
+      "processor_version": 6,
+      "selection_notes": "Left Strafe Walking; standing left strafe walk coverage.",
+      "source_fbx": "c9c96857-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "left"
+      ]
+    },
+    "c9c96924-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c96924_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Strafe Walking To The Right",
+        "file": "download/c9c96924-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Right Strafe Walking",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96924_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c96924-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:03:07.621095+00:00",
+      "processor_version": 6,
+      "selection_notes": "Right Strafe Walking; standing right strafe walk coverage.",
+      "source_fbx": "c9c96924-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "right"
+      ]
+    },
+    "c9c96c6d-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c96c6d_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Running Strafe To The Left",
+        "file": "download/c9c96c6d-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Left Strafe",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96c6d_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c96c6d-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:03:15.172504+00:00",
+      "processor_version": 6,
+      "selection_notes": "Left Strafe; running left strafe coverage.",
+      "source_fbx": "c9c96c6d-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "strafe",
+        "left"
+      ]
+    },
+    "c9c96eae-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c96eae_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Standing 180 Left Turn",
+        "file": "download/c9c96eae-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Left Turn",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96eae_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "TurnInPlace",
+      "motion_id": "c9c96eae-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:05:06.931116+00:00",
+      "processor_version": 6,
+      "selection_notes": "Left Turn; stationary 180-degree left turn coverage.",
+      "source_fbx": "c9c96eae-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "turn",
+        "in_place",
+        "left",
+        "180"
+      ]
+    },
+    "c9c96f9e-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c96f9e_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Running Strafe To The Right",
+        "file": "download/c9c96f9e-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Right Strafe",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96f9e_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c96f9e-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:03:22.273612+00:00",
+      "processor_version": 6,
+      "selection_notes": "Right Strafe; running right strafe coverage.",
+      "source_fbx": "c9c96f9e-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "strafe",
+        "right"
+      ]
+    },
+    "c9c9713c-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c9713c_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Standing 180 Right Turn",
+        "file": "download/c9c9713c-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Right Turn",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9713c_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "TurnInPlace",
+      "motion_id": "c9c9713c-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:05:17.816897+00:00",
+      "processor_version": 6,
+      "selection_notes": "Right Turn; stationary 180-degree right turn coverage.",
+      "source_fbx": "c9c9713c-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "turn",
+        "in_place",
+        "right",
+        "180"
+      ]
+    },
+    "c9c972d1-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c972d1_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Standing Idle",
+        "file": "download/c9c972d1-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Idle",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c972d1_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingIdle",
+      "motion_id": "c9c972d1-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T08:59:11.601378+00:00",
+      "processor_version": 6,
+      "selection_notes": "Idle; ordinary standing idle anchor selected from external manifest for zero-intent baseline traceability.",
+      "source_fbx": "c9c972d1-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "idle",
+        "standing",
+        "neutral"
+      ]
+    },
+    "c9c9829c-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c9829c_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Strafe To The Left",
+        "file": "download/c9c9829c-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Left Strafe Walk",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9829c_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c9829c-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-15T13:24:13.495235+00:00",
+      "processor_version": 6,
+      "selection_notes": "Left Strafe Walk; alternate relaxed left strafe-walk preview with clear side travel and no weapon/combat posture.",
+      "source_fbx": "c9c9829c-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "left",
+        "relaxed"
+      ]
+    },
+    "c9c985b7-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c985b7_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Strafe To The Right",
+        "file": "download/c9c985b7-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Right Strafe Walk",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c985b7_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c985b7-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-15T13:24:21.583953+00:00",
+      "processor_version": 6,
+      "selection_notes": "Right Strafe Walk; alternate relaxed right strafe-walk preview with clear side travel and no weapon/combat posture.",
+      "source_fbx": "c9c985b7-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "right",
+        "relaxed"
+      ]
+    },
+    "c9c98676-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c98676_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Standing Right Turn",
+        "file": "download/c9c98676-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Right Turn",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c98676_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "TurnInPlace",
+      "motion_id": "c9c98676-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:04:34.779029+00:00",
+      "processor_version": 6,
+      "selection_notes": "Right Turn; ordinary standing right turn replacing the former rifle-aiming 45-degree right turn.",
+      "source_fbx": "c9c98676-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "turn",
+        "in_place",
+        "right"
+      ]
+    },
+    "c9c98e99-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c98e99_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Looking Over Both Shoulders",
+        "file": "download/c9c98e99-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Idle",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c98e99_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingIdle",
+      "motion_id": "c9c98e99-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:01:06.076139+00:00",
+      "processor_version": 6,
+      "selection_notes": "Idle; c9 ordinary looking-over-shoulders idle used instead of stop candidates that did not round-trip through Godot generation.",
+      "source_fbx": "c9c98e99-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "idle",
+        "standing",
+        "look"
+      ]
+    },
+    "c9c9a5a7-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c9a5a7_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Fast Stop From Full Run",
+        "file": "download/c9c9a5a7-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Run To Stop",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9a5a7_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c9a5a7-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:01:13.954669+00:00",
+      "processor_version": 6,
+      "selection_notes": "Run To Stop; ordinary full-run stop retained for deceleration coverage.",
+      "source_fbx": "c9c9a5a7-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "stop",
+        "forward"
+      ]
+    },
+    "c9c9d9d6-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Strafe To The Left",
+        "file": "download/c9c9d9d6-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Walk Strafe Left",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c9d9d6-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-15T13:23:54.626021+00:00",
+      "processor_version": 6,
+      "selection_notes": "Walk Strafe Left; preview shows clean upright lateral walking with relaxed arms, selected for low-speed left strafe variety.",
+      "source_fbx": "c9c9d9d6-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "left",
+        "relaxed"
+      ]
+    },
+    "c9c9db9e-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Strafe To The Right",
+        "file": "download/c9c9db9e-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Walk Strafe Right",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9c9db9e-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-15T13:24:04.933920+00:00",
+      "processor_version": 6,
+      "selection_notes": "Walk Strafe Right; preview shows clean upright lateral walking with relaxed arms, selected for low-speed right strafe variety.",
+      "source_fbx": "c9c9db9e-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "strafe",
+        "right",
+        "relaxed"
+      ]
+    },
+    "c9cbef68-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9cbef68_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Backwards",
+        "file": "download/c9cbef68-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Walking Backwards",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cbef68_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9cbef68-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:42.815129+00:00",
+      "processor_version": 6,
+      "selection_notes": "Walking Backwards; alternate ordinary backwards walk coverage.",
+      "source_fbx": "c9cbef68-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "backward"
+      ]
+    },
+    "c9ccc2e9-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccc2e9_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Standard Walk",
+        "file": "download/c9ccc2e9-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Standard Walk",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccc2e9_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccc2e9-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:01:31.157088+00:00",
+      "processor_version": 6,
+      "selection_notes": "Standard Walk; neutral forward walk coverage.",
+      "source_fbx": "c9ccc2e9-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "standard",
+        "forward"
+      ]
+    },
+    "c9ccc5dd-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccc5dd_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Standard Running",
+        "file": "download/c9ccc5dd-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Standard Run",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccc5dd_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccc5dd-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:09.703063+00:00",
+      "processor_version": 6,
+      "selection_notes": "Standard Run; neutral forward run coverage.",
+      "source_fbx": "c9ccc5dd-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "standard",
+        "forward"
+      ]
+    },
+    "c9ccc765-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccc765_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Backwards Running",
+        "file": "download/c9ccc765-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Running Backward",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccc765_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccc765-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:50.666784+00:00",
+      "processor_version": 6,
+      "selection_notes": "Running Backward; backwards run coverage without crouch/rifle/action manifest terms.",
+      "source_fbx": "c9ccc765-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "backward"
+      ]
+    },
+    "c9ccdbe3-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccdbe3_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Forward Right Arc In A Sad Disposition",
+        "file": "download/c9ccdbe3-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Walk Forward Arc Right",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccdbe3_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccdbe3-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:03:52.556447+00:00",
+      "processor_version": 6,
+      "selection_notes": "Walk Forward Arc Right; moving turn/arc walk coverage.",
+      "source_fbx": "c9ccdbe3-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "arc",
+        "right",
+        "forward"
+      ]
+    },
+    "c9cceeed-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9cceeed_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Happy Walking Forward",
+        "file": "download/c9cceeed-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Happy Walk",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cceeed_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9cceeed-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:01:22.459907+00:00",
+      "processor_version": 6,
+      "selection_notes": "Happy Walk; slower ordinary forward-walk coverage from downloaded manifest.",
+      "source_fbx": "c9cceeed-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "slow",
+        "forward",
+        "happy"
+      ]
+    },
+    "c9ccf2b8-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccf2b8_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Happy Run Forward Right Arc",
+        "file": "download/c9ccf2b8-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Run Forward Arc Right",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccf2b8_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccf2b8-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:04:09.244746+00:00",
+      "processor_version": 6,
+      "selection_notes": "Run Forward Arc Right; moving turn/arc run coverage.",
+      "source_fbx": "c9ccf2b8-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "arc",
+        "right",
+        "forward"
+      ]
+    },
+    "c9ccf750-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Idle",
+        "file": "download/c9ccf750-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Idle",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingIdle",
+      "motion_id": "c9ccf750-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T08:59:48.837128+00:00",
+      "processor_version": 6,
+      "selection_notes": "Idle; female ordinary idle variation selected from the c9 Mixamo set after Unarmed Idle 01 lacked mapped source bones for Godot generation.",
+      "source_fbx": "c9ccf750-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "idle",
+        "standing",
+        "female"
+      ]
+    },
+    "c9ccf814-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Walk",
+        "file": "download/c9ccf814-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Walk",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccf814-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:01:45.128454+00:00",
+      "processor_version": 6,
+      "selection_notes": "Female Walk; alternate ordinary forward walk style.",
+      "source_fbx": "c9ccf814-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "standard",
+        "forward",
+        "female"
+      ]
+    },
+    "c9ccf8d5-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Walk Arc Left",
+        "file": "download/c9ccf8d5-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Walking Arc Left",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccf8d5-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:04:01.220964+00:00",
+      "processor_version": 6,
+      "selection_notes": "Walking Arc Left; moving turn/arc walk coverage.",
+      "source_fbx": "c9ccf8d5-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "arc",
+        "left",
+        "forward",
+        "female"
+      ]
+    },
+    "c9ccf998-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Walk Backwards",
+        "file": "download/c9ccf998-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Walking Backwards",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccf998-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:24.362823+00:00",
+      "processor_version": 6,
+      "selection_notes": "Walking Backwards; female backwards walk candidate replacing Slow Jog Backwards because that source lacked mapped bones for Godot generation.",
+      "source_fbx": "c9ccf998-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "backward",
+        "female"
+      ]
+    },
+    "c9ccfbe8-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ccfbe8_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "female",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Female Run Arc Left",
+        "file": "download/c9ccfbe8-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Run Arc Left",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccfbe8_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ccfbe8-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:04:16.141729+00:00",
+      "processor_version": 6,
+      "selection_notes": "Run Arc Left; moving turn/arc run coverage.",
+      "source_fbx": "c9ccfbe8-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "arc",
+        "left",
+        "forward",
+        "female"
+      ]
+    },
+    "c9ce777f-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ce777f_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Slow Run Forward",
+        "file": "download/c9ce777f-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Slow Run",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ce777f_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ce777f-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:01.943247+00:00",
+      "processor_version": 6,
+      "selection_notes": "Slow Run; bridges walk-to-run speed coverage.",
+      "source_fbx": "c9ce777f-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "slow",
+        "forward"
+      ]
+    },
+    "c9ce7bbc-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ce7bbc_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Running Fast",
+        "file": "download/c9ce7bbc-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Fast Run",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ce7bbc_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9ce7bbc-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:16.566495+00:00",
+      "processor_version": 6,
+      "selection_notes": "Fast Run; high-speed ordinary forward locomotion coverage.",
+      "source_fbx": "c9ce7bbc-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "run",
+        "fast",
+        "forward"
+      ]
+    },
+    "c9ceeb89-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ceeb89_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Looking Around",
+        "file": "download/c9ceeb89-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Unarmed Idle Looking Ver. 2",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ceeb89_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingIdle",
+      "motion_id": "c9ceeb89-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:00:19.061430+00:00",
+      "processor_version": 6,
+      "selection_notes": "Unarmed Idle Looking Ver. 2; mild look-around idle retained for stationary variation while remaining ordinary/unarmed.",
+      "source_fbx": "c9ceeb89-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "idle",
+        "standing",
+        "look"
+      ]
+    },
+    "c9ceef5f-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Turning 90 Degrees Left",
+        "file": "download/c9ceef5f-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Unarmed Turn Left 90",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "TurnInPlace",
+      "motion_id": "c9ceef5f-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:04:45.778530+00:00",
+      "processor_version": 6,
+      "selection_notes": "Unarmed Turn Left 90; stationary 90-degree left turn coverage.",
+      "source_fbx": "c9ceef5f-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "turn",
+        "in_place",
+        "left",
+        "90"
+      ]
+    },
+    "c9cef01d-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Turning 90 Degrees Right",
+        "file": "download/c9cef01d-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Unarmed Turn Right 90",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "TurnInPlace",
+      "motion_id": "c9cef01d-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:04:56.078446+00:00",
+      "processor_version": 6,
+      "selection_notes": "Unarmed Turn Right 90; stationary 90-degree right turn coverage.",
+      "source_fbx": "c9cef01d-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "turn",
+        "in_place",
+        "right",
+        "90"
+      ]
+    },
+    "c9cef0de-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9cef0de_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Backwards",
+        "file": "download/c9cef0de-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Unarmed Walk Back",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cef0de_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9cef0de-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:02:33.968683+00:00",
+      "processor_version": 6,
+      "selection_notes": "Unarmed Walk Back; primary backwards walking coverage.",
+      "source_fbx": "c9cef0de-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "backward",
+        "unarmed"
+      ]
+    },
+    "c9cef1a4-b96c-11e4-a802-0aaa78deedf9": {
+      "action": "mixamo_c9cef1a4_b96c_11e4_a802_0aaa78deedf9",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Forward",
+        "file": "download/c9cef1a4-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Unarmed Walk Forward",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cef1a4_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "c9cef1a4-b96c-11e4-a802-0aaa78deedf9",
+      "processed_at": "2026-07-04T09:01:54.461109+00:00",
+      "processor_version": 6,
+      "selection_notes": "Unarmed Walk Forward; ordinary unarmed forward walk selected as a clean non-rifle source.",
+      "source_fbx": "c9cef1a4-b96c-11e4-a802-0aaa78deedf9.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "standard",
+        "forward",
+        "unarmed"
+      ]
+    },
+    "cf0d35fa-e14c-479d-9e70-422b7db09010": {
+      "action": "mixamo_cf0d35fa_e14c_479d_9e70_422b7db09010",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Right",
+        "file": "download/cf0d35fa-e14c-479d-9e70-422b7db09010.fbx",
+        "name": "Standing Walk Right",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_cf0d35fa_e14c_479d_9e70_422b7db09010.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "cf0d35fa-e14c-479d-9e70-422b7db09010",
+      "processed_at": "2026-07-09T11:08:21.441044+00:00",
+      "processor_version": 6,
+      "selection_notes": "Standing Walk Right; neutral walking-right candidate selected for small lateral-start playtest coverage.",
+      "source_fbx": "cf0d35fa-e14c-479d-9e70-422b7db09010.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "sidestep",
+        "right"
+      ]
+    },
+    "dafc5687-c69f-487c-a672-dfb04cd28c30": {
+      "action": "mixamo_dafc5687_c69f_487c_a672_dfb04cd28c30",
+      "category": "locomotion",
+      "create_root_motion": false,
+      "gender": "neutral",
+      "group": "locomotion_standing",
+      "group_blend": "game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
+      "manifest": {
+        "description": "Walking Left",
+        "file": "download/dafc5687-c69f-487c-a672-dfb04cd28c30.fbx",
+        "name": "Standing Walk Left",
+        "type": "Motion"
+      },
+      "metrics": "game/assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_dafc5687_c69f_487c_a672_dfb04cd28c30.metrics.json",
+      "motion_class": "StandingLocomotion",
+      "motion_id": "dafc5687-c69f-487c-a672-dfb04cd28c30",
+      "processed_at": "2026-07-09T11:08:12.785356+00:00",
+      "processor_version": 6,
+      "selection_notes": "Standing Walk Left; neutral walking-left candidate selected for small lateral-start playtest coverage.",
+      "source_fbx": "dafc5687-c69f-487c-a672-dfb04cd28c30.fbx",
+      "status": "success",
+      "tags": [
+        "walk",
+        "sidestep",
+        "left"
+      ]
+    }
+  },
+  "processor_version": 6,
+  "schema_version": 2,
+  "selection": {
+    "categories": [
+      "locomotion"
+    ],
+    "enabled_count": 46,
+    "groups": [
+      "locomotion_standing"
+    ],
+    "path": "game/assets/characters/reference/female/animations/source/mixamo/selection.csv"
+  },
+  "updated_at": "2026-07-15T14:04:55.902190+00:00"
+}
