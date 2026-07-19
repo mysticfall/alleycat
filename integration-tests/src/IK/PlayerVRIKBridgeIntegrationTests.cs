@@ -16,8 +16,8 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed partial class PlayerVRIKBridgeIntegrationTests
 {
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string FemaleReferenceNPCScenePath = "res://assets/characters/reference/ally.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
+    private const string FemaleReferenceNPCScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string ReferencePlayerFixtureScenePath = "res://assets/testing/reference_player_fixture/reference_player_fixture.tscn";
     private const string PlayerVRIKScriptPath = "res://src/IK/PlayerVRIK.cs";
     private const string CharacterIKScriptPath = "res://src/IK/CharacterIK.cs";

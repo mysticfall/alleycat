@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://woinokxnjt65"]
+
+[ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/ally_player.tscn" id="1_ally_player"]
+
+[node name="AlternatePlayer" instance=ExtResource("1_ally_player")]
+Id = "Riley"

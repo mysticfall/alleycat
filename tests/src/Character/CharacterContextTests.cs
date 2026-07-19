@@ -47,6 +47,25 @@ public sealed class CharacterContextTests
     }
 
     /// <summary>
+    /// Character cards expose only the contextual character's exact asset-owned ID.
+    /// </summary>
+    [Fact]
+    public void CharacterCardContextSource_ReturnsOnlyExactSubjectID()
+    {
+        var source = (CharacterCardContextSource)RuntimeHelpers.GetUninitializedObject(
+            typeof(CharacterCardContextSource));
+        var subject = new FakeCharacter { Id = "Case-Sensitive.Identity" };
+        var observer = new FakeCharacter { Id = "observer" };
+        var scene = new FakeSceneContext([subject, observer]);
+
+        IReadOnlyDictionary<string, object?> context = source.GetContext(subject, scene, observer);
+
+        KeyValuePair<string, object?> entry = Assert.Single(context);
+        Assert.Equal("Id", entry.Key);
+        Assert.Equal("Case-Sensitive.Identity", entry.Value);
+    }
+
+    /// <summary>
     /// Characters with multiple context sources aggregate entries in authored source order.
     /// </summary>
     [Fact]

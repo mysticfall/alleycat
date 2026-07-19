@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Context;
 using AlleyCat.Core.Content;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
@@ -15,6 +16,37 @@ namespace AlleyCat.IntegrationTests.Scene;
 /// </summary>
 public sealed class SceneContextIntegrationTests
 {
+    /// <summary>
+    /// Shared character bases provide Actors discovery and character-card context to inherited role templates.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void CharacterRoleTemplates_InheritActorsMembershipAndCharacterCardContext()
+    {
+        string[] scenePaths =
+        [
+            "res://assets/characters/templates/reference_female/reference_female_player.tscn",
+            "res://assets/characters/templates/reference_female/reference_female_npc.tscn",
+            "res://assets/characters/templates/reference_male/reference_male_npc.tscn",
+        ];
+        foreach (string scenePath in scenePaths)
+        {
+            PackedScene packedScene = ResourceLoader.Load<PackedScene>(scenePath);
+            CharacterHub character = Assert.IsType<CharacterHub>(packedScene.Instantiate(), exactMatch: false);
+
+            try
+            {
+                Assert.True(character.IsInGroup("Actors"), $"{scenePath} should inherit Actors membership.");
+                ContextSource source = Assert.Single(character.ContextSources);
+                _ = Assert.IsType<CharacterCardContextSource>(source, exactMatch: false);
+            }
+            finally
+            {
+                character.QueueFree();
+            }
+        }
+    }
+
     /// <summary>
     /// The scene context provider discovers character nodes from the live SceneTree group membership.
     /// </summary>
@@ -175,6 +207,43 @@ public sealed class SceneContextIntegrationTests
 
         Assert.Equal("story-pack", context.Content.ContentID);
         Assert.Equal("res://content/story-pack/", context.Content.RootPath);
+    }
+
+    /// <summary>
+    /// Scene membership rejects identities that cannot safely key character context.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Constructor_WhenCharacterIDIsBlank_ThrowsUsefulError()
+    {
+        foreach (string invalidID in new[] { string.Empty, "   " })
+        {
+            var character = new CharacterHub { Name = "InvalidIdentityCharacter", Id = invalidID };
+
+            ArgumentException exception = Assert.Throws<ArgumentException>(() => new SceneContext([character]));
+
+            Assert.Contains("empty or whitespace", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(typeof(CharacterHub).FullName!, exception.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Exact duplicate IDs fail, while case-only differences remain distinct at the runtime scene boundary.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Constructor_UsesOrdinalCaseSensitiveCharacterIDUniqueness()
+    {
+        var first = new CharacterHub { Name = "First", Id = "Ally" };
+        var caseDistinct = new CharacterHub { Name = "CaseDistinct", Id = "ally" };
+        var duplicate = new CharacterHub { Name = "Duplicate", Id = "Ally" };
+
+        SceneContext accepted = new([first, caseDistinct]);
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => new SceneContext([first, duplicate]));
+
+        Assert.Equal(2, accepted.Characters.Count);
+        Assert.Contains("Ally", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("duplicate exact", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -17,7 +17,7 @@ namespace AlleyCat.IntegrationTests.Control;
 /// </summary>
 public sealed class PlayerControllerGrabInputIntegrationTests
 {
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
 
     /// <summary>
     /// Verifies analogue grip input drives the same hand grab/release path as XR button clicks.

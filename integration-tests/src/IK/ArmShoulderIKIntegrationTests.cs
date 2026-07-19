@@ -14,8 +14,8 @@ namespace AlleyCat.IntegrationTests.IK;
 public sealed class ArmShoulderIKIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/ik/arm_shoulder_ik_test.tscn";
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string NPCScenePath = "res://assets/characters/reference/ally.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
+    private const string NPCScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string HandTargetPosesPath = "Markers/HandTargetPoses";
     private const string LeftHandTargetPath = "Markers/LeftHandTarget";
     private const string RightHandTargetPath = "Markers/RightHandTarget";
@@ -309,7 +309,7 @@ public sealed class ArmShoulderIKIntegrationTests
     public async Task ArmIk_RuntimeInstalledPlayer_UsesReferenceRigFrameForArmPolesAndShoulders()
         => await AssertRuntimeInstalledCharacterUsesReferenceRigFrameForArmPolesAndShoulders(
             PlayerScenePath,
-            "player",
+            "Ally player",
             verifyDirectPoleSolve: true);
 
     /// <summary>

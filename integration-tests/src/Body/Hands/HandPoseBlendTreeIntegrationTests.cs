@@ -16,7 +16,7 @@ public sealed class HandPoseBlendTreeIntegrationTests
     private const string PoseStateMachineTreePath = "res://assets/characters/templates/animation/animation_tree_root_player.tres";
     private const string NpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_npc.tres";
     private const string PlayerTemplateScenePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string StandingPoseStatePath = "res://assets/characters/ik/pose/standing_pose_state.tres";
     private const string ResetAnimationPath = "res://assets/characters/reference/female/animations/Reset.tres";
     private const string GrabBallAnimationPath = "res://assets/characters/reference/female/animations/Grab-ball-40.tres";

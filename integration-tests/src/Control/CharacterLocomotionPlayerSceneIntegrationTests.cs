@@ -14,7 +14,7 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
 {
     private const string BrokenCharacterSceneFileName = "reference_female" + "_character.tscn";
     private const string BrokenVisualSceneFileName = "reference_female" + "_visual.tscn";
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string ReferenceFemalePlayerTemplatePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
     private const string PlayerInstallerScenePath = "res://assets/characters/templates/installers/player_installer.tscn";

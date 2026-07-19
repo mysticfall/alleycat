@@ -13,8 +13,8 @@ namespace AlleyCat.IntegrationTests.Control;
 public sealed partial class CharacterLocomotionIntegrationTests
 {
     private const float Tolerance = 1e-4f;
-    private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally.tscn";
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string PlayerAnimationTreeRootUID = "uid://bge48ng374i85";
     private const string NpcAnimationTreeRootUID = "uid://c485owf86etdu";
 

@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://baut876fuyk5c"]
 
 [ext_resource type="PackedScene" uid="uid://dei4vqs1pclk8" path="res://assets/testing/test_mirror.tscn" id="1_70tdi"]
-[ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/player.tscn" id="2_o5j6c"]
-[ext_resource type="PackedScene" uid="uid://c06wv3etncaiq" path="res://assets/characters/reference/vadim.tscn" id="3_dk4eq"]
+[ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/ally_player.tscn" id="2_o5j6c"]
+[ext_resource type="PackedScene" uid="uid://c06wv3etncaiq" path="res://assets/characters/reference/vadim_npc.tscn" id="3_dk4eq"]
 [ext_resource type="PackedScene" uid="uid://bx2i1qev0800s" path="res://assets/testing/test_environment.tscn" id="3_shmn4"]
 [ext_resource type="PackedScene" uid="uid://doedwhsg5x0o0" path="res://assets/items/chain/physics_chain.tscn" id="4_3ounv"]
 [ext_resource type="PackedScene" uid="uid://df4i6mqjgm16e" path="res://assets/items/test_ball.tscn" id="6_dk4eq"]

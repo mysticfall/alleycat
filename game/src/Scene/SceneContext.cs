@@ -22,6 +22,25 @@ public sealed record SceneContext : ISceneContext
         ArgumentNullException.ThrowIfNull(characters);
 
         _characters = [.. characters];
+        Dictionary<string, int> characterIDIndexes = new(StringComparer.Ordinal);
+        for (int index = 0; index < _characters.Length; index++)
+        {
+            ICharacter character = _characters[index];
+            if (string.IsNullOrWhiteSpace(character.Id))
+            {
+                throw new ArgumentException(
+                    $"Scene context character at snapshot index {index} ('{character.GetType().FullName}') has an empty or whitespace-only ID.",
+                    nameof(characters));
+            }
+
+            if (!characterIDIndexes.TryAdd(character.Id, index))
+            {
+                throw new ArgumentException(
+                    $"Scene context characters at snapshot indexes {characterIDIndexes[character.Id]} and {index} share duplicate exact character ID '{character.Id}'. Character IDs must be unique using ordinal, case-sensitive comparison.",
+                    nameof(characters));
+            }
+        }
+
         _charactersView = Array.AsReadOnly(_characters);
         Content = content ?? ContentContext.Default;
     }

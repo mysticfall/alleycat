@@ -14,8 +14,8 @@ public sealed class EyesBlendTreeIntegrationTests
     private const string PlayerAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_player.tres";
     private const string NpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_npc.tres";
     private const string ReferenceFemaleScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
-    private const string ReferencePlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string ReferenceNpcScenePath = "res://assets/characters/reference/ally.tscn";
+    private const string ReferencePlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
+    private const string ReferenceNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string EyesPhotoboothScenePath = "res://tests/body/eyes/eyes_visual_test.tscn";
     private const string HorizontalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_right_left.tres";
     private const string VerticalLookAnimationResourcePath = "res://assets/characters/reference/female/animations/eyes/eyes_up_down.tres";

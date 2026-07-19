@@ -39,7 +39,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     [Fact]
     public async Task ReferenceFemale_HasHandBoneAttachments()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/ally.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/ally_npc.tscn");
         Node root = scene.Instantiate();
         SceneTree sceneTree = TestUtils.GetSceneTree();
         sceneTree.Root.AddChild(root);
@@ -517,7 +517,7 @@ public sealed partial class HandGrabAssetIntegrationTests
     [Fact]
     public async Task PlayerScene_HandGrabScriptedNodesHaveCustomTypeMetadata()
     {
-        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/player.tscn");
+        PackedScene scene = ResourceLoader.Load<PackedScene>("res://assets/characters/reference/ally_player.tscn");
         Node root = scene.Instantiate();
         SceneTree sceneTree = TestUtils.GetSceneTree();
         sceneTree.Root.AddChild(root);

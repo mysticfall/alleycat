@@ -21,8 +21,8 @@ public sealed class DynamicPhysicalRigIntegrationTests
     private const string ColliderSourceScenePath = "res://assets/characters/reference/female/reference_female.colliders.blend";
     private const string ColliderProfilePath = "res://assets/characters/reference/female/body_collider_profile.tres";
     private const string ColliderProfileUID = "uid://dpisik0mj8f6a";
-    private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally.tscn";
-    private const string ReferencePlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string ReferenceFemaleNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
+    private const string ReferencePlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string TestBallScenePath = "res://assets/items/test_ball.tscn";
     private const string TestStickScenePath = "res://assets/items/test_stick.tscn";
     private const float PositionToleranceMetres = 0.001f;

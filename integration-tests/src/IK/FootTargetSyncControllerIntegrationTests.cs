@@ -10,7 +10,7 @@ namespace AlleyCat.IntegrationTests.IK;
 /// </summary>
 public sealed partial class FootTargetSyncControllerIntegrationTests
 {
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
 
     private const string SkeletonPath = "Female/GeneralSkeleton";
     private const string LeftFootTargetPath = "IKTargets/LeftFoot";

@@ -19,8 +19,8 @@ public sealed class CharacterRootImportIntegrationTests
     private const string CharacterColliderImportScriptPath = "res://assets/characters/import/character_collider_profile_import.gd";
     private const string LegacyEyeImportScriptPath = "res://assets/characters/import/eye_animation_library_import.gd";
     private const string ReferenceFemaleBlendPath = "res://assets/characters/reference/female/reference_female.blend";
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
-    private const string AllyScenePath = "res://assets/characters/reference/ally.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
+    private const string AllyScenePath = "res://assets/characters/reference/ally_npc.tscn";
 
     /// <summary>
     /// The imported source scene uses Character.cs directly on its CharacterBody3D root.

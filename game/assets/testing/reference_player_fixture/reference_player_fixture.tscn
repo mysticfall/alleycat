@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://bid23piq2bsm2"]
 
-[ext_resource type="PackedScene" uid="uid://bmy3r56h5ufd6" path="res://assets/characters/reference/ally.tscn" id="1_pre7u"]
+[ext_resource type="PackedScene" uid="uid://bmy3r56h5ufd6" path="res://assets/characters/reference/ally_npc.tscn" id="1_pre7u"]
 [ext_resource type="Script" uid="uid://bh2t1kkfwpvbf" path="res://src/Character/Character.cs" id="2_1rt1i"]
-[ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/player.tscn" id="3_jifym"]
+[ext_resource type="PackedScene" uid="uid://c1rexm45hq1rf" path="res://assets/characters/reference/ally_player.tscn" id="3_jifym"]
 [ext_resource type="PackedScene" uid="uid://df4i6mqjgm16e" path="res://assets/items/test_ball.tscn" id="4_6nfom"]
 [ext_resource type="Script" uid="uid://d0aaosrbv6dgv" path="res://src/Interaction/GrabbableRigidBody3D.cs" id="5_2cwih"]
 
@@ -20,7 +20,7 @@ Id = "Ally"
 
 [node name="Player" type="CharacterBody3D" parent="Actors" unique_id=1411573683 groups=["Player"] instance=ExtResource("3_jifym")]
 script = ExtResource("2_1rt1i")
-Id = "Player"
+Id = "ReferencePlayer"
 
 [node name="Items" type="Node3D" parent="." unique_id=110533895]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7552289, -0.6124832)

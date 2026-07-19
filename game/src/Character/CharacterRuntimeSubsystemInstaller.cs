@@ -16,6 +16,7 @@ namespace AlleyCat.Character;
 public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 {
     private static readonly StringName _eyesLibraryName = new("eyes");
+    private static readonly StringName _actorsGroupName = new("Actors");
     private static readonly StringName _authoredTreeRootResourcePathMeta = new("authored_tree_root_resource_path");
     private static readonly StringName[] _requiredEyeAnimationNames =
     [
@@ -58,6 +59,10 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
                 this,
                 failOnUnresolved: true,
                 targetSceneOverrides: context.TargetSceneOverrides);
+            if (templateCharacter.IsInGroup(_actorsGroupName))
+            {
+                targetCharacter.AddToGroup(_actorsGroupName, persistent: true);
+            }
 
             RigTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);
 
@@ -73,6 +78,10 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
             ValidateLocomotion(targetCharacter.Locomotion, context.TargetRoot);
             ValidateNavigation(targetCharacter.Navigation, context.TargetRoot);
+            Body.Voice.Voice targetVoice = targetCharacter.Voice
+                ?? throw new InvalidOperationException(
+                    $"Character runtime subsystem installer requires template-authored '{nameof(Character.Voice)}' on '{targetCharacter.GetPath()}'.");
+            targetVoice.Id = targetCharacter.Id;
             targetCharacter.RefreshComponents();
 
             return SceneInstallationResult.Successful();

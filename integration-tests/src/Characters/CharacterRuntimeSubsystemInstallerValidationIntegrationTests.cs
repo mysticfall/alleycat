@@ -46,8 +46,17 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
     {
         using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
         CharacterHub targetRoot = Assert.IsType<CharacterHub>(fixture.TargetRoot, exactMatch: false);
+        targetRoot.Id = "Target.Override.Identity";
+        const string authoredTargetPath = "user://character-runtime-target-identity-override.tscn";
+        var authoredTarget = new CharacterHub { Name = targetRoot.Name, Id = targetRoot.Id };
+        var authoredScene = new PackedScene();
+        Assert.Equal(Error.Ok, authoredScene.Pack(authoredTarget));
+        Assert.Equal(Error.Ok, ResourceSaver.Save(authoredScene, authoredTargetPath));
+        targetRoot.SceneFilePath = authoredTargetPath;
+        var targetSceneOverrides = TargetSceneOverrides.Discover(targetRoot);
 
-        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(
+            fixture.CreateContext(targetSceneOverrides));
 
         Assert.True(result.Succeeded, string.Join('\n', result.Errors));
         Assert.Equal(6, targetRoot.Components.Count);
@@ -61,8 +70,10 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.Same(fixture.TargetRightHand, character.RequireHand(LimbSide.Right));
         Assert.Same(fixture.TargetLocomotion, targetRoot.RequireComponent<ILocomotion>());
         Assert.Same(targetRoot, fixture.TargetNavigation!.Target);
+        Assert.Equal("Target.Override.Identity", fixture.TargetVoice!.Id);
         AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
         Assert.NotSame(fixture.OriginalAnimationTreeRoot, fixture.TargetAnimationTree!.TreeRoot);
+        Assert.Equal(Error.Ok, DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(authoredTargetPath)));
     }
 
     /// <summary>
@@ -391,13 +402,14 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
             return fixture;
         }
 
-        public RigInstallationContext CreateContext()
+        public RigInstallationContext CreateContext(TargetSceneOverrides? targetSceneOverrides = null)
             => new(
                 TargetRoot,
                 "test.character_runtime_validation",
                 _templateRoot,
                 _targetSkeleton,
-                _templateSkeleton);
+                _templateSkeleton,
+                targetSceneOverrides: targetSceneOverrides);
 
         public void Dispose()
         {

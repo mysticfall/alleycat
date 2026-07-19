@@ -36,10 +36,10 @@ public sealed class RigInstallerIntegrationTests
         "res://assets/characters/templates/reference_female/reference_female_player.tscn";
 
     private const string AllyScenePath =
-        "res://assets/characters/reference/ally.tscn";
+        "res://assets/characters/reference/ally_npc.tscn";
 
     private const string PlayerScenePath =
-        "res://assets/characters/reference/player.tscn";
+        "res://assets/characters/reference/ally_player.tscn";
 
     private const string ReferenceFemaleBodyColliderProfilePath =
         "res://assets/characters/reference/female/body_collider_profile.tres";

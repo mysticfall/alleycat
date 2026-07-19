@@ -22,9 +22,9 @@ namespace AlleyCat.IntegrationTests.Characters;
 /// </summary>
 public sealed partial class CharacterAnimationRuntimeIntegrationTests
 {
-    private const string AllyScenePath = "res://assets/characters/reference/ally.tscn";
-    private const string VadimScenePath = "res://assets/characters/reference/vadim.tscn";
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string AllyScenePath = "res://assets/characters/reference/ally_npc.tscn";
+    private const string VadimScenePath = "res://assets/characters/reference/vadim_npc.tscn";
+    private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string MaleNpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres";
     private static readonly StringName _eyesLibraryName = new("eyes");
 
