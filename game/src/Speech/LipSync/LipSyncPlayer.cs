@@ -1,5 +1,7 @@
 using System.Text;
+using AlleyCat.Core.Logging;
 using Godot;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Speech.LipSync;
 
@@ -155,9 +157,15 @@ public abstract partial class LipSyncPlayer : Node
     private float[] _lastAppliedChannelValues = [];
     private bool _audioWasObservedPlaying;
     private double _audioStartGraceSeconds;
+    private bool _hasLoggedUnmappedBlendshapes;
+    private ILogger<LipSyncPlayer>? _logger;
 
     /// <inheritdoc />
-    public override void _Ready() => TryInitialise();
+    public override void _Ready()
+    {
+        _logger = GameLoggerResolver.ResolveRequired<LipSyncPlayer>();
+        TryInitialise();
+    }
 
     /// <inheritdoc />
     public override void _ExitTree()
@@ -399,8 +407,11 @@ public abstract partial class LipSyncPlayer : Node
         ResetPlaybackMetrics();
         ResetPlaybackTiming();
 
-        GD.Print(
-            $"LipSyncPlayer: loaded {_frames.Length} frames at {_outputFps:0.###} fps, mapped {_meshBindings.Count} mesh(es).");
+        GetLogger().LogInformation(
+            "LipSyncPlayer loaded {FrameCount} frames at {OutputFps:0.###} fps, mapped {MappedMeshCount} mesh(es).",
+            _frames.Length,
+            _outputFps,
+            _meshBindings.Count);
 
         AudioPlayer.Stop();
         AudioPlayer.Stream = playback.Speech;
@@ -474,7 +485,7 @@ public abstract partial class LipSyncPlayer : Node
 
         if (blendshapeNames.Count == 0)
         {
-            GD.PushWarning("LipSyncPlayer: config contains zero blendshape names.");
+            GetLogger().LogWarning("LipSyncPlayer config contains zero blendshape names.");
             return;
         }
 
@@ -515,23 +526,34 @@ public abstract partial class LipSyncPlayer : Node
             }
         }
 
-        List<string>? missingNames = null;
-        for (int shapeIndex = 0; shapeIndex < blendshapeNames.Count; shapeIndex++)
+        ILogger<LipSyncPlayer> logger = GetLogger();
+        if (!_hasLoggedUnmappedBlendshapes && logger.IsEnabled(LogLevel.Debug))
         {
-            if (hasGlobalMapping[shapeIndex])
+            List<string>? missingNames = null;
+            for (int shapeIndex = 0; shapeIndex < blendshapeNames.Count; shapeIndex++)
             {
-                continue;
+                if (hasGlobalMapping[shapeIndex])
+                {
+                    continue;
+                }
+
+                missingNames ??= [];
+                missingNames.Add(blendshapeNames[shapeIndex]);
             }
 
-            missingNames ??= [];
-            missingNames.Add(blendshapeNames[shapeIndex]);
-        }
-
-        if (missingNames is { Count: > 0 })
-        {
-            GD.PushWarning($"LipSyncPlayer: unmapped blendshapes ({missingNames.Count}): {string.Join(", ", missingNames)}");
+            if (missingNames is { Count: > 0 })
+            {
+                _hasLoggedUnmappedBlendshapes = true;
+                logger.LogDebug(
+                    "LipSyncPlayer unmapped blendshapes ({UnmappedBlendshapeCount}): {UnmappedBlendshapes}",
+                    missingNames.Count,
+                    string.Join(", ", missingNames));
+            }
         }
     }
+
+    private ILogger<LipSyncPlayer> GetLogger()
+        => _logger ??= GameLoggerResolver.ResolveRequired<LipSyncPlayer>();
 
     private Skeleton3D GetConfiguredSkeleton()
     {
