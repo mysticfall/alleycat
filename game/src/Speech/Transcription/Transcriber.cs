@@ -439,7 +439,7 @@ public abstract partial class Transcriber : Node
         try
         {
             IsTranscribing = true;
-            string text = await Transcribe(recording);
+            string text = await Task.Run(() => Transcribe(recording));
             if (AIPipelineDebugLog.IsEnabled)
             {
                 AIPipelineDebugLog.Latency("STT completed in", stopwatch, $"{text.Length} chars");

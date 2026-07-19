@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Speech.Transcription;
@@ -218,6 +219,90 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
         }
         finally
         {
+            await DestroyRuntimeSpeechFixtureAsync(sceneTree, fixture);
+            await existingGlobalScope.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Verifies synchronous backend setup cannot block XR release or prevent Godot frames from advancing.
+    /// </summary>
+    [Fact]
+    public async Task XRRecordButton_OnRelease_WithSynchronousBackendDelay_RemainsResponsiveAndCompletesOnGodotThread()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        ExistingGlobalScope existingGlobalScope = await ExistingGlobalScope.CreateAsync(sceneTree);
+        int godotThreadId = System.Environment.CurrentManagedThreadId;
+        using ManualResetEventSlim backendInvocationEntered = new(false);
+        using ManualResetEventSlim releaseBackendInvocation = new(false);
+        using ManualResetEventSlim backendInvocationReturned = new(false);
+        int? backendThreadId = null;
+        bool backendWaitTimedOut = false;
+        FakeTranscriber transcriber = new()
+        {
+            Name = "Transcriber",
+            NextResultFactory = _ =>
+            {
+                backendThreadId = System.Environment.CurrentManagedThreadId;
+                backendInvocationEntered.Set();
+                backendWaitTimedOut = !releaseBackendInvocation.Wait(TimeSpan.FromSeconds(2));
+                backendInvocationReturned.Set();
+                return Task.FromResult("Responsive XR Transcript");
+            },
+        };
+        RuntimeSpeechFixture fixture = await CreateRuntimeSpeechFixtureAsync(sceneTree, transcriber);
+
+        try
+        {
+            int completedCount = 0;
+            int? completionThreadId = null;
+            _ = transcriber.Connect(
+                Transcriber.SignalName.TranscriptionCompleted,
+                Callable.From<string>(_ =>
+                {
+                    completedCount++;
+                    completionThreadId = System.Environment.CurrentManagedThreadId;
+                }));
+            transcriber.RecordButton = new StringName("speech_record");
+
+            fixture.LeftController.TriggerActionButtonPressed("speech_record");
+            await WaitForNextFrameAsync(sceneTree);
+            Assert.True(transcriber.IsRecording);
+
+            var releaseStopwatch = Stopwatch.StartNew();
+            fixture.LeftController.TriggerActionButtonReleased("speech_record");
+            releaseStopwatch.Stop();
+
+            Assert.True(
+                releaseStopwatch.Elapsed < TimeSpan.FromMilliseconds(500),
+                $"XR release was blocked for {releaseStopwatch.Elapsed.TotalMilliseconds:F0} ms by synchronous backend setup.");
+            Assert.True(backendInvocationEntered.Wait(TimeSpan.FromSeconds(1)), "Backend invocation did not begin.");
+            Assert.True(transcriber.IsTranscribing);
+
+            int advancedFrames = 0;
+            for (; advancedFrames < 3; advancedFrames++)
+            {
+                await WaitForNextFrameAsync(sceneTree);
+                Assert.False(backendInvocationReturned.IsSet, "Backend invocation returned before the frame responsiveness check completed.");
+                Assert.Equal(0, completedCount);
+            }
+
+            releaseBackendInvocation.Set();
+            await WaitUntilAsync(
+                sceneTree,
+                () => !transcriber.IsTranscribing && completedCount == 1,
+                maxFrames: 60);
+
+            Assert.Equal(3, advancedFrames);
+            Assert.False(backendWaitTimedOut);
+            Assert.True(backendThreadId.HasValue);
+            Assert.NotEqual(godotThreadId, backendThreadId);
+            Assert.Equal(1, transcriber.TranscribeCallCount);
+            Assert.Equal(godotThreadId, completionThreadId);
+        }
+        finally
+        {
+            releaseBackendInvocation.Set();
             await DestroyRuntimeSpeechFixtureAsync(sceneTree, fixture);
             await existingGlobalScope.DisposeAsync();
         }

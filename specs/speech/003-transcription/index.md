@@ -28,6 +28,8 @@ can be extended to other STT backends.
 6. The system uses OpenAI-compatible API endpoints for transcription.
 7. When transcript notifications are explicitly enabled, they appear promptly after transcription completes and are not
    delayed by downstream signal listeners, AI processing, or response generation.
+8. After recording ends, world and frame progression remain responsive while transcription is pending, including while
+   the backend performs synchronous setup before returning its asynchronous operation.
 
 ## Technical Requirements
 
@@ -50,9 +52,12 @@ can be extended to other STT backends.
     transcript text notification.
 11. On successful transcription with `TranscriptNotificationEnabled` enabled, dispatch the transcript notification
     before emitting completion signals or invoking other downstream completion hooks.
-12. Keep long-running transcription preparation, network calls, and other avoidable blocking work off frame-critical
-    Godot execution paths where practical; completion dispatch should stay narrow and should not front-load AI or LLM
-    setup ahead of the optional transcript notification.
+12. Dispatch the complete virtual `Transcribe(AudioStreamWav)` invocation through a worker boundary. This includes all
+    synchronous backend work performed before a `Task` is returned, which must not block frame-critical Godot execution
+    paths.
+13. Keep recording stop and audio capture on the Godot thread. Return transcription result or failure handling to that
+    thread through a narrow completion dispatch limited to Godot-safe state updates, the optional transcript notification,
+    and completion or failure signals; do not front-load AI or LLM setup into this dispatch.
 
 ## In Scope
 
@@ -96,6 +101,13 @@ Successful transcript notifications are debug-oriented and opt-in through `Trans
 the transcript notification is posted before completion signal listeners run so slow downstream AI processing cannot
 delay visible diagnostic feedback.
 
+### Transcription Worker Boundary
+
+The worker boundary covers invocation of the virtual backend method, not only awaiting the `Task` it returns. A regression
+where synchronous backend setup blocked XR release for 2,004 ms demonstrated that wrapping only the returned task does not
+protect frame progression. Godot-owned recording and completion work remains on the Godot thread, while the backend
+invocation remains outside frame-critical execution paths.
+
 ### No-Auth Backend Compatibility
 
 `ApiKey` is optional in the `STT` config section. When omitted and the SDK
@@ -108,13 +120,16 @@ for compatible services.
 1. UR-1–UR-7 covered: player can record, auto-stop works, completion/failure signals deliver results, transcript
    notifications are off by default but can be enabled, failures use diagnostics and signals rather than direct UI
    notification calls, and enabled transcript notifications are not delayed by downstream processing.
-2. TR-1–TR-12 covered: abstract class, XR binding, microphone capture, async contract, signals, logger-and-signal error
+2. UR-8 and TR-12–TR-13 covered: an XR release regression uses a mock backend that blocks synchronously for approximately
+   two seconds before returning a `Task`. XR release returns promptly, three Godot frames advance while the backend remains
+   pending, the backend invocation runs on another managed thread, and completion returns to the original Godot thread.
+3. TR-1–TR-11 covered: abstract class, XR binding, microphone capture, async contract, signals, logger-and-signal error
    handling, SDK implementation, subsystem-owned config loading, runtime integration, transcript notification toggle and
-   conditional ordering, and non-blocking completion boundaries are specified.
-3. `Out Of Scope` excludes only optional/unrelated work; no mandatory contract
+   conditional ordering are specified.
+4. `Out Of Scope` excludes only optional/unrelated work; no mandatory contract
    omitted.
 
-**Traceability map:** UR-1–UR-7 → AC-1; TR-1–TR-12 → AC-2; OOS guard → AC-3.
+**Traceability map:** UR-1–UR-7 → AC-1; UR-8 and TR-12–TR-13 → AC-2; TR-1–TR-11 → AC-3; OOS guard → AC-4.
 
 ## References
 
@@ -123,6 +138,7 @@ for compatible services.
 - `@game/src/Speech/Transcription/Transcriber.cs`
 - `@game/src/Speech/Transcription/OpenAITranscriber.cs`
 - `@game/src/UI/NotificationUIExtensions.cs`
+- `@integration-tests/src/Speech/TranscriberIntegrationTests.cs`
 
 ### Related Specs
 
