@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="PromptStack" format=3 uid="uid://dvw63im28183y"]
+
+[ext_resource type="Script" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="1_2m31c"]
+[ext_resource type="Script" path="res://src/Mind/AI/Prompting/EssentialLorePromptSection.cs" id="2_bsmxt"]
+[ext_resource type="Script" path="res://src/Mind/AI/Prompting/CharacterLorePromptSection.cs" id="3_0apto"]
+[ext_resource type="Script" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="4_bwdq6"]
+
+[sub_resource type="Resource" id="Resource_fqak1"]
+script = ExtResource("1_2m31c")
+Text = "You are {{ character.Id }}, a character present in the current scene.
+Respond naturally and concisely as spoken dialogue.
+Do not answer with normal chat text. For every response, call the speak tool exactly once with the words {{ character.Id }} should say aloud. Do not describe tool use or include stage directions."
+Name = "Instructions"
+
+[sub_resource type="Resource" id="Resource_yofkv"]
+script = ExtResource("2_bsmxt")
+Name = "Essential World Lore"
+
+[sub_resource type="Resource" id="Resource_ln7n0"]
+script = ExtResource("3_0apto")
+Name = "Scene Character Lore"
+
+[resource]
+script = ExtResource("4_bwdq6")
+Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0")]

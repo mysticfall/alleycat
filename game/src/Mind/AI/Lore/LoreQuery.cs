@@ -43,11 +43,28 @@ public sealed record LoreSubjectRequest
 
     /// <summary>Creates a location-lore request.</summary>
     public static LoreSubjectRequest Location(string subjectID)
-        => new(LoreSubjectKind.Location, LoreQuery.NormaliseID(subjectID, nameof(subjectID)));
+        => CreateSubjectRequest(LoreSubjectKind.Location, "location.", subjectID);
 
     /// <summary>Creates a character-lore request.</summary>
     public static LoreSubjectRequest Character(string subjectID)
-        => new(LoreSubjectKind.Character, LoreQuery.NormaliseID(subjectID, nameof(subjectID)));
+        => CreateSubjectRequest(LoreSubjectKind.Character, "character.", subjectID);
+
+    private static LoreSubjectRequest CreateSubjectRequest(
+        LoreSubjectKind kind,
+        string namespacePrefix,
+        string bareSubjectID)
+    {
+        string normalisedBareID = LoreQuery.NormaliseID(bareSubjectID, nameof(bareSubjectID));
+        _ = normalisedBareID.StartsWith(namespacePrefix, StringComparison.OrdinalIgnoreCase)
+            ? throw new ArgumentException(
+                $"{kind} lore subject IDs must be bare and must not include the '{namespacePrefix}' namespace prefix.",
+                nameof(bareSubjectID))
+            : false;
+
+        return new LoreSubjectRequest(
+            kind,
+            LoreQuery.NormaliseID(namespacePrefix + normalisedBareID, nameof(bareSubjectID)));
+    }
 }
 
 /// <summary>

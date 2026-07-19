@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="SpeechObservationPromptFormatter" format=3 uid="uid://7ga4p48d0sbf"]
+
+[ext_resource type="Script" path="res://src/Mind/AI/Prompting/SpeechObservationPromptFormatter.cs" id="1_u880x"]
+
+[resource]
+script = ExtResource("1_u880x")
+Source = "{{#if CharacterId}}Speech from {{ CharacterId }}: {{ Content }}{{else}}Speech from an unknown voice: {{ Content }}{{/if}}"

@@ -11,9 +11,9 @@ namespace AlleyCat.IntegrationTests.Testing;
 /// </summary>
 public sealed class CharacterSceneOwnershipIntegrationTests
 {
-    private const string PlayerScenePath = "res://assets/characters/reference/player.tscn";
+    private const string AllyPlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string ReferenceFemalePlayerScenePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
-    private const string AllyScenePath = "res://assets/characters/reference/ally.tscn";
+    private const string AllyNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
     private const string AgenticMindTypeName = "AlleyCat.Mind.AI.AgenticMind";
     private const string AIVoiceTypeName = "AlleyCat.Body.Voice.AIVoice";
@@ -32,12 +32,12 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         AssertReferencePlayerSceneDoesNotSerialiseConversationNodes();
         AssertReferenceNpcSceneDoesNotSerialiseConversationNodes();
         AssertReferenceFemalePlayerVoice();
-        AssertAllyVoiceAndMind();
+        AssertNpcVoiceAndSharedMindPrompt();
     }
 
     private static void AssertReferencePlayerSceneDoesNotSerialiseConversationNodes()
     {
-        string sceneText = ReadResourceText(PlayerScenePath);
+        string sceneText = ReadResourceText(AllyPlayerScenePath);
 
         Assert.DoesNotContain("PlayerVoice", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("PlayerVoice.cs", sceneText, StringComparison.Ordinal);
@@ -48,7 +48,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
 
     private static void AssertReferenceNpcSceneDoesNotSerialiseConversationNodes()
     {
-        string sceneText = ReadResourceText(AllyScenePath);
+        string sceneText = ReadResourceText(AllyNpcScenePath);
 
         Assert.DoesNotContain("AIVoice.cs", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("AgenticMind.cs", sceneText, StringComparison.Ordinal);
@@ -71,7 +71,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Node voice = RequireScriptedNode(player, "Female/GeneralSkeleton/Head/Voice", PlayerVoiceTypeName);
             Node transcriber = RequireScriptedNode(player, "OpenAITranscriber", OpenAITranscriberTypeName);
 
-            Assert.Equal("player", GetPropertyValue<string>(voice, "Id"));
+            Assert.Equal(string.Empty, GetPropertyValue<string>(voice, "Id"));
             Assert.Same(transcriber, GetPropertyValue<Node>(voice, "Transcriber"));
             Assert.Equal(new NodePath("../../../../OpenAITranscriber"), voice.GetPathTo(transcriber));
         }
@@ -81,7 +81,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         }
     }
 
-    private static void AssertAllyVoiceAndMind()
+    private static void AssertNpcVoiceAndSharedMindPrompt()
     {
         string sceneText = ReadResourceText(ReferenceFemaleNpcScenePath);
 
@@ -89,27 +89,30 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Contains("uid=\"uid://rqxjkfgkwfpc\" path=\"res://src/Speech/Generation/OpenAISpeechGenerator.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://cjjllyn8qs4nk\" path=\"res://src/Speech/LipSync/A2FLipSyncPlayer.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://hadsjgek6b2p\" path=\"res://src/Mind/AI/AgenticMind.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://bcokws68yoalk\" path=\"res://src/Mind/AI/Prompting/PromptStack.cs\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("uid=\"uid://7ga4p48d0sbf\" path=\"res://assets/characters/prompts/generic_speech_observation_formatter.tres\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://d0put3qinfuxa\" path=\"res://src/Mind/AI/Tool/SpeechTool.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://sy610kavjr0b\" path=\"res://src/Mind/AI/Prompting/TextPromptSection.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("SystemInstruction = SubResource(\"Resource_pt7qm\")", sceneText, StringComparison.Ordinal);
+        Assert.Contains("SystemInstruction = ExtResource(\"9_beijb\")", sceneText, StringComparison.Ordinal);
+        Assert.Contains("SpeechObservationFormatter = ExtResource(\"9_formatter\")", sceneText, StringComparison.Ordinal);
         Assert.Contains("Tools = Array[ExtResource(\"10_v2tt5\")]([SubResource(\"Resource_agentic_speech_tool\")])", sceneText, StringComparison.Ordinal);
-        Assert.Contains("You are Alley, a warm, observant person standing with the player in a VR room.", sceneText, StringComparison.Ordinal);
-        Assert.DoesNotContain("AlleyVoice", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("You are Alley", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vadim", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("../../../Female/Female/GeneralSkeleton", sceneText, StringComparison.Ordinal);
 
         Assert.Contains("Skeleton = NodePath(\"../../..\")", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("Meshes = [NodePath", sceneText, StringComparison.Ordinal);
 
-        Node ally = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate();
+        Node femaleNpc = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate();
+        Node maleNpc = LoadPackedScene("res://assets/characters/templates/reference_male/reference_male_npc.tscn").Instantiate();
         try
         {
-            Node voice = RequireScriptedNode(ally, "Female/GeneralSkeleton/Head/Voice", AIVoiceTypeName);
-            Node mind = RequireScriptedNode(ally, "Mind", AgenticMindTypeName);
-            Node speechGenerator = RequireScriptedNode(ally, "Female/GeneralSkeleton/Head/Voice/SpeechGenerator", OpenAISpeechGeneratorTypeName);
-            Node lipSyncPlayer = RequireScriptedNode(ally, "Female/GeneralSkeleton/Head/Voice/LipSyncPlayer", A2FLipSyncPlayerTypeName);
+            Node voice = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice", AIVoiceTypeName);
+            Node mind = RequireScriptedNode(femaleNpc, "Mind", AgenticMindTypeName);
+            Node maleMind = RequireScriptedNode(maleNpc, "Mind", AgenticMindTypeName);
+            Node speechGenerator = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice/SpeechGenerator", OpenAISpeechGeneratorTypeName);
+            Node lipSyncPlayer = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice/LipSyncPlayer", A2FLipSyncPlayerTypeName);
             AudioStreamPlayer3D audioPlayer = Assert.IsType<AudioStreamPlayer3D>(
-                ally.GetNodeOrNull("Female/GeneralSkeleton/Head/Voice/AudioStreamPlayer3D"),
+                femaleNpc.GetNodeOrNull("Female/GeneralSkeleton/Head/Voice/AudioStreamPlayer3D"),
                 exactMatch: false);
 
             Assert.Equal("Elena.wav", GetPropertyValue<string>(voice, "Id"));
@@ -122,30 +125,45 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Equal(0.6f, GetPropertyValue<float>(lipSyncPlayer, "InputStrength"), 4);
             Assert.True(GetPropertyValue<bool>(lipSyncPlayer, "ConstantNoise"));
             Assert.Equal(0.15f, GetPropertyValue<float>(lipSyncPlayer, "EyeRotationToBlendshapeScale"), 4);
-            Assert.Same(ally.GetNode<Skeleton3D>("Female/GeneralSkeleton"), GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton"));
+            Assert.Same(femaleNpc.GetNode<Skeleton3D>("Female/GeneralSkeleton"), GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton"));
             Assert.Same(audioPlayer, GetPropertyValue<AudioStreamPlayer3D>(lipSyncPlayer, "AudioPlayer"));
             Assert.Equal(new NodePath("../../.."), lipSyncPlayer.GetPathTo(GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton")));
             Assert.Equal(new NodePath("../AudioStreamPlayer3D"), lipSyncPlayer.GetPathTo(audioPlayer));
-            AssertAllyMindPromptAndTools(mind);
+            AssertNpcMindPromptAndTools(mind);
+            Assert.Same(
+                GetRequiredPropertyValue(mind, "SystemInstruction"),
+                GetRequiredPropertyValue(maleMind, "SystemInstruction"));
+            Assert.Same(
+                GetRequiredPropertyValue(mind, "SpeechObservationFormatter"),
+                GetRequiredPropertyValue(maleMind, "SpeechObservationFormatter"));
         }
         finally
         {
-            ally.Free();
+            femaleNpc.Free();
+            maleNpc.Free();
         }
     }
 
-    private static void AssertAllyMindPromptAndTools(Node mind)
+    private static void AssertNpcMindPromptAndTools(Node mind)
     {
         object systemInstruction = GetRequiredPropertyValue(mind, "SystemInstruction");
         Assert.Equal("AlleyCat.Mind.AI.Prompting.PromptStack", systemInstruction.GetType().FullName);
 
         Array sections = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(systemInstruction, "Sections"));
-        object section = Assert.Single(sections.Cast<object>());
-        Assert.Equal("AlleyCat.Mind.AI.Prompting.TextPromptSection", section.GetType().FullName);
-        Assert.Equal("Instructions", GetPropertyValue<string>(section, "Name"));
-        string sectionText = GetPropertyValue<string>(section, "Text");
-        Assert.Contains("You are Alley, a warm, observant person standing with the player in a VR room.", sectionText, StringComparison.Ordinal);
+        object[] orderedSections = [.. sections.Cast<object>()];
+        Assert.Equal(3, orderedSections.Length);
+        object instructionSection = orderedSections[0];
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.TextPromptSection", instructionSection.GetType().FullName);
+        Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
+        string sectionText = GetPropertyValue<string>(instructionSection, "Text");
+        Assert.Contains("You are {{ character.Id }}", sectionText, StringComparison.Ordinal);
         Assert.Contains("call the speak tool exactly once", sectionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.EssentialLorePromptSection", orderedSections[1].GetType().FullName);
+        Assert.Equal("Essential World Lore", GetPropertyValue<string>(orderedSections[1], "Name"));
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.CharacterLorePromptSection", orderedSections[2].GetType().FullName);
+        Assert.Equal("Scene Character Lore", GetPropertyValue<string>(orderedSections[2], "Name"));
 
         IEnumerable tools = Assert.IsAssignableFrom<IEnumerable>(GetRequiredPropertyValue(mind, "Tools"));
         object tool = Assert.Single(tools.Cast<object>());

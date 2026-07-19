@@ -14,6 +14,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
+using IObservationPromptRenderer = AlleyCat.Mind.Observation.IObservationPromptRenderer;
 using MindBase = AlleyCat.Mind.Mind;
 using SpeechObservation = AlleyCat.Mind.Observation.SpeechObservation;
 
@@ -25,15 +26,14 @@ namespace AlleyCat.Mind.AI;
 [GlobalClass]
 public partial class AgenticMind : MindBase, IServiceProvider
 {
+    internal const string AgentDescription = "Character mind for in-world speech responses.";
+
     private readonly Lock _responseStateLock = new();
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
     private ResponseTurn? _activeTurn;
-    private PromptStack? _compiledSystemInstructionSource;
     private ITemplate? _compiledSystemInstructionTemplate;
-    private ClientProvider? _clientProviderForAgent;
-    private PromptStack? _systemInstructionForAgent;
-    private string? _instructionsForAgent;
+    private AgentDefinition? _snapshotDefinition;
     private bool _enableRequestResponseDiagnosticsForAgent;
     private bool _agentRequestResponseDiagnosticsEnabled;
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
@@ -43,7 +43,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private bool _isResponding;
 
     /// <summary>
-    /// Minimum time to keep player listening paused after Alley starts speaking.
+    /// Minimum time to keep listening paused after this character starts speaking.
     /// </summary>
     [ExportGroup("Response")]
     [Export(PropertyHint.Range, "0,10,0.1")]
@@ -58,6 +58,12 @@ public partial class AgenticMind : MindBase, IServiceProvider
     {
         get; set;
     }
+
+    /// <summary>
+    /// Editor-authored presentation used for speech observations sent to the agent.
+    /// </summary>
+    [Export]
+    public SpeechObservationPromptFormatter? SpeechObservationFormatter { get; set; } = new();
 
     /// <summary>
     /// Backend factory used to create the chat client for Agent Framework turns.
@@ -87,8 +93,17 @@ public partial class AgenticMind : MindBase, IServiceProvider
             AIPipelineDebugLog.Stage("LLM observation received", $"{trimmedSpeech.Length} chars");
         }
 
-        _ = Observe(new SpeechObservation(source.Id, trimmedSpeech));
+        string voiceID = source.Id;
+        string? characterID = ResolveRecognisedCharacterId(voiceID);
+        _ = Observe(new SpeechObservation(voiceID, characterID, trimmedSpeech));
     }
+
+    /// <summary>
+    /// Resolves voice provenance to a character recognised by this mind.
+    /// </summary>
+    /// <param name="voiceId">The raw voice identifier supplied by the heard voice.</param>
+    /// <returns>The recognised character ID, or <see langword="null"/> when this mind does not recognise it.</returns>
+    protected virtual string? ResolveRecognisedCharacterId(string voiceId) => voiceId;
 
     private bool IsResponding()
     {
@@ -273,10 +288,14 @@ public partial class AgenticMind : MindBase, IServiceProvider
             template,
             systemInstructionContext);
 
-        return new AgentDefinition(
-            instructions,
-            "Alley",
-            "Prototype NPC mind for in-world speech responses.");
+        (string name, string description) = CreateAgentMetadata(character);
+        return new AgentDefinition(instructions, name, description);
+    }
+
+    internal static (string Name, string Description) CreateAgentMetadata(ICharacter character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        return (character.Id, AgentDescription);
     }
 
     private async Task<ITemplate> GetCompiledSystemInstructionTemplateAsync(
@@ -284,14 +303,12 @@ public partial class AgenticMind : MindBase, IServiceProvider
         PromptSectionBuildContext buildContext,
         CancellationToken cancellationToken)
     {
-        if (_compiledSystemInstructionTemplate is not null
-            && ReferenceEquals(_compiledSystemInstructionSource, systemInstruction))
+        if (_compiledSystemInstructionTemplate is not null)
         {
             return _compiledSystemInstructionTemplate;
         }
 
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
-        _compiledSystemInstructionSource = systemInstruction;
         _compiledSystemInstructionTemplate = template;
 
         return template;
@@ -316,21 +333,11 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
     private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
     {
-        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-        ICharacter character = ResolveAssociatedCharacter();
-        IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext(character, scene);
-        AIAgent agent = await EnsureAgentAsync(scene, character, systemInstructionContext, cancellationToken);
+        (AIAgent agent, AgentSession session) = await EnsureAgentRuntimeAsync(cancellationToken);
         bool enableRequestResponseDiagnostics = _enableRequestResponseDiagnosticsForAgent;
         if (enableRequestResponseDiagnostics)
         {
             StartTemporaryActivityLogListenerIfAvailable();
-        }
-
-        if (_session is null)
-        {
-            Stopwatch sessionStopwatch = AIPipelineDebugLog.StartTimer();
-            _session = await agent.CreateSessionAsync(cancellationToken);
-            AIPipelineDebugLog.Latency("LLM session created in", sessionStopwatch);
         }
 
         Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
@@ -341,7 +348,18 @@ public partial class AgenticMind : MindBase, IServiceProvider
                 Tools = CreateTurnTools(),
             });
 
-            AgentResponse response = await agent.RunAsync(RenderObservationSummary(observations), _session, options, cancellationToken);
+            SpeechObservationPromptFormatter observationFormatter = SpeechObservationFormatter
+                ?? throw new InvalidOperationException("AgenticMind requires a configured SpeechObservationFormatter.");
+            ITemplateCompiler templateCompiler = Game.Instance.GetRequiredService<ITemplateCompiler>();
+            string observationSummary = RenderObservationSummary(
+                observations,
+                observationFormatter,
+                templateCompiler);
+            AgentResponse response = await agent.RunAsync(
+                observationSummary,
+                session,
+                options,
+                cancellationToken);
             LogSensitiveTrialAgentResponse(response, enableRequestResponseDiagnostics);
         }
         finally
@@ -432,28 +450,12 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private static string FormatDiagnosticValue(string? value)
         => string.IsNullOrEmpty(value) ? "<empty>" : value;
 
-    private async Task<AIAgent> EnsureAgentAsync(
-        ISceneContext scene,
-        ICharacter character,
-        IReadOnlyDictionary<string, object?> systemInstructionContext,
+    private async Task<(AIAgent Agent, AgentSession Session)> EnsureAgentRuntimeAsync(
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(systemInstructionContext);
-
-        AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
-        AgentDefinition definition = await CreateAgentDefinitionAsync(
-            scene,
-            character,
-            systemInstructionContext,
-            cancellationToken);
-
-        if (_agent is not null
-            && ReferenceEquals(_clientProviderForAgent, ClientProvider)
-            && ReferenceEquals(_systemInstructionForAgent, SystemInstruction)
-            && string.Equals(_instructionsForAgent, definition.Instructions, StringComparison.Ordinal)
-            && _agentRequestResponseDiagnosticsEnabled == diagnosticsSettings.EnableRequestResponseLogging)
+        if (_agent is not null && _session is not null)
         {
-            return _agent;
+            return (_agent, _session);
         }
 
         if (ClientProvider is null)
@@ -466,19 +468,36 @@ public partial class AgenticMind : MindBase, IServiceProvider
             throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
         }
 
-        _session = null;
-        _clientProviderForAgent = ClientProvider;
-        _systemInstructionForAgent = SystemInstruction;
-        _instructionsForAgent = definition.Instructions;
-        _enableRequestResponseDiagnosticsForAgent = diagnosticsSettings.EnableRequestResponseLogging;
-        _agentRequestResponseDiagnosticsEnabled = diagnosticsSettings.EnableRequestResponseLogging;
-        ChatClientAgent agent = ClientProvider.CreateChatClient().AsAIAgent(
-            instructions: definition.Instructions,
-            name: definition.Name,
-            description: definition.Description);
-        _agent = ConfigureAgentDiagnostics(agent, this, diagnosticsSettings.EnableRequestResponseLogging);
+        if (_snapshotDefinition is null)
+        {
+            ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+            ICharacter character = ResolveAssociatedCharacter();
+            IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext(character, scene);
+            _snapshotDefinition = await CreateAgentDefinitionAsync(
+                scene,
+                character,
+                systemInstructionContext,
+                cancellationToken);
+        }
 
-        return _agent;
+        if (_agent is null)
+        {
+            ChatClientAgent agent = ClientProvider.CreateChatClient().AsAIAgent(
+                instructions: _snapshotDefinition.Instructions,
+                name: _snapshotDefinition.Name,
+                description: _snapshotDefinition.Description);
+            _agentRequestResponseDiagnosticsEnabled = _enableRequestResponseDiagnosticsForAgent;
+            _agent = ConfigureAgentDiagnostics(agent, this, _agentRequestResponseDiagnosticsEnabled);
+        }
+
+        if (_session is null)
+        {
+            Stopwatch sessionStopwatch = AIPipelineDebugLog.StartTimer();
+            _session = await _agent.CreateSessionAsync(cancellationToken);
+            AIPipelineDebugLog.Latency("LLM session created in", sessionStopwatch);
+        }
+
+        return (_agent, _session);
     }
 
     internal static IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(
@@ -488,7 +507,30 @@ public partial class AgenticMind : MindBase, IServiceProvider
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
 
-        return character.GetContext(scene, observer: null);
+        ICharacter[] characters = [.. scene.Characters.OrderBy(subject => subject.Id, StringComparer.Ordinal)];
+        if (!characters.Any(subject => ReferenceEquals(subject, character)))
+        {
+            throw new InvalidOperationException(
+                $"AgenticMind owning character '{character.Id}' is absent from the current scene context.");
+        }
+
+        Dictionary<string, object?> characterContexts = new(StringComparer.Ordinal);
+        IReadOnlyDictionary<string, object?>? owningCharacterContext = null;
+        foreach (ICharacter subject in characters)
+        {
+            IReadOnlyDictionary<string, object?> subjectContext = subject.GetContext(scene, observer: character);
+            characterContexts.Add(subject.Id, subjectContext);
+            if (ReferenceEquals(subject, character))
+            {
+                owningCharacterContext = subjectContext;
+            }
+        }
+
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["character"] = owningCharacterContext!,
+            ["characters"] = characterContexts,
+        };
     }
 
     private ICharacter ResolveAssociatedCharacter()
@@ -542,7 +584,10 @@ public partial class AgenticMind : MindBase, IServiceProvider
         _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
 
-    private static string RenderObservationSummary(IReadOnlyList<AgentObservation> observations)
+    internal static string RenderObservationSummary(
+        IReadOnlyList<AgentObservation> observations,
+        IObservationPromptRenderer renderer,
+        ITemplateCompiler templateCompiler)
     {
         if (observations.Count == 0)
         {
@@ -556,7 +601,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
         foreach (AgentObservation observation in observations)
         {
-            lines.Add($"- {observation.ToPromptString()}");
+            lines.Add($"- {observation.ToPromptString(renderer, templateCompiler)}");
         }
 
         return string.Join(System.Environment.NewLine, lines);

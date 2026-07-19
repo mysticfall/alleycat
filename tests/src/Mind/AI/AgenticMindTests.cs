@@ -24,20 +24,26 @@ public sealed class AgenticMindTests
     [Fact]
     public void SpeechObservation_DefaultWeight_IsInherentToObservationType()
     {
-        SpeechObservation observation = new("player", "hello");
+        SpeechObservation observation = new("microphone-7", "Speaker", "hello");
 
         Assert.Equal(1f, observation.Weight);
+        Assert.Equal("microphone-7", observation.VoiceId);
+        Assert.Equal("Speaker", observation.CharacterId);
+        Assert.Equal("hello", observation.Content);
     }
 
     /// <summary>
-    /// Speech observations own agent prompt formatting so the runtime does not type-switch on observation subtypes.
+    /// Speech observations retain a null recognition result separately from raw voice provenance.
     /// </summary>
     [Fact]
-    public void SpeechObservation_ToPromptString_DescribesSpeakerAndContent()
+    public void SpeechObservation_WhenUnrecognised_RetainsRawVoiceIDAndWeight()
     {
-        Observation observation = new SpeechObservation("player", "hello");
+        SpeechObservation observation = new("microphone-7", null, "hello", 0.75f);
 
-        Assert.Equal("Speech from player: hello", observation.ToPromptString());
+        Assert.Equal("microphone-7", observation.VoiceId);
+        Assert.Null(observation.CharacterId);
+        Assert.Equal("hello", observation.Content);
+        Assert.Equal(0.75f, observation.Weight);
     }
 
     /// <summary>
@@ -151,23 +157,85 @@ public sealed class AgenticMindTests
     }
 
     /// <summary>
-    /// AgenticMind obtains CTX-001 data from the associated character with the current scene and no observer.
+    /// AgenticMind obtains observer-relative CTX-001 data for every character in ordinal exact-ID order.
     /// </summary>
     [Fact]
-    public void CreateSystemInstructionContext_UsesAssociatedCharacterContext()
+    public void CreateSystemInstructionContext_BuildsDeterministicOwnerAndCharacterContext()
     {
-        Dictionary<string, object?> context = new()
+        Dictionary<string, object?> ownerContext = new()
         {
-            ["displayName"] = "Alley",
+            ["Id"] = "owner"
         };
-        SceneContext scene = new([]);
-        FakeCharacter character = new(context);
+        Dictionary<string, object?> firstContext = new()
+        {
+            ["Id"] = "Alpha"
+        };
+        FakeCharacter owner = new(ownerContext)
+        {
+            Id = "owner"
+        };
+        FakeCharacter last = new(new Dictionary<string, object?> { ["Id"] = "zulu" })
+        {
+            Id = "zulu"
+        };
+        FakeCharacter first = new(firstContext)
+        {
+            Id = "Alpha"
+        };
+        SceneContext scene = new([last, owner, first]);
 
-        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateSystemInstructionContext(character, scene);
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateSystemInstructionContext(owner, scene);
+        Dictionary<string, object?> characters = Assert.IsType<Dictionary<string, object?>>(result["characters"]);
 
-        Assert.Same(context, result);
-        Assert.Same(scene, character.ReceivedScene);
-        Assert.Null(character.ReceivedObserver);
+        Assert.Equal(["Alpha", "owner", "zulu"], characters.Keys);
+        Assert.Same(ownerContext, result["character"]);
+        Assert.Same(characters["owner"], result["character"]);
+        Assert.All([first, owner, last], subject =>
+        {
+            Assert.Same(scene, subject.ReceivedScene);
+            Assert.Same(owner, subject.ReceivedObserver);
+        });
+    }
+
+    /// <summary>
+    /// An owning character outside the scene snapshot is an invalid prompt context.
+    /// </summary>
+    [Fact]
+    public void CreateSystemInstructionContext_WhenOwnerIsAbsent_FailsClearly()
+    {
+        FakeCharacter sceneCharacter = new(new Dictionary<string, object?>())
+        {
+            Id = "scene-character"
+        };
+        FakeCharacter owner = new(new Dictionary<string, object?>())
+        {
+            Id = "owner"
+        };
+        SceneContext scene = new([sceneCharacter]);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => AgenticMind.CreateSystemInstructionContext(owner, scene));
+
+        Assert.Contains("absent", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, sceneCharacter.ContextRequestCount);
+    }
+
+    /// <summary>
+    /// Agent Framework metadata uses exact runtime identity while keeping its description generic.
+    /// </summary>
+    [Fact]
+    public void CreateAgentMetadata_UsesExactCharacterIDAndGenericDescription()
+    {
+        FakeCharacter character = new(new Dictionary<string, object?>())
+        {
+            Id = "NPC.Mixed-Case"
+        };
+
+        (string name, string description) = AgenticMind.CreateAgentMetadata(character);
+
+        Assert.Equal("NPC.Mixed-Case", name);
+        Assert.Equal(AgenticMind.AgentDescription, description);
+        Assert.DoesNotContain("NPC.Mixed-Case", description, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -221,8 +289,14 @@ public sealed class AgenticMindTests
             get; private set;
         }
 
+        public int ContextRequestCount
+        {
+            get; private set;
+        }
+
         public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
         {
+            ContextRequestCount++;
             ReceivedScene = scene;
             ReceivedObserver = observer;
             return context;

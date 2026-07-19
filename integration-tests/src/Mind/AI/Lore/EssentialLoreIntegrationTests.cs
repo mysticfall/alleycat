@@ -16,6 +16,93 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Lore;
 public sealed class EssentialLoreIntegrationTests
 {
     /// <summary>
+    /// Character lore requests the owner first and remaining exact runtime IDs in ordinal order.
+    /// </summary>
+    [Fact]
+    public async Task CharacterLorePromptSection_QueriesOwnerFirstThenOrdinalSceneCharacters()
+    {
+        CapturingLoreQueryService queryService = new(
+        [
+            new LoreEntry("known", "Known", "Known lore.", Kind: LoreSubjectKind.Character),
+        ]);
+        using ServiceProvider services = new ServiceCollection()
+            .AddSingleton<ILoreQueryService>(queryService)
+            .AddSingleton<ILorePromptFormatter, PseudoXmlLorePromptFormatter>()
+            .BuildServiceProvider();
+        PromptOwnerCharacter owner = new("owner");
+        PromptOwnerCharacter zulu = new("zulu");
+        PromptOwnerCharacter alpha = new("Alpha");
+        SceneContext scene = new([zulu, owner, alpha], ContentContext.Default);
+        CharacterLorePromptSection section = new();
+
+        string content = await section.GetContentAsync(new PromptSectionBuildContext(services, scene, owner));
+
+        Assert.Equal("owner", queryService.Query!.ObserverID);
+        Assert.Equal(
+            ["character.owner", "character.alpha", "character.zulu"],
+            queryService.Query.Subjects.Select(subject => subject.SubjectID));
+        Assert.Contains("Known lore.", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Missing perspective lore remains absent and does not acquire fallback content in the section.
+    /// </summary>
+    [Fact]
+    public async Task CharacterLorePromptSection_WhenLoreIsMissing_ReturnsEmptyContent()
+    {
+        CapturingLoreQueryService queryService = new([]);
+        using ServiceProvider services = new ServiceCollection()
+            .AddSingleton<ILoreQueryService>(queryService)
+            .AddSingleton<ILorePromptFormatter, PseudoXmlLorePromptFormatter>()
+            .BuildServiceProvider();
+        PromptOwnerCharacter owner = new("owner");
+        SceneContext scene = new([owner], ContentContext.Default);
+
+        string content = await new CharacterLorePromptSection().GetContentAsync(
+            new PromptSectionBuildContext(services, scene, owner));
+
+        Assert.Equal(string.Empty, content);
+    }
+
+    /// <summary>
+    /// Case-distinct runtime identities must not be silently deduplicated at the lore boundary.
+    /// </summary>
+    [Fact]
+    public async Task CharacterLorePromptSection_WhenRuntimeIDsNormaliseTogether_FailsClearly()
+    {
+        using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
+        PromptOwnerCharacter owner = new("Owner");
+        PromptOwnerCharacter collision = new("owner");
+        SceneContext scene = new([owner, collision], ContentContext.Default);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new CharacterLorePromptSection().GetContentAsync(
+                new PromptSectionBuildContext(services, scene, owner)));
+
+        Assert.Contains("same canonical lore subject", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Owner", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("owner", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Character lore requires the exact owning runtime character to belong to the scene snapshot.
+    /// </summary>
+    [Fact]
+    public async Task CharacterLorePromptSection_WhenOwnerIsAbsent_FailsClearly()
+    {
+        using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
+        PromptOwnerCharacter owner = new("owner");
+        PromptOwnerCharacter sceneCharacter = new("scene-character");
+        SceneContext scene = new([sceneCharacter], ContentContext.Default);
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new CharacterLorePromptSection().GetContentAsync(
+                new PromptSectionBuildContext(services, scene, owner)));
+
+        Assert.Contains("present in the scene context", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Vadim's essential world lore is selected from his perspective and sorted by stable ID when priorities tie.
     /// </summary>
     [Fact]
@@ -44,9 +131,9 @@ public sealed class EssentialLoreIntegrationTests
         LoreQuery query = new(
             "Vadim",
             [
-                LoreSubjectRequest.Character("CHARACTER.ALLY"),
-                LoreSubjectRequest.Location("LOCATION.INTERROGATION_ROOM"),
-                LoreSubjectRequest.Character("character.vadim"),
+                LoreSubjectRequest.Character("ALLY"),
+                LoreSubjectRequest.Location("INTERROGATION_ROOM"),
+                LoreSubjectRequest.Character("vadim"),
             ]);
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(ContentContext.Default, query);
@@ -173,5 +260,22 @@ public sealed class EssentialLoreIntegrationTests
         Assert.DoesNotContain("<title>", content, StringComparison.Ordinal);
         Assert.DoesNotContain("<body>", content, StringComparison.Ordinal);
         Assert.DoesNotContain("<source>", content, StringComparison.Ordinal);
+    }
+
+    private sealed class CapturingLoreQueryService(IReadOnlyList<LoreEntry> entries) : ILoreQueryService
+    {
+        public LoreQuery? Query
+        {
+            get; private set;
+        }
+
+        public Task<IReadOnlyList<LoreEntry>> QueryAsync(
+            ContentContext content,
+            LoreQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            Query = query;
+            return Task.FromResult(entries);
+        }
     }
 }

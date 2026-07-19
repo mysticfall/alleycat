@@ -7,6 +7,7 @@ using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Godot;
@@ -32,6 +33,87 @@ public sealed partial class MindIntegrationTests : IDisposable
     public void Dispose() => _debugLogFixture.Dispose();
 
     /// <summary>
+    /// Mind accepts every nonblank external voice regardless of ID and rejects only its exact output instance.
+    /// </summary>
+    [Fact]
+    public void ShouldHandleVoice_AcceptsAllExternalVoicesAndRejectsOwnOutput()
+    {
+        var output = new RecordingVoice { Id = "shared-id" };
+        var sameIDExternal = new RecordingVoice { Id = "shared-id" };
+        var otherExternal = new PlainVoice("another-character");
+        var mind = new TestMind { Voice = output };
+
+        Assert.True(mind.ShouldHandleVoiceForTest("hello", sameIDExternal));
+        Assert.True(mind.ShouldHandleVoiceForTest("hello", otherExternal));
+        Assert.False(mind.ShouldHandleVoiceForTest("hello", output));
+        Assert.False(mind.ShouldHandleVoiceForTest("  ", otherExternal));
+    }
+
+    /// <summary>
+    /// Default recognition is identity mapping and accepted speech retains all trimmed observation fields.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WithDefaultRecognition_CreatesRecognisedSpeechObservation()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecognitionTestMind mind = new()
+        {
+            ObservationWeightThreshold = 1f
+        };
+        PlainVoice voice = new("voice.Mixed-Case");
+        AddTestNode(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            Assert.Equal("voice.Mixed-Case", mind.ResolveForTest("voice.Mixed-Case"));
+            mind.ReceiveVoice("  trimmed speech  ", voice);
+            await WaitUntilAsync(sceneTree, () => mind.Observations.Count == 1, maxFrames: 120);
+
+            SpeechObservation observation = Assert.IsType<SpeechObservation>(Assert.Single(mind.Observations));
+            Assert.Equal("voice.Mixed-Case", observation.VoiceId);
+            Assert.Equal("voice.Mixed-Case", observation.CharacterId);
+            Assert.Equal("trimmed speech", observation.Content);
+            Assert.Equal(1f, observation.Weight);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, mind);
+        }
+    }
+
+    /// <summary>
+    /// A mind-relative resolver can leave accepted voice provenance unrecognised.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WhenRecognitionReturnsNull_CreatesUnrecognisedSpeechObservation()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecognitionTestMind mind = new()
+        {
+            RecogniseVoices = false,
+            ObservationWeightThreshold = 1f
+        };
+        PlainVoice voice = new("private-device-id");
+        AddTestNode(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("unknown speaker", voice);
+            await WaitUntilAsync(sceneTree, () => mind.Observations.Count == 1, maxFrames: 120);
+
+            SpeechObservation observation = Assert.IsType<SpeechObservation>(Assert.Single(mind.Observations));
+            Assert.Equal("private-device-id", observation.VoiceId);
+            Assert.Null(observation.CharacterId);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, mind);
+        }
+    }
+
+    /// <summary>
     /// Player speech should become a runtime turn whose first speak-tool call cancels the backend run when diagnostics are disabled.
     /// </summary>
     [Fact]
@@ -44,7 +126,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "player",
+            Id = "Speaker",
         };
         FakeClientProvider clientProvider = new()
         {
@@ -91,8 +173,8 @@ public sealed partial class MindIntegrationTests : IDisposable
             Assert.Equal(1, client.RunCount);
             Assert.True(character.ContextRequestCount >= 1);
             Assert.NotNull(character.ReceivedScene);
-            Assert.Null(character.ReceivedObserver);
-            Assert.Contains("- Speech from player: hello Alley", Assert.Single(client.Prompts));
+            Assert.Same(character, character.ReceivedObserver);
+            Assert.Contains("- Speech from Speaker: hello Alley", Assert.Single(client.Prompts));
             Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
             Assert.True(client.CancellationObservedAfterFirstSpeak);
             Assert.False(client.ReturnedResponse);
@@ -118,7 +200,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "player",
+            Id = "Speaker",
         };
         FakeClientProvider clientProvider = new()
         {
@@ -183,7 +265,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "player",
+            Id = "Speaker",
         };
         FakeClientProvider clientProvider = new();
         AgenticMind mind = new()
@@ -225,20 +307,20 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// System-instruction prompt stacks should compile once per assigned resource while rendering against fresh CTX-001 data every turn.
+    /// First speech snapshots prompt/context and keeps one agent and session stable for later turns.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenSystemInstructionResourceIsReused_ReusesCompiledTemplateAndRendersCurrentContext()
+    public async Task ReceiveVoice_AfterFirstSpeech_ReusesPromptSnapshotAgentAndSession()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
         {
             Id = "alley",
         };
-        PlainVoice playerVoice = new("player");
+        PlainVoice playerVoice = new("Speaker");
         FakeClientProvider clientProvider = new();
-        CountingPromptSection firstSection = new("First instruction for {{displayName}}.");
-        CountingPromptSection secondSection = new("Second instruction for {{displayName}}.");
+        CountingPromptSection firstSection = new("First instruction for {{character.displayName}}.");
+        CountingPromptSection secondSection = new("Second instruction for {{character.displayName}}.");
         PromptStack firstSystemInstruction = CreateCountingSystemInstruction(firstSection);
         PromptStack secondSystemInstruction = CreateCountingSystemInstruction(secondSection);
         Dictionary<string, object?> context = new()
@@ -263,23 +345,22 @@ public sealed partial class MindIntegrationTests : IDisposable
         try
         {
             mind.ReceiveVoice("first turn", playerVoice);
-            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 1, maxFrames: 120);
-            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients[0].Completed, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 1, Completed: true }, maxFrames: 120);
 
             context["displayName"] = "Second Alley";
-            mind.ReceiveVoice("second turn", playerVoice);
-            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 2, maxFrames: 120);
-            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients[1].Completed, maxFrames: 120);
-
             mind.SystemInstruction = secondSystemInstruction;
-            context["displayName"] = "Third Alley";
-            mind.ReceiveVoice("third turn", playerVoice);
-            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 3, maxFrames: 120);
-            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients[2].Completed, maxFrames: 120);
+            clientProvider.Client!.Completed = false;
+            mind.ReceiveVoice("second turn", playerVoice);
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 2, Completed: true }, maxFrames: 120);
 
             Assert.Equal(1, firstSection.ContentRequestCount);
-            Assert.Equal(1, secondSection.ContentRequestCount);
-            Assert.Equal(3, clientProvider.CreatedClients.Count);
+            Assert.Equal(0, secondSection.ContentRequestCount);
+            _ = Assert.Single(clientProvider.CreatedClients);
+            Assert.Equal(1, character.ContextRequestCount);
+            Assert.Equal(2, clientProvider.Client!.MessageSnapshots.Count);
+            Assert.Contains(
+                clientProvider.Client.MessageSnapshots[1],
+                message => string.Equals(message.Text, clientProvider.Client.Prompts[0], StringComparison.Ordinal));
         }
         finally
         {
@@ -300,7 +381,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "player",
+            Id = "Speaker",
         };
         ThrowingClientProvider clientProvider = new();
         AgenticMind mind = new()
@@ -345,7 +426,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             Id = "alley",
         };
-        PlainVoice playerVoice = new("player");
+        PlainVoice playerVoice = new("Speaker");
         FakeClientProvider clientProvider = new()
         {
             FirstSpeech = "Interface reply.",
@@ -373,7 +454,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
             Assert.NotNull(clientProvider.Client);
-            Assert.Contains("- Speech from player: hello through interface", Assert.Single(clientProvider.Client.Prompts));
+            Assert.Contains("- Speech from Speaker: hello through interface", Assert.Single(clientProvider.Client.Prompts));
             Assert.Equal(["Interface reply."], npcVoice.SpokenLines);
         }
         finally
@@ -395,7 +476,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "player",
+            Id = "Speaker",
         };
         FakeClientProvider clientProvider = new()
         {
@@ -454,7 +535,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             await WaitUntilAsync(sceneTree, () => mind.ProcessedBatches.Count == 1, maxFrames: 120);
 
-            Assert.Equal("important", Assert.Single(Assert.Single(mind.ProcessedBatches)).ToPromptString());
+            Assert.Equal("important", Assert.IsType<TestObservation>(Assert.Single(Assert.Single(mind.ProcessedBatches))).Prompt);
         }
         finally
         {
@@ -490,7 +571,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             mind.Enabled = true;
 
             await WaitUntilAsync(sceneTree, () => mind.ProcessedBatches.Count == 1, maxFrames: 120);
-            Assert.Equal("deferred", Assert.Single(Assert.Single(mind.ProcessedBatches)).ToPromptString());
+            Assert.Equal("deferred", Assert.IsType<TestObservation>(Assert.Single(Assert.Single(mind.ProcessedBatches))).Prompt);
         }
         finally
         {
@@ -509,7 +590,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             Id = "alley",
         };
-        PlainVoice playerVoice = new("player");
+        PlainVoice playerVoice = new("Speaker");
         FakeClientProvider clientProvider = new()
         {
             FirstSpeech = "Should not speak.",
@@ -561,6 +642,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         character.AddChild(mind);
         AddTestNode(sceneTree, character);
+        character.AddToGroup("Actors");
 
         return character;
     }
@@ -578,7 +660,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             new TextPromptSection
             {
                 Name = "Test Instructions",
-                Text = "CTX display name: {{displayName}}. Run the integration test turn.",
+                Text = "CTX display name: {{character.displayName}}. Run the integration test turn.",
             },
         ],
     };
@@ -632,6 +714,8 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public void ObserveForTest(AgentObservation observation) => _ = Observe(observation);
 
+        public bool ShouldHandleVoiceForTest(string speech, IVoice source) => ShouldHandleVoice(speech, source);
+
         public override void ReceiveVoice(string speech, IVoice source)
         {
             if (ShouldHandleVoice(speech, source))
@@ -649,9 +733,31 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
     }
 
+    private sealed partial class RecognitionTestMind : AgenticMind
+    {
+        public bool RecogniseVoices { get; init; } = true;
+
+        public List<AgentObservation> Observations { get; } = [];
+
+        public string? ResolveForTest(string voiceID) => ResolveRecognisedCharacterId(voiceID);
+
+        protected override string? ResolveRecognisedCharacterId(string voiceId)
+            => RecogniseVoices ? base.ResolveRecognisedCharacterId(voiceId) : null;
+
+        protected override Task ProcessObservationsAsync(
+            IReadOnlyList<AgentObservation> observations,
+            CancellationToken cancellationToken)
+        {
+            Observations.AddRange(observations);
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed record TestObservation(float Importance, string Prompt) : AgentObservation(Importance)
     {
-        public override string ToPromptString() => Prompt;
+        public override string ToPromptString(
+            IObservationPromptRenderer renderer,
+            Templating.ITemplateCompiler templateCompiler) => Prompt;
     }
 
     private sealed partial class TestCharacter(IReadOnlyDictionary<string, object?> context) : Node, ICharacter
@@ -779,6 +885,8 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public List<string> Prompts { get; } = [];
 
+        public List<ChatMessage[]> MessageSnapshots { get; } = [];
+
         public List<string> ToolNamesByRun { get; } = [];
 
         public string ResponseText => responseText;
@@ -814,6 +922,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             RunCount++;
             ChatMessage[] messageSnapshot = [.. messages];
+            MessageSnapshots.Add(messageSnapshot);
             Prompts.Add(messageSnapshot.Last().Text);
 
             try

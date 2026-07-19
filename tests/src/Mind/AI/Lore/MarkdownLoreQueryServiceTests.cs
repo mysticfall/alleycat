@@ -21,9 +21,9 @@ public sealed class MarkdownLoreQueryServiceTests
             "  VADIM ",
             [
                 LoreSubjectRequest.World(),
-                LoreSubjectRequest.Location(" LOCATION.INTERROGATION_ROOM "),
-                LoreSubjectRequest.Location("location.interrogation_room"),
-                LoreSubjectRequest.Character("CHARACTER.ALLY"),
+                LoreSubjectRequest.Location(" INTERROGATION_ROOM "),
+                LoreSubjectRequest.Location("interrogation_room"),
+                LoreSubjectRequest.Character("ALLY"),
             ]);
 
         Assert.Equal("vadim", query.ObserverID);
@@ -40,6 +40,42 @@ public sealed class MarkdownLoreQueryServiceTests
                 Assert.Equal(LoreSubjectKind.Character, request.Kind);
                 Assert.Equal("character.ally", request.SubjectID);
             });
+    }
+
+    /// <summary>
+    /// Subject factories own canonical namespaces and reject callers that supply them.
+    /// </summary>
+    [Theory]
+    [InlineData(LoreSubjectKind.Character, " Ally ", "character.ally")]
+    [InlineData(LoreSubjectKind.Location, " Interrogation_Room ", "location.interrogation_room")]
+    public void SubjectRequest_AddsCanonicalNamespaceToBareID(
+        LoreSubjectKind kind,
+        string bareID,
+        string expectedID)
+    {
+        LoreSubjectRequest request = kind == LoreSubjectKind.Character
+            ? LoreSubjectRequest.Character(bareID)
+            : LoreSubjectRequest.Location(bareID);
+
+        Assert.Equal(expectedID, request.SubjectID);
+    }
+
+    /// <summary>
+    /// Supplying a namespace owned by a subject factory is an authoring error.
+    /// </summary>
+    [Theory]
+    [InlineData(LoreSubjectKind.Character, "character.ally")]
+    [InlineData(LoreSubjectKind.Character, " CHARACTER.ALLY ")]
+    [InlineData(LoreSubjectKind.Location, "location.interrogation_room")]
+    [InlineData(LoreSubjectKind.Location, " LOCATION.INTERROGATION_ROOM ")]
+    public void SubjectRequest_RejectsAlreadyPrefixedInput(LoreSubjectKind kind, string prefixedID)
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            kind == LoreSubjectKind.Character
+                ? LoreSubjectRequest.Character(prefixedID)
+                : LoreSubjectRequest.Location(prefixedID));
+
+        Assert.Contains("bare", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -247,8 +283,8 @@ public sealed class MarkdownLoreQueryServiceTests
     /// Essential metadata never makes a location or character entry match an unrequested subject.
     /// </summary>
     [Theory]
-    [InlineData(LoreSubjectKind.Location, "location.requested", "location.other")]
-    [InlineData(LoreSubjectKind.Character, "character.requested", "character.other")]
+    [InlineData(LoreSubjectKind.Location, "requested", "location.other")]
+    [InlineData(LoreSubjectKind.Character, "requested", "character.other")]
     public void Matches_SubjectScopedEssentialEntry_DoesNotBypassSubjectSelection(
         LoreSubjectKind kind,
         string requestedSubjectID,

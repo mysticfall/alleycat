@@ -67,13 +67,6 @@ public abstract partial class Mind : Node, IVoiceListener
     public float ObservationWeightThreshold { get; set; } = 1f;
 
     /// <summary>
-    /// Voice ID accepted as player speech input.
-    /// </summary>
-    [ExportGroup("Input")]
-    [Export]
-    public string PlayerVoiceId { get; set; } = "player";
-
-    /// <summary>
     /// NPC voice used for spoken output when a derived mind can speak.
     /// </summary>
     [ExportGroup("Output")]
@@ -111,8 +104,7 @@ public abstract partial class Mind : Node, IVoiceListener
     protected bool ShouldHandleVoice(string speech, IVoice source)
         => _enabled
             && !string.IsNullOrWhiteSpace(speech)
-            && !ReferenceEquals(source, Voice)
-            && string.Equals(source.Id, PlayerVoiceId, StringComparison.Ordinal);
+            && !ReferenceEquals(source, Voice);
 
     /// <summary>
     /// Queues an observation and schedules processing according to cumulative weight and maximum wait settings.

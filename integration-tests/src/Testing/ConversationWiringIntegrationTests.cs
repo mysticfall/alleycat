@@ -9,6 +9,8 @@ using Microsoft.Extensions.AI;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
+using CharacterHub = AlleyCat.Character.Character;
+
 namespace AlleyCat.IntegrationTests.Testing;
 
 /// <summary>
@@ -45,9 +47,8 @@ public sealed class ConversationWiringIntegrationTests
             AgenticMind mind = FindSingleDescendant<AgenticMind>(npc);
             Voice npcVoice = Assert.IsAssignableFrom<Voice>(mind.Voice);
 
-            Assert.Equal("player", playerVoice.Id);
+            Assert.Equal("conversation-player", playerVoice.Id);
             Assert.Same(transcriber, playerVoice.Transcriber);
-            Assert.Equal("player", mind.PlayerVoiceId);
             Assert.True(mind.IsInGroup(IVoiceListener.GroupName));
             Assert.Contains(mind, sceneTree.GetNodesInGroup(IVoiceListener.GroupName).Cast<Node>());
             Assert.True(IsSameOrDescendant(npc, npcVoice));
@@ -66,7 +67,7 @@ public sealed class ConversationWiringIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 1 }, maxFrames: 180);
 
             RecordingChatClient client = Assert.IsType<RecordingChatClient>(clientProvider.Client);
-            Assert.Contains("- Speech from player: hello reference friend", Assert.Single(client.Prompts), StringComparison.Ordinal);
+            Assert.Contains("- Speech from conversation-player: hello reference friend", Assert.Single(client.Prompts), StringComparison.Ordinal);
             Assert.Equal(["speak"], client.ToolNamesByRun);
         }
         finally
@@ -89,8 +90,12 @@ public sealed class ConversationWiringIntegrationTests
 
         Node player = LoadPackedScene(ReferenceFemalePlayerScenePath).Instantiate();
         player.Name = "Player";
+        CharacterHub playerCharacter = Assert.IsType<CharacterHub>(player, exactMatch: false);
+        playerCharacter.Id = "conversation-player";
+        FindSingleDescendant<PlayerVoice>(player).Id = playerCharacter.Id;
         Node npc = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate();
         npc.Name = "NPC";
+        Assert.IsType<CharacterHub>(npc, exactMatch: false).Id = "conversation-npc";
 
         fixture.AddChild(actors);
         actors.AddChild(player);
