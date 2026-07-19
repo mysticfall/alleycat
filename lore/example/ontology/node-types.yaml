@@ -1,8 +1,0 @@
-# Canonical node type definitions for the example lore graph.
-nodeTypes:
-  - id: character
-    description: A person, creature, or agent with identity and perspective.
-  - id: location
-    description: A place, region, room, or spatial setting.
-  - id: concept
-    description: An idea, belief, rule, mystery, or abstract lore topic.
