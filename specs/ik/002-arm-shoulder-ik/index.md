@@ -128,7 +128,7 @@ All criteria remain normative. IDs are provided for traceability to component co
 
 ## References
 
-- @game/assets/characters/reference/player.tscn
+- @game/assets/characters/reference/ally_player.tscn
 - @specs/ik/001-neck-spine-ik/index.md
 - @specs/testing/002-visual-verification-scope/index.md
 - @specs/character/001-character-skeleton/index.md

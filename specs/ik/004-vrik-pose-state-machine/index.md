@@ -109,4 +109,4 @@ permission outputs that gate player movement in non-standing poses.
 - @game/assets/characters/templates/ik/vrik.tscn
 - @game/assets/characters/templates/animation/animation_tree_root_player.tres
 - @game/assets/characters/templates/reference_female/reference_female_player.tscn
-- @game/assets/characters/reference/player.tscn
+- @game/assets/characters/reference/ally_player.tscn

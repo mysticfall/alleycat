@@ -22,6 +22,7 @@ membership and content root through dependency injection while character and God
 3. Incorrect actor-group membership fails clearly during development instead of silently corrupting context.
 4. Items and future non-human actor categories are not misclassified as current humanoid characters.
 5. Game systems can read the active content identity and root from scene context without resolving CORE services again.
+6. Scene authors receive a clear failure when character identity would make conversation context ambiguous.
 
 ## Technical Requirements
 
@@ -39,12 +40,14 @@ membership and content root through dependency injection while character and God
 10. Discovering a non-`ICharacter` node in `Actors` is an authoring error and must throw immediately.
 11. Items must never be treated as actors by scene context.
 12. Non-human actors are future work and require revisiting or refactoring `ICharacter` before inclusion.
-13. `IEntity.Id` must not be empty, but ID validation remains a generic entity or character authoring responsibility;
-    SCN-001 does not add scene-context-specific ID validation.
+13. Scene-context construction must reject empty character IDs and exact duplicate character IDs. Runtime character IDs
+    remain exact and case-sensitive; case-only differences are not duplicates at this boundary.
 14. `ISceneContext` must expose the current content context for convenience, preserving CORE-008 as the source of truth
     for content identity and root resolution.
 15. SCN-001 must not define lore, AI, prompt, retrieval, or content-domain path semantics on top of the CORE content
     context.
+16. Every character role template must join `Actors` at the lowest shared male/female character base. Higher role or
+    concrete character scenes must not add redundant compensating membership.
 
 ## In Scope
 
@@ -53,6 +56,8 @@ membership and content root through dependency injection while character and God
 - DI-only provider access through CORE-004 service resolution.
 - Godot `Actors` group scanning as the initial discovery mechanism.
 - Immediate validation failure for non-`ICharacter` nodes in `Actors`.
+- Immediate validation failure for empty or exact duplicate character IDs.
+- Shared-base `Actors` membership for all character role templates.
 - Membership-snapshot semantics with live referenced objects.
 - Convenience exposure of the CORE current-content context.
 
@@ -64,7 +69,7 @@ membership and content root through dependency injection while character and God
 - Static convenience accessors or `Game` properties for scene-context access.
 - Treating items as actors.
 - Non-human actor support before the `ICharacter` model is revisited.
-- Scene-context-specific validation for `IEntity.Id` values.
+- Lore-normalised identity collision validation, which belongs to AI-004 character-lore construction.
 
 ## Acceptance Criteria
 
@@ -75,6 +80,7 @@ membership and content root through dependency injection while character and God
 3. A node in `Actors` that does not implement `ICharacter` produces an immediate authoring error.
 4. Items are absent from scene-context character membership, even if they are interactable scene objects.
 5. A consumer can read the active content id and root from the scene context for content-relative loading.
+6. Empty or exact duplicate character IDs fail scene-context construction clearly.
 
 ### Technical Requirements
 
@@ -86,8 +92,10 @@ membership and content root through dependency injection while character and God
 6. No `Game.SceneContextProvider` property or static scene-context convenience accessor exists.
 7. Discovery uses `SceneTree.GetNodesInGroup("Actors")` and rejects every non-`ICharacter` group member immediately.
 8. Context instances preserve membership from creation time while returning live `ICharacter` object references.
-9. ID validation for `IEntity.Id` remains delegated to generic entity or character authoring validation.
+9. Scene-context construction rejects empty and exact duplicate character IDs without normalising their case.
 10. Scene context contains no lore-specific path, AI prompt, or retrieval contract.
+11. Male and female character bases add their character root to `Actors` at the lowest shared level, with no redundant
+    higher-scene compensation.
 
 ## References
 

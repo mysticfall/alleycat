@@ -26,6 +26,8 @@ exists.
    hand capability references on the template root.
 6. Character capability wiring fails clearly when the scene root or required humanoid capability is missing, invalid,
    or unrebasable.
+7. Each character asset owns a stable identity that drives voice attribution and conversation context independently of
+   its player or NPC role.
 
 ## Technical Requirements
 
@@ -82,6 +84,14 @@ exists.
 25. Character roots that should appear in scene context must be authored into the Godot `Actors` group.
 26. `Actors` is reserved for strict character discovery; every member must implement `ICharacter`.
 27. Items and other non-character nodes must not be added to `Actors`.
+28. `Character.Id` is asset-owned, exact, and case-sensitive at runtime; role templates must not supply a concrete
+    character identity.
+29. Generic character installation must set the installed character-owned `Voice.Id` to the final `Character.Id` after
+    target-scene precedence is resolved.
+30. `Voiceprint` is a listener-recognition key and must not be used as proof that a voice belongs to a character.
+31. The lowest shared male/female character bases must author `CharacterCardContextSource` and `Actors` membership.
+    Higher role templates and concrete scenes must not add redundant compensation.
+32. `CharacterCardContextSource` returns exactly `{ Id: subject.Id }` under CTX-001.
 
 ## In Scope
 
@@ -96,6 +106,8 @@ exists.
 - Installer validation, reference rebase, refresh, and dependency-hub usage for character scene assembly.
 - Name conflict and alias guidance for the concrete `Character` type.
 - Character-root membership in the `Actors` group for SCN-001 scene-context discovery.
+- Asset-owned stable character identity and generic installed voice-ID alignment.
+- Lowest-shared-base character-card context wiring.
 
 ## Out Of Scope
 
@@ -107,6 +119,8 @@ exists.
 - Migration support for legacy no-root or near-root character scenes beyond clearly failing validation.
 - Optional capability discovery systems beyond the explicit required humanoid capability references.
 - Item or non-human actor discovery through `Actors`.
+- A Vadim player asset; this slice uses a lightweight alternate female-player identity fixture for configurability.
+- Empty voice-ID authoring validation.
 
 ## Acceptance Criteria
 
@@ -121,6 +135,8 @@ exists.
 6. Missing, wrong, duplicate, or unrebasable required humanoid capabilities produce clear validation failures.
 7. Partial reusable base templates may omit role-specific `Voice` only when the final role templates that consume them
    author `Voice` before runtime installation.
+8. Role-explicit Ally player, Ally NPC, and Vadim NPC assets retain their own identities, while an alternate
+   female-player fixture demonstrates configurable identity.
 
 ### Technical Requirements
 
@@ -148,6 +164,11 @@ exists.
     into the character root.
 16. Character roots intended for scene context are members of `Actors`, and no item or non-`ICharacter` node is accepted
     as valid `Actors` membership.
+17. Character installation copies the final exact `Character.Id` to the character-owned voice through generic logic.
+18. Voiceprint remains recognition metadata and is not used to establish character ownership.
+19. Shared male/female bases each author one `CharacterCardContextSource` and `Actors` membership; higher layers do not
+    compensate redundantly.
+20. `CharacterCardContextSource` returns only the exact subject `Id` entry.
 
 ## References
 
@@ -159,3 +180,4 @@ exists.
 - [BODY-006: Voice Component](../../body/006-voice/index.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
+- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)

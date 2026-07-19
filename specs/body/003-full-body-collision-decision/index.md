@@ -324,8 +324,8 @@ Physical rig API types shall live in `AlleyCat.Rigging.Physics`; `PhysicalIntera
 33. Code review confirms `DynamicPhysicalRig` contains no references to IK nodes,
      components, or state, preserving the IK → Body coupling direction.
 34. Tests verify that scenes requiring generated proxy collision integration
-     (e.g. `game/assets/characters/reference/ally.tscn` and
-      `game/assets/characters/reference/player.tscn`) wire an explicit
+     (for example, `game/assets/characters/reference/ally_npc.tscn` and
+      `game/assets/characters/reference/ally_player.tscn`) wire an explicit
      `PhysicalRig` path on their `CharacterIK` node without serialising a
      separate `Skeleton` path.
 35. Tests verify that `PlayerVRIK` uses the configured `PhysicalRig` reference for

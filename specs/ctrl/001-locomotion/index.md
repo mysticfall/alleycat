@@ -48,7 +48,7 @@ respects pose-based permission gating.
 
 3. `CharacterLocomotion` component must be composed via template-authored exported references,
    not through inheritance of a hard-coded base scene. The component requires root-level AnimationTree,
-   DynamicPhysicalRig, and TurnMode.Smooth default. Consuming scenes, such as player.tscn, add the
+   DynamicPhysicalRig, and TurnMode.Smooth default. Consuming scenes, such as `ally_player.tscn`, add the
    component and wire VRIK, pose-state permission wiring, and PlayerController.
 
 ### Permission Source API
@@ -72,7 +72,7 @@ respects pose-based permission gating.
    - Reads XR controller stick input.
    - Forwards input to locomotion component.
 
-8. Add `PlayerController` as child node in `player.tscn`.
+8. Add `PlayerController` as a child node in `ally_player.tscn`.
 
 ### Animation Integration
 
@@ -141,7 +141,7 @@ respects pose-based permission gating.
 9. Velocity derives from animation root motion output in root-motion states.
 10. Zero planar velocity returned when movement not allowed.
 11. `CharacterLocomotion` component is composable via template-authored exported references,
-     with TurnMode.Smooth default; consuming scenes, such as player.tscn, add the component and wire
+     with TurnMode.Smooth default; consuming scenes, such as `ally_player.tscn`, add the component and wire
      pose-state permission wiring.
 12. Control scheme: left stick movement, right stick rotation.
 13. Permission source API implemented and documented.
@@ -162,5 +162,5 @@ respects pose-based permission gating.
 - [CTRL: Player Character Control System](../index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../ik/004-vrik-pose-state-machine/index.md)
-- `game/assets/characters/reference/player.tscn`
+- `game/assets/characters/reference/ally_player.tscn`
 - `game/src/XR/XRManagerAbstractions.cs`

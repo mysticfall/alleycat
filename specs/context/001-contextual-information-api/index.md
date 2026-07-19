@@ -12,9 +12,8 @@ information is available.
 
 ## Goal
 
-Define the first top-level `AlleyCat.Context` contract for contextual subjects and context sources to provide neutral
-key/value contextual data, separate from scene membership, character-specific APIs, concrete source implementations,
-AI systems, prompt systems, templating systems, and presentation systems.
+Define the top-level `AlleyCat.Context` contract for neutral key/value context, separate from scene membership and
+consumer APIs, while providing the narrow character-card source and scene-character context required by this slice.
 
 ## User Requirements
 
@@ -24,6 +23,7 @@ AI systems, prompt systems, templating systems, and presentation systems.
 4. Player-visible behaviour can use available context without exposing source wiring, Godot export details, or data
    assembly details.
 5. Names, aliases, and display labels are contextual data when sources provide them, not fixed character properties.
+6. Character identity shown in generated conversation context must come from exact authored character IDs.
 
 ## Technical Requirements
 
@@ -51,9 +51,17 @@ AI systems, prompt systems, templating systems, and presentation systems.
 15. `IEntity` is not required to extend `IContextual` in the first slice.
 16. Do not introduce `ContextData`, titled-fragment result objects, `ContextRequest`, `ContextRequestKind`, typed
     request filters, or a detailed item taxonomy.
-17. Do not require any concrete source implementation, static identity provider, authored content, or fixture data in
-    the initial CTX-001 implementation.
+17. `CharacterCardContextSource` is the concrete narrow character source for this slice and returns exactly
+    `{ Id: subject.Id }`.
 18. Names, aliases, and display labels must not be added as fixed properties on `ICharacter` for this slice.
+19. Prompt/system character context must contain `character` for the owner and `characters`, keyed by each exact,
+    case-sensitive `Character.Id`.
+20. Context assembly must call every subject with `observer` set to the owning character.
+21. The owner must appear in both `character` and `characters[owner.Id]`, and both entries must reference the exact same
+    context dictionary instance.
+22. The `characters` dictionary must be inserted in ordinal order by exact `Character.Id`.
+23. Context assembly must fail for empty character IDs, duplicate exact scene character IDs, or an owner absent from the
+    scene context.
 
 ## In Scope
 
@@ -65,11 +73,12 @@ AI systems, prompt systems, templating systems, and presentation systems.
 - `ICharacter : IContextual` for the first character-focused slice.
 - Optional observer-relative context via `ICharacter? observer`.
 - Internal source aggregation by subjects or owning systems.
+- `CharacterCardContextSource` as the narrow identity source returning only the subject's exact ID.
+- Deterministic owner and scene-character context assembly for prompt/system consumers.
 - Names, aliases, and display labels as possible context entries when future sources provide them.
 
 ## Out Of Scope
 
-- Concrete context source implementations, including static identity sources.
 - Character-specific source base classes or APIs under `AlleyCat.Context`.
 - Final authored context content, fixture data, character biographies, names, aliases, or display labels.
 - Consumer-specific placement, final serialisation format, renderer ownership, and consumer content structure.
@@ -90,6 +99,7 @@ AI systems, prompt systems, templating systems, and presentation systems.
 2. Context retrieval can use the current SCN-001 scene context and optional observer when provided.
 3. Names, aliases, and display labels are representable as dictionary entries from future sources.
 4. No player-facing behaviour exposes source aggregation, Godot export details, or data assembly details.
+5. Generated character context identifies the owner and scene characters by their exact authored IDs.
 
 ### Technical Requirements
 
@@ -106,8 +116,13 @@ AI systems, prompt systems, templating systems, and presentation systems.
 8. `ContextSource` is the neutral abstract exported resource base for Godot-authored source collections.
 9. No character-specific source API under `AlleyCat.Context` or separate authored source collection is required.
 10. `ICharacter` extends `IContextual`, while `IEntity` does not need to extend `IContextual` for CTX-001.
-11. No `ContextRequest`, `ContextRequestKind`, concrete source implementation, fixed character label property, final
-    renderer, AI retrieval backend, memory backend, lore backend, or perception backend is required by this slice.
+11. No `ContextRequest`, `ContextRequestKind`, fixed character label property, AI retrieval backend, memory backend,
+    lore backend, or perception backend is required by this slice.
+12. `CharacterCardContextSource` returns exactly one `Id` entry whose value is `subject.Id`.
+13. Prompt/system context contains `character` and ordinally inserted `characters[exact Character.Id]` entries, with
+    every subject queried using the owning character as observer.
+14. The owner appears in both locations using the same dictionary instance.
+15. Empty IDs, exact duplicate scene IDs, and owner absence fail context assembly clearly.
 
 ## References
 

@@ -132,7 +132,7 @@ Child guidance under [IK: VRIK System](index.md).
 4. `XRControllerTargetProvider` exposes a `LimbSide` property and resolves the corresponding
    XR controller hand-position node through XR services instead of receiving controller nodes
    from `PlayerVRIK`.
-5. The `player.tscn` scene wires fallback providers to the appropriate character IK properties
+5. The `ally_player.tscn` scene wires fallback providers to the appropriate character IK properties
    and assigns each provider side explicitly.
 6. Generic fallback-provider selection is owned by `CharacterIK`; `PlayerVRIK` does not
    distribute XR runtime or `XRManager` to XR fallback providers.
@@ -162,9 +162,9 @@ Child guidance under [IK: VRIK System](index.md).
   world-space transform.
 - **Influence gating:** When provider desired influence is 0, all corresponding side
   effects must be disabled.
-- **XR fallback:** With fallback provider wired in `player.tscn`, the system behaves as
+- **XR fallback:** With fallback provider wired in `ally_player.tscn`, the system behaves as
   if the XR controller is the source when no custom provider overrides it.
-- **Scene wiring:** `player.tscn` must populate per-limb modifier groups so provider
+- **Scene wiring:** `ally_player.tscn` must populate per-limb modifier groups so provider
   influence gates direct solvers and side-effect modifiers without duplicate per-limb exports.
 - **Side resolution:** XR fallback providers must prove left/right controller selection from
   their own `LimbSide` setting rather than a manually assigned source node.

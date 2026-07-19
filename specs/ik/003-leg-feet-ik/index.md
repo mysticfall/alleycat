@@ -229,7 +229,7 @@ pages.
 
 ## References
 
-- @game/assets/characters/reference/player.tscn
+- @game/assets/characters/reference/ally_player.tscn
 - @game/assets/testing/photobooth/templates/lower_body_5_cams.tscn
 - @specs/ik/002-arm-shoulder-ik/index.md
 - @specs/ik/003-leg-feet-ik/leg-feet-ik-contract.md

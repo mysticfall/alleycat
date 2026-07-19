@@ -40,7 +40,9 @@ authored template contents without requiring generators to know internal node pl
    installer, without expanding or directly editing inherited child installer internals.
 10. Character-specific values explicitly authored in an actual target scene survive automatic and repeated role
     installation, while values not explicitly overridden continue to refresh from the role template.
-11. The mirror room uses the production Vadim character scene and retains Vadim's authored identity and voice settings.
+11. The mirror room uses role-explicit production scenes and retains each asset-owned character identity.
+12. A lightweight alternate female-player identity fixture demonstrates that player identity is configurable without a
+    Vadim player asset.
 
 ## Technical Requirements
 
@@ -65,9 +67,9 @@ authored template contents without requiring generators to know internal node pl
    - `reference_female_npc.tscn` — complete working NPC template that extends the base template as appropriate.
    - `reference_female_player.tscn` — complete working player template that extends the base template as appropriate.
 8. Actual runtime role scenes are separate from template-only sources:
-   - `game/assets/characters/reference/player.tscn`
-   - `game/assets/characters/reference/ally.tscn`
-   - `game/assets/characters/reference/vadim.tscn`
+    - `game/assets/characters/reference/ally_player.tscn`
+    - `game/assets/characters/reference/ally_npc.tscn`
+    - `game/assets/characters/reference/vadim_npc.tscn`
 9. Obsolete wrapper scenes under `game/assets/characters/reference/female/` are removed:
    - `reference_female.tscn`
    - `reference_female_npc.tscn`
@@ -98,7 +100,7 @@ authored template contents without requiring generators to know internal node pl
 21. Role templates are authoritative exemplars for generic serialisable exported node references, component wiring, and
      reusable player/NPC topology, subject to explicitly local target-scene configuration precedence from CORE-005.
 22. Child installers copy explicit template subtrees from `context.TemplateRoot` into the target actual scene, such as
-      `game/assets/characters/reference/ally.tscn`, without requiring the actual scene root to be template-aware.
+      `game/assets/characters/reference/ally_npc.tscn`, without requiring the actual scene root to be template-aware.
 23. Child installers own source subtree path, target parent path or resolver, selected-node versus
       selected-node-children mode, binding, metadata, and idempotency.
 24. Child installers in role installer scenes do not expose `PackedScene Template` or equivalent template/resource
@@ -125,7 +127,7 @@ authored template contents without requiring generators to know internal node pl
        role templates rather than hard-coded in C#.
 34. Legacy metadata bindings may remain for migration or escape-hatch cases, but role templates are the preferred
        primary wiring mechanism.
-35. The mirror room instances the actual runtime player and Vadim scenes, not template-only sources.
+35. The mirror room instances `ally_player.tscn` and `vadim_npc.tscn`, not template-only sources.
 36. Integration and visual verification scenes use specialised minimal fixtures where appropriate; production role or
         mirror-room scenes are used only when testing production assembly.
 37. Base template content remains role-neutral; player-only VRIK, pose, and hip reconciliation stay out of base/NPC
@@ -135,15 +137,22 @@ authored template contents without requiring generators to know internal node pl
 39. Animation tree templates live under `game/assets/characters/templates/animation/`.
 40. `game/assets/characters/reference/female/animations/` remains source/reference animation-library data.
 41. Male NPC template assets live under `game/assets/characters/templates/reference_male/`; the production Vadim scene
-    is `game/assets/characters/reference/vadim.tscn` and selects the male template and runtime assets.
+    is `game/assets/characters/reference/vadim_npc.tscn` and selects the male template and runtime assets.
 42. Character installation follows CORE-005 target-scene precedence: explicitly local exported properties and
     `Node3D.Transform` values on reused nodes, including direct character-root exported-property copies, win over role
     template defaults. Non-overridden values refresh, and new or missing nodes receive complete template state.
-43. `game/assets/characters/reference/vadim.tscn` owns `Voice.Id = "Vadim"` and
-    `SpeechGenerator.VoiceOverride = "Ian.wav"`. Shared templates are not made character-specific by this requirement
-    and must not encode `Ian.wav` as the shared value for this fix.
+43. `game/assets/characters/reference/vadim_npc.tscn` owns stable `Character.Id = "Vadim"` and
+    `SpeechGenerator.VoiceOverride = "Ian.wav"`. Generic installation sets the installed character-owned `Voice.Id` to
+    the final `Character.Id`; shared templates do not encode Vadim-specific identity or `Ian.wav`.
 44. `TemplateBaseline` remains a topology-selection input for inherited imported content; it is not unioned into the
     local target `SceneState` used to determine property overrides.
+45. `ally_npc.tscn`, `vadim_npc.tscn`, and `ally_player.tscn` own their stable `Character.Id`; role templates remain
+    identity-neutral.
+46. There is no Vadim player asset in this slice. A lightweight alternate female-player identity fixture must prove that
+    generic installation preserves a different asset-owned player ID and applies it to the installed voice.
+47. Asset renames must preserve existing Godot UIDs so UID-backed scene and resource references remain valid.
+48. `CharacterCardContextSource` and `Actors` membership are attached at the lowest shared male/female character bases.
+    Higher role templates and concrete character scenes must not add redundant compensation.
 
 ## In Scope
 
@@ -166,6 +175,8 @@ authored template contents without requiring generators to know internal node pl
 - Mirror-room and verification-scene consumption rules for actual scenes versus specialised fixtures.
 - Target-scene configuration precedence for character-specific exported properties and transforms.
 - Male template/runtime assets and the production Vadim scene used by the mirror room.
+- Asset-owned stable identity, generic voice-ID installation, and role-explicit runtime scene names.
+- Lowest-shared-base character-card context and `Actors` membership.
 
 ## Out Of Scope
 
@@ -175,6 +186,7 @@ authored template contents without requiring generators to know internal node pl
 - Specific character art assets or visual design.
 - Gameplay logic that varies by character type or role.
 - Non-human character template families before they are planned.
+- A production Vadim player asset.
 - Active base-scene inheritance from template-only sources in actual player or ally role scenes.
 - Exact final rig-tuning values for authored template content.
 - Replacing role-template authored references with metadata binding as the normal wiring path.
@@ -198,7 +210,8 @@ authored template contents without requiring generators to know internal node pl
         without expanding inherited child installer internals.
     - Explicitly authored character-scene values survive automatic and repeated role installation, while non-overridden
         values continue to refresh from the role template.
-    - The mirror room uses the production Vadim scene with Vadim's locally authored identity and voice settings.
+    - The mirror room uses `ally_player.tscn` and `vadim_npc.tscn` with their asset-owned identities.
+    - An alternate female-player fixture demonstrates configurable player identity without a Vadim player asset.
 
 2. Technical Requirements:
     - Canonical hierarchy references `SkeletonProfileHumanoid` with documented bone structure.
@@ -214,9 +227,9 @@ authored template contents without requiring generators to know internal node pl
         `game/assets/characters/reference/female/reference_female_npc.tscn` are removed.
     - Template-only source scenes and actual runtime scenes instance the source `.blend` directly where a visual/import
         root is needed.
-    - Actual runtime role scenes exist at `game/assets/characters/reference/player.tscn` and
-        `game/assets/characters/reference/ally.tscn`, with the production male NPC at
-        `game/assets/characters/reference/vadim.tscn`.
+    - Actual runtime role scenes exist at `game/assets/characters/reference/ally_player.tscn` and
+        `game/assets/characters/reference/ally_npc.tscn`, with the production male NPC at
+        `game/assets/characters/reference/vadim_npc.tscn`.
     - Actual player and ally scenes derive from or instance the source `.blend` directly and include the matching role
         installer scene.
     - Actual role scene roots do not own `RigRoleTemplateSceneInstaller` directly and do not use active base-scene
@@ -267,9 +280,11 @@ authored template contents without requiring generators to know internal node pl
     - Tests verify CORE-005 precedence preserves explicitly local reused-node exported properties,
         `Node3D.Transform`, and direct character-root exported-property copies while refreshing non-overridden values
         and fully populating new or missing nodes.
-    - Tests verify Vadim retains `Voice.Id = "Vadim"` and `SpeechGenerator.VoiceOverride = "Ian.wav"` after automatic
-        and repeated installation, without requiring `Ian.wav` in a shared template.
+    - Tests verify each installed voice ID equals final exact `Character.Id`; Vadim retains `Character.Id = "Vadim"` and
+        `SpeechGenerator.VoiceOverride = "Ian.wav"` without character-specific shared-template defaults.
     - Tests verify `TemplateBaseline` does not contribute inherited values to local target-scene override detection.
+    - Renamed assets preserve Godot UIDs, and UID-backed references continue to resolve.
+    - Character-card context and `Actors` membership are present at the lowest shared male/female bases only.
 
 ## References
 
@@ -283,11 +298,14 @@ authored template contents without requiring generators to know internal node pl
 - @game/assets/characters/templates/installers/npc_installer.tscn
 - @game/assets/characters/templates/installers/player_installer.tscn
 - @game/assets/characters/templates/animation/
-- @game/assets/characters/reference/player.tscn
-- @game/assets/characters/reference/ally.tscn
-- @game/assets/characters/reference/vadim.tscn
+- @game/assets/characters/reference/ally_player.tscn
+- @game/assets/characters/reference/ally_npc.tscn
+- @game/assets/characters/reference/vadim_npc.tscn
 - @game/assets/characters/reference/female/body_collider_profile.tres
 - @game/assets/characters/reference/female/reference_female.blend
 - @game/assets/characters/reference/female/animations/
 - @game/assets/testing/mirror_room/mirror_room.tscn
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
+- [CHAR-002: Character Root](../002-character-root/index.md)
+- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
+- [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

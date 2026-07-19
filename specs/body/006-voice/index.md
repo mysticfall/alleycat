@@ -27,6 +27,7 @@ the real-world expectation that a voice belongs to a speaker and originates from
 8. Systems that listen for generated voice events must receive the spoken speech and source voice.
 9. Completed player transcription must trigger player voice output when the transcript contains spoken text.
 10. Empty or whitespace-only transcription results must be ignored so silence does not produce speech events.
+11. Speech from an installed character must be attributed with that character's stable asset-owned ID.
 
 ## Technical Requirements
 
@@ -65,6 +66,12 @@ the real-world expectation that a voice belongs to a speaker and originates from
     - Honour the inherited `Enabled` contract in its speech path.
 17. The manual voice test scene must place the `AIVoice` node under the character's head attachment and keep playback
     audio spatially attached to that voice origin.
+18. Generic character installation must set a character-owned voice `Id` to the final exact `Character.Id` after
+    target-scene precedence is resolved.
+19. `Voiceprint` is a listener-recognition key. Matching or possessing a voiceprint does not prove that a voice is owned
+    by a particular character.
+20. Empty voice-ID authoring validation is not required in this slice; character and scene ID validation remains owned
+    by CHAR-002 and SCN-001.
 
 ## In Scope
 
@@ -82,6 +89,7 @@ the real-world expectation that a voice belongs to a speaker and originates from
 - Implementation under `@game/src/Body/Voice/` using the `AlleyCat.Body.Voice` namespace.
 - Manual test scene under `@game/tests/body/voice/voice_test.tscn`.
 - Unit and integration tests using mocks/fakes for voice, transcription, generation, and lip-sync dependencies.
+- Generic alignment of installed character-owned voice IDs with final character IDs.
 
 ## Out Of Scope
 
@@ -92,6 +100,7 @@ the real-world expectation that a voice belongs to a speaker and originates from
 - Audio preprocessing or post-processing beyond conversion to WAV format.
 - Character animation beyond lip-sync via `LipSyncPlayer`.
 - Playback completion notification after audio finishes.
+- Empty voice-ID authoring validation.
 
 ## Voice Contract
 
@@ -193,6 +202,8 @@ The `AIVoice` implementation must ensure audio passed to `LipSyncPlayer.Play(Aud
 17. `PlayerVoice` is a `Voice`/`Node3D` that binds to a `Transcriber` by exported direct reference.
 18. `PlayerVoice` invokes the inherited speech path once for a non-empty transcription completion, ignores empty or
     whitespace completions, honours `Enabled`, and disconnects from the transcriber on exit.
+19. Generic installation sets each character-owned voice ID to the final exact `Character.Id`.
+20. Recognition may use `Voiceprint`, but ownership is established by installation rather than inferred from it.
 
 ## References
 
@@ -214,3 +225,5 @@ The `AIVoice` implementation must ensure audio passed to `LipSyncPlayer.Play(Aud
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
 - [CORE-007: Microsoft Logging Integration](../../core/007-microsoft-logging-integration/index.md)
+- [CHAR-002: Character Root](../../character/002-character-root/index.md)
+- [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

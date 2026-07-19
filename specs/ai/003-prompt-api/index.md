@@ -72,6 +72,12 @@ syntax decision.
      competing template abstraction.
 23. Runtime-backed sections such as `EssentialLorePromptSection` are in scope for asynchronous build support, but lore
      query details belong to AI-004.
+24. `PromptStack` is an authoring template. It must not cache rendered output or mutable runtime context.
+25. Male and female NPC role templates must reference one shared generic prompt-stack resource. In authored order, it
+    must provide context-driven `{{ character.Id }}`, generic tool and speech instructions,
+    `EssentialLorePromptSection`, then `CharacterLorePromptSection`.
+26. AgenticMind owns one-time compilation and first-eligible-speech context snapshotting under AI-001; these runtime
+    lifecycle responsibilities do not belong to `PromptStack`.
 
 ## In Scope
 
@@ -81,12 +87,13 @@ syntax decision.
 - `PseudoXmlPromptWriter` as the default prompt writer and startup-registered Godot resource.
 - Prompt-writer delegation, source trimming, and delegation to the existing template compiler.
 - Async source assembly, runtime-backed prompt sections, and compiler delegation.
+- One shared, context-driven NPC prompt-stack resource for male and female role templates.
 - Unit or integration coverage for asynchronous source assembly and compiler delegation.
 
 ## Out Of Scope
 
 - Alternative prompt writer implementations beyond the default pseudo-XML writer.
-- Prompt caching, localisation workflow, or editor preview tooling.
+- Rendered-output caching, localisation workflow, or editor preview tooling.
 - Runtime agent integration beyond producing an `ITemplate` for callers.
 - Detailed lore querying, filtering, formatting, and retrieval behaviour, which is specified by AI-004.
 - New templating compiler implementations or template-render context changes.
@@ -117,6 +124,9 @@ syntax decision.
      service resolution, writer registration, and compiler delegation.
 16. Acceptance covers both author-facing prompt composition and the technical contracts with prompt writing, dependency
      injection, and the templating system.
+17. Male and female NPC role templates use the same generic prompt-stack resource with `{{ character.Id }}`, generic
+    tool and speech instructions, and essential then character lore in authored order.
+18. `PromptStack` does not cache rendered output; AgenticMind compiles and snapshots it under AI-001.
 
 ## References
 
