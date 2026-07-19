@@ -8,7 +8,7 @@ namespace AlleyCat.Mind.AI.Lore;
 public interface ILoreQueryService
 {
     /// <summary>
-    /// Queries lore for the supplied content context and intent.
+    /// Queries lore for one observer and an ordered batch of subjects in the supplied content context.
     /// </summary>
     Task<IReadOnlyList<LoreEntry>> QueryAsync(
         ContentContext content,

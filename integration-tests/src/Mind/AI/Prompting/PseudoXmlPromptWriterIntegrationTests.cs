@@ -1,5 +1,6 @@
 using System.Reflection;
 using AlleyCat.Core;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
@@ -117,7 +118,7 @@ public sealed partial class PseudoXmlPromptWriterIntegrationTests
     }
 
     private static PromptSectionBuildContext CreateBuildContext()
-        => new(new ServiceCollection().BuildServiceProvider(), new SceneContext([]));
+        => new(new ServiceCollection().BuildServiceProvider(), new SceneContext([]), new PromptOwnerCharacter());
 
     /// <summary>
     /// The default prompt writer is an authorable Godot resource and service registrar.

@@ -1,12 +1,14 @@
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace AlleyCat.Tests.Mind.AI;
@@ -166,6 +168,27 @@ public sealed class AgenticMindTests
         Assert.Same(context, result);
         Assert.Same(scene, character.ReceivedScene);
         Assert.Null(character.ReceivedObserver);
+    }
+
+    /// <summary>
+    /// Prompt build context exposes its required owning character without validating optional subsystem-specific identity.
+    /// </summary>
+    [Fact]
+    public void PromptSectionBuildContext_ExposesOwningCharacterWithEmptyID()
+    {
+        using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
+        SceneContext scene = new([]);
+        FakeCharacter character = new(new Dictionary<string, object?>())
+        {
+            Id = string.Empty,
+        };
+
+        PromptSectionBuildContext context = new(services, scene, character);
+
+        Assert.Same(character, context.Character);
+        Assert.Same(scene, context.Scene);
+        Assert.Same(services, context.Services);
+        _ = Assert.Throws<ArgumentNullException>(() => new PromptSectionBuildContext(services, scene, null!));
     }
 
     private sealed class CapturingTemplate : ITemplate

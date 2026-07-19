@@ -1,10 +1,11 @@
+using System.Globalization;
 using AlleyCat.Core.Content;
 using Godot;
 
 namespace AlleyCat.Mind.AI.Lore;
 
 /// <summary>
-/// Initial Markdown-backed lore query service for canonical wiki source files.
+/// Read-only Markdown-backed access to content-scoped perspective lore.
 /// </summary>
 public sealed class MarkdownLoreQueryService : ILoreQueryService
 {
@@ -18,39 +19,107 @@ public sealed class MarkdownLoreQueryService : ILoreQueryService
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string loreWikiRoot = CombineResourcePath(content.RootPath, "lore/wiki/");
+        string perspectiveRoot = CombineResourcePath(
+            content.RootPath,
+            $"lore/perspectives/{query.ObserverID}/");
+        Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = [];
         List<LoreEntry> entries = [];
-        foreach (string path in EnumerateMarkdownFiles(loreWikiRoot))
+
+        foreach (LoreSubjectRequest request in query.Subjects)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            LoreMarkdownDocument document = ReadDocument(path);
-            if (!query.EssentialOnly || document.Essential)
+            if (!documentsByKind.TryGetValue(request.Kind, out IReadOnlyList<LoreMarkdownDocument>? documents))
             {
-                entries.Add(ToEntry(document, path));
+                documents = ReadCollection(perspectiveRoot, request.Kind, cancellationToken);
+                documentsByKind.Add(request.Kind, documents);
+            }
+
+            List<LoreMarkdownDocument> requestDocuments = [];
+            foreach (LoreMarkdownDocument document in documents)
+            {
+                if (Matches(request, document))
+                {
+                    requestDocuments.Add(document);
+                }
+            }
+
+            requestDocuments.Sort(CompareDocuments);
+            foreach (LoreMarkdownDocument document in requestDocuments)
+            {
+                entries.Add(ToEntry(document, request.Kind));
             }
         }
 
-        entries.Sort(static (left, right) => string.Compare(left.ID, right.ID, StringComparison.Ordinal));
         return Task.FromResult<IReadOnlyList<LoreEntry>>(entries);
     }
 
-    private static LoreEntry ToEntry(LoreMarkdownDocument document, string sourcePath)
+    private static IReadOnlyList<LoreMarkdownDocument> ReadCollection(
+        string perspectiveRoot,
+        LoreSubjectKind kind,
+        CancellationToken cancellationToken)
     {
-        if (document.Essential)
+        string collectionPath = perspectiveRoot + GetFolderName(kind) + "/";
+        List<LoreMarkdownDocument> documents = [];
+        foreach (string path in EnumerateMarkdownFiles(collectionPath))
         {
-            if (string.IsNullOrWhiteSpace(document.ID))
-            {
-                throw new InvalidOperationException($"Essential lore page '{sourcePath}' requires a non-empty 'id' frontmatter field.");
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            documents.Add(ReadDocument(path, kind));
+        }
 
-            if (string.IsNullOrWhiteSpace(document.Title))
+        return documents;
+    }
+
+    internal static bool Matches(LoreSubjectRequest request, LoreMarkdownDocument document)
+        => request.Kind == LoreSubjectKind.World
+            ? document.Essential
+            : string.Equals(document.SubjectID, request.SubjectID, StringComparison.Ordinal);
+
+    private static LoreEntry ToEntry(LoreMarkdownDocument document, LoreSubjectKind kind)
+        => new(
+            document.ID,
+            document.Title,
+            document.Body,
+            document.Priority,
+            kind,
+            document.SubjectID);
+
+    internal static int CompareDocuments(LoreMarkdownDocument left, LoreMarkdownDocument right)
+    {
+        int comparison = left.Priority.CompareTo(right.Priority);
+        if (comparison != 0)
+        {
+            return comparison;
+        }
+
+        bool leftHasID = !string.IsNullOrEmpty(left.ID);
+        bool rightHasID = !string.IsNullOrEmpty(right.ID);
+        if (leftHasID != rightHasID)
+        {
+            return leftHasID ? -1 : 1;
+        }
+
+        if (leftHasID)
+        {
+            comparison = string.Compare(left.ID, right.ID, StringComparison.Ordinal);
+            if (comparison != 0)
             {
-                throw new InvalidOperationException($"Essential lore page '{sourcePath}' requires a non-empty 'title' frontmatter field.");
+                return comparison;
             }
         }
 
-        return new LoreEntry(document.ID, document.Title, document.Body.Trim(), sourcePath);
+        comparison = string.Compare(left.Title, right.Title, StringComparison.Ordinal);
+        return comparison != 0
+            ? comparison
+            : string.Compare(left.SourcePath, right.SourcePath, StringComparison.Ordinal);
     }
+
+    private static string GetFolderName(LoreSubjectKind kind) => kind switch
+    {
+        LoreSubjectKind.World => "world",
+        LoreSubjectKind.Location => "locations",
+        LoreSubjectKind.Character => "characters",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported lore subject kind."),
+    };
 
     private static IEnumerable<string> EnumerateMarkdownFiles(string directoryPath)
     {
@@ -81,7 +150,7 @@ public sealed class MarkdownLoreQueryService : ILoreQueryService
         }
     }
 
-    private static LoreMarkdownDocument ReadDocument(string path)
+    private static LoreMarkdownDocument ReadDocument(string path, LoreSubjectKind kind)
     {
         using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read);
         if (file is null)
@@ -90,17 +159,20 @@ public sealed class MarkdownLoreQueryService : ILoreQueryService
             throw new InvalidOperationException($"Could not read lore file '{path}'. Godot FileAccess error: {error}.");
         }
 
-        return ParseDocument(file.GetAsText(), path);
+        return ParseDocument(file.GetAsText(), path, kind);
     }
 
-    internal static LoreMarkdownDocument ParseDocument(string markdown, string sourcePath)
+    internal static LoreMarkdownDocument ParseDocument(
+        string markdown,
+        string sourcePath,
+        LoreSubjectKind kind = LoreSubjectKind.World)
     {
         ArgumentNullException.ThrowIfNull(markdown);
 
         string normalised = markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
         if (!normalised.StartsWith("---\n", StringComparison.Ordinal))
         {
-            return new LoreMarkdownDocument(string.Empty, string.Empty, Essential: false, normalised.Trim());
+            throw new InvalidOperationException($"Lore page '{sourcePath}' requires frontmatter with a non-empty 'title' field.");
         }
 
         int end = normalised.IndexOf("\n---\n", 4, StringComparison.Ordinal);
@@ -110,34 +182,71 @@ public sealed class MarkdownLoreQueryService : ILoreQueryService
         }
 
         Dictionary<string, string> frontmatter = ParseFrontmatter(normalised[4..end]);
-        string body = normalised[(end + "\n---\n".Length)..];
-        _ = frontmatter.TryGetValue("id", out string? id);
-        _ = frontmatter.TryGetValue("title", out string? title);
-
+        string body = normalised[(end + "\n---\n".Length)..].Trim();
+        string? id = GetOptionalField(frontmatter, "id");
+        string title = GetRequiredField(frontmatter, "title", sourcePath);
         bool essential = ParseEssential(frontmatter, sourcePath);
-        if (essential)
-        {
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                throw new InvalidOperationException($"Essential lore page '{sourcePath}' requires a non-empty 'id' frontmatter field.");
-            }
+        int priority = ParsePriority(frontmatter, sourcePath);
+        string? subjectID = ParseSubjectID(frontmatter, sourcePath, kind);
 
-            if (string.IsNullOrWhiteSpace(title))
-            {
-                throw new InvalidOperationException($"Essential lore page '{sourcePath}' requires a non-empty 'title' frontmatter field.");
-            }
+        return new LoreMarkdownDocument(id, title, subjectID, essential, priority, body, sourcePath);
+    }
+
+    private static string GetRequiredField(
+        IReadOnlyDictionary<string, string> frontmatter,
+        string field,
+        string sourcePath)
+    {
+        return !frontmatter.TryGetValue(field, out string? value) || string.IsNullOrWhiteSpace(value)
+            ? throw new InvalidOperationException($"Lore page '{sourcePath}' requires a non-empty '{field}' frontmatter field.")
+            : value.Trim();
+    }
+
+    private static string? GetOptionalField(IReadOnlyDictionary<string, string> frontmatter, string field)
+        => frontmatter.TryGetValue(field, out string? value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : null;
+
+    private static string? ParseSubjectID(
+        IReadOnlyDictionary<string, string> frontmatter,
+        string sourcePath,
+        LoreSubjectKind kind)
+    {
+        if (kind == LoreSubjectKind.World)
+        {
+            return null;
         }
 
-        return new LoreMarkdownDocument(id?.Trim() ?? string.Empty, title?.Trim() ?? string.Empty, essential, body.Trim());
+        string subjectID = GetRequiredField(frontmatter, "subject_id", sourcePath);
+        try
+        {
+            return LoreQuery.NormaliseID(subjectID, "subject_id");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                $"Lore page '{sourcePath}' has invalid 'subject_id' frontmatter value '{subjectID}'.",
+                exception);
+        }
     }
 
     private static bool ParseEssential(IReadOnlyDictionary<string, string> frontmatter, string sourcePath)
     {
         bool essential = false;
-        return !frontmatter.TryGetValue("essential", out string? essentialValue) || bool.TryParse(essentialValue, out essential)
+        return !frontmatter.TryGetValue("essential", out string? value) || bool.TryParse(value, out essential)
             ? essential
             : throw new InvalidOperationException(
-                $"Lore page '{sourcePath}' has invalid 'essential' frontmatter value '{essentialValue}'. Expected boolean 'true' or 'false'.");
+                $"Lore page '{sourcePath}' has invalid 'essential' frontmatter value '{value}'. Expected boolean 'true' or 'false'.");
+    }
+
+    private static int ParsePriority(IReadOnlyDictionary<string, string> frontmatter, string sourcePath)
+    {
+        return !frontmatter.TryGetValue("priority", out string? value)
+            ? 0
+            : int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int priority)
+            ? priority
+            : throw new InvalidOperationException(
+                $"Lore page '{sourcePath}' has invalid 'priority' frontmatter value '{value}'. Expected an integer.");
     }
 
     private static Dictionary<string, string> ParseFrontmatter(string frontmatter)
@@ -166,5 +275,12 @@ public sealed class MarkdownLoreQueryService : ILoreQueryService
     private static string CombineResourcePath(string rootPath, string relativePath)
         => rootPath.EndsWith("/", StringComparison.Ordinal) ? rootPath + relativePath : rootPath + "/" + relativePath;
 
-    internal sealed record LoreMarkdownDocument(string ID, string Title, bool Essential, string Body);
+    internal sealed record LoreMarkdownDocument(
+        string? ID,
+        string Title,
+        string? SubjectID,
+        bool Essential,
+        int Priority,
+        string Body,
+        string SourcePath);
 }

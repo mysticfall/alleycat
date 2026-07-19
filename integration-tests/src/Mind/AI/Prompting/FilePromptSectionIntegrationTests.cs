@@ -1,3 +1,4 @@
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
@@ -45,5 +46,5 @@ public sealed partial class FilePromptSectionIntegrationTests
     }
 
     private static PromptSectionBuildContext CreateBuildContext()
-        => new(new ServiceCollection().BuildServiceProvider(), new SceneContext([]));
+        => new(new ServiceCollection().BuildServiceProvider(), new SceneContext([]), new PromptOwnerCharacter());
 }

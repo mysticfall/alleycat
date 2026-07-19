@@ -1,3 +1,4 @@
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
@@ -138,7 +139,7 @@ public sealed partial class PromptStackIntegrationTests
     }
 
     private static PromptSectionBuildContext CreateBuildContext(IServiceProvider services)
-        => new(services, new SceneContext([]));
+        => new(services, new SceneContext([]), new PromptOwnerCharacter());
 
     private sealed class RecordingCompiler(ITemplate template) : ITemplateCompiler
     {

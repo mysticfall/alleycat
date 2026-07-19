@@ -257,13 +257,14 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
     private async Task<AgentDefinition> CreateAgentDefinitionAsync(
         ISceneContext scene,
+        ICharacter character,
         IReadOnlyDictionary<string, object?> systemInstructionContext,
         CancellationToken cancellationToken)
     {
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
-        PromptSectionBuildContext buildContext = new(Game.Instance, scene);
+        PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await GetCompiledSystemInstructionTemplateAsync(
             systemInstruction,
             buildContext,
@@ -316,8 +317,9 @@ public partial class AgenticMind : MindBase, IServiceProvider
     private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
     {
         ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-        IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext(scene);
-        AIAgent agent = await EnsureAgentAsync(scene, systemInstructionContext, cancellationToken);
+        ICharacter character = ResolveAssociatedCharacter();
+        IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext(character, scene);
+        AIAgent agent = await EnsureAgentAsync(scene, character, systemInstructionContext, cancellationToken);
         bool enableRequestResponseDiagnostics = _enableRequestResponseDiagnosticsForAgent;
         if (enableRequestResponseDiagnostics)
         {
@@ -432,13 +434,18 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
     private async Task<AIAgent> EnsureAgentAsync(
         ISceneContext scene,
+        ICharacter character,
         IReadOnlyDictionary<string, object?> systemInstructionContext,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(systemInstructionContext);
 
         AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
-        AgentDefinition definition = await CreateAgentDefinitionAsync(scene, systemInstructionContext, cancellationToken);
+        AgentDefinition definition = await CreateAgentDefinitionAsync(
+            scene,
+            character,
+            systemInstructionContext,
+            cancellationToken);
 
         if (_agent is not null
             && ReferenceEquals(_clientProviderForAgent, ClientProvider)
@@ -472,12 +479,6 @@ public partial class AgenticMind : MindBase, IServiceProvider
         _agent = ConfigureAgentDiagnostics(agent, this, diagnosticsSettings.EnableRequestResponseLogging);
 
         return _agent;
-    }
-
-    private IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(ISceneContext scene)
-    {
-        ICharacter character = ResolveAssociatedCharacter();
-        return CreateSystemInstructionContext(character, scene);
     }
 
     internal static IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(
