@@ -8,6 +8,7 @@ using AlleyCat.Core.Installer;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Rigging.Physics;
+using AlleyCat.Speech.Generation;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -91,6 +92,46 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             AssertBlinkAnimationTargetsBodyMesh(animationPlayer, "GeneralSkeleton/Male_body");
             AssertBodyMeshBlinkShapesDeform(animationPlayer, "GeneralSkeleton/Male_body");
             AssertBlinkFilterTargetsMaleMeshes(animationTree);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
+
+    /// <summary>
+    /// Verifies Vadim's locally authored voice identity and backend override survive automatic and explicit role installation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task VadimScene_RoleInstallation_PreservesLocalVoiceOverrides()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node root = LoadPackedScene(VadimScenePath).Instantiate();
+        CharacterHub character = Assert.IsType<CharacterHub>(root);
+        Voice voice = root.GetNode<Voice>("Male/GeneralSkeleton/Head/Voice");
+        OpenAISpeechGenerator speechGenerator = root.GetNode<OpenAISpeechGenerator>("Male/GeneralSkeleton/Head/Voice/SpeechGenerator");
+
+        Assert.Equal("Vadim", character.Id);
+        Assert.Equal("Vadim", voice.Id);
+        Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 12);
+            Assert.Equal("Vadim", character.Id);
+            Assert.Equal("Vadim", voice.Id);
+            Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
+
+            RigRoleTemplateSceneInstaller installer = root.GetNode<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
+            SceneInstallationResult reinstall = installer.Install(new SceneInstallationContext(root));
+
+            Assert.True(reinstall.Succeeded, string.Join('\n', reinstall.Errors));
+            Assert.Equal("Vadim", character.Id);
+            Assert.Equal("Vadim", voice.Id);
+            Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
         }
         finally
         {

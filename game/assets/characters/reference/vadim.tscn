@@ -8,6 +8,12 @@
 [node name="Vadim" unique_id=504240789 instance=ExtResource("1_0e151")]
 Id = "Vadim"
 
+[node name="Voice" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1295007558]
+Id = "Vadim"
+
+[node name="SpeechGenerator" parent="Male/GeneralSkeleton/Head/Voice" index="0" unique_id=1402629371]
+VoiceOverride = "Ian.wav"
+
 [node name="NPCCharacterInstaller" parent="." index="7" unique_id=532609475 instance=ExtResource("2_0o8g4")]
 Template = ExtResource("1_0e151")
 TemplateBaseline = ExtResource("3_megh4")
