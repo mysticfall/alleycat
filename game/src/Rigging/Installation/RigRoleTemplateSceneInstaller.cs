@@ -136,6 +136,7 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
             return SceneInstallationResult.Failed(ex.Message);
         }
 
+        var targetSceneOverrides = TargetSceneOverrides.Discover(context.TargetRoot);
         var characterContext = new RigInstallationContext(
             context.TargetRoot,
             context.MetadataNamespace,
@@ -143,7 +144,8 @@ public partial class RigRoleTemplateSceneInstaller : SceneInstaller
             targetSkeleton,
             templateSkeleton,
             ownedTemplateBaselineRoot,
-            ColliderProfile);
+            ColliderProfile,
+            targetSceneOverrides);
 
         try
         {

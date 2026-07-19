@@ -381,7 +381,10 @@ public static class TemplateSceneInstallation
     {
         if (existing is Node3D existingNode3D && source is Node3D sourceNode3D)
         {
-            existingNode3D.Transform = sourceNode3D.Transform;
+            if (!context.TargetSceneOverrides.IsAuthored(existingNode3D, Node3D.PropertyName.Transform))
+            {
+                existingNode3D.Transform = sourceNode3D.Transform;
+            }
         }
 
         TemplateSceneReferenceRebaser.CopyExportedPropertyValues(
@@ -391,7 +394,8 @@ public static class TemplateSceneInstallation
             context.TargetRoot,
             installer,
             sourceNodeMap,
-            failOnUnresolved: false);
+            failOnUnresolved: false,
+            targetSceneOverrides: context.TargetSceneOverrides);
 
         HashSet<Node> usedExistingChildren = [];
         foreach (Node sourceChild in source.GetChildren())

@@ -55,7 +55,8 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
                 context.TemplateRoot,
                 context.TargetRoot,
                 this,
-                failOnUnresolved: true);
+                failOnUnresolved: true,
+                targetSceneOverrides: context.TargetSceneOverrides);
 
             RigTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);
 

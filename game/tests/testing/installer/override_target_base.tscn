@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/testing/installer/InstallerOverrideProbe.cs" id="1_heikp"]
+
+[node name="Target" type="Node3D" unique_id=1180034670]
+script = ExtResource("1_heikp")
+PreservedValue = "base-preserved"
+RefreshValue = "base-refresh"
+metadata/_custom_type_script = "uid://b4msnda6v2q3h"
+
+[node name="Reused" type="Node3D" parent="." unique_id=1208317583 node_paths=PackedStringArray("Target")]
+script = ExtResource("1_heikp")
+PreservedValue = "base-nested-preserved"
+RefreshValue = "base-nested-refresh"
+Target = NodePath("../StaleReference")
+metadata/_custom_type_script = "uid://b4msnda6v2q3h"
+
+[node name="StaleReference" type="Node" parent="." unique_id=1890015611]

@@ -18,7 +18,8 @@ public static class TemplateSceneReferenceRebaser
         Node targetRoot,
         ISceneInstaller installer,
         IReadOnlyDictionary<Node, Node>? sourceNodeMap = null,
-        bool failOnUnresolved = false)
+        bool failOnUnresolved = false,
+        TargetSceneOverrides? targetSceneOverrides = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(destination);
@@ -26,6 +27,11 @@ public static class TemplateSceneReferenceRebaser
         Type destinationType = destination.GetType();
         foreach (PropertyInfo property in GetExportedWritableProperties(source.GetType()))
         {
+            if (targetSceneOverrides?.IsAuthored(destination, property.Name) == true)
+            {
+                continue;
+            }
+
             PropertyInfo? destinationProperty = destinationType.GetProperty(property.Name, BindingFlags.Instance | BindingFlags.Public);
             if (destinationProperty is null || !destinationProperty.CanWrite || !destinationProperty.PropertyType.IsAssignableFrom(property.PropertyType))
             {

@@ -10,7 +10,8 @@ title: Scene Installer System
 Establish a general, composable installer pattern for setting up and configuring scene modules through visible
 template-backed installation. Template scenes are the authoritative, inspector-readable source for serialisable node
 references and reusable topology. Installers copy, rebase, and validate authored template contents instead of encoding
-primary scene topology in C#.
+primary scene topology in C#. Shared templates provide generic defaults and topology, while explicitly serialised
+configuration in a higher-layer target scene takes precedence for reused content.
 
 ## Goal
 
@@ -43,7 +44,12 @@ Provide a contract for composing scene setup logic through modular installers. T
     references, propagate to installed player/NPC scenes without C# installer source changes when they stay within
     authored installer boundaries.
 11. Player and NPC role templates can be used as drop-in replacements for scenes derived from them, including nested
-    descendants under reused template subtrees.
+     descendants under reused template subtrees.
+12. Contributors can customise reused nodes and character-root settings in a target scene without those explicitly
+    authored values being reset by automatic or repeated installation.
+13. Target-scene settings that are not explicitly customised continue to receive current template defaults, and newly
+    added template content installs with complete template state.
+14. Target-scene authoring precedence does not imply that arbitrary runtime mutations persist across installation.
 
 ## Technical Requirements
 
@@ -115,8 +121,21 @@ Provide a contract for composing scene setup logic through modular installers. T
     content is provided by the role-owned template scene; misleading generic base-installer assets are removed rather
     than advertising character-context-only children as generic composites.
 35. Player-specific animation-tree root selection is authored in the player role/template layer. Player subsystem
-        installers bind the already-installed `AnimationTree` and fail clearly if the template did not provide a tree
-        root; they do not load hidden player animation resources from C#.
+         installers bind the already-installed `AnimationTree` and fail clearly if the template did not provide a tree
+         root; they do not load hidden player animation resources from C#.
+36. Before any role installer child mutates the target, the role coordinator captures target-scene override state and
+    propagates it through template and rig installation contexts.
+37. Override capture loads the target root's `SceneFilePath` and inspects only the packed scene's local, top-level
+    `SceneState`. It indexes explicitly serialised properties by node path and property name.
+38. For reused nodes, explicitly serialised target-scene exported properties and `Node3D.Transform` take precedence over
+    template values. The same precedence applies when exported properties are copied directly to the character root.
+39. Reused properties not explicitly serialised by the local target scene refresh from the current template. New or
+    missing nodes receive complete template state.
+40. Override detection does not union inherited or base `SceneState`, preserve arbitrary runtime mutations, retain a
+    previous-template snapshot, or perform a full value-based three-way merge.
+41. Target-scene property precedence is independent of installer node ownership, deletion, and idempotency metadata;
+    ownership markers do not determine whether a property is overridden.
+42. If a target has no source scene that can provide local `SceneState`, installation retains template-wins behaviour.
 
 ## In Scope
 
@@ -140,6 +159,8 @@ Provide a contract for composing scene setup logic through modular installers. T
 - Copy semantics for ownership, installer metadata, idempotency, sibling installer output, and role split.
 - Template-backed module scenes/resources for reusable topology that must remain inspectable.
 - Reconciliation for reused template subtrees, including nested descendant installation and reference refresh.
+- Target-scene authoring precedence for reused exported properties, transforms, and direct character-root exports.
+- Local target `SceneState` capture and propagation through template and rig installation contexts.
 
 ## Out Of Scope
 
@@ -150,6 +171,8 @@ Provide a contract for composing scene setup logic through modular installers. T
 - Custom persistence of installer configurations outside standard Godot scene saving/loading mechanisms.
 - Real-time modification of installed scenes during gameplay, unless a module explicitly defines it.
 - Replacing template-authored exported references with metadata binding as the normal authoring path.
+- Persistence of arbitrary runtime property mutations across installation.
+- Persistent previous-template snapshots or a full value-based three-way merge between target and template state.
 
 ## Acceptance Criteria
 
@@ -165,6 +188,9 @@ Provide a contract for composing scene setup logic through modular installers. T
 9. Template edits within authored installer boundaries, including new, moved, or renamed nodes and changed node
    references, appear in installed player/NPC scenes without C# installer source changes.
 10. Nested descendants added under reused template subtrees are installed automatically.
+11. Explicitly authored target-scene values on reused properties, transforms, and character-root exports survive
+    automatic and repeated installation.
+12. Non-overridden reused values refresh from the template, while new template nodes install with complete state.
 
 ### Technical Requirements
 1. A core installer interface is defined in `AlleyCat.Core.Installer` with an explicit installation target context.
@@ -219,10 +245,23 @@ Provide a contract for composing scene setup logic through modular installers. T
 30. Tests or review confirm character-context-only composition is represented by explicit role installer scenes, not an
          obsolete generic base asset.
 31. Tests or review confirm player animation-tree root selection is serialised in the player template/role-owned data,
-         while `PlayerRigInstaller` contains no hard-coded player animation resource load.
+          while `PlayerRigInstaller` contains no hard-coded player animation resource load.
+32. Tests verify override state is captured before child installer mutation and propagated through template and rig
+    installation contexts.
+33. Tests verify override capture uses only explicitly serialised properties from the target packed scene's local,
+    top-level `SceneState`, indexed by node path and property name, without inherited base-state union.
+34. Tests verify reused exported properties, `Node3D.Transform`, and direct character-root exported-property copies
+    preserve explicitly local target-scene values.
+35. Tests verify non-overridden reused properties refresh from the current template and new or missing nodes receive
+    complete template state.
+36. Tests verify property precedence is independent of installer ownership, deletion, and idempotency metadata.
+37. Tests verify a target without a usable source scene retains template-wins behaviour.
+38. Tests verify arbitrary runtime mutations and values inferred from previous-template snapshots are not treated as
+    local target-scene overrides.
 
 ## References
 - `@game/src/Core/Installer/` — Installer system types
+- `@game/src/Core/Installer/TargetSceneOverrides.cs` — Local target-scene property precedence capture
 - `@game/src/Core/Installer/TemplateSceneReferenceRebaser.cs` — Template-root to target-root reference rebasing
 - [CORE-003: Component/Trait System](../003-component-system/index.md) — Potential component-holder integration
 - [CHAR-001: Character Skeleton Profile](../../character/001-character-skeleton/index.md)

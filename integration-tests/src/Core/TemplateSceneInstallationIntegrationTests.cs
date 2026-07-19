@@ -1,6 +1,7 @@
 using AlleyCat.Core.Installer;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.TestFramework;
+using AlleyCat.Tests.Testing.Installer;
 using Godot;
 using Xunit;
 
@@ -11,6 +12,8 @@ namespace AlleyCat.IntegrationTests.Core;
 /// </summary>
 public sealed class TemplateSceneInstallationIntegrationTests
 {
+    private const string LocalOverrideTargetPath = "res://tests/testing/installer/override_target_local.tscn";
+
     /// <summary>
     /// Selected-node mode copies the resolved source subtree without moving it out of the template source.
     /// </summary>
@@ -410,6 +413,84 @@ public sealed class TemplateSceneInstallationIntegrationTests
         Assert.Equal(1, CountDirectChildren(existingProbe, "ChildReference"));
     }
 
+    /// <summary>
+    /// Only properties serialised by the inherited target's local layer take precedence during reconciliation.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_InheritedTargetLocalOverrides_SurviveInitialInstallAndReinstall()
+    {
+        using PackedScene targetScene = ResourceLoader.Load<PackedScene>(LocalOverrideTargetPath)
+            ?? throw new InvalidOperationException($"Failed to load installer override fixture '{LocalOverrideTargetPath}'.");
+        using Node target = targetScene.Instantiate();
+        InstallerOverrideProbe existing = target.GetNode<InstallerOverrideProbe>("Reused");
+        Transform3D localTransform = existing.Transform;
+        using Node templateRoot = CreateOverrideTemplateRoot();
+        using var installer = new TestTemplateSubtreeInstaller
+        {
+            Name = "OverrideInstaller",
+            InstallMode = TemplateInstallMode.SelectedNode,
+            SourcePath = new NodePath("Reused"),
+        };
+        var context = new TemplateSceneInstallationContext(target, SceneInstallationMetadata.DefaultNamespace, templateRoot);
+
+        SceneInstallationResult first = installer.Install(context);
+
+        Assert.True(first.Succeeded, string.Join('\n', first.Errors));
+        Assert.Equal("local-nested-preserved", existing.PreservedValue);
+        Assert.Equal("template-refresh", existing.RefreshValue);
+        Assert.Equal(localTransform, existing.Transform);
+        InstallerOverrideProbe fresh = existing.GetNode<InstallerOverrideProbe>("Fresh");
+        Assert.Equal("template-fresh", fresh.PreservedValue);
+        Assert.Same(fresh, existing.Target);
+        Assert.True(SceneInstallationMetadata.HasInstalled(fresh, context, installer));
+        Assert.False(SceneInstallationMetadata.HasInstalled(existing, context, installer));
+
+        existing.RefreshValue = "runtime-stale";
+        existing.Target = target.GetNode("StaleReference");
+        SceneInstallationResult second = installer.Install(context);
+
+        Assert.True(second.Succeeded, string.Join('\n', second.Errors));
+        Assert.Equal("local-nested-preserved", existing.PreservedValue);
+        Assert.Equal("template-refresh", existing.RefreshValue);
+        Assert.Equal(localTransform, existing.Transform);
+        Assert.Same(fresh, existing.Target);
+        Assert.Equal(1, CountDirectChildren(existing, "Fresh"));
+        Assert.True(SceneInstallationMetadata.HasInstalled(fresh, context, installer));
+    }
+
+    /// <summary>
+    /// Direct root copying protects a local root override but refreshes a property authored only by the base scene.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void CopyExportedPropertyValues_InheritedTargetRoot_ProtectsOnlyLocalProperties()
+    {
+        using PackedScene targetScene = ResourceLoader.Load<PackedScene>(LocalOverrideTargetPath)
+            ?? throw new InvalidOperationException($"Failed to load installer override fixture '{LocalOverrideTargetPath}'.");
+        using Node target = targetScene.Instantiate();
+        InstallerOverrideProbe targetProbe = Assert.IsType<InstallerOverrideProbe>(target);
+        using var templateRoot = new InstallerOverrideProbe
+        {
+            Name = "Template",
+            PreservedValue = "template-root-preserved",
+            RefreshValue = "template-root-refresh",
+        };
+        using var installer = new TestTemplateSubtreeInstaller { Name = "RootPropertyInstaller" };
+        var context = new TemplateSceneInstallationContext(target, SceneInstallationMetadata.DefaultNamespace, templateRoot);
+
+        TemplateSceneReferenceRebaser.CopyExportedPropertyValues(
+            templateRoot,
+            targetProbe,
+            templateRoot,
+            target,
+            installer,
+            targetSceneOverrides: context.TargetSceneOverrides);
+
+        Assert.Equal("local-root-preserved", targetProbe.PreservedValue);
+        Assert.Equal("template-root-refresh", targetProbe.RefreshValue);
+    }
+
     private static PackedScene CreateTemplate()
     {
         var root = new Node { Name = "TemplateRoot" };
@@ -460,6 +541,28 @@ public sealed class TemplateSceneInstallationIntegrationTests
         var probe = new ReadyReferenceProbe { Name = "Probe", Target = reference };
         root.AddChild(probe);
         root.AddChild(reference);
+        return root;
+    }
+
+    private static Node CreateOverrideTemplateRoot()
+    {
+        var root = new Node { Name = "TemplateRoot" };
+        var reused = new InstallerOverrideProbe
+        {
+            Name = "Reused",
+            PreservedValue = "template-preserved",
+            RefreshValue = "template-refresh",
+            Transform = new Transform3D(Basis.FromEuler(new Vector3(0.2f, 0.1f, 0.3f)), new Vector3(8.0f, 9.0f, 10.0f)),
+        };
+        var fresh = new InstallerOverrideProbe
+        {
+            Name = "Fresh",
+            PreservedValue = "template-fresh",
+            RefreshValue = "template-fresh-refresh",
+        };
+        reused.AddChild(fresh);
+        reused.Target = fresh;
+        root.AddChild(reused);
         return root;
     }
 

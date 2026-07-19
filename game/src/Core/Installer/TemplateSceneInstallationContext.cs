@@ -9,11 +9,13 @@ namespace AlleyCat.Core.Installer;
 /// <param name="metadataNamespace">The metadata namespace used for idempotency markers.</param>
 /// <param name="templateRoot">The instantiated template root used as the source for template installers.</param>
 /// <param name="templateBaselineRoot">The optional instantiated baseline scene used to ignore inherited template content.</param>
+/// <param name="targetSceneOverrides">The target scene's locally authored property index, captured before installation.</param>
 public class TemplateSceneInstallationContext(
     Node targetRoot,
     string metadataNamespace,
     Node templateRoot,
-    Node? templateBaselineRoot = null)
+    Node? templateBaselineRoot = null,
+    TargetSceneOverrides? targetSceneOverrides = null)
     : SceneInstallationContext(targetRoot, metadataNamespace)
 {
     /// <summary>
@@ -27,7 +29,12 @@ public class TemplateSceneInstallationContext(
     /// </summary>
     public Node? TemplateBaselineRoot { get; } = templateBaselineRoot;
 
+    /// <summary>
+    /// Gets the properties explicitly authored by the original target scene layer.
+    /// </summary>
+    public TargetSceneOverrides TargetSceneOverrides { get; } = targetSceneOverrides ?? TargetSceneOverrides.Discover(targetRoot);
+
     /// <inheritdoc />
     public override TemplateSceneInstallationContext WithTargetRoot(Node targetRoot)
-        => new(targetRoot, MetadataNamespace, TemplateRoot, TemplateBaselineRoot);
+        => new(targetRoot, MetadataNamespace, TemplateRoot, TemplateBaselineRoot, TargetSceneOverrides);
 }
