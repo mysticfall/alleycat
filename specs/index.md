@@ -33,6 +33,12 @@
 
 - [NAV-001: NPC Navigation](nav/001-npc-navigation/index.md)
 
+## Animation
+
+- [ANIM: Animation](animation/index.md)
+  - [ANIM-001: Animation Source Pipeline](animation/001-animation-source-pipeline/index.md)
+  - ANIM-003: Standing locomotion selection and Godot packaging (future)
+
 ## Scene
 
 - [SCN-001: Scene Context API](scene/001-scene-context-api/index.md)
