@@ -161,6 +161,26 @@ public sealed class ICharacterTests
             get; set;
         }
 
+        public float InitialFacingRampDistance
+        {
+            get; set;
+        }
+
+        public float FacingRampDistance
+        {
+            get; set;
+        }
+
+        public float ShortMoveDistance
+        {
+            get; set;
+        }
+
+        public float FacingToleranceDegrees
+        {
+            get; set;
+        }
+
         public bool AvoidanceEnabled
         {
             get; set;
@@ -194,6 +214,20 @@ public sealed class ICharacterTests
 
         public void ClearDestination() => HasDestination = false;
 
-        public Vector3 GetNextPathPosition() => Destination.Origin;
+        public NavigationMotionIntent Poll(Transform3D actorTransform)
+        {
+            Vector3 travel = actorTransform.Origin.DirectionTo(Destination.Origin);
+            return new NavigationMotionIntent(
+                Destination.Origin,
+                travel,
+                Vector3.Forward,
+                0.0f,
+                actorTransform.Origin.DistanceTo(Destination.Origin),
+                0.0f,
+                false,
+                true,
+                false,
+                true);
+        }
     }
 }

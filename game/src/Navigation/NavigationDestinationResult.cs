@@ -19,4 +19,9 @@ public enum NavigationDestinationResult
     /// The destination is valid but cannot currently be reached by the navigation map.
     /// </summary>
     Unreachable,
+
+    /// <summary>
+    /// The navigation map is not ready, so reachability is unknown and no request state was changed.
+    /// </summary>
+    NotReady,
 }

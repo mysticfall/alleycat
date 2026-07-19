@@ -57,6 +57,38 @@ public interface INavigation : IComponent
     }
 
     /// <summary>
+    /// Gets or sets the initial path distance over which facing aligns to travel.
+    /// </summary>
+    float InitialFacingRampDistance
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Gets or sets the shared approach distance for waypoint and terminal facing ramps.
+    /// </summary>
+    float FacingRampDistance
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Gets or sets the route length at or below which terminal facing applies immediately.
+    /// </summary>
+    float ShortMoveDistance
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Gets or sets the horizontal facing completion tolerance in degrees.
+    /// </summary>
+    float FacingToleranceDegrees
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Gets or sets whether Godot avoidance is enabled for the underlying navigation agent.
     /// </summary>
     bool AvoidanceEnabled
@@ -108,7 +140,10 @@ public interface INavigation : IComponent
     /// Requests navigation toward the supplied transform intent.
     /// </summary>
     /// <param name="destination">Destination and final-orientation intent.</param>
-    /// <returns>The destination request result.</returns>
+    /// <returns>
+    /// The destination request result. Invalid, unreachable, and map-not-ready results leave existing request state
+    /// unchanged.
+    /// </returns>
     NavigationDestinationResult SetDestination(Transform3D destination);
 
     /// <summary>
@@ -117,8 +152,9 @@ public interface INavigation : IComponent
     void ClearDestination();
 
     /// <summary>
-    /// Gets the next path position and advances the backing path follower as required by Godot.
+    /// Polls one coherent navigation intent against the actor's authoritative world transform.
     /// </summary>
-    /// <returns>The next path position.</returns>
-    Vector3 GetNextPathPosition();
+    /// <param name="actorTransform">Current authoritative actor transform in world space.</param>
+    /// <returns>The cached or newly sampled immutable intent.</returns>
+    NavigationMotionIntent Poll(Transform3D actorTransform);
 }

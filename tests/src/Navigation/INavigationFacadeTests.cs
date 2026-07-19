@@ -44,6 +44,43 @@ public sealed class INavigationFacadeTests
         Assert.NotNull(navigationType.GetProperty(nameof(INavigation.DestinationReachedDistance)));
         Assert.NotNull(navigationType.GetMethod(nameof(INavigation.SetDestination)));
         Assert.NotNull(navigationType.GetMethod(nameof(INavigation.ClearDestination)));
+        Assert.NotNull(navigationType.GetMethod(nameof(INavigation.Poll)));
+        Assert.Null(navigationType.GetMethod("GetNextPathPosition"));
+    }
+
+    /// <summary>
+    /// Verifies request outcomes distinguish unknown map readiness from invalid and unreachable destinations.
+    /// </summary>
+    [Fact]
+    public void NavigationDestinationResult_DefinesDistinctAtomicRejectionOutcomes()
+    {
+        NavigationDestinationResult[] results = Enum.GetValues<NavigationDestinationResult>();
+
+        Assert.Contains(NavigationDestinationResult.Accepted, results);
+        Assert.Contains(NavigationDestinationResult.Invalid, results);
+        Assert.Contains(NavigationDestinationResult.Unreachable, results);
+        Assert.Contains(NavigationDestinationResult.NotReady, results);
+        Assert.Equal(4, results.Distinct().Count());
+    }
+
+    /// <summary>
+    /// Verifies intent is immutable and carries separate travel, facing, and completion state.
+    /// </summary>
+    [Fact]
+    public void NavigationMotionIntent_ExposesImmutableCoherentSnapshot()
+    {
+        Type intentType = typeof(NavigationMotionIntent);
+
+        Assert.True(intentType.IsValueType);
+        Assert.All(
+            intentType.GetProperties(BindingFlags.Public | BindingFlags.Instance),
+            property => Assert.False(property.CanWrite));
+        Assert.NotNull(intentType.GetProperty(nameof(NavigationMotionIntent.TravelDirection)));
+        Assert.NotNull(intentType.GetProperty(nameof(NavigationMotionIntent.DesiredFacingDirection)));
+        Assert.NotNull(intentType.GetProperty(nameof(NavigationMotionIntent.PositionReached)));
+        Assert.NotNull(intentType.GetProperty(nameof(NavigationMotionIntent.FacingReached)));
+        Assert.NotNull(intentType.GetProperty(nameof(NavigationMotionIntent.IsComplete)));
+        Assert.NotNull(intentType.GetProperty(nameof(NavigationMotionIntent.HasValidSample)));
     }
 
     /// <summary>
