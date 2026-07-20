@@ -18,6 +18,7 @@ public static class BuiltInTemplateTools
     [
         new DelegateTemplateTool("add", Add),
         new DelegateTemplateTool("eq", Eq),
+        new DelegateTemplateTool("eqOrdinal", EqOrdinal),
         new DelegateTemplateTool("nf", NumberFormat),
         new DelegateTemplateTool("repeat", Repeat),
     ];
@@ -44,6 +45,19 @@ public static class BuiltInTemplateTools
         string right = Convert.ToString(arguments[1], CultureInfo.CurrentCulture) ?? string.Empty;
 
         return string.Equals(left, right, StringComparison.OrdinalIgnoreCase) ? "true" : string.Empty;
+    }
+
+    private static string EqOrdinal(IReadOnlyList<object?> arguments)
+    {
+        if (arguments.Count < 2)
+        {
+            return string.Empty;
+        }
+
+        string left = Convert.ToString(arguments[0], CultureInfo.InvariantCulture) ?? string.Empty;
+        string right = Convert.ToString(arguments[1], CultureInfo.InvariantCulture) ?? string.Empty;
+
+        return string.Equals(left, right, StringComparison.Ordinal) ? "true" : string.Empty;
     }
 
     private static string NumberFormat(IReadOnlyList<object?> arguments)

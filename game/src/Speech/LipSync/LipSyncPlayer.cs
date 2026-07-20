@@ -159,6 +159,22 @@ public abstract partial class LipSyncPlayer : Node
     private double _audioStartGraceSeconds;
     private bool _hasLoggedUnmappedBlendshapes;
     private ILogger<LipSyncPlayer>? _logger;
+    private readonly Lock _preparationLifetimeLock = new();
+    private readonly CancellationTokenSource _preparationLifetimeCancellation = new();
+    private int _activePreparationCount;
+    private bool _preparationLifetimeEnded;
+    private bool _backendDisposalPending;
+
+    internal bool IsLifetimeEnded
+    {
+        get
+        {
+            lock (_preparationLifetimeLock)
+            {
+                return _preparationLifetimeEnded;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public override void _Ready()
@@ -170,8 +186,25 @@ public abstract partial class LipSyncPlayer : Node
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        bool disposeBackend;
+        lock (_preparationLifetimeLock)
+        {
+            if (_preparationLifetimeEnded)
+            {
+                return;
+            }
+
+            _preparationLifetimeEnded = true;
+            _backendDisposalPending = _activePreparationCount > 0;
+            disposeBackend = !_backendDisposalPending;
+        }
+
+        _preparationLifetimeCancellation.Cancel();
         StopPlayback(resetWeights: true, clearFrames: true);
-        DisposeBackend();
+        if (disposeBackend)
+        {
+            DisposeBackend();
+        }
     }
 
     /// <inheritdoc />
@@ -249,7 +282,7 @@ public abstract partial class LipSyncPlayer : Node
     {
         try
         {
-            PlayPrepared(PreparePlayback(speech));
+            PlayPrepared(PreparePlayback(speech, CancellationToken.None));
         }
         catch (Exception ex)
         {
@@ -261,8 +294,27 @@ public abstract partial class LipSyncPlayer : Node
     /// <summary>
     /// Prepares lip-sync inference data for the supplied speech clip off the caller thread.
     /// </summary>
-    public Task<PreparedPlayback> PreparePlaybackAsync(AudioStreamWav speech)
-        => Task.Run(() => PreparePlayback(speech));
+    public Task<PreparedPlayback> PreparePlaybackAsync(
+        AudioStreamWav speech,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        CancellationTokenSource preparationCancellation;
+        lock (_preparationLifetimeLock)
+        {
+            if (_preparationLifetimeEnded)
+            {
+                throw new InvalidOperationException("LipSyncPlayer cannot prepare playback after node teardown.");
+            }
+
+            _activePreparationCount++;
+            preparationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                _preparationLifetimeCancellation.Token);
+        }
+
+        return RunPreparationAsync(speech, preparationCancellation);
+    }
 
     /// <summary>
     /// Starts playback for lip-sync data prepared by <see cref="PreparePlaybackAsync" />.
@@ -288,7 +340,9 @@ public abstract partial class LipSyncPlayer : Node
     /// <summary>
     /// Executes backend inference and returns normalised playback data.
     /// </summary>
-    protected abstract LipSyncInferenceResult RunBackendInference(AudioStreamWav speech);
+    protected abstract LipSyncInferenceResult RunBackendInference(
+        AudioStreamWav speech,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Releases backend resources allocated during initialisation or inference.
@@ -367,8 +421,28 @@ public abstract partial class LipSyncPlayer : Node
         SetProcess(false);
     }
 
-    private PreparedPlayback PreparePlayback(AudioStreamWav speech)
+    private async Task<PreparedPlayback> RunPreparationAsync(
+        AudioStreamWav speech,
+        CancellationTokenSource preparationCancellation)
     {
+        try
+        {
+            return await Task.Run(
+                () => PreparePlayback(speech, preparationCancellation.Token),
+                preparationCancellation.Token);
+        }
+        finally
+        {
+            preparationCancellation.Dispose();
+            CompletePreparation();
+        }
+    }
+
+    private PreparedPlayback PreparePlayback(
+        AudioStreamWav speech,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         if (speech is null)
         {
             throw new InvalidOperationException("LipSyncPlayer: speech clip is not assigned.");
@@ -379,7 +453,8 @@ public abstract partial class LipSyncPlayer : Node
             throw new InvalidOperationException("LipSyncPlayer: cannot prepare playback before initialisation succeeds.");
         }
 
-        LipSyncInferenceResult inferenceResult = RunBackendInference(speech);
+        LipSyncInferenceResult inferenceResult = RunBackendInference(speech, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateInferenceResult(inferenceResult);
 
         return new PreparedPlayback(
@@ -387,6 +462,27 @@ public abstract partial class LipSyncPlayer : Node
             inferenceResult.Frames,
             inferenceResult.BlendshapeNames,
             inferenceResult.OutputFps);
+    }
+
+    private void CompletePreparation()
+    {
+        bool disposeBackend;
+        lock (_preparationLifetimeLock)
+        {
+            _activePreparationCount--;
+            disposeBackend = _preparationLifetimeEnded
+                && _backendDisposalPending
+                && _activePreparationCount == 0;
+            if (disposeBackend)
+            {
+                _backendDisposalPending = false;
+            }
+        }
+
+        if (disposeBackend)
+        {
+            DisposeBackend();
+        }
     }
 
     private static void ValidateInferenceResult(LipSyncInferenceResult inferenceResult)

@@ -29,4 +29,13 @@ public interface IVoice : IComponent
     /// </summary>
     /// <param name="speech">Speech text to speak.</param>
     void Speak(string speech);
+
+    /// <summary>
+    /// Submits speech without waiting for generation or playback completion.
+    /// </summary>
+    /// <param name="speech">Speech text to submit.</param>
+    /// <param name="cancellationToken">Cancellation observed until submission commits.</param>
+    ValueTask SpeakAsync(
+        string speech,
+        CancellationToken cancellationToken = default);
 }

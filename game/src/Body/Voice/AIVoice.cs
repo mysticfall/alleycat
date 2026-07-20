@@ -22,8 +22,10 @@ public partial class AIVoice : Voice
     private const int ExpectedSampleRate = 16000;
     private const string AudioFormatIncompatibleMessage = "Audio format incompatible";
 
-    private readonly Lock _generationStateLock = new();
-    private bool _isGenerating;
+    private readonly Lock _submissionLock = new();
+    private readonly Queue<string> _pendingSpeech = [];
+    private bool _pumpRunning;
+    private TaskCompletionSource? _pumpSettlement;
     private ILogger<AIVoice>? _logger;
 
     /// <summary>
@@ -46,46 +48,109 @@ public partial class AIVoice : Voice
         set;
     }
 
-    /// <inheritdoc />
-    public override void Speak(string speech)
-        => _ = SpeakAsync(speech);
-
-    internal async Task SpeakAsync(string speech)
+    internal Task PumpSettlement
     {
-        if (!Enabled)
+        get
         {
-            return;
+            lock (_submissionLock)
+            {
+                return _pumpSettlement?.Task ?? Task.CompletedTask;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public override ValueTask SpeakAsync(
+        string speech,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string acceptedSpeech = ValidateSubmission(speech);
+
+        bool startPump;
+        lock (_submissionLock)
+        {
+            if (IsNodeLifetimeEnded)
+            {
+                throw new InvalidOperationException("AI voice is unavailable after node teardown.");
+            }
+
+            if (!Enabled || SpeechGenerator is null || LipSyncPlayer is null)
+            {
+                throw new InvalidOperationException(
+                    "AI voice requires enabled output with configured speech generator and lip-sync player dependencies.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            _pendingSpeech.Enqueue(acceptedSpeech);
+            startPump = !_pumpRunning;
+            _pumpRunning = true;
+            if (startPump)
+            {
+                _pumpSettlement = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
         }
 
-        if (!TryBeginGeneration())
+        if (startPump)
         {
-            GD.PushWarning("AIVoice ignored Speak() because a speech generation request is already in flight.");
-            return;
+            _ = DrainSpeechQueueAsync();
         }
 
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public override void _ExitTree()
+    {
+        base._ExitTree();
+        lock (_submissionLock)
+        {
+            _pendingSpeech.Clear();
+        }
+    }
+
+    private async Task DrainSpeechQueueAsync()
+    {
+        await Task.Yield();
+
+        while (true)
+        {
+            string speech;
+            lock (_submissionLock)
+            {
+                if (IsNodeLifetimeEnded || _pendingSpeech.Count == 0)
+                {
+                    _pendingSpeech.Clear();
+                    _pumpRunning = false;
+                    TaskCompletionSource? settlement = _pumpSettlement;
+                    _pumpSettlement = null;
+                    _ = settlement?.TrySetResult();
+                    return;
+                }
+
+                speech = _pendingSpeech.Dequeue();
+            }
+
+            await ProcessAdmittedSpeechAsync(speech);
+        }
+    }
+
+    private async Task ProcessAdmittedSpeechAsync(string speech)
+    {
         Stopwatch totalStopwatch = AIPipelineDebugLog.StartTimer();
 
         try
         {
+            NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
             if (AIPipelineDebugLog.IsEnabled)
             {
-                AIPipelineDebugLog.Stage("TTS request received", $"{speech.Trim().Length} chars");
-            }
-
-            if (SpeechGenerator is null)
-            {
-                await FailSpeechAsync("AIVoice requires a configured SpeechGenerator.");
-                return;
-            }
-
-            if (LipSyncPlayer is null)
-            {
-                await FailSpeechAsync("AIVoice requires a configured LipSyncPlayer.");
-                return;
+                AIPipelineDebugLog.Stage("TTS request received", $"{speech.Length} chars");
             }
 
             Stopwatch generationStopwatch = AIPipelineDebugLog.StartTimer();
-            byte[] generatedAudio = await GenerateSpeechAudioAsync(speech);
+            byte[] generatedAudio = await GenerateSpeechAudioAsync(speech)
+                .WaitAsync(NodeLifetimeCancellationToken);
+            NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
             if (AIPipelineDebugLog.IsEnabled)
             {
                 AIPipelineDebugLog.Latency("TTS audio generated in", generationStopwatch, $"{generatedAudio.Length} bytes");
@@ -99,7 +164,10 @@ public partial class AIVoice : Voice
             }
 
             Stopwatch lipSyncStopwatch = AIPipelineDebugLog.StartTimer();
-            LipSyncPlayer.PreparedPlayback preparedPlayback = await PrepareGeneratedSpeechAsync(speechStream);
+            LipSyncPlayer.PreparedPlayback preparedPlayback = await PrepareGeneratedSpeechAsync(
+                speechStream,
+                NodeLifetimeCancellationToken);
+            NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
             if (AIPipelineDebugLog.IsEnabled)
             {
                 AIPipelineDebugLog.Latency(
@@ -110,24 +178,54 @@ public partial class AIVoice : Voice
 
             await DispatchDeferredGodotActionAsync(() =>
             {
+                NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
                 PlayGeneratedSpeech(preparedPlayback);
                 OnSpeechGenerated(speech);
             });
             AIPipelineDebugLog.Latency("TTS playback started after", totalStopwatch);
         }
+        catch (OperationCanceledException) when (IsNodeLifetimeEnded
+            || NodeLifetimeCancellationToken.IsCancellationRequested
+            || LipSyncPlayer is { IsLifetimeEnded: true })
+        {
+        }
         catch (AudioConversionException ex)
         {
             AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
-            await FailSpeechAsync(AudioFormatIncompatibleMessage, ex);
+            await ReportAdmittedFailureAsync(AudioFormatIncompatibleMessage, ex);
         }
         catch (Exception ex)
         {
             AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
-            await FailSpeechAsync(ex.Message, ex);
+            await ReportAdmittedFailureAsync(ex.Message, ex);
         }
-        finally
+    }
+
+    private async Task ReportAdmittedFailureAsync(string emittedError, Exception exception)
+    {
+        if (IsNodeLifetimeEnded)
         {
-            EndGeneration();
+            return;
+        }
+
+        try
+        {
+            await FailSpeechAsync(emittedError, exception);
+        }
+        catch (OperationCanceledException) when (IsNodeLifetimeEnded)
+        {
+        }
+        catch (Exception reportingException)
+        {
+            if (_logger is null && GameLoggerResolver.TryResolve(out ILogger<AIVoice>? logger))
+            {
+                _logger = logger;
+            }
+
+            _logger?.LogError(
+                reportingException,
+                "AI voice could not report admitted speech failure: {Error}",
+                emittedError);
         }
     }
 
@@ -279,9 +377,12 @@ public partial class AIVoice : Voice
     /// Prepares lip-sync data for a generated WAV stream before playback starts.
     /// </summary>
     /// <param name="speechStream">Prepared speech stream.</param>
+    /// <param name="cancellationToken">Voice-lifetime cancellation propagated into backend preparation.</param>
     /// <returns>Prepared speech playback data.</returns>
-    protected virtual Task<LipSyncPlayer.PreparedPlayback> PrepareGeneratedSpeechAsync(AudioStreamWav speechStream)
-        => LipSyncPlayer!.PreparePlaybackAsync(speechStream);
+    protected virtual Task<LipSyncPlayer.PreparedPlayback> PrepareGeneratedSpeechAsync(
+        AudioStreamWav speechStream,
+        CancellationToken cancellationToken)
+        => LipSyncPlayer!.PreparePlaybackAsync(speechStream, cancellationToken);
 
     /// <summary>
     /// Hands a prepared WAV stream off to the lip-sync playback boundary.
@@ -318,30 +419,7 @@ public partial class AIVoice : Voice
     /// Emits the voice failure signal.
     /// </summary>
     /// <param name="error">Failure message payload.</param>
-    protected virtual void EmitSpeechFailedSignal(string error)
-        => _ = EmitSignal(new StringName("SpeechFailed"), error);
-
-    private bool TryBeginGeneration()
-    {
-        lock (_generationStateLock)
-        {
-            if (_isGenerating)
-            {
-                return false;
-            }
-
-            _isGenerating = true;
-            return true;
-        }
-    }
-
-    private void EndGeneration()
-    {
-        lock (_generationStateLock)
-        {
-            _isGenerating = false;
-        }
-    }
+    protected override void EmitSpeechFailedSignal(string error) => base.EmitSpeechFailedSignal(error);
 
     private sealed record WaveFileData(byte[] PcmData);
 

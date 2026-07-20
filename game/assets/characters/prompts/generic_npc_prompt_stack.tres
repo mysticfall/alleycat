@@ -3,13 +3,15 @@
 [ext_resource type="Script" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="1_2m31c"]
 [ext_resource type="Script" path="res://src/Mind/AI/Prompting/EssentialLorePromptSection.cs" id="2_bsmxt"]
 [ext_resource type="Script" path="res://src/Mind/AI/Prompting/CharacterLorePromptSection.cs" id="3_0apto"]
+[ext_resource type="Script" path="res://src/Mind/AI/Prompting/EventHistoryPromptFragment.cs" id="4_0apto"]
 [ext_resource type="Script" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="4_bwdq6"]
+[ext_resource type="Script" path="res://src/Mind/AI/Prompting/EventHistoryPromptSection.cs" id="5_bwdq6"]
 
 [sub_resource type="Resource" id="Resource_fqak1"]
 script = ExtResource("1_2m31c")
 Text = "You are {{ character.Id }}, a character present in the current scene.
-Respond naturally and concisely as spoken dialogue.
-Do not answer with normal chat text. For every response, call the speak tool exactly once with the words {{ character.Id }} should say aloud. Do not describe tool use or include stage directions."
+Respond naturally and concisely through available actions when appropriate. You may take no action, one action, or several actions, and may repeat an action.
+Do not answer with normal chat text. When your actions are complete, return only the required end-of-turn result. Do not describe tool use or include stage directions."
 Name = "Instructions"
 
 [sub_resource type="Resource" id="Resource_yofkv"]
@@ -20,6 +22,19 @@ Name = "Essential World Lore"
 script = ExtResource("3_0apto")
 Name = "Scene Character Lore"
 
+[sub_resource type="Resource" id="Resource_fwgwp"]
+script = ExtResource("4_0apto")
+TypeKey = "speech.observed"
+Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.Id)}}Said aloud: {{Content}}{{else}}Heard {{ActorId}} say: {{Content}}{{/if}}{{else}}Heard an unknown speaker say: {{Content}}{{/if}}
+"
+
+[sub_resource type="Resource" id="Resource_ot777"]
+script = ExtResource("5_bwdq6")
+Fragments = [SubResource("Resource_fwgwp")]
+FallbackSource = "((Received {{TypeKey}} event.))
+"
+Name = "Event History"
+
 [resource]
 script = ExtResource("4_bwdq6")
-Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0")]
+Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0"), SubResource("Resource_ot777")]

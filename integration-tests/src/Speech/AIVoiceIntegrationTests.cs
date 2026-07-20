@@ -1,12 +1,17 @@
 using System.Text;
 using AlleyCat.Body.Voice;
+using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Mind.Observation;
+using AlleyCat.Scene;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using AlleyCat.Speech.Transcription;
 using AlleyCat.TestFramework;
 using Godot;
+using Microsoft.Extensions.AI;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
@@ -185,7 +190,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         try
         {
-            voice.Speak("Hello alley cat");
+            await voice.SpeakAsync("Hello alley cat");
             await WaitUntilAsync(sceneTree, () => voice.LastPlayedSpeech is not null || voice.FailureErrors.Count > 0, 30);
 
             Assert.Equal(1, speechGenerator.GenerateCallCount);
@@ -312,7 +317,8 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         try
         {
-            voice.Speak("Hello alley cat");
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await voice.SpeakAsync("Hello alley cat"));
             await WaitForFramesAsync(sceneTree, 2);
 
             Assert.Equal(0, speechGenerator.GenerateCallCount);
@@ -324,6 +330,497 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         finally
         {
             await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Blank speech is explicitly rejected before generation, playback, or listener notification.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakAsync_WhenSpeechIsBlank_ThrowsWithoutStartingOutput()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeSpeechGenerator speechGenerator = new();
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+        };
+        RecordingVoiceListener listener = new();
+
+        AddTestNode(sceneTree, speechGenerator);
+        AddTestNode(sceneTree, lipSyncPlayer);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            _ = await Assert.ThrowsAsync<ArgumentException>(
+                async () => await voice.SpeakAsync(" \t\r\n "));
+
+            Assert.Equal(0, voice.GenerateSpeechAudioCallCount);
+            Assert.Equal(0, speechGenerator.GenerateCallCount);
+            Assert.Equal(0, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+            Assert.Null(voice.LastPlayedSpeech);
+            Assert.Empty(listener.Events);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, listener, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Missing required generation and playback dependencies reject speech before any output work starts.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakAsync_WhenUnconfigured_ThrowsWithoutStartingOutput()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TestAIVoice voice = new();
+        RecordingVoiceListener listener = new();
+
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await voice.SpeakAsync("Configured speech text"));
+
+            Assert.Equal(0, voice.GenerateSpeechAudioCallCount);
+            Assert.Equal(0, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+            Assert.Null(voice.LastPlayedSpeech);
+            Assert.Empty(listener.Events);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, listener);
+        }
+    }
+
+    /// <summary>
+    /// Cancellation observed before acceptance must surface without starting any configured voice output work.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakAsync_WhenAlreadyCancelled_ThrowsWithoutStartingOutput()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeSpeechGenerator speechGenerator = new();
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+        };
+        RecordingVoiceListener listener = new();
+
+        AddTestNode(sceneTree, speechGenerator);
+        AddTestNode(sceneTree, lipSyncPlayer);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            using CancellationTokenSource cancellation = new();
+            cancellation.Cancel();
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                async () => await voice.SpeakAsync("Cancelled before acceptance", cancellation.Token));
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Equal(0, voice.GenerateSpeechAudioCallCount);
+            Assert.Equal(0, speechGenerator.GenerateCallCount);
+            Assert.Equal(0, voice.PrepareGeneratedSpeechCallCount);
+            Assert.Equal(0, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+            Assert.Null(voice.LastPlayedSpeech);
+            Assert.Empty(listener.Events);
+            Assert.Empty(voice.FailureErrors);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, listener, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Busy submissions are admitted immediately and generated in exact FIFO order through one serial pipeline.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakAsync_WhileGenerationIsBusy_AdmitsAndProcessesFIFOWithoutConcurrency()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TaskCompletionSource<byte[]> generationResult = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            PendingResult = generationResult,
+        };
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+        };
+
+        sceneTree.Root.AddChild(speechGenerator);
+        sceneTree.Root.AddChild(lipSyncPlayer);
+        sceneTree.Root.AddChild(voice);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            await voice.SpeakAsync("First request");
+            await voice.SpeakAsync("Second request");
+            await voice.SpeakAsync("Third request");
+
+            await WaitUntilAsync(sceneTree, () => speechGenerator.GenerateCallCount == 1, 30);
+            Assert.Equal(["First request"], speechGenerator.RequestedTexts);
+
+            _ = generationResult.TrySetResult(
+                CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+            await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 3, 60);
+            Assert.Equal(["First request", "Second request", "Third request"], speechGenerator.RequestedTexts);
+            Assert.Equal(3, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(1, voice.MaximumConcurrentPipelines);
+        }
+        finally
+        {
+            _ = generationResult.TrySetCanceled();
+            await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Failure of the first queued item emits failure and does not block the later FIFO item.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakAsync_WhenFirstQueuedItemFails_ContinuesWithLaterItem()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeSpeechGenerator speechGenerator = new();
+        speechGenerator.EnqueueFailure(new InvalidOperationException("first failed"));
+        speechGenerator.EnqueueResult(
+            CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer
+        };
+        AddTestNode(sceneTree, speechGenerator);
+        AddTestNode(sceneTree, lipSyncPlayer);
+        AddTestNode(sceneTree, voice);
+
+        try
+        {
+            await voice.SpeakAsync("failing first");
+            await voice.SpeakAsync("successful second");
+            await WaitUntilAsync(
+                sceneTree,
+                () => voice.FailureErrors.Count == 1 && voice.SpeechGeneratedCallCount == 1,
+                60);
+
+            Assert.Equal(["failing first", "successful second"], speechGenerator.RequestedTexts);
+            Assert.Equal("first failed", Assert.Single(voice.FailureErrors));
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(1, voice.MaximumConcurrentPipelines);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Caller cancellation after atomic admission does not retract committed speech work.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakAsync_WhenCancelledAfterAdmission_DoesNotRetractWork()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TaskCompletionSource<byte[]> generation = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            PendingResult = generation
+        };
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer
+        };
+        AddTestNode(sceneTree, speechGenerator);
+        AddTestNode(sceneTree, lipSyncPlayer);
+        AddTestNode(sceneTree, voice);
+
+        try
+        {
+            using CancellationTokenSource cancellation = new();
+            await voice.SpeakAsync("committed speech", cancellation.Token);
+            cancellation.Cancel();
+            await WaitUntilAsync(sceneTree, () => speechGenerator.GenerateCallCount == 1, 30);
+
+            _ = generation.TrySetResult(
+                CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+            await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 1, 30);
+
+            Assert.Equal(["committed speech"], speechGenerator.RequestedTexts);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+        }
+        finally
+        {
+            _ = generation.TrySetCanceled();
+            await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Compatibility Speak observes both synchronous validation and asynchronous production failures.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task Speak_CompatibilityAdapter_ReportsValidationAndProductionFailures()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            GenerateException = new InvalidOperationException("asynchronous production failed"),
+        };
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer
+        };
+        AddTestNode(sceneTree, speechGenerator);
+        AddTestNode(sceneTree, lipSyncPlayer);
+        AddTestNode(sceneTree, voice);
+
+        try
+        {
+            voice.Speak("   ");
+            voice.Speak("valid but failing");
+            await WaitUntilAsync(sceneTree, () => voice.FailureErrors.Count == 2, 60);
+
+            Assert.Contains(voice.FailureErrors, error => error.Contains("blank", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains("asynchronous production failed", voice.FailureErrors);
+            Assert.Equal(1, speechGenerator.GenerateCallCount);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Voice teardown discards queued work and prevents delayed playback or misleading failure signals.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task NodeExit_WithActiveAndQueuedSpeech_PreventsPostExitWork()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TaskCompletionSource<byte[]> generation = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            PendingResult = generation
+        };
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer
+        };
+        AddTestNode(sceneTree, speechGenerator);
+        AddTestNode(sceneTree, lipSyncPlayer);
+        AddTestNode(sceneTree, voice);
+
+        try
+        {
+            await voice.SpeakAsync("active");
+            await voice.SpeakAsync("queued");
+            await WaitUntilAsync(sceneTree, () => speechGenerator.GenerateCallCount == 1, 30);
+
+            voice.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+            _ = generation.TrySetResult(
+                CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+            await WaitForFramesAsync(sceneTree, 3);
+
+            Assert.Equal(["active"], speechGenerator.RequestedTexts);
+            Assert.Equal(0, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+            Assert.Empty(voice.FailureErrors);
+        }
+        finally
+        {
+            _ = generation.TrySetCanceled();
+            await DestroyFixtureAsync(sceneTree, speechGenerator, lipSyncPlayer);
+        }
+    }
+
+    /// <summary>
+    /// Common-parent teardown cancels active lip-sync preparation before backend disposal or freed-node access.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task CommonParentExit_DuringBlockedPreparation_SettlesBeforeBackendDisposal()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PreparationLifecycleProbe probe = new();
+        var commonParent = new Node3D { Name = "VoicePreparationFixture" };
+        var skeleton = new Skeleton3D { Name = "Skeleton" };
+        var audioPlayer = new AudioStreamPlayer3D { Name = "AudioPlayer" };
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            Name = "Generator",
+            NextResult = CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16),
+        };
+        BlockingPreparationLipSyncPlayer lipSyncPlayer = new()
+        {
+            Name = "LipSyncPlayer",
+            Probe = probe,
+            Skeleton = skeleton,
+            AudioPlayer = audioPlayer,
+        };
+        LifecycleTestAIVoice voice = new()
+        {
+            Name = "Voice",
+            Probe = probe,
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+        };
+        RecordingVoiceListener listener = new();
+
+        commonParent.AddChild(skeleton);
+        commonParent.AddChild(audioPlayer);
+        commonParent.AddChild(speechGenerator);
+        commonParent.AddChild(lipSyncPlayer);
+        commonParent.AddChild(voice);
+        AddTestNode(sceneTree, commonParent);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            await voice.SpeakAsync("blocked preparation");
+            Task pumpSettlement = voice.PumpSettlement;
+            await probe.PreparationStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            commonParent.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.False(GodotObject.IsInstanceValid(commonParent));
+            probe.ReleasePreparation.Set();
+
+            await probe.PreparationSettled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await probe.BackendDisposed.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await pumpSettlement.WaitAsync(TimeSpan.FromSeconds(2));
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Equal(1, probe.CancellationObservedCount);
+            Assert.Equal(0, probe.BackendAccessAfterExitCount);
+            Assert.Equal(0, probe.BackendDisposalRaceCount);
+            Assert.Equal(1, probe.BackendDisposalCount);
+            Assert.Equal(0, probe.PlaybackCount);
+            Assert.Equal(0, probe.ListenerNotificationCount);
+            Assert.Empty(probe.FailureErrors);
+            Assert.Empty(listener.Events);
+        }
+        finally
+        {
+            probe.ReleasePreparation.Set();
+            if (GodotObject.IsInstanceValid(commonParent))
+            {
+                commonParent.QueueFree();
+            }
+
+            listener.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+        }
+    }
+
+    /// <summary>
+    /// Multiple SpeechTool calls queue in order and each successful admission records one owner-stamped observation.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeechTool_WithAIVoice_QueuesMultipleCallsAndRecordsEachAdmission()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        TaskCompletionSource<byte[]> generationResult = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            PendingResult = generationResult
+        };
+        StubLipSyncPlayer lipSyncPlayer = new();
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer
+        };
+        TestAIVoice disabledVoice = new()
+        {
+            Enabled = false,
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+        };
+        ToolMind acceptedMind = new();
+        ToolMind disabledMind = new();
+        SpeechTool tool = new();
+        AIFunction activeFunction = tool.CreateFunction(new ToolServiceProvider(voice, acceptedMind));
+        AIFunction disabledFunction = tool.CreateFunction(new ToolServiceProvider(disabledVoice, disabledMind));
+
+        sceneTree.Root.AddChild(speechGenerator);
+        sceneTree.Root.AddChild(lipSyncPlayer);
+        sceneTree.Root.AddChild(voice);
+        sceneTree.Root.AddChild(disabledVoice);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            object? accepted = await InvokeSpeechToolAsync(activeFunction, "Accepted request");
+            object? queued = await InvokeSpeechToolAsync(activeFunction, "Queued request");
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => InvokeSpeechToolAsync(disabledFunction, "Disabled request"));
+
+            Assert.Equal("Spoken through the configured voice.", accepted);
+            Assert.Equal("Spoken through the configured voice.", queued);
+            Assert.Equal(
+                ["Accepted request", "Queued request"],
+                acceptedMind.Timeline.Cast<ObservedSpeech>().Select(observation => observation.Content));
+            Assert.All(
+                acceptedMind.Timeline.Cast<ObservedSpeech>(),
+                observation => Assert.Equal(acceptedMind.Owner.Id, observation.ActorId));
+            Assert.Empty(disabledMind.Timeline);
+
+            _ = generationResult.TrySetResult(
+                CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+            await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 2, 30);
+            Assert.Equal(["Accepted request", "Queued request"], speechGenerator.RequestedTexts);
+        }
+        finally
+        {
+            _ = generationResult.TrySetCanceled();
+            acceptedMind.Free();
+            disabledMind.Free();
+            await DestroyFixtureAsync(sceneTree, voice, disabledVoice, speechGenerator, lipSyncPlayer);
         }
     }
 
@@ -600,6 +1097,11 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         await WaitForFramesAsync(sceneTree, 2);
     }
 
+    private static async Task<object?> InvokeSpeechToolAsync(AIFunction function, string speech)
+        => await function.InvokeAsync(
+            new AIFunctionArguments { ["speech"] = speech },
+            CancellationToken.None);
+
     private sealed partial class TestVoice : Voice
     {
         public int SpeechGeneratedCallCount
@@ -632,7 +1134,20 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
     private sealed partial class TestAIVoice : AIVoice
     {
+        private int _activePipelines;
+        public int GenerateSpeechAudioCallCount
+        {
+            get;
+            private set;
+        }
+
         public int PlayGeneratedSpeechCallCount
+        {
+            get;
+            private set;
+        }
+
+        public int PrepareGeneratedSpeechCallCount
         {
             get;
             private set;
@@ -652,13 +1167,54 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         public List<string> FailureErrors { get; } = [];
 
-        protected override Task<LipSyncPlayer.PreparedPlayback> PrepareGeneratedSpeechAsync(AudioStreamWav speechStream)
-            => Task.FromResult(new LipSyncPlayer.PreparedPlayback(speechStream, [[0f]], ["jawOpen"], 30f));
+        public int MaximumConcurrentPipelines
+        {
+            get; private set;
+        }
+
+        protected override async Task<byte[]> GenerateSpeechAudioAsync(string speech)
+        {
+            GenerateSpeechAudioCallCount++;
+            EnterPipelineOperation();
+            try
+            {
+                return await base.GenerateSpeechAudioAsync(speech);
+            }
+            finally
+            {
+                ExitPipelineOperation();
+            }
+        }
+
+        protected override Task<LipSyncPlayer.PreparedPlayback> PrepareGeneratedSpeechAsync(
+            AudioStreamWav speechStream,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PrepareGeneratedSpeechCallCount++;
+            EnterPipelineOperation();
+            try
+            {
+                return Task.FromResult(new LipSyncPlayer.PreparedPlayback(speechStream, [[0f]], ["jawOpen"], 30f));
+            }
+            finally
+            {
+                ExitPipelineOperation();
+            }
+        }
 
         protected override void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
         {
-            PlayGeneratedSpeechCallCount++;
-            LastPlayedSpeech = preparedPlayback.Speech;
+            EnterPipelineOperation();
+            try
+            {
+                PlayGeneratedSpeechCallCount++;
+                LastPlayedSpeech = preparedPlayback.Speech;
+            }
+            finally
+            {
+                ExitPipelineOperation();
+            }
         }
 
         protected override void OnSpeechGenerated(string speech)
@@ -669,6 +1225,35 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         protected override void EmitSpeechFailedSignal(string error)
             => FailureErrors.Add(error);
+
+        private void EnterPipelineOperation()
+        {
+            _activePipelines++;
+            MaximumConcurrentPipelines = Math.Max(MaximumConcurrentPipelines, _activePipelines);
+        }
+
+        private void ExitPipelineOperation() => _activePipelines--;
+    }
+
+    private sealed partial class LifecycleTestAIVoice : AIVoice
+    {
+        public PreparationLifecycleProbe Probe { get; set; } = null!;
+
+        protected override void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
+        {
+            _ = preparedPlayback;
+            Probe.PlaybackCount++;
+        }
+
+        protected override void OnSpeechGenerated(string speech)
+        {
+            _ = speech;
+            Probe.ListenerNotificationCount++;
+            base.OnSpeechGenerated(speech);
+        }
+
+        protected override void EmitSpeechFailedSignal(string error)
+            => Probe.FailureErrors.Add(error);
     }
 
     private sealed partial class TestPlayerVoice : PlayerVoice
@@ -698,8 +1283,48 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
     private sealed record VoiceListenerEvent(string Speech, IVoice Source);
 
+    private sealed partial class ToolMind : AlleyCat.Mind.Mind
+    {
+        public new ToolCharacter Owner { get; } = new();
+
+        public IReadOnlyList<Observation> Timeline => GetObservationTimelineSnapshot();
+
+        public override void ReceiveVoice(string speech, IVoice source)
+        {
+        }
+
+        protected override ICharacter ResolveOwningCharacter() => Owner;
+
+        protected override Task ProcessObservationsAsync(
+            IReadOnlyList<Observation> observations,
+            IReadOnlyList<Observation> timelineSnapshot,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class ToolCharacter : ICharacter
+    {
+        public string Id { get; set; } = "voice-tool-owner";
+
+        public IReadOnlyList<IComponent> Components { get; } = [];
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+            => new Dictionary<string, object?>();
+    }
+
+    private sealed class ToolServiceProvider(IVoice voice, ToolMind mind) : IServiceProvider
+    {
+        public object? GetService(Type serviceType)
+            => serviceType == typeof(IVoice) ? voice
+                : serviceType == typeof(ICharacter) ? mind.Owner
+                : serviceType.IsInstanceOfType(mind) ? mind
+                : null;
+    }
+
     private sealed partial class FakeSpeechGenerator : SpeechGenerator
     {
+        private readonly Queue<Func<Task<byte[]>>> _queuedResults = [];
+
         public Exception? GenerateException
         {
             get;
@@ -708,21 +1333,37 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         public byte[] NextResult { get; set; } = [];
 
+        public TaskCompletionSource<byte[]>? PendingResult
+        {
+            get;
+            set;
+        }
+
         public int GenerateCallCount
         {
             get;
             private set;
         }
 
+        public List<string> RequestedTexts { get; } = [];
+
+        public void EnqueueResult(byte[] result)
+            => _queuedResults.Enqueue(() => Task.FromResult(result));
+
+        public void EnqueueFailure(Exception exception)
+            => _queuedResults.Enqueue(() => Task.FromException<byte[]>(exception));
+
         protected override Task<byte[]> GenerateCore(string text, string? instruction = null)
         {
-            _ = text;
             _ = instruction;
             GenerateCallCount++;
+            RequestedTexts.Add(text);
 
-            return GenerateException is not null
+            return _queuedResults.TryDequeue(out Func<Task<byte[]>>? result)
+                ? result()
+                : PendingResult?.Task ?? (GenerateException is not null
                 ? Task.FromException<byte[]>(GenerateException)
-                : Task.FromResult(NextResult);
+                : Task.FromResult(NextResult));
         }
     }
 
@@ -744,8 +1385,11 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         {
         }
 
-        protected override LipSyncInferenceResult RunBackendInference(AudioStreamWav speech)
+        protected override LipSyncInferenceResult RunBackendInference(
+            AudioStreamWav speech,
+            CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             _ = speech;
             return new LipSyncInferenceResult([[0f]], ["jawOpen"], 30f);
         }
@@ -753,5 +1397,85 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         protected override void DisposeBackend()
         {
         }
+    }
+
+    private sealed partial class BlockingPreparationLipSyncPlayer : LipSyncPlayer
+    {
+        public PreparationLifecycleProbe Probe { get; set; } = null!;
+
+        protected override void InitialiseBackend()
+        {
+        }
+
+        public override void _ExitTree()
+        {
+            Probe.LifetimeExitStarted = true;
+            base._ExitTree();
+        }
+
+        protected override LipSyncInferenceResult RunBackendInference(
+            AudioStreamWav speech,
+            CancellationToken cancellationToken)
+        {
+            _ = speech;
+            _ = Interlocked.Increment(ref Probe.ActiveBackendAccessCount);
+            _ = Probe.PreparationStarted.TrySetResult();
+            try
+            {
+                int signalled = WaitHandle.WaitAny(
+                    [cancellationToken.WaitHandle, Probe.ReleasePreparation.WaitHandle],
+                    TimeSpan.FromSeconds(5));
+                if (signalled == 0)
+                {
+                    _ = Interlocked.Increment(ref Probe.CancellationObservedCount);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                if (Probe.LifetimeExitStarted)
+                {
+                    _ = Interlocked.Increment(ref Probe.BackendAccessAfterExitCount);
+                }
+
+                return new LipSyncInferenceResult([[0f]], ["jawOpen"], 30f);
+            }
+            finally
+            {
+                _ = Interlocked.Decrement(ref Probe.ActiveBackendAccessCount);
+                _ = Probe.PreparationSettled.TrySetResult();
+            }
+        }
+
+        protected override void DisposeBackend()
+        {
+            if (Volatile.Read(ref Probe.ActiveBackendAccessCount) != 0)
+            {
+                _ = Interlocked.Increment(ref Probe.BackendDisposalRaceCount);
+            }
+
+            _ = Interlocked.Increment(ref Probe.BackendDisposalCount);
+            _ = Probe.BackendDisposed.TrySetResult();
+        }
+    }
+
+    private sealed class PreparationLifecycleProbe
+    {
+        public ManualResetEventSlim ReleasePreparation { get; } = new(initialState: false);
+
+        public TaskCompletionSource PreparationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource PreparationSettled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource BackendDisposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<string> FailureErrors { get; } = [];
+
+        public volatile bool LifetimeExitStarted;
+        public int ActiveBackendAccessCount;
+        public int CancellationObservedCount;
+        public int BackendAccessAfterExitCount;
+        public int BackendDisposalRaceCount;
+        public int BackendDisposalCount;
+        public int PlaybackCount;
+        public int ListenerNotificationCount;
     }
 }

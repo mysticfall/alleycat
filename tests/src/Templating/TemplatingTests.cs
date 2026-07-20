@@ -196,6 +196,27 @@ public sealed class TemplatingTests
     }
 
     /// <summary>
+    /// The explicit ordinal equality helper is case-sensitive without changing legacy eq semantics.
+    /// </summary>
+    [Fact]
+    public void BuiltInEqOrdinalUsesCaseSensitiveComparison()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        Dictionary<string, object?> context = new()
+        {
+            ["value"] = "speech.observed",
+        };
+
+        ITemplate exactTemplate = compiler.Compile("{{eqOrdinal value \"speech.observed\"}}");
+        ITemplate caseMismatchTemplate = compiler.Compile("{{eqOrdinal value \"Speech.Observed\"}}");
+        ITemplate legacyTemplate = compiler.Compile("{{eq value \"Speech.Observed\"}}");
+
+        Assert.Equal("true", exactTemplate.Render(context));
+        Assert.Equal(string.Empty, caseMismatchTemplate.Render(context));
+        Assert.Equal("true", legacyTemplate.Render(context));
+    }
+
+    /// <summary>
     /// The built-in nf tool uses fixed-point formatting with clamped precision.
     /// </summary>
     [Fact]

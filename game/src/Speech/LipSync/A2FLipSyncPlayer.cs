@@ -335,8 +335,11 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     }
 
     /// <inheritdoc />
-    protected override LipSyncInferenceResult RunBackendInference(AudioStreamWav speech)
+    protected override LipSyncInferenceResult RunBackendInference(
+        AudioStreamWav speech,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         HttpClient httpClient = _httpClient
             ?? throw new InvalidOperationException("LipSyncPlayer: HTTP client was not initialised.");
         Uri endpointUri = _blendshapeEndpointUri
@@ -348,11 +351,12 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         requestContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
         using HttpResponseMessage response = httpClient
-            .PostAsync(requestUri, requestContent)
+            .PostAsync(requestUri, requestContent, cancellationToken)
             .GetAwaiter()
             .GetResult();
 
-        string jsonPayload = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        string jsonPayload = response.Content.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();
+        cancellationToken.ThrowIfCancellationRequested();
         if (!response.IsSuccessStatusCode)
         {
             string errorMessage = TryParseApiError(jsonPayload) ?? jsonPayload;

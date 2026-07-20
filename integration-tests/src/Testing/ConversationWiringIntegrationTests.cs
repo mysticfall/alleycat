@@ -60,14 +60,15 @@ public sealed class ConversationWiringIntegrationTests
             Assert.False(string.IsNullOrWhiteSpace(tool.ToolDescription));
 
             mind.ClientProvider = clientProvider;
-            mind.PostReplyListenCooldownSeconds = 0f;
 
             _ = transcriber.EmitSignal(Transcriber.SignalName.TranscriptionCompleted, "  hello reference friend  ");
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 1 }, maxFrames: 180);
 
             RecordingChatClient client = Assert.IsType<RecordingChatClient>(clientProvider.Client);
-            Assert.Contains("- Speech from conversation-player: hello reference friend", Assert.Single(client.Prompts), StringComparison.Ordinal);
+            string prompt = Assert.Single(client.Prompts);
+            Assert.Contains("You are conversation-npc", prompt, StringComparison.Ordinal);
+            Assert.Contains("Heard an unknown speaker say: hello reference friend", prompt, StringComparison.Ordinal);
             Assert.Equal(["speak"], client.ToolNamesByRun);
         }
         finally
@@ -192,9 +193,12 @@ public sealed class ConversationWiringIntegrationTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             RunCount++;
-            Prompts.Add(messages.Last().Text);
+            Assert.Empty(messages);
+            Assert.NotNull(options);
+            Assert.False(string.IsNullOrWhiteSpace(options.Instructions));
+            Prompts.Add(options.Instructions);
             ToolNamesByRun.AddRange(options?.Tools?.Select(tool => tool.Name) ?? []);
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty)));
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}")));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(

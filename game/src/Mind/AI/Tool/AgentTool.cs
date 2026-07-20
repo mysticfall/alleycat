@@ -1,5 +1,7 @@
+using AlleyCat.Character;
 using Godot;
 using Microsoft.Extensions.AI;
+using MindBase = AlleyCat.Mind.Mind;
 
 namespace AlleyCat.Mind.AI.Tool;
 
@@ -47,8 +49,15 @@ public abstract partial class AgentTool : Resource
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(services);
+        ValidateDelegateResultType(method);
 
-        AIFunction inner = AIFunctionFactory.Create(method, name, description);
+        AIFunction inner = AIFunctionFactory.Create(method, new AIFunctionFactoryOptions
+        {
+            Name = name,
+            Description = description,
+            ExcludeResultSchema = true,
+            MarshalResult = static (result, _, _) => ValueTask.FromResult(result),
+        });
         return new ServiceProviderFunction(inner, services);
     }
 
@@ -57,16 +66,49 @@ public abstract partial class AgentTool : Resource
     /// </summary>
     protected abstract Delegate CreateDelegate();
 
+    private static void ValidateDelegateResultType(Delegate method)
+    {
+        Type returnType = method.Method.ReturnType;
+        if (returnType != typeof(Task<AgentToolResult>)
+            && returnType != typeof(ValueTask<AgentToolResult>))
+        {
+            throw new ArgumentException(
+                $"Agent tool delegate '{method.Method.Name}' must return Task<AgentToolResult> or ValueTask<AgentToolResult>, but returns '{returnType.FullName}'.",
+                nameof(method));
+        }
+    }
+
     private sealed class ServiceProviderFunction(AIFunction inner, IServiceProvider services) : DelegatingAIFunction(inner)
     {
-        protected override ValueTask<object?> InvokeCoreAsync(
+        protected override async ValueTask<object?> InvokeCoreAsync(
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
             arguments.Context ??= new Dictionary<object, object?>();
             arguments.Services = services;
 
-            return base.InvokeCoreAsync(arguments, cancellationToken);
+            object? rawResult = await base.InvokeCoreAsync(arguments, cancellationToken);
+            if (rawResult is not AgentToolResult result)
+            {
+                throw new InvalidOperationException(
+                    $"Agent tool '{Name}' returned an invalid result shape. Expected {nameof(AgentToolResult)}.");
+            }
+
+            if (services.GetService(typeof(MindBase)) is not MindBase mind)
+            {
+                throw new InvalidOperationException(
+                    $"Agent tool '{Name}' requires an owning {nameof(MindBase)} invocation service.");
+            }
+
+            if (services.GetService(typeof(ICharacter)) is not ICharacter character
+                || !ReferenceEquals(character, mind.OwningCharacter))
+            {
+                throw new InvalidOperationException(
+                    $"Agent tool '{Name}' requires the owning character associated with its Mind invocation service.");
+            }
+
+            mind.IngestToolObservations(result.Observations);
+            return result.Message;
         }
 
         public override object? GetService(Type serviceType, object? serviceKey = null)

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using AlleyCat.Body.Voice;
+using AlleyCat.Mind.Observation;
 using Godot;
 
 namespace AlleyCat.Mind.AI.Tool;
@@ -24,30 +25,27 @@ public partial class SpeechTool : AgentTool
     protected override Delegate CreateDelegate() => Speak;
 
     [Description("Speak natural-language output through the configured voice.")]
-    private static Task<string> Speak(
+    private static async ValueTask<AgentToolResult> Speak(
         [Description("Exact words to say aloud.")] string speech,
         IServiceProvider services,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (services.GetService(typeof(AgenticMind)) is AgenticMind mind)
+        if (string.IsNullOrWhiteSpace(speech))
         {
-            return Task.FromResult(mind.TrySpeakFromToolForTool(speech) switch
-            {
-                AgenticMind.SpeakToolResult.Spoken => "Spoken through the configured voice.",
-                AgenticMind.SpeakToolResult.DuplicateIgnored => "Ignored because this turn already accepted a speak request.",
-                AgenticMind.SpeakToolResult.NoActiveTurn => "Unable to speak because no active response turn is available.",
-                _ => "Unable to speak because the speech request could not be accepted.",
-            });
+            throw new ArgumentException("Speech request cannot be blank.", nameof(speech));
         }
 
         if (services.GetService(typeof(IVoice)) is not IVoice voice)
         {
-            return Task.FromResult("Unable to speak because voice context is unavailable.");
+            throw new InvalidOperationException("Speech voice context is unavailable.");
         }
 
-        voice.Speak(speech);
-        return Task.FromResult("Spoken through the configured voice.");
+        string acceptedSpeech = speech.Trim();
+        await voice.SpeakAsync(acceptedSpeech, cancellationToken);
+        return new AgentToolResult(
+            "Spoken through the configured voice.",
+            [new ObservedSpeech(ActorId: null, VoiceId: null, Content: acceptedSpeech)]);
     }
 }

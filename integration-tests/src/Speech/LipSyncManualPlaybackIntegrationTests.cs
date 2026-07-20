@@ -173,8 +173,11 @@ internal sealed partial class FakeLipSyncPlayer : LipSyncPlayer
 
     public override void _Ready() => base._Ready();
 
-    protected override LipSyncInferenceResult RunBackendInference(AudioStreamWav speech)
+    protected override LipSyncInferenceResult RunBackendInference(
+        AudioStreamWav speech,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         InferenceCallCount++;
 
         return new LipSyncInferenceResult(

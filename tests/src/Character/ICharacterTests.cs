@@ -116,6 +116,15 @@ public sealed class ICharacterTests
         }
 
         public void Speak(string speech) => LastSpeech = speech;
+
+        public ValueTask SpeakAsync(
+            string speech,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Speak(speech);
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class FakeLocomotion : ILocomotion

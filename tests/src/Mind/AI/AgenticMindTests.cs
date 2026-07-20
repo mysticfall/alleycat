@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Mind.AI;
@@ -19,16 +20,45 @@ namespace AlleyCat.Tests.Mind.AI;
 public sealed class AgenticMindTests
 {
     /// <summary>
+    /// End-of-turn output is a serialisable property-free object with no placeholder payload.
+    /// </summary>
+    [Fact]
+    public void EndTurnResult_SerialisesAsEmptyObject()
+    {
+        string json = JsonSerializer.Serialize(new EndTurnResult());
+
+        Assert.Equal("{}", json);
+        Assert.Empty(typeof(EndTurnResult).GetProperties());
+    }
+
+    /// <summary>
+    /// Agent Framework schema generation keeps the empty result closed to unknown properties.
+    /// </summary>
+    [Fact]
+    public void EndTurnResult_GeneratesClosedEmptySchema()
+    {
+        ChatResponseFormatJson format = Assert.IsType<ChatResponseFormatJson>(
+            ChatResponseFormat.ForJsonSchema<EndTurnResult>());
+        Assert.True(format.Schema.HasValue);
+        JsonElement schema = format.Schema.Value;
+        if (schema.TryGetProperty("properties", out JsonElement properties))
+        {
+            Assert.Empty(properties.EnumerateObject());
+        }
+
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+    }
+
+    /// <summary>
     /// Speech observations own their default scheduling significance without Mind-specific configuration.
     /// </summary>
     [Fact]
-    public void SpeechObservation_DefaultWeight_IsInherentToObservationType()
+    public void ObservedSpeech_RecognisedSpeakerRetainsIdentityAndProvenance()
     {
-        SpeechObservation observation = new("microphone-7", "Speaker", "hello");
+        ObservedSpeech observation = new("Speaker", "microphone-7", "hello");
 
-        Assert.Equal(1f, observation.Weight);
         Assert.Equal("microphone-7", observation.VoiceId);
-        Assert.Equal("Speaker", observation.CharacterId);
+        Assert.Equal("Speaker", observation.ActorId);
         Assert.Equal("hello", observation.Content);
     }
 
@@ -36,14 +66,13 @@ public sealed class AgenticMindTests
     /// Speech observations retain a null recognition result separately from raw voice provenance.
     /// </summary>
     [Fact]
-    public void SpeechObservation_WhenUnrecognised_RetainsRawVoiceIDAndWeight()
+    public void ObservedSpeech_WhenUnrecognised_RetainsRawVoiceIDSeparately()
     {
-        SpeechObservation observation = new("microphone-7", null, "hello", 0.75f);
+        ObservedSpeech observation = new(null, "microphone-7", "hello");
 
         Assert.Equal("microphone-7", observation.VoiceId);
-        Assert.Null(observation.CharacterId);
+        Assert.Null(observation.ActorId);
         Assert.Equal("hello", observation.Content);
-        Assert.Equal(0.75f, observation.Weight);
     }
 
     /// <summary>

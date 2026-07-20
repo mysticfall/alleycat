@@ -7,161 +7,154 @@ title: Mind Component
 
 ## Requirement
 
-The system must provide a Mind component family that lets an NPC hear external speech and respond through its own
-character-owned voice.
+The system must provide a Mind component that records an NPC's subjective observations in order and schedules
+stateless agent turns through one contextual-importance pipeline.
 
 ## Goal
 
-Provide a minimal realtime conversation prototype where the player can speak to the mirror-room NPC and hear that NPC
-reply aloud using its asset-owned character identity.
+Give NPCs coherent node-lifetime experience without treating Agent Framework transcripts as memory, while preserving
+responsive and interruption-safe in-world behaviour.
 
 ## User Requirements
 
-1. Any externally voiced character must be able to speak to an NPC in the mirror-room test scene.
-2. The NPC must answer as its authored character identity in the mirror-room test scene.
-3. The NPC response must be spoken through the in-world voice component, not displayed as normal chat text.
-4. The NPC must provide one reply to each accepted utterance, then wait for further speech.
-5. NPC replies must be generated from system instructions rendered with the NPC's current character context.
-6. If the backend is unavailable or misconfigured, the scene must fail gracefully with logged errors.
+1. An NPC must remember, for its node lifetime, the ordered observations it perceived or produced through successful
+   actions.
+2. Every observation must influence scheduling according to its importance; even an observation with zero importance
+   must receive bounded processing.
+3. An important new observation may interrupt an active response when interruption is enabled, without overlapping
+   responses or discarding actions and observations that were already committed.
+4. Several important arrivals during one active response must produce at most one immediate replacement response.
+5. Each response must reflect the NPC's complete observation history and current authored character context.
+6. Speech history must distinguish the NPC, a recognised other character, and an unknown speaker without presenting a
+   raw voice identifier as recognised identity or rendered wording.
+7. An NPC may take no action, one action, or several actions before ending a turn; speaking must not end the turn.
+8. Spoken responses must use the NPC's character-owned in-world voice rather than normal chat text.
+9. Missing configuration and backend failures must be contained and logged without crashing the scene.
+10. Removing an NPC's Mind from the scene must prevent delayed actions, replacement responses, and other
+    post-destruction effects from that Mind.
 
 ## Technical Requirements
 
-1. The abstract Mind base must implement the voice-listener contract and accept nonblank speech from every external
-   voice except its configured output voice.
-2. Mind must not expose `PlayerVoiceId` or apply player-only input filtering.
-3. Mind must own generic observation queueing, cumulative weight triggering, maximum-wait scheduling, and processing
-   guards for derived minds.
-4. Queued observations must wait no more than 10 seconds by default before Mind processing.
-5. Disabling Mind must stop observation scheduling immediately while preserving pending observations for later
-   re-enable.
-6. The concrete AgenticMind component must call its exported character-owned voice reference to speak responses.
-7. Chat-client backend creation must be delegated to an exported, replaceable Godot Resource client provider.
-8. AgenticMind must own system-instruction rendering, exported tool-resource selection, client-provider wiring, Agent
-   Framework turn execution, and session state caching.
-9. Exported tool resources must follow the dynamic Resource and per-turn `ChatOptions` contract in
-   [AI-002](../002-agent-runtime/index.md).
-10. The initial client provider must supply an OpenAI-compatible chat client to the Agent Framework adapter.
-11. The OpenAI-compatible provider must expose an editor-selectable client kind for chat-completions or responses
-    adapters.
-12. AgenticMind must export `SystemInstruction` as a `PromptStack` compatible with
+1. Each Mind must own a private, synchronised, ordered timeline of subjective `Observation` records. The timeline lasts
+   for the Mind node's lifetime and is the authoritative cross-turn memory.
+2. `Observation` must calculate importance through `CalculateImportance(ObservationContext)`. `ObservationContext` must
+   initially contain the owning `ICharacter` and remain extensible for future contextual scoring.
+3. Mind must calculate and validate importance exactly once at ingestion, before mutation, and store the calculated
+   value with the pending entry. Negative, non-finite, or otherwise invalid importance must reject the entire ingestion.
+4. Every successfully ingested observation must enter both the timeline and the pending scheduling queue. There must be
+   no public recorder or sink contract and no timeline-only ingestion path.
+5. Pending observations must retain FIFO order. Disabling Mind must stop scheduling while preserving pending entries for
+   processing after re-enable.
+6. Scheduling must use configurable cumulative importance threshold, maximum observation wait, and minimum interval
+   after the previous turn completes:
+   - cumulative importance at or above the threshold becomes eligible when the minimum interval permits;
+   - maximum-wait expiry makes every pending entry eligible, including entries with zero importance; and
+   - eligibility reached during an active turn remains pending until that turn settles.
+7. `MinimumTurnIntervalSeconds` must have a Godot editor range of 0–5 seconds. Runtime handling must remain
+   non-negative.
+8. Mind must support a configurable, disabled-by-default high-importance interruption policy. One newly ingested
+   observation interrupts only when its individual stored importance meets the configured threshold; cumulative pending
+   importance alone must not interrupt.
+9. An interruption must request expected cancellation of the active invocation. The invocation and all tool work must
+   settle before exactly one fresh replacement starts; turns must never overlap.
+10. The replacement must bypass the minimum interval exactly once. Multiple qualifying arrivals before settlement must
+    coalesce into one replacement, while pending entries retain FIFO order.
+11. Committed actions and observations must remain in the timeline after interruption. Disabling Mind or ending its node
+    lifetime must suppress replacement safely, including during natural-completion and cancellation races.
+12. Scheduling must not exempt observations by source. Owning-character actions avoid interruption through contextual
+    importance rather than a separate ingestion or scheduling policy.
+13. `ObservedAction` must be the actor-aware observation base and retain an exact stable actor ID rather than a
+    scene-node reference.
+14. `ObservedSpeech : ObservedAction` must represent owning-character, recognised-other, and unknown speech through the
+    exact case-sensitive `speech.observed` key. It must retain content and nullable raw `VoiceId` provenance separately
+    from `ActorId` identity.
+15. Raw `VoiceId` provenance must never prove identity or appear in rendered wording. Recognition must be relative to
+    the observing Mind; unknown speech must remain representable without inventing an actor identity.
+16. Owning-character speech must calculate importance `0`. Recognised-external and unknown speech must retain effective
+    importance `1`, while final broader importance models remain tunable and deferred.
+17. Mind must stamp tool-produced `ObservedAction` actor IDs with the owning character's exact ID before calculating
+    importance. A tool-supplied actor ID must not spoof another character.
+18. Mind must atomically ingest each ordered observation batch produced by a tool result. Validation failure must append
+    none of the batch to either timeline or pending state.
+19. Mind must expose immutable, atomic timeline snapshots while keeping mutable timeline storage private. Each turn must
+    render the complete, unbounded snapshot; framework history must not provide cross-turn memory.
+20. Observations received before `_Ready()` must become schedulable when scheduling is available.
+21. AgenticMind must execute each turn through [AI-002](../002-agent-runtime/index.md) and render it through
     [AI-003](../003-prompt-api/index.md).
-13. AgenticMind must compile its authorable Handlebars-backed `SystemInstruction` `PromptStack` once for its node
-    lifetime. The resource is an authoring template and must not cache rendered output.
-14. AgenticMind must snapshot prompt, lore, and system context on the first eligible speech observation and render the
-    compiled template once from that snapshot.
-15. The Agent Framework agent and session created from that first snapshot must remain stable for the AgenticMind node
-    lifetime; later turns must not rebuild identity or instructions from mutable scene context.
-16. AgenticMind must render with the owning character's SCN-001 prompt context defined by CTX-001, including `character`
-    and `characters`.
-17. AgenticMind must consume CTX-001 dictionaries without adding any dependency from `AlleyCat.Context` to AI,
-     prompt, or templating APIs.
-18. Male and female NPC role templates must use one shared generic prompt-stack resource with context-driven
-    `{{ character.Id }}`, generic tool and speech instructions, and essential then character lore in authored order.
-19. The `speak` tool must invoke AgenticMind's configured `IVoice` output rather than returning visible text.
-20. Tool invocation services must include the calling AgenticMind and its configured `IVoice` so Resource tools can
-     execute against that instance.
-21. Each speech turn must accept at most one `speak` tool call before waiting for more speech.
-22. Listening must remain paused for a short cooldown after the NPC starts speaking.
-23. OpenAI-compatible backend settings must bind/read subsystem-owned AI options from CORE-006 `IConfiguration`, or
-     build a local custom-path JSON configuration when an explicit path is supplied.
-24. Observation prompt rendering must be polymorphic on the observation contract, not hard-coded by provider type
-     checks.
-25. The mirror-room test scene must contain the minimum player and NPC voice wiring needed for conversation testing.
-26. `SpeechObservation` must retain `VoiceId`, nullable recognised `CharacterId`, `Content`, and `Weight`.
-27. AgenticMind must resolve recognition through a mind-relative resolver from `VoiceId` to nullable `CharacterId`;
-    the initial resolver uses identity mapping.
-28. Observation prompt text must identify a recognised speaker by `CharacterId` or use an unknown-voice label. It must
-    never present raw `VoiceId` as proof of character recognition.
-29. Agent Framework technical agent names derive from the owning `Character.Id`; framework descriptions remain generic.
-    Prompt-visible identity comes from character context and lore.
-
-### AI-002 Runtime Sync Note
-
-The AgenticMind speech path fulfils the AI-001 contract through the AI-002 runtime: accepted external voice input is
-queued as a speech observation by the base Mind cycle, AgenticMind executes the agent turn, and `speak` tool calls
-receive execution services through `IServiceProvider` at invocation time. This preserves the one-spoken-reply boundary
-while keeping backend failures contained to logged errors.
+22. Tree exit must establish one irreversible node-lifetime boundary that stops intake and scheduling, stops timers, and
+    cancels active observation processing. Deferred callbacks must not access Mind services after exit.
+23. Node-lifetime cancellation must propagate through active agent and tool work. Expected interruption and lifetime
+    cancellation must not be reported as backend failures or trigger retries or unintended turns.
 
 ## In Scope
 
-- Abstract Mind base node for mind-like voice listeners and generic observation-cycle scheduling.
-- AgenticMind node component for external-speech-triggered NPC responses.
-- AgenticMind-owned prompt-stack system instructions, exported tool selection, client-provider wiring, and Agent
-  Framework turn orchestration.
-- One-time AgenticMind compilation and first-eligible-speech rendering of the assigned `SystemInstruction` prompt stack.
-- Shared generic NPC prompt authoring for male and female role templates.
-- Mind-relative voice recognition and recognised-character speech observations.
-- Replaceable Agent Framework client provider Resource for chat-client creation.
-- Microsoft Agent Framework prototype backend.
-- OpenAI-compatible chat configuration from subsystem-owned AI options.
-- Editor-selectable OpenAI chat-completions and responses client adapters.
-- Mirror-room scene wiring for manual conversation testing.
+- Mind-owned node-lifetime observation timeline and pending importance queue.
+- Contextual importance calculation, validation, and stored scheduling values.
+- Unified external and tool-result observation ingestion.
+- Threshold, maximum-wait, minimum-interval, disable, and active-turn interruption behaviour.
+- Actor-relative observed speech and privacy-safe voice provenance.
+- AgenticMind orchestration through AI-002 and AI-003.
+- Irreversible node-lifetime shutdown of scheduling, agent, tool, and deferred action work.
 
 ## Out Of Scope
 
-- Persistent memory or long-term relationship state.
-- Multi-agent orchestration.
-- Behaviour or animation planning beyond spoken response output.
-- Streaming token or streaming speech playback.
-- Persona authoring tools and prompt previews beyond the required generic, context-driven prompt stack.
-- NPC-to-NPC attention loops and participant filtering.
-- Session reset, scenario or conversation lifecycle, and post-session memory ingestion.
+- Richer importance models beyond owning-character-relative speech and test observations.
+- Additional production action tools beyond speech.
+- Cancelling or reversing world actions already admitted before interruption.
+- Timeline summarisation, compaction, token budgeting, or persistence beyond the Mind node lifetime.
+- Automatic retry or backoff policy beyond existing failure containment.
+- Multi-agent orchestration, long-term relationship state, and NPC attention loops.
+- Final tuning values for importance thresholds and wait durations.
+- Visual verification, because this refactor has no visual acceptance surface.
 
 ## Acceptance Criteria
 
-1. An AgenticMind node receives nonblank speech from any external voice and ignores only its own output voice.
-2. Accepted speech is queued as an observation by Mind and orchestrated by AgenticMind into an Agent Framework turn.
-3. The mirror-room NPC answers as its authored identity through spoken in-world voice output.
-4. Character context values are available to the rendered system instructions used for the NPC reply.
-5. The OpenAI-compatible client provider supplies the chat client used by the default Agent Framework adapter.
-6. Agent Framework turn execution and session state caching are owned by `AgenticMind`.
-7. Exported tool resources are delivered per turn through `ChatOptions` under the AI-002 runtime contract.
-8. The client provider owns binding/loading for Host, optional ApiKey, Model, and Timeout settings.
-9. The client provider can be switched between OpenAI chat-completions and responses client adapters in the editor.
-10. AgenticMind ignores further `speak` tool calls and voice input until the current reply turn completes.
-11. Tool invocation uses an `IServiceProvider` context that contains the calling AgenticMind and configured `IVoice`
-    for that turn.
-12. Observation prompt formatting is verified through the observation contract without concrete-type switches in
-    AgenticMind or provider code.
-13. `AgenticMind.SystemInstruction` is an exported `PromptStack` compiled once into a reusable `ITemplate` instead of
-    hard-coded production persona text.
-14. First eligible speech snapshots prompt, lore, and system context; the resulting agent, rendered instructions, and
-    session remain stable for the AgenticMind node lifetime.
-15. Rendering receives CTX-001 `character` and `characters` context for the owning character.
-16. CTX-001 remains independent from AI, prompt, and templating APIs, and no `ContextData` type is reintroduced.
-17. Male and female NPC templates share one generic prompt stack containing context-driven identity, generic tool and
-    speech instructions, `EssentialLorePromptSection`, then `CharacterLorePromptSection`.
-18. Disabled Mind instances do not process queued or newly received voice observations until re-enabled.
-19. Missing voice/backend configuration and backend failures are logged without crashing the scene.
-20. Acceptance covers both player-visible conversation behaviour and the component/backend integration contract.
-21. Speech observations preserve raw voice provenance separately from nullable character recognition, and prompt text
-    never treats raw `VoiceId` as recognised identity.
-22. Agent Framework technical names derive from exact owning `Character.Id`, while descriptions remain generic.
+1. An NPC records owning-character, recognised-other, and unknown speech in timeline order through one
+   `ObservedSpeech : ObservedAction` contract with exact key `speech.observed`.
+2. Rendered speech history uses actor-relative self, recognised-other, and unknown wording and never renders raw voice
+   provenance or treats it as identity proof.
+3. Tests verify every observation enters both timeline and pending FIFO, with importance calculated and validated
+   exactly once before atomic mutation.
+4. Tests verify self-speech stores importance `0`, external and unknown speech store effective importance `1`, and zero
+   importance still processes through maximum wait.
+5. Tests verify cumulative-importance threshold, maximum wait, the 0–5-second minimum-interval authoring range,
+   disable/re-enable, pre-`_Ready()` intake, and atomic snapshots.
+6. Tests verify one qualifying observation cancels an active invocation and starts exactly one fresh replacement after
+   full settlement, with one minimum-interval bypass and no overlap.
+7. Tests verify cumulative sub-threshold entries do not interrupt, multiple qualifying arrivals coalesce, FIFO order is
+   retained, and committed events survive interruption.
+8. Tests verify natural completion, cancellation, disable, and node-exit races neither duplicate a replacement nor emit
+   erroneous failure diagnostics.
+9. Tests verify Mind stamps tool-produced actors, prevents spoofing, atomically ingests ordered batches, and exposes no
+   public observation recorder, sink, or timeline-only path.
+10. A later turn's sole system instruction reflects the complete ordered timeline without carrying forward framework
+    transcripts or observation-summary messages.
+11. Missing configuration and genuine backend failures are logged and contained without crashing the scene.
+12. After tree exit, tests verify no new intake, delayed action, replacement turn, timer, or node-service access occurs.
+13. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
+    ingestion, scheduling, interruption, cancellation, and lifetime contracts.
 
 ## References
 
 ### Implementation
 
-- game/src/Mind/Mind.cs
-- game/src/Mind/AI/AgenticMind.cs
-- game/src/Mind/AI/Tool/AgentTool.cs
-- game/src/Mind/AI/Tool/SpeechTool.cs
-- game/src/Mind/AI/Provider/ClientProvider.cs
-- game/src/Mind/AI/Provider/OpenAIClientProvider.cs
-- game/assets/testing/mirror_room/mirror_room.tscn
-- game/AlleyCat.json
+- `game/src/Mind/Mind.cs`
+- `game/src/Mind/Observation/Observation.cs`
+- `game/src/Mind/AI/AgenticMind.cs`
+- `game/src/Mind/AI/Tool/AgentTool.cs`
+- `game/src/Mind/AI/Tool/SpeechTool.cs`
 
-### Related Specs
+### Related Specifications
 
-- BODY-006: Voice Component
-- SPCH-003: Transcriber Component
-- SPCH-004: Speech Generator Component
-- CORE-006: Microsoft Configuration Integration
+- [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
+- [BODY-006: Voice Component](../../body/006-voice/index.md)
+- [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
+- [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 
-### External Dependencies
+### Design Background
 
-- Microsoft Agent Framework
+- [AI Context Management Memo](../../../docs/ai-context-management-memo.md)

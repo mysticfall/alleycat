@@ -45,13 +45,17 @@ public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
     }
 
     /// <inheritdoc />
-    protected override LipSyncInferenceResult RunBackendInference(AudioStreamWav speech)
+    protected override LipSyncInferenceResult RunBackendInference(
+        AudioStreamWav speech,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         InferenceSession session = _session
             ?? throw new InvalidOperationException("LipSyncPlayer: backend session was not initialised.");
 
         float[] monoWaveform = LoadAudioWaveform(speech, _config.Preprocessing.SampleRate);
         float[][] frames = RunInference(session, _config, monoWaveform);
+        cancellationToken.ThrowIfCancellationRequested();
         return new LipSyncInferenceResult(frames, _config.BlendshapeNames, _config.OutputSpec.Fps);
     }
 

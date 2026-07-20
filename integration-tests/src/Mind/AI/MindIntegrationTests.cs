@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Core;
@@ -13,6 +14,8 @@ using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 using MindBase = AlleyCat.Mind.Mind;
@@ -50,15 +53,170 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Default recognition is identity mapping and accepted speech retains all trimmed observation fields.
+    /// Successful speech produces one actorless envelope observation that the wrapper stamps as the owner.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WithDefaultRecognition_CreatesRecognisedSpeechObservation()
+    public async Task SpeechTool_AcceptedDispatch_IngestsOneStampedObservedSpeech()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        CapturingAgenticMind mind = new()
+        {
+            Enabled = false
+        };
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            var voice = new PlainVoice("private-output-device");
+            AIFunction function = new SpeechTool().CreateFunction(new ToolInvocationProvider(mind, character, voice));
+
+            object? result = await function.InvokeAsync(
+                new AIFunctionArguments { ["speech"] = "  Hello there.  " },
+                CancellationToken.None);
+
+            Assert.Equal("Spoken through the configured voice.", result);
+            ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.GetTimelineForTest()));
+            Assert.Equal(character.Id, observation.ActorId);
+            Assert.Null(observation.VoiceId);
+            Assert.Equal("Hello there.", observation.Content);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, character);
+        }
+    }
+
+    /// <summary>
+    /// Blank, missing, failed, throwing, and cancelled speech calls ingest no successful observation.
+    /// </summary>
+    [Fact]
+    public async Task SpeechTool_UnsuccessfulDispatches_IngestNothing()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        CapturingAgenticMind mind = new()
+        {
+            Enabled = false
+        };
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            SpeechTool tool = new();
+            AIFunction blank = tool.CreateFunction(new ToolInvocationProvider(mind, character, new PlainVoice("voice")));
+            AIFunction missing = tool.CreateFunction(new ToolInvocationProvider(mind, character, null));
+            AIFunction failed = tool.CreateFunction(new ToolInvocationProvider(mind, character, new FailingVoice()));
+            AIFunction throwing = tool.CreateFunction(new ToolInvocationProvider(mind, character, new ThrowingVoice()));
+
+            _ = await Assert.ThrowsAsync<ArgumentException>(
+                blank.InvokeAsync(new AIFunctionArguments { ["speech"] = "  " }, CancellationToken.None).AsTask);
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                missing.InvokeAsync(new AIFunctionArguments { ["speech"] = "hello" }, CancellationToken.None).AsTask);
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                failed.InvokeAsync(new AIFunctionArguments { ["speech"] = "hello" }, CancellationToken.None).AsTask);
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                throwing.InvokeAsync(new AIFunctionArguments { ["speech"] = "hello" }, CancellationToken.None).AsTask);
+            using CancellationTokenSource cancellation = new();
+            cancellation.Cancel();
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                blank.InvokeAsync(new AIFunctionArguments { ["speech"] = "hello" }, cancellation.Token).AsTask);
+
+            Assert.Empty(mind.GetTimelineForTest());
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, character);
+        }
+    }
+
+    /// <summary>
+    /// Cancelling a queued main-thread dispatch prevents both the underlying voice call and observation recording.
+    /// </summary>
+    [Fact]
+    public async Task SpeechTool_WhenDeferredDispatchIsCancelledBeforeFlush_DoesNotDispatchOrRecord()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecordingVoice voice = new();
+        CapturingAgenticMind mind = new()
+        {
+            Voice = voice,
+        };
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            AIFunction function = new SpeechTool().CreateFunction(mind);
+            using CancellationTokenSource cancellation = new();
+            ValueTask<object?> invocation = function.InvokeAsync(
+                new AIFunctionArguments { ["speech"] = "must not dispatch" },
+                cancellation.Token);
+            cancellation.Cancel();
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(invocation.AsTask);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Empty(voice.SpokenLines);
+            Assert.Empty(mind.GetTimelineForTest());
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, mind, voice);
+        }
+    }
+
+    /// <summary>
+    /// Removing a mind settles queued speech without dispatching or recording after its node lifetime ends.
+    /// </summary>
+    [Fact]
+    public async Task SpeechTool_WhenMindExitsBeforeDeferredFlush_CancelsQueuedDispatch()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecordingVoice voice = new();
+        CapturingAgenticMind mind = new()
+        {
+            Voice = voice,
+        };
+        Node parent = sceneTree.CurrentScene ?? sceneTree.Root;
+        AddTestNode(sceneTree, voice);
+        parent.AddChild(mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            AIFunction function = new SpeechTool().CreateFunction(mind);
+            ValueTask<object?> invocation = function.InvokeAsync(
+                new AIFunctionArguments { ["speech"] = "must not survive exit" },
+                CancellationToken.None);
+
+            parent.RemoveChild(mind);
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => invocation.AsTask().WaitAsync(TimeSpan.FromSeconds(2)));
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+
+            Assert.Empty(voice.SpokenLines);
+            Assert.Empty(mind.GetTimelineForTest());
+        }
+        finally
+        {
+            mind.Free();
+            await DestroyFixtureAsync(sceneTree, voice);
+        }
+    }
+
+    /// <summary>
+    /// Raw voice provenance is unrecognised by default while accepted speech retains its other fields.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WithDefaultRecognition_CreatesUnrecognisedObservedSpeech()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecognitionTestMind mind = new()
         {
-            ObservationWeightThreshold = 1f
+            ObservationImportanceThreshold = 1f
         };
         PlainVoice voice = new("voice.Mixed-Case");
         AddTestNode(sceneTree, mind);
@@ -66,15 +224,14 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         try
         {
-            Assert.Equal("voice.Mixed-Case", mind.ResolveForTest("voice.Mixed-Case"));
+            Assert.Null(mind.ResolveForTest("voice.Mixed-Case"));
             mind.ReceiveVoice("  trimmed speech  ", voice);
             await WaitUntilAsync(sceneTree, () => mind.Observations.Count == 1, maxFrames: 120);
 
-            SpeechObservation observation = Assert.IsType<SpeechObservation>(Assert.Single(mind.Observations));
+            ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Observations));
             Assert.Equal("voice.Mixed-Case", observation.VoiceId);
-            Assert.Equal("voice.Mixed-Case", observation.CharacterId);
+            Assert.Null(observation.ActorId);
             Assert.Equal("trimmed speech", observation.Content);
-            Assert.Equal(1f, observation.Weight);
         }
         finally
         {
@@ -83,16 +240,19 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// A mind-relative resolver can leave accepted voice provenance unrecognised.
+    /// An explicit mind-relative association can recognise voice provenance as a character.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenRecognitionReturnsNull_CreatesUnrecognisedSpeechObservation()
+    public async Task ReceiveVoice_WithExplicitMindRelativeAssociation_CreatesRecognisedObservedSpeech()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecognitionTestMind mind = new()
         {
-            RecogniseVoices = false,
-            ObservationWeightThreshold = 1f
+            RecognisedVoices =
+            {
+                ["private-device-id"] = "Known Character",
+            },
+            ObservationImportanceThreshold = 1f
         };
         PlainVoice voice = new("private-device-id");
         AddTestNode(sceneTree, mind);
@@ -103,9 +263,9 @@ public sealed partial class MindIntegrationTests : IDisposable
             mind.ReceiveVoice("unknown speaker", voice);
             await WaitUntilAsync(sceneTree, () => mind.Observations.Count == 1, maxFrames: 120);
 
-            SpeechObservation observation = Assert.IsType<SpeechObservation>(Assert.Single(mind.Observations));
+            ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Observations));
             Assert.Equal("private-device-id", observation.VoiceId);
-            Assert.Null(observation.CharacterId);
+            Assert.Equal("Known Character", observation.ActorId);
         }
         finally
         {
@@ -114,10 +274,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Player speech should become a runtime turn whose first speak-tool call cancels the backend run when diagnostics are disabled.
+    /// Multiple speech actions should dispatch and the typed end result should complete regardless of diagnostics.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenRequestResponseDiagnosticsDisabled_CancelsRunAfterFirstAcceptedSpeak()
+    public async Task ReceiveVoice_WhenDiagnosticsDisabled_AllowsMultipleToolsBeforeTypedEndTurn()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -131,23 +291,28 @@ public sealed partial class MindIntegrationTests : IDisposable
         FakeClientProvider clientProvider = new()
         {
             FirstSpeech = "First reply.",
-            SecondSpeech = "Second reply should not be attempted.",
+            SecondSpeech = "Second reply.",
         };
-        AgenticMind mind = new()
+        CapturingAgenticMind mind = new()
         {
             ClientProvider = clientProvider,
             SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 1f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 1f,
             Tools = [new SpeechTool()],
         };
         mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(EnableRequestResponseLogging: false));
 
+        bool sentDuringTurn = false;
         clientProvider.AfterFirstSpeakAsync = () =>
         {
-            mind.ReceiveVoice("interrupting player speech", playerVoice);
+            if (!sentDuringTurn)
+            {
+                sentDuringTurn = true;
+                mind.ReceiveVoice("interrupting player speech", playerVoice);
+            }
+
             return Task.CompletedTask;
         };
 
@@ -165,21 +330,64 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             mind.ReceiveVoice("  hello Alley  ", playerVoice);
 
-            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { Completed: true }, maxFrames: 120);
+            await WaitUntilAsync(
+                sceneTree,
+                () => clientProvider.CreatedClients.Count > 0 && clientProvider.CreatedClients[0].Completed,
+                maxFrames: 120);
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
-            Assert.NotNull(clientProvider.Client);
-            FakeChatClient client = clientProvider.Client;
+            FakeChatClient client = clientProvider.CreatedClients[0];
             Assert.Equal(1, client.RunCount);
             Assert.True(character.ContextRequestCount >= 1);
             Assert.NotNull(character.ReceivedScene);
             Assert.Same(character, character.ReceivedObserver);
-            Assert.Contains("- Speech from Speaker: hello Alley", Assert.Single(client.Prompts));
+            Assert.Contains("Heard an unknown speaker: hello Alley", Assert.Single(client.Prompts));
+            _ = Assert.Single(client.MessageSnapshots);
+            Assert.Empty(client.MessageSnapshots[0]);
             Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
-            Assert.True(client.CancellationObservedAfterFirstSpeak);
-            Assert.False(client.ReturnedResponse);
-            Assert.Equal("Ignored because this turn already accepted a speak request.", client.SecondSpeakResult);
-            Assert.Equal(["First reply."], npcVoice.SpokenLines);
+            Assert.False(client.CancellationObservedAfterFirstSpeak);
+            Assert.True(client.ReturnedResponse);
+            Assert.Equal("Spoken through the configured voice.", client.SecondSpeakResult);
+            Assert.Equal(["First reply.", "Second reply."], npcVoice.SpokenLines.Take(2));
+            Assert.DoesNotContain("interrupting player speech", client.Prompts[0], StringComparison.Ordinal);
+            Assert.DoesNotContain("First reply.", client.Prompts[0], StringComparison.Ordinal);
+            Assert.DoesNotContain("Second reply.", client.Prompts[0], StringComparison.Ordinal);
+
+            Assert.Collection(
+                mind.GetTimelineForTest().Cast<ObservedSpeech>().Take(4),
+                observation =>
+                {
+                    Assert.Null(observation.ActorId);
+                    Assert.Equal("Speaker", observation.VoiceId);
+                    Assert.Equal("hello Alley", observation.Content);
+                },
+                observation =>
+                {
+                    Assert.Equal(character.Id, observation.ActorId);
+                    Assert.Null(observation.VoiceId);
+                    Assert.Equal("First reply.", observation.Content);
+                },
+                observation =>
+                {
+                    Assert.Null(observation.ActorId);
+                    Assert.Equal("Speaker", observation.VoiceId);
+                    Assert.Equal("interrupting player speech", observation.Content);
+                },
+                observation =>
+                {
+                    Assert.Equal(character.Id, observation.ActorId);
+                    Assert.Null(observation.VoiceId);
+                    Assert.Equal("Second reply.", observation.Content);
+                });
+
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 2 && clientProvider.Client is { Completed: true }, maxFrames: 120);
+            string laterPrompt = clientProvider.CreatedClients[1].Prompts[0];
+            Assert.True(laterPrompt.IndexOf("Heard an unknown speaker: hello Alley", StringComparison.Ordinal)
+                < laterPrompt.IndexOf("Said: First reply.", StringComparison.Ordinal));
+            Assert.True(laterPrompt.IndexOf("Said: First reply.", StringComparison.Ordinal)
+                < laterPrompt.IndexOf("Heard an unknown speaker: interrupting player speech", StringComparison.Ordinal));
+            Assert.True(laterPrompt.IndexOf("Heard an unknown speaker: interrupting player speech", StringComparison.Ordinal)
+                < laterPrompt.IndexOf("Said: Second reply.", StringComparison.Ordinal));
         }
         finally
         {
@@ -188,10 +396,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Request/response diagnostics should keep the backend run alive so AgentResponse diagnostics can inspect the result.
+    /// Enabling request/response diagnostics should not alter completion or action semantics.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenRequestResponseDiagnosticsEnabled_AllowsRunCompletionAndDuplicateSpeakProtection()
+    public async Task ReceiveVoice_WhenDiagnosticsEnabled_HasIdenticalCompletionSemantics()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -206,7 +414,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             FirstSpeech = "First diagnostic reply.",
             SecondSpeech = "Second diagnostic reply should be ignored.",
-            ResponseText = "general agent response diagnostics text",
+            ResponseText = "{}",
         };
         AgenticMind mind = new()
         {
@@ -214,8 +422,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 1f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 1f,
             Tools = [new SpeechTool()],
         };
         mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(EnableRequestResponseLogging: true));
@@ -238,12 +445,12 @@ public sealed partial class MindIntegrationTests : IDisposable
             Assert.False(client.CancellationObservedAfterFirstSpeak);
             Assert.True(client.ReturnedResponse);
             Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
-            Assert.Equal("Ignored because this turn already accepted a speak request.", client.SecondSpeakResult);
-            Assert.Equal(["First diagnostic reply."], npcVoice.SpokenLines);
+            Assert.Equal("Spoken through the configured voice.", client.SecondSpeakResult);
+            Assert.Equal(["First diagnostic reply.", "Second diagnostic reply should be ignored."], npcVoice.SpokenLines);
 
             string diagnostics = AgenticMind.CreateSensitiveTrialAgentResponseDiagnostics(
                 new AgentResponse(new ChatMessage(ChatRole.Assistant, client.ResponseText)));
-            Assert.Contains("Text=general agent response diagnostics text", diagnostics, StringComparison.Ordinal);
+            Assert.Contains("Text={}", diagnostics, StringComparison.Ordinal);
             Assert.Contains("Messages=1", diagnostics, StringComparison.Ordinal);
         }
         finally
@@ -274,8 +481,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 1f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 1f,
             Tools = [new MarkerTool("first_tool")],
         };
 
@@ -293,12 +499,16 @@ public sealed partial class MindIntegrationTests : IDisposable
             clientProvider.Client!.Completed = false;
             mind.ReceiveVoice("second turn", playerVoice);
 
-            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 2, Completed: true }, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 2 && clientProvider.Client is { Completed: true }, maxFrames: 120);
 
             Assert.NotNull(clientProvider.Client);
-            Assert.Equal(2, clientProvider.Client.RunCount);
-            Assert.Equal(["first_tool", "second_tool"], clientProvider.Client.ToolNamesByRun);
+            Assert.Equal(2, clientProvider.CreatedClients.Count);
+            Assert.Equal("first_tool", Assert.Single(clientProvider.CreatedClients[0].ToolNamesByRun));
+            Assert.Equal("second_tool", Assert.Single(clientProvider.CreatedClients[1].ToolNamesByRun));
             Assert.Empty(npcVoice.SpokenLines);
+            string laterPrompt = clientProvider.CreatedClients[1].Prompts[0];
+            Assert.True(laterPrompt.IndexOf("Heard an unknown speaker: first turn", StringComparison.Ordinal)
+                < laterPrompt.IndexOf("Heard an unknown speaker: second turn", StringComparison.Ordinal));
         }
         finally
         {
@@ -307,10 +517,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// First speech snapshots prompt/context and keeps one agent and session stable for later turns.
+    /// Every turn rebuilds current prompt/context and starts without prior framework transcript.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_AfterFirstSpeech_ReusesPromptSnapshotAgentAndSession()
+    public async Task ReceiveVoice_OnLaterTurn_RebuildsPromptAndUsesFreshSession()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -333,8 +543,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             SystemInstruction = firstSystemInstruction,
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 1f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 1f,
             Tools = [new MarkerTool("cache_probe")],
         };
 
@@ -349,22 +558,239 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             context["displayName"] = "Second Alley";
             mind.SystemInstruction = secondSystemInstruction;
-            clientProvider.Client!.Completed = false;
             mind.ReceiveVoice("second turn", playerVoice);
-            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 2, Completed: true }, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.CreatedClients.Count == 2 && clientProvider.Client is { Completed: true }, maxFrames: 120);
 
             Assert.Equal(1, firstSection.ContentRequestCount);
-            Assert.Equal(0, secondSection.ContentRequestCount);
-            _ = Assert.Single(clientProvider.CreatedClients);
-            Assert.Equal(1, character.ContextRequestCount);
-            Assert.Equal(2, clientProvider.Client!.MessageSnapshots.Count);
-            Assert.Contains(
-                clientProvider.Client.MessageSnapshots[1],
-                message => string.Equals(message.Text, clientProvider.Client.Prompts[0], StringComparison.Ordinal));
+            Assert.Equal(1, secondSection.ContentRequestCount);
+            Assert.Equal(2, clientProvider.CreatedClients.Count);
+            Assert.Equal(2, character.ContextRequestCount);
+            Assert.All(clientProvider.CreatedClients, client =>
+            {
+                ChatMessage[] messages = Assert.Single(client.MessageSnapshots);
+                Assert.Empty(messages);
+            });
+            Assert.Contains("First instruction for First Alley", clientProvider.CreatedClients[0].Prompts[0], StringComparison.Ordinal);
+            Assert.Contains("Second instruction for Second Alley", clientProvider.CreatedClients[1].Prompts[0], StringComparison.Ordinal);
         }
         finally
         {
             await DestroyFixtureAsync(sceneTree, character, npcVoice);
+        }
+    }
+
+    /// <summary>
+    /// The active turn uses the timeline captured with its claimed batch while later observations remain FIFO-queued.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_AfterBatchClaimBeforePromptConstruction_IsDeferredToNextTurnSnapshot()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PlainVoice playerVoice = new("Speaker");
+        FakeClientProvider clientProvider = new();
+        TaskCompletionSource batchClaimed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releasePromptConstruction = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CapturingAgenticMind mind = new()
+        {
+            ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
+            ObservationImportanceThreshold = 1f,
+            Tools = [],
+            ObservationBatchClaimedHookForTesting = async cancellationToken =>
+            {
+                _ = batchClaimed.TrySetResult();
+                await releasePromptConstruction.Task.WaitAsync(cancellationToken);
+            },
+        };
+
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("observation A", playerVoice);
+            await batchClaimed.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            mind.ReceiveVoice("observation B", playerVoice);
+            mind.ReceiveVoice("observation C", playerVoice);
+            mind.ObservationBatchClaimedHookForTesting = null;
+            _ = releasePromptConstruction.TrySetResult();
+
+            await WaitUntilAsync(
+                sceneTree,
+                () => clientProvider.CreatedClients.Count == 2 && clientProvider.CreatedClients[1].Completed,
+                maxFrames: 180);
+
+            Assert.Equal(2, mind.ClaimedBatches.Count);
+            Assert.Equal(
+                ["observation A"],
+                mind.ClaimedBatches[0].Cast<ObservedSpeech>().Select(observation => observation.Content));
+            Assert.Equal(
+                ["observation B", "observation C"],
+                mind.ClaimedBatches[1].Cast<ObservedSpeech>().Select(observation => observation.Content));
+
+            string activeInstruction = clientProvider.CreatedClients[0].Prompts[0];
+            Assert.Contains("Heard an unknown speaker: observation A", activeInstruction, StringComparison.Ordinal);
+            Assert.DoesNotContain("observation B", activeInstruction, StringComparison.Ordinal);
+            Assert.DoesNotContain("observation C", activeInstruction, StringComparison.Ordinal);
+
+            string subsequentInstruction = clientProvider.CreatedClients[1].Prompts[0];
+            int firstIndex = subsequentInstruction.IndexOf("observation A", StringComparison.Ordinal);
+            int secondIndex = subsequentInstruction.IndexOf("observation B", StringComparison.Ordinal);
+            int thirdIndex = subsequentInstruction.IndexOf("observation C", StringComparison.Ordinal);
+            Assert.True(firstIndex >= 0 && firstIndex < secondIndex && secondIndex < thirdIndex);
+        }
+        finally
+        {
+            _ = releasePromptConstruction.TrySetResult();
+            await DestroyFixtureAsync(sceneTree, character);
+        }
+    }
+
+    /// <summary>
+    /// Exiting the tree cancels an active backend invocation and does not wait for backend completion.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WhenMindExitsDuringBlockedBackend_CancelsActiveTurn()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PlainVoice playerVoice = new("Speaker");
+        BlockingClientProvider clientProvider = new();
+        AgenticMind mind = new()
+        {
+            ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
+            ObservationImportanceThreshold = 1f,
+            Tools = [],
+        };
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("start blocked backend", playerVoice);
+            await clientProvider.InvocationStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            mind.QueueFree();
+            await TestUtils.WaitForNextFrameAsync(sceneTree);
+            await clientProvider.InvocationCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.True(clientProvider.CancellationObserved);
+            Assert.False(clientProvider.ReturnedResponse);
+            Assert.Equal(1, clientProvider.RunCount);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, character);
+        }
+    }
+
+    /// <summary>
+    /// Mind tree exit irreversibly closes intake and scheduling, cancels active work quietly, and rejects re-entry.
+    /// </summary>
+    [Fact]
+    public async Task NodeLifetime_AfterExit_RejectsIntakeSchedulingAndReentryWithoutFailureDiagnostic()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        Node parent = sceneTree.CurrentScene ?? sceneTree.Root;
+        PlainVoice externalVoice = new("external");
+        LifetimeBoundaryTestMind mind = new()
+        {
+            ObservationImportanceThreshold = 1f,
+        };
+        using RecordingLoggerProvider loggerProvider = new();
+        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
+
+        parent.AddChild(mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            _ = mind.ObserveForTest(new TestObservation(1f, "active"));
+            await mind.ProcessingStarted.WaitAsync(TimeSpan.FromSeconds(2));
+
+            _ = mind.ObserveForTest(new TestObservation(1f, "pending"));
+            mind.Enabled = false;
+            mind.Enabled = true;
+            IReadOnlyList<AgentObservation> timelineAtExit = mind.GetTimelineForTest();
+            bool hadPendingAtExit = mind.HasPendingObservationsForTest;
+
+            parent.RemoveChild(mind);
+            await mind.ProcessingSettled.WaitAsync(TimeSpan.FromSeconds(2));
+
+            (bool shouldProcess, bool shouldSchedule) = mind.ObserveForTest(
+                new TestObservation(1f, "ignored direct intake"));
+            mind.ReceiveVoice("ignored voice intake", externalVoice);
+            _ = mind.ObserveForTest(new TestObservation(0f, "ignored intake"));
+            await TestUtils.WaitForFramesAsync(sceneTree, 3);
+
+            parent.AddChild(mind);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.False(mind.IsInsideTree());
+            Assert.Null(mind.GetParent());
+            Assert.Equal(1, mind.ReadyCallCount);
+            Assert.True(mind.LifetimeCancellationObserved);
+            Assert.True(mind.LifetimeEndedForTest);
+            Assert.False(mind.Enabled);
+            Assert.False(shouldProcess);
+            Assert.False(shouldSchedule);
+            Assert.Equal(timelineAtExit, mind.GetTimelineForTest());
+            Assert.Equal(hadPendingAtExit, mind.HasPendingObservationsForTest);
+            Assert.True(hadPendingAtExit);
+            Assert.Equal(1, mind.ProcessCallCount);
+            Assert.DoesNotContain(
+                loggerProvider.Entries,
+                entry => entry.Level >= LogLevel.Error);
+        }
+        finally
+        {
+            if (mind.GetParent() is { } currentParent)
+            {
+                currentParent.RemoveChild(mind);
+            }
+
+            if (mind.ProcessingStarted.IsCompleted)
+            {
+                await mind.ProcessingSettled.WaitAsync(TimeSpan.FromSeconds(2));
+            }
+
+            mind.Free();
+        }
+    }
+
+    /// <summary>
+    /// A configured voice and tool invocation are both optional for a typed no-action turn.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WithoutVoiceOrTools_AcceptsNoActionEndTurn()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        PlainVoice playerVoice = new("Speaker");
+        FakeClientProvider clientProvider = new();
+        AgenticMind mind = new()
+        {
+            ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
+            ObservationImportanceThreshold = 1f,
+            Tools = [],
+        };
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("quiet turn", playerVoice);
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { Completed: true }, maxFrames: 120);
+
+            FakeChatClient client = Assert.Single(clientProvider.CreatedClients);
+            Assert.True(client.ReturnedResponse);
+            Assert.Empty(client.ToolNamesByRun);
+            Assert.Empty(client.MessageSnapshots[0]);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, character);
         }
     }
 
@@ -390,8 +816,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 1f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 1f,
             Tools = [new SpeechTool()],
         };
 
@@ -437,8 +862,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 1f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 1f,
             Tools = [new SpeechTool()],
         };
 
@@ -454,8 +878,9 @@ public sealed partial class MindIntegrationTests : IDisposable
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
             Assert.NotNull(clientProvider.Client);
-            Assert.Contains("- Speech from Speaker: hello through interface", Assert.Single(clientProvider.Client.Prompts));
-            Assert.Equal(["Interface reply."], npcVoice.SpokenLines);
+            Assert.Contains("Heard an unknown speaker: hello through interface", Assert.Single(clientProvider.Client.Prompts));
+            Assert.NotEmpty(npcVoice.SpokenLines);
+            Assert.All(npcVoice.SpokenLines, line => Assert.Equal("Interface reply.", line));
         }
         finally
         {
@@ -467,7 +892,7 @@ public sealed partial class MindIntegrationTests : IDisposable
     /// Below-threshold speech should wait for the configured maximum observation wait instead of polling frequently.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenBelowWeightThreshold_RunsAfterMaxObservationWait()
+    public async Task ReceiveVoice_WhenBelowImportanceThreshold_RunsAfterMaxObservationWait()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -488,8 +913,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 2f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 2f,
             Tools = [new SpeechTool()],
         };
 
@@ -515,15 +939,15 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// The base Mind processing loop should run immediately once cumulative observation weight reaches the threshold.
+    /// The base Mind processing loop should run immediately once cumulative observation importance reaches the threshold.
     /// </summary>
     [Fact]
-    public async Task Observe_WhenWeightThresholdReached_ProcessesThroughBaseMindLoop()
+    public async Task Observe_WhenImportanceThresholdReached_ProcessesThroughBaseMindLoop()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         TestMind mind = new()
         {
-            ObservationWeightThreshold = 1f,
+            ObservationImportanceThreshold = 1f,
         };
 
         AddTestNode(sceneTree, mind);
@@ -553,7 +977,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         TestMind mind = new()
         {
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 2f,
+            ObservationImportanceThreshold = 2f,
         };
 
         AddTestNode(sceneTree, mind);
@@ -602,8 +1026,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             SystemInstruction = CreateTestSystemInstruction(),
             Voice = npcVoice,
             MaxObservationWaitSeconds = 0.05f,
-            ObservationWeightThreshold = 1f,
-            PostReplyListenCooldownSeconds = 0f,
+            ObservationImportanceThreshold = 1f,
             Tools = [new SpeechTool()],
         };
 
@@ -662,6 +1085,19 @@ public sealed partial class MindIntegrationTests : IDisposable
                 Name = "Test Instructions",
                 Text = "CTX display name: {{character.displayName}}. Run the integration test turn.",
             },
+            new EventHistoryPromptSection
+            {
+                Name = "Event History",
+                Fragments =
+                [
+                    new EventHistoryPromptFragment
+                    {
+                        TypeKey = "speech.observed",
+                        Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId \"agentic-mind-fixture-character\")}}Said: {{Content}}{{else}}Heard {{ActorId}}: {{Content}}{{/if}}{{else}}Heard an unknown speaker: {{Content}}{{/if}}\n",
+                    },
+                ],
+                FallbackSource = "((Received {{TypeKey}} event.))\n",
+            },
         ],
     };
 
@@ -700,14 +1136,24 @@ public sealed partial class MindIntegrationTests : IDisposable
         public List<string> SpokenLines { get; } = [];
 
         public override void Speak(string speech)
+            => base.Speak(speech);
+
+        public override ValueTask SpeakAsync(
+            string speech,
+            CancellationToken cancellationToken = default)
         {
-            SpokenLines.Add(speech);
-            _ = TryNotifySpeechGeneratedWhenEnabled(speech);
+            cancellationToken.ThrowIfCancellationRequested();
+            string acceptedSpeech = ValidateSubmission(speech);
+            SpokenLines.Add(acceptedSpeech);
+            _ = TryNotifySpeechGeneratedWhenEnabled(acceptedSpeech);
+            return ValueTask.CompletedTask;
         }
     }
 
     private sealed partial class TestMind : MindBase
     {
+        private readonly StandaloneCharacter _owner = new();
+
         public List<IReadOnlyList<AgentObservation>> ProcessedBatches { get; } = [];
 
         public bool HasPendingObservationsForTest => HasPendingObservations;
@@ -726,38 +1172,210 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         protected override Task ProcessObservationsAsync(
             IReadOnlyList<AgentObservation> observations,
+            IReadOnlyList<AgentObservation> timelineSnapshot,
             CancellationToken cancellationToken)
         {
             ProcessedBatches.Add([.. observations]);
             return Task.CompletedTask;
         }
+
+        protected override ICharacter ResolveOwningCharacter() => _owner;
+    }
+
+    private sealed partial class LifetimeBoundaryTestMind : MindBase
+    {
+        private readonly StandaloneCharacter _owner = new();
+        private readonly TaskCompletionSource _processingStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _processingSettled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task ProcessingStarted => _processingStarted.Task;
+
+        public Task ProcessingSettled => _processingSettled.Task;
+
+        public int ProcessCallCount
+        {
+            get; private set;
+        }
+
+        public int ReadyCallCount
+        {
+            get; private set;
+        }
+
+        public bool HasPendingObservationsForTest => HasPendingObservations;
+
+        public bool LifetimeCancellationObserved
+        {
+            get; private set;
+        }
+
+        public bool LifetimeEndedForTest => IsNodeLifetimeEnded;
+
+        public override void _Ready()
+        {
+            base._Ready();
+            ReadyCallCount++;
+        }
+
+        public (bool ShouldProcess, bool ShouldSchedule) ObserveForTest(AgentObservation observation)
+        {
+            MindScheduleDecision decision = Observe(observation);
+            return (decision.ShouldProcessImmediately, decision.ShouldEnsureIntervalScheduled);
+        }
+
+        public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
+
+        public override void ReceiveVoice(string speech, IVoice source)
+        {
+            if (ShouldHandleVoice(speech, source))
+            {
+                _ = Observe(new TestObservation(1f, speech.Trim()));
+            }
+        }
+
+        protected override async Task ProcessObservationsAsync(
+            IReadOnlyList<AgentObservation> observations,
+            IReadOnlyList<AgentObservation> timelineSnapshot,
+            CancellationToken cancellationToken)
+        {
+            _ = observations;
+            _ = timelineSnapshot;
+            ProcessCallCount++;
+            _ = _processingStarted.TrySetResult();
+
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                LifetimeCancellationObserved = true;
+                throw;
+            }
+            finally
+            {
+                _ = _processingSettled.TrySetResult();
+            }
+        }
+
+        protected override ICharacter ResolveOwningCharacter() => _owner;
+    }
+
+    private sealed class RecordingLoggerProvider : ILoggerProvider
+    {
+        private readonly Lock _entriesLock = new();
+        private readonly List<LogEntry> _entries = [];
+        private bool _disposed;
+
+        public IReadOnlyList<LogEntry> Entries
+        {
+            get
+            {
+                lock (_entriesLock)
+                {
+                    return [.. _entries];
+                }
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => new RecordingLogger(this, categoryName);
+
+        public void Dispose() => _disposed = true;
+
+        private void Record(LogLevel level, string category, string message, Exception? exception)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            lock (_entriesLock)
+            {
+                _entries.Add(new LogEntry(level, category, message, exception));
+            }
+        }
+
+        private sealed class RecordingLogger(RecordingLoggerProvider provider, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull
+                => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel is not LogLevel.None;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                _ = eventId;
+                provider.Record(logLevel, category, formatter(state, exception), exception);
+            }
+        }
+
+        public sealed record LogEntry(LogLevel Level, string Category, string Message, Exception? Exception);
     }
 
     private sealed partial class RecognitionTestMind : AgenticMind
     {
-        public bool RecogniseVoices { get; init; } = true;
+        private readonly StandaloneCharacter _owner = new();
+        public Dictionary<string, string> RecognisedVoices { get; } = new(StringComparer.Ordinal);
 
         public List<AgentObservation> Observations { get; } = [];
 
         public string? ResolveForTest(string voiceID) => ResolveRecognisedCharacterId(voiceID);
 
         protected override string? ResolveRecognisedCharacterId(string voiceId)
-            => RecogniseVoices ? base.ResolveRecognisedCharacterId(voiceId) : null;
+            => RecognisedVoices.TryGetValue(voiceId, out string? characterID)
+                ? characterID
+                : base.ResolveRecognisedCharacterId(voiceId);
 
         protected override Task ProcessObservationsAsync(
             IReadOnlyList<AgentObservation> observations,
+            IReadOnlyList<AgentObservation> timelineSnapshot,
             CancellationToken cancellationToken)
         {
             Observations.AddRange(observations);
             return Task.CompletedTask;
         }
+
+        protected override ICharacter ResolveOwningCharacter() => _owner;
     }
 
-    private sealed record TestObservation(float Importance, string Prompt) : AgentObservation(Importance)
+    private sealed class StandaloneCharacter : ICharacter
     {
-        public override string ToPromptString(
-            IObservationPromptRenderer renderer,
-            Templating.ITemplateCompiler templateCompiler) => Prompt;
+        public string Id { get; set; } = "standalone-mind-owner";
+
+        public IReadOnlyList<IComponent> Components { get; } = [];
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+            => new Dictionary<string, object?>();
+    }
+
+    private sealed partial class CapturingAgenticMind : AgenticMind
+    {
+        public List<IReadOnlyList<AgentObservation>> ClaimedBatches { get; } = [];
+
+        public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
+
+        protected override Task ProcessObservationsAsync(
+            IReadOnlyList<AgentObservation> observations,
+            IReadOnlyList<AgentObservation> timelineSnapshot,
+            CancellationToken cancellationToken)
+        {
+            ClaimedBatches.Add([.. observations]);
+            return base.ProcessObservationsAsync(observations, timelineSnapshot, cancellationToken);
+        }
+    }
+
+    private sealed record TestObservation(float Importance, string Prompt) : AgentObservation
+    {
+        public override string TypeKey => "test.observation";
+
+        public override float CalculateImportance(ObservationContext context) => Importance;
+
     }
 
     private sealed partial class TestCharacter(IReadOnlyDictionary<string, object?> context) : Node, ICharacter
@@ -826,7 +1444,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public string SecondSpeech { get; init; } = string.Empty;
 
-        public string ResponseText { get; init; } = string.Empty;
+        public string ResponseText { get; init; } = "{}";
 
         public Func<Task>? AfterFirstSpeakAsync
         {
@@ -862,6 +1480,86 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             CreateChatClientCallCount++;
             throw new InvalidOperationException("Backend configuration is invalid for test.");
+        }
+    }
+
+    private sealed class BlockingClientProvider : ClientProvider
+    {
+        public TaskCompletionSource InvocationStarted
+        {
+            get;
+        } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource InvocationCompleted
+        {
+            get;
+        } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int RunCount
+        {
+            get;
+            private set;
+        }
+
+        public bool CancellationObserved
+        {
+            get;
+            private set;
+        }
+
+        public bool ReturnedResponse
+        {
+            get;
+            private set;
+        }
+
+        public override IChatClient CreateChatClient() => new BlockingChatClient(this);
+
+        private sealed class BlockingChatClient(BlockingClientProvider owner) : IChatClient
+        {
+            public async Task<ChatResponse> GetResponseAsync(
+                IEnumerable<ChatMessage> messages,
+                ChatOptions? options = null,
+                CancellationToken cancellationToken = default)
+            {
+                _ = messages;
+                _ = options;
+                owner.RunCount++;
+                _ = owner.InvocationStarted.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    owner.ReturnedResponse = true;
+                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}"));
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    owner.CancellationObserved = true;
+                    throw;
+                }
+                finally
+                {
+                    _ = owner.InvocationCompleted.TrySetResult();
+                }
+            }
+
+            public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+                IEnumerable<ChatMessage> messages,
+                ChatOptions? options = null,
+                [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            {
+                ChatResponse response = await GetResponseAsync(messages, options, cancellationToken);
+                foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
+                {
+                    yield return update;
+                }
+            }
+
+            public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+            public void Dispose()
+            {
+            }
         }
     }
 
@@ -923,19 +1621,35 @@ public sealed partial class MindIntegrationTests : IDisposable
             RunCount++;
             ChatMessage[] messageSnapshot = [.. messages];
             MessageSnapshots.Add(messageSnapshot);
-            Prompts.Add(messageSnapshot.Last().Text);
+            Assert.NotNull(options);
+            Assert.False(string.IsNullOrWhiteSpace(options.Instructions));
+            Prompts.Add(options.Instructions);
 
             try
             {
-                Assert.NotNull(options);
                 Assert.NotNull(options.Tools);
+                ChatResponseFormatJson responseFormat = Assert.IsType<ChatResponseFormatJson>(options.ResponseFormat);
+                Assert.True(responseFormat.Schema.HasValue);
+                JsonElement schema = responseFormat.Schema.Value;
+                if (schema.TryGetProperty("properties", out JsonElement properties))
+                {
+                    Assert.Empty(properties.EnumerateObject());
+                }
+
+                Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+                if (options.Tools.Count == 0)
+                {
+                    ReturnedResponse = true;
+                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}"));
+                }
+
                 AIFunction toolFunction = Assert.IsAssignableFrom<AIFunction>(Assert.Single(options.Tools));
                 ToolNamesByRun.Add(toolFunction.Name);
 
                 if (toolFunction.Name != "speak")
                 {
                     _ = await toolFunction.InvokeAsync([], cancellationToken);
-                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty));
+                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}"));
                 }
 
                 FirstSpeakResult = await InvokeSpeakAsync(toolFunction, firstSpeech, cancellationToken);
@@ -1004,6 +1718,62 @@ public sealed partial class MindIntegrationTests : IDisposable
         public void Speak(string speech)
         {
         }
+
+        public ValueTask SpeakAsync(
+            string speech,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Speak(speech);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ToolInvocationProvider(
+        AgenticMind mind,
+        ICharacter character,
+        IVoice? voice) : IServiceProvider
+    {
+        public object? GetService(Type serviceType)
+            => serviceType == typeof(IVoice) ? voice
+                : serviceType == typeof(ICharacter) ? character
+                : serviceType.IsInstanceOfType(mind) ? mind
+                : null;
+    }
+
+    private sealed class ThrowingVoice : IVoice
+    {
+        public string Id => "throwing";
+
+        public Vector3 Origin => Vector3.Zero;
+
+        public void Speak(string speech) => throw new InvalidOperationException("Dispatch failed.");
+
+        public ValueTask SpeakAsync(
+            string speech,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Speak(speech);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class FailingVoice : IVoice
+    {
+        public string Id => "rejecting";
+
+        public Vector3 Origin => Vector3.Zero;
+
+        public void Speak(string speech) => throw new InvalidOperationException("Failing voice must not dispatch.");
+
+        public ValueTask SpeakAsync(
+            string speech,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException("Speech submission failed for test.");
+        }
     }
 
     private sealed partial class MarkerTool : AgentTool
@@ -1016,6 +1786,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         protected override Delegate CreateDelegate() => Mark;
 
-        private static string Mark() => "Marked.";
+        private static ValueTask<AgentToolResult> Mark()
+            => ValueTask.FromResult(new AgentToolResult("Marked."));
     }
 }

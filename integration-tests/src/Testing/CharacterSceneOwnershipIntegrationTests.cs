@@ -1,4 +1,5 @@
 using System.Collections;
+using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -84,16 +85,16 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private static void AssertNpcVoiceAndSharedMindPrompt()
     {
         string sceneText = ReadResourceText(ReferenceFemaleNpcScenePath);
+        string maleSceneText = ReadResourceText("res://assets/characters/templates/reference_male/reference_male_npc.tscn");
 
         Assert.Contains("uid=\"uid://cwfjtq7oif2yk\" path=\"res://src/Body/Voice/AIVoice.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://rqxjkfgkwfpc\" path=\"res://src/Speech/Generation/OpenAISpeechGenerator.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://cjjllyn8qs4nk\" path=\"res://src/Speech/LipSync/A2FLipSyncPlayer.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://hadsjgek6b2p\" path=\"res://src/Mind/AI/AgenticMind.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://7ga4p48d0sbf\" path=\"res://assets/characters/prompts/generic_speech_observation_formatter.tres\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", maleSceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://d0put3qinfuxa\" path=\"res://src/Mind/AI/Tool/SpeechTool.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("SystemInstruction = ExtResource(\"9_beijb\")", sceneText, StringComparison.Ordinal);
-        Assert.Contains("SpeechObservationFormatter = ExtResource(\"9_formatter\")", sceneText, StringComparison.Ordinal);
         Assert.Contains("Tools = Array[ExtResource(\"10_v2tt5\")]([SubResource(\"Resource_agentic_speech_tool\")])", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("You are Alley", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sceneText, StringComparison.Ordinal);
@@ -130,12 +131,13 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Equal(new NodePath("../../.."), lipSyncPlayer.GetPathTo(GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton")));
             Assert.Equal(new NodePath("../AudioStreamPlayer3D"), lipSyncPlayer.GetPathTo(audioPlayer));
             AssertNpcMindPromptAndTools(mind);
+            PromptStack promptByUID = Assert.IsType<PromptStack>(
+                ResourceLoader.Load("uid://dvw63im28183y"),
+                exactMatch: false);
+            Assert.Same(promptByUID, GetRequiredPropertyValue(mind, "SystemInstruction"));
             Assert.Same(
                 GetRequiredPropertyValue(mind, "SystemInstruction"),
                 GetRequiredPropertyValue(maleMind, "SystemInstruction"));
-            Assert.Same(
-                GetRequiredPropertyValue(mind, "SpeechObservationFormatter"),
-                GetRequiredPropertyValue(maleMind, "SpeechObservationFormatter"));
         }
         finally
         {
@@ -151,19 +153,36 @@ public sealed class CharacterSceneOwnershipIntegrationTests
 
         Array sections = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(systemInstruction, "Sections"));
         object[] orderedSections = [.. sections.Cast<object>()];
-        Assert.Equal(3, orderedSections.Length);
+        Assert.Equal(4, orderedSections.Length);
         object instructionSection = orderedSections[0];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.TextPromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
         string sectionText = GetPropertyValue<string>(instructionSection, "Text");
         Assert.Contains("You are {{ character.Id }}", sectionText, StringComparison.Ordinal);
-        Assert.Contains("call the speak tool exactly once", sectionText, StringComparison.Ordinal);
+        Assert.Contains("You may take no action, one action, or several actions", sectionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("exactly once", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);
         Assert.Equal("AlleyCat.Mind.AI.Prompting.EssentialLorePromptSection", orderedSections[1].GetType().FullName);
         Assert.Equal("Essential World Lore", GetPropertyValue<string>(orderedSections[1], "Name"));
         Assert.Equal("AlleyCat.Mind.AI.Prompting.CharacterLorePromptSection", orderedSections[2].GetType().FullName);
         Assert.Equal("Scene Character Lore", GetPropertyValue<string>(orderedSections[2], "Name"));
+        object historySection = orderedSections[3];
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.EventHistoryPromptSection", historySection.GetType().FullName);
+        Assert.Equal("Event History", GetPropertyValue<string>(historySection, "Name"));
+        Array fragments = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(historySection, "Fragments"));
+        Assert.Equal(["speech.observed"], fragments.Cast<object>()
+            .Select(fragment => GetPropertyValue<string>(fragment, "TypeKey")));
+        object speechFragment = Assert.Single(fragments.Cast<object>());
+        string speechSource = GetPropertyValue<string>(speechFragment, "Source");
+        Assert.Contains("eqOrdinal ActorId @root.character.Id", speechSource, StringComparison.Ordinal);
+        Assert.Contains("Said aloud: {{Content}}", speechSource, StringComparison.Ordinal);
+        Assert.Contains("Heard {{ActorId}} say: {{Content}}", speechSource, StringComparison.Ordinal);
+        Assert.Contains("Heard an unknown speaker say: {{Content}}", speechSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("VoiceId", speechSource, StringComparison.Ordinal);
+        string fallbackSource = GetPropertyValue<string>(historySection, "FallbackSource");
+        Assert.Equal("((Received {{TypeKey}} event.))\n", fallbackSource);
+        Assert.DoesNotContain("VoiceId", fallbackSource, StringComparison.Ordinal);
 
         IEnumerable tools = Assert.IsAssignableFrom<IEnumerable>(GetRequiredPropertyValue(mind, "Tools"));
         object tool = Assert.Single(tools.Cast<object>());

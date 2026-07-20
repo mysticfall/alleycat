@@ -8,7 +8,6 @@
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_db11o"]
 [ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="7_xyj0a"]
 [ext_resource type="Resource" uid="uid://dvw63im28183y" path="res://assets/characters/prompts/generic_npc_prompt_stack.tres" id="9_beijb"]
-[ext_resource type="Resource" uid="uid://7ga4p48d0sbf" path="res://assets/characters/prompts/generic_speech_observation_formatter.tres" id="9_formatter"]
 [ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="10_v2tt5"]
 [ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="11_u8xcn"]
 
@@ -75,7 +74,6 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 [node name="Mind" type="Node" parent="." index="9" unique_id=917502219 node_paths=PackedStringArray("Voice")]
 script = ExtResource("7_xyj0a")
 SystemInstruction = ExtResource("9_beijb")
-SpeechObservationFormatter = ExtResource("9_formatter")
 Tools = Array[ExtResource("10_v2tt5")]([SubResource("Resource_agentic_speech_tool")])
 Voice = NodePath("../Female/GeneralSkeleton/Head/Voice")
 metadata/_custom_type_script = "uid://hadsjgek6b2p"

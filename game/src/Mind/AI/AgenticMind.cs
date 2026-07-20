@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json.Serialization;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Core.Logging;
@@ -6,6 +7,7 @@ using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using Godot;
@@ -14,66 +16,43 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
-using IObservationPromptRenderer = AlleyCat.Mind.Observation.IObservationPromptRenderer;
 using MindBase = AlleyCat.Mind.Mind;
-using SpeechObservation = AlleyCat.Mind.Observation.SpeechObservation;
 
 namespace AlleyCat.Mind.AI;
 
 /// <summary>
-/// Speech-driven NPC mind that batches observations and delegates responses to an LLM backend.
+/// NPC mind that reconstructs every agent turn from its complete subjective timeline.
 /// </summary>
 [GlobalClass]
 public partial class AgenticMind : MindBase, IServiceProvider
 {
-    internal const string AgentDescription = "Character mind for in-world speech responses.";
+    internal const string AgentDescription = "Character mind for in-world actions.";
 
-    private readonly Lock _responseStateLock = new();
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
-    private ResponseTurn? _activeTurn;
-    private ITemplate? _compiledSystemInstructionTemplate;
-    private AgentDefinition? _snapshotDefinition;
-    private bool _enableRequestResponseDiagnosticsForAgent;
-    private bool _agentRequestResponseDiagnosticsEnabled;
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
-    private AIAgent? _agent;
-    private AgentSession? _session;
     private bool _deferredGodotActionFlushQueued;
-    private bool _isResponding;
 
     /// <summary>
-    /// Minimum time to keep listening paused after this character starts speaking.
-    /// </summary>
-    [ExportGroup("Response")]
-    [Export(PropertyHint.Range, "0,10,0.1")]
-    public float PostReplyListenCooldownSeconds { get; set; } = 1f;
-
-    /// <summary>
-    /// Editor-authored system prompt stack compiled into the Agent Framework instructions for this mind.
+    /// Editor-authored system prompt stack compiled and rendered afresh for every turn.
     /// </summary>
     [ExportGroup("Prompt")]
     [Export]
     public PromptStack? SystemInstruction
     {
-        get; set;
+        get;
+        set;
     }
 
     /// <summary>
-    /// Editor-authored presentation used for speech observations sent to the agent.
-    /// </summary>
-    [Export]
-    public SpeechObservationPromptFormatter? SpeechObservationFormatter { get; set; } = new();
-
-    /// <summary>
-    /// Backend factory used to create the chat client for Agent Framework turns.
+    /// Backend factory used to create a fresh chat client for each turn.
     /// </summary>
     [ExportGroup("Backend")]
     [Export]
     public ClientProvider? ClientProvider { get; set; } = new OpenAIClientProvider();
 
     /// <summary>
-    /// Editor-authored Agent Framework tools selected for each agent turn.
+    /// Editor-authored Agent Framework tools resolved for each turn.
     /// </summary>
     [ExportGroup("Tools")]
     [Export]
@@ -82,7 +61,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
     /// <inheritdoc />
     public override void ReceiveVoice(string speech, IVoice source)
     {
-        if (!ShouldHandleVoice(speech, source) || IsResponding())
+        if (!ShouldHandleVoice(speech, source))
         {
             return;
         }
@@ -94,202 +73,108 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
 
         string voiceID = source.Id;
-        string? characterID = ResolveRecognisedCharacterId(voiceID);
-        _ = Observe(new SpeechObservation(voiceID, characterID, trimmedSpeech));
+        _ = Observe(new ObservedSpeech(
+            ResolveRecognisedCharacterId(voiceID),
+            voiceID,
+            trimmedSpeech));
     }
 
     /// <summary>
     /// Resolves voice provenance to a character recognised by this mind.
     /// </summary>
-    /// <param name="voiceId">The raw voice identifier supplied by the heard voice.</param>
-    /// <returns>The recognised character ID, or <see langword="null"/> when this mind does not recognise it.</returns>
-    protected virtual string? ResolveRecognisedCharacterId(string voiceId) => voiceId;
+    protected virtual string? ResolveRecognisedCharacterId(string voiceId) => null;
 
-    private bool IsResponding()
+    /// <inheritdoc />
+    protected override async Task ProcessObservationsAsync(
+        IReadOnlyList<AgentObservation> observations,
+        IReadOnlyList<AgentObservation> timelineSnapshot,
+        CancellationToken cancellationToken)
     {
-        lock (_responseStateLock)
+        if (observations.Count == 0)
         {
-            return _isResponding;
+            return;
         }
-    }
 
-    private ResponseTurn? TryBeginResponse()
-    {
-        lock (_responseStateLock)
-        {
-            if (_isResponding)
-            {
-                return null;
-            }
-
-            _isResponding = true;
-            AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
-            _enableRequestResponseDiagnosticsForAgent = diagnosticsSettings.EnableRequestResponseLogging;
-            _activeTurn = new ResponseTurn(diagnosticsSettings.EnableRequestResponseLogging);
-            return _activeTurn;
-        }
-    }
-
-    private void EndResponse(ResponseTurn turn)
-    {
-        lock (_responseStateLock)
-        {
-            if (ReferenceEquals(_activeTurn, turn))
-            {
-                _activeTurn = null;
-            }
-
-            _isResponding = false;
-        }
-    }
-
-    private async Task RespondAsync(IReadOnlyList<AgentObservation> observations, ResponseTurn turn)
-    {
         try
         {
-            if (Voice is null)
-            {
-                GameLoggerResolver.ResolveRequired<AgenticMind>().LogError("AgenticMind requires a configured NPC Voice.");
-                return;
-            }
-
-            if (ClientProvider is null)
-            {
-                GameLoggerResolver.ResolveRequired<AgenticMind>().LogError("AgenticMind requires a configured ClientProvider.");
-                return;
-            }
-
-            if (SystemInstruction is null)
-            {
-                GameLoggerResolver.ResolveRequired<AgenticMind>().LogError("AgenticMind requires a configured SystemInstruction prompt stack.");
-                return;
-            }
-
-            await RunAgentTurnAsync(observations, turn.CancellationTokenSource.Token);
+            await RunAgentTurnAsync(timelineSnapshot, cancellationToken);
         }
-        catch (OperationCanceledException) when (turn.HasSpoken)
-        {
-            // Treat cancellation after accepted speech as a completed response; duplicate speak calls remain ignored separately.
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogOptionalResponseFailure(ex);
         }
-        finally
-        {
-            await WaitForReplyCooldownAsync(turn);
-            EndResponse(turn);
-        }
     }
 
-    private bool TrySpeakFromTool(string speech)
-        => TrySpeakFromToolForTool(speech) == SpeakToolResult.Spoken;
-
-    internal SpeakToolResult TrySpeakFromToolForTool(string speech)
-    {
-        ResponseTurn? turn = GetActiveTurn();
-        if (turn is null)
-        {
-            return SpeakToolResult.NoActiveTurn;
-        }
-
-        if (!turn.TrySetSpokenSpeech(speech))
-        {
-            LogOptionalDuplicateSpeakIgnored();
-            return SpeakToolResult.DuplicateIgnored;
-        }
-
-        if (AIPipelineDebugLog.IsEnabled)
-        {
-            AIPipelineDebugLog.Latency("LLM first speak tool call after", turn.Stopwatch, $"{turn.SpokenSpeech.Length} chars");
-        }
-
-        if (!turn.AllowRunCompletionAfterFirstSpeak)
-        {
-            turn.CancellationTokenSource.Cancel();
-        }
-
-        _ = SpeakAsync(speech, CancellationToken.None).ContinueWith(
-            task =>
-            {
-                if (task.IsFaulted)
-                {
-                    GameLoggerResolver.ResolveRequired<AgenticMind>().LogError(
-                        task.Exception?.GetBaseException(),
-                        "AgenticMind speech dispatch failed.");
-                    return;
-                }
-
-                AIPipelineDebugLog.Latency("LLM speech dispatched after", turn.Stopwatch);
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-
-        return SpeakToolResult.Spoken;
-    }
-
-    private ResponseTurn? GetActiveTurn()
-    {
-        lock (_responseStateLock)
-        {
-            return _activeTurn;
-        }
-    }
-
-    private Task SpeakAsync(string speech, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(speech))
-        {
-            return Task.CompletedTask;
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        return DispatchDeferredGodotActionAsync(() => Voice?.Speak(speech.Trim()));
-    }
-
-    private async Task WaitForReplyCooldownAsync(ResponseTurn turn)
-    {
-        if (!turn.HasSpoken)
-        {
-            return;
-        }
-
-        double cooldownSeconds = Math.Max(PostReplyListenCooldownSeconds, EstimateSpeechDurationSeconds(turn.SpokenSpeech));
-        if (cooldownSeconds <= 0d)
-        {
-            return;
-        }
-
-        await Task.Delay(TimeSpan.FromSeconds(cooldownSeconds));
-    }
-
-    private static double EstimateSpeechDurationSeconds(string speech)
-    {
-        int characterCount = speech.Count(character => !char.IsWhiteSpace(character));
-        return characterCount / 12d;
-    }
-
-    private async Task<AgentDefinition> CreateAgentDefinitionAsync(
-        ISceneContext scene,
-        ICharacter character,
-        IReadOnlyDictionary<string, object?> systemInstructionContext,
+    private async Task RunAgentTurnAsync(
+        IReadOnlyList<AgentObservation> timeline,
         CancellationToken cancellationToken)
     {
+        ClientProvider clientProvider = ClientProvider
+            ?? throw new InvalidOperationException("AgenticMind requires a configured ClientProvider.");
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
+        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+        ICharacter character = ResolveOwningCharacter();
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
-        ITemplate template = await GetCompiledSystemInstructionTemplateAsync(
-            systemInstruction,
-            buildContext,
-            cancellationToken);
-        string instructions = RenderSystemInstruction(
-            template,
-            systemInstructionContext);
-
+        ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
+        IReadOnlyDictionary<string, object?> renderContext = CreateSystemInstructionContext(character, scene, timeline);
+        string instructions = RenderSystemInstruction(template, renderContext);
         (string name, string description) = CreateAgentMetadata(character);
-        return new AgentDefinition(instructions, name, description);
+
+        AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
+        if (diagnosticsSettings.EnableRequestResponseLogging)
+        {
+            StartTemporaryActivityLogListenerIfAvailable();
+        }
+
+        TurnInvocationServices invocationServices = new(this, character, Voice);
+        ChatClientAgentRunOptions options = new(new ChatOptions
+        {
+            Tools = CreateTurnTools(invocationServices),
+        });
+
+        // ChatClientAgent 1.8.0 exposes this typed no-message overload directly. Keeping the
+        // concrete type avoids diagnostics wrappers obscuring the package's typed API.
+        ChatClientAgent agent = clientProvider.CreateChatClient().AsAIAgent(
+            instructions: instructions,
+            name: name,
+            description: description);
+        Stopwatch sessionStopwatch = AIPipelineDebugLog.StartTimer();
+        AgentSession session = await agent.CreateSessionAsync(cancellationToken);
+        AIPipelineDebugLog.Latency("LLM session created in", sessionStopwatch);
+
+        Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
+        try
+        {
+            AgentResponse<EndTurnResult> response = await agent.RunAsync<EndTurnResult>(
+                session,
+                serializerOptions: null,
+                options,
+                cancellationToken);
+            LogSensitiveTrialAgentResponse(response, diagnosticsSettings.EnableRequestResponseLogging);
+        }
+        finally
+        {
+            if (AIPipelineDebugLog.IsEnabled)
+            {
+                AIPipelineDebugLog.Latency("LLM turn returned in", runStopwatch, $"{timeline.Count} observation(s)");
+            }
+        }
+    }
+
+    private List<AITool> CreateTurnTools(IServiceProvider invocationServices)
+    {
+        List<AITool> tools = new(Tools.Count);
+        foreach (AgentTool? tool in Tools)
+        {
+            if (tool is not null)
+            {
+                tools.Add(tool.CreateFunction(invocationServices));
+            }
+        }
+
+        return tools;
     }
 
     internal static (string Name, string Description) CreateAgentMetadata(ICharacter character)
@@ -298,211 +183,10 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return (character.Id, AgentDescription);
     }
 
-    private async Task<ITemplate> GetCompiledSystemInstructionTemplateAsync(
-        PromptStack systemInstruction,
-        PromptSectionBuildContext buildContext,
-        CancellationToken cancellationToken)
-    {
-        if (_compiledSystemInstructionTemplate is not null)
-        {
-            return _compiledSystemInstructionTemplate;
-        }
-
-        ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
-        _compiledSystemInstructionTemplate = template;
-
-        return template;
-    }
-
-    private List<AITool> CreateTurnTools()
-    {
-        List<AITool> tools = new(Tools.Count);
-
-        foreach (AgentTool? tool in Tools)
-        {
-            if (tool is null)
-            {
-                continue;
-            }
-
-            tools.Add(tool.CreateFunction(this));
-        }
-
-        return tools;
-    }
-
-    private async Task RunAgentTurnAsync(IReadOnlyList<AgentObservation> observations, CancellationToken cancellationToken)
-    {
-        (AIAgent agent, AgentSession session) = await EnsureAgentRuntimeAsync(cancellationToken);
-        bool enableRequestResponseDiagnostics = _enableRequestResponseDiagnosticsForAgent;
-        if (enableRequestResponseDiagnostics)
-        {
-            StartTemporaryActivityLogListenerIfAvailable();
-        }
-
-        Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
-        try
-        {
-            ChatClientAgentRunOptions options = new(new ChatOptions
-            {
-                Tools = CreateTurnTools(),
-            });
-
-            SpeechObservationPromptFormatter observationFormatter = SpeechObservationFormatter
-                ?? throw new InvalidOperationException("AgenticMind requires a configured SpeechObservationFormatter.");
-            ITemplateCompiler templateCompiler = Game.Instance.GetRequiredService<ITemplateCompiler>();
-            string observationSummary = RenderObservationSummary(
-                observations,
-                observationFormatter,
-                templateCompiler);
-            AgentResponse response = await agent.RunAsync(
-                observationSummary,
-                session,
-                options,
-                cancellationToken);
-            LogSensitiveTrialAgentResponse(response, enableRequestResponseDiagnostics);
-        }
-        finally
-        {
-            if (AIPipelineDebugLog.IsEnabled)
-            {
-                AIPipelineDebugLog.Latency("LLM turn returned in", runStopwatch, $"{observations.Count} observation(s)");
-            }
-        }
-    }
-
-    private static void StartTemporaryActivityLogListenerIfAvailable()
-    {
-        // Sensitive development/debug diagnostics only: starts an in-process listener that writes Agent Framework
-        // OpenTelemetry tags/events/baggage, including prompt/response/tool payloads, into the AlleyCat runtime log
-        // when Diagnostics:AI:EnableRequestResponseLogging is enabled. Missing logging infrastructure is intentionally
-        // tolerated here so isolated AgenticMind tests/runtime contexts keep their existing backend failure containment
-        // behaviour.
-        if (GameLoggerResolver.TryResolveFactory(out ILoggerFactory? loggerFactory) && loggerFactory is not null)
-        {
-            AgenticMindActivityLogListener.Start(loggerFactory);
-        }
-    }
-
-    private static void LogOptionalResponseFailure(Exception exception)
-    {
-        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
-        {
-            logger.LogError(exception, "AgenticMind response failed.");
-        }
-    }
-
-    private static void LogOptionalDuplicateSpeakIgnored()
-    {
-        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
-        {
-            logger.LogWarning(
-                "AgenticMind ignored an additional speak tool call in the same turn after first speech was accepted.");
-        }
-    }
-
-    private static void LogSensitiveTrialAgentResponse(AgentResponse response, bool enableRequestResponseDiagnostics)
-    {
-        string? diagnostics = CreateSensitiveAgentResponseDiagnosticsOrDefault(response, enableRequestResponseDiagnostics);
-        if (diagnostics is null)
-        {
-            return;
-        }
-
-        // Sensitive development/debug diagnostics only: records Agent Framework response payloads through the general
-        // AgentResponse result path rather than relying on the speak tool argument as the primary response source.
-        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger)
-            && logger is not null
-            && logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Sensitive development-only Agent Framework response diagnostics: {AgentResponseDiagnostics}",
-                diagnostics);
-        }
-    }
-
-    internal static string? CreateSensitiveAgentResponseDiagnosticsOrDefault(
-        AgentResponse response,
-        bool enableRequestResponseDiagnostics)
-        => enableRequestResponseDiagnostics ? CreateSensitiveTrialAgentResponseDiagnostics(response) : null;
-
-    internal static string CreateSensitiveTrialAgentResponseDiagnostics(AgentResponse response)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-
-        List<string> diagnostics =
-        [
-            $"Text={FormatDiagnosticValue(response.Text)}",
-            $"Messages={response.Messages.Count}",
-        ];
-
-        for (int index = 0; index < response.Messages.Count; index++)
-        {
-            ChatMessage message = response.Messages[index];
-            diagnostics.Add($"Message[{index}].Role={message.Role}");
-            diagnostics.Add($"Message[{index}].Text={FormatDiagnosticValue(message.Text)}");
-            diagnostics.Add($"Message[{index}].Contents={message.Contents.Count}");
-        }
-
-        return string.Join("; ", diagnostics);
-    }
-
-    private static string FormatDiagnosticValue(string? value)
-        => string.IsNullOrEmpty(value) ? "<empty>" : value;
-
-    private async Task<(AIAgent Agent, AgentSession Session)> EnsureAgentRuntimeAsync(
-        CancellationToken cancellationToken)
-    {
-        if (_agent is not null && _session is not null)
-        {
-            return (_agent, _session);
-        }
-
-        if (ClientProvider is null)
-        {
-            throw new InvalidOperationException("AgenticMind requires a configured ClientProvider.");
-        }
-
-        if (SystemInstruction is null)
-        {
-            throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
-        }
-
-        if (_snapshotDefinition is null)
-        {
-            ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-            ICharacter character = ResolveAssociatedCharacter();
-            IReadOnlyDictionary<string, object?> systemInstructionContext = CreateSystemInstructionContext(character, scene);
-            _snapshotDefinition = await CreateAgentDefinitionAsync(
-                scene,
-                character,
-                systemInstructionContext,
-                cancellationToken);
-        }
-
-        if (_agent is null)
-        {
-            ChatClientAgent agent = ClientProvider.CreateChatClient().AsAIAgent(
-                instructions: _snapshotDefinition.Instructions,
-                name: _snapshotDefinition.Name,
-                description: _snapshotDefinition.Description);
-            _agentRequestResponseDiagnosticsEnabled = _enableRequestResponseDiagnosticsForAgent;
-            _agent = ConfigureAgentDiagnostics(agent, this, _agentRequestResponseDiagnosticsEnabled);
-        }
-
-        if (_session is null)
-        {
-            Stopwatch sessionStopwatch = AIPipelineDebugLog.StartTimer();
-            _session = await _agent.CreateSessionAsync(cancellationToken);
-            AIPipelineDebugLog.Latency("LLM session created in", sessionStopwatch);
-        }
-
-        return (_agent, _session);
-    }
-
     internal static IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(
         ICharacter character,
-        ISceneContext scene)
+        ISceneContext scene,
+        IReadOnlyList<AgentObservation>? observations = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
@@ -530,21 +214,8 @@ public partial class AgenticMind : MindBase, IServiceProvider
         {
             ["character"] = owningCharacterContext!,
             ["characters"] = characterContexts,
+            [EventHistoryPromptSection.ObservationsContextKey] = observations ?? [],
         };
-    }
-
-    private ICharacter ResolveAssociatedCharacter()
-    {
-        for (Node? current = GetParent(); current is not null; current = current.GetParent())
-        {
-            if (current is ICharacter character)
-            {
-                return character;
-            }
-        }
-
-        throw new InvalidOperationException(
-            $"AgenticMind node '{Name}' requires an ancestor that implements {typeof(ICharacter).FullName} to provide CTX-001 system-instruction context.");
     }
 
     internal static string RenderSystemInstruction(
@@ -553,102 +224,84 @@ public partial class AgenticMind : MindBase, IServiceProvider
     {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(context);
-
         return template.Render(context);
     }
 
-    internal static AIAgent ConfigureAgentDiagnostics(
-        ChatClientAgent agent,
-        IServiceProvider serviceProvider,
+    private static void StartTemporaryActivityLogListenerIfAvailable()
+    {
+        if (GameLoggerResolver.TryResolveFactory(out ILoggerFactory? loggerFactory) && loggerFactory is not null)
+        {
+            AgenticMindActivityLogListener.Start(loggerFactory);
+        }
+    }
+
+    private static void LogOptionalResponseFailure(Exception exception)
+    {
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
+        {
+            logger.LogError(exception, "AgenticMind response failed.");
+        }
+    }
+
+    private static void LogSensitiveTrialAgentResponse(
+        AgentResponse response,
         bool enableRequestResponseDiagnostics)
     {
-        ArgumentNullException.ThrowIfNull(agent);
-        ArgumentNullException.ThrowIfNull(serviceProvider);
+        string? diagnostics = CreateSensitiveAgentResponseDiagnosticsOrDefault(response, enableRequestResponseDiagnostics);
+        if (diagnostics is null)
+        {
+            return;
+        }
 
-        return enableRequestResponseDiagnostics
-            ? agent
-                .AsBuilder()
-                .UseOpenTelemetry(
-                    AgenticMindActivityLogListener.DefaultActivitySourceName,
-                    // Sensitive development/debug content capture: emits prompts, responses, and tool data to subscribed
-                    // OpenTelemetry listeners/exporters only when Diagnostics:AI:EnableRequestResponseLogging is enabled.
-                    static telemetryAgent => telemetryAgent.EnableSensitiveData = true)
-                .Build(serviceProvider)
-            : agent;
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger)
+            && logger is not null
+            && logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Sensitive development-only Agent Framework response diagnostics: {AgentResponseDiagnostics}",
+                diagnostics);
+        }
     }
+
+    internal static string? CreateSensitiveAgentResponseDiagnosticsOrDefault(
+        AgentResponse response,
+        bool enableRequestResponseDiagnostics)
+        => enableRequestResponseDiagnostics ? CreateSensitiveTrialAgentResponseDiagnostics(response) : null;
+
+    internal static string CreateSensitiveTrialAgentResponseDiagnostics(AgentResponse response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        List<string> diagnostics =
+        [
+            $"Text={FormatDiagnosticValue(response.Text)}",
+            $"Messages={response.Messages.Count}",
+        ];
+
+        for (int index = 0; index < response.Messages.Count; index++)
+        {
+            ChatMessage message = response.Messages[index];
+            diagnostics.Add($"Message[{index}].Role={message.Role}");
+            diagnostics.Add($"Message[{index}].Text={FormatDiagnosticValue(message.Text)}");
+            diagnostics.Add($"Message[{index}].Contents={message.Contents.Count}");
+        }
+
+        return string.Join("; ", diagnostics);
+    }
+
+    private static string FormatDiagnosticValue(string? value)
+        => string.IsNullOrEmpty(value) ? "<empty>" : value;
 
     internal void SetDiagnosticsSettingsLoaderForTesting(Func<AIDiagnosticsSettings> diagnosticsSettingsLoader)
     {
         ArgumentNullException.ThrowIfNull(diagnosticsSettingsLoader);
-
         _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
 
-    internal static string RenderObservationSummary(
-        IReadOnlyList<AgentObservation> observations,
-        IObservationPromptRenderer renderer,
-        ITemplateCompiler templateCompiler)
-    {
-        if (observations.Count == 0)
-        {
-            return "No new observations.";
-        }
-
-        List<string> lines = new(observations.Count + 1)
-        {
-            "New observations since the last turn:",
-        };
-
-        foreach (AgentObservation observation in observations)
-        {
-            lines.Add($"- {observation.ToPromptString(renderer, templateCompiler)}");
-        }
-
-        return string.Join(System.Environment.NewLine, lines);
-    }
-
     /// <inheritdoc />
-    protected override async Task ProcessObservationsAsync(
-        IReadOnlyList<AgentObservation> observations,
-        CancellationToken cancellationToken)
+    protected override void OnNodeLifetimeEnding()
     {
-        if (observations.Count == 0)
-        {
-            return;
-        }
-
-        ResponseTurn? turn = TryBeginResponse();
-        if (turn is null)
-        {
-            return;
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        await RespondAsync(observations, turn);
-    }
-
-    private Task DispatchDeferredGodotActionAsync(Action action)
-    {
-        TaskCompletionSource completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        lock (_deferredGodotActionsLock)
-        {
-            _deferredGodotActions.Enqueue(new DeferredGodotAction(action, completionSource));
-
-            if (!_deferredGodotActionFlushQueued)
-            {
-                _deferredGodotActionFlushQueued = true;
-                _ = CallDeferred(nameof(FlushDeferredGodotActions));
-            }
-        }
-
-        return completionSource.Task;
-    }
-
-    private void FlushDeferredGodotActions()
-    {
+        base.OnNodeLifetimeEnding();
         DeferredGodotAction[] actions;
-
         lock (_deferredGodotActionsLock)
         {
             actions = [.. _deferredGodotActions];
@@ -658,75 +311,60 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
         foreach (DeferredGodotAction action in actions)
         {
-            try
-            {
-                action.Action();
-                _ = action.CompletionSource.TrySetResult();
-            }
-            catch (Exception ex)
-            {
-                _ = action.CompletionSource.TrySetException(ex);
-            }
+            action.Cancel(NodeLifetimeCancellationToken);
         }
+    }
 
+    private Task DispatchDeferredSpeechAsync(
+        IVoice voice,
+        string speech,
+        CancellationToken cancellationToken)
+    {
+        var dispatchCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            NodeLifetimeCancellationToken);
+        DeferredGodotAction action = new(
+            voice,
+            speech,
+            dispatchCancellation);
         lock (_deferredGodotActionsLock)
         {
-            if (_deferredGodotActions.Count > 0 && !_deferredGodotActionFlushQueued)
+            if (IsNodeLifetimeEnded)
+            {
+                action.Cancel(NodeLifetimeCancellationToken);
+                return action.Task;
+            }
+
+            _deferredGodotActions.Enqueue(action);
+            if (!_deferredGodotActionFlushQueued)
             {
                 _deferredGodotActionFlushQueued = true;
                 _ = CallDeferred(nameof(FlushDeferredGodotActions));
             }
         }
+
+        return action.Task;
     }
 
-    private sealed record AgentDefinition(
-        string Instructions,
-        string Name,
-        string Description);
-
-    internal enum SpeakToolResult
+    private void FlushDeferredGodotActions()
     {
-        Spoken,
-        DuplicateIgnored,
-        NoActiveTurn,
-    }
-
-    private sealed class DeferredGodotAction(Action action, TaskCompletionSource completionSource)
-    {
-        public Action Action { get; } = action;
-
-        public TaskCompletionSource CompletionSource { get; } = completionSource;
-    }
-
-    private sealed class ResponseTurn(bool allowRunCompletionAfterFirstSpeak)
-    {
-        private readonly Lock _lock = new();
-
-        public CancellationTokenSource CancellationTokenSource { get; } = new();
-
-        public bool AllowRunCompletionAfterFirstSpeak { get; } = allowRunCompletionAfterFirstSpeak;
-
-        public Stopwatch Stopwatch { get; } = AIPipelineDebugLog.StartTimer();
-
-        public bool HasSpoken
+        DeferredGodotAction[] actions;
+        lock (_deferredGodotActionsLock)
         {
-            get; private set;
+            actions = [.. _deferredGodotActions];
+            _deferredGodotActions.Clear();
+            _deferredGodotActionFlushQueued = false;
         }
 
-        public string SpokenSpeech { get; private set; } = string.Empty;
-
-        public bool TrySetSpokenSpeech(string speech)
+        foreach (DeferredGodotAction action in actions)
         {
-            lock (_lock)
+            if (IsNodeLifetimeEnded)
             {
-                if (HasSpoken)
-                {
-                    return false;
-                }
-
-                SpokenSpeech = speech.Trim();
-                HasSpoken = true;
-                return true;
+                action.Cancel(NodeLifetimeCancellationToken);
+            }
+            else
+            {
+                action.Invoke();
             }
         }
     }
@@ -735,18 +373,165 @@ public partial class AgenticMind : MindBase, IServiceProvider
     public object? GetService(Type serviceType)
     {
         ArgumentNullException.ThrowIfNull(serviceType);
-
-        return serviceType.IsInstanceOfType(this)
-            ? this
-            : serviceType == typeof(IVoice) ? new ToolVoice(this) : null;
+        return IsNodeLifetimeEnded
+            ? null
+            : serviceType == typeof(ICharacter)
+                ? ResolveOwningCharacter()
+                : new TurnInvocationServices(this, character: null, Voice).GetService(serviceType);
     }
 
-    private sealed class ToolVoice(AgenticMind mind) : IVoice
+    private sealed class TurnInvocationServices(AgenticMind mind, ICharacter? character, IVoice? voice) : IServiceProvider
     {
-        public string Id => mind.Voice?.Id ?? mind.Name;
+        private readonly DeferredVoice? _voice = voice is null ? null : new DeferredVoice(mind, voice);
 
-        public Vector3 Origin => mind.Voice?.Origin ?? Vector3.Zero;
+        public object? GetService(Type serviceType)
+            => serviceType == typeof(IVoice) ? _voice
+                : serviceType == typeof(ICharacter) ? character ?? mind.ResolveOwningCharacter()
+                : serviceType.IsInstanceOfType(mind) ? mind
+                : null;
+    }
 
-        public void Speak(string speech) => _ = mind.TrySpeakFromTool(speech);
+    private sealed class DeferredVoice(AgenticMind mind, IVoice voice) : IVoice
+    {
+        public string Id => voice.Id;
+
+        public Vector3 Origin => voice.Origin;
+
+        public void Speak(string speech) => _ = ObserveCompatibilitySubmissionAsync(SpeakAsync(speech));
+
+        public ValueTask SpeakAsync(
+            string speech,
+            CancellationToken cancellationToken = default)
+            => new(mind.DispatchDeferredSpeechAsync(voice, speech, cancellationToken));
+
+        private static async Task ObserveCompatibilitySubmissionAsync(ValueTask submission)
+        {
+            try
+            {
+                await submission;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                LogOptionalResponseFailure(ex);
+            }
+        }
+    }
+
+    private sealed class DeferredGodotAction
+    {
+        private readonly IVoice _voice;
+        private readonly string _speech;
+        private readonly CancellationTokenSource _cancellation;
+        private readonly TaskCompletionSource _completionSource = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly CancellationTokenRegistration _cancellationRegistration;
+        private int _settled;
+
+        public DeferredGodotAction(
+            IVoice voice,
+            string speech,
+            CancellationTokenSource cancellation)
+        {
+            _voice = voice;
+            _speech = speech;
+            _cancellation = cancellation;
+            _cancellationRegistration = cancellation.Token.Register(
+                () => _completionSource.TrySetCanceled(cancellation.Token));
+        }
+
+        public Task Task => _completionSource.Task;
+
+        public void Cancel(CancellationToken cancellationToken)
+        {
+            if (Volatile.Read(ref _settled) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!_cancellation.IsCancellationRequested)
+                {
+                    _cancellation.Cancel();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+
+            _ = _completionSource.TrySetCanceled(cancellationToken);
+            Cleanup();
+        }
+
+        public void Invoke()
+        {
+            if (_completionSource.Task.IsCompleted || _cancellation.IsCancellationRequested)
+            {
+                Cleanup();
+                return;
+            }
+
+            try
+            {
+                ValueTask invocation = _voice.SpeakAsync(
+                    _speech,
+                    _cancellation.Token);
+                if (invocation.IsCompletedSuccessfully)
+                {
+                    _ = _completionSource.TrySetResult();
+                    Cleanup();
+                    return;
+                }
+
+                _ = CompleteAsync(invocation);
+            }
+            catch (Exception ex)
+            {
+                _ = _completionSource.TrySetException(ex);
+                Cleanup();
+            }
+        }
+
+        private async Task CompleteAsync(ValueTask invocation)
+        {
+            try
+            {
+                await invocation;
+                _ = _completionSource.TrySetResult();
+            }
+            catch (OperationCanceledException ex)
+            {
+                _ = _completionSource.TrySetCanceled(ex.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _ = _completionSource.TrySetException(ex);
+            }
+            finally
+            {
+                Cleanup();
+            }
+        }
+
+        private void Cleanup()
+        {
+            if (Interlocked.Exchange(ref _settled, 1) != 0)
+            {
+                return;
+            }
+
+            _ = _cancellationRegistration.Unregister();
+            _cancellation.Dispose();
+        }
     }
 }
+
+/// <summary>
+/// Closed, property-free result that marks successful completion of an agent turn.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record EndTurnResult;

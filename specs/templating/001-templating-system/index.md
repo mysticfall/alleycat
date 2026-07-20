@@ -21,8 +21,10 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 1. Content authors can write reusable template strings that substitute values from game-provided context.
 2. Authored templates can use reusable partials to share common fragments.
 3. Authored templates can use built-in helper tools for simple arithmetic, comparison, formatting, and repetition.
-4. Developers can add project-specific Handlebars tools without changing the compiler implementation.
-5. Developers can configure the compiler via Godot resources/nodes for partial loading and tool registration.
+4. Content authors can use `eqOrdinal` for exact, case-sensitive comparisons without changing the case-insensitive
+   behaviour of `eq`.
+5. Developers can add project-specific Handlebars tools without changing the compiler implementation.
+6. Developers can configure the compiler via Godot resources/nodes for partial loading and tool registration.
 
 ## Technical Requirements
 
@@ -35,6 +37,9 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
     - `add`: adds the first two integer-like arguments and renders the sum.
     - `eq`: compares the first two arguments with ordinal, case-insensitive string equality and renders `true` only when
       they match.
+    - `eqOrdinal`: converts the first two arguments to strings using invariant culture, compares them with
+      `StringComparison.Ordinal` case-sensitive equality, and renders `true` only when equal and empty otherwise. Fewer
+      than two arguments render empty.
     - `nf`: formats a numeric argument as fixed-point text using current culture, default precision `3`, and precision
       clamped to `0..99`.
     - `repeat`: renders the first argument repeated by the integer count in the second argument.
@@ -53,7 +58,7 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 - Handlebars.Net-backed template compilation and rendering.
 - Programmatic partial registration.
 - Programmatic custom tool registration.
-- Built-in `add`, `eq`, `nf`, and `repeat` tools.
+- Built-in `add`, `eq`, `eqOrdinal`, `nf`, and `repeat` tools.
 - Unit tests covering the public contracts and built-in behaviours.
 - Godot-authored configuration of the template compiler service (as Resource or Node) for global service registration.
 - Loading partials from a configured Godot path/directory using filenames (without extension) as names.
@@ -70,14 +75,18 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 1. A template such as `Hello {{name}}` compiles once and renders with supplied context values.
 2. Registered partials render through Handlebars partial syntax.
 3. A custom registered tool can be invoked from a template without modifying the compiler.
-4. The built-in `add`, `eq`, `nf`, and `repeat` tools produce the behaviours defined in Technical Requirement 5.
-5. Templates render from caller-supplied key/value dictionaries without requiring renderable-object APIs.
-6. Unit tests verify the compiler, rendering, partials, custom tools, and built-in tools.
-7. The implementation uses plain C# contracts and contains no dependency on Language-Ext or the archived
+4. The built-in `add`, `eq`, `eqOrdinal`, `nf`, and `repeat` tools produce the behaviours defined in Technical
+   Requirement 5.
+5. `eqOrdinal` uses invariant string conversion and `StringComparison.Ordinal`: equal values render `true`, while case
+   mismatches and other unequal values render empty. Calls with fewer than two arguments also render empty.
+6. Existing `eq` comparisons remain ordinal and case-insensitive.
+7. Templates render from caller-supplied key/value dictionaries without requiring renderable-object APIs.
+8. Unit tests verify the compiler, rendering, partials, custom tools, and built-in tools.
+9. The implementation uses plain C# contracts and contains no dependency on Language-Ext or the archived
     `ResourceFactory` pattern.
-8. Handlebars compiler registered globally as `ITemplateCompiler` via global service resolution.
-9. Compiler loads partials from configured Godot path using filenames (no extension) as names.
-10. Pluggable tools configurable via Godot resources/nodes retaining plain C# `ITemplateTool` contract.
+10. Handlebars compiler registered globally as `ITemplateCompiler` via global service resolution.
+11. Compiler loads partials from configured Godot path using filenames (no extension) as names.
+12. Pluggable tools configurable via Godot resources/nodes retaining plain C# `ITemplateTool` contract.
 
 ## References
 

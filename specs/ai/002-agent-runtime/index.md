@@ -7,144 +7,149 @@ title: Agent Runtime
 
 ## Requirement
 
-Refactor Mind into an observation-driven runtime slice: observation contracts, async batching loop with weighted
-triggering, dynamic Agent Framework tool resources, and AgenticMind-owned invocation context for in-world actions.
+The system must execute each Mind turn as a fresh, stateless Agent Framework session whose tools return one standard
+result envelope for Mind-owned observation ingestion.
 
 ## Goal
 
-Establish Agent Runtime with observation-driven batching, event-driven consciousness scheduling, and extensible tool
-invocation context.
+Keep framework protocol transient while allowing agents to perform real-time actions whose committed effects become
+ordered subjective observations without granting tools direct mutation access to Mind.
 
 ## User Requirements
 
-1. Players experience responsive NPC interactions: speech as sensory input, not direct agent triggers.
-2. NPCs maintain immediate responsiveness to player input while leaving room for future background context processing.
-3. The system preserves mirror-room behaviour: external voice -> NPC hears -> NPC speaks through its voice component.
-4. Agents can process observations asynchronously without blocking primary interaction flows.
-5. Observation significance influences when the consciousness loop runs, reducing unnecessary processing.
+1. An NPC may perform zero or more actions during one turn and may repeat an action when appropriate.
+2. Speaking must be optional and must not complete the current turn.
+3. Successful actions that matter to the NPC's experience must be available to later turns as self-observations.
+4. Failed, cancelled, or invalid actions must not be remembered as successful events.
+5. Tool feedback needed by the active model may remain transient and must not become player-visible chat or durable
+   character memory by default.
+6. Voice availability must constrain speech only, not whether the NPC can run a turn or use other actions.
+7. An enabled high-importance interruption must cancel the active response as expected pre-emption, then produce one
+   fresh replacement only after active invocation and action work settle.
+8. Removing an NPC's Mind from the scene must not allow active or queued actions to produce delayed in-world effects.
 
 ## Technical Requirements
 
-1. Define an abstract `Observation` contract under `AlleyCat.Mind.Observation`:
-    - Observations encapsulate sensory data, such as heard speech with voice provenance and recognised character.
-    - `SpeechObservation` retains `VoiceId`, nullable `CharacterId`, `Content`, and `Weight`.
-2. Implement the main interaction track for the agent workflow:
-    - Main interaction track handles immediate observations for low-latency response.
-    - Guidance/support track remains a future dual-track design concern; do not add context/guidance placeholder APIs
-      until its final shape is specified.
-    - **Passive sensory inputs produce observations as events arrive** (e.g., voice listener emits voice observation).
-3. Implement asynchronous consciousness loop in the abstract Mind base:
-    - Loop runs when observation weight threshold is reached or when queued observations reach a configurable maximum
-      wait.
-    - Each observation has a weight; cumulative weight triggers immediate loop execution.
-    - Loop does not run on every tick without notable observations.
-    - Disabling Mind stops timer scheduling immediately and preserves pending observations for later re-enable.
-    - **The sensory processing model maps into observation creation, cumulative observation weight calculation, and
-      loop triggering**.
-4. Preserve mirror-room behaviour migration:
-    - Nonblank speech from every external voice except the Mind's own output becomes a speech observation.
-    - Mind has no `PlayerVoiceId` or player-only input filter.
-    - Speaking is exposed as an Agent Framework `speak` tool.
-    - Visible mirror-room behaviour (external speech -> NPC speech) is maintained.
-5. Define concrete tool invocation context:
-    - AI tools are authored as top-level Godot `Resource` classes under `AlleyCat.Mind.AI.Tool` so scenes can configure
-      the current tool set without nested serialisation types.
-    - AgenticMind exports the active tool resources and supplies them through per-turn Agent Framework chat options
-      instead of registering static tools on agent construction.
-    - Agent Framework tools receive AgenticMind itself as the `IServiceProvider` execution context for the turn.
-    - The initial `speak` tool queries `IVoice` from that context and uses the configured voice component.
-    - Future action tools must be creatable without adding a central action-layer switch.
-6. Maintain compatibility with existing Mind component contracts where applicable:
-    - Voice-listener contract adapted to produce voice observations.
-    - NPC voice output invoked by the `speak` tool through invocation services.
-    - Provider resources remain limited to creating `IChatClient` instances.
-7. AgenticMind must resolve `VoiceId` to nullable `CharacterId` through a mind-relative recognition resolver. The
-   initial resolver is identity mapping, while the observation retains the original `VoiceId`.
-8. Observation prompt rendering must use recognised `CharacterId` or an unknown-voice label and must not present raw
-   `VoiceId` as recognition proof.
-9. The Agent Framework technical agent name derives from exact owning `Character.Id`; its description remains generic.
-10. AgenticMind snapshots prompt, lore, and system context on first eligible speech. Its Agent Framework agent and
-    session remain stable for the node lifetime.
+1. AgenticMind must create and configure a fresh Agent Framework agent and session for every turn. It must not cache an
+   agent, session, first-turn prompt snapshot, or completed assistant/tool transcript across turns.
+2. At turn start, AgenticMind must resolve the current scene and owning character, compile and render the configured
+   `PromptStack`, create the fresh agent and session, and invoke the typed no-input run for `EndTurnResult`.
+3. The rendered prompt stack must be the sole system instruction. No prior transcript or per-batch observation-summary
+   user message may cross turn boundaries.
+4. A turn must preserve exactly one rendered instruction snapshot throughout its active function-calling loop.
+   Observations arriving mid-turn remain recorded by Mind but do not alter the active snapshot.
+5. A turn may execute an arbitrary sequence of zero or more tool calls before end of turn. No action, including `speak`,
+   may implicitly complete the turn.
+6. The only accepted final non-tool output is a typed, closed `EndTurnResult`. Its initial schema is property-free, and
+   successful deserialisation marks end of turn.
+7. Every `AgentTool` delegate must return the standard `AgentToolResult`, containing an optional model-facing `Message`
+   and an ordered observation collection. A null message and an empty collection are valid.
+8. The common `AgentTool` wrapper must await and validate the complete result before exposing any part of it. It must
+   ask the owning Mind to atomically ingest the ordered observations, then return only `Message` to Agent Framework.
+9. Mind owns all observation mutation. Tool invocation services must expose the owning Mind boundary and
+   action-specific capabilities, but must not expose a public observation recorder or sink.
+10. Tools must not mutate Mind directly. Tool-result ingestion must stamp every `ObservedAction` with the owning
+    character's exact actor ID before contextual importance is calculated, preventing actor spoofing.
+11. A throwing, cancelled, malformed, wrong-shaped, or otherwise invalid tool result must contribute no observations.
+    Batch validation and ingestion must be all-or-nothing and preserve authored result order.
+12. Only the optional `AgentToolResult.Message` may reach the active framework tool loop. Structured envelopes and
+    observations must not be exposed to the model or retained as cross-turn framework protocol.
+13. `SpeechTool` must:
+    - reject blank input through the voice contract without producing a result observation;
+    - await successful admission through the configured character-owned `IVoice.SpeakAsync(...)`;
+    - return exactly one actorless `ObservedSpeech` in its `AgentToolResult` after admission; and
+    - optionally return a transient model-facing acknowledgement.
+14. Speech admission, not playback completion, is the successful tool-action boundary. Failure or cancellation before
+    admission must produce no observed speech.
+15. The configured output voice must remain excluded from external listening so dispatched self-speech is not recorded
+    a second time as perceived speech.
+16. Voice is a SpeechTool capability and must not be a generic AgenticMind runtime prerequisite.
+17. Request and response diagnostics may observe a turn but must not change tool iteration, cancellation, completion, or
+    end-of-turn behaviour.
+18. Backend or malformed-end-result failures must remain contained and logged. Automatic retry and backoff behaviour is
+    not defined by this specification.
+19. High-importance pre-emption under [AI-001](../001-mind/index.md) must cancel the active invocation as expected
+    cancellation. Invocation and tool work must settle before exactly one replacement can start, and turns must not
+    overlap.
+20. Actions and tool observations committed before pre-emption must remain committed. Cancellation does not reverse
+    admitted actions.
+21. Node-lifetime cancellation from AI-001 must propagate through active invocation and tool work. Expected pre-emption
+    and lifetime cancellation must not trigger retry, another unintended turn, or misleading failure diagnostics.
+22. Queued or deferred action tasks must settle when Mind exits, without dispatch or successful observation. Deferred
+    callbacks must not access services from the exited node.
+23. AI-001 is normative for node lifetime, actor stamping, atomic ingestion, scheduling, and interruption. AI-003 is
+    normative for per-turn prompt compilation and event-history rendering.
 
 ## In Scope
 
-- Observation abstract data contract.
-- Main interaction workflow, with dual-track guidance/support noted only as a future contract.
-- Mind-owned asynchronous consciousness loop with observation-weighted triggering.
-- Migration path from AI-001: external speech → observation, speaking → Agent Framework tool.
-- Dynamic Godot Resource tool API, including the concrete `speak` tool invocation context using `IServiceProvider`.
-- Configuration contracts for maximum observation wait and observation weight threshold.
-- Preservation of mirror-room test scene behaviour.
-- Mind-relative speech recognition and stable node-lifetime agent/session identity.
-- Updated AI-001 AgenticMind component to emit observations, execute Agent Framework turns, and own session state;
-  configured client providers only supply `IChatClient` instances.
+- Fresh Agent Framework agent and session creation for each turn.
+- Typed no-input invocation and closed, initially empty `EndTurnResult` completion.
+- Arbitrary zero-or-more tool iterations before end of turn.
+- Standard `AgentToolResult` validation, projection, and atomic Mind hand-off.
+- Invocation-time action capabilities without public observation mutation services.
+- Speech admission, transient acknowledgement, and exactly-once observed-speech production.
+- Expected interruption and node-lifetime cancellation settlement.
+- Failure containment and diagnostics that do not alter runtime semantics.
 
 ## Out Of Scope
 
-- Full context providers (scene info, memory, sensory data beyond voice observation).
-- Persistent memory or long-term relationship storage.
-- Final multi-agent orchestration beyond dual-track contract.
-- Complete action catalogue beyond the initial `speak` tool.
-- Final budget/scheduler implementation (configurable contracts only).
-- Guidance/support APIs, context providers, and guidance agent implementation.
-- NPC attention loops and participant filtering.
-- Session reset, scenario or conversation lifecycle, and post-session memory ingestion.
-- Tuning constants for observation weights, maximum waits, or thresholds beyond sensible defaults.
-- AI resource prioritisation/queueing beyond basic loop triggering.
+- Automatic retry or backoff policy for backend or malformed-end-result failures.
+- Additional production action tools beyond speech and the generic tool-result contract.
+- Cancelling or reversing world actions already admitted before interruption.
+- Speech playback-finished success semantics.
+- Timeline compaction, persistence, and cross-turn framework transcript retention.
+- Voice as a requirement for generic non-speech turn execution.
+- Multi-agent orchestration and guidance-agent APIs.
 
 ## Acceptance Criteria
 
-1. User Requirements are verified by:
-    - Realtime Interaction: NPC responds to accepted external speech with low perceived latency.
-    - Non-Dialogue Interaction: System designed to handle sensory observations beyond speech (contract level).
-    - Context: Future guidance/support work is not blocked by malformed placeholder APIs.
-    - Performance: Consciousness loop does not run continuously without observation weight threshold.
-    - Extensibility: observation contracts and invocation-time tool services support future extensions.
-2. Technical Requirements are verified by:
-    - Observation contract defined with sensory data encapsulation.
-    - Main interaction workflow established, without context/guidance placeholder APIs.
-    - Mind-owned asynchronous consciousness loop contract with configurable maximum wait and weight-based triggering.
-    - Agent Framework `speak` tool receives Mind execution services through `IServiceProvider` at invocation time.
-    - The `IServiceProvider` execution context is the calling AgenticMind and resolves the current turn's `IVoice`.
-    - Tool resources are selected through per-turn `ChatOptions`, so changes to `AgenticMind` tool configuration apply
-      to the next agent turn without rebuilding the agent/session.
-    - Mirror-room behaviour preserved via observation/tool migration.
-    - AI-001 AgenticMind component emits voice observations, owns Agent Framework session state, executes Agent
-      Framework turns, and uses its client provider only to obtain an `IChatClient`.
-    - **Passive sensory processing verified: voice input converts to speech observation upon event arrival**.
-    - **Weighted triggering verified: observation weight accumulation triggers immediate loop execution when threshold
-      reached**.
-    - **Maximum-wait triggering verified: queued observations below threshold process after the configured maximum
-      wait**.
-    - **Disabled-loop behaviour verified: timer processing pauses while disabled and resumes after re-enable**.
-    - **Tool invocation verified: `speak` tool routes through invocation services to voice output**.
-    - Speech observations preserve `VoiceId`, nullable `CharacterId`, `Content`, and `Weight`.
-    - Mind accepts nonblank speech from all external voices, ignores its own output, and has no player-only filter.
-    - Recognition is mind-relative; prompt text uses recognised `CharacterId` or an unknown-voice label, never raw
-      `VoiceId` as recognition proof.
-    - Agent technical naming derives from exact owning `Character.Id`, and the first-speech agent/session remains stable
-      for the AgenticMind node lifetime.
-3. Acceptance covers behavioural and technical contracts.
+1. A turn can reach a typed `EndTurnResult` without calling any tool or producing player-visible assistant text.
+2. A turn can invoke multiple different tools or repeat tools before producing exactly one accepted typed end result;
+   calling `speak` neither completes the turn nor prevents later tools.
+3. Capturing-client tests verify every turn uses a fresh agent and session, one sole system instruction, and no prior
+   transcript or observation-summary user message.
+4. Tests verify observations arriving during an invocation appear in the next turn's reconstructed context without
+   altering the active instruction snapshot.
+5. Tool tests verify synchronous and asynchronous delegates return one `AgentToolResult`, whose null message and empty
+   or ordered multiple-observation collection are valid.
+6. Tool tests verify the common wrapper awaits and validates the result, atomically hands observations to Mind in order,
+   and exposes only the optional message to Agent Framework.
+7. Tests verify Mind stamps tool action actors with the owning character ID, prevents spoofing, and provides no public
+   observation recorder, sink, or direct tool-mutation path.
+8. Tests verify throwing, cancelled, malformed, wrong-shaped, and atomically invalid tool calls contribute no
+   observations.
+9. Speech tests verify exactly one self-relative `ObservedSpeech` after successful voice admission and none for blank,
+   unavailable, unconfigured, failed-before-admission, or cancelled requests.
+10. Speech tests verify admission does not await playback and self-listener exclusion prevents duplicate observed
+    speech.
+11. Interruption tests verify expected cancellation settles invocation and tools before one fresh replacement starts,
+    committed tool observations survive, and no turns overlap.
+12. Diagnostics settings do not change invocation, cancellation, action, or completion semantics; genuine failures
+    remain logged and contained.
+13. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
+    replacement, exited-node service access, or erroneous expected-cancellation diagnostics.
+14. Acceptance verifies both player-visible action, interruption, and post-destruction behaviour and the fresh-session,
+    result-envelope, atomic-ingestion, cancellation, settlement, and typed end-of-turn contracts.
 
 ## References
 
 ### Implementation
 
-- game/src/Mind/Observation/Observation.cs
-- game/src/Mind/AI/Tool/AgentTool.cs
-- game/src/Mind/AI/Tool/SpeechTool.cs
-- game/src/Mind/Mind.cs (abstract base)
-- game/src/Mind/AI/AgenticMind.cs
-- game/src/Mind/AI/Provider/ClientProvider.cs
-- game/assets/testing/mirror_room/mirror_room.tscn
+- `game/src/Mind/AI/AgenticMind.cs`
+- `game/src/Mind/AI/Tool/AgentTool.cs`
+- `game/src/Mind/AI/Tool/AgentToolResult.cs`
+- `game/src/Mind/AI/Tool/SpeechTool.cs`
+- `game/src/Mind/Mind.cs`
+- `game/src/Mind/Observation/Observation.cs`
 
-### Related Specs
+### Related Specifications
 
-- AI-001: Mind Component
-- BODY-006: Voice Component
-- SPCH-003: Transcriber Component
-- SPCH-004: Speech Generator Component
-- CORE-002: Configuration API
+- [AI-001: Mind Component](../001-mind/index.md)
+- [AI-003: Prompt API](../003-prompt-api/index.md)
+- [BODY-006: Voice Component](../../body/006-voice/index.md)
+- [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
+- [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
+- [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
 
 ### External Dependencies
 

@@ -51,11 +51,11 @@ public partial class PlayerVoice : Voice
     public override void _Ready() => ConnectTranscriber();
 
     /// <inheritdoc />
-    public override void _ExitTree() => DisconnectTranscriber();
-
-    /// <inheritdoc />
-    public override void Speak(string speech)
-        => _ = TryNotifySpeechGeneratedWhenEnabled(speech);
+    public override void _ExitTree()
+    {
+        DisconnectTranscriber();
+        base._ExitTree();
+    }
 
     private void ConnectTranscriber()
     {

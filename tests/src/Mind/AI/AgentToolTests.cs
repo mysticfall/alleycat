@@ -1,73 +1,84 @@
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Mind.Observation;
 using Microsoft.Extensions.AI;
 using Xunit;
+using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.Tests.Mind.AI;
 
 /// <summary>
-/// Unit coverage for Agent Framework tool invocation context wiring.
+/// Unit coverage for Agent Framework tool result contracts and metadata.
 /// </summary>
 public sealed class AgentToolTests
 {
     /// <summary>
-    /// Tool functions should resolve invocation dependencies from the supplied service provider.
+    /// Result envelopes own an immutable ordered snapshot and permit optional messages and empty observations.
     /// </summary>
     [Fact]
-    public async Task Create_WhenToolAcceptsServiceProvider_InjectsConfiguredServices()
+    public void AgentToolResult_SnapshotsOrderedObservationsAndAllowsEmptyState()
     {
-        RecordingService service = new();
-        RecordingServiceProvider services = new(service);
-        AIFunction function = AgentTool.CreateFunction(ToolHost.Speak, services, "speak", "Speak aloud.");
-        AIFunctionArguments arguments = new()
-        {
-            ["speech"] = " Alley speaks. ",
-        };
+        List<AgentObservation> source =
+        [
+            new TestObservation("first"),
+            new TestObservation("second"),
+        ];
 
-        object? result = await function.InvokeAsync(arguments, CancellationToken.None);
+        var populated = new AgentToolResult("Done.", source);
+        var empty = new AgentToolResult();
+        source.Clear();
 
-        Assert.Equal("Spoken.", result?.ToString());
-        Assert.Equal("Alley speaks.", service.SpokenLine);
+        Assert.Equal("Done.", populated.Message);
+        Assert.Equal(["first", "second"], populated.Observations.Cast<TestObservation>().Select(x => x.Value));
+        Assert.Null(empty.Message);
+        Assert.Empty(empty.Observations);
     }
 
     /// <summary>
-    /// Tool resources should pass authored metadata through to the generated Agent Framework function.
+    /// Tool delegates with non-envelope return contracts are rejected before invocation.
+    /// </summary>
+    [Fact]
+    public void CreateFunction_WithWrongDelegateResultType_FailsEarly()
+    {
+        var services = new EmptyServiceProvider();
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AgentTool.CreateFunction(ToolHost.WrongResult, services));
+
+        Assert.Contains(nameof(AgentToolResult), exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Tool resources pass authored metadata through to the generated Agent Framework function.
     /// </summary>
     [Fact]
     public void CreateFunction_WithResourceMetadata_UsesConfiguredNameAndDescription()
     {
-        RecordingServiceProvider services = new(new RecordingService());
-        AIFunction function = AgentTool.CreateFunction(ToolHost.Speak, services, "speak", "Speak aloud.");
+        AIFunction function = AgentTool.CreateFunction(
+            ToolHost.ValidResult,
+            new EmptyServiceProvider(),
+            "speak",
+            "Speak aloud.");
 
         Assert.Equal("speak", function.Name);
         Assert.Equal("Speak aloud.", function.Description);
     }
 
-    private sealed class RecordingService
+    private sealed class EmptyServiceProvider : IServiceProvider
     {
-        public string? SpokenLine
-        {
-            get;
-            private set;
-        }
-
-        public Task<string> SpeakAsync(string speech)
-        {
-            SpokenLine = speech.Trim();
-            return Task.FromResult("Spoken.");
-        }
-    }
-
-    private sealed class RecordingServiceProvider(RecordingService service) : IServiceProvider
-    {
-        public object? GetService(Type serviceType)
-            => serviceType == typeof(RecordingService) ? service : null;
+        public object? GetService(Type serviceType) => null;
     }
 
     private static class ToolHost
     {
-        public static Task<string> Speak(string speech, IServiceProvider services)
-            => services.GetService(typeof(RecordingService)) is RecordingService service
-                ? service.SpeakAsync(speech)
-                : Task.FromResult("Missing service.");
+        public static Task<string> WrongResult() => Task.FromResult("wrong");
+
+        public static ValueTask<AgentToolResult> ValidResult() => ValueTask.FromResult(new AgentToolResult());
+    }
+
+    private sealed record TestObservation(string Value) : AgentObservation
+    {
+        public override string TypeKey => "test.tool-result";
+
+        public override float CalculateImportance(ObservationContext context) => 1f;
     }
 }

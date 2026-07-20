@@ -1,4 +1,6 @@
+using AlleyCat.Core.Logging;
 using Godot;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Body.Voice;
 
@@ -10,7 +12,9 @@ public abstract partial class Voice : Node3D, IVoice
 {
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
+    private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
     private bool _deferredGodotActionFlushQueued;
+    private int _nodeLifetimeEnded;
 
     /// <summary>
     /// Emitted when speech generation or audio conversion fails.
@@ -28,29 +32,89 @@ public abstract partial class Voice : Node3D, IVoice
     /// Enables voice playback.
     /// </summary>
     [Export]
-    public bool Enabled
-    {
-        get;
-        set;
-    } = true;
+    public bool Enabled { get; set; } = true;
 
     /// <inheritdoc />
     public Vector3 Origin => GlobalPosition;
 
     /// <summary>
-    /// Starts speech generation and playback for the supplied speech text.
+    /// Indicates whether this voice has crossed its irreversible node-lifetime boundary.
     /// </summary>
-    /// <param name="speech">Speech text to speak.</param>
-    public abstract void Speak(string speech);
+    protected bool IsNodeLifetimeEnded => Volatile.Read(ref _nodeLifetimeEnded) != 0;
+
+    /// <summary>
+    /// Cancellation bounded by this voice node's scene-tree lifetime.
+    /// </summary>
+    protected CancellationToken NodeLifetimeCancellationToken => _nodeLifetimeCancellation.Token;
+
+    /// <inheritdoc />
+    public virtual void Speak(string speech)
+    {
+        try
+        {
+            ValueTask submission = SpeakAsync(speech);
+            if (!submission.IsCompletedSuccessfully)
+            {
+                _ = ObserveCompatibilitySubmissionAsync(submission);
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportCompatibilityFailure(ex);
+        }
+    }
+
+    /// <inheritdoc />
+    public virtual ValueTask SpeakAsync(
+        string speech,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string acceptedSpeech = ValidateSubmission(speech);
+        _ = TryNotifySpeechGeneratedWhenEnabled(acceptedSpeech);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public override void _ExitTree()
+    {
+        if (Interlocked.Exchange(ref _nodeLifetimeEnded, 1) != 0)
+        {
+            return;
+        }
+
+        _nodeLifetimeCancellation.Cancel();
+
+        DeferredGodotAction[] actions;
+        lock (_deferredGodotActionsLock)
+        {
+            actions = [.. _deferredGodotActions];
+            _deferredGodotActions.Clear();
+            _deferredGodotActionFlushQueued = false;
+        }
+
+        foreach (DeferredGodotAction action in actions)
+        {
+            _ = action.CompletionSource.TrySetCanceled(NodeLifetimeCancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Validates common submission state and returns trimmed speech.
+    /// </summary>
+    protected string ValidateSubmission(string speech)
+        => string.IsNullOrWhiteSpace(speech)
+            ? throw new ArgumentException("Speech cannot be blank.", nameof(speech))
+            : !Enabled
+            ? throw new InvalidOperationException("Voice output is disabled.")
+            : IsNodeLifetimeEnded ? throw new InvalidOperationException("Voice output is unavailable after node teardown.") : speech.Trim();
 
     /// <summary>
     /// Invokes the post-generation hook when speech is currently enabled.
     /// </summary>
-    /// <param name="speech">Speech that completed generation or playback handoff.</param>
-    /// <returns>True when the hook was invoked; otherwise false.</returns>
     protected bool TryNotifySpeechGeneratedWhenEnabled(string speech)
     {
-        if (!Enabled)
+        if (!Enabled || IsNodeLifetimeEnded)
         {
             return false;
         }
@@ -62,7 +126,6 @@ public abstract partial class Voice : Node3D, IVoice
     /// <summary>
     /// Called after a speech request has completed its generation or playback handoff boundary.
     /// </summary>
-    /// <param name="speech">Speech that completed generation or playback handoff.</param>
     protected virtual void OnSpeechGenerated(string speech)
     {
         if (!IsInsideTree())
@@ -88,19 +151,23 @@ public abstract partial class Voice : Node3D, IVoice
     /// <summary>
     /// Dispatches a Godot action through the deferred main-thread queue.
     /// </summary>
-    /// <param name="action">Action to execute on the Godot thread.</param>
-    /// <returns>Completion task for the queued action.</returns>
     protected virtual Task DispatchDeferredGodotActionAsync(Action action)
-        => DispatchGodotActionAsync(action);
-
-    private Task DispatchGodotActionAsync(Action action)
     {
-        TaskCompletionSource completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ArgumentNullException.ThrowIfNull(action);
+        if (IsNodeLifetimeEnded)
+        {
+            return Task.FromCanceled(NodeLifetimeCancellationToken);
+        }
 
+        TaskCompletionSource completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_deferredGodotActionsLock)
         {
-            _deferredGodotActions.Enqueue(new DeferredGodotAction(action, completionSource));
+            if (IsNodeLifetimeEnded)
+            {
+                return Task.FromCanceled(NodeLifetimeCancellationToken);
+            }
 
+            _deferredGodotActions.Enqueue(new DeferredGodotAction(action, completionSource));
             if (!_deferredGodotActionFlushQueued)
             {
                 _deferredGodotActionFlushQueued = true;
@@ -111,10 +178,42 @@ public abstract partial class Voice : Node3D, IVoice
         return completionSource.Task;
     }
 
+    /// <summary>
+    /// Emits the voice failure signal.
+    /// </summary>
+    protected virtual void EmitSpeechFailedSignal(string error)
+        => _ = EmitSignal(new StringName("SpeechFailed"), error);
+
+    private async Task ObserveCompatibilitySubmissionAsync(ValueTask submission)
+    {
+        try
+        {
+            await submission;
+        }
+        catch (Exception ex)
+        {
+            ReportCompatibilityFailure(ex);
+        }
+    }
+
+    private void ReportCompatibilityFailure(Exception exception)
+    {
+        if (exception is OperationCanceledException && IsNodeLifetimeEnded)
+        {
+            return;
+        }
+
+        if (GameLoggerResolver.TryResolve(out ILogger<Voice>? logger) && logger is not null)
+        {
+            logger.LogError(exception, "Voice compatibility submission failed: {Error}", exception.Message);
+        }
+
+        EmitSpeechFailedSignal(exception.Message);
+    }
+
     private void FlushDeferredGodotActions()
     {
         DeferredGodotAction[] actions;
-
         lock (_deferredGodotActionsLock)
         {
             actions = [.. _deferredGodotActions];
@@ -124,6 +223,12 @@ public abstract partial class Voice : Node3D, IVoice
 
         foreach (DeferredGodotAction action in actions)
         {
+            if (IsNodeLifetimeEnded)
+            {
+                _ = action.CompletionSource.TrySetCanceled(NodeLifetimeCancellationToken);
+                continue;
+            }
+
             try
             {
                 action.Action();
@@ -137,7 +242,7 @@ public abstract partial class Voice : Node3D, IVoice
 
         lock (_deferredGodotActionsLock)
         {
-            if (_deferredGodotActions.Count > 0 && !_deferredGodotActionFlushQueued)
+            if (!IsNodeLifetimeEnded && _deferredGodotActions.Count > 0 && !_deferredGodotActionFlushQueued)
             {
                 _deferredGodotActionFlushQueued = true;
                 _ = CallDeferred(nameof(FlushDeferredGodotActions));
@@ -145,10 +250,5 @@ public abstract partial class Voice : Node3D, IVoice
         }
     }
 
-    private sealed class DeferredGodotAction(Action action, TaskCompletionSource completionSource)
-    {
-        public Action Action { get; } = action;
-
-        public TaskCompletionSource CompletionSource { get; } = completionSource;
-    }
+    private sealed record DeferredGodotAction(Action Action, TaskCompletionSource CompletionSource);
 }
