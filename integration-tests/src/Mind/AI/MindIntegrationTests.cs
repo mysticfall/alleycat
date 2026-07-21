@@ -274,10 +274,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Multiple speech actions should dispatch and the typed end result should complete regardless of diagnostics.
+    /// Multiple speech actions should dispatch while later observations remain queued for the next turn.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenDiagnosticsDisabled_AllowsMultipleToolsBeforeTypedEndTurn()
+    public async Task ReceiveVoice_WithMultipleSpeechActions_QueuesLaterObservationsForNextTurn()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -396,67 +396,55 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Enabling request/response diagnostics should not alter completion or action semantics.
+    /// Diagnostics must not alter a genuine Agent Framework tool loop or its typed completion.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenDiagnosticsEnabled_HasIdenticalCompletionSemantics()
+    public async Task ReceiveVoice_WithEquivalentDiagnosticsModes_PreservesFrameworkToolLoopSemantics()
     {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        RecordingVoice npcVoice = new()
-        {
-            Id = "alley",
-        };
-        RecordingVoice playerVoice = new()
-        {
-            Id = "Speaker",
-        };
-        FakeClientProvider clientProvider = new()
-        {
-            FirstSpeech = "First diagnostic reply.",
-            SecondSpeech = "Second diagnostic reply should be ignored.",
-            ResponseText = "{}",
-        };
-        AgenticMind mind = new()
-        {
-            ClientProvider = clientProvider,
-            SystemInstruction = CreateTestSystemInstruction(),
-            Voice = npcVoice,
-            MaxObservationWaitSeconds = 0.05f,
-            ObservationImportanceThreshold = 1f,
-            Tools = [new SpeechTool()],
-        };
-        mind.SetDiagnosticsSettingsLoaderForTesting(() => new AIDiagnosticsSettings(EnableRequestResponseLogging: true));
+        ToolLoopScenarioResult disabled = await RunToolLoopScenarioAsync(
+            diagnosticsEnabled: false,
+            cancelDuringSecondModelCall: false);
+        ToolLoopScenarioResult enabled = await RunToolLoopScenarioAsync(
+            diagnosticsEnabled: true,
+            cancelDuringSecondModelCall: false);
 
-        AddTestNode(sceneTree, npcVoice);
-        AddTestNode(sceneTree, playerVoice);
-        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
-        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+        AssertEquivalentSemantics(disabled.Semantics, enabled.Semantics);
+        Assert.Equal(3, enabled.Semantics.ModelInvocationCount);
+        Assert.Equal(["First diagnostic reply.", "Second diagnostic reply."], enabled.Semantics.ToolInvocations);
+        Assert.Equal(
+            ["Spoken through the configured voice.", "Spoken through the configured voice."],
+            enabled.Semantics.FunctionResults);
+        Assert.Equal(3, enabled.Semantics.AdmittedEffects.Length);
+        Assert.True(enabled.Semantics.TypedCompletion);
+        Assert.False(enabled.Semantics.CancellationObserved);
 
-        try
-        {
-            mind.ReceiveVoice("hello with diagnostics", playerVoice);
+        AssertDiagnosticsDisabled(disabled.LogEntries);
+        AssertEnabledToolLoopDiagnostics(enabled.LogEntries, expectedRequestCount: 3, expectedResponseCount: 3);
+    }
 
-            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { Completed: true }, maxFrames: 120);
-            await TestUtils.WaitForFramesAsync(sceneTree, 4);
+    /// <summary>
+    /// Diagnostics must not alter cancellation settlement within a genuine Agent Framework tool loop.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WithEquivalentDiagnosticsModes_PreservesFrameworkToolLoopCancellation()
+    {
+        ToolLoopScenarioResult disabled = await RunToolLoopScenarioAsync(
+            diagnosticsEnabled: false,
+            cancelDuringSecondModelCall: true);
+        ToolLoopScenarioResult enabled = await RunToolLoopScenarioAsync(
+            diagnosticsEnabled: true,
+            cancelDuringSecondModelCall: true);
 
-            Assert.NotNull(clientProvider.Client);
-            FakeChatClient client = clientProvider.Client;
-            Assert.Equal(1, client.RunCount);
-            Assert.False(client.CancellationObservedAfterFirstSpeak);
-            Assert.True(client.ReturnedResponse);
-            Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
-            Assert.Equal("Spoken through the configured voice.", client.SecondSpeakResult);
-            Assert.Equal(["First diagnostic reply.", "Second diagnostic reply should be ignored."], npcVoice.SpokenLines);
+        AssertEquivalentSemantics(disabled.Semantics, enabled.Semantics);
+        Assert.Equal(2, enabled.Semantics.ModelInvocationCount);
+        Assert.Equal(["First diagnostic reply."], enabled.Semantics.ToolInvocations);
+        Assert.Equal(["Spoken through the configured voice."], enabled.Semantics.FunctionResults);
+        Assert.Equal(2, enabled.Semantics.AdmittedEffects.Length);
+        Assert.False(enabled.Semantics.TypedCompletion);
+        Assert.True(enabled.Semantics.CancellationObserved);
 
-            string diagnostics = AgenticMind.CreateSensitiveTrialAgentResponseDiagnostics(
-                new AgentResponse(new ChatMessage(ChatRole.Assistant, client.ResponseText)));
-            Assert.Contains("Text={}", diagnostics, StringComparison.Ordinal);
-            Assert.Contains("Messages=1", diagnostics, StringComparison.Ordinal);
-        }
-        finally
-        {
-            await DestroyFixtureAsync(sceneTree, character, playerVoice, npcVoice);
-        }
+        AssertDiagnosticsDisabled(disabled.LogEntries);
+        AssertEnabledToolLoopDiagnostics(enabled.LogEntries, expectedRequestCount: 2, expectedResponseCount: 1);
     }
 
     /// <summary>
@@ -1106,6 +1094,143 @@ public sealed partial class MindIntegrationTests : IDisposable
         Sections = [section],
     };
 
+    private static async Task<ToolLoopScenarioResult> RunToolLoopScenarioAsync(
+        bool diagnosticsEnabled,
+        bool cancelDuringSecondModelCall)
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecordingVoice npcVoice = new()
+        {
+            Id = "alley"
+        };
+        RecordingVoice playerVoice = new()
+        {
+            Id = "Speaker"
+        };
+        FrameworkToolLoopClientProvider clientProvider = new(cancelDuringSecondModelCall);
+        using RecordingLoggerProvider loggerProvider = new();
+        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
+        ScenarioAgenticMind mind = new()
+        {
+            ClientProvider = clientProvider,
+            SystemInstruction = CreateTestSystemInstruction(),
+            Voice = npcVoice,
+            MaxObservationWaitSeconds = 0.05f,
+            ObservationImportanceThreshold = 1f,
+            Tools = [new SpeechTool()],
+        };
+        mind.SetDiagnosticsSettingsLoaderForTesting(
+            () => new AIDiagnosticsSettings(EnableRequestResponseLogging: diagnosticsEnabled));
+
+        AddTestNode(sceneTree, npcVoice);
+        AddTestNode(sceneTree, playerVoice);
+        TestCharacter character = AddAgenticMindFixture(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            AdmittedEffect[]? effectsBeforeCancellation = null;
+            mind.ReceiveVoice("equivalent diagnostic scenario", playerVoice);
+            if (cancelDuringSecondModelCall)
+            {
+                await clientProvider.SecondInvocationStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                effectsBeforeCancellation =
+                [
+                    .. mind.GetTimelineForTest().OfType<ObservedSpeech>().Select(AdmittedEffect.From),
+                ];
+                mind.QueueFree();
+                await TestUtils.WaitForNextFrameAsync(sceneTree);
+                await WaitUntilAsync(
+                    sceneTree,
+                    () => clientProvider.Client is { CancellationObserved: true },
+                    maxFrames: 120);
+            }
+            else
+            {
+                await WaitUntilAsync(
+                    sceneTree,
+                    () => clientProvider.Client is { Completed: true },
+                    maxFrames: 120);
+            }
+
+            await mind.ProcessingSettled.WaitAsync(TimeSpan.FromSeconds(2));
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            FrameworkToolLoopChatClient client = Assert.IsType<FrameworkToolLoopChatClient>(clientProvider.Client);
+            ToolLoopSemantics semantics = new(
+                client.InvocationCount,
+                [.. npcVoice.SpokenLines],
+                [.. client.FunctionResults],
+                effectsBeforeCancellation
+                    ?? [.. mind.GetTimelineForTest().OfType<ObservedSpeech>().Select(AdmittedEffect.From)],
+                mind.TypedCompletion,
+                client.CancellationObserved);
+            return new ToolLoopScenarioResult(semantics, [.. loggerProvider.Entries]);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, character, playerVoice, npcVoice);
+        }
+    }
+
+    private static void AssertEquivalentSemantics(ToolLoopSemantics expected, ToolLoopSemantics actual)
+    {
+        Assert.Equal(expected.ModelInvocationCount, actual.ModelInvocationCount);
+        Assert.Equal(expected.ToolInvocations, actual.ToolInvocations);
+        Assert.Equal(expected.FunctionResults, actual.FunctionResults);
+        Assert.Equal(expected.AdmittedEffects, actual.AdmittedEffects);
+        Assert.Equal(expected.TypedCompletion, actual.TypedCompletion);
+        Assert.Equal(expected.CancellationObserved, actual.CancellationObserved);
+    }
+
+    private static void AssertDiagnosticsDisabled(IReadOnlyList<RecordingLoggerProvider.LogEntry> entries)
+    {
+        Assert.DoesNotContain(entries, entry =>
+            entry.Category == "Microsoft.Extensions.AI.LoggingChatClient");
+        Assert.DoesNotContain(entries, entry =>
+            entry.Message.Contains("runtime-sensitive-initial-call", StringComparison.Ordinal)
+            || entry.Message.Contains("runtime-sensitive-intermediate-call", StringComparison.Ordinal)
+            || entry.Message.Contains("Spoken through the configured voice.", StringComparison.Ordinal));
+    }
+
+    private static void AssertEnabledToolLoopDiagnostics(
+        IReadOnlyList<RecordingLoggerProvider.LogEntry> entries,
+        int expectedRequestCount,
+        int expectedResponseCount)
+    {
+        RecordingLoggerProvider.LogEntry[] requestEntries =
+        [
+            .. entries.Where(entry =>
+                entry.Category == "Microsoft.Extensions.AI.LoggingChatClient"
+                && entry.Level == LogLevel.Trace
+                && entry.Message.Contains(" invoked:", StringComparison.Ordinal)),
+        ];
+        RecordingLoggerProvider.LogEntry[] responseEntries =
+        [
+            .. entries.Where(entry =>
+                entry.Category == "Microsoft.Extensions.AI.LoggingChatClient"
+                && entry.Level == LogLevel.Trace
+                && entry.Message.Contains(" completed:", StringComparison.Ordinal)),
+        ];
+
+        Assert.Equal(expectedRequestCount, requestEntries.Length);
+        Assert.Equal(expectedResponseCount, responseEntries.Length);
+        Assert.Contains("runtime-sensitive-initial-call", responseEntries[0].Message, StringComparison.Ordinal);
+        if (expectedResponseCount == 3)
+        {
+            Assert.Contains("runtime-sensitive-intermediate-call", responseEntries[1].Message, StringComparison.Ordinal);
+            Assert.Contains("{}", responseEntries[2].Message, StringComparison.Ordinal);
+        }
+
+        Assert.Contains(requestEntries.Skip(1), entry =>
+            entry.Message.Contains("Spoken through the configured voice.", StringComparison.Ordinal));
+        Assert.DoesNotContain(entries, entry =>
+            entry.Category is "System.ClientModel.Primitives.MessageLoggingPolicy"
+                or "System.ClientModel.Primitives.PipelineTransport");
+        Assert.DoesNotContain(entries, entry =>
+            entry.Category == typeof(AgenticMind).FullName && entry.Level >= LogLevel.Error);
+    }
+
     private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames)
     {
         for (int frame = 0; frame < maxFrames; frame++)
@@ -1370,6 +1495,55 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
     }
 
+    private sealed partial class ScenarioAgenticMind : AgenticMind
+    {
+        private readonly TaskCompletionSource _processingSettled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task ProcessingSettled => _processingSettled.Task;
+
+        public bool TypedCompletion
+        {
+            get;
+            private set;
+        }
+
+        public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
+
+        protected override async Task ProcessObservationsAsync(
+            IReadOnlyList<AgentObservation> observations,
+            IReadOnlyList<AgentObservation> timelineSnapshot,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await base.ProcessObservationsAsync(observations, timelineSnapshot, cancellationToken);
+                TypedCompletion = true;
+            }
+            finally
+            {
+                _ = _processingSettled.TrySetResult();
+            }
+        }
+    }
+
+    private sealed record ToolLoopScenarioResult(
+        ToolLoopSemantics Semantics,
+        RecordingLoggerProvider.LogEntry[] LogEntries);
+
+    private sealed record ToolLoopSemantics(
+        int ModelInvocationCount,
+        string[] ToolInvocations,
+        string[] FunctionResults,
+        AdmittedEffect[] AdmittedEffects,
+        bool TypedCompletion,
+        bool CancellationObserved);
+
+    private sealed record AdmittedEffect(string? ActorID, string? VoiceID, string Content)
+    {
+        public static AdmittedEffect From(ObservedSpeech speech)
+            => new(speech.ActorId, speech.VoiceId, speech.Content);
+    }
+
     private sealed record TestObservation(float Importance, string Prompt) : AgentObservation
     {
         public override string TypeKey => "test.observation";
@@ -1466,6 +1640,124 @@ public sealed partial class MindIntegrationTests : IDisposable
             CreatedClients.Add(Client);
             return Client;
         }
+    }
+
+    private sealed class FrameworkToolLoopClientProvider(bool cancelDuringSecondModelCall) : ClientProvider
+    {
+        public TaskCompletionSource SecondInvocationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public FrameworkToolLoopChatClient? Client
+        {
+            get;
+            private set;
+        }
+
+        public override IChatClient CreateChatClient()
+        {
+            Client = new FrameworkToolLoopChatClient(cancelDuringSecondModelCall, SecondInvocationStarted);
+            return Client;
+        }
+    }
+
+    private sealed class FrameworkToolLoopChatClient(
+        bool cancelDuringSecondModelCall,
+        TaskCompletionSource secondInvocationStarted) : IChatClient
+    {
+        private const string InitialCallID = "runtime-sensitive-initial-call";
+        private const string IntermediateCallID = "runtime-sensitive-intermediate-call";
+
+        public int InvocationCount
+        {
+            get;
+            private set;
+        }
+
+        public bool Completed
+        {
+            get;
+            private set;
+        }
+
+        public bool CancellationObserved
+        {
+            get;
+            private set;
+        }
+
+        public List<string> FunctionResults { get; } = [];
+
+        public async Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _ = Assert.Single(options?.Tools ?? []);
+            ChatResponseFormatJson responseFormat = Assert.IsType<ChatResponseFormatJson>(options?.ResponseFormat);
+            Assert.True(responseFormat.Schema.HasValue);
+            InvocationCount++;
+
+            ChatMessage[] request = [.. messages];
+            if (InvocationCount > 1)
+            {
+                FunctionResultContent[] results =
+                [
+                    .. request.SelectMany(message => message.Contents).OfType<FunctionResultContent>(),
+                ];
+                Assert.Equal(InvocationCount - 1, results.Length);
+                FunctionResults.Add(Assert.IsType<string>(results[^1].Result));
+            }
+
+            if (InvocationCount == 2 && cancelDuringSecondModelCall)
+            {
+                _ = secondInvocationStarted.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    CancellationObserved = true;
+                    throw;
+                }
+            }
+
+            ChatMessage response = InvocationCount switch
+            {
+                1 => CreateSpeechCall(InitialCallID, "First diagnostic reply."),
+                2 => CreateSpeechCall(IntermediateCallID, "Second diagnostic reply."),
+                3 => new ChatMessage(ChatRole.Assistant, "{}"),
+                _ => throw new InvalidOperationException("Agent Framework made an unexpected model invocation."),
+            };
+            Completed = InvocationCount == 3;
+            return new ChatResponse(response);
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            ChatResponse response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
+            {
+                yield return update;
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+
+        private static ChatMessage CreateSpeechCall(string callID, string speech)
+            => new(
+                ChatRole.Assistant,
+                [new FunctionCallContent(
+                    callID,
+                    "speak",
+                    new Dictionary<string, object?> { ["speech"] = speech })]);
     }
 
     private sealed class ThrowingClientProvider : ClientProvider

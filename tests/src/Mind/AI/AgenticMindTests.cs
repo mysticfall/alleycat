@@ -6,7 +6,6 @@ using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,67 +72,6 @@ public sealed class AgenticMindTests
         Assert.Equal("microphone-7", observation.VoiceId);
         Assert.Null(observation.ActorId);
         Assert.Equal("hello", observation.Content);
-    }
-
-    /// <summary>
-    /// Trial response diagnostics should use AgentResponse primary text and SDK message abstractions.
-    /// </summary>
-    [Fact]
-    public void CreateSensitiveTrialAgentResponseDiagnostics_IncludesTextAndMessages()
-    {
-        AgentResponse response = new(new ChatMessage(ChatRole.Assistant, "hello from response"));
-
-        string diagnostics = AgenticMind.CreateSensitiveTrialAgentResponseDiagnostics(response);
-
-        Assert.Contains("Text=hello from response", diagnostics, StringComparison.Ordinal);
-        Assert.Contains("Messages=1", diagnostics, StringComparison.Ordinal);
-        Assert.Contains("Message[0].Role=assistant", diagnostics, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Message[0].Text=hello from response", diagnostics, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Empty SDK responses are reported explicitly rather than substituting speech-tool arguments.
-    /// </summary>
-    [Fact]
-    public void CreateSensitiveTrialAgentResponseDiagnostics_WhenTextIsEmpty_ReportsEmptySdkContent()
-    {
-        AgentResponse response = new(new ChatMessage(ChatRole.Assistant, string.Empty));
-
-        string diagnostics = AgenticMind.CreateSensitiveTrialAgentResponseDiagnostics(response);
-
-        Assert.Contains("Text=<empty>", diagnostics, StringComparison.Ordinal);
-        Assert.Contains("Message[0].Text=<empty>", diagnostics, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Sensitive AgentResponse diagnostics should be suppressed when request/response logging is disabled.
-    /// </summary>
-    [Fact]
-    public void CreateSensitiveAgentResponseDiagnosticsOrDefault_WhenDisabled_ReturnsNull()
-    {
-        AgentResponse response = new(new ChatMessage(ChatRole.Assistant, "secret response"));
-
-        string? diagnostics = AgenticMind.CreateSensitiveAgentResponseDiagnosticsOrDefault(
-            response,
-            enableRequestResponseDiagnostics: false);
-
-        Assert.Null(diagnostics);
-    }
-
-    /// <summary>
-    /// Sensitive AgentResponse diagnostics should include response payloads when request/response logging is enabled.
-    /// </summary>
-    [Fact]
-    public void CreateSensitiveAgentResponseDiagnosticsOrDefault_WhenEnabled_ReturnsDiagnostics()
-    {
-        AgentResponse response = new(new ChatMessage(ChatRole.Assistant, "secret response"));
-
-        string? diagnostics = AgenticMind.CreateSensitiveAgentResponseDiagnosticsOrDefault(
-            response,
-            enableRequestResponseDiagnostics: true);
-
-        Assert.NotNull(diagnostics);
-        Assert.Contains("Text=secret response", diagnostics, StringComparison.Ordinal);
     }
 
     /// <summary>

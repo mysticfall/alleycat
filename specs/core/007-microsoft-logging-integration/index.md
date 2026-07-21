@@ -21,6 +21,8 @@ and can be extended without changing gameplay consumers.
 2. Players see intentional error notifications for actionable failures without seeing raw debug output.
 3. Suppressed debug or trace diagnostics do not create noticeable runtime overhead.
 4. Existing player-facing error behaviour is preserved while diagnostics migrate away from direct `GD.*` calls.
+5. Developers can configure a third-party component's dedicated logging category without suppressed sensitive payloads
+   being serialised.
 
 ## Technical Requirements
 
@@ -39,8 +41,12 @@ and can be extended without changing gameplay consumers.
 10. Protocol output, intentional UI notifications, and Godot API calls that are not diagnostics may remain explicit
    exceptions to the `ILogger` preference.
 11. Low-priority legacy `GD.*` diagnostics may remain temporarily, but new or touched diagnostics should migrate to
-   `ILogger` in this integration path.
+    `ILogger` in this integration path.
 12. Logging integration lives in `AlleyCat.Core.Logging` and is resolved through the DI container.
+13. Third-party logging components that can expose sensitive request or response payloads must retain their dedicated
+    category and level controls. Payload serialisation must be deferred until that category's required level is enabled;
+    any subsystem feature gate remains an additional prerequisite. Subsystem specs define which payloads are sensitive
+    and the required category and level.
 
 ## In Scope
 
@@ -50,13 +56,14 @@ and can be extended without changing gameplay consumers.
 - Unified core logging resolver for non-constructor-injected Godot objects.
 - Structured logging conventions for new and migrated diagnostics.
 - Performance guidance for suppressed logs.
+- Reusable category gating and deferred serialisation for sensitive third-party logging payloads.
 
 ## Out Of Scope
 
 - External log aggregation, file sinks, or telemetry upload.
 - Complete replacement of all existing low-priority `GD.*` diagnostics in this slice.
 - Player-facing UI design beyond routing eligible errors to existing notification UI.
-- Logging level tuning beyond selecting appropriate levels at call sites.
+- Project-wide default level tuning beyond category and call-site contracts required by subsystem specs.
 
 ## Acceptance Criteria
 
@@ -70,9 +77,11 @@ and can be extended without changing gameplay consumers.
 7. `Error` and `Critical` logs reach notification UI when that UI is available, without exposing normal debug logs.
 8. Protocol output, intentional UI notifications, and non-diagnostic Godot API calls remain explicit exceptions.
 9. `Out Of Scope` defers optional sinks and full legacy cleanup without excluding required logging registration.
+10. Tests of a sensitive third-party payload logger verify its dedicated category remains independently configurable and
+    that payload detail is not serialised below the subsystem-required level or while its feature gate is disabled.
 
-**Traceability Map:** User Requirements 1-4 -> AC-2, AC-5, AC-6, AC-7, AC-8; Technical Requirements 1-12 -> AC-1,
-AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9.
+**Traceability Map:** User Requirements 1-5 -> AC-2, AC-5, AC-6, AC-7, AC-8, AC-10; Technical Requirements 1-13 ->
+AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-10.
 
 ## References
 
@@ -87,6 +96,7 @@ AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9.
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [AI-001: Mind Component](../../ai/001-mind/index.md)
+- [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)
 
 ### External
 

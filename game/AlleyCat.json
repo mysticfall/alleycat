@@ -22,13 +22,14 @@
   },
   "Diagnostics": {
     "AI": {
-      "EnableRequestResponseLogging": false
+      "EnableRequestResponseLogging": true
     }
   },
   "Logging": {
     "LogLevel": {
       "Default": "Information",
       "Microsoft": "Warning",
+      "Microsoft.Extensions.AI.LoggingChatClient": "Trace",
       "System.ClientModel.Primitives.MessageLoggingPolicy": "Warning",
       "System.ClientModel.Primitives.PipelineTransport": "Warning"
     }

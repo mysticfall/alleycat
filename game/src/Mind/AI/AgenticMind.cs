@@ -122,12 +122,6 @@ public partial class AgenticMind : MindBase, IServiceProvider
         string instructions = RenderSystemInstruction(template, renderContext);
         (string name, string description) = CreateAgentMetadata(character);
 
-        AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
-        if (diagnosticsSettings.EnableRequestResponseLogging)
-        {
-            StartTemporaryActivityLogListenerIfAvailable();
-        }
-
         TurnInvocationServices invocationServices = new(this, character, Voice);
         ChatClientAgentRunOptions options = new(new ChatOptions
         {
@@ -136,7 +130,11 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
         // ChatClientAgent 1.8.0 exposes this typed no-message overload directly. Keeping the
         // concrete type avoids diagnostics wrappers obscuring the package's typed API.
-        ChatClientAgent agent = clientProvider.CreateChatClient().AsAIAgent(
+        IChatClient chatClient = AIChatClientDiagnostics.Decorate(
+            clientProvider.CreateChatClient(),
+            _diagnosticsSettingsLoader(),
+            GameLoggerResolver.ResolveFactoryRequired);
+        ChatClientAgent agent = chatClient.AsAIAgent(
             instructions: instructions,
             name: name,
             description: description);
@@ -147,12 +145,11 @@ public partial class AgenticMind : MindBase, IServiceProvider
         Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
         try
         {
-            AgentResponse<EndTurnResult> response = await agent.RunAsync<EndTurnResult>(
+            _ = await agent.RunAsync<EndTurnResult>(
                 session,
                 serializerOptions: null,
                 options,
                 cancellationToken);
-            LogSensitiveTrialAgentResponse(response, diagnosticsSettings.EnableRequestResponseLogging);
         }
         finally
         {
@@ -227,14 +224,6 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return template.Render(context);
     }
 
-    private static void StartTemporaryActivityLogListenerIfAvailable()
-    {
-        if (GameLoggerResolver.TryResolveFactory(out ILoggerFactory? loggerFactory) && loggerFactory is not null)
-        {
-            AgenticMindActivityLogListener.Start(loggerFactory);
-        }
-    }
-
     private static void LogOptionalResponseFailure(Exception exception)
     {
         if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
@@ -242,54 +231,6 @@ public partial class AgenticMind : MindBase, IServiceProvider
             logger.LogError(exception, "AgenticMind response failed.");
         }
     }
-
-    private static void LogSensitiveTrialAgentResponse(
-        AgentResponse response,
-        bool enableRequestResponseDiagnostics)
-    {
-        string? diagnostics = CreateSensitiveAgentResponseDiagnosticsOrDefault(response, enableRequestResponseDiagnostics);
-        if (diagnostics is null)
-        {
-            return;
-        }
-
-        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger)
-            && logger is not null
-            && logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Sensitive development-only Agent Framework response diagnostics: {AgentResponseDiagnostics}",
-                diagnostics);
-        }
-    }
-
-    internal static string? CreateSensitiveAgentResponseDiagnosticsOrDefault(
-        AgentResponse response,
-        bool enableRequestResponseDiagnostics)
-        => enableRequestResponseDiagnostics ? CreateSensitiveTrialAgentResponseDiagnostics(response) : null;
-
-    internal static string CreateSensitiveTrialAgentResponseDiagnostics(AgentResponse response)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-        List<string> diagnostics =
-        [
-            $"Text={FormatDiagnosticValue(response.Text)}",
-            $"Messages={response.Messages.Count}",
-        ];
-
-        for (int index = 0; index < response.Messages.Count; index++)
-        {
-            ChatMessage message = response.Messages[index];
-            diagnostics.Add($"Message[{index}].Role={message.Role}");
-            diagnostics.Add($"Message[{index}].Text={FormatDiagnosticValue(message.Text)}");
-            diagnostics.Add($"Message[{index}].Contents={message.Contents.Count}");
-        }
-
-        return string.Join("; ", diagnostics);
-    }
-
-    private static string FormatDiagnosticValue(string? value)
-        => string.IsNullOrEmpty(value) ? "<empty>" : value;
 
     internal void SetDiagnosticsSettingsLoaderForTesting(Func<AIDiagnosticsSettings> diagnosticsSettingsLoader)
     {

@@ -45,6 +45,22 @@ public sealed class OpenAIClientOptionsFactoryTests
     }
 
     /// <summary>
+    /// The shared AI, STT, and TTS SDK pipeline must not expose request or response bodies.
+    /// </summary>
+    [Fact]
+    public void Create_ForSharedAIAndSpeechClients_ExplicitlyDisablesMessageContentLogging()
+    {
+        using ILoggerFactory loggerFactory = new TestLoggerFactory();
+
+        OpenAIClientOptions options = OpenAIClientOptionsFactory.Create(
+            new Uri("https://api.openai.com/v1"),
+            timeoutSeconds: null,
+            loggerFactory);
+
+        Assert.False(options.ClientLoggingOptions?.EnableMessageContentLogging);
+    }
+
+    /// <summary>
     /// Logging infrastructure is required so SDK diagnostics are not silently suppressed.
     /// </summary>
     [Fact]

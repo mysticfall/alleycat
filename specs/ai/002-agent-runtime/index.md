@@ -27,6 +27,10 @@ ordered subjective observations without granting tools direct mutation access to
 7. An enabled high-importance interruption must cancel the active response as expected pre-emption, then produce one
    fresh replacement only after active invocation and action work settle.
 8. Removing an NPC's Mind from the scene must not allow active or queued actions to produce delayed in-world effects.
+9. During development, developers can inspect the request and response for every underlying LLM invocation in a turn,
+   including intermediate invocations in a tool loop, when explicitly enabled.
+10. Sensitive AI request and response detail must remain suppressed unless both dedicated diagnostics controls permit
+    it, without changing NPC behaviour.
 
 ## Technical Requirements
 
@@ -64,20 +68,31 @@ ordered subjective observations without granting tools direct mutation access to
 15. The configured output voice must remain excluded from external listening so dispatched self-speech is not recorded
     a second time as perceived speech.
 16. Voice is a SpeechTool capability and must not be a generic AgenticMind runtime prerequisite.
-17. Request and response diagnostics may observe a turn but must not change tool iteration, cancellation, completion, or
-    end-of-turn behaviour.
-18. Backend or malformed-end-result failures must remain contained and logged. Automatic retry and backoff behaviour is
+17. Development-only request and response diagnostics must require both
+    `Diagnostics:AI:EnableRequestResponseLogging` and the dedicated
+    `Microsoft.Extensions.AI.LoggingChatClient` category enabled at `Trace`. Either control being disabled must
+    suppress sensitive payload detail.
+18. The runtime must decorate the AI `IChatClient` with Microsoft.Extensions.AI `LoggingChatClient` before adapting it
+    with `AsAIAgent`. This placement must observe every underlying invocation, including intermediate tool-loop calls.
+19. Request and response payload serialisation must be deferred until the complete diagnostics gate in requirement 17
+    is satisfied. Levels below `Trace` must not serialise sensitive payload detail. CORE-007 is normative for the
+    reusable third-party logging and deferred sensitive-serialisation contract.
+20. AI request and response diagnostics must not use shared `System.ClientModel` body logging. Their scope must remain
+    the agent-runtime chat client so speech transcription and generation traffic is unaffected.
+21. Request and response diagnostics may observe a turn but must not change invocation count, tool iteration, tool
+    results, cancellation, completion, or end-of-turn behaviour.
+22. Backend or malformed-end-result failures must remain contained and logged. Automatic retry and backoff behaviour is
     not defined by this specification.
-19. High-importance pre-emption under [AI-001](../001-mind/index.md) must cancel the active invocation as expected
+23. High-importance pre-emption under [AI-001](../001-mind/index.md) must cancel the active invocation as expected
     cancellation. Invocation and tool work must settle before exactly one replacement can start, and turns must not
     overlap.
-20. Actions and tool observations committed before pre-emption must remain committed. Cancellation does not reverse
+24. Actions and tool observations committed before pre-emption must remain committed. Cancellation does not reverse
     admitted actions.
-21. Node-lifetime cancellation from AI-001 must propagate through active invocation and tool work. Expected pre-emption
+25. Node-lifetime cancellation from AI-001 must propagate through active invocation and tool work. Expected pre-emption
     and lifetime cancellation must not trigger retry, another unintended turn, or misleading failure diagnostics.
-22. Queued or deferred action tasks must settle when Mind exits, without dispatch or successful observation. Deferred
+26. Queued or deferred action tasks must settle when Mind exits, without dispatch or successful observation. Deferred
     callbacks must not access services from the exited node.
-23. AI-001 is normative for node lifetime, actor stamping, atomic ingestion, scheduling, and interruption. AI-003 is
+27. AI-001 is normative for node lifetime, actor stamping, atomic ingestion, scheduling, and interruption. AI-003 is
     normative for per-turn prompt compilation and event-history rendering.
 
 ## In Scope
@@ -89,7 +104,8 @@ ordered subjective observations without granting tools direct mutation access to
 - Invocation-time action capabilities without public observation mutation services.
 - Speech admission, transient acknowledgement, and exactly-once observed-speech production.
 - Expected interruption and node-lifetime cancellation settlement.
-- Failure containment and diagnostics that do not alter runtime semantics.
+- Development-only, per-invocation AI request and response diagnostics with explicit sensitive-detail gating.
+- Failure containment and diagnostics that do not alter runtime semantics or speech service logging.
 
 ## Out Of Scope
 
@@ -100,6 +116,7 @@ ordered subjective observations without granting tools direct mutation access to
 - Timeline compaction, persistence, and cross-turn framework transcript retention.
 - Voice as a requirement for generic non-speech turn execution.
 - Multi-agent orchestration and guidance-agent APIs.
+- Production request and response payload logging.
 
 ## Acceptance Criteria
 
@@ -124,17 +141,26 @@ ordered subjective observations without granting tools direct mutation access to
     speech.
 11. Interruption tests verify expected cancellation settles invocation and tools before one fresh replacement starts,
     committed tool observations survive, and no turns overlap.
-12. Diagnostics settings do not change invocation, cancellation, action, or completion semantics; genuine failures
-    remain logged and contained.
-13. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
+12. A capturing client verifies that a multi-call tool loop logs the request and response for its initial, intermediate,
+    and final underlying LLM invocations only when `Diagnostics:AI:EnableRequestResponseLogging` is enabled and the
+    `Microsoft.Extensions.AI.LoggingChatClient` category is enabled at `Trace`.
+13. Suppression tests verify that disabling the AI diagnostics option while retaining `Trace`, or setting the dedicated
+    category below `Trace` while retaining the option, does not serialise sensitive request or response payload detail.
+14. Integration tests verify `LoggingChatClient` decorates the AI chat client before `AsAIAgent`, shared
+    `System.ClientModel` body logging is not used, and STT and TTS request and response logging is unaffected.
+15. Equivalent runs with diagnostics enabled and disabled preserve invocation count, tool calls and results,
+    cancellation, actions, completion, and typed end-turn semantics; genuine failures remain logged and contained.
+16. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
     replacement, exited-node service access, or erroneous expected-cancellation diagnostics.
-14. Acceptance verifies both player-visible action, interruption, and post-destruction behaviour and the fresh-session,
-    result-envelope, atomic-ingestion, cancellation, settlement, and typed end-of-turn contracts.
+17. Acceptance verifies both player- and developer-visible behaviour and the fresh-session, result-envelope,
+    atomic-ingestion, diagnostics-gating, cancellation, settlement, and typed end-of-turn contracts.
 
 ## References
 
 ### Implementation
 
+- `game/src/Mind/AI/AIChatClientDiagnostics.cs`
+- `game/src/Mind/AI/AIDiagnosticsOptions.cs`
 - `game/src/Mind/AI/AgenticMind.cs`
 - `game/src/Mind/AI/Tool/AgentTool.cs`
 - `game/src/Mind/AI/Tool/AgentToolResult.cs`
@@ -150,7 +176,9 @@ ordered subjective observations without granting tools direct mutation access to
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
+- [CORE-007: Microsoft Logging Integration](../../core/007-microsoft-logging-integration/index.md)
 
 ### External Dependencies
 
 - Microsoft Agent Framework
+- Microsoft.Extensions.AI
