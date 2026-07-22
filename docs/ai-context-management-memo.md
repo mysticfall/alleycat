@@ -16,8 +16,8 @@ log. It is explanatory only; the linked specifications are authoritative.
 
 - [AI-001](../specs/ai/001-mind/index.md) defines observation representation, Mind-owned ingestion, contextual
   importance, scheduling, interruption, and node lifetime.
-- [AI-002](../specs/ai/002-agent-runtime/index.md) defines fresh sessions, tool loops, standard tool results, and typed
-  end of turn.
+- [AI-002](../specs/ai/002-agent-runtime/index.md) defines bounded tool-only turns, transient request replay, provider
+  transport, standard action results, and the synthetic `end_turn` marker.
 - [AI-003](../specs/ai/003-prompt-api/index.md) defines complete timeline rendering and actor-relative observed speech.
 - [BODY-006](../specs/body/006-voice/index.md) defines FIFO speech admission, serial production, and voice teardown.
 - [CTX-001](../specs/context/001-contextual-information-api/index.md) defines non-AI-specific contextual data and scene
@@ -36,9 +36,9 @@ log. It is explanatory only; the linked specifications are authoritative.
    maximum wait; no source receives a separate scheduling exemption.
 5. Every turn receives a complete immutable timeline snapshot in ordinary prompt render context.
 6. The prompt stack is compiled and rendered each turn into the sole system instruction.
-7. Every turn uses a fresh Agent Framework agent and session. No prior transcript, observation-summary user message, or
+7. Every turn uses a fresh tool-only provider loop. No prior transcript, observation-summary message, response ID, or
    raw assistant/tool protocol crosses turn boundaries.
-8. The active function-calling loop keeps one instruction snapshot. New observations remain recorded for the next turn.
+8. The active loop keeps one instruction snapshot. New observations remain recorded for the next turn.
 9. Every tool returns `AgentToolResult` with an optional model-facing message and ordered observations. The common
    wrapper validates the complete result, asks Mind to ingest observations atomically, and returns only the message.
 10. Mind owns mutation and actor stamping. Tools have no public observation recorder or sink and do not mutate Mind
@@ -47,6 +47,25 @@ log. It is explanatory only; the linked specifications are authoritative.
     settle before exactly one fresh replacement starts, with no turn overlap.
 12. Committed events survive interruption. Multiple qualifying arrivals coalesce, and disable or node exit suppresses
     unsafe replacement.
+
+## Tool-Only Turn Protocol
+
+- The explicit tool-only loop is the permanent production route, not a diagnostic alternative to a generic typed
+  terminal-result path.
+- Every request requires at least one tool call and carries all configured actions plus reserved synthetic `end_turn`.
+- `end_turn` is neither an action nor an observation. It is valid only as the sole call in a response and is never
+  invoked locally.
+- A zero-action turn returns `end_turn` first. Valid action calls execute serially, then another request replays the
+  complete transient turn history until sole `end_turn` is returned.
+- `AllowMultipleToolCalls` is configurable and defaults to `false`, but local validation accepts valid all-action
+  batches and executes them serially.
+- Assistant text, malformed or unknown content, mixed action and `end_turn` calls, tool errors, and exhausted request or
+  action bounds fail closed without model repair or automatic retry.
+- `MaxModelRequests` and `MaxToolActions` have normative defaults of `8`. They may remain constants until a settings
+  surface is exposed; an exposed surface keeps the names, positive-integer validation, and defaults.
+- OpenAI Responses is the default transport. Each request uses `store: false`, omits `previous_response_id`, and fully
+  replays transient history. Chat Completions is available only as an explicitly selected rollback transport.
+- No provider `response_format`, ordinary assistant text, or generic typed terminal result completes a turn.
 
 ## Context-Layer Boundaries
 
@@ -115,10 +134,11 @@ The current timeline is complete and unbounded for the Mind node's lifetime. The
 A future design may investigate metadata such as source, salience, freshness, or context kind. These names are
 provisional and must not become implementation requirements without an approved specification update.
 
-## Microsoft Agent Framework Findings
+## Provider History Findings
 
-Framework history providers can store message sequences and tool protocol in session state. Those capabilities do not
-change the approved architecture: each turn uses a fresh session, and completed framework history is discarded.
+Provider and framework abstractions can retain message sequences, tool protocol, or response identifiers. Those
+capabilities do not change the approved architecture: only the active turn may retain protocol history, and Responses
+receives a complete replay rather than stored state or `previous_response_id` chaining.
 
 ## Remaining Open Questions
 

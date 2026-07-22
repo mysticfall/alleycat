@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json.Serialization;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Core.Logging;
@@ -11,7 +10,6 @@ using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using Godot;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -26,8 +24,6 @@ namespace AlleyCat.Mind.AI;
 [GlobalClass]
 public partial class AgenticMind : MindBase, IServiceProvider
 {
-    internal const string AgentDescription = "Character mind for in-world actions.";
-
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
@@ -52,7 +48,16 @@ public partial class AgenticMind : MindBase, IServiceProvider
     public ClientProvider? ClientProvider { get; set; } = new OpenAIClientProvider();
 
     /// <summary>
-    /// Editor-authored Agent Framework tools resolved for each turn.
+    /// Allows the provider to return several action calls in one response.
+    /// </summary>
+    [Export]
+    public bool AllowMultipleToolCalls
+    {
+        get; set;
+    }
+
+    /// <summary>
+    /// Editor-authored action tools resolved for each turn.
     /// </summary>
     [ExportGroup("Tools")]
     [Export]
@@ -152,35 +157,24 @@ public partial class AgenticMind : MindBase, IServiceProvider
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
         IReadOnlyDictionary<string, object?> renderContext = CreateSystemInstructionContext(character, scene, timeline);
         string instructions = RenderSystemInstruction(template, renderContext);
-        (string name, string description) = CreateAgentMetadata(character);
-
         TurnInvocationServices invocationServices = new(this, character, Voice);
-        ChatClientAgentRunOptions options = new(new ChatOptions
-        {
-            Tools = CreateTurnTools(invocationServices),
-        });
+        List<AITool> turnTools = CreateTurnTools(invocationServices);
 
-        // ChatClientAgent 1.8.0 exposes this typed no-message overload directly. Keeping the
-        // concrete type avoids diagnostics wrappers obscuring the package's typed API.
         IChatClient chatClient = AIChatClientDiagnostics.Decorate(
             clientProvider.CreateChatClient(),
             _diagnosticsSettingsLoader(),
             GameLoggerResolver.ResolveFactoryRequired);
-        ChatClientAgent agent = chatClient.AsAIAgent(
-            instructions: instructions,
-            name: name,
-            description: description);
-        Stopwatch sessionStopwatch = AIPipelineDebugLog.StartTimer();
-        AgentSession session = await agent.CreateSessionAsync(cancellationToken);
-        AIPipelineDebugLog.Latency("LLM session created in", sessionStopwatch);
-
+        ILogger<AgenticMind> logger = GameLoggerResolver.ResolveRequired<AgenticMind>();
         Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
         try
         {
-            _ = await agent.RunAsync<EndTurnResult>(
-                session,
-                serializerOptions: null,
-                options,
+            await ToolOnlyTurnRunner.RunAsync(
+                chatClient,
+                instructions,
+                clientProvider.CreateRunMessages(),
+                turnTools,
+                AllowMultipleToolCalls,
+                logger,
                 cancellationToken);
         }
         finally
@@ -204,12 +198,6 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
 
         return tools;
-    }
-
-    internal static (string Name, string Description) CreateAgentMetadata(ICharacter character)
-    {
-        ArgumentNullException.ThrowIfNull(character);
-        return (character.Id, AgentDescription);
     }
 
     internal static IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(
@@ -241,7 +229,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
         return new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            ["character"] = owningCharacterContext!,
+            ["character"] = owningCharacterContext,
             ["characters"] = characterContexts,
             [EventHistoryPromptSection.ObservationsContextKey] = observations ?? [],
         };
@@ -501,10 +489,5 @@ public partial class AgenticMind : MindBase, IServiceProvider
             _cancellation.Dispose();
         }
     }
-}
 
-/// <summary>
-/// Closed, property-free result that marks successful completion of an agent turn.
-/// </summary>
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record EndTurnResult;
+}

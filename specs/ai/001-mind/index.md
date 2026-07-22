@@ -8,11 +8,11 @@ title: Mind Component
 ## Requirement
 
 The system must provide a Mind component that records an NPC's subjective observations in order and schedules
-stateless agent turns through one contextual-importance pipeline.
+stateless provider turns through one contextual-importance pipeline.
 
 ## Goal
 
-Give NPCs coherent node-lifetime experience without treating Agent Framework transcripts as memory, while preserving
+Give NPCs coherent node-lifetime experience without treating transient provider protocol as memory, while preserving
 responsive and interruption-safe in-world behaviour.
 
 ## User Requirements
@@ -33,6 +33,8 @@ responsive and interruption-safe in-world behaviour.
 9. Missing configuration and backend failures must be contained and logged without crashing the scene.
 10. Removing an NPC's Mind from the scene must prevent delayed actions, replacement responses, and other
     post-destruction effects from that Mind.
+11. A turn must end through protocol control rather than ordinary assistant text, and invalid output must not trigger a
+    model repair attempt or automatic retry.
 
 ## Technical Requirements
 
@@ -78,7 +80,7 @@ responsive and interruption-safe in-world behaviour.
 18. Mind must atomically ingest each ordered observation batch produced by a tool result. Validation failure must append
     none of the batch to either timeline or pending state.
 19. Mind must expose immutable, atomic timeline snapshots while keeping mutable timeline storage private. Each turn must
-    render the complete, unbounded snapshot; framework history must not provide cross-turn memory.
+    render the complete, unbounded snapshot; transient provider request history must not provide cross-turn memory.
 20. Observations received before `_Ready()` must become schedulable when scheduling is available.
 21. AgenticMind must execute each turn through [AI-002](../002-agent-runtime/index.md) and render it through
     [AI-003](../003-prompt-api/index.md).
@@ -95,6 +97,11 @@ responsive and interruption-safe in-world behaviour.
 26. Voice-ID matching is configured, operational attribution rather than authenticated provenance. A source that
     presents another character's voice ID can therefore be attributed to that character; same-ID spoofing is an accepted
     limitation of this model.
+27. AI-002's action calls and synthetic `end_turn` marker must remain transient turn protocol. `end_turn` must never
+    become an action result or timeline observation, while successfully committed action observations must use the
+    ordinary Mind ingestion path.
+28. A failed tool-only turn must settle through the existing containment path without model repair or automatic retry.
+    Any observations committed by earlier successful actions in that turn must remain in timeline order.
 
 ## In Scope
 
@@ -104,7 +111,8 @@ responsive and interruption-safe in-world behaviour.
 - Threshold, maximum-wait, minimum-interval, disable, and active-turn interruption behaviour.
 - Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
 - AgenticMind orchestration through AI-002 and AI-003.
-- Irreversible node-lifetime shutdown of scheduling, agent, tool, and deferred action work.
+- Tool-only turn settlement without assistant-text completion or synthetic-marker observations.
+- Irreversible node-lifetime shutdown of scheduling, provider requests, tools, and deferred action work.
 
 ## Out Of Scope
 
@@ -137,8 +145,8 @@ responsive and interruption-safe in-world behaviour.
    erroneous failure diagnostics.
 9. Tests verify Mind stamps tool-produced actors, prevents spoofing, atomically ingests ordered batches, and exposes no
    public observation recorder, sink, or timeline-only path.
-10. A later turn's sole system instruction reflects the complete ordered timeline without carrying forward framework
-    transcripts or observation-summary messages.
+10. A later turn's sole system instruction reflects the complete ordered timeline without carrying forward transient
+    provider transcripts or observation-summary messages.
 11. Missing configuration and genuine backend failures are logged and contained without crashing the scene.
 12. After tree exit, tests verify no new intake, delayed action, replacement turn, timer, or node-service access occurs.
 13. Tests verify `source.Id` is captured as `VoiceId` and compared ordinally with every current-scene character's
@@ -147,7 +155,9 @@ responsive and interruption-safe in-world behaviour.
     character's exact case-sensitive `Character.Id`, and multiple exact matches fail clearly without choosing an actor.
 15. Tests verify same-ID spoofing follows the configured attribution, while `ActorId` and nullable `VoiceId` remain
     separate and rendered speech history never exposes `VoiceId` as identity wording or authenticated provenance.
-16. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
+16. Tests verify AI-002's `end_turn` marker never enters Mind, invalid output causes no model repair or automatic retry,
+    and observations from actions committed before a later turn failure remain in timeline order.
+17. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
     ingestion, speaker-attribution, scheduling, interruption, cancellation, and lifetime contracts.
 
 ## References

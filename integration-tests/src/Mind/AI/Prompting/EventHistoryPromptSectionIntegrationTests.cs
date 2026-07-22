@@ -17,6 +17,33 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 public sealed class EventHistoryPromptSectionIntegrationTests
 {
     private const string GenericPromptPath = "res://assets/characters/prompts/generic_npc_prompt_stack.tres";
+    private const string StrictToolOnlyGuidance =
+        "Use `end_turn` exactly as the reserved argument-free non-action marker. "
+        + "It is valid alone after zero or more actions. "
+        + "Action tools such as `speak` are optional and do not end the turn. "
+        + "Ordinary text is invalid.";
+
+    /// <summary>
+    /// The shared prompt renders exact strict tool-only protocol guidance without legacy terminal-result wording.
+    /// </summary>
+    [Fact]
+    public async Task ProductionPromptResource_RendersStrictToolOnlyProtocolGuidance()
+    {
+        PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
+        TextPromptSection section = Assert.IsType<TextPromptSection>(stack.Sections[0], exactMatch: false);
+        string source = await section.GetContentAsync(CreateBuildContext());
+        ITemplate template = new HandlebarsTemplateCompiler().Compile(source);
+
+        string output = template.Render(new Dictionary<string, object?>
+        {
+            ["character"] = new Dictionary<string, object?> { ["Id"] = "test-character" },
+        });
+
+        Assert.Contains(StrictToolOnlyGuidance, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("required end-of-turn result", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("terminal result", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("terminal response", output, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// The production prompt asset owns exactly one unified speech fragment with safe actor-relative output.

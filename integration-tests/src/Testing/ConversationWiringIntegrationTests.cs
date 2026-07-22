@@ -69,7 +69,7 @@ public sealed class ConversationWiringIntegrationTests
             string prompt = Assert.Single(client.Prompts);
             Assert.Contains("You are conversation-npc", prompt, StringComparison.Ordinal);
             Assert.Contains("Heard conversation-player say: hello reference friend", prompt, StringComparison.Ordinal);
-            Assert.Equal(["speak"], client.ToolNamesByRun);
+            Assert.Equal(["speak", ToolOnlyTurnRunner.EndTurnToolName], client.ToolNamesByRun);
         }
         finally
         {
@@ -201,7 +201,12 @@ public sealed class ConversationWiringIntegrationTests
             Assert.False(string.IsNullOrWhiteSpace(options.Instructions));
             Prompts.Add(options.Instructions);
             ToolNamesByRun.AddRange(options?.Tools?.Select(tool => tool.Name) ?? []);
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}")));
+            return Task.FromResult(new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent(
+                    "end-call",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>())])));
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(

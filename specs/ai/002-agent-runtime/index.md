@@ -7,161 +7,213 @@ title: Agent Runtime
 
 ## Requirement
 
-The system must execute each Mind turn as a fresh, stateless Agent Framework session whose tools return one standard
-result envelope for Mind-owned observation ingestion.
+The system must execute each Mind turn through a bounded, tool-only request sequence whose successful actions return
+standard results for Mind-owned observation ingestion.
 
 ## Goal
 
-Keep framework protocol transient while allowing agents to perform real-time actions whose committed effects become
-ordered subjective observations without granting tools direct mutation access to Mind.
+Let NPCs take real-time in-world actions while keeping provider protocol transient, turn completion explicit, and
+failures contained without treating assistant text or provider history as character memory.
 
 ## User Requirements
 
-1. An NPC may perform zero or more actions during one turn and may repeat an action when appropriate.
-2. Speaking must be optional and must not complete the current turn.
-3. Successful actions that matter to the NPC's experience must be available to later turns as self-observations.
-4. Failed, cancelled, or invalid actions must not be remembered as successful events.
-5. Tool feedback needed by the active model may remain transient and must not become player-visible chat or durable
+1. An NPC may take zero actions, one action, or multiple actions during one turn and may repeat an action when
+   appropriate.
+2. `speak` must be an optional in-world action and must not end the turn.
+3. A turn with no actions must end directly without producing player-visible assistant text.
+4. Successful actions that matter to the NPC's experience must be available to later turns as self-observations.
+5. Failed, cancelled, malformed, or invalid actions must not be remembered as successful events.
+6. Tool feedback needed during the active turn may remain transient and must not become player-visible chat or durable
    character memory by default.
-6. Voice availability must constrain speech only, not whether the NPC can run a turn or use other actions.
-7. An enabled high-importance interruption must cancel the active response as expected pre-emption, then produce one
-   fresh replacement only after active invocation and action work settle.
-8. Removing an NPC's Mind from the scene must not allow active or queued actions to produce delayed in-world effects.
-9. During development, developers can inspect the request and response for every underlying LLM invocation in a turn,
-   including intermediate invocations in a tool loop, when explicitly enabled.
-10. Sensitive AI request and response detail must remain suppressed unless both dedicated diagnostics controls permit
+7. Voice availability must constrain speech only, not whether the NPC can run a turn or use other actions.
+8. Invalid model output, unknown calls, action failures, backend failures, and exhausted safety bounds must stop the
+   turn safely without a model repair attempt or automatic retry.
+9. An enabled high-importance interruption must cancel the active turn as expected pre-emption, then produce one fresh
+   replacement only after active request and action work settle.
+10. Removing an NPC's Mind from the scene must not allow active or queued actions to produce delayed in-world effects.
+11. Every action configured for a turn must remain available while the NPC decides how to complete that turn.
+12. During development, developers can inspect `LoggingChatClient` request and response representations at the
+    Microsoft.Extensions.AI abstraction for every model request when explicitly enabled. These diagnostics do not
+    promise complete HTTP wire bodies.
+13. Sensitive AI request and response detail must remain suppressed unless both dedicated diagnostics controls permit
     it, without changing NPC behaviour.
 
 ## Technical Requirements
 
-1. AgenticMind must create and configure a fresh Agent Framework agent and session for every turn. It must not cache an
-   agent, session, first-turn prompt snapshot, or completed assistant/tool transcript across turns.
+1. AgenticMind must create a fresh provider client execution context for every turn. It must not retain an agent,
+   provider response identifier, completed assistant/tool transcript, or first-turn prompt snapshot across turns.
 2. At turn start, AgenticMind must resolve the current scene and owning character, compile and render the configured
-   `PromptStack`, create the fresh agent and session, and invoke the typed no-input run for `EndTurnResult`.
-3. The rendered prompt stack must be the sole system instruction. No prior transcript or per-batch observation-summary
-   user message may cross turn boundaries.
-4. A turn must preserve exactly one rendered instruction snapshot throughout its active function-calling loop.
-   Observations arriving mid-turn remain recorded by Mind but do not alter the active snapshot.
-5. A turn may execute an arbitrary sequence of zero or more tool calls before end of turn. No action, including `speak`,
-   may implicitly complete the turn.
-6. The only accepted final non-tool output is a typed, closed `EndTurnResult`. Its initial schema is property-free, and
-   successful deserialisation marks end of turn.
-7. Every `AgentTool` delegate must return the standard `AgentToolResult`, containing an optional model-facing `Message`
-   and an ordered observation collection. A null message and an empty collection are valid.
-8. The common `AgentTool` wrapper must await and validate the complete result before exposing any part of it. It must
-   ask the owning Mind to atomically ingest the ordered observations, then return only `Message` to Agent Framework.
-9. Mind owns all observation mutation. Tool invocation services must expose the owning Mind boundary and
-   action-specific capabilities, but must not expose a public observation recorder or sink.
-10. Tools must not mutate Mind directly. Tool-result ingestion must stamp every `ObservedAction` with the owning
+   `PromptStack`, resolve the current action tools, and start one explicit tool-only request loop.
+3. The rendered prompt stack must remain the turn's sole system instruction. Provider-required bootstrap input may be
+   sent, but no prior transcript or per-batch observation-summary message may cross turn boundaries.
+4. Every model request in the loop must require at least one tool call and must send no provider `response_format` or
+   equivalent terminal-output schema. Ordinary assistant text is never an accepted turn result.
+5. The runtime must register every configured production action plus the exact reserved synthetic marker `end_turn` on
+   every request. A configured action must not use the reserved name.
+6. `end_turn` is protocol control, not an action, action result, or observation. It must accept no arguments, must never
+   invoke a production tool delegate, and must never be ingested by Mind.
+7. A response containing `end_turn` is valid only when it contains exactly that one call and no ordinary assistant text
+   or other callable protocol content. The sole marker completes the turn without another provider request.
+8. A response without `end_turn` is valid only when it contains one or more well-formed calls to configured production
+   actions and no ordinary assistant text, unknown content, unknown tool, duplicate call identifier, or other malformed
+   item.
+9. Zero actions must therefore be represented by `end_turn` in the first response. One or more actions must be followed
+   by a later sequential request whose valid response either supplies more actions or the sole `end_turn` marker.
+10. The runtime must validate a complete response batch before invoking any call in that batch. Valid all-action batches
+    must be supported locally and their calls must execute serially in provider order.
+11. `AllowMultipleToolCalls` must be a configurable runtime or provider preference and must default to `false`. It may
+    guide provider generation but must not make an otherwise valid multi-action batch fail local validation.
+12. After each successful all-action batch, the runtime must append the assistant function calls and corresponding tool
+    results to transient per-turn history, then issue the next request by replaying the complete history in order.
+13. Transient request history must be discarded when the turn settles. The Mind timeline under
+    [AI-001](../001-mind/index.md) is the only cross-turn memory.
+14. The runtime must enforce the named bounds `MaxModelRequests` and `MaxToolActions`, with normative defaults of `8`
+    requests and `8` production actions per turn. These may remain constants when no settings surface exists. If
+    exposed, both bounds must be configurable positive integers with the stated defaults.
+15. `MaxModelRequests` counts every provider request, including the request that returns `end_turn`.
+    `MaxToolActions` counts production action calls but not `end_turn`.
+16. A batch that would exceed `MaxToolActions` must fail before any call in that batch executes. Reaching
+    `MaxModelRequests` without a valid `end_turn` must fail once another request would be required.
+17. Malformed output, assistant text, unknown content or tools, mixed `end_turn` and action calls, invalid arguments,
+    duplicate call identifiers, tool errors, and bound exhaustion must fail closed. The runtime must not ask the model
+    to repair output, retry the failed request or action, or continue the turn.
+18. Valid sequential requests after successful actions are protocol continuation, not repair or retry. Actions and
+    observations committed before a later failure or pre-emption remain committed.
+19. Every `AgentTool` delegate must return the standard `AgentToolResult`, containing an optional model-facing `Message`
+    and an ordered observation collection. A null message and an empty collection are valid.
+20. The common `AgentTool` wrapper must await and validate the complete result before exposing any part of it. It must
+    ask the owning Mind to atomically ingest the ordered observations, then return only `Message` as the tool result.
+21. Mind owns all observation mutation. Tool invocation services must expose the owning Mind boundary and
+    action-specific capabilities, but must not expose a public observation recorder or sink.
+22. Tools must not mutate Mind directly. Tool-result ingestion must stamp every `ObservedAction` with the owning
     character's exact actor ID before contextual importance is calculated, preventing actor spoofing.
-11. A throwing, cancelled, malformed, wrong-shaped, or otherwise invalid tool result must contribute no observations.
-    Batch validation and ingestion must be all-or-nothing and preserve authored result order.
-12. Only the optional `AgentToolResult.Message` may reach the active framework tool loop. Structured envelopes and
-    observations must not be exposed to the model or retained as cross-turn framework protocol.
-13. `SpeechTool` must:
+23. A throwing, cancelled, malformed, wrong-shaped, or otherwise invalid tool result must contribute no observations.
+    Validation and ingestion of that tool's observation batch must be all-or-nothing and preserve authored order.
+24. Only the optional `AgentToolResult.Message` may enter transient per-turn tool protocol. Structured envelopes and
+    observations must not be exposed to the model or retained as cross-turn protocol.
+25. `SpeechTool` must:
     - reject blank input through the voice contract without producing a result observation;
     - await successful admission through the configured character-owned `IVoice.SpeakAsync(...)`;
     - return exactly one actorless `ObservedSpeech` in its `AgentToolResult` after admission; and
     - optionally return a transient model-facing acknowledgement.
-14. Speech admission, not playback completion, is the successful tool-action boundary. Failure or cancellation before
+26. Speech admission, not playback completion, is the successful tool-action boundary. Failure or cancellation before
     admission must produce no observed speech.
-15. The configured output voice must remain excluded from external listening so dispatched self-speech is not recorded
+27. The configured output voice must remain excluded from external listening so dispatched self-speech is not recorded
     a second time as perceived speech.
-16. Voice is a SpeechTool capability and must not be a generic AgenticMind runtime prerequisite.
-17. Development-only request and response diagnostics must require both
+28. Voice is a `SpeechTool` capability and must not be a generic AgenticMind runtime prerequisite.
+29. OpenAI Responses must be the default provider transport. Every Responses request must be stateless, set `store` to
+    `false`, omit `previous_response_id`, and replay the complete ordered per-turn history instead.
+30. OpenAI Chat Completions may remain only as an explicitly selected rollback transport. The runtime must not fall back
+    to it automatically, and it must preserve the same tool-only validation, ordering, bounds, and failure semantics.
+31. Development-only Microsoft.Extensions.AI request and response diagnostics must require both
     `Diagnostics:AI:EnableRequestResponseLogging` and the dedicated
     `Microsoft.Extensions.AI.LoggingChatClient` category enabled at `Trace`. Either control being disabled must
     suppress sensitive payload detail.
-18. The runtime must decorate the AI `IChatClient` with Microsoft.Extensions.AI `LoggingChatClient` before adapting it
-    with `AsAIAgent`. This placement must observe every underlying invocation, including intermediate tool-loop calls.
-19. Request and response payload serialisation must be deferred until the complete diagnostics gate in requirement 17
-    is satisfied. Levels below `Trace` must not serialise sensitive payload detail. CORE-007 is normative for the
-    reusable third-party logging and deferred sensitive-serialisation contract.
-20. AI request and response diagnostics must not use shared `System.ClientModel` body logging. Their scope must remain
-    the agent-runtime chat client so speech transcription and generation traffic is unaffected.
-21. Request and response diagnostics may observe a turn but must not change invocation count, tool iteration, tool
-    results, cancellation, completion, or end-of-turn behaviour.
-22. Backend or malformed-end-result failures must remain contained and logged. Automatic retry and backoff behaviour is
-    not defined by this specification.
-23. High-importance pre-emption under [AI-001](../001-mind/index.md) must cancel the active invocation as expected
-    cancellation. Invocation and tool work must settle before exactly one replacement can start, and turns must not
-    overlap.
-24. Actions and tool observations committed before pre-emption must remain committed. Cancellation does not reverse
-    admitted actions.
-25. Node-lifetime cancellation from AI-001 must propagate through active invocation and tool work. Expected pre-emption
+32. The runtime must decorate its AI `IChatClient` with Microsoft.Extensions.AI `LoggingChatClient` before the tool-only
+    loop. This placement must observe every sequential provider request in a turn.
+33. `LoggingChatClient` diagnostics represent requests and responses at the Microsoft.Extensions.AI abstraction and must
+    not be described as complete HTTP wire-body capture. Serialisation must be deferred until the complete diagnostics
+    gate in requirement 31 is satisfied. CORE-007 is normative for reusable logging and deferred serialisation.
+34. AI request and response diagnostics must not use shared `System.ClientModel` body logging. Their scope must remain
+    the agent-runtime client so speech transcription and generation traffic is unaffected.
+35. Diagnostics must not change request count, tool calls, results, cancellation, actions, completion, validation, or
+    failure behaviour.
+36. High-importance pre-emption under AI-001 must cancel the active request loop as expected cancellation. Request and
+    tool work must settle before exactly one replacement can start, and turns must not overlap.
+37. Node-lifetime cancellation from AI-001 must propagate through active requests and tool work. Expected pre-emption
     and lifetime cancellation must not trigger retry, another unintended turn, or misleading failure diagnostics.
-26. Queued or deferred action tasks must settle when Mind exits, without dispatch or successful observation. Deferred
+38. Queued or deferred action tasks must settle when Mind exits, without dispatch or successful observation. Deferred
     callbacks must not access services from the exited node.
-27. AI-001 is normative for node lifetime, actor stamping, atomic ingestion, scheduling, and interruption. AI-003 is
+39. AI-001 is normative for node lifetime, actor stamping, atomic ingestion, scheduling, and interruption. AI-003 is
     normative for per-turn prompt compilation and event-history rendering.
+40. Development-only structural transport evidence may report configured tool names, required tool choice,
+    `AllowMultipleToolCalls`, and response-format absence when explicitly gated. It must exclude message bodies,
+    generated content, credentials, and other secrets and must not be presented as complete wire logging.
+41. The explicit tool-only loop must be the sole production turn route, not a diagnostic or feature-gated alternative.
+    No legacy framework-managed generic terminal-result route may remain selectable.
 
 ## In Scope
 
-- Fresh Agent Framework agent and session creation for each turn.
-- Typed no-input invocation and closed, initially empty `EndTurnResult` completion.
-- Arbitrary zero-or-more tool iterations before end of turn.
+- Permanent production use of fresh, bounded tool-only execution for every turn.
+- Zero, one, or multiple serial actions followed by the sole synthetic `end_turn` marker.
+- Required tool choice, local batch validation, transient full-history replay, and fail-closed handling.
+- Configurable multiple-call preference and named request and action bounds.
+- Responses-default stateless transport and explicitly selected Chat Completions rollback.
 - Standard `AgentToolResult` validation, projection, and atomic Mind hand-off.
-- Invocation-time action capabilities without public observation mutation services.
 - Speech admission, transient acknowledgement, and exactly-once observed-speech production.
 - Expected interruption and node-lifetime cancellation settlement.
-- Development-only, per-invocation AI request and response diagnostics with explicit sensitive-detail gating.
-- Failure containment and diagnostics that do not alter runtime semantics or speech service logging.
+- Development-only MEAI diagnostics and non-secret structural transport evidence with explicit gating.
 
 ## Out Of Scope
 
-- Automatic retry or backoff policy for backend or malformed-end-result failures.
-- Additional production action tools beyond speech and the generic tool-result contract.
-- Cancelling or reversing world actions already admitted before interruption.
+- Model repair, automatic retry, or backoff after backend, protocol, action, or bound failures.
+- Additional production action tools beyond speech and the generic action-result contract.
+- Cancelling or reversing world actions already admitted before interruption or a later failure.
 - Speech playback-finished success semantics.
-- Timeline compaction, persistence, and cross-turn framework transcript retention.
+- Timeline compaction, persistence, and cross-turn provider transcript retention.
 - Voice as a requirement for generic non-speech turn execution.
 - Multi-agent orchestration and guidance-agent APIs.
-- Production request and response payload logging.
+- Complete or production HTTP wire-body logging.
 
 ## Acceptance Criteria
 
-1. A turn can reach a typed `EndTurnResult` without calling any tool or producing player-visible assistant text.
-2. A turn can invoke multiple different tools or repeat tools before producing exactly one accepted typed end result;
-   calling `speak` neither completes the turn nor prevents later tools.
-3. Capturing-client tests verify every turn uses a fresh agent and session, one sole system instruction, and no prior
-   transcript or observation-summary user message.
-4. Tests verify observations arriving during an invocation appear in the next turn's reconstructed context without
-   altering the active instruction snapshot.
-5. Tool tests verify synchronous and asynchronous delegates return one `AgentToolResult`, whose null message and empty
-   or ordered multiple-observation collection are valid.
-6. Tool tests verify the common wrapper awaits and validates the result, atomically hands observations to Mind in order,
-   and exposes only the optional message to Agent Framework.
-7. Tests verify Mind stamps tool action actors with the owning character ID, prevents spoofing, and provides no public
-   observation recorder, sink, or direct tool-mutation path.
-8. Tests verify throwing, cancelled, malformed, wrong-shaped, and atomically invalid tool calls contribute no
-   observations.
-9. Speech tests verify exactly one self-relative `ObservedSpeech` after successful voice admission and none for blank,
-   unavailable, unconfigured, failed-before-admission, or cancelled requests.
-10. Speech tests verify admission does not await playback and self-listener exclusion prevents duplicate observed
+1. Tests verify a zero-action turn returns sole `end_turn` on its first response, executes no action, creates no
+   observation, and produces no accepted or player-visible assistant text.
+2. Tests verify one action followed by `end_turn`, repeated sequential action responses, and locally accepted
+   multi-action batches; all actions execute serially in provider order and `speak` never completes the turn.
+3. Tests verify every request requires a tool call, registers all configured actions plus `end_turn`, and sends no
+   provider response format or terminal schema.
+4. Tests verify `end_turn` is reserved, argument-free, never invoked, never returned as an action result, never ingested
+   as an observation, and accepted only as the sole call in its response.
+5. Tests reject empty or malformed responses, assistant text, unknown content and tools, duplicate call identifiers,
+   invalid arguments, mixed action and `end_turn` calls, and non-sole `end_turn` without executing the invalid batch.
+6. Tests verify `AllowMultipleToolCalls` is configurable and defaults to `false`, while local validation still accepts a
+   valid all-action batch and executes it serially.
+7. Tests verify successful calls and results are replayed in full on each later request, then discarded at turn end. A
+   later turn receives only its newly rendered instruction, provider bootstrap input, and Mind timeline context.
+8. Tests verify `MaxModelRequests` and `MaxToolActions` default to `8`, count requests and production actions
+   respectively, reject a batch that would exceed the action bound before execution, and stop when the request bound is
+   exhausted without `end_turn`.
+9. Tests verify malformed, unknown, text, mixed, tool-error, backend-error, and bounds failures stop without model
+   repair, request or action retry, or continued execution; earlier committed actions and observations remain committed.
+10. Responses transport tests verify it is the default and that every sequential request sets `store: false`, omits
+    `previous_response_id`, and replays complete ordered per-turn history.
+11. Configuration and transport tests verify Chat Completions is available only through explicit selection, is never an
+    automatic fallback, and preserves the tool-only protocol semantics.
+12. Tool tests verify delegates return one `AgentToolResult`; the common wrapper validates it, atomically hands ordered
+    observations to Mind, and exposes only the optional transient message as the tool result.
+13. Tests verify Mind stamps tool action actors with the owning character ID, prevents spoofing, and provides no public
+    observation recorder, sink, or direct tool-mutation path.
+14. Speech tests verify exactly one self-relative `ObservedSpeech` after successful voice admission and none for blank,
+    unavailable, unconfigured, failed-before-admission, or cancelled requests.
+15. Speech tests verify admission does not await playback and self-listener exclusion prevents duplicate observed
     speech.
-11. Interruption tests verify expected cancellation settles invocation and tools before one fresh replacement starts,
-    committed tool observations survive, and no turns overlap.
-12. A capturing client verifies that a multi-call tool loop logs the request and response for its initial, intermediate,
-    and final underlying LLM invocations only when `Diagnostics:AI:EnableRequestResponseLogging` is enabled and the
-    `Microsoft.Extensions.AI.LoggingChatClient` category is enabled at `Trace`.
-13. Suppression tests verify that disabling the AI diagnostics option while retaining `Trace`, or setting the dedicated
-    category below `Trace` while retaining the option, does not serialise sensitive request or response payload detail.
-14. Integration tests verify `LoggingChatClient` decorates the AI chat client before `AsAIAgent`, shared
-    `System.ClientModel` body logging is not used, and STT and TTS request and response logging is unaffected.
-15. Equivalent runs with diagnostics enabled and disabled preserve invocation count, tool calls and results,
-    cancellation, actions, completion, and typed end-turn semantics; genuine failures remain logged and contained.
-16. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
+16. Interruption tests verify expected cancellation settles requests and tools before one fresh replacement starts,
+    committed action observations survive, and no turns overlap.
+17. A capturing client verifies every sequential request is logged at the Microsoft.Extensions.AI abstraction only when
+    the diagnostics option and `Microsoft.Extensions.AI.LoggingChatClient` `Trace` category are both enabled.
+18. Suppression tests verify either disabled diagnostics control prevents serialisation of sensitive payload detail.
+19. Integration tests verify `LoggingChatClient` decorates the tool-only client, shared `System.ClientModel` body
+    logging is not used, and STT and TTS request and response logging is unaffected.
+20. Equivalent runs with diagnostics enabled and disabled preserve requests, tool calls, results, cancellation,
+    validation, actions, completion, and failure handling.
+21. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
     replacement, exited-node service access, or erroneous expected-cancellation diagnostics.
-17. Acceptance verifies both player- and developer-visible behaviour and the fresh-session, result-envelope,
-    atomic-ingestion, diagnostics-gating, cancellation, settlement, and typed end-of-turn contracts.
+22. Acceptance verifies both NPC-visible action and speech behaviour and the tool-only protocol, provider transport,
+    transient-history, observation-ingestion, diagnostics, cancellation, settlement, and failure contracts.
+23. Tests verify every production turn uses the explicit tool-only loop and no diagnostic flag or legacy generic
+    terminal-result route can select a competing execution path.
 
 ## References
 
 ### Implementation
 
+- `game/src/Mind/AI/AgenticMind.cs`
+- `game/src/Mind/AI/ToolOnlyTurnRunner.cs`
 - `game/src/Mind/AI/AIChatClientDiagnostics.cs`
 - `game/src/Mind/AI/AIDiagnosticsOptions.cs`
-- `game/src/Mind/AI/AgenticMind.cs`
+- `game/src/Mind/AI/Provider/ClientProvider.cs`
+- `game/src/Mind/AI/Provider/OpenAIClientProvider.cs`
 - `game/src/Mind/AI/Tool/AgentTool.cs`
 - `game/src/Mind/AI/Tool/AgentToolResult.cs`
 - `game/src/Mind/AI/Tool/SpeechTool.cs`
@@ -180,5 +232,5 @@ ordered subjective observations without granting tools direct mutation access to
 
 ### External Dependencies
 
-- Microsoft Agent Framework
 - Microsoft.Extensions.AI
+- OpenAI .NET SDK

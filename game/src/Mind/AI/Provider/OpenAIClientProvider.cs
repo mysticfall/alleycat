@@ -12,7 +12,7 @@ using OpenAI.Responses;
 namespace AlleyCat.Mind.AI.Provider;
 
 /// <summary>
-/// OpenAI client adapter used by the Agent Framework runtime.
+/// OpenAI client adapter used by the Mind runtime.
 /// </summary>
 public enum OpenAIChatClientKind
 {
@@ -28,7 +28,7 @@ public enum OpenAIChatClientKind
 }
 
 /// <summary>
-/// OpenAI-compatible chat-client provider for Agent Framework turn execution.
+/// OpenAI-compatible chat-client provider for tool-only turn execution.
 /// </summary>
 [GlobalClass]
 public partial class OpenAIClientProvider : ClientProvider
@@ -37,6 +37,9 @@ public partial class OpenAIClientProvider : ClientProvider
     private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
     private const string DefaultModel = "gpt-4o-mini";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
+    private const string ResponsesRunInput = "Process the observations in your instructions. Use the available actions as needed, then call end_turn by itself.";
+
+    internal const OpenAIChatClientKind DefaultChatClientKind = OpenAIChatClientKind.Responses;
 
     private OpenAIClientProviderSettings? _settings;
 
@@ -50,25 +53,72 @@ public partial class OpenAIClientProvider : ClientProvider
     /// OpenAI client adapter used to expose the backend as an <see cref="IChatClient" />.
     /// </summary>
     [Export]
-    public OpenAIChatClientKind ChatClientKind { get; set; } = OpenAIChatClientKind.ChatCompletions;
+    public OpenAIChatClientKind ChatClientKind { get; set; } = DefaultChatClientKind;
+
+    /// <inheritdoc />
+    public override IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> CreateRunMessages()
+        => CreateRunMessages(ChatClientKind);
 
     /// <inheritdoc />
     public override IChatClient CreateChatClient()
     {
         OpenAIClientProviderSettings settings = _settings ??= OpenAIClientProviderSettings.Load(ConfigPath);
-        return ChatClientKind switch
+        return CreateChatClient(ChatClientKind, settings);
+    }
+
+    internal static IChatClient CreateChatClient(
+        OpenAIChatClientKind chatClientKind,
+        OpenAIClientProviderSettings settings,
+        OpenAIClientOptions? clientOptions = null)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return chatClientKind switch
         {
-            OpenAIChatClientKind.ChatCompletions => settings.CreateChatClient().AsIChatClient(),
-            OpenAIChatClientKind.Responses => CreateResponsesChatClient(settings),
-            _ => throw new InvalidOperationException($"Unsupported OpenAI chat client kind '{ChatClientKind}'."),
+            OpenAIChatClientKind.ChatCompletions => settings.CreateChatClient(clientOptions).AsIChatClient(),
+            OpenAIChatClientKind.Responses => CreateResponsesChatClient(settings, clientOptions),
+            _ => throw new InvalidOperationException($"Unsupported OpenAI chat client kind '{chatClientKind}'."),
         };
     }
 
+    internal static IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> CreateRunMessages(
+        OpenAIChatClientKind chatClientKind)
+        => chatClientKind switch
+        {
+            OpenAIChatClientKind.ChatCompletions => [],
+            OpenAIChatClientKind.Responses =>
+                [new Microsoft.Extensions.AI.ChatMessage(ChatRole.User, ResponsesRunInput)],
+            _ => throw new InvalidOperationException($"Unsupported OpenAI chat client kind '{chatClientKind}'."),
+        };
+
 #pragma warning disable OPENAI001 // The OpenAI Responses APIs are experimental in the SDK.
-    private static IChatClient CreateResponsesChatClient(OpenAIClientProviderSettings settings)
+    private static IChatClient CreateResponsesChatClient(
+        OpenAIClientProviderSettings settings,
+        OpenAIClientOptions? clientOptions)
     {
-        ResponsesClient responsesClient = settings.CreateOpenAIClient().GetResponsesClient();
-        return responsesClient.AsIChatClient(settings.Model);
+        ResponsesClient responsesClient = settings.CreateOpenAIClient(clientOptions).GetResponsesClient();
+        return CreateStatelessResponsesChatClient(responsesClient, settings.Model);
+    }
+
+    internal static IChatClient CreateStatelessResponsesChatClient(
+        ResponsesClient responsesClient,
+        string model)
+    {
+        ArgumentNullException.ThrowIfNull(responsesClient);
+        ArgumentException.ThrowIfNullOrWhiteSpace(model);
+
+        return new ChatClientBuilder(responsesClient.AsIChatClient(model))
+            .ConfigureOptions(options =>
+            {
+                // Explicit raw options keep Responses stateless and force the MEAI adapter to
+                // replay supplied history rather than deriving a previous_response_id.
+                options.ConversationId = null;
+                options.RawRepresentationFactory = _ => new CreateResponseOptions
+                {
+                    PreviousResponseId = null,
+                    StoredOutputEnabled = false,
+                };
+            })
+            .Build();
     }
 #pragma warning restore OPENAI001
 
@@ -81,11 +131,11 @@ public partial class OpenAIClientProvider : ClientProvider
         public string GetApiKeyOrDefault()
             => string.IsNullOrWhiteSpace(ApiKey) ? DefaultCompatibleBackendApiKey : ApiKey.Trim();
 
-        public ChatClient CreateChatClient()
-            => new(Model, new ApiKeyCredential(GetApiKeyOrDefault()), CreateClientOptions());
+        public ChatClient CreateChatClient(OpenAIClientOptions? clientOptions = null)
+            => new(Model, new ApiKeyCredential(GetApiKeyOrDefault()), clientOptions ?? CreateClientOptions());
 
-        public OpenAIClient CreateOpenAIClient()
-            => new(new ApiKeyCredential(GetApiKeyOrDefault()), CreateClientOptions());
+        public OpenAIClient CreateOpenAIClient(OpenAIClientOptions? clientOptions = null)
+            => new(new ApiKeyCredential(GetApiKeyOrDefault()), clientOptions ?? CreateClientOptions());
 
         public Uri CreateEndpointUri()
         {

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Mind.AI;
@@ -6,7 +5,6 @@ using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -18,36 +16,6 @@ namespace AlleyCat.Tests.Mind.AI;
 /// </summary>
 public sealed class AgenticMindTests
 {
-    /// <summary>
-    /// End-of-turn output is a serialisable property-free object with no placeholder payload.
-    /// </summary>
-    [Fact]
-    public void EndTurnResult_SerialisesAsEmptyObject()
-    {
-        string json = JsonSerializer.Serialize(new EndTurnResult());
-
-        Assert.Equal("{}", json);
-        Assert.Empty(typeof(EndTurnResult).GetProperties());
-    }
-
-    /// <summary>
-    /// Agent Framework schema generation keeps the empty result closed to unknown properties.
-    /// </summary>
-    [Fact]
-    public void EndTurnResult_GeneratesClosedEmptySchema()
-    {
-        ChatResponseFormatJson format = Assert.IsType<ChatResponseFormatJson>(
-            ChatResponseFormat.ForJsonSchema<EndTurnResult>());
-        Assert.True(format.Schema.HasValue);
-        JsonElement schema = format.Schema.Value;
-        if (schema.TryGetProperty("properties", out JsonElement properties))
-        {
-            Assert.Empty(properties.EnumerateObject());
-        }
-
-        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
-    }
-
     /// <summary>
     /// Speech observations own their default scheduling significance without Mind-specific configuration.
     /// </summary>
@@ -185,24 +153,6 @@ public sealed class AgenticMindTests
 
         Assert.Contains("absent", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, sceneCharacter.ContextRequestCount);
-    }
-
-    /// <summary>
-    /// Agent Framework metadata uses exact runtime identity while keeping its description generic.
-    /// </summary>
-    [Fact]
-    public void CreateAgentMetadata_UsesExactCharacterIDAndGenericDescription()
-    {
-        FakeCharacter character = new(new Dictionary<string, object?>())
-        {
-            Id = "NPC.Mixed-Case"
-        };
-
-        (string name, string description) = AgenticMind.CreateAgentMetadata(character);
-
-        Assert.Equal("NPC.Mixed-Case", name);
-        Assert.Equal(AgenticMind.AgentDescription, description);
-        Assert.DoesNotContain("NPC.Mixed-Case", description, StringComparison.Ordinal);
     }
 
     /// <summary>

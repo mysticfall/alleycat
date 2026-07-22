@@ -78,7 +78,10 @@ control over how concrete observation types appear in chronological event histor
     an authoring policy verified for the shared NPC assets, not a generic runtime ordering restriction or type-system
     rule.
 23. Male and female NPC role templates must reference one shared generic prompt stack containing context-driven
-    identity, optional and repeatable action guidance, essential lore, character lore, then event history.
+    identity, tool-only action and `end_turn` guidance, essential lore, character lore, then event history.
+24. Shared action guidance must permit zero, one, or multiple actions, make `speak` optional and non-terminal, and
+    identify `end_turn` as the reserved non-action protocol marker. It must not request ordinary assistant text or a
+    terminal response schema.
 
 ## In Scope
 
@@ -88,6 +91,7 @@ control over how concrete observation types appear in chronological event histor
 - One actor-relative `speech.observed` fragment for every observed-speech perspective.
 - Complete per-turn observation-timeline rendering.
 - Shared generic NPC prompt-stack authoring and static-before-dynamic asset policy.
+- Tool-only action and synthetic `end_turn` guidance aligned with AI-002.
 - Default pseudo-XML prompt writer and existing templating-system integration.
 
 ## Out Of Scope
@@ -120,8 +124,8 @@ control over how concrete observation types appear in chronological event histor
    wording or proof of identity.
 10. Male and female NPC role templates use one shared prompt stack whose static instructions and lore precede event
     history; asset tests enforce this policy without imposing a generic runtime ordering restriction.
-11. Prompt guidance permits zero or more actions, does not require `speak`, and reserves final non-tool output for the
-    typed end-of-turn contract in AI-002.
+11. Prompt guidance permits zero, one, or multiple actions, makes `speak` optional and non-terminal, and reserves sole
+    `end_turn` as a non-action protocol marker without requesting assistant text or a terminal response schema.
 12. Acceptance verifies both author-visible composition behaviour and the compilation, actor-relative rendering,
     privacy, ordering, and runtime integration contracts.
 

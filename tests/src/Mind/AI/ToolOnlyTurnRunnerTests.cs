@@ -1,0 +1,544 @@
+using AlleyCat.Mind.AI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+
+namespace AlleyCat.Tests.Mind.AI;
+
+/// <summary>
+/// Tests the production tool-only protocol without a network backend.
+/// </summary>
+public sealed class ToolOnlyTurnRunnerTests
+{
+    private const string Instructions = "Private test instructions.";
+    private const string SpeakToolName = "speak";
+
+    /// <summary>
+    /// A sole end marker terminates without invocation or another request.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithImmediateEndTurn_StopsAfterOneRequest()
+    {
+        var client = new ScriptedChatClient(CreateCall("end", ToolOnlyTurnRunner.EndTurnToolName));
+        AIFunction speak = CreateSpeakFunction(_ => throw new Xunit.Sdk.XunitException("Speak must not run."));
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [new ChatMessage(ChatRole.User, "Run input.")],
+            [speak],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// A speak result is correlated into exact response replay before a later end marker.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithSpeakThenEnd_ReplaysCallAndResultAndUsesFreshRequiredOptions()
+    {
+        ChatMessage speakResponse = CreateCall(
+            "speak-call",
+            SpeakToolName,
+            new Dictionary<string, object?> { ["speech"] = "Hello" });
+        var client = new ScriptedChatClient(
+            speakResponse,
+            CreateCall("end-call", ToolOnlyTurnRunner.EndTurnToolName));
+        List<string> speech = [];
+        AIFunction speak = CreateSpeakFunction(speech.Add);
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [new ChatMessage(ChatRole.User, "Run input.")],
+            [speak],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["Hello"], speech);
+        Assert.Equal(2, client.Requests.Count);
+        Assert.NotSame(client.Options[0], client.Options[1]);
+        foreach (ChatOptions options in client.Options)
+        {
+            Assert.Equal(Instructions, options.Instructions);
+            RequiredChatToolMode toolMode = Assert.IsType<RequiredChatToolMode>(options.ToolMode);
+            Assert.Null(toolMode.RequiredFunctionName);
+            Assert.False(options.AllowMultipleToolCalls);
+            Assert.Null(options.ResponseFormat);
+            IList<AITool> tools = Assert.IsAssignableFrom<IList<AITool>>(options.Tools);
+            Assert.Equal(
+                [SpeakToolName, ToolOnlyTurnRunner.EndTurnToolName],
+                tools.Cast<AIFunction>().Select(tool => tool.Name));
+            Assert.Same(speak, tools[0]);
+        }
+
+        IReadOnlyList<ChatMessage> replay = client.Requests[1];
+        Assert.Same(speakResponse, replay[1]);
+        FunctionResultContent result = Assert.IsType<FunctionResultContent>(Assert.Single(replay[2].Contents));
+        Assert.Equal("speak-call", result.CallId);
+    }
+
+    /// <summary>
+    /// A valid multi-action batch is accepted locally and executes serially regardless of the provider preference.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_WithMultiActionBatch_ExecutesAllConfiguredActionsInOrder(
+        bool allowMultipleToolCalls)
+    {
+        List<string> actions = [];
+        AIFunction first = AIFunctionFactory.Create(
+            () => actions.Add("first"),
+            "first_action");
+        AIFunction second = AIFunctionFactory.Create(
+            (int count) => actions.Add($"second:{count}"),
+            "second_action");
+        ChatMessage batch = new(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent("first-call", "first_action", new Dictionary<string, object?>()),
+                new FunctionCallContent(
+                    "second-call",
+                    "second_action",
+                    new Dictionary<string, object?> { ["count"] = 2 }),
+            ]);
+        var client = new ScriptedChatClient(
+            batch,
+            CreateCall("end-call", ToolOnlyTurnRunner.EndTurnToolName));
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [first, second],
+            allowMultipleToolCalls,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["first", "second:2"], actions);
+        Assert.All(client.Options, options => Assert.Equal(allowMultipleToolCalls, options.AllowMultipleToolCalls));
+        Assert.Equal(2, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// Invalid output is rejected as a whole before any valid-looking call can cause effects.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(InvalidResponses))]
+    public async Task RunAsync_WithInvalidResponse_RejectsWithoutEffects(ChatResponse response)
+    {
+        int invocationCount = 0;
+        var client = new ScriptedChatClient(response);
+
+        _ = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => invocationCount++)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Equal(0, invocationCount);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Any non-function content invalidates the complete response before a valid call can cause effects.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(NonFunctionContents))]
+    public async Task RunAsync_WithNonFunctionContent_RejectsWholeResponseWithoutEffects(AIContent content)
+    {
+        int invocationCount = 0;
+        var response = new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "valid-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Must not run" }),
+                content,
+            ]));
+        var client = new ScriptedChatClient(response);
+
+        _ = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => invocationCount++)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Equal(0, invocationCount);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Caller cancellation is propagated rather than converted into a protocol failure.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WhenRequestIsCancelled_PropagatesCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var client = new ScriptedChatClient(CreateCall("unused", ToolOnlyTurnRunner.EndTurnToolName));
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => { })],
+            false,
+            NullLogger.Instance,
+            cancellation.Token));
+
+        Assert.Empty(client.Requests);
+    }
+
+    /// <summary>
+    /// A production action failure stops the loop without a repair request.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WhenSpeakFails_DoesNotRetry()
+    {
+        var client = new ScriptedChatClient(CreateCall(
+            "speak-call",
+            SpeakToolName,
+            new Dictionary<string, object?> { ["speech"] = "Hello" }));
+        AIFunction speak = AIFunctionFactory.Create(
+            ThrowingSpeak,
+            SpeakToolName);
+
+        ToolOnlyTurnException error = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [speak],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Equal("A tool-only action failed.", error.Message);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Call identifiers remain unique across the complete transient turn history.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithCallIDRepeatedOnLaterResponse_StopsWithoutSecondEffect()
+    {
+        var client = new ScriptedChatClient(
+            CreateCall(
+                "repeated-call",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "First" }),
+            CreateCall(
+                "repeated-call",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Second" }));
+        List<string> speech = [];
+
+        _ = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(speech.Add)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Equal(["First"], speech);
+        Assert.Equal(2, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// Repeated valid actions cannot exceed the named model-request bound.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithOnlySpeakCalls_FailsAtRequestBound()
+    {
+        ChatResponse[] responses = [.. Enumerable.Range(0, ToolOnlyTurnRunner.MaxModelRequests)
+            .Select(index => new ChatResponse(CreateCall(
+                $"call-{index}",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Hello" })) )];
+        var client = new ScriptedChatClient(responses);
+        int invocationCount = 0;
+
+        ToolOnlyTurnException error = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => invocationCount++)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Contains("model-request limit", error.Message, StringComparison.Ordinal);
+        Assert.Equal(ToolOnlyTurnRunner.MaxModelRequests, invocationCount);
+        Assert.Equal(ToolOnlyTurnRunner.MaxModelRequests, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// An oversized response is rejected before any action crosses the total-action bound.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithTooManySpeakCalls_FailsAtActionBoundWithoutEffects()
+    {
+        List<AIContent> calls = [.. Enumerable.Range(0, ToolOnlyTurnRunner.MaxToolActions + 1)
+            .Select(index => (AIContent)new FunctionCallContent(
+                $"call-{index}",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Hello" }))];
+        var client = new ScriptedChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)));
+        int invocationCount = 0;
+
+        ToolOnlyTurnException error = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => invocationCount++)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Contains("action limit", error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, invocationCount);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Reserved names and duplicate production declarations are rejected before any request.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithReservedOrDuplicateProductionTools_RejectsBeforeRequest()
+    {
+        var client = new ScriptedChatClient(CreateCall("end", ToolOnlyTurnRunner.EndTurnToolName));
+        AIFunction endCollision = AIFunctionFactory.Create(
+            () => { },
+            ToolOnlyTurnRunner.EndTurnToolName);
+
+        _ = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => { }), endCollision],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+        Assert.Empty(client.Requests);
+
+        _ = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => { }), CreateSpeakFunction(_ => { })],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+        Assert.Empty(client.Requests);
+    }
+
+    /// <summary>
+    /// The protocol accepts any set of uniquely named production functions, including none.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithNoOrArbitraryProductionFunctions_RegistersAllActions()
+    {
+        var client = new ScriptedChatClient(CreateCall("end", ToolOnlyTurnRunner.EndTurnToolName));
+        AIFunction otherFunction = AIFunctionFactory.Create(
+            () => { },
+            "other_action");
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None);
+        _ = Assert.Single(client.Requests);
+
+        var secondClient = new ScriptedChatClient(CreateCall("end", ToolOnlyTurnRunner.EndTurnToolName));
+        await ToolOnlyTurnRunner.RunAsync(
+            secondClient,
+            Instructions,
+            [],
+            [otherFunction],
+            true,
+            NullLogger.Instance,
+            CancellationToken.None);
+        ChatOptions options = Assert.Single(secondClient.Options);
+        Assert.True(options.AllowMultipleToolCalls);
+        Assert.Equal(
+            ["other_action", ToolOnlyTurnRunner.EndTurnToolName],
+            options.Tools!.Select(tool => tool.Name));
+    }
+
+    /// <summary>
+    /// Gets representative malformed, text-bearing, mixed, refused, and unsupported responses.
+    /// </summary>
+    public static TheoryData<ChatResponse> InvalidResponses =>
+    [
+        new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text")),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Hello" }),
+                new TextContent("mixed text"),
+            ])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "duplicate",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "One" }),
+                new FunctionCallContent(
+                    "duplicate",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Two" }),
+            ])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [new ErrorContent("refusal or adapter error")])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.User,
+            [new FunctionCallContent("call", ToolOnlyTurnRunner.EndTurnToolName, new Dictionary<string, object?>())])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Hello" }),
+                new FunctionCallContent(
+                    "end",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+            ])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [new FunctionCallContent(
+                "call",
+                "Speak",
+                new Dictionary<string, object?> { ["speech"] = "Hello" })])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [new FunctionCallContent(
+                "end",
+                ToolOnlyTurnRunner.EndTurnToolName,
+                new Dictionary<string, object?> { ["unexpected"] = true })])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [new FunctionCallContent(
+                " ",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Hello" })])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [new FunctionCallContent(
+                "call",
+                SpeakToolName,
+                new Dictionary<string, object?>())
+            {
+                Exception = new InvalidOperationException("Malformed adapter arguments."),
+            }])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "valid-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Must not run" }),
+                new FunctionCallContent(
+                    "malformed-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["unexpected"] = true }),
+            ])),
+    ];
+
+    /// <summary>
+    /// Gets non-function content that the strict tool-only response contract rejects.
+    /// </summary>
+    public static TheoryData<AIContent> NonFunctionContents =>
+    [
+        new TextReasoningContent("private reasoning"),
+        new TextContent(string.Empty),
+        new TextContent("   "),
+    ];
+
+    private static AIFunction CreateSpeakFunction(Action<string> action)
+        => AIFunctionFactory.Create(
+            (string speech) =>
+            {
+                action(speech);
+                return "Spoken.";
+            },
+            SpeakToolName,
+            "Speak aloud.");
+
+    private static string ThrowingSpeak(string speech)
+        => throw new InvalidOperationException($"Sensitive tool detail: {speech}");
+
+    private static ChatMessage CreateCall(
+        string callID,
+        string name,
+        IDictionary<string, object?>? arguments = null)
+        => new(
+            ChatRole.Assistant,
+            [new FunctionCallContent(callID, name, arguments ?? new Dictionary<string, object?>())]);
+
+    private sealed class ScriptedChatClient(params object[] responses) : IChatClient
+    {
+        private readonly Queue<object> _responses = new(responses);
+
+        public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
+
+        public List<ChatOptions> Options { get; } = [];
+
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Requests.Add([.. messages]);
+            Options.Add(Assert.IsType<ChatOptions>(options));
+            object response = _responses.Dequeue();
+            return Task.FromResult(response is ChatResponse chatResponse
+                ? chatResponse
+                : new ChatResponse(Assert.IsType<ChatMessage>(response)));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            ChatResponse response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
+            {
+                yield return update;
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+    }
+}

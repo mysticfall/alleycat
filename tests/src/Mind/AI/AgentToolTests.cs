@@ -7,7 +7,7 @@ using AgentObservation = AlleyCat.Mind.Observation.Observation;
 namespace AlleyCat.Tests.Mind.AI;
 
 /// <summary>
-/// Unit coverage for Agent Framework tool result contracts and metadata.
+/// Unit coverage for action-tool result contracts and metadata.
 /// </summary>
 public sealed class AgentToolTests
 {
@@ -48,7 +48,7 @@ public sealed class AgentToolTests
     }
 
     /// <summary>
-    /// Tool resources pass authored metadata through to the generated Agent Framework function.
+    /// Tool resources pass authored metadata through to the generated AI function.
     /// </summary>
     [Fact]
     public void CreateFunction_WithResourceMetadata_UsesConfiguredNameAndDescription()

@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Core;
@@ -12,7 +11,6 @@ using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Godot;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,6 +32,23 @@ public sealed partial class MindIntegrationTests : IDisposable
     /// Clears the isolated AI pipeline logger override after each test.
     /// </summary>
     public void Dispose() => _debugLogFixture.Dispose();
+
+    /// <summary>
+    /// Production runtime defaults select Responses and discourage provider-side multi-call batches.
+    /// </summary>
+    [Fact]
+    public void RuntimeDefaults_UseResponsesAndDisableMultipleToolCalls()
+    {
+        AgenticMind mind = new();
+        OpenAIClientProvider provider = Assert.IsType<OpenAIClientProvider>(mind.ClientProvider);
+
+        Assert.Equal(OpenAIChatClientKind.Responses, provider.ChatClientKind);
+        Assert.False(mind.AllowMultipleToolCalls);
+        Assert.Empty(OpenAIClientProvider.CreateRunMessages(OpenAIChatClientKind.ChatCompletions));
+        _ = Assert.Single(OpenAIClientProvider.CreateRunMessages(OpenAIChatClientKind.Responses));
+
+        mind.Free();
+    }
 
     /// <summary>
     /// Mind accepts every nonblank external voice regardless of ID and rejects only its exact output instance.
@@ -435,12 +450,12 @@ public sealed partial class MindIntegrationTests : IDisposable
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
             FakeChatClient client = clientProvider.CreatedClients[0];
-            Assert.Equal(1, client.RunCount);
+            Assert.Equal(3, client.ModelRequestCount);
             Assert.True(character.ContextRequestCount >= 1);
             Assert.NotNull(character.ReceivedScene);
             Assert.Same(character, character.ReceivedObserver);
-            Assert.Contains("Heard an unknown speaker: hello Alley", Assert.Single(client.Prompts));
-            _ = Assert.Single(client.MessageSnapshots);
+            Assert.Contains("Heard an unknown speaker: hello Alley", client.Prompts[0]);
+            Assert.Equal(3, client.MessageSnapshots.Count);
             Assert.Empty(client.MessageSnapshots[0]);
             Assert.Equal("Spoken through the configured voice.", client.FirstSpeakResult);
             Assert.False(client.CancellationObservedAfterFirstSpeak);
@@ -494,10 +509,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Diagnostics must not alter a genuine Agent Framework tool loop or its typed completion.
+    /// Diagnostics must not alter a genuine production tool-only loop or its completion.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WithEquivalentDiagnosticsModes_PreservesFrameworkToolLoopSemantics()
+    public async Task ReceiveVoice_WithEquivalentDiagnosticsModes_PreservesToolOnlyLoopSemantics()
     {
         ToolLoopScenarioResult disabled = await RunToolLoopScenarioAsync(
             diagnosticsEnabled: false,
@@ -513,7 +528,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             ["Spoken through the configured voice.", "Spoken through the configured voice."],
             enabled.Semantics.FunctionResults);
         Assert.Equal(3, enabled.Semantics.AdmittedEffects.Length);
-        Assert.True(enabled.Semantics.TypedCompletion);
+        Assert.True(enabled.Semantics.TurnCompleted);
         Assert.False(enabled.Semantics.CancellationObserved);
 
         AssertDiagnosticsDisabled(disabled.LogEntries);
@@ -521,10 +536,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Diagnostics must not alter cancellation settlement within a genuine Agent Framework tool loop.
+    /// Diagnostics must not alter cancellation settlement within a production tool-only loop.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WithEquivalentDiagnosticsModes_PreservesFrameworkToolLoopCancellation()
+    public async Task ReceiveVoice_WithEquivalentDiagnosticsModes_PreservesToolOnlyLoopCancellation()
     {
         ToolLoopScenarioResult disabled = await RunToolLoopScenarioAsync(
             diagnosticsEnabled: false,
@@ -538,7 +553,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         Assert.Equal(["First diagnostic reply."], enabled.Semantics.ToolInvocations);
         Assert.Equal(["Spoken through the configured voice."], enabled.Semantics.FunctionResults);
         Assert.Equal(2, enabled.Semantics.AdmittedEffects.Length);
-        Assert.False(enabled.Semantics.TypedCompletion);
+        Assert.False(enabled.Semantics.TurnCompleted);
         Assert.True(enabled.Semantics.CancellationObserved);
 
         AssertDiagnosticsDisabled(disabled.LogEntries);
@@ -546,10 +561,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// AgenticMind should select exported tools for every turn through per-invocation ChatOptions.
+    /// AgenticMind should bind the currently exported tools to every fresh provider turn.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WhenToolsChangeBetweenTurns_SendsCurrentToolsInRunOptions()
+    public async Task ReceiveVoice_WhenToolsChangeBetweenTurns_BindsCurrentToolsToFreshProviderTurn()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -579,7 +594,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         try
         {
             mind.ReceiveVoice("first turn", playerVoice);
-            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 1, Completed: true }, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { ModelRequestCount: 2, Completed: true }, maxFrames: 120);
 
             mind.Tools = [new MarkerTool("second_tool")];
             clientProvider.Client!.Completed = false;
@@ -589,8 +604,9 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             Assert.NotNull(clientProvider.Client);
             Assert.Equal(2, clientProvider.CreatedClients.Count);
-            Assert.Equal("first_tool", Assert.Single(clientProvider.CreatedClients[0].ToolNamesByRun));
-            Assert.Equal("second_tool", Assert.Single(clientProvider.CreatedClients[1].ToolNamesByRun));
+            Assert.All(clientProvider.CreatedClients, client => Assert.Equal(2, client.ModelRequestCount));
+            Assert.Equal("first_tool", Assert.Single(clientProvider.CreatedClients[0].ToolNamesByProviderTurn));
+            Assert.Equal("second_tool", Assert.Single(clientProvider.CreatedClients[1].ToolNamesByProviderTurn));
             Assert.Empty(npcVoice.SpokenLines);
             string laterPrompt = clientProvider.CreatedClients[1].Prompts[0];
             Assert.True(laterPrompt.IndexOf("Heard an unknown speaker: first turn", StringComparison.Ordinal)
@@ -603,10 +619,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Every turn rebuilds current prompt/context and starts without prior framework transcript.
+    /// Every turn rebuilds current prompt/context and starts with fresh provider protocol state.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_OnLaterTurn_RebuildsPromptAndUsesFreshSession()
+    public async Task ReceiveVoice_OnLaterTurn_RebuildsPromptAndUsesFreshProtocolState()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecordingVoice npcVoice = new()
@@ -640,7 +656,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         try
         {
             mind.ReceiveVoice("first turn", playerVoice);
-            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { RunCount: 1, Completed: true }, maxFrames: 120);
+            await WaitUntilAsync(sceneTree, () => clientProvider.Client is { ModelRequestCount: 2, Completed: true }, maxFrames: 120);
 
             context["displayName"] = "Second Alley";
             mind.SystemInstruction = secondSystemInstruction;
@@ -650,12 +666,9 @@ public sealed partial class MindIntegrationTests : IDisposable
             Assert.Equal(1, firstSection.ContentRequestCount);
             Assert.Equal(1, secondSection.ContentRequestCount);
             Assert.Equal(2, clientProvider.CreatedClients.Count);
+            Assert.All(clientProvider.CreatedClients, client => Assert.Equal(2, client.ModelRequestCount));
             Assert.Equal(2, character.ContextRequestCount);
-            Assert.All(clientProvider.CreatedClients, client =>
-            {
-                ChatMessage[] messages = Assert.Single(client.MessageSnapshots);
-                Assert.Empty(messages);
-            });
+            Assert.All(clientProvider.CreatedClients, client => Assert.Empty(client.MessageSnapshots[0]));
             Assert.Contains("First instruction for First Alley", clientProvider.CreatedClients[0].Prompts[0], StringComparison.Ordinal);
             Assert.Contains("Second instruction for Second Alley", clientProvider.CreatedClients[1].Prompts[0], StringComparison.Ordinal);
         }
@@ -846,7 +859,7 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// A configured voice and tool invocation are both optional for a typed no-action turn.
+    /// A configured voice and production action are both optional when the protocol returns end_turn.
     /// </summary>
     [Fact]
     public async Task ReceiveVoice_WithoutVoiceOrTools_AcceptsNoActionEndTurn()
@@ -871,7 +884,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             FakeChatClient client = Assert.Single(clientProvider.CreatedClients);
             Assert.True(client.ReturnedResponse);
-            Assert.Empty(client.ToolNamesByRun);
+            Assert.Empty(client.ToolNamesByProviderTurn);
             Assert.Empty(client.MessageSnapshots[0]);
         }
         finally
@@ -964,7 +977,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
             Assert.NotNull(clientProvider.Client);
-            Assert.Contains("Heard an unknown speaker: hello through interface", Assert.Single(clientProvider.Client.Prompts));
+            Assert.Contains("Heard an unknown speaker: hello through interface", clientProvider.Client.Prompts[0]);
             Assert.NotEmpty(npcVoice.SpokenLines);
             Assert.All(npcVoice.SpokenLines, line => Assert.Equal("Interface reply.", line));
         }
@@ -1219,7 +1232,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             Id = "Speaker"
         };
-        FrameworkToolLoopClientProvider clientProvider = new(cancelDuringSecondModelCall);
+        ToolOnlyLoopClientProvider clientProvider = new(cancelDuringSecondModelCall);
         using RecordingLoggerProvider loggerProvider = new();
         Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
         ScenarioAgenticMind mind = new()
@@ -1268,14 +1281,14 @@ public sealed partial class MindIntegrationTests : IDisposable
             await mind.ProcessingSettled.WaitAsync(TimeSpan.FromSeconds(2));
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
-            FrameworkToolLoopChatClient client = Assert.IsType<FrameworkToolLoopChatClient>(clientProvider.Client);
+            ToolOnlyLoopChatClient client = Assert.IsType<ToolOnlyLoopChatClient>(clientProvider.Client);
             ToolLoopSemantics semantics = new(
                 client.InvocationCount,
                 [.. npcVoice.SpokenLines],
                 [.. client.FunctionResults],
                 effectsBeforeCancellation
                     ?? [.. mind.GetTimelineForTest().OfType<ObservedSpeech>().Select(AdmittedEffect.From)],
-                mind.TypedCompletion,
+                mind.TurnCompleted,
                 client.CancellationObserved);
             return new ToolLoopScenarioResult(semantics, [.. loggerProvider.Entries]);
         }
@@ -1291,7 +1304,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         Assert.Equal(expected.ToolInvocations, actual.ToolInvocations);
         Assert.Equal(expected.FunctionResults, actual.FunctionResults);
         Assert.Equal(expected.AdmittedEffects, actual.AdmittedEffects);
-        Assert.Equal(expected.TypedCompletion, actual.TypedCompletion);
+        Assert.Equal(expected.TurnCompleted, actual.TurnCompleted);
         Assert.Equal(expected.CancellationObserved, actual.CancellationObserved);
     }
 
@@ -1331,7 +1344,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         if (expectedResponseCount == 3)
         {
             Assert.Contains("runtime-sensitive-intermediate-call", responseEntries[1].Message, StringComparison.Ordinal);
-            Assert.Contains("{}", responseEntries[2].Message, StringComparison.Ordinal);
+            Assert.Contains(ToolOnlyTurnRunner.EndTurnToolName, responseEntries[2].Message, StringComparison.Ordinal);
         }
 
         Assert.Contains(requestEntries.Skip(1), entry =>
@@ -1601,7 +1614,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public Task ProcessingSettled => _processingSettled.Task;
 
-        public bool TypedCompletion
+        public bool TurnCompleted
         {
             get;
             private set;
@@ -1617,7 +1630,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             try
             {
                 await base.ProcessObservationsAsync(observations, timelineSnapshot, cancellationToken);
-                TypedCompletion = true;
+                TurnCompleted = true;
             }
             finally
             {
@@ -1635,7 +1648,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         string[] ToolInvocations,
         string[] FunctionResults,
         AdmittedEffect[] AdmittedEffects,
-        bool TypedCompletion,
+        bool TurnCompleted,
         bool CancellationObserved);
 
     private sealed record AdmittedEffect(string? ActorID, string? VoiceID, string Content)
@@ -1718,8 +1731,6 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public string SecondSpeech { get; init; } = string.Empty;
 
-        public string ResponseText { get; init; } = "{}";
-
         public Func<Task>? AfterFirstSpeakAsync
         {
             get;
@@ -1736,17 +1747,17 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public override IChatClient CreateChatClient()
         {
-            Client = new FakeChatClient(FirstSpeech, SecondSpeech, ResponseText, AfterFirstSpeakAsync);
+            Client = new FakeChatClient(FirstSpeech, SecondSpeech, AfterFirstSpeakAsync);
             CreatedClients.Add(Client);
             return Client;
         }
     }
 
-    private sealed class FrameworkToolLoopClientProvider(bool cancelDuringSecondModelCall) : ClientProvider
+    private sealed class ToolOnlyLoopClientProvider(bool cancelDuringSecondModelCall) : ClientProvider
     {
         public TaskCompletionSource SecondInvocationStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public FrameworkToolLoopChatClient? Client
+        public ToolOnlyLoopChatClient? Client
         {
             get;
             private set;
@@ -1754,12 +1765,12 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public override IChatClient CreateChatClient()
         {
-            Client = new FrameworkToolLoopChatClient(cancelDuringSecondModelCall, SecondInvocationStarted);
+            Client = new ToolOnlyLoopChatClient(cancelDuringSecondModelCall, SecondInvocationStarted);
             return Client;
         }
     }
 
-    private sealed class FrameworkToolLoopChatClient(
+    private sealed class ToolOnlyLoopChatClient(
         bool cancelDuringSecondModelCall,
         TaskCompletionSource secondInvocationStarted) : IChatClient
     {
@@ -1792,9 +1803,9 @@ public sealed partial class MindIntegrationTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _ = Assert.Single(options?.Tools ?? []);
-            ChatResponseFormatJson responseFormat = Assert.IsType<ChatResponseFormatJson>(options?.ResponseFormat);
-            Assert.True(responseFormat.Schema.HasValue);
+            Assert.Equal(["speak", ToolOnlyTurnRunner.EndTurnToolName], options?.Tools?.Select(tool => tool.Name));
+            Assert.Null(options?.ResponseFormat);
+            _ = Assert.IsType<RequiredChatToolMode>(options?.ToolMode);
             InvocationCount++;
 
             ChatMessage[] request = [.. messages];
@@ -1826,8 +1837,8 @@ public sealed partial class MindIntegrationTests : IDisposable
             {
                 1 => CreateSpeechCall(InitialCallID, "First diagnostic reply."),
                 2 => CreateSpeechCall(IntermediateCallID, "Second diagnostic reply."),
-                3 => new ChatMessage(ChatRole.Assistant, "{}"),
-                _ => throw new InvalidOperationException("Agent Framework made an unexpected model invocation."),
+                3 => CreateCall("end-call", ToolOnlyTurnRunner.EndTurnToolName),
+                _ => throw new InvalidOperationException("The tool-only loop made an unexpected model invocation."),
             };
             Completed = InvocationCount == 3;
             return new ChatResponse(response);
@@ -1858,6 +1869,11 @@ public sealed partial class MindIntegrationTests : IDisposable
                     callID,
                     "speak",
                     new Dictionary<string, object?> { ["speech"] = speech })]);
+
+        private static ChatMessage CreateCall(string callID, string name)
+            => new(
+                ChatRole.Assistant,
+                [new FunctionCallContent(callID, name, new Dictionary<string, object?>())]);
     }
 
     private sealed class ThrowingClientProvider : ClientProvider
@@ -1922,7 +1938,12 @@ public sealed partial class MindIntegrationTests : IDisposable
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
                     owner.ReturnedResponse = true;
-                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}"));
+                    return new ChatResponse(new ChatMessage(
+                        ChatRole.Assistant,
+                        [new FunctionCallContent(
+                            "end-call",
+                            ToolOnlyTurnRunner.EndTurnToolName,
+                            new Dictionary<string, object?>())]));
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -1958,10 +1979,9 @@ public sealed partial class MindIntegrationTests : IDisposable
     private sealed class FakeChatClient(
         string firstSpeech,
         string secondSpeech,
-        string responseText,
         Func<Task>? afterFirstSpeakAsync) : IChatClient
     {
-        public int RunCount
+        public int ModelRequestCount
         {
             get;
             private set;
@@ -1977,9 +1997,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public List<ChatMessage[]> MessageSnapshots { get; } = [];
 
-        public List<string> ToolNamesByRun { get; } = [];
-
-        public string ResponseText => responseText;
+        public List<string> ToolNamesByProviderTurn { get; } = [];
 
         public bool CancellationObservedAfterFirstSpeak
         {
@@ -2010,7 +2028,7 @@ public sealed partial class MindIntegrationTests : IDisposable
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            RunCount++;
+            ModelRequestCount++;
             ChatMessage[] messageSnapshot = [.. messages];
             MessageSnapshots.Add(messageSnapshot);
             Assert.NotNull(options);
@@ -2019,52 +2037,80 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             try
             {
+                Assert.Null(options.ResponseFormat);
+                _ = Assert.IsType<RequiredChatToolMode>(options.ToolMode);
                 Assert.NotNull(options.Tools);
-                ChatResponseFormatJson responseFormat = Assert.IsType<ChatResponseFormatJson>(options.ResponseFormat);
-                Assert.True(responseFormat.Schema.HasValue);
-                JsonElement schema = responseFormat.Schema.Value;
-                if (schema.TryGetProperty("properties", out JsonElement properties))
-                {
-                    Assert.Empty(properties.EnumerateObject());
-                }
-
-                Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
-                if (options.Tools.Count == 0)
+                AIFunction[] actionFunctions =
+                [
+                    .. options.Tools
+                        .OfType<AIFunction>()
+                        .Where(function => function.Name != ToolOnlyTurnRunner.EndTurnToolName),
+                ];
+                Assert.Contains(
+                    options.Tools,
+                    tool => tool.Name == ToolOnlyTurnRunner.EndTurnToolName);
+                if (actionFunctions.Length == 0)
                 {
                     ReturnedResponse = true;
-                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}"));
+                    return EndTurnResponse();
                 }
 
-                AIFunction toolFunction = Assert.IsAssignableFrom<AIFunction>(Assert.Single(options.Tools));
-                ToolNamesByRun.Add(toolFunction.Name);
+                AIFunction toolFunction = Assert.Single(actionFunctions);
+                if (ToolNamesByProviderTurn.Count == 0)
+                {
+                    ToolNamesByProviderTurn.Add(toolFunction.Name);
+                }
 
                 if (toolFunction.Name != "speak")
                 {
-                    _ = await toolFunction.InvokeAsync([], cancellationToken);
-                    return new ChatResponse(new ChatMessage(ChatRole.Assistant, "{}"));
+                    if (ModelRequestCount == 1)
+                    {
+                        return CallResponse("marker-call", toolFunction.Name, new Dictionary<string, object?>());
+                    }
+
+                    ReturnedResponse = true;
+                    return EndTurnResponse();
                 }
 
-                FirstSpeakResult = await InvokeSpeakAsync(toolFunction, firstSpeech, cancellationToken);
-
-                if (afterFirstSpeakAsync is not null)
+                FunctionResultContent[] results =
+                [
+                    .. messageSnapshot.SelectMany(message => message.Contents).OfType<FunctionResultContent>(),
+                ];
+                if (results.Length >= 1)
                 {
-                    await afterFirstSpeakAsync();
+                    FirstSpeakResult = results[0].Result?.ToString();
                 }
 
-                SecondSpeakResult = await InvokeSpeakAsync(toolFunction, secondSpeech, CancellationToken.None);
-
-                if (cancellationToken.IsCancellationRequested)
+                if (results.Length >= 2)
                 {
-                    CancellationObservedAfterFirstSpeak = true;
-                    cancellationToken.ThrowIfCancellationRequested();
+                    SecondSpeakResult = results[1].Result?.ToString();
                 }
 
-                ReturnedResponse = true;
-                return new ChatResponse(new ChatMessage(ChatRole.Assistant, responseText));
+                switch (ModelRequestCount)
+                {
+                    case 1 when !string.IsNullOrWhiteSpace(firstSpeech):
+                        return CallResponse(
+                            "first-speak-call",
+                            "speak",
+                            new Dictionary<string, object?> { ["speech"] = firstSpeech });
+                    case 2 when !string.IsNullOrWhiteSpace(secondSpeech):
+                        if (afterFirstSpeakAsync is not null)
+                        {
+                            await afterFirstSpeakAsync();
+                        }
+
+                        return CallResponse(
+                            "second-speak-call",
+                            "speak",
+                            new Dictionary<string, object?> { ["speech"] = secondSpeech });
+                    default:
+                        ReturnedResponse = true;
+                        return EndTurnResponse();
+                }
             }
             finally
             {
-                Completed = true;
+                Completed = ReturnedResponse;
             }
         }
 
@@ -2086,19 +2132,19 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
         }
 
-        private static async Task<string?> InvokeSpeakAsync(
-            AIFunction speakFunction,
-            string speech,
-            CancellationToken cancellationToken)
-        {
-            AIFunctionArguments arguments = new()
-            {
-                ["speech"] = speech,
-            };
+        private static ChatResponse CallResponse(
+            string callID,
+            string name,
+            IDictionary<string, object?> arguments)
+            => new(new ChatMessage(
+                ChatRole.Assistant,
+                [new FunctionCallContent(callID, name, arguments)]));
 
-            object? result = await speakFunction.InvokeAsync(arguments, cancellationToken);
-            return result?.ToString();
-        }
+        private static ChatResponse EndTurnResponse()
+            => CallResponse(
+                "end-call",
+                ToolOnlyTurnRunner.EndTurnToolName,
+                new Dictionary<string, object?>());
     }
 
     private sealed class PlainVoice(string id) : IVoice

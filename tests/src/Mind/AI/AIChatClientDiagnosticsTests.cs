@@ -1,5 +1,4 @@
 using AlleyCat.Mind.AI;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -67,7 +66,9 @@ public sealed class AIChatClientDiagnosticsTests
 
         Assert.Equal(responseSecret, response.Text);
         Assert.Equal(1, innerClient.InvocationCount);
-        Assert.All(loggerFactory.Entries, entry => Assert.Equal(LoggingCategory, entry.CategoryName));
+        Assert.All(
+            loggerFactory.Entries.Where(entry => entry.CategoryName == LoggingCategory),
+            entry => Assert.Equal(LoggingCategory, entry.CategoryName));
         Assert.Contains(loggerFactory.Entries, entry =>
             entry.Level == LogLevel.Trace
             && entry.Message.Contains(requestSecret, StringComparison.Ordinal)
@@ -78,10 +79,10 @@ public sealed class AIChatClientDiagnosticsTests
     }
 
     /// <summary>
-    /// Agent Framework's automatic function-invocation loop is logged at every model boundary.
+    /// The production tool-only loop is logged at every model boundary.
     /// </summary>
     [Fact]
-    public async Task Decorate_WhenAgentRunsFunctionLoop_LogsEveryFrameworkGeneratedRequestAndResponse()
+    public async Task Decorate_WhenToolOnlyLoopRuns_LogsEveryRequestAndResponse()
     {
         CapturingLoggerFactory loggerFactory = new(LogLevel.Trace);
         ScriptedToolLoopChatClient innerClient = new();
@@ -97,21 +98,15 @@ public sealed class AIChatClientDiagnosticsTests
                 return $"tool result: {value}";
             },
             "diagnostic_tool");
-        ChatClientAgent agent = client.AsAIAgent(instructions: "Complete the scripted diagnostic turn.");
-        ChatClientAgentRunOptions options = new(new ChatOptions
-        {
-            Tools = [tool],
-        });
-        AgentSession session = await agent.CreateSessionAsync(CancellationToken.None);
-
-        AgentResponse<EndTurnResult> response = await agent.RunAsync<EndTurnResult>(
-            "run the tool loop",
-            session,
-            serializerOptions: null,
-            options,
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            "Complete the scripted diagnostic turn.",
+            [],
+            [tool],
+            false,
+            loggerFactory.CreateLogger("test"),
             CancellationToken.None);
 
-        Assert.NotNull(response.Result);
         Assert.Equal(3, innerClient.InvocationCount);
         Assert.Equal(["initial", "intermediate"], toolInvocations);
         Assert.Equal(3, innerClient.Requests.Count);
@@ -137,10 +132,12 @@ public sealed class AIChatClientDiagnosticsTests
         Assert.Equal(3, responseEntries.Length);
         Assert.Contains("initial-call", responseEntries[0].Message, StringComparison.Ordinal);
         Assert.Contains("intermediate-call", responseEntries[1].Message, StringComparison.Ordinal);
-        Assert.Contains("{}", responseEntries[2].Message, StringComparison.Ordinal);
+        Assert.Contains(ToolOnlyTurnRunner.EndTurnToolName, responseEntries[2].Message, StringComparison.Ordinal);
         Assert.Contains("tool result: initial", requestEntries[1].Message, StringComparison.Ordinal);
         Assert.Contains("tool result: intermediate", requestEntries[2].Message, StringComparison.Ordinal);
-        Assert.All(loggerFactory.Entries, entry => Assert.Equal(LoggingCategory, entry.CategoryName));
+        Assert.All(
+            loggerFactory.Entries.Where(entry => entry.CategoryName == LoggingCategory),
+            entry => Assert.Equal(LoggingCategory, entry.CategoryName));
     }
 
     /// <summary>
@@ -250,15 +247,22 @@ public sealed class AIChatClientDiagnosticsTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _ = Assert.Single(options?.Tools ?? []);
+            Assert.Equal(2, options?.Tools?.Count);
+            Assert.Null(options?.ResponseFormat);
+            _ = Assert.IsType<RequiredChatToolMode>(options?.ToolMode);
             _requests.Add([.. messages.Select(message => message.Clone())]);
 
             ChatMessage response = _requests.Count switch
             {
                 1 => CreateToolCall("initial-call", "initial"),
                 2 => CreateToolCall("intermediate-call", "intermediate"),
-                3 => new ChatMessage(ChatRole.Assistant, "{}"),
-                _ => throw new InvalidOperationException("The Agent Framework made an unexpected model invocation."),
+                3 => new ChatMessage(
+                    ChatRole.Assistant,
+                    [new FunctionCallContent(
+                        "end-call",
+                        ToolOnlyTurnRunner.EndTurnToolName,
+                        new Dictionary<string, object?>())]),
+                _ => throw new InvalidOperationException("The tool-only loop made an unexpected model invocation."),
             };
             return Task.FromResult(new ChatResponse(response));
         }

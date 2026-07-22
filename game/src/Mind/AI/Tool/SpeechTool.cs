@@ -6,14 +6,14 @@ using Godot;
 namespace AlleyCat.Mind.AI.Tool;
 
 /// <summary>
-/// Agent Framework tool that speaks natural-language output through the invocation voice context.
+/// Action tool that speaks natural-language output through the invocation voice context.
 /// </summary>
 [Tool]
 [GlobalClass]
 public partial class SpeechTool : AgentTool
 {
     /// <summary>
-    /// Creates a speech tool with the default Agent Framework metadata.
+    /// Creates a speech tool with the default model-facing metadata.
     /// </summary>
     public SpeechTool()
     {

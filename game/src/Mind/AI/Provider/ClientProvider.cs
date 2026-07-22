@@ -10,8 +10,14 @@ namespace AlleyCat.Mind.AI.Provider;
 public abstract partial class ClientProvider : Resource
 {
     /// <summary>
-    /// Creates a valid chat client for Agent Framework turn execution.
+    /// Creates any provider-required input messages for a new agent run.
     /// </summary>
-    /// <returns>A chat client ready for Agent Framework turn execution.</returns>
+    /// <returns>Input messages to send alongside the agent instructions.</returns>
+    public virtual IReadOnlyList<ChatMessage> CreateRunMessages() => [];
+
+    /// <summary>
+    /// Creates a valid chat client for tool-only turn execution.
+    /// </summary>
+    /// <returns>A chat client ready for tool-only turn execution.</returns>
     public abstract IChatClient CreateChatClient();
 }

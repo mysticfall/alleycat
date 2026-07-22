@@ -6,20 +6,20 @@ using MindBase = AlleyCat.Mind.Mind;
 namespace AlleyCat.Mind.AI.Tool;
 
 /// <summary>
-/// Godot-authored AI tool resource that creates Agent Framework functions for an AgenticMind turn.
+/// Godot-authored action resource that creates AI functions for an AgenticMind turn.
 /// </summary>
 [Tool]
 [GlobalClass]
 public abstract partial class AgentTool : Resource
 {
     /// <summary>
-    /// Agent Framework function name exposed to the model.
+    /// Function name exposed to the model.
     /// </summary>
     [Export]
     public string ToolName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Agent Framework function description exposed to the model.
+    /// Function description exposed to the model.
     /// </summary>
     [Export(PropertyHint.MultilineText)]
     public string ToolDescription { get; set; } = string.Empty;
@@ -62,7 +62,7 @@ public abstract partial class AgentTool : Resource
     }
 
     /// <summary>
-    /// Creates the delegate used by Agent Framework for this tool.
+    /// Creates the delegate used by the action function.
     /// </summary>
     protected abstract Delegate CreateDelegate();
 
