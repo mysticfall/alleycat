@@ -25,8 +25,8 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 6. One failed speech item must not block later queued items, and failures must be logged without crashing or
    desynchronising later playback.
 7. Runtime toggling through `Enabled` must remain supported.
-8. Speech events must expose a stable voice `Id` and world-space `Origin` to listeners without making the voice ID proof
-   of character identity.
+8. Speech events must expose a stable voice `Id` and world-space `Origin` to listeners. The ID supports configured,
+   operational attribution but is not authenticated provenance.
 9. Completed nonblank player transcription must trigger player voice output; blank transcription must be ignored.
 10. Removing a voice from the scene must prevent queued or active work from accessing freed Godot nodes.
 11. A manual test scene must allow testers to enter arbitrary speech and observe character speech output.
@@ -75,7 +75,8 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 19. The manual voice test scene must place `AIVoice` under the character's head attachment and keep playback audio
     spatially attached to the voice origin.
 20. Generic character installation must set a character-owned voice `Id` to the final exact `Character.Id` after
-    target-scene precedence is resolved.
+    target-scene precedence is resolved. AI-001 may use this configured ID for operational attribution; another source
+    presenting the same ID is an accepted limitation rather than authenticated ownership.
 21. `Voiceprint` is a listener-recognition key. Matching or possessing it does not prove that a voice is owned by a
     particular character.
 
@@ -151,8 +152,8 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 11. Tests verify audio supplied to lip-sync is PCM 16-bit, 16 kHz, mono WAV and `AIVoice` does not resample it.
 12. Tests verify `PlayerVoice` forwards one nonblank transcription, ignores blank transcription, honours `Enabled`, and
     disconnects on exit.
-13. Generic installation sets each character-owned voice ID to final exact `Character.Id`, while recognition never
-    treats voice provenance as identity proof.
+13. Generic installation sets each character-owned voice ID to final exact `Character.Id`; tests verify this supports
+    configured attribution without claiming authenticated provenance or rejecting a source that presents the same ID.
 14. Acceptance verifies both user-visible FIFO speech and failure isolation and the validation, admission,
     serialisation, cancellation, listener, and node-lifetime contracts.
 

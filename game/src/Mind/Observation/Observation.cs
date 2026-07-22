@@ -37,7 +37,7 @@ public abstract record ObservedAction(string? ActorId) : Observation;
 /// Speech observed from the owning character, a recognised other character, or an unknown speaker.
 /// </summary>
 /// <param name="ActorId">Exact recognised actor ID, or <see langword="null"/> when unknown.</param>
-/// <param name="VoiceId">Optional raw voice provenance. This value does not establish actor identity.</param>
+/// <param name="VoiceId">Optional raw voice ID used for configured attribution, but not authenticated provenance.</param>
 /// <param name="Content">Observed speech content.</param>
 public sealed record ObservedSpeech(
     string? ActorId,

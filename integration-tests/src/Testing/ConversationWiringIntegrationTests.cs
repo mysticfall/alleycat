@@ -68,7 +68,7 @@ public sealed class ConversationWiringIntegrationTests
             RecordingChatClient client = Assert.IsType<RecordingChatClient>(clientProvider.Client);
             string prompt = Assert.Single(client.Prompts);
             Assert.Contains("You are conversation-npc", prompt, StringComparison.Ordinal);
-            Assert.Contains("Heard an unknown speaker say: hello reference friend", prompt, StringComparison.Ordinal);
+            Assert.Contains("Heard conversation-player say: hello reference friend", prompt, StringComparison.Ordinal);
             Assert.Equal(["speak"], client.ToolNamesByRun);
         }
         finally
@@ -94,9 +94,12 @@ public sealed class ConversationWiringIntegrationTests
         CharacterHub playerCharacter = Assert.IsType<CharacterHub>(player, exactMatch: false);
         playerCharacter.Id = "conversation-player";
         FindSingleDescendant<PlayerVoice>(player).Id = playerCharacter.Id;
+        playerCharacter.RefreshComponents();
         Node npc = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate();
         npc.Name = "NPC";
-        Assert.IsType<CharacterHub>(npc, exactMatch: false).Id = "conversation-npc";
+        CharacterHub npcCharacter = Assert.IsType<CharacterHub>(npc, exactMatch: false);
+        npcCharacter.Id = "conversation-npc";
+        npcCharacter.RefreshComponents();
 
         fixture.AddChild(actors);
         actors.AddChild(player);

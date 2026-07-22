@@ -73,16 +73,48 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
 
         string voiceID = source.Id;
+        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
         _ = Observe(new ObservedSpeech(
-            ResolveRecognisedCharacterId(voiceID),
+            ResolveRecognisedCharacterID(voiceID, scene),
             voiceID,
             trimmedSpeech));
     }
 
     /// <summary>
-    /// Resolves voice provenance to a character recognised by this mind.
+    /// Resolves a configured voice ID to a character in the current scene.
     /// </summary>
-    protected virtual string? ResolveRecognisedCharacterId(string voiceId) => null;
+    protected virtual string? ResolveRecognisedCharacterID(string voiceID, ISceneContext scene)
+    {
+        ArgumentNullException.ThrowIfNull(voiceID);
+        ArgumentNullException.ThrowIfNull(scene);
+
+        if (string.IsNullOrWhiteSpace(voiceID))
+        {
+            return null;
+        }
+
+        ICharacter? owner = null;
+        foreach (ICharacter character in scene.Characters)
+        {
+            if (!character.TryGetVoice(out IVoice? characterVoice)
+                || characterVoice is null
+                || string.IsNullOrWhiteSpace(characterVoice.Id)
+                || !string.Equals(characterVoice.Id, voiceID, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (owner is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Voice ID '{voiceID}' ambiguously matches current-scene characters '{owner.Id}' and '{character.Id}'.");
+            }
+
+            owner = character;
+        }
+
+        return owner?.Id;
+    }
 
     /// <inheritdoc />
     protected override async Task ProcessObservationsAsync(

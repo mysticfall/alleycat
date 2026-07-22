@@ -208,54 +208,52 @@ public sealed partial class MindIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Raw voice provenance is unrecognised by default while accepted speech retains its other fields.
+    /// A distinct source instance is attributed by its exact voice ID rather than object identity.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WithDefaultRecognition_CreatesUnrecognisedObservedSpeech()
+    public async Task ReceiveVoice_WithDistinctSameIDSource_CreatesRecognisedObservedSpeech()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecognitionTestMind mind = new()
         {
             ObservationImportanceThreshold = 1f
         };
-        PlainVoice voice = new("voice.Mixed-Case");
-        AddTestNode(sceneTree, mind);
+        PlainVoice ownedVoice = new("voice.Mixed-Case");
+        PlainVoice spoofedVoice = new("voice.Mixed-Case");
+        TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
+        TestCharacter speaker = AddSceneCharacter(sceneTree, "Known-Character", ownedVoice);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
         {
-            Assert.Null(mind.ResolveForTest("voice.Mixed-Case"));
-            mind.ReceiveVoice("  trimmed speech  ", voice);
+            mind.ReceiveVoice("  trimmed speech  ", spoofedVoice);
             await WaitUntilAsync(sceneTree, () => mind.Observations.Count == 1, maxFrames: 120);
 
             ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Observations));
             Assert.Equal("voice.Mixed-Case", observation.VoiceId);
-            Assert.Null(observation.ActorId);
+            Assert.Equal("Known-Character", observation.ActorId);
             Assert.Equal("trimmed speech", observation.Content);
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind);
+            await DestroyFixtureAsync(sceneTree, speaker, owner);
         }
     }
 
     /// <summary>
-    /// An explicit mind-relative association can recognise voice provenance as a character.
+    /// A current character's composed voice ID is recognised even when it differs from the character ID.
     /// </summary>
     [Fact]
-    public async Task ReceiveVoice_WithExplicitMindRelativeAssociation_CreatesRecognisedObservedSpeech()
+    public async Task ReceiveVoice_WithCurrentCharacterOwnedSource_CreatesRecognisedObservedSpeech()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         RecognitionTestMind mind = new()
         {
-            RecognisedVoices =
-            {
-                ["private-device-id"] = "Known Character",
-            },
             ObservationImportanceThreshold = 1f
         };
         PlainVoice voice = new("private-device-id");
-        AddTestNode(sceneTree, mind);
+        TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
+        TestCharacter speaker = AddSceneCharacter(sceneTree, "Known Character", voice);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -269,7 +267,107 @@ public sealed partial class MindIntegrationTests : IDisposable
         }
         finally
         {
-            await DestroyFixtureAsync(sceneTree, mind);
+            await DestroyFixtureAsync(sceneTree, speaker, owner);
+        }
+    }
+
+    /// <summary>
+    /// Case-distinct, blank, and unmatched source IDs remain unknown, and blank configured IDs never match.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WithNonMatchingOrBlankIDs_CreatesUnrecognisedObservedSpeech()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecognitionTestMind mind = new()
+        {
+            ObservationImportanceThreshold = 1f,
+        };
+        TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
+        TestCharacter exactSpeaker = AddSceneCharacter(sceneTree, "ExactSpeaker", new PlainVoice("Voice.Exact"));
+        TestCharacter blankSpeaker = AddSceneCharacter(sceneTree, "BlankSpeaker", new PlainVoice("  "));
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("case mismatch", new PlainVoice("voice.Exact"));
+            mind.ReceiveVoice("blank source", new PlainVoice(" "));
+            mind.ReceiveVoice("no match", new PlainVoice("missing"));
+            await WaitUntilAsync(sceneTree, () => mind.Observations.Count == 3, maxFrames: 120);
+
+            ObservedSpeech[] observations = [.. mind.Observations.Cast<ObservedSpeech>()];
+            Assert.Equal(3, observations.Length);
+            Assert.All(observations, observation => Assert.Null(observation.ActorId));
+            Assert.Equal(["voice.Exact", " ", "missing"], observations.Select(observation => observation.VoiceId));
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, blankSpeaker, exactSpeaker, owner);
+        }
+    }
+
+    /// <summary>
+    /// A voice owned only by a character absent from the current scene remains unknown.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WithOffSceneOwnedSource_CreatesUnrecognisedObservedSpeech()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecognitionTestMind mind = new()
+        {
+            ObservationImportanceThreshold = 1f,
+        };
+        PlainVoice voice = new("off-scene-device");
+        var offSceneCharacter = new TestCharacter(new Dictionary<string, object?>())
+        {
+            Id = "OffSceneCharacter",
+            Components = [voice],
+        };
+        TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ReceiveVoice("off scene speech", voice);
+            await WaitUntilAsync(sceneTree, () => mind.Observations.Count == 1, maxFrames: 120);
+
+            ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Observations));
+            Assert.Null(observation.ActorId);
+            Assert.Equal("off-scene-device", observation.VoiceId);
+        }
+        finally
+        {
+            offSceneCharacter.Free();
+            await DestroyFixtureAsync(sceneTree, owner);
+        }
+    }
+
+    /// <summary>
+    /// Duplicate exact configured voice IDs are rejected before the speech observation is ingested.
+    /// </summary>
+    [Fact]
+    public async Task ReceiveVoice_WithAmbiguousCurrentSceneOwnership_FailsClearly()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        RecognitionTestMind mind = new();
+        PlainVoice source = new("shared-device");
+        TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
+        TestCharacter first = AddSceneCharacter(sceneTree, "FirstOwner", new PlainVoice("shared-device"));
+        TestCharacter second = AddSceneCharacter(sceneTree, "SecondOwner", new PlainVoice("shared-device"));
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                () => mind.ReceiveVoice("ambiguous speech", source));
+
+            Assert.Contains("ambiguously matches current-scene characters", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("FirstOwner", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("SecondOwner", exception.Message, StringComparison.Ordinal);
+            Assert.Empty(mind.Observations);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, second, first, owner);
         }
     }
 
@@ -1049,12 +1147,26 @@ public sealed partial class MindIntegrationTests : IDisposable
         {
             Name = "AgenticMindFixtureCharacter",
             Id = "agentic-mind-fixture-character",
+            Components = mind.Voice is IComponent voice ? [voice] : [],
         };
 
         character.AddChild(mind);
         AddTestNode(sceneTree, character);
         character.AddToGroup("Actors");
 
+        return character;
+    }
+
+    private static TestCharacter AddSceneCharacter(SceneTree sceneTree, string id, IVoice voice)
+    {
+        var character = new TestCharacter(new Dictionary<string, object?>())
+        {
+            Name = id,
+            Id = id,
+            Components = [voice],
+        };
+        AddTestNode(sceneTree, character);
+        character.AddToGroup("Actors");
         return character;
     }
 
@@ -1445,17 +1557,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
     private sealed partial class RecognitionTestMind : AgenticMind
     {
-        private readonly StandaloneCharacter _owner = new();
-        public Dictionary<string, string> RecognisedVoices { get; } = new(StringComparer.Ordinal);
-
         public List<AgentObservation> Observations { get; } = [];
-
-        public string? ResolveForTest(string voiceID) => ResolveRecognisedCharacterId(voiceID);
-
-        protected override string? ResolveRecognisedCharacterId(string voiceId)
-            => RecognisedVoices.TryGetValue(voiceId, out string? characterID)
-                ? characterID
-                : base.ResolveRecognisedCharacterId(voiceId);
 
         protected override Task ProcessObservationsAsync(
             IReadOnlyList<AgentObservation> observations,
@@ -1465,8 +1567,6 @@ public sealed partial class MindIntegrationTests : IDisposable
             Observations.AddRange(observations);
             return Task.CompletedTask;
         }
-
-        protected override ICharacter ResolveOwningCharacter() => _owner;
     }
 
     private sealed class StandaloneCharacter : ICharacter
@@ -1556,7 +1656,7 @@ public sealed partial class MindIntegrationTests : IDisposable
     {
         public string Id { get; set; } = string.Empty;
 
-        public IReadOnlyList<IComponent> Components { get; } = [];
+        public IReadOnlyList<IComponent> Components { get; init; } = [];
 
         public int ContextRequestCount
         {

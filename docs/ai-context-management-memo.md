@@ -66,8 +66,8 @@ Only domain events intentionally and successfully ingested by Mind belong in the
 - `ObservedAction` carries actor-relative action identity through an exact stable actor ID, not a scene-node reference.
 - `ObservedSpeech : ObservedAction` represents owning-character, recognised-other, and unknown speech with the one exact
   semantic key `speech.observed`.
-- Actor identity and nullable raw `VoiceId` provenance remain separate. `VoiceId` is neither identity proof nor rendered
-  wording.
+- Actor identity and nullable raw `VoiceId` remain separate. Ordinal ID matching provides configured, operational
+  attribution rather than authenticated provenance, and `VoiceId` is never rendered as identity wording.
 - One actor-relative prompt fragment renders self, recognised-other, and unknown speech perspectives.
 - Tool-produced action actors are stamped by Mind before contextual importance is calculated.
 - Tool-result observation batches remain ordered and are ingested all-or-nothing.

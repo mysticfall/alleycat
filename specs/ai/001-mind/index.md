@@ -25,8 +25,9 @@ responsive and interruption-safe in-world behaviour.
    responses or discarding actions and observations that were already committed.
 4. Several important arrivals during one active response must produce at most one immediate replacement response.
 5. Each response must reflect the NPC's complete observation history and current authored character context.
-6. Speech history must distinguish the NPC, a recognised other character, and an unknown speaker without presenting a
-   raw voice identifier as recognised identity or rendered wording.
+6. Speech history must attribute a speaker by matching the received voice ID to current-scene characters. It must
+   distinguish the NPC, a recognised other character, and an unknown speaker without rendering the voice ID as identity
+   wording. No match must remain unknown, while ambiguous matches must fail clearly.
 7. An NPC may take no action, one action, or several actions before ending a turn; speaking must not end the turn.
 8. Spoken responses must use the NPC's character-owned in-world voice rather than normal chat text.
 9. Missing configuration and backend failures must be contained and logged without crashing the scene.
@@ -66,10 +67,10 @@ responsive and interruption-safe in-world behaviour.
 13. `ObservedAction` must be the actor-aware observation base and retain an exact stable actor ID rather than a
     scene-node reference.
 14. `ObservedSpeech : ObservedAction` must represent owning-character, recognised-other, and unknown speech through the
-    exact case-sensitive `speech.observed` key. It must retain content and nullable raw `VoiceId` provenance separately
-    from `ActorId` identity.
-15. Raw `VoiceId` provenance must never prove identity or appear in rendered wording. Recognition must be relative to
-    the observing Mind; unknown speech must remain representable without inventing an actor identity.
+    exact case-sensitive `speech.observed` key. It must retain content and nullable raw `VoiceId` separately from
+    `ActorId` identity.
+15. `VoiceId` must never appear in rendered identity wording or be treated as authenticated provenance. Recognition must
+    be relative to the observing Mind; unknown speech must remain representable without inventing an actor identity.
 16. Owning-character speech must calculate importance `0`. Recognised-external and unknown speech must retain effective
     importance `1`, while final broader importance models remain tunable and deferred.
 17. Mind must stamp tool-produced `ObservedAction` actor IDs with the owning character's exact ID before calculating
@@ -85,6 +86,15 @@ responsive and interruption-safe in-world behaviour.
     cancels active observation processing. Deferred callbacks must not access Mind services after exit.
 23. Node-lifetime cancellation must propagate through active agent and tool work. Expected interruption and lifetime
     cancellation must not be reported as backend failures or trigger retries or unintended turns.
+24. AgenticMind must capture the received `source.Id` as `VoiceId` and resolve attribution only against `ICharacter`
+    instances in the current scene. It must compare `VoiceId` ordinally with each character's composed `IVoice.Id`.
+    Voice object reference identity, lore prose, character names, and aliases must not participate in matching.
+25. Blank received IDs and blank configured character voice IDs must not match. Zero matches must leave `ActorId` null;
+    exactly one match must set `ActorId` to that character's exact case-sensitive `Character.Id`; multiple matches must
+    fail clearly without selecting an actor.
+26. Voice-ID matching is configured, operational attribution rather than authenticated provenance. A source that
+    presents another character's voice ID can therefore be attributed to that character; same-ID spoofing is an accepted
+    limitation of this model.
 
 ## In Scope
 
@@ -92,7 +102,7 @@ responsive and interruption-safe in-world behaviour.
 - Contextual importance calculation, validation, and stored scheduling values.
 - Unified external and tool-result observation ingestion.
 - Threshold, maximum-wait, minimum-interval, disable, and active-turn interruption behaviour.
-- Actor-relative observed speech and privacy-safe voice provenance.
+- Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
 - AgenticMind orchestration through AI-002 and AI-003.
 - Irreversible node-lifetime shutdown of scheduling, agent, tool, and deferred action work.
 
@@ -111,8 +121,8 @@ responsive and interruption-safe in-world behaviour.
 
 1. An NPC records owning-character, recognised-other, and unknown speech in timeline order through one
    `ObservedSpeech : ObservedAction` contract with exact key `speech.observed`.
-2. Rendered speech history uses actor-relative self, recognised-other, and unknown wording and never renders raw voice
-   provenance or treats it as identity proof.
+2. Rendered speech history uses actor-relative self, recognised-other, and unknown wording and never renders `VoiceId`
+   as identity wording or treats it as authenticated provenance.
 3. Tests verify every observation enters both timeline and pending FIFO, with importance calculated and validated
    exactly once before atomic mutation.
 4. Tests verify self-speech stores importance `0`, external and unknown speech store effective importance `1`, and zero
@@ -131,8 +141,14 @@ responsive and interruption-safe in-world behaviour.
     transcripts or observation-summary messages.
 11. Missing configuration and genuine backend failures are logged and contained without crashing the scene.
 12. After tree exit, tests verify no new intake, delayed action, replacement turn, timer, or node-service access occurs.
-13. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
-    ingestion, scheduling, interruption, cancellation, and lifetime contracts.
+13. Tests verify `source.Id` is captured as `VoiceId` and compared ordinally with every current-scene character's
+    composed `IVoice.Id`, without comparing voice object references.
+14. Tests verify blank received and configured IDs do not match, zero matches remain unknown, one exact match yields the
+    character's exact case-sensitive `Character.Id`, and multiple exact matches fail clearly without choosing an actor.
+15. Tests verify same-ID spoofing follows the configured attribution, while `ActorId` and nullable `VoiceId` remain
+    separate and rendered speech history never exposes `VoiceId` as identity wording or authenticated provenance.
+16. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
+    ingestion, speaker-attribution, scheduling, interruption, cancellation, and lifetime contracts.
 
 ## References
 
