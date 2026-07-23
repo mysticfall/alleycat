@@ -1,6 +1,5 @@
 using System.ClientModel;
 using System.Diagnostics;
-using System.Text;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
@@ -26,6 +25,7 @@ public partial class OpenAITranscriber : Transcriber
 
     private OpenAITranscriberSettings? _settings;
     private ILogger<OpenAITranscriber>? _logger;
+    private bool _pipelineDebugLoggingEnabled;
 
     /// <summary>
     /// Config file used to resolve OpenAI-compatible speech settings.
@@ -42,6 +42,7 @@ public partial class OpenAITranscriber : Transcriber
     {
         base._Ready();
         _logger = GameLoggerResolver.ResolveRequired<OpenAITranscriber>();
+        _pipelineDebugLoggingEnabled = AIPipelineDebugLog.IsEnabled;
 
         try
         {
@@ -55,15 +56,14 @@ public partial class OpenAITranscriber : Transcriber
     }
 
     /// <inheritdoc />
-    public override async Task<string> Transcribe(AudioStreamWav audioStream)
+    public override async Task<string> Transcribe(RecordedAudioData recording)
     {
-        OpenAITranscriberSettings settings = _settings ?? OpenAITranscriberSettings.Load(ConfigPath);
-        RecordedAudioData recordedAudio = CaptureRecordedAudio(audioStream);
+        OpenAITranscriberSettings settings = _settings
+            ?? throw new InvalidOperationException("OpenAI transcription settings were not initialised on the Godot thread.");
 
         Stopwatch preparationStopwatch = AIPipelineDebugLog.StartTimer();
-        using PreparedTranscriptionRequest request = await PrepareTranscriptionRequestAsync(recordedAudio, settings)
-            .ConfigureAwait(false);
-        if (AIPipelineDebugLog.IsEnabled)
+        using PreparedTranscriptionRequest request = PrepareTranscriptionRequest(recording, settings);
+        if (_pipelineDebugLoggingEnabled)
         {
             await LogLatencyOnGodotThreadAsync("STT request prepared in", preparationStopwatch, $"model {settings.Model}")
                 .ConfigureAwait(false);
@@ -73,7 +73,7 @@ public partial class OpenAITranscriber : Transcriber
         AudioTranscription response = await request.Client
             .TranscribeAudioAsync(request.WavStream, "alleycat-recording.wav", request.Options)
             .ConfigureAwait(false);
-        if (AIPipelineDebugLog.IsEnabled)
+        if (_pipelineDebugLoggingEnabled)
         {
             await LogLatencyOnGodotThreadAsync("STT backend returned in", backendStopwatch, $"model {settings.Model}")
                 .ConfigureAwait(false);
@@ -82,44 +82,11 @@ public partial class OpenAITranscriber : Transcriber
         return GetTranscriptionTextOrThrow(response);
     }
 
-    internal static byte[] CreateWaveFileBytes(AudioStreamWav audioStream)
-    {
-        using MemoryStream stream = CreateWaveFileStream(audioStream);
-        return stream.ToArray();
-    }
-
-    internal static MemoryStream CreateWaveFileStream(AudioStreamWav audioStream)
-    {
-        RecordedAudioData recordedAudio = CaptureRecordedAudio(audioStream);
-        return CreateWaveFileStream(recordedAudio.Data, recordedAudio.MixRate, recordedAudio.Stereo, recordedAudio.Format);
-    }
-
-    internal static Task<PreparedTranscriptionRequest> PrepareTranscriptionRequestAsync(
+    internal static PreparedTranscriptionRequest PrepareTranscriptionRequest(
         RecordedAudioData recordedAudio,
         OpenAITranscriberSettings settings,
         ILoggerFactory? loggerFactory = null)
-        => Task.Run(() => PrepareTranscriptionRequest(recordedAudio, settings, loggerFactory));
-
-    internal static byte[] CreateWaveFileBytes(
-        byte[] data,
-        int mixRate,
-        bool stereo,
-        AudioStreamWav.FormatEnum format)
-    {
-        using MemoryStream stream = CreateWaveFileStream(data, mixRate, stereo, format);
-        return stream.ToArray();
-    }
-
-    internal static MemoryStream CreateWaveFileStream(
-        byte[] data,
-        int mixRate,
-        bool stereo,
-        AudioStreamWav.FormatEnum format)
-    {
-        MemoryStream stream = CreateWaveFileStream(data, mixRate, stereo, format, data.Length + 44);
-        stream.Position = 0;
-        return stream;
-    }
+        => PrepareTranscriptionRequestCore(recordedAudio, settings, loggerFactory);
 
     internal static AudioTranscriptionOptions CreateTranscriptionOptions(OpenAITranscriberSettings settings)
     {
@@ -149,69 +116,24 @@ public partial class OpenAITranscriber : Transcriber
                 "OpenAI transcription response did not contain a non-empty 'text' field.")
             : response.Text.Trim();
 
-    internal static RecordedAudioData CaptureRecordedAudio(AudioStreamWav audioStream)
-        => new(audioStream.Data, audioStream.MixRate, audioStream.Stereo, audioStream.Format);
-
-    private static MemoryStream CreateWaveFileStream(
-        byte[] data,
-        int mixRate,
-        bool stereo,
-        AudioStreamWav.FormatEnum format,
-        int capacity)
-    {
-        if (data.Length == 0)
-        {
-            throw new InvalidOperationException("OpenAITranscriber requires non-empty microphone audio.");
-        }
-
-        if (format is not AudioStreamWav.FormatEnum.Format8Bits and not AudioStreamWav.FormatEnum.Format16Bits)
-        {
-            throw new InvalidOperationException(
-                $"OpenAITranscriber only supports PCM WAV input. Got format '{format}'.");
-        }
-
-        int bitsPerSample = format == AudioStreamWav.FormatEnum.Format8Bits ? 8 : 16;
-        short channelCount = (short)(stereo ? 2 : 1);
-        int sampleRate = mixRate;
-        int byteRate = sampleRate * channelCount * bitsPerSample / 8;
-        short blockAlign = (short)(channelCount * bitsPerSample / 8);
-
-        MemoryStream stream = new(capacity: capacity);
-        using BinaryWriter writer = new(stream, Encoding.ASCII, leaveOpen: true);
-
-        writer.Write(Encoding.ASCII.GetBytes("RIFF"));
-        writer.Write(36 + data.Length);
-        writer.Write(Encoding.ASCII.GetBytes("WAVE"));
-        writer.Write(Encoding.ASCII.GetBytes("fmt "));
-        writer.Write(16);
-        writer.Write((short)1);
-        writer.Write(channelCount);
-        writer.Write(sampleRate);
-        writer.Write(byteRate);
-        writer.Write(blockAlign);
-        writer.Write((short)bitsPerSample);
-        writer.Write(Encoding.ASCII.GetBytes("data"));
-        writer.Write(data.Length);
-        writer.Write(data);
-        writer.Flush();
-
-        return stream;
-    }
-
-    private static PreparedTranscriptionRequest PrepareTranscriptionRequest(
+    private static PreparedTranscriptionRequest PrepareTranscriptionRequestCore(
         RecordedAudioData recordedAudio,
         OpenAITranscriberSettings settings,
         ILoggerFactory? loggerFactory)
     {
-        MemoryStream? wavStream = null;
+        WaveFileStream? wavStream = null;
 
         try
         {
-            wavStream = CreateWaveFileStream(
-                recordedAudio.Data,
-                recordedAudio.MixRate,
-                recordedAudio.Stereo,
-                recordedAudio.Format);
+            if (recordedAudio.PCMData.IsEmpty)
+            {
+                throw new InvalidOperationException("OpenAITranscriber requires non-empty microphone audio.");
+            }
+
+            wavStream = new WaveFileStream(
+                recordedAudio.PCMData,
+                recordedAudio.SampleRate,
+                recordedAudio.ChannelCount);
 
             return new PreparedTranscriptionRequest(
                 wavStream,
@@ -342,18 +264,12 @@ public partial class OpenAITranscriber : Transcriber
 
     }
 
-    internal readonly record struct RecordedAudioData(
-        byte[] Data,
-        int MixRate,
-        bool Stereo,
-        AudioStreamWav.FormatEnum Format);
-
     internal sealed class PreparedTranscriptionRequest(
-        MemoryStream wavStream,
+        Stream wavStream,
         AudioClient client,
         AudioTranscriptionOptions options) : IDisposable
     {
-        public MemoryStream WavStream { get; } = wavStream;
+        public Stream WavStream { get; } = wavStream;
 
         public AudioClient Client { get; } = client;
 

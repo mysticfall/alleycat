@@ -1,8 +1,14 @@
+using System.ClientModel;
+using System.ClientModel.Primitives;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Speech.Transcription;
-using Godot;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using OpenAI;
 using OpenAI.Audio;
 using Xunit;
 
@@ -247,70 +253,12 @@ public sealed class OpenAITranscriberTests
     }
 
     /// <summary>
-    /// Recorded PCM data must be wrapped into a valid RIFF/WAVE payload for upload.
-    /// </summary>
-    [Fact]
-    public void CreateWaveFileBytes_Pcm16Audio_WritesWaveHeader()
-    {
-        byte[] bytes = OpenAITranscriber.CreateWaveFileBytes(
-            data: [0x34, 0x12, 0x78, 0x56],
-            mixRate: 16000,
-            stereo: false,
-            format: AudioStreamWav.FormatEnum.Format16Bits);
-
-        Assert.Equal((byte)'R', bytes[0]);
-        Assert.Equal((byte)'I', bytes[1]);
-        Assert.Equal((byte)'F', bytes[2]);
-        Assert.Equal((byte)'F', bytes[3]);
-        Assert.Equal((byte)'W', bytes[8]);
-        Assert.Equal((byte)'A', bytes[9]);
-        Assert.Equal((byte)'V', bytes[10]);
-        Assert.Equal((byte)'E', bytes[11]);
-        Assert.Equal(48, bytes.Length);
-        Assert.Equal(0x34, bytes[44]);
-        Assert.Equal(0x12, bytes[45]);
-        Assert.Equal(0x78, bytes[46]);
-        Assert.Equal(0x56, bytes[47]);
-    }
-
-    /// <summary>
-    /// Stream uploads must receive a rewound in-memory WAV stream.
-    /// </summary>
-    [Fact]
-    public void CreateWaveFileStream_Pcm16Audio_ReturnsReadableRewoundWaveStream()
-    {
-        using MemoryStream stream = OpenAITranscriber.CreateWaveFileStream(
-            data: [0x34, 0x12, 0x78, 0x56],
-            mixRate: 16000,
-            stereo: false,
-            format: AudioStreamWav.FormatEnum.Format16Bits);
-
-        byte[] bytes = stream.ToArray();
-
-        Assert.True(stream.CanRead);
-        Assert.Equal(0, stream.Position);
-        Assert.Equal(48, stream.Length);
-        Assert.Equal((byte)'R', bytes[0]);
-        Assert.Equal((byte)'I', bytes[1]);
-        Assert.Equal((byte)'F', bytes[2]);
-        Assert.Equal((byte)'F', bytes[3]);
-        Assert.Equal(0x34, bytes[44]);
-        Assert.Equal(0x12, bytes[45]);
-        Assert.Equal(0x78, bytes[46]);
-        Assert.Equal(0x56, bytes[47]);
-    }
-
-    /// <summary>
     /// OpenAI request preparation must produce a rewound WAV stream and configured SDK options off the caller path.
     /// </summary>
     [Fact]
-    public async Task PrepareTranscriptionRequestAsync_ConfiguredAudioAndSettings_CreatesUploadRequest()
+    public void PrepareTranscriptionRequest_ConfiguredAudioAndSettings_CreatesUploadRequest()
     {
-        OpenAITranscriber.RecordedAudioData recordedAudio = new(
-            Data: [0x34, 0x12, 0x78, 0x56],
-            MixRate: 16000,
-            Stereo: false,
-            Format: AudioStreamWav.FormatEnum.Format16Bits);
+        RecordedAudioData recordedAudio = new([0x34, 0x12, 0x78, 0x56], sampleRate: 16000, channelCount: 1);
         OpenAITranscriber.OpenAITranscriberSettings settings = new(
             Host: "https://api.openai.com/v1",
             ApiKey: string.Empty,
@@ -322,12 +270,16 @@ public sealed class OpenAITranscriberTests
 
         using ILoggerFactory loggerFactory = new TestLoggerFactory();
         using OpenAITranscriber.PreparedTranscriptionRequest request =
-            await OpenAITranscriber.PrepareTranscriptionRequestAsync(recordedAudio, settings, loggerFactory);
-        byte[] bytes = request.WavStream.ToArray();
+            OpenAITranscriber.PrepareTranscriptionRequest(recordedAudio, settings, loggerFactory);
+        WaveFileStream wavStream = Assert.IsType<WaveFileStream>(request.WavStream);
+        Assert.True(MemoryMarshal.TryGetArray(recordedAudio.PCMData, out ArraySegment<byte> recordingSegment));
+        Assert.True(MemoryMarshal.TryGetArray(wavStream.PCMData, out ArraySegment<byte> streamSegment));
+        byte[] bytes = new byte[request.WavStream.Length];
+        _ = request.WavStream.Read(bytes);
 
         Assert.NotNull(request.Client);
-        Assert.Equal(0, request.WavStream.Position);
         Assert.Equal(48, request.WavStream.Length);
+        Assert.Same(recordingSegment.Array, streamSegment.Array);
         Assert.Equal((byte)'R', bytes[0]);
         Assert.Equal((byte)'I', bytes[1]);
         Assert.Equal((byte)'F', bytes[2]);
@@ -335,6 +287,70 @@ public sealed class OpenAITranscriberTests
         Assert.Equal("en", request.Options.Language);
         Assert.Equal("Transcribe clearly.", request.Options.Prompt);
         Assert.Equal(0.35f, request.Options.Temperature);
+
+        request.WavStream.Position = 0;
+        byte[] replay = new byte[request.WavStream.Length];
+        Assert.Equal(replay.Length, request.WavStream.Read(replay));
+        Assert.Equal(bytes, replay);
+    }
+
+    /// <summary>
+    /// Caller-owned arrays cannot mutate the PCM retained by the production recording/request route.
+    /// </summary>
+    [Fact]
+    public void PrepareTranscriptionRequest_PublicRecordingCopy_IsImmutableFromSource()
+    {
+        byte[] source = [0x34, 0x12];
+        RecordedAudioData recording = new(source, sampleRate: 16000, channelCount: 1);
+        source[0] = 0xff;
+        OpenAITranscriber.OpenAITranscriberSettings settings = new(
+            Host: "https://api.openai.com/v1",
+            ApiKey: null,
+            Model: "whisper-1",
+            Language: null,
+            Prompt: null,
+            Temperature: null,
+            TimeoutSeconds: null);
+
+        using ILoggerFactory loggerFactory = new TestLoggerFactory();
+        using OpenAITranscriber.PreparedTranscriptionRequest request =
+            OpenAITranscriber.PrepareTranscriptionRequest(recording, settings, loggerFactory);
+        request.WavStream.Position = WaveFileStream.HeaderLength;
+
+        Assert.Equal(0x34, request.WavStream.ReadByte());
+    }
+
+    /// <summary>
+    /// The pinned SDK must serialise and replay the complete composite WAV stream through its real multipart path.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeAudioAsync_WaveFileStream_RetriesWithIdenticalMultipartWavBody()
+    {
+        byte[] pcmData = [0x34, 0x12, 0x78, 0x56, 0xbc, 0x9a];
+        using WaveFileStream expectedStream = new(pcmData, sampleRate: 16000, channelCount: 1);
+        byte[] expectedWave = new byte[expectedStream.Length];
+        Assert.Equal(expectedWave.Length, expectedStream.Read(expectedWave));
+        using CapturingTranscriptionHandler handler = new();
+        using HttpClient httpClient = new(handler);
+        OpenAIClientOptions clientOptions = new()
+        {
+            Endpoint = new Uri("https://unit.test/v1"),
+            RetryPolicy = new ImmediateRetryPolicy(),
+            Transport = new HttpClientPipelineTransport(httpClient),
+        };
+        AudioClient client = new("whisper-1", new ApiKeyCredential("unit-test-key"), clientOptions);
+        using WaveFileStream uploadStream = new(pcmData, sampleRate: 16000, channelCount: 1);
+
+        AudioTranscription transcription = await client.TranscribeAudioAsync(
+            uploadStream,
+            "alleycat-recording.wav",
+            new AudioTranscriptionOptions { Language = "en" });
+
+        Assert.Equal("synthetic transcript", transcription.Text);
+        Assert.Equal(2, handler.RequestBodies.Count);
+        Assert.Equal(handler.RequestBodies[0], handler.RequestBodies[1]);
+        Assert.All(handler.ContentTypes, value => Assert.StartsWith("multipart/form-data; boundary=", value));
+        Assert.All(handler.RequestBodies, body => Assert.Equal(expectedWave, ExtractFileContent(body)));
     }
 
     private static IConfiguration CreateConfiguration(
@@ -362,6 +378,24 @@ public sealed class OpenAITranscriberTests
                 values[$"{section}:{key}"] = value;
             }
         }
+    }
+
+    private static byte[] ExtractFileContent(byte[] multipartBody)
+    {
+        ReadOnlySpan<byte> body = multipartBody;
+        ReadOnlySpan<byte> fileMarker = "alleycat-recording.wav"u8;
+        int fileMarkerIndex = body.IndexOf(fileMarker);
+        Assert.True(fileMarkerIndex >= 0, "The SDK multipart body did not contain the named WAV file part.");
+
+        ReadOnlySpan<byte> filePart = body[fileMarkerIndex..];
+        ReadOnlySpan<byte> headerTerminator = "\r\n\r\n"u8;
+        int headerLength = filePart.IndexOf(headerTerminator);
+        Assert.True(headerLength >= 0, "The SDK multipart file part had no header terminator.");
+
+        ReadOnlySpan<byte> contentAndBoundary = filePart[(headerLength + headerTerminator.Length)..];
+        int contentLength = contentAndBoundary.IndexOf("\r\n--"u8);
+        Assert.True(contentLength >= 0, "The SDK multipart file part had no closing boundary.");
+        return contentAndBoundary[..contentLength].ToArray();
     }
 
     private sealed class TestLoggerFactory : ILoggerFactory
@@ -393,5 +427,61 @@ public sealed class OpenAITranscriberTests
             Exception? exception,
             Func<TState, Exception?, string> formatter)
             => ArgumentNullException.ThrowIfNull(formatter);
+    }
+
+    private sealed class CapturingTranscriptionHandler : HttpMessageHandler
+    {
+        public List<byte[]> RequestBodies { get; } = [];
+
+        public List<string> ContentTypes { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("https://unit.test/v1/audio/transcriptions", request.RequestUri?.ToString());
+            Assert.NotNull(request.Content);
+            ContentTypes.Add(request.Content.Headers.ContentType?.ToString() ?? string.Empty);
+            RequestBodies.Add(await request.Content.ReadAsByteArrayAsync(cancellationToken));
+
+            if (RequestBodies.Count == 1)
+            {
+                HttpResponseMessage retryResponse = CreateJsonResponse(
+                    HttpStatusCode.InternalServerError,
+                    new
+                    {
+                        error = new
+                        {
+                            message = "retry once"
+                        }
+                    });
+                retryResponse.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.Zero);
+                return retryResponse;
+            }
+
+            return CreateJsonResponse(
+                HttpStatusCode.OK,
+                new
+                {
+                    text = "synthetic transcript"
+                });
+        }
+
+        private static HttpResponseMessage CreateJsonResponse<T>(HttpStatusCode statusCode, T body)
+        {
+            ByteArrayContent content = new(JsonSerializer.SerializeToUtf8Bytes(body));
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            return new HttpResponseMessage(statusCode)
+            {
+                Content = content,
+            };
+        }
+    }
+
+    private sealed class ImmediateRetryPolicy() : ClientRetryPolicy(maxRetries: 1)
+    {
+        protected override TimeSpan GetNextDelay(PipelineMessage message, int tryCount)
+            => TimeSpan.Zero;
     }
 }

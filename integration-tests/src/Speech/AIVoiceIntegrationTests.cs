@@ -1369,9 +1369,9 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
     private sealed partial class FakeTranscriber : Transcriber
     {
-        public override Task<string> Transcribe(AudioStreamWav audioStream)
+        public override Task<string> Transcribe(RecordedAudioData recording)
         {
-            _ = audioStream;
+            _ = recording;
             return Task.FromResult(string.Empty);
         }
 
