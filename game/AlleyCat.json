@@ -1,7 +1,7 @@
 {
   "STT": {
-    "Host": "http://localhost:8000/v1",
-    "Model": "Systran/faster-whisper-small.en",
+    "Host": "http://localhost:9000/v1",
+    "Model": "whisper-1",
     "Language": "en",
     "Prompt": "Transcribe the player's speech clearly.",
     "Temperature": 0.0,

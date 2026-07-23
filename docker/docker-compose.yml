@@ -29,13 +29,19 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-  speaches-api:
-    image: ghcr.io/speaches-ai/speaches:latest-cuda
-    container_name: alleycat-speaches-api
+  whisper-api:
+    image: hwdsl2/whisper-server:cuda
+    container_name: alleycat-whisper-api
     ports:
-      - "8000:8000"
+      - "9000:9000"
     volumes:
-      - ~/.cache/huggingface:/home/ubuntu/.cache/huggingface
+      - whisper-data:/var/lib/whisper
+    environment:
+      - WHISPER_MODEL=small.en
+      - WHISPER_DEVICE=auto
+      - WHISPER_COMPUTE_TYPE=float16
+      - WHISPER_API_KEY=
+      - HF_TOKEN=${HF_TOKEN}
     deploy:
       resources:
         reservations:
@@ -51,7 +57,7 @@ services:
     ports:
       - "8765:8765"
     volumes:
-      - ./audio2face-api-server/model_cache:/app/models
+      - audio2face-data:/app/models
     deploy:
       resources:
         reservations:
@@ -59,4 +65,8 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
+volumes:
+  whisper-data:
+    name: whisper-data
+  audio2face-data:
+    name: audio2face-data
