@@ -18,7 +18,7 @@ internal static class ToolOnlyTurnRunner
         new AIFunctionFactoryOptions
         {
             Name = EndTurnToolName,
-            Description = "End this turn without performing another action.",
+            Description = "Reserved non-action marker. Call exactly once in final position, alone for zero actions or after actions when their results are not needed. Omit it when waiting for action results.",
             AdditionalProperties = new AdditionalPropertiesDictionary
             {
                 ["Strict"] = true,
@@ -69,28 +69,22 @@ internal static class ToolOnlyTurnRunner
             }
 
             FunctionCallContent[] calls = ValidateResponse(response, functions, callIDs);
+            bool completesTurn = string.Equals(calls[^1].Name, EndTurnToolName, StringComparison.Ordinal);
+            int productionCallCount = completesTurn ? calls.Length - 1 : calls.Length;
             logger.LogDebug(
                 "Tool-only request {RequestCount} returned {ActionCount} action(s).",
                 requestCount,
-                calls.Length);
+                productionCallCount);
 
-            if (string.Equals(calls[0].Name, EndTurnToolName, StringComparison.Ordinal))
-            {
-                logger.LogInformation(
-                    "Tool-only turn terminated after {RequestCount} request(s) and {ActionCount} action(s).",
-                    requestCount,
-                    actionCount);
-                return;
-            }
-
-            if (calls.Length > MaxToolActions - actionCount)
+            if (productionCallCount > MaxToolActions - actionCount)
             {
                 throw new ToolOnlyTurnException("The tool-only turn exhausted its action limit.");
             }
 
-            List<AIContent> results = new(calls.Length);
-            foreach (FunctionCallContent call in calls)
+            List<AIContent>? results = completesTurn ? null : new(productionCallCount);
+            for (int index = 0; index < productionCallCount; index++)
             {
+                FunctionCallContent call = calls[index];
                 AIFunction function = functions[call.Name];
                 AIFunctionArguments arguments = new(call.Arguments);
                 object? result;
@@ -109,11 +103,20 @@ internal static class ToolOnlyTurnRunner
 
                 actionCount++;
                 logger.LogDebug("Tool-only action {ActionCount} completed.", actionCount);
-                results.Add(new FunctionResultContent(call.CallId, result));
+                results?.Add(new FunctionResultContent(call.CallId, result));
+            }
+
+            if (completesTurn)
+            {
+                logger.LogInformation(
+                    "Tool-only turn terminated after {RequestCount} request(s) and {ActionCount} action(s).",
+                    requestCount,
+                    actionCount);
+                return;
             }
 
             messages.AddRange(response.Messages);
-            messages.Add(new ChatMessage(ChatRole.Tool, results));
+            messages.Add(new ChatMessage(ChatRole.Tool, results!));
         }
 
         throw new ToolOnlyTurnException("The tool-only turn exhausted its model-request limit.");
@@ -195,10 +198,11 @@ internal static class ToolOnlyTurnRunner
             }
         }
 
+        int markerCount = calls.Count(call => string.Equals(call.Name, EndTurnToolName, StringComparison.Ordinal));
         if (calls.Count == 0
-            || (calls.Any(call => string.Equals(call.Name, EndTurnToolName, StringComparison.Ordinal))
-                && (calls.Count != 1
-                    || !string.Equals(calls[0].Name, EndTurnToolName, StringComparison.Ordinal))))
+            || markerCount > 1
+            || (markerCount == 1
+                && !string.Equals(calls[^1].Name, EndTurnToolName, StringComparison.Ordinal)))
         {
             throw InvalidResponse();
         }

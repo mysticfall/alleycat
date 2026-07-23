@@ -18,13 +18,15 @@ failures contained without treating assistant text or provider history as charac
 ## User Requirements
 
 1. An NPC may take zero actions, one action, or multiple actions during one turn and may repeat an action when
-   appropriate.
+   appropriate. When no action result is needed, it may perform its chosen actions and complete the turn in one model
+   response, avoiding an unnecessary follow-up request.
 2. `speak` must be an optional in-world action and must not end the turn.
 3. A turn with no actions must end directly without producing player-visible assistant text.
 4. Successful actions that matter to the NPC's experience must be available to later turns as self-observations.
 5. Failed, cancelled, malformed, or invalid actions must not be remembered as successful events.
-6. Tool feedback needed during the active turn may remain transient and must not become player-visible chat or durable
-   character memory by default.
+6. When an NPC needs action results to decide whether to act again or finish, those results must be returned during the
+   active turn for a later model response. This feedback may remain transient and must not become player-visible chat or
+   durable character memory by default.
 7. Voice availability must constrain speech only, not whether the NPC can run a turn or use other actions.
 8. Invalid model output, unknown calls, action failures, backend failures, and exhausted safety bounds must stop the
    turn safely without a model repair attempt or automatic retry.
@@ -51,20 +53,25 @@ failures contained without treating assistant text or provider history as charac
 5. The runtime must register every configured production action plus the exact reserved synthetic marker `end_turn` on
    every request. A configured action must not use the reserved name.
 6. `end_turn` is protocol control, not an action, action result, or observation. It must accept no arguments, must never
-   invoke a production tool delegate, and must never be ingested by Mind.
-7. A response containing `end_turn` is valid only when it contains exactly that one call and no ordinary assistant text
-   or other callable protocol content. The sole marker completes the turn without another provider request.
+   invoke a production tool delegate, produce a tool result, be ingested by Mind, or count towards `MaxToolActions`.
+7. A response containing `end_turn` is valid only when the marker occurs exactly once as the final call and the response
+   contains no ordinary assistant text or other non-call protocol content. The marker may be the sole call for zero
+   actions or may follow one or more configured production action calls.
 8. A response without `end_turn` is valid only when it contains one or more well-formed calls to configured production
    actions and no ordinary assistant text, unknown content, unknown tool, duplicate call identifier, or other malformed
    item.
-9. Zero actions must therefore be represented by `end_turn` in the first response. One or more actions must be followed
-   by a later sequential request whose valid response either supplies more actions or the sole `end_turn` marker.
-10. The runtime must validate a complete response batch before invoking any call in that batch. Valid all-action batches
-    must be supported locally and their calls must execute serially in provider order.
+9. Zero actions must be represented by sole `end_turn`. One or more actions may be followed by final `end_turn` in the
+   same response when no result-dependent continuation is needed. An action-only response requires result replay and a
+   later sequential model request.
+10. The runtime must validate the complete response batch, including all calls, marker placement, identifiers,
+    arguments, content, and bounds, before invoking any production action in that batch. Valid production actions must
+    execute serially in provider order, including those before a final `end_turn` marker.
 11. `AllowMultipleToolCalls` must be a configurable runtime or provider preference and must default to `false`. It may
     guide provider generation but must not make an otherwise valid multi-action batch fail local validation.
-12. After each successful all-action batch, the runtime must append the assistant function calls and corresponding tool
-    results to transient per-turn history, then issue the next request by replaying the complete history in order.
+12. After each successful action-only batch, the runtime must append all assistant function calls and corresponding tool
+    results to transient per-turn history, then issue the next request by replaying the complete history in order. After
+    all production actions in a valid final-marker batch succeed, the turn must finish without replaying that batch or
+    issuing another provider request.
 13. Transient request history must be discarded when the turn settles. The Mind timeline under
     [AI-001](../001-mind/index.md) is the only cross-turn memory.
 14. The runtime must enforce the named bounds `MaxModelRequests` and `MaxToolActions`, with normative defaults of `8`
@@ -74,9 +81,10 @@ failures contained without treating assistant text or provider history as charac
     `MaxToolActions` counts production action calls but not `end_turn`.
 16. A batch that would exceed `MaxToolActions` must fail before any call in that batch executes. Reaching
     `MaxModelRequests` without a valid `end_turn` must fail once another request would be required.
-17. Malformed output, assistant text, unknown content or tools, mixed `end_turn` and action calls, invalid arguments,
-    duplicate call identifiers, tool errors, and bound exhaustion must fail closed. The runtime must not ask the model
-    to repair output, retry the failed request or action, or continue the turn.
+17. Empty or malformed output, assistant text, unknown content or tools, invalid arguments, duplicate call identifiers,
+    and a non-final, repeated, or malformed `end_turn` marker must fail before any batch effect. Tool errors and bound
+    exhaustion must also fail closed. The runtime must not ask the model to repair output, retry the failed request or
+    action, or continue the turn.
 18. Valid sequential requests after successful actions are protocol continuation, not repair or retry. Actions and
     observations committed before a later failure or pre-emption remain committed.
 19. Every `AgentTool` delegate must return the standard `AgentToolResult`, containing an optional model-facing `Message`
@@ -135,8 +143,10 @@ failures contained without treating assistant text or provider history as charac
 ## In Scope
 
 - Permanent production use of fresh, bounded tool-only execution for every turn.
-- Zero, one, or multiple serial actions followed by the sole synthetic `end_turn` marker.
-- Required tool choice, local batch validation, transient full-history replay, and fail-closed handling.
+- Zero actions represented by sole `end_turn`, or one or more serial actions optionally followed by final `end_turn` in
+  the same response.
+- Required tool choice, local batch validation, transient full-history replay for action-only continuation, and
+  fail-closed handling.
 - Configurable multiple-call preference and named request and action bounds.
 - Responses-default stateless transport and explicitly selected Chat Completions rollback.
 - Standard `AgentToolResult` validation, projection, and atomic Mind hand-off.
@@ -159,23 +169,28 @@ failures contained without treating assistant text or provider history as charac
 
 1. Tests verify a zero-action turn returns sole `end_turn` on its first response, executes no action, creates no
    observation, and produces no accepted or player-visible assistant text.
-2. Tests verify one action followed by `end_turn`, repeated sequential action responses, and locally accepted
-   multi-action batches; all actions execute serially in provider order and `speak` never completes the turn.
+2. Tests verify one model response can call `speak` and then final `end_turn`, executing speech once and completing the
+   turn without result replay or another provider request. Equivalent final-marker batches with multiple production
+   actions execute each action serially in provider order before completion.
 3. Tests verify every request requires a tool call, registers all configured actions plus `end_turn`, and sends no
    provider response format or terminal schema.
-4. Tests verify `end_turn` is reserved, argument-free, never invoked, never returned as an action result, never ingested
-   as an observation, and accepted only as the sole call in its response.
+4. Tests verify `end_turn` is reserved, argument-free, accepted at most once and only as the final call, and may be sole
+   or follow one or more production actions. It is never invoked, returned as a result, ingested, or counted as an
+   action.
 5. Tests reject empty or malformed responses, assistant text, unknown content and tools, duplicate call identifiers,
-   invalid arguments, mixed action and `end_turn` calls, and non-sole `end_turn` without executing the invalid batch.
+   invalid arguments, and non-final, repeated, or malformed `end_turn` before executing any action in the invalid batch.
 6. Tests verify `AllowMultipleToolCalls` is configurable and defaults to `false`, while local validation still accepts a
    valid all-action batch and executes it serially.
-7. Tests verify successful calls and results are replayed in full on each later request, then discarded at turn end. A
-   later turn receives only its newly rendered instruction, provider bootstrap input, and Mind timeline context.
+7. Tests verify a successful action-only batch replays all calls and results in full on a later model request, including
+   when the model needs those results to continue. A final-marker batch performs no such replay or request. Transient
+   history is discarded at turn end, and a later turn receives only its newly rendered instruction, provider bootstrap
+   input, and Mind timeline context.
 8. Tests verify `MaxModelRequests` and `MaxToolActions` default to `8`, count requests and production actions
    respectively, reject a batch that would exceed the action bound before execution, and stop when the request bound is
    exhausted without `end_turn`.
-9. Tests verify malformed, unknown, text, mixed, tool-error, backend-error, and bounds failures stop without model
-   repair, request or action retry, or continued execution; earlier committed actions and observations remain committed.
+9. Tests verify malformed, unknown, text, invalid-marker, tool-error, backend-error, and bounds failures stop without
+   model repair, request or action retry, or continued execution; earlier actions and observations committed before a
+   later action fails remain committed.
 10. Responses transport tests verify it is the default and that every sequential request sets `store: false`, omits
     `previous_response_id`, and replays complete ordered per-turn history.
 11. Configuration and transport tests verify Chat Completions is available only through explicit selection, is never an

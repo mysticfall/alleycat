@@ -35,6 +35,40 @@ public sealed class ToolOnlyTurnRunnerTests
     }
 
     /// <summary>
+    /// A production action followed by the final marker completes without marker invocation, result replay, or another request.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithSpeakAndFinalEndTurn_CompletesInOneRequest()
+    {
+        var client = new ScriptedChatClient(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "speak-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Hello" }),
+                new FunctionCallContent(
+                    "end-call",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+            ]));
+        List<string> speech = [];
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(speech.Add)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["Hello"], speech);
+        IReadOnlyList<ChatMessage> request = Assert.Single(client.Requests);
+        Assert.Empty(request);
+    }
+
+    /// <summary>
     /// A speak result is correlated into exact response replay before a later end marker.
     /// </summary>
     [Fact]
@@ -123,6 +157,44 @@ public sealed class ToolOnlyTurnRunnerTests
         Assert.Equal(["first", "second:2"], actions);
         Assert.All(client.Options, options => Assert.Equal(allowMultipleToolCalls, options.AllowMultipleToolCalls));
         Assert.Equal(2, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// Multiple production actions before a final marker execute serially and complete in the same response.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithMultiActionFinalBatch_ExecutesInProviderOrderAndCompletes()
+    {
+        List<string> actions = [];
+        AIFunction first = AIFunctionFactory.Create(() => actions.Add("first"), "first_action");
+        AIFunction second = AIFunctionFactory.Create(
+            (int count) => actions.Add($"second:{count}"),
+            "second_action");
+        var client = new ScriptedChatClient(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent("first-call", "first_action", new Dictionary<string, object?>()),
+                new FunctionCallContent(
+                    "second-call",
+                    "second_action",
+                    new Dictionary<string, object?> { ["count"] = 2 }),
+                new FunctionCallContent(
+                    "end-call",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+            ]));
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [first, second],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["first", "second:2"], actions);
+        _ = Assert.Single(client.Requests);
     }
 
     /// <summary>
@@ -316,6 +388,72 @@ public sealed class ToolOnlyTurnRunnerTests
     }
 
     /// <summary>
+    /// The final protocol marker does not consume the production-action allowance.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithMaximumActionsAndFinalMarker_DoesNotCountMarkerAsAction()
+    {
+        List<AIContent> calls = [.. Enumerable.Range(0, ToolOnlyTurnRunner.MaxToolActions)
+            .Select(index => (AIContent)new FunctionCallContent(
+                $"call-{index}",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = $"Line {index}" }))];
+        calls.Add(new FunctionCallContent(
+            "end-call",
+            ToolOnlyTurnRunner.EndTurnToolName,
+            new Dictionary<string, object?>()));
+        var client = new ScriptedChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)));
+        int invocationCount = 0;
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => invocationCount++)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(ToolOnlyTurnRunner.MaxToolActions, invocationCount);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// A later action failure leaves an earlier action committed and prevents terminal completion.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WhenLaterActionBeforeFinalMarkerFails_PreservesEarlierEffectAndStops()
+    {
+        List<string> actions = [];
+        AIFunction first = AIFunctionFactory.Create(() => actions.Add("first"), "first_action");
+        AIFunction failing = AIFunctionFactory.Create(
+            (Action)(() => throw new InvalidOperationException("Later failure.")),
+            "failing_action");
+        var client = new ScriptedChatClient(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent("first-call", "first_action", new Dictionary<string, object?>()),
+                new FunctionCallContent("failing-call", "failing_action", new Dictionary<string, object?>()),
+                new FunctionCallContent(
+                    "end-call",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+            ]));
+
+        _ = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [first, failing],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Equal(["first"], actions);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
     /// Reserved names and duplicate production declarations are rejected before any request.
     /// </summary>
     [Fact]
@@ -421,13 +559,41 @@ public sealed class ToolOnlyTurnRunnerTests
             ChatRole.Assistant,
             [
                 new FunctionCallContent(
-                    "call",
-                    SpeakToolName,
-                    new Dictionary<string, object?> { ["speech"] = "Hello" }),
-                new FunctionCallContent(
                     "end",
                     ToolOnlyTurnRunner.EndTurnToolName,
                     new Dictionary<string, object?>()),
+                new FunctionCallContent(
+                    "call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Must not run" }),
+            ])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "valid-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Must not run" }),
+                new FunctionCallContent(
+                    "end-one",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+                new FunctionCallContent(
+                    "end-two",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+            ])),
+        new ChatResponse(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent(
+                    "valid-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Must not run" }),
+                new FunctionCallContent(
+                    "end",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?> { ["unexpected"] = true }),
             ])),
         new ChatResponse(new ChatMessage(
             ChatRole.Assistant,

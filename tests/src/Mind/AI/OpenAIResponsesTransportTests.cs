@@ -54,7 +54,7 @@ public sealed class OpenAIResponsesTransportTests
 
         Assert.Equal(["Hello"], admittedSpeech);
         Assert.Equal(2, handler.Requests.Count);
-        const string bootstrap = "Process the observations in your instructions. Use the available actions as needed, then call end_turn by itself.";
+        const string bootstrap = "Process the observations in your instructions. Use available actions as needed. Call end_turn exactly once in final position, after the actions when their results are not needed, or alone for zero actions. Omit end_turn when waiting for action results.";
         for (int index = 0; index < handler.Requests.Count; index++)
         {
             CapturedRequest capture = handler.Requests[index];
@@ -99,6 +99,37 @@ public sealed class OpenAIResponsesTransportTests
         Assert.Equal(
             "Spoken.",
             JsonSerializer.Deserialize<string>(functionResult.GetProperty("output").GetString()!));
+    }
+
+    /// <summary>
+    /// Responses maps an action and final marker from one wire payload and completes without replay.
+    /// </summary>
+    [Fact]
+    public async Task ProviderDefaultResponses_WithSpeakAndFinalMarker_CompletesAfterOneWireRequest()
+    {
+        var handler = new CapturingHandler(CreateCombinedToolCallResponse());
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient);
+        List<string> admittedSpeech = [];
+        AIFunction speak = AIFunctionFactory.Create(
+            (string speech) => admittedSpeech.Add(speech),
+            "speak",
+            "Speak through the character-owned voice.");
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            OpenAIClientProvider.CreateRunMessages(OpenAIChatClientKind.Responses),
+            [speak],
+            true,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["Hello"], admittedSpeech);
+        CapturedRequest request = Assert.Single(handler.Requests);
+        using var payload = JsonDocument.Parse(request.Body);
+        Assert.Equal("required", payload.RootElement.GetProperty("tool_choice").GetString());
+        Assert.True(payload.RootElement.GetProperty("parallel_tool_calls").GetBoolean());
     }
 
     /// <summary>
@@ -148,6 +179,8 @@ public sealed class OpenAIResponsesTransportTests
             root.GetProperty("tools").EnumerateArray(),
             tool => tool.GetProperty("name").GetString() == ToolOnlyTurnRunner.EndTurnToolName);
         Assert.True(endTurn.GetProperty("strict").GetBoolean());
+        Assert.Contains("final position", endTurn.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Contains("waiting for action results", endTurn.GetProperty("description").GetString(), StringComparison.Ordinal);
         JsonElement parameters = endTurn.GetProperty("parameters");
         Assert.Equal("object", parameters.GetProperty("type").GetString());
         Assert.Empty(parameters.GetProperty("properties").EnumerateObject());
@@ -219,6 +252,50 @@ public sealed class OpenAIResponsesTransportTests
                 "output_tokens": 1,
                 "output_tokens_details": { "reasoning_tokens": 0 },
                 "total_tokens": 3
+              }
+            }
+            """;
+
+    private static string CreateCombinedToolCallResponse()
+        => $$"""
+            {
+              "id": "resp_sanitised_combined",
+              "object": "response",
+              "created_at": 1,
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "instructions": null,
+              "model": "test-model",
+              "output": [
+                {
+                  "type": "function_call",
+                  "id": "fc_sanitised_combined_speak",
+                  "call_id": "{{CallID}}",
+                  "name": "speak",
+                  "arguments": "{\"speech\":\"Hello\"}",
+                  "status": "completed"
+                },
+                {
+                  "type": "function_call",
+                  "id": "fc_sanitised_combined_end",
+                  "call_id": "call_sanitised_end",
+                  "name": "end_turn",
+                  "arguments": "{}",
+                  "status": "completed"
+                }
+              ],
+              "parallel_tool_calls": true,
+              "previous_response_id": null,
+              "store": false,
+              "tool_choice": "required",
+              "tools": [],
+              "usage": {
+                "input_tokens": 1,
+                "input_tokens_details": { "cached_tokens": 0 },
+                "output_tokens": 1,
+                "output_tokens_details": { "reasoning_tokens": 0 },
+                "total_tokens": 2
               }
             }
             """;

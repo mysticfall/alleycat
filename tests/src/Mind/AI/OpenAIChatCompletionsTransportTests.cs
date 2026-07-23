@@ -65,6 +65,36 @@ public sealed class OpenAIChatCompletionsTransportTests
     }
 
     /// <summary>
+    /// Chat Completions maps an action and final marker from one wire payload and completes without replay.
+    /// </summary>
+    [Fact]
+    public async Task ProviderChatCompletionsRollback_WithSpeakAndFinalMarker_CompletesAfterOneWireRequest()
+    {
+        var handler = new CapturingHandler(CreateCombinedToolCallResponse());
+        using var httpClient = new HttpClient(handler);
+        using IChatClient client = CreateClient(httpClient);
+        List<string> admittedSpeech = [];
+        AIFunction speak = AIFunctionFactory.Create(
+            (string speech) => admittedSpeech.Add(speech),
+            "speak",
+            "Speak aloud.");
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [speak],
+            true,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["Hello"], admittedSpeech);
+        string requestBody = Assert.Single(handler.RequestBodies);
+        using var payload = JsonDocument.Parse(requestBody);
+        AssertStrictToolOnlyRequest(payload.RootElement, true);
+    }
+
+    /// <summary>
     /// Additional speak arguments are rejected before the production function can be invoked or retried.
     /// </summary>
     [Fact]
@@ -129,6 +159,8 @@ public sealed class OpenAIChatCompletionsTransportTests
             tool => tool.GetProperty("function").GetProperty("name").GetString()
                 == ToolOnlyTurnRunner.EndTurnToolName).GetProperty("function");
         Assert.True(endTurn.GetProperty("strict").GetBoolean());
+        Assert.Contains("final position", endTurn.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Contains("waiting for action results", endTurn.GetProperty("description").GetString(), StringComparison.Ordinal);
         JsonElement parameters = endTurn.GetProperty("parameters");
         Assert.Equal("object", parameters.GetProperty("type").GetString());
         Assert.Empty(parameters.GetProperty("properties").EnumerateObject());
@@ -177,6 +209,37 @@ public sealed class OpenAIChatCompletionsTransportTests
                     "type": "function",
                     "function": { "name": "end_turn", "arguments": "{}" }
                   }]
+                },
+                "finish_reason": "tool_calls"
+              }],
+              "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
+            }
+            """;
+
+    private static string CreateCombinedToolCallResponse()
+        => /*lang=json,strict*/ """
+            {
+              "id": "chatcmpl-combined",
+              "object": "chat.completion",
+              "created": 1,
+              "model": "test-model",
+              "choices": [{
+                "index": 0,
+                "message": {
+                  "role": "assistant",
+                  "content": null,
+                  "tool_calls": [
+                    {
+                      "id": "call-1",
+                      "type": "function",
+                      "function": { "name": "speak", "arguments": "{\"speech\":\"Hello\"}" }
+                    },
+                    {
+                      "id": "end-call",
+                      "type": "function",
+                      "function": { "name": "end_turn", "arguments": "{}" }
+                    }
+                  ]
                 },
                 "finish_reason": "tool_calls"
               }],

@@ -160,7 +160,12 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string sectionText = GetPropertyValue<string>(instructionSection, "Text");
         Assert.Contains("You are {{ character.Id }}", sectionText, StringComparison.Ordinal);
         Assert.Contains("You may take no action, one action, or several actions", sectionText, StringComparison.Ordinal);
-        Assert.DoesNotContain("exactly once", sectionText, StringComparison.Ordinal);
+        Assert.Contains("Use `end_turn` exactly once as the final", sectionText, StringComparison.Ordinal);
+        Assert.Contains("Call it alone for zero actions", sectionText, StringComparison.Ordinal);
+        Assert.Contains(
+            "Omit `end_turn` from an action-only response when you need action results",
+            sectionText,
+            StringComparison.Ordinal);
         Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);
         Assert.Equal("AlleyCat.Mind.AI.Prompting.EssentialLorePromptSection", orderedSections[1].GetType().FullName);

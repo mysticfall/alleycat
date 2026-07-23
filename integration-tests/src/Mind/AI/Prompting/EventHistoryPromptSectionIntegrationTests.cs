@@ -18,8 +18,9 @@ public sealed class EventHistoryPromptSectionIntegrationTests
 {
     private const string GenericPromptPath = "res://assets/characters/prompts/generic_npc_prompt_stack.tres";
     private const string StrictToolOnlyGuidance =
-        "Use `end_turn` exactly as the reserved argument-free non-action marker. "
-        + "It is valid alone after zero or more actions. "
+        "Use `end_turn` exactly once as the final argument-free non-action marker. "
+        + "Call it alone for zero actions, or after one or more actions when you can finish without inspecting their results. "
+        + "Omit `end_turn` from an action-only response when you need action results before deciding whether to continue or finish. "
         + "Action tools such as `speak` are optional and do not end the turn. "
         + "Ordinary text is invalid.";
 

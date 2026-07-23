@@ -37,7 +37,7 @@ public partial class OpenAIClientProvider : ClientProvider
     private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
     private const string DefaultModel = "gpt-4o-mini";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
-    private const string ResponsesRunInput = "Process the observations in your instructions. Use the available actions as needed, then call end_turn by itself.";
+    private const string ResponsesRunInput = "Process the observations in your instructions. Use available actions as needed. Call end_turn exactly once in final position, after the actions when their results are not needed, or alone for zero actions. Omit end_turn when waiting for action results.";
 
     internal const OpenAIChatClientKind DefaultChatClientKind = OpenAIChatClientKind.Responses;
 

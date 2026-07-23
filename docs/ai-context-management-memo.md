@@ -53,14 +53,16 @@ log. It is explanatory only; the linked specifications are authoritative.
 - The explicit tool-only loop is the permanent production route, not a diagnostic alternative to a generic typed
   terminal-result path.
 - Every request requires at least one tool call and carries all configured actions plus reserved synthetic `end_turn`.
-- `end_turn` is neither an action nor an observation. It is valid only as the sole call in a response and is never
-  invoked locally.
-- A zero-action turn returns `end_turn` first. Valid action calls execute serially, then another request replays the
-  complete transient turn history until sole `end_turn` is returned.
+- `end_turn` is neither an action nor an observation and is never invoked locally. A zero-action response must contain
+  sole `end_turn`.
+- One or more production actions followed by exactly one final `end_turn` form a terminal batch. After complete batch
+  validation and successful serial action execution, the turn finishes without result replay or another model request.
+- An action-only batch is the result replay and continuation path when the model needs action results before deciding
+  whether to act again or finish. Successful calls and results enter transient history for the next sequential request.
 - `AllowMultipleToolCalls` is configurable and defaults to `false`, but local validation accepts valid all-action
   batches and executes them serially.
-- Assistant text, malformed or unknown content, mixed action and `end_turn` calls, tool errors, and exhausted request or
-  action bounds fail closed without model repair or automatic retry.
+- Non-final, repeated, malformed, or otherwise invalid markers or batches fail closed. Assistant text, unknown content,
+  tool errors, and exhausted request or action bounds also fail without model repair or automatic retry.
 - `MaxModelRequests` and `MaxToolActions` have normative defaults of `8`. They may remain constants until a settings
   surface is exposed; an exposed surface keeps the names, positive-integer validation, and defaults.
 - OpenAI Responses is the default transport. Each request uses `store: false`, omits `previous_response_id`, and fully
