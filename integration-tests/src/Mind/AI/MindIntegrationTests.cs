@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
+using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
+using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
@@ -1588,7 +1590,9 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
             => new Dictionary<string, object?>();
     }
 
@@ -1671,6 +1675,8 @@ public sealed partial class MindIntegrationTests : IDisposable
 
         public IReadOnlyList<IComponent> Components { get; init; } = [];
 
+        public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
         public int ContextRequestCount
         {
             get; private set;
@@ -1681,12 +1687,12 @@ public sealed partial class MindIntegrationTests : IDisposable
             get; private set;
         }
 
-        public ICharacter? ReceivedObserver
+        public IContextual? ReceivedObserver
         {
             get; private set;
         }
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
         {
             ContextRequestCount++;
             ReceivedScene = scene;

@@ -8,6 +8,9 @@
 [node name="Vadim" unique_id=504240789 instance=ExtResource("1_0e151")]
 Id = "Vadim"
 
+[node name="BodyVisualCue" parent="Male/GeneralSkeleton/Head/Viewpoint" parent_id_path=PackedInt32Array(1214445104) index="0" unique_id=1621608574]
+Description = "Vadim is a sturdily built European man in his late twenties, standing around 180 centimetres tall. Light blond hair and pale skin frame an austere face, while his icy blue eyes lend him a distinctly stern appearance."
+
 [node name="Voice" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1295007558]
 Id = "Vadim"
 

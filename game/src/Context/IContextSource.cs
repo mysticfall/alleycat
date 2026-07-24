@@ -1,4 +1,3 @@
-using AlleyCat.Character;
 using AlleyCat.Scene;
 
 namespace AlleyCat.Context;
@@ -13,9 +12,9 @@ public interface IContextSource
     /// </summary>
     /// <param name="subject">Contextual subject being described.</param>
     /// <param name="scene">Current scene membership snapshot.</param>
-    /// <param name="observer">Optional observing character.</param>
+    /// <param name="observer">Optional contextual observer.</param>
     /// <returns>Context entries contributed by this source, keyed by stable field name.</returns>
-    IReadOnlyDictionary<string, object?> GetContext(IContextual subject, ISceneContext scene, ICharacter? observer);
+    IReadOnlyDictionary<string, object?> GetContext(IContextual subject, ISceneContext scene, IContextual? observer);
 }
 
 /// <summary>
@@ -30,15 +29,15 @@ public interface IContextSource<in TContextual> : IContextSource
     /// </summary>
     /// <param name="subject">Contextual subject being described.</param>
     /// <param name="scene">Current scene membership snapshot.</param>
-    /// <param name="observer">Optional observing character.</param>
+    /// <param name="observer">Optional contextual observer.</param>
     /// <returns>Context entries contributed by this source, keyed by stable field name.</returns>
-    IReadOnlyDictionary<string, object?> GetContext(TContextual subject, ISceneContext scene, ICharacter? observer);
+    IReadOnlyDictionary<string, object?> GetContext(TContextual subject, ISceneContext scene, IContextual? observer);
 
     /// <inheritdoc />
     IReadOnlyDictionary<string, object?> IContextSource.GetContext(
         IContextual subject,
         ISceneContext scene,
-        ICharacter? observer)
+        IContextual? observer)
     {
         if (subject is not TContextual typedSubject)
         {

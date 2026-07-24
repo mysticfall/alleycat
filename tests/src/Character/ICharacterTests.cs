@@ -34,6 +34,8 @@ public sealed class ICharacterTests
         Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(INavigator).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IContextual).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(IVisualObserver).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(IVisualSubject).IsAssignableFrom(typeof(ICharacter)));
     }
 
     /// <summary>
@@ -75,7 +77,9 @@ public sealed class ICharacterTests
 
         public IReadOnlyList<IComponent> Components { get; } = components;
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
             => new Dictionary<string, object?>();
     }
 

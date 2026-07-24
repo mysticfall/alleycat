@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Scene;
@@ -97,15 +98,15 @@ public sealed class CharacterContextTests
     }
 
     /// <summary>
-    /// Character context aggregation passes the subject, scene, and observer to each source.
+    /// Character context aggregation passes the subject, scene, and non-visual contextual observer to each source.
     /// </summary>
     [Fact]
     public void GetContext_PassesSubjectSceneAndObserverToSource()
     {
         var source = CapturingContextSource.Create();
         AlleyCat.Character.Character character = CreateCharacter(source);
-        var observer = new FakeCharacter();
-        var scene = new FakeSceneContext([character, observer]);
+        var observer = new FakeContextual();
+        var scene = new FakeSceneContext([character]);
 
         _ = character.GetContext(scene, observer);
 
@@ -185,13 +186,13 @@ public sealed class CharacterContextTests
         public override IReadOnlyDictionary<string, object?> GetContext(
             IContextual subject,
             ISceneContext scene,
-            ICharacter? observer)
+            IContextual? observer)
             => GetContext(RequireCompatibleSubject<ICharacter>(subject), scene, observer);
 
         public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
-            ICharacter? observer)
+            IContextual? observer)
             => _context;
     }
 
@@ -219,7 +220,7 @@ public sealed class CharacterContextTests
             get; private set;
         }
 
-        public ICharacter? Observer
+        public IContextual? Observer
         {
             get; private set;
         }
@@ -227,13 +228,13 @@ public sealed class CharacterContextTests
         public override IReadOnlyDictionary<string, object?> GetContext(
             IContextual subject,
             ISceneContext scene,
-            ICharacter? observer)
+            IContextual? observer)
             => GetContext(RequireCompatibleSubject<ICharacter>(subject), scene, observer);
 
         public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
-            ICharacter? observer)
+            IContextual? observer)
         {
             Subject = subject;
             Scene = scene;
@@ -255,7 +256,7 @@ public sealed class CharacterContextTests
             get; private set;
         }
 
-        public ICharacter? Observer
+        public IContextual? Observer
         {
             get; private set;
         }
@@ -263,7 +264,7 @@ public sealed class CharacterContextTests
         public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
-            ICharacter? observer)
+            IContextual? observer)
         {
             Subject = subject;
             Scene = scene;
@@ -290,13 +291,15 @@ public sealed class CharacterContextTests
 
         public IReadOnlyList<AlleyCat.Core.IComponent> Components { get; } = [];
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
             => new Dictionary<string, object?>();
     }
 
     private sealed class FakeContextual : IContextual
     {
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
             => new Dictionary<string, object?>();
     }
 }

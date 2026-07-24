@@ -19,7 +19,8 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 
 1. Game systems can request contextual data from a subject through one shared API.
 2. Contextual data is returned as neutral key/value entries that are independent of any consumer API.
-3. Context retrieval may consider the current scene and an observing character when that matters to the subject.
+3. Context retrieval may consider the current scene and an optional contextual observer when that matters to the
+   subject.
 4. Player-visible behaviour can use available context without exposing source wiring, Godot export details, or data
    assembly details.
 5. Names, aliases, and display labels are contextual data when sources provide them, not fixed character properties.
@@ -33,7 +34,8 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 3. The active context result contract is `IReadOnlyDictionary<string, object?>`.
 4. Context result dictionaries expose stable string keys and nullable object values without depending on AI, prompt,
    templating, or presentation APIs.
-5. Context requests accept the current `AlleyCat.Scene.ISceneContext` and an optional observing `ICharacter`.
+5. General context signatures on `IContextual`, `IContextSource`, and `IContextSource<TContextual>` accept the current
+   `AlleyCat.Scene.ISceneContext` and an optional `IContextual? observer`.
 6. `AlleyCat.Scene` owns current scene membership through SCN-001. CTX-001 must not redefine membership, actor
    discovery, or scene snapshot semantics.
 7. Source aggregation is internal to contextual subjects or owning systems, not a public requester responsibility.
@@ -44,10 +46,12 @@ consumer APIs, while providing the narrow character-card source and scene-charac
    implementation path.
 11. `ContextSource` is a neutral abstract Godot resource base under `AlleyCat.Context` and is the exported property type
     for Godot-authored source collections.
-12. `AlleyCat.Context` must not contain character-specific source APIs or character-specific source resource bases.
+12. `AlleyCat.Context` must not depend on `AlleyCat.Body.Eyes` or `AlleyCat.Character`, and must not contain
+    character-specific source APIs or character-specific source resource bases.
 13. Character source wiring, where specified by character-owned specs, uses one source collection rather than separate
     authored and runtime collections.
-14. `ICharacter` extends `IContextual` for the first character-focused slice.
+14. Under CHAR-002, `ICharacter` extends `IContextual` for the first character-focused slice without creating a
+    dependency from `AlleyCat.Context` to `AlleyCat.Character`.
 15. `IEntity` is not required to extend `IContextual` in the first slice.
 16. Do not introduce `ContextData`, titled-fragment result objects, `ContextRequest`, `ContextRequestKind`, typed
     request filters, or a detailed item taxonomy.
@@ -62,6 +66,12 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 22. The `characters` dictionary must be inserted in ordinal order by exact `Character.Id`.
 23. Context assembly must fail for empty character IDs, duplicate exact scene character IDs, or an owner absent from the
     scene context.
+24. Existing observer-relative semantics remain unchanged: when an observer is supplied, sources receive that same
+    observer; when omitted, sources receive `null`.
+25. Context sources that need narrower observer capabilities may explicitly pattern-match the supplied `IContextual`;
+    the general contracts must not require visual inspection capabilities from every observer.
+26. `ICharacter` remains a valid contextual observer through its CHAR-002 aggregation of BODY-004's
+    `IVisualObserver : IEyesHolder, IContextual` role.
 
 ## In Scope
 
@@ -71,7 +81,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - Neutral `ContextSource` resource base as the exported Godot type for authored source collections.
 - Integration boundary with `AlleyCat.Scene.ISceneContext` from SCN-001.
 - `ICharacter : IContextual` for the first character-focused slice.
-- Optional observer-relative context via `ICharacter? observer`.
+- Optional observer-relative context via `IContextual? observer`.
 - Internal source aggregation by subjects or owning systems.
 - `CharacterCardContextSource` as the narrow identity source returning only the subject's exact ID.
 - Deterministic owner and scene-character context assembly for prompt/system consumers.
@@ -100,6 +110,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 3. Names, aliases, and display labels are representable as dictionary entries from future sources.
 4. No player-facing behaviour exposes source aggregation, Godot export details, or data assembly details.
 5. Generated character context identifies the owner and scene characters by their exact authored IDs.
+6. Existing context remains observer-relative when a contextual observer is supplied and remains available without one.
 
 ### Technical Requirements
 
@@ -123,10 +134,17 @@ consumer APIs, while providing the narrow character-card source and scene-charac
     every subject queried using the owning character as observer.
 14. The owner appears in both locations using the same dictionary instance.
 15. Empty IDs, exact duplicate scene IDs, and owner absence fail context assembly clearly.
+16. General context contracts use optional `IContextual? observer` parameters rather than narrower visual- or
+    character-domain observer parameters.
+17. The observer contract preserves existing supplied-observer and omitted-observer semantics across contextual subjects
+    and context sources.
+18. `AlleyCat.Context` has no dependency on `AlleyCat.Body.Eyes` or `AlleyCat.Character`; sources may explicitly
+    pattern-match an observer when they need narrower domain capabilities.
 
 ## References
 
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
+- [BODY-004: Eyes](../../body/004-eyes/index.md)
 - `game/src/Context/`
 - `game/src/Character/Character.cs`

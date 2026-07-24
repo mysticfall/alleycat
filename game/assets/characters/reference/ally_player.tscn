@@ -1,14 +1,31 @@
 [gd_scene load_steps=4 format=3 uid="uid://c1rexm45hq1rf"]
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
+[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/PointVisualCue.cs" id="2_amqjb"]
 [ext_resource type="PackedScene" uid="uid://deek4lix763je" path="res://assets/characters/templates/installers/player_installer.tscn" id="2_installer"]
 
-[node name="Player" groups=["Player"] instance=ExtResource("1_blend")]
+[node name="Player" unique_id=619146847 node_paths=PackedStringArray("AuthoredVisualCues") groups=["Player"] instance=ExtResource("1_blend")]
 Id = "Ally"
+AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/Viewpoint/BodyVisualCue")]
 
-[node name="Female" parent="." index="0"]
+[node name="Female" parent="." index="0" unique_id=1569261267]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="PlayerCharacterInstaller" parent="." instance=ExtResource("2_installer")]
+[node name="Head" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(332081969) index="9" unique_id=828506146]
+transform = Transform3D(1, 2.3283064e-10, 1.8626451e-09, 4.656613e-10, 1, -8.940697e-08, -2.0954758e-09, 5.9604645e-08, 1, -8.004758e-05, 1.4581467, 0.035322875)
+bone_name = "Head"
+bone_idx = 46
+
+[node name="Viewpoint" type="Marker3D" parent="Female/GeneralSkeleton/Head" index="0" unique_id=847299656]
+unique_name_in_owner = true
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
+
+[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head/Viewpoint" index="0" unique_id=977349589]
+script = ExtResource("2_amqjb")
+Description = "Ally is a slender Asian woman in her early twenties, standing about 160 centimetres tall. Her unassuming features and meek expression give her a quiet, gentle appearance."
+ID = "body"
+metadata/_custom_type_script = "uid://tb33120b0yo"
+
+[node name="PlayerCharacterInstaller" parent="." index="2" unique_id=1001620530 instance=ExtResource("2_installer")]
 
 [editable path="Female"]

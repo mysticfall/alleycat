@@ -89,6 +89,18 @@ public partial class Character : CharacterBody3D, ICharacter
         get; set;
     } = [];
 
+    /// <summary>
+    /// Gets or sets template-authored visual cue references in deterministic discovery order.
+    /// </summary>
+    [Export]
+    public VisualCue[] AuthoredVisualCues
+    {
+        get; set;
+    } = [];
+
+    /// <inheritdoc />
+    public IReadOnlyList<VisualCue> VisualCues { get; private set; } = [];
+
     /// <inheritdoc />
     public IReadOnlyList<IComponent> Components => _components;
 
@@ -117,12 +129,14 @@ public partial class Character : CharacterBody3D, ICharacter
         ];
 
         ValidateDistinctReferences(components);
+        ValidateVisualCues();
 
         _components = components;
+        VisualCues = Array.AsReadOnly(AuthoredVisualCues);
     }
 
     /// <inheritdoc />
-    public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+    public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
     {
         ArgumentNullException.ThrowIfNull(scene);
 
@@ -136,7 +150,7 @@ public partial class Character : CharacterBody3D, ICharacter
 
     private IReadOnlyDictionary<string, object?> AggregateContextSources(
         ISceneContext scene,
-        ICharacter? observer)
+        IContextual? observer)
     {
         Dictionary<string, object?> context = [];
         foreach (IContextSource source in ContextSources)
@@ -178,6 +192,35 @@ public partial class Character : CharacterBody3D, ICharacter
             {
                 throw new InvalidOperationException(
                     $"Character node '{GetPath()}' has duplicate capability reference {DescribeComponent(component)}. Each required capability must reference a distinct authored component node.");
+            }
+        }
+    }
+
+    private void ValidateVisualCues()
+    {
+        HashSet<string> IDs = new(StringComparer.Ordinal);
+        for (int index = 0; index < AuthoredVisualCues.Length; index++)
+        {
+            VisualCue cue = AuthoredVisualCues[index]
+                ?? throw new InvalidOperationException(
+                    $"Character node '{GetPath()}' has a null visual cue reference at index {index}.");
+
+            if (string.IsNullOrWhiteSpace(cue.ID))
+            {
+                throw new InvalidOperationException(
+                    $"Character node '{GetPath()}' visual cue at index {index} requires a non-empty ID.");
+            }
+
+            if (!float.IsFinite(cue.Prominence) || cue.Prominence < 0.0f)
+            {
+                throw new InvalidOperationException(
+                    $"Character node '{GetPath()}' visual cue '{cue.ID}' requires finite, non-negative prominence, but found {cue.Prominence}.");
+            }
+
+            if (!IDs.Add(cue.ID))
+            {
+                throw new InvalidOperationException(
+                    $"Character node '{GetPath()}' has duplicate visual cue ID '{cue.ID}'. IDs must be ordinally unique.");
             }
         }
     }

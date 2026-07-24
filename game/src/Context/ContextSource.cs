@@ -1,4 +1,3 @@
-using AlleyCat.Character;
 using AlleyCat.Scene;
 using Godot;
 
@@ -14,7 +13,7 @@ public abstract partial class ContextSource : Resource, IContextSource
     public abstract IReadOnlyDictionary<string, object?> GetContext(
         IContextual subject,
         ISceneContext scene,
-        ICharacter? observer);
+        IContextual? observer);
 
     /// <summary>
     /// Validates a non-generic subject before delegating to a typed source implementation.

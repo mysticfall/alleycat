@@ -29,6 +29,11 @@ Provide a reusable eye component system that:
 4. Eye animations must blend with existing facial animations without overriding them.
 5. Left and right eyes must move together as a unit.
 6. The eyes must make bounded saccade movements around the active gaze anchor.
+7. Systems can discover authored visual cues that identify meaningful points on a character or other visual subject.
+8. A visual cue can describe itself relative to the observing character and, when applicable, its containing visual
+   subject.
+9. Whole-character cues provide character-specific appearance descriptions while allowing shared character templates
+   to use placeholder text.
 
 ## Technical Requirements
 
@@ -90,6 +95,31 @@ Provide a reusable eye component system that:
 16. Runtime character installation validates that the imported `eyes` library, required
     animations, and blend-shape track targets are present before enabling eye behaviour.
 17. Player and NPC AnimationTree roots include the eye partial blend setup.
+18. Define the visual-cue contracts in `AlleyCat.Body.Eyes`:
+    - `IVisualObserver : IEyesHolder, IContextual` represents an observer that can supply observer-relative context.
+    - `IProvidesVisualCues` exposes a read-only collection of `VisualCue` instances.
+    - `IVisualSubject : IProvidesVisualCues, IContextual` represents a contextual subject that owns discoverable cues.
+19. `VisualCue` is an abstract `Node3D` base that supports Godot authoring and exports:
+    - A non-empty `ID` that is ordinally unique within its `IProvidesVisualCues` provider.
+    - A finite, non-negative relative `Prominence`, defaulting to `1`; `0` disables the cue and there is no fixed upper
+      bound.
+    - Template-backed description content compiled and rendered through the existing `ITemplate` system in TMPL-001.
+20. `VisualCue` defines `Vector3 SampleGlobalPosition()` and
+    `string Describe(ISceneContext scene, IVisualObserver observer)`.
+21. `Describe` requires a non-null observer even though general CTX-001 context observers remain optional.
+22. The description render root always contains
+    `observer = observer.GetContext(scene, observer)`.
+23. The description render root contains `subject = subject.GetContext(scene, observer)` only when the cue's nearest
+    `IVisualSubject` ancestor exists. A cue without such ancestry is valid and omits `subject`.
+24. `PointVisualCue` is the concrete point implementation: `SampleGlobalPosition()` returns `GlobalPosition`, and its
+    exported authored property is named `Description`. The property value remains template-backed, and `Describe`
+    compiles and renders it through the existing `ITemplate` system.
+25. Visual-cue providers validate non-empty IDs, finite non-negative prominence, and ordinal ID uniqueness within each
+    provider. Validation may occur at provider or character call sites; no standalone validation helper is prescribed.
+26. The shared reference female and male character templates each author one whole-character cue with ID `body` at the
+    existing head `Viewpoint`. Its generic template may contain placeholder description content.
+27. Ally NPC, Ally player, and Vadim character assets override the `body` cue template with character-specific
+    appearance descriptions.
 
 ## In Scope
 
@@ -105,11 +135,16 @@ Provide a reusable eye component system that:
 - Import-time generation of eye tracks from discovered eye blend shapes, or invisible
   placeholder/no-op tracks when no recognised eye blend shapes exist.
 - Per-character AnimationTree integration.
+- Visual observer, visual subject, visual-cue provider, and visual-cue contracts under `AlleyCat.Body.Eyes`.
+- Point cue sampling, template-backed descriptions, nested observer and optional subject context, and provider
+  validation.
+- Authored whole-character `body` cues and character-specific appearance overrides.
 
 ## Out Of Scope
 
 - Perception, sight AI, or independent gaze-selection logic.
 - Visual landmark selection policy beyond a future hook owned by `EyesBehaviour`.
+- Automatic visual-cue selection or gaze movement towards cues.
 - Emotional-state policy that modifies saccade tuning.
 - Eyebrow movement or expression changes.
 - Lip-sync or mouth animation.
@@ -171,12 +206,38 @@ Provide a reusable eye component system that:
 |    |                   | (b) directional look animates correctly for up/down/left/right, |
 |    |                   | (c) saccades remain bounded around the anchor, and |
 |    |                   | (d) blink animation opens and closes eyes. |
+| 29 | User              | Systems can discover an authored whole-character `body` cue and obtain an observer-relative |
+|    |                   | appearance description for Ally NPC, Ally player, and Vadim. |
+| 30 | User              | Shared female and male templates provide a usable `body` cue even when its |
+|    |                   | description is placeholder text. |
+| 31 | Technical         | `IVisualObserver`, `IProvidesVisualCues`, and `IVisualSubject` have the |
+|    |                   | inheritance and read-only collection contracts specified in Technical |
+|    |                   | Requirement 18. |
+| 32 | Technical         | `VisualCue` and `PointVisualCue` expose the authoring, sampling, prominence, |
+|    |                   | and required-observer description contracts specified in Technical |
+|    |                   | Requirements 19–24, including `Describe(ISceneContext scene, IVisualObserver observer)` |
+|    |                   | and the exported `PointVisualCue.Description` property. |
+| 33 | Technical         | Description rendering always supplies observer context and supplies subject |
+|    |                   | context only for the nearest `IVisualSubject` ancestor; missing subject |
+|    |                   | ancestry remains valid. |
+| 34 | Technical         | Validation rejects empty cue IDs, non-finite or negative prominence, and |
+|    |                   | ordinally duplicate IDs within one provider, while accepting disabled |
+|    |                   | prominence `0` and finite values above `1`; no standalone helper is required. |
+| 35 | Technical         | Shared female and male templates each author exactly one `body` cue at the |
+|    |                   | existing head `Viewpoint`; Ally NPC, Ally player, and Vadim supply |
+|    |                   | character-specific template overrides. |
+| 36 | Technical         | Automated tests verify cue discovery, sampling, description context rendering, |
+|    |                   | authoring, overrides, and validation without requiring screenshot or |
+|    |                   | visual-rendering acceptance. |
 
 ## References
 
 - [BODY-001: Hands](../001-hands/index.md)
 - [BODY-002: Character Physical Response System](../002-character-physical-response/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
+- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
+- [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
+- [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/assets/characters/import/eye_animation_library_import.gd`
 - `game/src/Body/Eyes/IEyes.cs`

@@ -1,5 +1,7 @@
+using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
+using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Tool;
@@ -613,7 +615,9 @@ public sealed partial class MindInterruptionIntegrationTests
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
             => new Dictionary<string, object?>();
     }
 

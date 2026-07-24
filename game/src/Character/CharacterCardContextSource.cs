@@ -14,14 +14,14 @@ public sealed partial class CharacterCardContextSource : ContextSource, IContext
     public override IReadOnlyDictionary<string, object?> GetContext(
         IContextual subject,
         ISceneContext scene,
-        ICharacter? observer)
+        IContextual? observer)
         => GetContext(RequireCompatibleSubject<ICharacter>(subject), scene, observer);
 
     /// <inheritdoc />
     public IReadOnlyDictionary<string, object?> GetContext(
         ICharacter subject,
         ISceneContext scene,
-        ICharacter? observer)
+        IContextual? observer)
         => new Dictionary<string, object?>
         {
             [nameof(ICharacter.Id)] = subject.Id,

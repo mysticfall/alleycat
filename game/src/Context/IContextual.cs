@@ -1,4 +1,3 @@
-using AlleyCat.Character;
 using AlleyCat.Scene;
 
 namespace AlleyCat.Context;
@@ -12,7 +11,7 @@ public interface IContextual
     /// Gets contextual information for this subject within the supplied scene and optional observer.
     /// </summary>
     /// <param name="scene">Current scene membership snapshot.</param>
-    /// <param name="observer">Optional observing character.</param>
+    /// <param name="observer">Optional contextual observer.</param>
     /// <returns>Context entries keyed by stable field name.</returns>
-    IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer);
+    IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer);
 }

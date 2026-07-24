@@ -1,4 +1,6 @@
+using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
+using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -53,7 +55,9 @@ public sealed class ObservationTests
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
             => new Dictionary<string, object?>();
     }
 }

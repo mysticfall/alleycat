@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://b2ylrdplnarwo" path="res://src/Character/CharacterCardContextSource.cs" id="2_pyepr"]
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Rigging/Physics/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/templates/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
+[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/PointVisualCue.cs" id="3_oqvej"]
 [ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_5hhxm"]
 [ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/templates/ik/arm_ik_target_set.tres" id="5_vhysq"]
@@ -22,13 +23,14 @@ script = ExtResource("2_pyepr")
 [sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
 radius = 0.1
 
-[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "LeftHand", "RightHand") groups=["Actors"] instance=ExtResource("1_5molt")]
+[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors"] instance=ExtResource("1_5molt")]
 Locomotion = NodePath("Locomotion")
 Navigation = NodePath("Navigation")
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
 ContextSources = [SubResource("Resource_pyepr")]
+AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/Viewpoint/BodyVisualCue")]
 
 [node name="Female" parent="." index="0" unique_id=1569261267]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
@@ -41,6 +43,12 @@ bone_idx = 46
 [node name="Viewpoint" type="Marker3D" parent="Female/GeneralSkeleton/Head" index="0" unique_id=488293773]
 unique_name_in_owner = true
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
+
+[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head/Viewpoint" index="0" unique_id=1755026393]
+script = ExtResource("3_oqvej")
+Description = "{{subject.Id}} is a character."
+ID = "body"
+metadata/_custom_type_script = "uid://tb33120b0yo"
 
 [node name="RightHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(332081969) index="10" unique_id=190350548]
 transform = Transform3D(-2.9802322e-08, -1.0000001, 3.7252903e-08, 2.9802322e-08, -6.7055225e-08, -1.0000001, 1, -1.3411045e-07, 5.9604645e-08, -0.581, 1.244, -1.4156103e-07)

@@ -1,12 +1,29 @@
 [gd_scene format=3 uid="uid://bmy3r56h5ufd6"]
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
+[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/PointVisualCue.cs" id="2_3rx5m"]
 [ext_resource type="PackedScene" uid="uid://dxao507r2dgb2" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_installer"]
 
-[node name="Ally" unique_id=58109474 instance=ExtResource("1_blend")]
+[node name="Ally" unique_id=58109474 node_paths=PackedStringArray("AuthoredVisualCues") instance=ExtResource("1_blend")]
 Id = "Ally"
+AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/Viewpoint/BodyVisualCue")]
 
 [node name="Female" parent="." index="0" unique_id=1569261267]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
+
+[node name="Head" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(332081969) index="9" unique_id=1124329817]
+transform = Transform3D(1, 2.3283064e-10, 1.8626451e-09, 4.656613e-10, 1, -8.940697e-08, -2.0954758e-09, 5.9604645e-08, 1, -8.004758e-05, 1.4581467, 0.035322875)
+bone_name = "Head"
+bone_idx = 46
+
+[node name="Viewpoint" type="Marker3D" parent="Female/GeneralSkeleton/Head" index="0" unique_id=1930216792]
+unique_name_in_owner = true
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
+
+[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head/Viewpoint" index="0" unique_id=1055479996]
+script = ExtResource("2_3rx5m")
+Description = "Ally is a slender Asian woman in her early twenties, standing about 160 centimetres tall. Her unassuming features and meek expression give her a quiet, gentle appearance."
+ID = "body"
+metadata/_custom_type_script = "uid://tb33120b0yo"
 
 [node name="NPCCharacterInstaller" parent="." index="2" unique_id=1740368386 instance=ExtResource("2_installer")]

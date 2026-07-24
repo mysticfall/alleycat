@@ -1,4 +1,6 @@
+using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
+using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
@@ -196,12 +198,14 @@ public sealed class AgenticMindTests
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 
+        public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
         public ISceneContext? ReceivedScene
         {
             get; private set;
         }
 
-        public ICharacter? ReceivedObserver
+        public IContextual? ReceivedObserver
         {
             get; private set;
         }
@@ -211,7 +215,7 @@ public sealed class AgenticMindTests
             get; private set;
         }
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, ICharacter? observer)
+        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
         {
             ContextRequestCount++;
             ReceivedScene = scene;
