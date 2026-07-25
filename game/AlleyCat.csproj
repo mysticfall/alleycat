@@ -1,4 +1,4 @@
-<Project Sdk="Godot.NET.Sdk/4.7.0">
+<Project Sdk="Godot.NET.Sdk/4.7.1">
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -13,15 +13,15 @@
     <ItemGroup>
         <PackageReference Update="GodotSharp" Version="4.7.0" />
         <PackageReference Include="Handlebars.Net" Version="2.1.6" />
-        <PackageReference Include="Microsoft.Agents.AI" Version="1.8.0" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.8" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.8" />
-        <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.8" />
-        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.26.0" />
-        <PackageReference Include="OpenAI" Version="2.10.0" />
-        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.300" />
+        <PackageReference Include="Microsoft.Agents.AI" Version="1.15.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.10" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
+        <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.1" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.10" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+        <PackageReference Include="OpenAI" Version="2.12.0" />
+        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.302" />
     </ItemGroup>
 
     <ItemGroup>
