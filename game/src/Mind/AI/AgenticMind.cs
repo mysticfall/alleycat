@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
@@ -24,10 +25,33 @@ namespace AlleyCat.Mind.AI;
 [GlobalClass]
 public partial class AgenticMind : MindBase, IServiceProvider
 {
+    private static readonly IReadOnlyDictionary<string, object?> _emptyRenderContext =
+        new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>());
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
     private bool _deferredGodotActionFlushQueued;
+    private ContextWorker[] _contextWorkers = [];
+    private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
+
+    internal CancellationToken LifetimeCancellationToken => NodeLifetimeCancellationToken;
+
+    /// <summary>Occurs after an observation has been committed to this Mind's timeline.</summary>
+    public event Action<AgentObservation>? ObservationCommitted;
+
+    /// <summary>Occurs after foreground processing has genuinely completed successfully.</summary>
+    public event Action? ForegroundTurnSucceeded;
+
+    /// <inheritdoc />
+    public override void _Ready()
+    {
+        base._Ready();
+        _contextWorkers = [.. GetChildren().OfType<ContextWorker>()];
+        foreach (ContextWorker worker in _contextWorkers)
+        {
+            worker.Attach(this);
+        }
+    }
 
     /// <summary>
     /// Editor-authored system prompt stack compiled and rendered afresh for every turn.
@@ -126,23 +150,37 @@ public partial class AgenticMind : MindBase, IServiceProvider
         IReadOnlyList<AgentObservation> observations,
         IReadOnlyList<AgentObservation> timelineSnapshot,
         CancellationToken cancellationToken)
+        => await RunAgentTurnAsync(timelineSnapshot, cancellationToken);
+
+    /// <inheritdoc />
+    protected override async Task<bool> ProcessForegroundObservationsAsync(
+        IReadOnlyList<AgentObservation> observations,
+        IReadOnlyList<AgentObservation> timelineSnapshot,
+        CancellationToken cancellationToken)
     {
         if (observations.Count == 0)
         {
-            return;
+            return true;
         }
 
         try
         {
-            await RunAgentTurnAsync(timelineSnapshot, cancellationToken);
+            await ProcessObservationsAsync(observations, timelineSnapshot, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             LogOptionalResponseFailure(ex);
+            return false;
         }
     }
 
-    private async Task RunAgentTurnAsync(
+    /// <summary>Runs the foreground tool-only turn after its observation batch has been claimed.</summary>
+    protected virtual async Task RunAgentTurnAsync(
         IReadOnlyList<AgentObservation> timeline,
         CancellationToken cancellationToken)
     {
@@ -155,8 +193,8 @@ public partial class AgenticMind : MindBase, IServiceProvider
         ICharacter character = ResolveOwningCharacter();
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
-        IReadOnlyDictionary<string, object?> renderContext = CreateSystemInstructionContext(character, scene, timeline);
-        string instructions = RenderSystemInstruction(template, renderContext);
+        IReadOnlyDictionary<string, object?> renderContext = CreateRenderContext(character, scene, timeline, _contextWorkers);
+        string instructions = RenderAndPublishSystemInstruction(template, renderContext);
         TurnInvocationServices invocationServices = new(this, character, Voice);
         List<AITool> turnTools = CreateTurnTools(invocationServices);
 
@@ -200,13 +238,34 @@ public partial class AgenticMind : MindBase, IServiceProvider
         return tools;
     }
 
-    internal static IReadOnlyDictionary<string, object?> CreateSystemInstructionContext(
+    internal static IReadOnlyDictionary<string, object?> CreateRenderContext(
         ICharacter character,
         ISceneContext scene,
         IReadOnlyList<AgentObservation>? observations = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
+
+        return CreateRenderContext(character, scene, observations, []);
+    }
+
+    /// <summary>Constructs the complete foreground render context for a claimed timeline snapshot.</summary>
+    protected IReadOnlyDictionary<string, object?> CreateRenderContext(IReadOnlyList<AgentObservation> timeline)
+    {
+        ArgumentNullException.ThrowIfNull(timeline);
+        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+        return CreateRenderContext(ResolveOwningCharacter(), scene, timeline, _contextWorkers);
+    }
+
+    private static IReadOnlyDictionary<string, object?> CreateRenderContext(
+        ICharacter character,
+        ISceneContext scene,
+        IReadOnlyList<AgentObservation>? observations,
+        IReadOnlyList<ContextWorker> workers)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(workers);
 
         ICharacter[] characters = [.. scene.Characters.OrderBy(subject => subject.Id, StringComparer.Ordinal)];
         if (!characters.Any(subject => ReferenceEquals(subject, character)))
@@ -219,6 +278,11 @@ public partial class AgenticMind : MindBase, IServiceProvider
         IReadOnlyDictionary<string, object?>? owningCharacterContext = null;
         foreach (ICharacter subject in characters)
         {
+            if (string.IsNullOrEmpty(subject.Id))
+            {
+                throw new InvalidOperationException("Scene character context requires non-empty character IDs.");
+            }
+
             IReadOnlyDictionary<string, object?> subjectContext = subject.GetContext(scene, observer: character);
             characterContexts.Add(subject.Id, subjectContext);
             if (ReferenceEquals(subject, character))
@@ -227,12 +291,25 @@ public partial class AgenticMind : MindBase, IServiceProvider
             }
         }
 
-        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        Dictionary<string, object?> context = new(StringComparer.Ordinal)
         {
             ["character"] = owningCharacterContext,
-            ["characters"] = characterContexts,
+            ["characters"] = new ReadOnlyDictionary<string, object?>(characterContexts),
             [EventHistoryPromptSection.ObservationsContextKey] = observations ?? [],
         };
+        foreach (ContextWorker worker in workers)
+        {
+            foreach (KeyValuePair<string, object?> entry in worker.GetContext(scene, character))
+            {
+                if (!context.TryAdd(entry.Key, entry.Value))
+                {
+                    throw new InvalidOperationException(
+                        $"Context worker has duplicate context key '{entry.Key}'. Worker projection keys must be unique in authored order.");
+                }
+            }
+        }
+
+        return new ReadOnlyDictionary<string, object?>(context);
     }
 
     internal static string RenderSystemInstruction(
@@ -242,6 +319,32 @@ public partial class AgenticMind : MindBase, IServiceProvider
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(context);
         return template.Render(context);
+    }
+
+    internal IReadOnlyDictionary<string, object?> GetLatestRenderContext()
+        => Volatile.Read(ref _latestRenderContext);
+
+    internal string RenderAndPublishSystemInstruction(
+        ITemplate template,
+        IReadOnlyDictionary<string, object?> context)
+    {
+        string instructions = RenderSystemInstruction(template, context);
+        _ = Interlocked.Exchange(ref _latestRenderContext, context);
+        return instructions;
+    }
+
+    /// <inheritdoc />
+    protected override void OnObservationIngested(AgentObservation observation)
+    {
+        base.OnObservationIngested(observation);
+        ObservationCommitted?.Invoke(observation);
+    }
+
+    /// <inheritdoc />
+    protected override void OnForegroundTurnSettled()
+    {
+        base.OnForegroundTurnSettled();
+        ForegroundTurnSucceeded?.Invoke();
     }
 
     private static void LogOptionalResponseFailure(Exception exception)

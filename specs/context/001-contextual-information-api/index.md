@@ -33,7 +33,8 @@ consumer APIs, while providing the narrow character-card source and scene-charac
    subject argument.
 3. The active context result contract is `IReadOnlyDictionary<string, object?>`.
 4. Context result dictionaries expose stable string keys and nullable object values without depending on AI, prompt,
-   templating, or presentation APIs.
+   templating, or presentation APIs. Producers must treat returned dictionaries and nested values as immutable after
+   publication.
 5. General context signatures on `IContextual`, `IContextSource`, and `IContextSource<TContextual>` accept the current
    `AlleyCat.Scene.ISceneContext` and an optional `IContextual? observer`.
 6. `AlleyCat.Scene` owns current scene membership through SCN-001. CTX-001 must not redefine membership, actor
@@ -58,20 +59,31 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 17. `CharacterCardContextSource` is the concrete narrow character source for this slice and returns exactly
     `{ Id: subject.Id }`.
 18. Names, aliases, and display labels must not be added as fixed properties on `ICharacter` for this slice.
-19. Prompt/system character context must contain `character` for the owner and `characters`, keyed by each exact,
-    case-sensitive `Character.Id`.
-20. Context assembly must call every subject with `observer` set to the owning character.
+19. `CreateRenderContext` is AgenticMind's foreground-only aggregation operation. It must create AgenticMind's own
+    complete top-level read-only render dictionary containing `character` for the owner, deterministically ordered
+    `characters` keyed by each exact, case-sensitive `Character.Id`, the read-only `observations` snapshot, and all
+    authored ContextWorker projections.
+20. `CreateRenderContext` must call every subject with `observer` set to the owning character.
 21. The owner must appear in both `character` and `characters[owner.Id]`, and both entries must reference the exact same
     context dictionary instance.
 22. The `characters` dictionary must be inserted in ordinal order by exact `Character.Id`.
-23. Context assembly must fail for empty character IDs, duplicate exact scene character IDs, or an owner absent from the
-    scene context.
+23. `CreateRenderContext` must fail for empty character IDs, duplicate exact scene character IDs, or an owner absent
+    from the scene context.
 24. Existing observer-relative semantics remain unchanged: when an observer is supplied, sources receive that same
     observer; when omitted, sources receive `null`.
 25. Context sources that need narrower observer capabilities may explicitly pattern-match the supplied `IContextual`;
     the general contracts must not require visual inspection capabilities from every observer.
 26. `ICharacter` remains a valid contextual observer through its CHAR-002 aggregation of BODY-004's
     `IVisualObserver : IEyesHolder, IContextual` role.
+27. A ContextWorker run under AI-005 returns `IReadOnlyDictionary<string, object?>` directly. No public
+    `ContextualSnapshot`, worker-specific `IContextual` wrapper, `ContextWorkerState`, or alternative worker-state
+    boundary is introduced.
+28. ContextWorker atomically stores and returns the exact `IReadOnlyDictionary<string, object?>` returned by a worker.
+    Post-publication mutation of that dictionary or its nested values violates the producer contract, and resulting
+    behaviour may be undefined or stale.
+29. `IReadOnlyDictionary` alone does not prove deep immutability. Aggregation and publication require no recursive
+    defensive copying or freezing, cycle detection, scalar allowlist, reflection observation projection, or rejection
+    of live Godot objects. This convention changes no scenario-model, neutral API, observer, scene, or eyes boundary.
 
 ## In Scope
 
@@ -84,8 +96,9 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - Optional observer-relative context via `IContextual? observer`.
 - Internal source aggregation by subjects or owning systems.
 - `CharacterCardContextSource` as the narrow identity source returning only the subject's exact ID.
-- Deterministic owner and scene-character context assembly for prompt/system consumers.
+- Deterministic, foreground-only `CreateRenderContext` assembly for prompt rendering and later snapshot publication.
 - Names, aliases, and display labels as possible context entries when future sources provide them.
+- Convention-based direct ContextWorker dictionary publication without a public wrapper or scenario-model requirement.
 
 ## Out Of Scope
 
@@ -93,7 +106,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - Final authored context content, fixture data, character biographies, names, aliases, or display labels.
 - Consumer-specific placement, final serialisation format, renderer ownership, and consumer content structure.
 - Direct dependencies from `AlleyCat.Context` to AI retrieval, prompt, or templating APIs.
-- Budgeting, ranking, summarisation, omission policy, diagnostics, and evaluation metadata.
+- Budgeting, ranking, summarisation, omission policy, context-content diagnostics, and evaluation metadata.
 - AI retrieval, memory, perception, lore, relationship, inventory, planner, or other backend architectures.
 - Non-character contextual subjects such as items, scenes, memories, or lore records.
 - Requiring `IEntity : IContextual`.
@@ -130,8 +143,9 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 11. No `ContextRequest`, `ContextRequestKind`, fixed character label property, AI retrieval backend, memory backend,
     lore backend, or perception backend is required by this slice.
 12. `CharacterCardContextSource` returns exactly one `Id` entry whose value is `subject.Id`.
-13. Prompt/system context contains `character` and ordinally inserted `characters[exact Character.Id]` entries, with
-    every subject queried using the owning character as observer.
+13. Foreground-only `CreateRenderContext` returns AgenticMind's complete top-level read-only dictionary containing
+    `character`, ordinally inserted `characters[exact Character.Id]`, read-only `observations`, and all authored
+    ContextWorker projections, with every subject queried using the owning character as observer.
 14. The owner appears in both locations using the same dictionary instance.
 15. Empty IDs, exact duplicate scene IDs, and owner absence fail context assembly clearly.
 16. General context contracts use optional `IContextual? observer` parameters rather than narrower visual- or
@@ -140,11 +154,21 @@ consumer APIs, while providing the narrow character-card source and scene-charac
     and context sources.
 18. `AlleyCat.Context` has no dependency on `AlleyCat.Body.Eyes` or `AlleyCat.Character`; sources may explicitly
     pattern-match an observer when they need narrower domain capabilities.
+19. A ContextWorker run returns `IReadOnlyDictionary<string, object?>` directly, with no public `ContextualSnapshot`,
+    worker-specific `IContextual` wrapper, `ContextWorkerState`, or alternative worker-state boundary.
+20. Tests verify a ContextWorker atomically stores and returns the exact dictionary returned by the worker. Producer
+    fixtures treat that dictionary and its nested values as immutable after return; contract tests identify later
+    mutation as a producer violation with potentially undefined or stale behaviour.
+21. The specification and API do not claim `IReadOnlyDictionary` proves deep immutability. Tests require no recursive
+    copying or freezing, cycle detection, scalar allowlist, reflection observation projection, or live Godot-object
+    rejection at aggregation or publication. The convention changes no scenario-model, scene, observer, or eyes
+    contract.
 
 ## References
 
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [BODY-004: Eyes](../../body/004-eyes/index.md)
+- [AI-005: Context Worker](../../ai/005-context-worker/index.md)
 - `game/src/Context/`
 - `game/src/Character/Character.cs`

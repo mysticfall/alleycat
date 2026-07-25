@@ -1,3 +1,4 @@
+using System.Reflection;
 using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
@@ -10,6 +11,7 @@ using AlleyCat.Templating;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.Tests.Mind.AI;
 
@@ -97,7 +99,7 @@ public sealed class AgenticMindTests
     /// AgenticMind obtains observer-relative CTX-001 data for every character in ordinal exact-ID order.
     /// </summary>
     [Fact]
-    public void CreateSystemInstructionContext_BuildsDeterministicOwnerAndCharacterContext()
+    public void CreateRenderContext_BuildsDeterministicOwnerAndCharacterContext()
     {
         Dictionary<string, object?> ownerContext = new()
         {
@@ -120,13 +122,22 @@ public sealed class AgenticMindTests
             Id = "Alpha"
         };
         SceneContext scene = new([last, owner, first]);
+        ObservedSpeech speech = new("Alpha", "voice-alpha", "Hello");
+        AgentObservation[] timeline = [speech];
 
-        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateSystemInstructionContext(owner, scene);
-        Dictionary<string, object?> characters = Assert.IsType<Dictionary<string, object?>>(result["characters"]);
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(owner, scene, timeline);
+        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
+        IReadOnlyList<AgentObservation> observations = Assert.IsAssignableFrom<IReadOnlyList<AgentObservation>>(result["observations"]);
 
         Assert.Equal(["Alpha", "owner", "zulu"], characters.Keys);
         Assert.Same(ownerContext, result["character"]);
+        Assert.Same(firstContext, characters["Alpha"]);
         Assert.Same(characters["owner"], result["character"]);
+        Assert.Equal("owner", Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["character"])["Id"]);
+        Assert.Same(timeline, observations);
+        Assert.Same(speech, Assert.Single(observations));
+        _ = Assert.Throws<NotSupportedException>(
+            () => ((IDictionary<string, object?>)result).Add("mutation", null));
         Assert.All([first, owner, last], subject =>
         {
             Assert.Same(scene, subject.ReceivedScene);
@@ -138,7 +149,7 @@ public sealed class AgenticMindTests
     /// An owning character outside the scene snapshot is an invalid prompt context.
     /// </summary>
     [Fact]
-    public void CreateSystemInstructionContext_WhenOwnerIsAbsent_FailsClearly()
+    public void CreateRenderContext_WhenOwnerIsAbsent_FailsClearly()
     {
         FakeCharacter sceneCharacter = new(new Dictionary<string, object?>())
         {
@@ -151,7 +162,7 @@ public sealed class AgenticMindTests
         SceneContext scene = new([sceneCharacter]);
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => AgenticMind.CreateSystemInstructionContext(owner, scene));
+            () => AgenticMind.CreateRenderContext(owner, scene));
 
         Assert.Contains("absent", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, sceneCharacter.ContextRequestCount);
@@ -178,6 +189,43 @@ public sealed class AgenticMindTests
         _ = Assert.Throws<ArgumentNullException>(() => new PromptSectionBuildContext(services, scene, null!));
     }
 
+    /// <summary>Context workers expose dictionary runs without legacy state wrappers or trigger back-references.</summary>
+    [Fact]
+    public void ContextWorker_UsesConventionBasedDictionaryPublicationWithoutMutualTriggerReference()
+    {
+        Type workerType = typeof(ContextWorker);
+        Assembly assembly = workerType.Assembly;
+
+        Assert.True(typeof(IContextual).IsAssignableFrom(workerType));
+        Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextWorkerState"));
+        Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextWorkerRunInput"));
+        Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextualSnapshot"));
+        Assert.Equal(
+            typeof(Task<IReadOnlyDictionary<string, object?>>),
+            workerType.GetMethod("RunAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.ReturnType);
+        Assert.DoesNotContain(
+            typeof(ContextWorkerTrigger).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+            field => typeof(ContextWorker).IsAssignableFrom(field.FieldType));
+        Assert.NotNull(typeof(ContextWorkerTrigger).GetEvent(nameof(ContextWorkerTrigger.RunRequested)));
+        Assert.DoesNotContain(
+            workerType.GetProperties(),
+            property => property.PropertyType == typeof(object));
+    }
+
+    /// <summary>Observation trigger policies are abstract and must supply a concrete predicate.</summary>
+    [Fact]
+    public void ObservationContextWorkerTrigger_RequiresConcretePredicateImplementation()
+    {
+        Type triggerType = typeof(ObservationContextWorkerTrigger);
+        MethodInfo predicate = triggerType.GetMethod(
+            "ShouldRequestFor",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        Assert.True(triggerType.IsAbstract);
+        Assert.True(predicate.IsAbstract);
+        Assert.False(typeof(ConcreteObservationTrigger).IsAbstract);
+    }
+
     private sealed class CapturingTemplate : ITemplate
     {
         public IReadOnlyDictionary<string, object?>? ReceivedContext
@@ -190,6 +238,11 @@ public sealed class AgenticMindTests
             ReceivedContext = context;
             return $"Hello {context["displayName"]}";
         }
+    }
+
+    private sealed partial class ConcreteObservationTrigger : ObservationContextWorkerTrigger
+    {
+        protected override bool ShouldRequestFor(AgentObservation observation) => true;
     }
 
     private sealed class FakeCharacter(IReadOnlyDictionary<string, object?> context) : ICharacter

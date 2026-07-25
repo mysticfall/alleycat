@@ -24,7 +24,8 @@ responsive and interruption-safe in-world behaviour.
 3. An important new observation may interrupt an active response when interruption is enabled, without overlapping
    responses or discarding actions and observations that were already committed.
 4. Several important arrivals during one active response must produce at most one immediate replacement response.
-5. Each response must reflect the NPC's complete observation history and current authored character context.
+5. Each response must reflect the NPC's complete observation history, current authored character context, and worker
+   projections captured for that foreground prompt.
 6. Speech history must attribute a speaker by matching the received voice ID to current-scene characters. It must
    distinguish the NPC, a recognised other character, and an unknown speaker without rendering the voice ID as identity
    wording. No match must remain unknown, while ambiguous matches must fail clearly.
@@ -79,8 +80,9 @@ responsive and interruption-safe in-world behaviour.
     importance. A tool-supplied actor ID must not spoof another character.
 18. Mind must atomically ingest each ordered observation batch produced by a tool result. Validation failure must append
     none of the batch to either timeline or pending state.
-19. Mind must expose immutable, atomic timeline snapshots while keeping mutable timeline storage private. Each turn must
-    render the complete, unbounded snapshot; transient provider request history must not provide cross-turn memory.
+19. Mind must expose read-only, atomic timeline snapshots while keeping mutable timeline storage private. Observation
+    records in a published snapshot are treated as immutable. Each turn must render the complete, unbounded snapshot;
+    transient provider request history must not provide cross-turn memory.
 20. Observations received before `_Ready()` must become schedulable when scheduling is available.
 21. AgenticMind must execute each turn through [AI-002](../002-agent-runtime/index.md) and render it through
     [AI-003](../003-prompt-api/index.md).
@@ -102,6 +104,21 @@ responsive and interruption-safe in-world behaviour.
     ordinary Mind ingestion path.
 28. A failed tool-only turn must settle through the existing containment path without model repair or automatic retry.
     Any observations committed by earlier successful actions in that turn must remain in timeline order.
+29. AgenticMind must own configured ContextWorker child nodes as specified by [AI-005](../005-context-worker/index.md)
+    and may retain them solely for deterministic projection aggregation during foreground `CreateRenderContext` calls.
+30. AgenticMind must initialise its latest render dictionary to an empty top-level read-only dictionary. Only foreground
+    prompt execution may call `CreateRenderContext` to create AgenticMind's own top-level read-only render dictionary
+    from current character context, deterministic scene-character context, the complete timeline snapshot, and authored
+    worker projections.
+31. The foreground template must use the exact dictionary returned by `CreateRenderContext`. AgenticMind must atomically
+    publish that exact dictionary as the cached latest foreground context only after rendering succeeds. Construction or
+    rendering failure must retain the previous published dictionary.
+32. AgenticMind must publish general typed C# events after committed observations and genuinely successful foreground
+    turns. Relevant trigger nodes subscribe and unsubscribe directly. AgenticMind must not loop through ContextWorkers
+    for trigger notification, and contained failures and cancellations must not publish a successful-turn event.
+33. ContextWorker event handling and activity must remain independent of foreground scheduling and within the Mind
+    node-lifetime boundary. Workers may only capture the published render snapshot; they must not initiate context
+    construction, aggregation, or timeline refresh.
 
 ## In Scope
 
@@ -111,6 +128,8 @@ responsive and interruption-safe in-world behaviour.
 - Threshold, maximum-wait, minimum-interval, disable, and active-turn interruption behaviour.
 - Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
 - AgenticMind orchestration through AI-002 and AI-003.
+- AgenticMind ownership and lifetime integration of AI-005 ContextWorker child nodes.
+- Foreground-only render-context construction and success-only publication of the latest top-level read-only dictionary.
 - Tool-only turn settlement without assistant-text completion or synthetic-marker observations.
 - Irreversible node-lifetime shutdown of scheduling, provider requests, tools, and deferred action work.
 
@@ -159,6 +178,19 @@ responsive and interruption-safe in-world behaviour.
     and observations from actions committed before a later turn failure remain in timeline order.
 17. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
     ingestion, speaker-attribution, scheduling, interruption, cancellation, and lifetime contracts.
+18. Tests verify ContextWorker child-node ownership and foreground-only `CreateRenderContext` assembly. AgenticMind
+    starts with an empty top-level read-only latest dictionary and retains authored workers only for deterministic
+    projection aggregation, not trigger notification.
+19. Tests verify general typed C# events are published only after observation commitment and genuinely successful
+    foreground completion, never for contained failures or cancellations. Relevant triggers subscribe and unsubscribe
+    directly without delaying foreground turns; AI-005 remains normative for trigger, projection, and lifetime
+    contracts.
+20. Tests verify the foreground template renders with AgenticMind's exact complete top-level read-only dictionary from
+    `CreateRenderContext`. AgenticMind publishes that exact dictionary atomically only after successful rendering and
+    retains the previous published dictionary after construction or rendering failure.
+21. Tests verify workers capture only the currently published snapshot and never initiate context construction,
+    aggregation, or timeline refresh. A worker projection reaches workers only through a subsequent successfully
+    rendered and published foreground context.
 
 ## References
 
@@ -175,6 +207,7 @@ responsive and interruption-safe in-world behaviour.
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
+- [AI-005: Context Worker](../005-context-worker/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [BODY-006: Voice Component](../../body/006-voice/index.md)

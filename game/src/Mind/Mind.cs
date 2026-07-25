@@ -334,13 +334,16 @@ public abstract partial class Mind : Node, IVoiceListener
 
             if (!_enabled)
             {
-                return new MindScheduleDecision(false, false);
+                shouldEvaluateScheduling = false;
+                shouldProcessImmediately = false;
             }
-
-            bool thresholdReached = _cumulativeObservationImportance >= EffectiveObservationImportanceThreshold;
-            shouldEvaluateScheduling = !_isProcessingObservations
-                && (wasPendingQueueEmpty || (wasBelowThreshold && thresholdReached));
-            shouldProcessImmediately = shouldEvaluateScheduling && IsEligibleAt(GetTimestamp());
+            else
+            {
+                bool thresholdReached = _cumulativeObservationImportance >= EffectiveObservationImportanceThreshold;
+                shouldEvaluateScheduling = !_isProcessingObservations
+                    && (wasPendingQueueEmpty || (wasBelowThreshold && thresholdReached));
+                shouldProcessImmediately = shouldEvaluateScheduling && IsEligibleAt(GetTimestamp());
+            }
         }
 
         if (interruptionCancellation is not null)
@@ -360,11 +363,24 @@ public abstract partial class Mind : Node, IVoiceListener
             QueueSchedulingEvaluation();
         }
 
+        foreach (PendingObservation observation in observations)
+        {
+            OnObservationIngested(observation.Observation);
+        }
+
         return new MindScheduleDecision(shouldProcessImmediately, shouldEvaluateScheduling && !shouldProcessImmediately);
     }
 
     /// <summary>
-    /// Gets an immutable, atomic copy of the complete node-lifetime observation timeline.
+    /// Notifies derived minds after a successfully committed observation without affecting foreground scheduling.
+    /// </summary>
+    protected virtual void OnObservationIngested(AgentObservation observation)
+    {
+    }
+
+    /// <summary>
+    /// Gets an atomic, top-level read-only copy of the complete node-lifetime observation timeline membership and order.
+    /// Observation records are passed directly under the producer immutability convention.
     /// </summary>
     protected IReadOnlyList<AgentObservation> GetObservationTimelineSnapshot()
     {
@@ -381,6 +397,16 @@ public abstract partial class Mind : Node, IVoiceListener
         IReadOnlyList<AgentObservation> observations,
         IReadOnlyList<AgentObservation> timelineSnapshot,
         CancellationToken cancellationToken);
+
+    /// <summary>Processes a foreground batch and reports whether it genuinely completed successfully.</summary>
+    protected virtual async Task<bool> ProcessForegroundObservationsAsync(
+        IReadOnlyList<AgentObservation> observations,
+        IReadOnlyList<AgentObservation> timelineSnapshot,
+        CancellationToken cancellationToken)
+    {
+        await ProcessObservationsAsync(observations, timelineSnapshot, cancellationToken);
+        return true;
+    }
 
     /// <summary>
     /// Indicates whether queued observations are waiting for processing.
@@ -569,7 +595,14 @@ public abstract partial class Mind : Node, IVoiceListener
 
             try
             {
-                await ProcessObservationsAsync(observations, timelineSnapshot, processingToken);
+                bool completedSuccessfully = await ProcessForegroundObservationsAsync(
+                    observations,
+                    timelineSnapshot,
+                    processingToken);
+                if (completedSuccessfully && !processingToken.IsCancellationRequested && !IsNodeLifetimeEnded)
+                {
+                    OnForegroundTurnSettled();
+                }
             }
             catch (OperationCanceledException) when (IsExpectedInterruption(processingCancellation, cancellationToken))
             {
@@ -594,6 +627,13 @@ public abstract partial class Mind : Node, IVoiceListener
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Notifies derived minds after a foreground processing cycle settles successfully.
+    /// </summary>
+    protected virtual void OnForegroundTurnSettled()
+    {
     }
 
     private bool IsEligibleAt(double timestamp) => timestamp >= GetEligibleTimestamp();

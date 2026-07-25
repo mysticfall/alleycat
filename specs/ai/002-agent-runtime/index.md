@@ -44,8 +44,11 @@ failures contained without treating assistant text or provider history as charac
 
 1. AgenticMind must create a fresh provider client execution context for every turn. It must not retain an agent,
    provider response identifier, completed assistant/tool transcript, or first-turn prompt snapshot across turns.
-2. At turn start, AgenticMind must resolve the current scene and owning character, compile and render the configured
-   `PromptStack`, resolve the current action tools, and start one explicit tool-only request loop.
+2. At turn start, AgenticMind must resolve the current scene and owning character, compile the configured `PromptStack`,
+   call foreground `CreateRenderContext`, render the template with that exact dictionary, resolve current action tools,
+   and start one explicit tool-only request loop. It must publish that exact dictionary as the latest snapshot only
+   after rendering succeeds. Construction or rendering failure must retain the prior snapshot and enter the containment
+   path.
 3. The rendered prompt stack must remain the turn's sole system instruction. Provider-required bootstrap input may be
    sent, but no prior transcript or per-batch observation-summary message may cross turn boundaries.
 4. Every model request in the loop must require at least one tool call and must send no provider `response_format` or
@@ -139,6 +142,9 @@ failures contained without treating assistant text or provider history as charac
     generated content, credentials, and other secrets and must not be presented as complete wire logging.
 41. The explicit tool-only loop must be the sole production turn route, not a diagnostic or feature-gated alternative.
     No legacy framework-managed generic terminal-result route may remain selectable.
+42. AI-005 ContextWorker runs are separate background projections, not AgenticMind foreground turns. They capture the
+    latest foreground-published render dictionary at run start and must not construct or aggregate context. They must
+    not weaken this runtime's tool-only, no-terminal-response-schema, or no-assistant-text guarantees.
 
 ## In Scope
 
@@ -152,6 +158,7 @@ failures contained without treating assistant text or provider history as charac
 - Standard `AgentToolResult` validation, projection, and atomic Mind hand-off.
 - Speech admission, transient acknowledgement, and exactly-once observed-speech production.
 - Expected interruption and node-lifetime cancellation settlement.
+- Preservation of foreground tool-only protocol boundaries while AI-005 workers run independently.
 - Development-only MEAI diagnostics and non-secret structural transport evidence with explicit gating.
 
 ## Out Of Scope
@@ -218,6 +225,9 @@ failures contained without treating assistant text or provider history as charac
     transient-history, observation-ingestion, diagnostics, cancellation, settlement, and failure contracts.
 23. Tests verify every production turn uses the explicit tool-only loop and no diagnostic flag or legacy generic
     terminal-result route can select a competing execution path.
+24. Tests verify foreground execution publishes its exact render dictionary only after successful template rendering.
+    ContextWorker execution captures the latest published snapshot without constructing or aggregating context and
+    cannot alter the foreground route, tool-only requirement, or absence of a terminal response schema.
 
 ## References
 
@@ -239,6 +249,7 @@ failures contained without treating assistant text or provider history as charac
 
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
+- [AI-005: Context Worker](../005-context-worker/index.md)
 - [BODY-006: Voice Component](../../body/006-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
