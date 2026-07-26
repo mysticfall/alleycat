@@ -1,4 +1,5 @@
 using Godot;
+using Godot.Collections;
 
 namespace AlleyCat.Body.Eyes;
 
@@ -11,6 +12,8 @@ public partial class EyesBehaviour : Node, IEyes
     private const float DefaultSaccadeIntervalSeconds = 1f;
     private const float DefaultSaccadeSpeedMetresPerSecond = 0.6f;
     private const float DefaultSaccadeAmplitudeMetres = 0.075f;
+    private const uint VisionOccluderLayer = 1u << 4;
+    private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
 
     private EyesController? _controller;
     private Node3D? _lookTarget;
@@ -22,6 +25,7 @@ public partial class EyesBehaviour : Node, IEyes
     private Vector3 _targetSaccadeOffsetGlobal;
     private float _timeUntilSaccadeAnchorPoll;
     private bool _hasSaccadeAnchor;
+    private readonly Array<Rid> _selfCollisionExclusions = [];
 
     /// <summary>
     /// Gets or sets the animation tree controlled by this behaviour.
@@ -219,6 +223,32 @@ public partial class EyesBehaviour : Node, IEyes
     private float _maximumBlinkInterval = 6f;
     private float _blinkDuration = 0.3f;
 
+    /// <summary>Gets or sets the horizontal visual sensing half-angle in degrees.</summary>
+    [ExportGroup("Visual Scanning")]
+    [Export(PropertyHint.Range, "1,180,0.5")]
+    public float HorizontalSensingHalfAngleDegrees { get; set; } = 60f;
+
+    /// <summary>Gets or sets the vertical visual sensing half-angle in degrees.</summary>
+    [Export(PropertyHint.Range, "1,90,0.5")]
+    public float VerticalSensingHalfAngleDegrees { get; set; } = 45f;
+
+    /// <summary>Gets or sets the physics mask used to test VisionOccluder geometry.</summary>
+    [Export(PropertyHint.Layers3DPhysics)]
+    public uint VisionOcclusionMask
+    {
+        get;
+        set => field = value == VisionOccluderLayer
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value,
+                $"{nameof(VisionOcclusionMask)} must contain only the VisionOccluder physics layer.");
+    } = VisionOccluderLayer;
+
+    /// <summary>Gets or sets the tolerated distance from a cue sample endpoint in metres.</summary>
+    [Export(PropertyHint.Range, "0,1,0.001,or_greater")]
+    public float VisionEndpointTolerance { get; set; } = 0.025f;
+
     /// <inheritdoc />
     public override void _EnterTree()
         => SetProcess(true);
@@ -336,6 +366,139 @@ public partial class EyesBehaviour : Node, IEyes
 
         Transform3D eyeOriginTransform = ResolveEyeOriginGlobalTransform();
         return eyeOriginTransform.Origin - eyeOriginTransform.Basis.Z.Normalized();
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<VisualScanResult> Scan()
+    {
+        if (!IsInsideTree())
+        {
+            return [];
+        }
+
+        Transform3D eyeTransform = ResolveEyeOriginGlobalTransform();
+        IVisualSubject? selfSubject = FindNearestVisualSubject();
+        PopulateSelfCollisionExclusions(selfSubject);
+        List<VisualScanResult> results = [];
+
+        foreach (Node node in GetTree().GetNodesInGroup(_visualSubjectsGroupName))
+        {
+            if (node is not IVisualSubject subject)
+            {
+                throw new InvalidOperationException(
+                    $"Visual scan requires every '{_visualSubjectsGroupName}' group member to implement {nameof(IVisualSubject)}, but node '{node.GetPath()}' does not.");
+            }
+
+            if (ReferenceEquals(subject, selfSubject))
+            {
+                continue;
+            }
+
+            List<VisualCue> visibleCues = [];
+            foreach (VisualCue cue in subject.VisualCues)
+            {
+                if (cue is null || cue.Prominence <= 0f || !float.IsFinite(cue.Prominence))
+                {
+                    continue;
+                }
+
+                if (IsCueVisible(eyeTransform, cue))
+                {
+                    visibleCues.Add(cue);
+                }
+            }
+
+            if (visibleCues.Count > 0)
+            {
+                results.Add(new VisualScanResult(subject, visibleCues));
+            }
+        }
+
+        return System.Array.AsReadOnly(results.ToArray());
+    }
+
+    private bool IsCueVisible(Transform3D eyeTransform, VisualCue cue)
+    {
+        foreach (Vector3 localSample in cue.GetSampleLocalPositions())
+        {
+            if (IsSampleVisible(eyeTransform, cue.GlobalTransform * localSample, cue.MaxVisibleDistance))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsSampleVisible(Transform3D eyeTransform, Vector3 sample, float maximumDistance)
+    {
+        Vector3 offset = sample - eyeTransform.Origin;
+        float distance = offset.Length();
+        if (distance <= VisionEndpointTolerance)
+        {
+            return true;
+        }
+
+        if (maximumDistance > 0f && distance > maximumDistance)
+        {
+            return false;
+        }
+
+        Vector3 direction = offset / distance;
+        Vector3 forward = -eyeTransform.Basis.Z.Normalized();
+        Vector3 right = eyeTransform.Basis.X.Normalized();
+        Vector3 up = eyeTransform.Basis.Y.Normalized();
+        float horizontalRadians = Mathf.Abs(Mathf.Atan2(direction.Dot(right), direction.Dot(forward)));
+        float verticalRadians = Mathf.Abs(Mathf.Atan2(direction.Dot(up), Mathf.Sqrt((direction.Dot(right) * direction.Dot(right)) + (direction.Dot(forward) * direction.Dot(forward)))));
+        if (horizontalRadians > Mathf.DegToRad(HorizontalSensingHalfAngleDegrees) ||
+            verticalRadians > Mathf.DegToRad(VerticalSensingHalfAngleDegrees))
+        {
+            return false;
+        }
+
+        var query = PhysicsRayQueryParameters3D.Create(eyeTransform.Origin, sample, VisionOcclusionMask, _selfCollisionExclusions);
+        Dictionary hit = ResolveEyeOriginNode().GetWorld3D().DirectSpaceState.IntersectRay(query);
+        return hit.Count == 0 || hit["position"].AsVector3().DistanceTo(eyeTransform.Origin) >= distance - VisionEndpointTolerance;
+    }
+
+    private IVisualSubject? FindNearestVisualSubject()
+    {
+        for (Node? ancestor = this; ancestor is not null; ancestor = ancestor.GetParent())
+        {
+            if (ancestor is IVisualSubject subject)
+            {
+                return subject;
+            }
+        }
+
+        return null;
+    }
+
+    private Node3D ResolveEyeOriginNode()
+        => EyeOrigin is Node3D eyeOrigin && IsValidNode(eyeOrigin) && eyeOrigin.IsInsideTree()
+            ? eyeOrigin
+            : throw new InvalidOperationException($"{nameof(EyesBehaviour)} '{Name}' requires a valid {nameof(EyeOrigin)} to scan visual cues.");
+
+    private void PopulateSelfCollisionExclusions(IVisualSubject? selfSubject)
+    {
+        _selfCollisionExclusions.Clear();
+        if (selfSubject is Node root)
+        {
+            AddCollisionObjectRids(root);
+        }
+    }
+
+    private void AddCollisionObjectRids(Node root)
+    {
+        if (root is CollisionObject3D collisionObject)
+        {
+            _selfCollisionExclusions.Add(collisionObject.GetRid());
+        }
+
+        foreach (Node child in root.GetChildren())
+        {
+            AddCollisionObjectRids(child);
+        }
     }
 
     private Vector3 UpdateSaccadeLookPoint(double deltaSeconds)

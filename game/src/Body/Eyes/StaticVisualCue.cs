@@ -6,10 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AlleyCat.Body.Eyes;
 
 /// <summary>
-/// A visual cue sampled at its node position and described by an authored template.
+/// A visual cue with a fixed, authored description template and origin-based position sampling.
 /// </summary>
 [GlobalClass]
-public sealed partial class PointVisualCue : VisualCue
+public sealed partial class StaticVisualCue : VisualCue
 {
     private ITemplate? _compiledTemplate;
     private string? _compiledDescription;

@@ -40,6 +40,7 @@ enabled=PackedStringArray("res://addons/alleycat_editor/plugin.cfg")
 [global_group]
 
 Actors="Actors in the scene."
+VisualSubjects="Discoverable subjects considered by visual scans."
 Markers="Markers in the scene."
 Player="The player actor."
 
@@ -54,6 +55,7 @@ theme/custom="res://assets/ui/themes/default.tres"
 3d_physics/layer_2="Impact"
 3d_physics/layer_3="Character"
 3d_physics/layer_4="IK"
+3d_physics/layer_5="VisionOccluder"
 3d_physics/layer_32="Hearing"
 
 [navigation]

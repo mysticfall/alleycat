@@ -13,11 +13,18 @@
 [ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="12_2m28j"]
 [ext_resource type="Script" uid="uid://clntm6ydqb54a" path="res://src/Body/Hands/HandComponentHolder.cs" id="12_5rn12"]
 [ext_resource type="Script" uid="uid://cxh7lfqn5k3nw" path="res://src/Body/Hands/HandPoseBehaviour.cs" id="13_b0yuh"]
+[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/StaticVisualCue.cs" id="13_e6bn2"]
+[ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Body/Eyes/SphereVisualBounds.cs" id="14_c6lj4"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bs4kur56aknxq" path="res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres" id="19_4r77l"]
 [ext_resource type="Script" uid="uid://b6qde8hx65pcb" path="res://src/Navigation/DirectTransformNavigation.cs" id="20_navigation"]
 
 [sub_resource type="Resource" id="Resource_wlfxg"]
 script = ExtResource("2_58k5s")
+
+[sub_resource type="Resource" id="Resource_c6lj4"]
+script = ExtResource("14_c6lj4")
+Radius = 0.05
+metadata/_custom_type_script = "uid://b8340t35vo8cv"
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_55bxu"]
 angle = 0.87266463
@@ -38,7 +45,7 @@ Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
 ContextSources = [SubResource("Resource_wlfxg")]
-AuthoredVisualCues = [NodePath("")]
+AuthoredVisualCues = [NodePath("Male/GeneralSkeleton/Head/BodyVisualCue")]
 
 [node name="Male" parent="." index="0" unique_id=240695816]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
@@ -51,6 +58,14 @@ bone_idx = 44
 [node name="Viewpoint" type="Marker3D" parent="Male/GeneralSkeleton/Head" index="0" unique_id=1214445104]
 unique_name_in_owner = true
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
+
+[node name="BodyVisualCue" type="Node3D" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1094214123]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00018767762, 0.012320638, 0.06855364)
+script = ExtResource("13_e6bn2")
+Description = "{{subject.Id}} is a character."
+ID = "body"
+Bounds = SubResource("Resource_c6lj4")
+metadata/_custom_type_script = "uid://tb33120b0yo"
 
 [node name="RightHand" type="BoneAttachment3D" parent="Male/GeneralSkeleton" index="10" unique_id=1844281610]
 transform = Transform3D(-3.9115548e-08, -1.0000001, 3.632158e-08, -5.9604645e-08, -3.0733645e-08, -1.0000001, 1, -2.7939677e-08, -8.940697e-08, -0.6792059, 1.3990749, 5.2234624e-05)

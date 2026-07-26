@@ -39,5 +39,7 @@ public sealed class EyesHolderTests
         public void SetLookTarget(Node3D? target) => LookTarget = target;
 
         public void ClearLookTarget() => LookTarget = null;
+
+        public IReadOnlyList<VisualScanResult> Scan() => [];
     }
 }

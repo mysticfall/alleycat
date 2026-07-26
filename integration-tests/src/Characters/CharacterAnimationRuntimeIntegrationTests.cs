@@ -87,7 +87,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
 
             Assert.Equal(new NodePath("../Male"), animationTree.RootNode);
             Assert.Equal(new NodePath("../Male"), animationPlayer.RootNode);
-            Assert.Equal(MaleNpcAnimationTreeRootPath, animationTree.TreeRoot.ResourcePath);
+            Assert.Equal(MaleNpcAnimationTreeRootPath, GetAuthoredTreeRootResourcePath(animationTree));
             AssertRuntimeEyeAnimationTracksResolve(animationPlayer);
             AssertBlinkAnimationTargetsBodyMesh(animationPlayer, "GeneralSkeleton/Male_body");
             AssertBodyMeshBlinkShapesDeform(animationPlayer, "GeneralSkeleton/Male_body");
@@ -256,6 +256,14 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         return Assert.IsType<AnimationNodeAnimation>(
             rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(side)),
             exactMatch: false);
+    }
+
+    private static string GetAuthoredTreeRootResourcePath(AnimationTree animationTree)
+    {
+        string resourcePath = animationTree.TreeRoot?.ResourcePath ?? string.Empty;
+        return !string.IsNullOrEmpty(resourcePath)
+            ? resourcePath
+            : animationTree.GetMeta("authored_tree_root_resource_path").AsString();
     }
 
     private static void AssertRuntimeEyeAnimationTracksResolve(AnimationPlayer animationPlayer)

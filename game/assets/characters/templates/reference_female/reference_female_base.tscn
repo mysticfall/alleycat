@@ -4,9 +4,10 @@
 [ext_resource type="Script" uid="uid://b2ylrdplnarwo" path="res://src/Character/CharacterCardContextSource.cs" id="2_pyepr"]
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Rigging/Physics/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/templates/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
-[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/PointVisualCue.cs" id="3_oqvej"]
+[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/StaticVisualCue.cs" id="3_oqvej"]
 [ext_resource type="Resource" uid="uid://dpisik0mj8f6a" path="res://assets/characters/reference/female/body_collider_profile.tres" id="4_2a5tg"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_5hhxm"]
+[ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Body/Eyes/SphereVisualBounds.cs" id="4_8lkn1"]
 [ext_resource type="Resource" uid="uid://dawof1far13c8" path="res://assets/characters/templates/ik/arm_ik_target_set.tres" id="5_vhysq"]
 [ext_resource type="Script" uid="uid://ca8x66d568byq" path="res://src/IK/LegIKController.cs" id="6_65br6"]
 [ext_resource type="Script" uid="uid://bortwjgmky2ik" path="res://src/IK/FootTargetSyncController.cs" id="7_56k28"]
@@ -20,17 +21,22 @@
 [sub_resource type="Resource" id="Resource_pyepr"]
 script = ExtResource("2_pyepr")
 
+[sub_resource type="Resource" id="Resource_42fxf"]
+script = ExtResource("4_8lkn1")
+Radius = 0.05
+metadata/_custom_type_script = "uid://b8340t35vo8cv"
+
 [sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
 radius = 0.1
 
-[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors"] instance=ExtResource("1_5molt")]
+[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
 Locomotion = NodePath("Locomotion")
 Navigation = NodePath("Navigation")
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
 ContextSources = [SubResource("Resource_pyepr")]
-AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/Viewpoint/BodyVisualCue")]
+AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
 
 [node name="Female" parent="." index="0" unique_id=1569261267]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
@@ -44,10 +50,12 @@ bone_idx = 46
 unique_name_in_owner = true
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.032278657, 0.0937431)
 
-[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head/Viewpoint" index="0" unique_id=1755026393]
+[node name="BodyVisualCue" type="Node3D" parent="Female/GeneralSkeleton/Head" index="1" unique_id=1755026393]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00018767762, 0.012320638, 0.06855364)
 script = ExtResource("3_oqvej")
 Description = "{{subject.Id}} is a character."
 ID = "body"
+Bounds = SubResource("Resource_42fxf")
 metadata/_custom_type_script = "uid://tb33120b0yo"
 
 [node name="RightHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(332081969) index="10" unique_id=190350548]

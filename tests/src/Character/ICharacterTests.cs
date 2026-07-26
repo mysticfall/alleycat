@@ -106,6 +106,8 @@ public sealed class ICharacterTests
         public void SetLookTarget(Node3D? target) => LookTarget = target;
 
         public void ClearLookTarget() => LookTarget = null;
+
+        public IReadOnlyList<VisualScanResult> Scan() => [];
     }
 
     private sealed class FakeVoice : IVoice

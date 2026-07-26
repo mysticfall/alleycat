@@ -37,20 +37,20 @@ public sealed class VisualCueIntegrationTests
         "Vadim is a sturdily built European man in his late twenties, standing around 180 centimetres tall. Light blond hair and pale skin frame an austere face, while his icy blue eyes lend him a distinctly stern appearance.";
 
     /// <summary>
-    /// Shared female and male templates author exactly one referenced whole-character cue under Viewpoint.
+    /// Shared female and male templates author exactly one referenced whole-character cue under Head.
     /// </summary>
     [Fact]
-    public void ReferenceBaseTemplates_AuthorSingleReferencedBodyCueUnderViewpoint()
+    public void ReferenceBaseTemplates_AuthorSingleReferencedBodyCueUnderHead()
     {
         AssertBaseTemplateCue(ReferenceFemaleBaseScenePath);
         AssertBaseTemplateCue(ReferenceMaleBaseScenePath);
     }
 
     /// <summary>
-    /// Point cues sample their transformed world-space node position.
+    /// Static cues retain origin sampling while their bounds supply scan extent samples.
     /// </summary>
     [Fact]
-    public void SampleGlobalPosition_AfterSceneTreePlacement_ReturnsGlobalPosition()
+    public void StaticCue_WithNonPointBounds_ProvidesExtentScanSamplesAndReturnsGlobalPosition()
     {
         SceneTree sceneTree = GetSceneTree();
         var root = new Node3D
@@ -59,13 +59,18 @@ public sealed class VisualCueIntegrationTests
             Rotation = new Vector3(0.0f, 0.6f, 0.0f),
         };
         var parent = new Node3D { Position = new Vector3(-0.5f, 3.0f, 1.25f) };
-        var cue = new PointVisualCue { Position = new Vector3(0.25f, 0.75f, -2.0f) };
+        var cue = new StaticVisualCue
+        {
+            Position = new Vector3(0.25f, 0.75f, -2.0f),
+            Bounds = new SphereVisualBounds { Radius = 0.5f },
+        };
         root.AddChild(parent);
         parent.AddChild(cue);
         sceneTree.Root.AddChild(root);
 
         try
         {
+            Assert.Contains(cue.GetSampleLocalPositions(), sample => sample != Vector3.Zero);
             Assert.Equal(cue.GlobalPosition, cue.SampleGlobalPosition());
         }
         finally
@@ -83,7 +88,7 @@ public sealed class VisualCueIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         var observer = new TestVisualObserver("Observer Context");
         var subject = new TestVisualSubject("Subject Context");
-        var cue = new PointVisualCue
+        var cue = new StaticVisualCue
         {
             Description = "observer={{observer.label}}; subject={{subject.label}}",
         };
@@ -116,7 +121,7 @@ public sealed class VisualCueIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         var observer = new TestVisualObserver("Observer Only");
         var root = new Node3D();
-        var cue = new PointVisualCue
+        var cue = new StaticVisualCue
         {
             Description = "observer={{observer.label}}; {{#if subject}}subject-present{{else}}subject-absent{{/if}}",
         };
@@ -178,8 +183,8 @@ public sealed class VisualCueIntegrationTests
     [Fact]
     public void CharacterProviderValidation_AcceptsValidBoundaryValuesAndCaseDistinctIDs()
     {
-        PointVisualCue disabled = CreateCue("body", 0.0f);
-        PointVisualCue prominent = CreateCue("Body", 12.0f);
+        StaticVisualCue disabled = CreateCue("body", 0.0f);
+        StaticVisualCue prominent = CreateCue("Body", 12.0f);
         CharacterHub character = CreateAuthoredCharacter([disabled, prominent]);
         try
         {
@@ -198,11 +203,11 @@ public sealed class VisualCueIntegrationTests
         CharacterHub character = Assert.IsType<CharacterHub>(LoadPackedScene(scenePath).Instantiate(), exactMatch: false);
         try
         {
-            PointVisualCue cue = Assert.IsType<PointVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
+            StaticVisualCue cue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
             Assert.Equal("body", cue.ID);
             Assert.Equal(1.0f, cue.Prominence);
-            Assert.Equal("Viewpoint", cue.GetParent().Name.ToString());
-            Assert.Same(cue, Assert.Single(FindDescendants<PointVisualCue>(character)));
+            Assert.Equal("Head", cue.GetParent().Name.ToString());
+            Assert.Same(cue, Assert.Single(FindDescendants<StaticVisualCue>(character)));
         }
         finally
         {
@@ -217,14 +222,14 @@ public sealed class VisualCueIntegrationTests
         {
             EnsureCharacterRuntimeInstalled(character);
 
-            PointVisualCue authoredCue = Assert.IsType<PointVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
-            PointVisualCue exposedCue = Assert.IsType<PointVisualCue>(Assert.Single(character.VisualCues), exactMatch: false);
-            PointVisualCue descendantCue = Assert.Single(FindDescendants<PointVisualCue>(character));
+            StaticVisualCue authoredCue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
+            StaticVisualCue exposedCue = Assert.IsType<StaticVisualCue>(Assert.Single(character.VisualCues), exactMatch: false);
+            StaticVisualCue descendantCue = Assert.Single(FindDescendants<StaticVisualCue>(character));
             Assert.Same(authoredCue, exposedCue);
             Assert.Same(authoredCue, descendantCue);
             Assert.Equal("body", authoredCue.ID);
             Assert.Equal(1.0f, authoredCue.Prominence);
-            Assert.Equal("Viewpoint", authoredCue.GetParent().Name.ToString());
+            Assert.Equal("Head", authoredCue.GetParent().Name.ToString());
 
             var scene = new SceneContext([character]);
             Assert.Equal(expectedDescription, authoredCue.Describe(scene, character));
@@ -250,7 +255,7 @@ public sealed class VisualCueIntegrationTests
         }
     }
 
-    private static PointVisualCue CreateCue(string id, float prominence)
+    private static StaticVisualCue CreateCue(string id, float prominence)
         => new()
         {
             ID = id,

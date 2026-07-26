@@ -26,4 +26,9 @@ public interface IEyes : IComponent
     /// Clears the current directed look target.
     /// </summary>
     void ClearLookTarget();
+
+    /// <summary>
+    /// Synchronously scans the configured visual-subject group from this eye component's origin.
+    /// </summary>
+    IReadOnlyList<VisualScanResult> Scan();
 }

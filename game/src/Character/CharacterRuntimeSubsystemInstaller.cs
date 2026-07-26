@@ -17,6 +17,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 {
     private static readonly StringName _eyesLibraryName = new("eyes");
     private static readonly StringName _actorsGroupName = new("Actors");
+    private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
     private static readonly StringName _authoredTreeRootResourcePathMeta = new("authored_tree_root_resource_path");
     private static readonly StringName[] _requiredEyeAnimationNames =
     [
@@ -62,6 +63,11 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             if (templateCharacter.IsInGroup(_actorsGroupName))
             {
                 targetCharacter.AddToGroup(_actorsGroupName, persistent: true);
+            }
+
+            if (templateCharacter.IsInGroup(_visualSubjectsGroupName))
+            {
+                targetCharacter.AddToGroup(_visualSubjectsGroupName, persistent: true);
             }
 
             RigTemplateInstallation.RebaseTemplateReferences(context.TargetRoot, context, this);

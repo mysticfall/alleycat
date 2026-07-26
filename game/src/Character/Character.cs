@@ -217,6 +217,12 @@ public partial class Character : CharacterBody3D, ICharacter
                     $"Character node '{GetPath()}' visual cue '{cue.ID}' requires finite, non-negative prominence, but found {cue.Prominence}.");
             }
 
+            if (!float.IsFinite(cue.MaxVisibleDistance) || cue.MaxVisibleDistance < 0.0f)
+            {
+                throw new InvalidOperationException(
+                    $"Character node '{GetPath()}' visual cue '{cue.ID}' requires finite, non-negative maximum visible distance, but found {cue.MaxVisibleDistance}.");
+            }
+
             if (!IDs.Add(cue.ID))
             {
                 throw new InvalidOperationException(

@@ -23,6 +23,7 @@ membership and content root through dependency injection while character and God
 4. Items and future non-human actor categories are not misclassified as current humanoid characters.
 5. Game systems can read the active content identity and root from scene context without resolving CORE services again.
 6. Scene authors receive a clear failure when character identity would make conversation context ambiguous.
+7. Contributors can author visual subjects in one explicit group without making those subjects actors.
 
 ## Technical Requirements
 
@@ -48,6 +49,10 @@ membership and content root through dependency injection while character and God
     context.
 16. Every character role template must join `Actors` at the lowest shared male/female character base. Higher role or
     concrete character scenes must not add redundant compensating membership.
+17. `VisualSubjects` is the group for nodes authored as `IVisualSubject` instances. BODY-004 owns direct group
+    querying, member validation, and scan authoring-failure behaviour.
+18. `VisualSubjects` membership is independent of `Actors`. A scene node may be a visual subject without being a
+    current humanoid character, and `Actors` retains its `ICharacter`-only contract.
 
 ## In Scope
 
@@ -60,6 +65,7 @@ membership and content root through dependency injection while character and God
 - Shared-base `Actors` membership for all character role templates.
 - Membership-snapshot semantics with live referenced objects.
 - Convenience exposure of the CORE current-content context.
+- `VisualSubjects` group-membership semantics for BODY-004 visual scans.
 
 ## Out Of Scope
 
@@ -70,6 +76,7 @@ membership and content root through dependency injection while character and God
 - Treating items as actors.
 - Non-human actor support before the `ICharacter` model is revisited.
 - Lore-normalised identity collision validation, which belongs to AI-004 character-lore construction.
+- Visibility policy, bounds sampling, field-of-view calculations, and raycast behaviour, which belong to BODY-004.
 
 ## Acceptance Criteria
 
@@ -81,6 +88,7 @@ membership and content root through dependency injection while character and God
 4. Items are absent from scene-context character membership, even if they are interactable scene objects.
 5. A consumer can read the active content id and root from the scene context for content-relative loading.
 6. Empty or exact duplicate character IDs fail scene-context construction clearly.
+7. A contributor can place a visual subject in `VisualSubjects` without making it an actor.
 
 ### Technical Requirements
 
@@ -96,6 +104,9 @@ membership and content root through dependency injection while character and God
 10. Scene context contains no lore-specific path, AI prompt, or retrieval contract.
 11. Male and female character bases add their character root to `Actors` at the lowest shared level, with no redundant
     higher-scene compensation.
+12. `VisualSubjects` is reserved for nodes authored as `IVisualSubject` instances; BODY-004 owns direct querying,
+    member validation, and invalid-member failure for visual scans.
+13. `VisualSubjects` does not relax, replace, or imply `Actors` membership.
 
 ## References
 
@@ -103,3 +114,4 @@ membership and content root through dependency injection while character and God
 - [CORE-008: Content Pack Resolution](../../core/008-content-pack-resolution/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
+- [BODY-004: Eyes](../../body/004-eyes/index.md)

@@ -119,7 +119,7 @@ public partial class DynamicPhysicalRig : Node
     {
         get;
         set;
-    } = 4;
+    } = 20;
 
     /// <summary>
     /// Collision mask applied to generated proxy bodies.

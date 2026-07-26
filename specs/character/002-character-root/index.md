@@ -100,8 +100,9 @@ exists.
 33. The concrete `Character` root owns a validated, read-only visual-cue collection for its `IVisualSubject` role.
 34. Character installation must preserve, rebase, and validate template-authored visual-cue references. Validation must
     enforce the BODY-004 cue contract, including non-empty and ordinally unique IDs per provider.
-35. The lowest shared reference female and male character templates each author exactly one `PointVisualCue` with ID
-    `body` at the existing head `Viewpoint`; its generic template may use placeholder description content.
+35. The lowest shared reference female and male character templates each author exactly one `StaticVisualCue` with ID
+    `body` at `Head/BodyVisualCue` (a sibling of the existing `Viewpoint`); its generic template may use placeholder
+    description content.
 36. Ally NPC, Ally player, and Vadim assets override the inherited `body` cue template with character-specific
     appearance descriptions rather than replacing the shared cue topology.
 
@@ -190,8 +191,8 @@ exists.
 21. `ICharacter` normatively aggregates both `IVisualObserver` and `IVisualSubject` from BODY-004.
 22. Character roots expose validated visual-cue references through a read-only collection, and installation preserves
     or rebases those authored references.
-23. Shared reference female and male templates each contain exactly one `PointVisualCue` with ID `body` at the existing
-    head `Viewpoint`.
+23. Shared reference female and male templates each contain exactly one `StaticVisualCue` with ID `body` at
+    `Head/BodyVisualCue`.
 24. Validation enforces the BODY-004 cue contract, including non-empty, ordinally unique IDs per character provider.
 25. Ally player, Ally NPC, and Vadim retain the shared `body` cue topology and provide character-specific template
     overrides.
