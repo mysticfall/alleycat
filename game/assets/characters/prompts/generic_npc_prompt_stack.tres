@@ -1,11 +1,11 @@
 [gd_resource type="Resource" script_class="PromptStack" format=3 uid="uid://dvw63im28183y"]
 
-[ext_resource type="Script" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="1_2m31c"]
-[ext_resource type="Script" path="res://src/Mind/AI/Prompting/EssentialLorePromptSection.cs" id="2_bsmxt"]
-[ext_resource type="Script" path="res://src/Mind/AI/Prompting/CharacterLorePromptSection.cs" id="3_0apto"]
-[ext_resource type="Script" path="res://src/Mind/AI/Prompting/EventHistoryPromptFragment.cs" id="4_0apto"]
-[ext_resource type="Script" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="4_bwdq6"]
-[ext_resource type="Script" path="res://src/Mind/AI/Prompting/EventHistoryPromptSection.cs" id="5_bwdq6"]
+[ext_resource type="Script" uid="uid://sy610kavjr0b" path="res://src/Mind/AI/Prompting/TextPromptSection.cs" id="1_2m31c"]
+[ext_resource type="Script" uid="uid://b5evrsqr6axkt" path="res://src/Mind/AI/Prompting/EssentialLorePromptSection.cs" id="2_bsmxt"]
+[ext_resource type="Script" uid="uid://ma8scv62385o" path="res://src/Mind/AI/Prompting/CharacterLorePromptSection.cs" id="3_0apto"]
+[ext_resource type="Script" uid="uid://ymq5mrb46tea" path="res://src/Mind/AI/Prompting/EventHistoryPromptFragment.cs" id="4_0apto"]
+[ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="4_bwdq6"]
+[ext_resource type="Script" uid="uid://cafmu04bp678h" path="res://src/Mind/AI/Prompting/EventHistoryPromptSection.cs" id="5_bwdq6"]
 
 [sub_resource type="Resource" id="Resource_fqak1"]
 script = ExtResource("1_2m31c")
