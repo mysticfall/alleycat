@@ -15,11 +15,11 @@ public sealed partial class DirectTransformNavigationIntegrationTests
     private const float DirectionTolerance = 0.02f;
 
     /// <summary>
-    /// Verifies precision defaults apply to code-created and scene-instanced direct consumers and remain configurable.
+    /// Verifies precision defaults apply to code-created direct consumers and remain configurable.
     /// </summary>
     [Headless]
     [Fact]
-    public void PrecisionDistanceDefaults_ApplyToFreshAndAuthoredSceneInstancesAndRemainConfigurable()
+    public void PrecisionDistanceDefaults_ApplyToFreshInstancesAndRemainConfigurable()
     {
         DirectTransformNavigation fresh = new();
         Assert.Equal(0.05f, fresh.PathDesiredDistance);
@@ -34,27 +34,6 @@ public sealed partial class DirectTransformNavigationIntegrationTests
         Assert.Equal(0.03f, fresh.TargetDesiredDistance);
         fresh.Free();
 
-        string[] scenePaths = [
-            "res://assets/testing/navigation/navigation_test_npc.tscn",
-            "res://assets/characters/templates/reference_female/reference_female_base.tscn",
-            "res://assets/characters/templates/reference_male/reference_male_base.tscn",
-        ];
-        foreach (string scenePath in scenePaths)
-        {
-            PackedScene scene = GD.Load<PackedScene>(scenePath);
-            Node instance = scene.Instantiate();
-            try
-            {
-                DirectTransformNavigation navigation = instance.GetNode<DirectTransformNavigation>("Navigation");
-                Assert.Equal(0.05f, navigation.PathDesiredDistance);
-                Assert.Equal(0.05f, navigation.DestinationReachedDistance);
-                Assert.Equal(navigation.DestinationReachedDistance, navigation.TargetDesiredDistance);
-            }
-            finally
-            {
-                instance.Free();
-            }
-        }
     }
 
     /// <summary>
@@ -123,6 +102,8 @@ public sealed partial class DirectTransformNavigationIntegrationTests
 
             NavigationMotionIntent closeAcrossCorner = rig.Navigation.Poll(GetWorldTransform(rig.Target));
             Assert.True(GetWorldTransform(rig.Target).Origin.DistanceTo(destinationPosition) <= rig.Navigation.DestinationReachedDistance);
+            Assert.Equal(0, rig.Navigation.LastSampledPathIndex);
+            Assert.Equal(corner, closeAcrossCorner.NextPathPosition);
             Assert.True(closeAcrossCorner.RemainingPathDistance > rig.Navigation.PathDesiredDistance);
             Assert.False(closeAcrossCorner.PositionReached);
             Assert.False(closeAcrossCorner.IsComplete);

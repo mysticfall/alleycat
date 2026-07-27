@@ -3,12 +3,19 @@
 [ext_resource type="AnimationNodeBlendTree" uid="uid://c485owf86etdu" path="res://assets/characters/templates/animation/animation_tree_root_npc.tres" id="1_ibtlu"]
 
 [node name="AnimationTree" type="AnimationTree" unique_id=2098590596]
-active = true
 root_motion_track = NodePath("%GeneralSkeleton:Root")
+callback_mode_process = 0
 tree_root = ExtResource("1_ibtlu")
 anim_player = NodePath("../AnimationPlayer")
+parameters/EyesBlinkOneShot/active = false
+parameters/EyesBlinkOneShot/internal_active = false
+parameters/EyesBlinkOneShot/request = 0
+parameters/States/Walking/Locomotion/blend_position = Vector2(0, 0)
+parameters/States/Walking/Locomotion/Movement/blend_position = Vector2(0, 0)
+parameters/EyesVerticalLookBlend/blend_amount = 1.0
+parameters/EyesVerticalLookSeek/seek_request = -1.0
+parameters/EyesHorizontalLookBlend/blend_amount = 1.0
+parameters/EyesHorizontalLookSeek/seek_request = -1.0
 parameters/RightHandBlend/blend_amount = 0.0
 parameters/LeftHandBlend/blend_amount = 0.0
-parameters/EyesVerticalLookBlend/blend_amount = 1.0
-parameters/EyesHorizontalLookBlend/blend_amount = 1.0
-parameters/States/Walking/blend_position = Vector2(0, 0)
+parameters/EyesBlinkTimeScale/scale = 1.0

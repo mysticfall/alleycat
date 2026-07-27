@@ -39,7 +39,7 @@ public partial class Character : CharacterBody3D, ICharacter
     /// Gets or sets the template-authored navigation capability reference.
     /// </summary>
     [Export]
-    public DirectTransformNavigation? Navigation
+    public NavigationBase? Navigation
     {
         get; set;
     }
@@ -118,20 +118,24 @@ public partial class Character : CharacterBody3D, ICharacter
     /// </summary>
     public void RefreshComponents()
     {
-        IComponent[] components =
-        [
+        var components = new List<IComponent>(6)
+        {
             RequireComponentReference(Locomotion, nameof(Locomotion)),
-            RequireComponentReference(Navigation, nameof(Navigation)),
-            RequireComponentReference(Eyes, nameof(Eyes)),
-            RequireComponentReference(Voice, nameof(Voice)),
-            RequireHandReference(LeftHand, LimbSide.Left, nameof(LeftHand)),
-            RequireHandReference(RightHand, LimbSide.Right, nameof(RightHand)),
-        ];
+        };
+        if (Navigation is not null)
+        {
+            components.Add(Navigation);
+        }
+
+        components.Add(RequireComponentReference(Eyes, nameof(Eyes)));
+        components.Add(RequireComponentReference(Voice, nameof(Voice)));
+        components.Add(RequireHandReference(LeftHand, LimbSide.Left, nameof(LeftHand)));
+        components.Add(RequireHandReference(RightHand, LimbSide.Right, nameof(RightHand)));
 
         ValidateDistinctReferences(components);
         ValidateVisualCues();
 
-        _components = components;
+        _components = [.. components];
         VisualCues = Array.AsReadOnly(AuthoredVisualCues);
     }
 

@@ -18,11 +18,11 @@ namespace AlleyCat.IntegrationTests.Characters;
 /// </summary>
 public sealed class CharacterCompositionIntegrationTests
 {
-    private const string ReferenceFemaleBaseScenePath =
-        "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+    private const string ReferenceFemaleNPCScenePath =
+        "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
 
-    private const string ReferenceMaleBaseScenePath =
-        "res://assets/characters/templates/reference_male/reference_male_base.tscn";
+    private const string ReferenceMaleNPCScenePath =
+        "res://assets/characters/templates/reference_male/reference_male_npc.tscn";
 
     /// <summary>
     /// Imported runtime roots may enter the tree before installers copy and rebase explicit capability references.
@@ -166,29 +166,38 @@ public sealed class CharacterCompositionIntegrationTests
     }
 
     /// <summary>
-    /// The reference female base template authors the NAV-001 direct-transform navigation component.
+    /// The reference female NPC template authors production locomotive navigation bound to its character root.
     /// </summary>
     [Headless]
     [Fact]
-    public void ReferenceFemaleBaseTemplate_AuthorsDirectTransformNavigation()
-        => AssertReferenceBaseTemplateAuthorsDirectTransformNavigation(ReferenceFemaleBaseScenePath);
+    public void ReferenceFemaleNPCTemplate_AuthorsLocomotiveNavigation()
+        => AssertNPCTemplateAuthorsLocomotiveNavigation(
+            ReferenceFemaleNPCScenePath,
+            StandingLocomotionCharacter.ReferenceFemale);
 
     /// <summary>
-    /// The reference male base template authors the NAV-001 direct-transform navigation component.
+    /// The reference male NPC template authors production locomotive navigation bound to its character root.
     /// </summary>
     [Headless]
     [Fact]
-    public void ReferenceMaleBaseTemplate_AuthorsDirectTransformNavigation()
-        => AssertReferenceBaseTemplateAuthorsDirectTransformNavigation(ReferenceMaleBaseScenePath);
+    public void ReferenceMaleNPCTemplate_AuthorsLocomotiveNavigation()
+        => AssertNPCTemplateAuthorsLocomotiveNavigation(
+            ReferenceMaleNPCScenePath,
+            StandingLocomotionCharacter.ReferenceMale);
 
-    private static void AssertReferenceBaseTemplateAuthorsDirectTransformNavigation(string scenePath)
+    private static void AssertNPCTemplateAuthorsLocomotiveNavigation(
+        string scenePath,
+        StandingLocomotionCharacter expectedProfile)
     {
         PackedScene scene = ResourceLoader.Load<PackedScene>(scenePath);
         CharacterHub character = Assert.IsType<CharacterHub>(scene.Instantiate(), exactMatch: false);
         try
         {
-            Assert.NotNull(character.Navigation);
-            Assert.Same(character, character.Navigation.Target);
+            LocomotiveNavigation navigation = Assert.IsType<LocomotiveNavigation>(character.Navigation);
+            Assert.Same(character, navigation.Actor);
+            Assert.Equal(expectedProfile, navigation.ResponseProfileCharacter);
+            _ = Assert.IsAssignableFrom<ILocomotive>(navigation.Actor);
+            _ = Assert.Single(character.GetChildren().OfType<NavigationBase>());
         }
         finally
         {

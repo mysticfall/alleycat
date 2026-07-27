@@ -1,0 +1,16 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" uid="uid://6b8las20aee4" path="res://assets/testing/photobooth/photobooth.tscn" id="1_photo"]
+[ext_resource type="PackedScene" uid="uid://cjk7djnvnvkr" path="res://assets/testing/navigation/navigation_test.tscn" id="2_nav"]
+[ext_resource type="Script" path="res://tests/navigation/predictive_navigation_photobooth.gd" id="3_runner"]
+
+[node name="PredictiveNavigationPhotobooth" instance=ExtResource("1_photo")]
+script = ExtResource("3_runner")
+
+[node name="NavigationRuntime" parent="." instance=ExtResource("2_nav")]
+
+[node name="VerificationCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 12, 0)
+current = true
+projection = 1
+size = 13.0

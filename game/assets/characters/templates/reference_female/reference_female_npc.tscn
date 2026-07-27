@@ -10,14 +10,21 @@
 [ext_resource type="Resource" uid="uid://dvw63im28183y" path="res://assets/characters/prompts/generic_npc_prompt_stack.tres" id="9_beijb"]
 [ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="10_v2tt5"]
 [ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="11_u8xcn"]
+[ext_resource type="Script" uid="uid://bfalxt2riwwdb" path="res://src/Navigation/LocomotiveNavigation.cs" id="12_navigation"]
 
 [sub_resource type="Resource" id="Resource_agentic_speech_tool"]
 script = ExtResource("11_u8xcn")
 ToolName = "speak"
 ToolDescription = "Speak the supplied text aloud through the configured voice."
 
-[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Voice") instance=ExtResource("1_vf6rf")]
+[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Voice", "Navigation") instance=ExtResource("1_vf6rf")]
 Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
+Navigation = NodePath("Navigation")
+
+[node name="Navigation" type="NavigationAgent3D" parent="." index="2" unique_id=2043362909 node_paths=PackedStringArray("Actor")]
+script = ExtResource("12_navigation")
+Actor = NodePath("..")
+metadata/_custom_type_script = "uid://bfalxt2riwwdb"
 
 [node name="Voice" type="Node3D" parent="Female/GeneralSkeleton/Head" index="1" unique_id=1804649546 node_paths=PackedStringArray("SpeechGenerator", "LipSyncPlayer")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2221888e-05, -0.035407424, 0.08069722)

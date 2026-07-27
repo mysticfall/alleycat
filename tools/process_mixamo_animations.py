@@ -24,6 +24,7 @@ DEFAULT_SELECTION = ROOT / "game/assets/characters/reference/female/animations/s
 DEFAULT_TARGET_RIG = ROOT / "game/assets/characters/reference/female/reference_female.blend"
 DEFAULT_OUTPUT_DIR = ROOT / "game/assets/characters/reference/female/animations/processed/mixamo"
 RETARGET_SCRIPT = ROOT / "tools/retarget_mixamo_animation.py"
+DERIVE_MIRROR_SCRIPT = ROOT / "tools/derive_mixamo_mirror.py"
 MANIFEST_COLUMNS = ("motion_id", "name", "description", "type", "file")
 SELECTION_COLUMNS = (
     "motion_id",
@@ -36,9 +37,8 @@ SELECTION_COLUMNS = (
     "create_root_motion",
     "notes",
 )
-# Version 6 forces reprocessing after the retargeter made reconstructed/sanitised Mixamo Root
-# tracks the normal source path and records root_source=reconstructed_root diagnostics.
-PROCESSOR_VERSION = 6
+# Version 8 adds class-specific Root reconstruction diagnostics and rig-aware turn proof.
+PROCESSOR_VERSION = 8
 INDEX_SCHEMA_VERSION = 2
 METRICS_SCHEMA_VERSION = 2
 ROOT_SOURCE_STATIC = "root_static"
@@ -84,7 +84,19 @@ class WorkItem:
 
     @property
     def action_name(self) -> str:
+        if self.is_derived_mirror:
+            return f'derived_mirror_{self.source_motion_id.replace("-", "_")}'
         return f'mixamo_{self.manifest.motion_id.replace("-", "_")}'
+
+    @property
+    def is_derived_mirror(self) -> bool:
+        return self.manifest.motion_id.startswith("derived_mirror_")
+
+    @property
+    def source_motion_id(self) -> str:
+        return self.manifest.motion_id.removeprefix("derived_mirror_")
+
+    # Loop intent is measured from the baked action and persisted in its metrics.
 
 
 @dataclass(frozen=True)
@@ -378,10 +390,43 @@ def write_single_row_manifest(path: Path, row: ManifestRow) -> None:
         )
 
 
-def retarget_single_clip(args: Args, item: WorkItem, temp_dir: Path, blender: str) -> tuple[Path, Path]:
+def retarget_single_clip(args: Args, item: WorkItem, temp_dir: Path, blender: str, index: dict[str, Any]) -> tuple[Path, Path]:
     temp_manifest = temp_dir / f"{item.manifest.motion_id}.manifest.csv"
     temp_blend = temp_dir / f"{item.action_name}.blend"
     temp_metrics = temp_dir / f"{item.action_name}.metrics.json"
+    if item.is_derived_mirror:
+        source_entry = index.get("motions", {}).get(item.source_motion_id, {})
+        source_intent = source_entry.get("loop_intent", {}) if isinstance(source_entry, dict) else {}
+        if not isinstance(source_intent.get("effective_loop_intent"), bool):
+            raise ScriptError(f'Derived mirror source {item.source_motion_id} lacks persisted loop intent.')
+        source_base_action = f'mixamo_{item.source_motion_id.replace("-", "_")}'
+        source_action = f"{source_base_action}-loop" if source_intent["effective_loop_intent"] else source_base_action
+        source_group = group_blend_path(args.output_dir, item.selection.group)
+        if not source_group.is_file():
+            raise ScriptError(f'Derived mirror source group is missing: "{source_group}".')
+        shutil.copy2(source_group, temp_blend)
+        run_subprocess(
+            [
+                blender,
+                "--background",
+                str(temp_blend),
+                "--python",
+                str(DERIVE_MIRROR_SCRIPT),
+                "--",
+                "--blend",
+                str(temp_blend),
+                "--source-action",
+                source_action,
+                "--derived-action",
+                item.action_name,
+                "--source-motion-id",
+                item.source_motion_id,
+                "--metrics-output",
+                str(temp_metrics),
+            ],
+            f'Deriving sagittal mirror from "{item.source_motion_id}"',
+        )
+        return temp_blend, temp_metrics
     write_single_row_manifest(temp_manifest, item.manifest)
     command = [
         blender,
@@ -401,6 +446,10 @@ def retarget_single_clip(args: Args, item: WorkItem, temp_dir: Path, blender: st
         str(temp_blend),
         "--metrics-output",
         str(temp_metrics),
+        "--action-name",
+        item.action_name,
+        "--metrics-action-name",
+        item.action_name,
         "--selection-category",
         item.selection.category,
         "--selection-motion-class",
@@ -416,7 +465,13 @@ def retarget_single_clip(args: Args, item: WorkItem, temp_dir: Path, blender: st
     return temp_blend, temp_metrics
 
 
-def append_action_to_group(temp_blend: Path, group_blend: Path, action_name: str, blender: str) -> None:
+def append_action_to_group(
+    temp_blend: Path,
+    group_blend: Path,
+    action_name: str,
+    alternate_action_name: str,
+    blender: str,
+) -> None:
     group_blend.parent.mkdir(parents=True, exist_ok=True)
     final_path = group_blend
     temp_output = group_blend.with_name(f".{group_blend.stem}.tmp.blend")
@@ -427,6 +482,7 @@ def append_action_to_group(temp_blend: Path, group_blend: Path, action_name: str
             f"temp_output = pathlib.Path({str(temp_output)!r})",
             f"source_blend = pathlib.Path({str(temp_blend)!r})",
             f"action_name = {action_name!r}",
+            f"alternate_action_name = {alternate_action_name!r}",
             "NLA_REFERENCE_NAME_LIMIT = 63",
             "NLA_REFERENCE_PREFIX = 'LinkedActionRef'",
             "def slugify(value):",
@@ -467,7 +523,7 @@ def append_action_to_group(temp_blend: Path, group_blend: Path, action_name: str
             "    if armature is None:",
             "        raise RuntimeError(f'no target armature found in {source_blend}')",
             "    return armature",
-            "def remove_existing_action_reference(armature, name):",
+            "def remove_existing_action(armature, name):",
             "    animation_data = getattr(armature, 'animation_data', None)",
             "    if animation_data is None:",
             "        return",
@@ -477,6 +533,9 @@ def append_action_to_group(temp_blend: Path, group_blend: Path, action_name: str
             "    for track in list(animation_data.nla_tracks):",
             "        if track.name == reference_name or any(getattr(strip.action, 'name', None) == name for strip in track.strips):",
             "            animation_data.nla_tracks.remove(track)",
+            "    existing = bpy.data.actions.get(name)",
+            "    if existing is not None:",
+            "        bpy.data.actions.remove(existing, do_unlink=True)",
             "def append_or_replace_action(name):",
             "    existing = bpy.data.actions.get(name)",
             "    if existing is not None:",
@@ -507,12 +566,12 @@ def append_action_to_group(temp_blend: Path, group_blend: Path, action_name: str
             "def prune_non_processed_actions(armature):",
             "    animation_data = armature.animation_data_create()",
             "    for track in list(animation_data.nla_tracks):",
-            "        if any(strip.action is not None and not strip.action.name.startswith('mixamo_') for strip in track.strips):",
+            "        if any(strip.action is not None and not (strip.action.name.startswith('mixamo_') or strip.action.name.startswith('derived_mirror_')) for strip in track.strips):",
             "            animation_data.nla_tracks.remove(track)",
-            "    if getattr(animation_data, 'action', None) is not None and not animation_data.action.name.startswith('mixamo_'):",
+            "    if getattr(animation_data, 'action', None) is not None and not (animation_data.action.name.startswith('mixamo_') or animation_data.action.name.startswith('derived_mirror_')):",
             "        animation_data.action = None",
             "    for candidate in list(bpy.data.actions):",
-            "        if not candidate.name.startswith('mixamo_'):",
+            "        if not (candidate.name.startswith('mixamo_') or candidate.name.startswith('derived_mirror_')):",
             "            bpy.data.actions.remove(candidate, do_unlink=True)",
             "def prune_duplicate_processed_actions(armature):",
             "    duplicate_pattern = re.compile(r'^mixamo_.+\\.\\d{3}$')",
@@ -535,7 +594,8 @@ def append_action_to_group(temp_blend: Path, group_blend: Path, action_name: str
             "armature = ensure_shared_armature()",
             "prune_non_processed_actions(armature)",
             "prune_duplicate_processed_actions(armature)",
-            "remove_existing_action_reference(armature, action_name)",
+            "remove_existing_action(armature, action_name)",
+            "remove_existing_action(armature, alternate_action_name)",
             "action = append_or_replace_action(action_name)",
             "create_persistent_action_user(action, armature)",
             "for other_action in bpy.data.actions:",
@@ -574,7 +634,7 @@ def validate_metrics(metrics_path: Path, item: WorkItem, allow_raw_root: bool = 
         "head_height_norm",
         "foot_contact",
         "feature_schema",
-        "selection",
+        "selection", "loop_intent",
     ):
         if required_key not in data:
             raise ScriptError(f'Metrics "{metrics_path}" is missing required field "{required_key}".')
@@ -628,6 +688,27 @@ def validate_metrics(metrics_path: Path, item: WorkItem, allow_raw_root: bool = 
         raise ScriptError(f'Metrics "{metrics_path}" contains an absolute source path.')
 
 
+def source_action_name(action_name: str, metrics_path: Path) -> str:
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    intent = metrics.get("loop_intent")
+    if not isinstance(intent, dict) or not isinstance(intent.get("effective_loop_intent"), bool):
+        raise ScriptError(f'Metrics "{metrics_path}" has no persisted effective loop intent.')
+    return f"{action_name}-loop" if intent["effective_loop_intent"] else action_name
+
+
+def rename_action_in_blend(blend: Path, original: str, renamed: str, blender: str) -> None:
+    if original == renamed:
+        return
+    code = (
+        "import bpy; "
+        f"action=bpy.data.actions.get({original!r}); "
+        "assert action is not None, 'missing action'; "
+        f"assert bpy.data.actions.get({renamed!r}) is None, 'duplicate action'; "
+        f"action.name={renamed!r}; bpy.ops.wm.save_as_mainfile(filepath={str(blend)!r}, check_existing=False)"
+    )
+    run_subprocess([blender, "--background", str(blend), "--python-expr", code], f'Renaming loop-marked action "{original}"')
+
+
 def enrich_metrics_with_selection(metrics_path: Path, item: WorkItem) -> None:
     with metrics_path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -653,7 +734,7 @@ def enrich_metrics_with_selection(metrics_path: Path, item: WorkItem) -> None:
 def make_index_entry(item: WorkItem, output_dir: Path) -> dict[str, Any]:
     metrics_path = action_metrics_path(output_dir, item.action_name)
     blend_path = group_blend_path(output_dir, item.selection.group)
-    return {
+    entry = {
         "motion_id": item.manifest.motion_id,
         "action": item.action_name,
         "group": item.selection.group,
@@ -676,6 +757,12 @@ def make_index_entry(item: WorkItem, output_dir: Path) -> dict[str, Any]:
         "processor_version": PROCESSOR_VERSION,
         "processed_at": datetime.now(timezone.utc).isoformat(),
     }
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    entry["loop_intent"] = metrics["loop_intent"]
+    if item.is_derived_mirror:
+        entry["derived_identity"] = item.action_name
+        entry["derivation_provenance"] = metrics["derived_provenance"]
+    return entry
 
 
 def reset_full_selection_outputs(args: Args, items: list[WorkItem], index: dict[str, Any]) -> None:
@@ -727,14 +814,22 @@ def process_items(args: Args, items: list[WorkItem]) -> None:
             continue
         with tempfile.TemporaryDirectory(prefix="mixamo_batch_") as temp_name:
             temp_dir = Path(temp_name)
-            temp_blend, temp_metrics = retarget_single_clip(args, item, temp_dir, blender)
+            temp_blend, temp_metrics = retarget_single_clip(args, item, temp_dir, blender, index)
             final_metrics = action_metrics_path(args.output_dir, item.action_name)
             final_metrics.parent.mkdir(parents=True, exist_ok=True)
             metrics_tmp = final_metrics.with_suffix(final_metrics.suffix + ".tmp")
             shutil.copy2(temp_metrics, metrics_tmp)
             enrich_metrics_with_selection(metrics_tmp, item)
             validate_metrics(metrics_tmp, item, args.skip_root_reconstruction)
-            append_action_to_group(temp_blend, group_blend_path(args.output_dir, item.selection.group), item.action_name, blender)
+            marked_action_name = source_action_name(item.action_name, metrics_tmp)
+            rename_action_in_blend(temp_blend, item.action_name, marked_action_name, blender)
+            append_action_to_group(
+                temp_blend,
+                group_blend_path(args.output_dir, item.selection.group),
+                marked_action_name,
+                item.action_name if marked_action_name.endswith("-loop") else f"{item.action_name}-loop",
+                blender,
+            )
             metrics_tmp.replace(final_metrics)
             validate_metrics(final_metrics, item, args.skip_root_reconstruction)
             index["motions"][item.manifest.motion_id] = make_index_entry(item, args.output_dir)

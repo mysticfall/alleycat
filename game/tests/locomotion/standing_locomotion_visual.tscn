@@ -1,0 +1,49 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8fq1s3gwmppl" path="res://assets/testing/photobooth/templates/full_body_5_cams.tscn" id="1_photobooth"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_origin_gold"]
+albedo_color = Color(1, 0.84, 0, 1)
+emission_enabled = true
+emission = Color(1, 0.84, 0, 1)
+shading_mode = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_origin_cyan"]
+albedo_color = Color(0.1, 0.9, 1, 1)
+emission_enabled = true
+emission = Color(0.1, 0.9, 1, 1)
+shading_mode = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_origin_red"]
+albedo_color = Color(1, 0.25, 0.1, 1)
+emission_enabled = true
+emission = Color(1, 0.25, 0.1, 1)
+shading_mode = 0
+
+[sub_resource type="BoxMesh" id="BoxMesh_origin_x"]
+material = SubResource("StandardMaterial3D_origin_gold")
+size = Vector3(0.8, 0.06, 0.06)
+
+[sub_resource type="BoxMesh" id="BoxMesh_origin_z"]
+material = SubResource("StandardMaterial3D_origin_cyan")
+size = Vector3(0.06, 0.06, 1.5)
+
+[sub_resource type="BoxMesh" id="BoxMesh_origin_y"]
+material = SubResource("StandardMaterial3D_origin_red")
+size = Vector3(0.08, 1.1, 0.08)
+
+[node name="StandingLocomotionVisual" instance=ExtResource("1_photobooth")]
+
+[node name="WorldOriginReference" type="Node3D" parent="."]
+
+[node name="WorldXAxis" type="MeshInstance3D" parent="WorldOriginReference"]
+position = Vector3(0, 0.03, 0)
+mesh = SubResource("BoxMesh_origin_x")
+
+[node name="WorldZAxis" type="MeshInstance3D" parent="WorldOriginReference"]
+position = Vector3(0, 0.03, 0)
+mesh = SubResource("BoxMesh_origin_z")
+
+[node name="WorldVerticalAxis" type="MeshInstance3D" parent="WorldOriginReference"]
+position = Vector3(0, 0.55, 0)
+mesh = SubResource("BoxMesh_origin_y")

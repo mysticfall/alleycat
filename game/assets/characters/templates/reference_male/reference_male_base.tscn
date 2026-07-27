@@ -16,7 +16,7 @@
 [ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/StaticVisualCue.cs" id="13_e6bn2"]
 [ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Body/Eyes/SphereVisualBounds.cs" id="14_c6lj4"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bs4kur56aknxq" path="res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres" id="19_4r77l"]
-[ext_resource type="Script" uid="uid://b6qde8hx65pcb" path="res://src/Navigation/DirectTransformNavigation.cs" id="20_navigation"]
+[ext_resource type="AnimationLibrary" path="res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres" id="20_locomotion"]
 
 [sub_resource type="Resource" id="Resource_wlfxg"]
 script = ExtResource("2_58k5s")
@@ -38,9 +38,8 @@ angle = 0.7853982
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_n6ra7"]
 angle = 0.34906584
 
-[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors"] instance=ExtResource("1_5molt")]
+[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Locomotion", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
 Locomotion = NodePath("Locomotion")
-Navigation = NodePath("Navigation")
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
@@ -448,10 +447,9 @@ script = ExtResource("12_2m28j")
 TargetCharacterBodyNode = NodePath("..")
 AnimationTree = NodePath("../AnimationTree")
 RootMotionReference = NodePath("../Male")
-AnimationBlendParameter = &"parameters/States/Walking/blend_position"
+AnimationBlendParameter = &"parameters/States/Walking/Locomotion/Movement/blend_position"
+AnimationTurnBlendParameter = &"parameters/States/Walking/Locomotion/blend_position"
 metadata/_custom_type_script = "uid://cjt48dl58j31y"
 
-[node name="Navigation" type="NavigationAgent3D" parent="." index="7" unique_id=1716822287 node_paths=PackedStringArray("Target")]
-script = ExtResource("20_navigation")
-Target = NodePath("..")
-metadata/_custom_type_script = "uid://b6qde8hx65pcb"
+[node name="AnimationPlayer" parent="." index="7" unique_id=1099544568]
+libraries/locomotion = ExtResource("20_locomotion")

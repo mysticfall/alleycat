@@ -20,6 +20,8 @@ boundaries across character control sub-specifications.
 3. Movement and rotation controls must be independent and simultaneously
    achievable.
 4. Control scheme must support configurable sensitivity and smoothing.
+5. Rotation must remain smooth and continuous; snap turns are not supported in
+   the current control scope.
 
 ## Technical Requirements
 
@@ -28,7 +30,7 @@ boundaries across character control sub-specifications.
 2. Runtime XR-to-control integration boundaries must remain explicit
    via [XR-001: XRManager](../xr/001-xr-manager/index.md).
 3. Child specifications carry feature-level implementation contracts.
-4. Incremental delivery preserves backwards-compatible control semantics.
+4. Incremental delivery preserves established smooth control semantics.
 
 ## In Scope
 
@@ -36,13 +38,14 @@ boundaries across character control sub-specifications.
 - Runtime XR-to-control bridging for controller input.
 - Movement control via left controller stick.
 - Rotation control via right controller stick.
-- Support for snap turn and smooth turn rotation modes.
+- Smooth, continuous rotation control.
 
 ## Out Of Scope
 
 - Feature-level implementation details defined by child CTRL specifications.
 - Network replication and backend concerns.
 - Platform certification and optimisation planning.
+- Snap turning. It may be reconsidered only as a new player-specific feature.
 
 ## Child Specifications
 
@@ -57,11 +60,19 @@ boundaries across character control sub-specifications.
 
 ## Acceptance Criteria
 
-1. The specification defines user-visible control outcomes and
-   technical governance contracts.
-2. System-level runtime boundaries explicitly reference XR contracts.
-3. Child CTRL specifications are identified as normative sources.
-4. Capability boundaries are defined for implementation planning.
+### User Requirement Acceptance
+
+1. Control outcomes specify independent, simultaneous movement and smooth,
+   continuous rotation without snap turns.
+2. Control sensitivity and smoothing remain configurable at the system level.
+
+### Technical Requirement Acceptance
+
+1. System-level runtime boundaries explicitly reference XR contracts.
+2. Child CTRL specifications are identified as normative sources for
+   feature-level implementation contracts.
+3. Capability boundaries define snap turning as out of scope for the current
+   control system.
 
 ## References
 

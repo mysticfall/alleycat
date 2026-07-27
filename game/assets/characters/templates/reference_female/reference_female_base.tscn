@@ -16,7 +16,7 @@
 [ext_resource type="Script" uid="uid://ckmm3fnsp6y36" path="res://src/Body/Eyes/EyesBehaviour.cs" id="10_eyesbehaviour"]
 [ext_resource type="Script" uid="uid://clntm6ydqb54a" path="res://src/Body/Hands/HandComponentHolder.cs" id="11_jgvmf"]
 [ext_resource type="Script" uid="uid://cxh7lfqn5k3nw" path="res://src/Body/Hands/HandPoseBehaviour.cs" id="12_kqwe4"]
-[ext_resource type="Script" uid="uid://b6qde8hx65pcb" path="res://src/Navigation/DirectTransformNavigation.cs" id="13_navigation"]
+[ext_resource type="AnimationLibrary" path="res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres" id="13_locomotion"]
 
 [sub_resource type="Resource" id="Resource_pyepr"]
 script = ExtResource("2_pyepr")
@@ -29,9 +29,8 @@ metadata/_custom_type_script = "uid://b8340t35vo8cv"
 [sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
 radius = 0.1
 
-[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
+[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
 Locomotion = NodePath("Locomotion")
-Navigation = NodePath("Navigation")
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
@@ -372,6 +371,9 @@ parameters/EyesVerticalLookSeek/seek_request = 0.5
 parameters/EyesHorizontalLookSeek/seek_request = 0.5
 parameters/EyesBlinkTimeScale/scale = 1.0
 
+[node name="AnimationPlayer" parent="." index="3" unique_id=2087271274]
+libraries/locomotion = ExtResource("13_locomotion")
+
 [node name="Eyes" type="Node" parent="." index="5" unique_id=1199535973 node_paths=PackedStringArray("AnimationTree", "EyeOrigin")]
 script = ExtResource("10_eyesbehaviour")
 AnimationTree = NodePath("../AnimationTree")
@@ -418,10 +420,6 @@ script = ExtResource("9_ctrlloco")
 TargetCharacterBodyNode = NodePath("..")
 AnimationTree = NodePath("../AnimationTree")
 RootMotionReference = NodePath("../Female")
-AnimationBlendParameter = &"parameters/States/Walking/blend_position"
+AnimationBlendParameter = &"parameters/States/Walking/Locomotion/Movement/blend_position"
+AnimationTurnBlendParameter = &"parameters/States/Walking/Locomotion/blend_position"
 metadata/_custom_type_script = "uid://cjt48dl58j31y"
-
-[node name="Navigation" type="NavigationAgent3D" parent="." index="8" unique_id=1542837639 node_paths=PackedStringArray("Target")]
-script = ExtResource("13_navigation")
-Target = NodePath("..")
-metadata/_custom_type_script = "uid://b6qde8hx65pcb"

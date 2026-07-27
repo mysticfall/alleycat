@@ -42,33 +42,81 @@ filters = ["%GeneralSkeleton:RightIndexDistal", "%GeneralSkeleton:RightIndexInte
 animation = &"Reset"
 
 [sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_idle"]
-animation = &"Idle"
+animation = &"locomotion/mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9"
 
-[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_idle"]
-animation = &"Idle"
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_e03uk"]
+animation = &"locomotion/mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9"
 
-[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_forward"]
-animation = &"Walk Forward"
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_p2txq"]
+animation = &"locomotion/mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9"
 
-[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_left"]
-animation = &"Idle"
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_cp4e3"]
+animation = &"locomotion/mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9"
 
-[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_walk_right"]
-animation = &"Idle"
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_tikal"]
+animation = &"locomotion/mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9"
 
-[sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_locomotion"]
-blend_point_0/node = SubResource("AnimationNodeAnimation_walk_idle")
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_31wc2"]
+animation = &"locomotion/mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_m7b1v"]
+animation = &"locomotion/mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9"
+
+[sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_vksbc"]
+min_space = Vector2(-1, 0)
+blend_point_0/node = SubResource("AnimationNodeAnimation_p2txq")
 blend_point_0/pos = Vector2(0, 0)
-blend_point_0/name = &"0"
-blend_point_1/node = SubResource("AnimationNodeAnimation_walk_forward")
+blend_point_0/name = &"Idle"
+blend_point_1/node = SubResource("AnimationNodeAnimation_cp4e3")
+blend_point_1/pos = Vector2(0, -1)
+blend_point_1/name = &"BackwardWalk"
+blend_point_2/node = SubResource("AnimationNodeAnimation_tikal")
+blend_point_2/pos = Vector2(0, 1)
+blend_point_2/name = &"ForwardWalk"
+blend_point_3/node = SubResource("AnimationNodeAnimation_31wc2")
+blend_point_3/pos = Vector2(-1, 0.2)
+blend_point_3/name = &"SideStepLeft"
+blend_point_4/node = SubResource("AnimationNodeAnimation_m7b1v")
+blend_point_4/pos = Vector2(1, 0.2)
+blend_point_4/name = &"SideStepRight"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_dnisg"]
+animation = &"locomotion/mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_dk57b"]
+animation = &"locomotion/mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_iiwx8"]
+animation = &"locomotion/derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_vksbc"]
+animation = &"locomotion/mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9"
+
+[sub_resource type="AnimationNodeBlendSpace2D" id="AnimationNodeBlendSpace2D_cp4e3"]
+min_space = Vector2(-1, 0)
+blend_point_0/node = SubResource("AnimationNodeAnimation_e03uk")
+blend_point_0/pos = Vector2(0, 0)
+blend_point_0/name = &"Idle"
+blend_point_1/node = SubResource("AnimationNodeBlendSpace2D_vksbc")
 blend_point_1/pos = Vector2(0, 1)
-blend_point_1/name = &"1"
-blend_point_2/node = SubResource("AnimationNodeAnimation_walk_left")
+blend_point_1/name = &"Movement"
+blend_point_2/node = SubResource("AnimationNodeAnimation_dnisg")
 blend_point_2/pos = Vector2(-1, 0)
-blend_point_2/name = &"2"
-blend_point_3/node = SubResource("AnimationNodeAnimation_walk_right")
-blend_point_3/pos = Vector2(1, 0)
-blend_point_3/name = &"3"
+blend_point_2/name = &"TurnInPlaceLeft90"
+blend_point_3/node = SubResource("AnimationNodeAnimation_dk57b")
+blend_point_3/pos = Vector2(-1, 1)
+blend_point_3/name = &"WalkArcLeft"
+blend_point_4/node = SubResource("AnimationNodeAnimation_iiwx8")
+blend_point_4/pos = Vector2(1, 1)
+blend_point_4/name = &"WalkArcRight"
+blend_point_5/node = SubResource("AnimationNodeAnimation_vksbc")
+blend_point_5/pos = Vector2(1, 0)
+blend_point_5/name = &"TurnInPlaceRight90"
+
+[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_85o36"]
+nodes/Locomotion/node = SubResource("AnimationNodeBlendSpace2D_cp4e3")
+nodes/Locomotion/position = Vector2(100, 100)
+node_connections = [&"output", 0, &"Locomotion"]
 
 [sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_start_idle"]
 advance_mode = 2
@@ -82,7 +130,7 @@ xfade_time = 0.5
 [sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_locomotion"]
 states/Idle/node = SubResource("AnimationNodeAnimation_idle")
 states/Idle/position = Vector2(360, 100)
-states/Walking/node = SubResource("AnimationNodeBlendSpace2D_locomotion")
+states/Walking/node = SubResource("AnimationNodeBlendTree_85o36")
 states/Walking/position = Vector2(360, -33)
 transitions = ["Start", "Idle", SubResource("AnimationNodeStateMachineTransition_start_idle"), "Idle", "Walking", SubResource("AnimationNodeStateMachineTransition_idle_walk"), "Walking", "Idle", SubResource("AnimationNodeStateMachineTransition_walk_idle")]
 

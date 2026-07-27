@@ -47,7 +47,11 @@ public sealed partial class CharacterLocomotionPlayerSceneIntegrationTests
 
             Node locomotion = AssertCharacterLocomotionNode(sceneRoot.GetNodeOrNull("Locomotion"));
 
-            Assert.Equal(TurnMode.Smooth.ToString(), ReadProperty(locomotion, nameof(CharacterLocomotion.TurnMode))?.ToString());
+            Assert.Null(typeof(CharacterLocomotion).Assembly.GetType("AlleyCat.Control.Locomotion.TurnMode"));
+            Assert.Null(typeof(CharacterLocomotion).GetProperty("TurnMode"));
+            Assert.Null(typeof(CharacterLocomotion).GetProperty("SnapTurnAngleDegrees"));
+            Assert.Null(typeof(CharacterLocomotion).GetProperty("SnapTurnCooldownSeconds"));
+            Assert.Null(typeof(CharacterLocomotion).GetProperty("SnapTurnActivationThreshold"));
             Node?[] permissionSourceNodes = ReadPermissionSourceNodes(locomotion);
             Node permissionSourceNode = Assert.Single(permissionSourceNodes)
                 ?? throw new Xunit.Sdk.XunitException("Expected player locomotion permission source to resolve to a node.");

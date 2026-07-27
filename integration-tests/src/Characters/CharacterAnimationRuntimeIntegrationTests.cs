@@ -26,8 +26,48 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
     private const string AllyScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string VadimScenePath = "res://assets/characters/reference/vadim_npc.tscn";
     private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
+    private const string FemaleNPCAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_npc.tres";
     private const string MaleNpcAnimationTreeRootPath = "res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres";
+    private static readonly StringName _femaleIdleAnimationName = new("locomotion/mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9");
+    private static readonly StringName _maleIdleAnimationName = new("locomotion/mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9");
     private static readonly StringName _eyesLibraryName = new("eyes");
+    private static readonly StringName _locomotionLibraryName = new("locomotion");
+
+    /// <summary>
+    /// Verifies Ally returns from active locomotion to a runtime-resolved, animated idle pose.
+    /// </summary>
+    [Fact]
+    public Task AllyScene_LocomotionZeroInput_ReturnsToAnimatedIdlePose()
+        => AssertLocomotionReturnsToAnimatedIdlePoseAsync(
+            AllyScenePath,
+            "Female/GeneralSkeleton",
+            "Idle",
+            _femaleIdleAnimationName,
+            AssertTopLevelIdleBindingResolves);
+
+    /// <summary>
+    /// Verifies Vadim returns from active locomotion to a runtime-resolved, animated idle pose.
+    /// </summary>
+    [Fact]
+    public Task VadimScene_LocomotionZeroInput_ReturnsToAnimatedIdlePose()
+        => AssertLocomotionReturnsToAnimatedIdlePoseAsync(
+            VadimScenePath,
+            "Male/GeneralSkeleton",
+            "Idle",
+            _maleIdleAnimationName,
+            AssertTopLevelIdleBindingResolves);
+
+    /// <summary>
+    /// Verifies the player returns from active locomotion to its standing idle pose without restoring the skeleton rest pose.
+    /// </summary>
+    [Fact]
+    public Task PlayerScene_LocomotionZeroInput_ReturnsToAnimatedIdlePose()
+        => AssertLocomotionReturnsToAnimatedIdlePoseAsync(
+            PlayerScenePath,
+            "Female/GeneralSkeleton",
+            "StandingCrouching",
+            _femaleIdleAnimationName,
+            AssertWalkingIdleBindingResolves);
 
     /// <summary>
     /// Verifies the NPC reference installer leaves the shared animation tree able to drive skeletal body motion.
@@ -52,7 +92,9 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             Assert.Equal(new NodePath("../Female"), animationTree.RootNode);
             Assert.Equal(new NodePath("../Female"), animationPlayer.RootNode);
             Assert.True(animationPlayer.HasAnimationLibrary(_eyesLibraryName), "Expected runtime installation to preserve the eye animation library used by the tree.");
+            Assert.True(animationPlayer.HasAnimationLibrary(_locomotionLibraryName), "Expected runtime installation to retain the locomotion library authored by the reference template.");
             Assert.True(animationPlayer.HasAnimation(new StringName("eyes/Eyes Blink")), "Expected the tree-referenced blink animation to be registered.");
+            AssertTopLevelIdleBindingResolves(animationTree, animationPlayer, _femaleIdleAnimationName);
             AssertRuntimeEyeAnimationTracksResolve(animationPlayer);
 
             Assert.NotEmpty(skeleton.GetBoneName(0).ToString());
@@ -88,6 +130,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
 
             Assert.Equal(new NodePath("../Male"), animationTree.RootNode);
             Assert.Equal(new NodePath("../Male"), animationPlayer.RootNode);
+            Assert.True(animationPlayer.HasAnimationLibrary(_locomotionLibraryName), "Expected runtime installation to retain the locomotion library authored by the reference template.");
             Assert.Equal(MaleNpcAnimationTreeRootPath, GetAuthoredTreeRootResourcePath(animationTree));
             AssertRuntimeEyeAnimationTracksResolve(animationPlayer);
             AssertBlinkAnimationTargetsBodyMesh(animationPlayer, "GeneralSkeleton/Male_body");
@@ -99,6 +142,17 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             root.QueueFree();
             await WaitForFramesAsync(sceneTree, 1);
         }
+    }
+
+    /// <summary>
+    /// Verifies per-character eye-filter isolation preserves the manually triangulated production Walking graph.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void RuntimeInstaller_ProductionWalkingGraphs_PreserveBlendSpaceTopologyDuringEyeFilterIsolation()
+    {
+        AssertProductionWalkingGraphSurvivesEyeFilterIsolation(AllyScenePath, FemaleNPCAnimationTreeRootPath);
+        AssertProductionWalkingGraphSurvivesEyeFilterIsolation(VadimScenePath, MaleNpcAnimationTreeRootPath);
     }
 
     /// <summary>
@@ -167,6 +221,8 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             AnimationPlayer animationPlayer = root.GetNode<AnimationPlayer>("AnimationPlayer");
             Node rightHand = root.GetNode<Node>("Hands/RightHand");
             Animation grabAnimation = animationPlayer.GetAnimation(new StringName("Grab-ball-40"));
+
+            AssertWalkingIdleBindingResolves(animationTree, animationPlayer, _femaleIdleAnimationName);
 
             InvokeScriptVoidMethod(rightHand, "SetPose", grabAnimation, null, true);
             await WaitForFramesAsync(sceneTree, 20);
@@ -271,6 +327,229 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         return !string.IsNullOrEmpty(resourcePath)
             ? resourcePath
             : animationTree.GetMeta("authored_tree_root_resource_path").AsString();
+    }
+
+    private static void AssertProductionWalkingGraphSurvivesEyeFilterIsolation(string scenePath, string graphPath)
+    {
+        Node root = LoadPackedScene(scenePath).Instantiate();
+        GetSceneTree().Root.AddChild(root);
+        try
+        {
+            RigRoleTemplateSceneInstaller installer = root.GetNode<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
+            SceneInstallationResult initialResult = installer.Install(new SceneInstallationContext(root));
+            Assert.True(initialResult.Succeeded, string.Join('\n', initialResult.Errors));
+
+            AnimationTree animationTree = root.GetNode<AnimationTree>("AnimationTree");
+            AnimationNodeBlendTree authoredRoot = Assert.IsType<AnimationNodeBlendTree>(
+                ResourceLoader.Load(graphPath),
+                exactMatch: false);
+            AnimationNodeBlendTree targetRoot = Assert.IsType<AnimationNodeBlendTree>(authoredRoot.Duplicate(false), exactMatch: false);
+            AnimationNodeOneShot authoredBlink = Assert.IsType<AnimationNodeOneShot>(
+                authoredRoot.GetNode(EyesAnimationTreePaths.BlinkOneShotNode),
+                exactMatch: false);
+            AnimationNodeOneShot targetBlink = Assert.IsType<AnimationNodeOneShot>(authoredBlink.Duplicate(false), exactMatch: false);
+            targetBlink.FilterEnabled = false;
+            ReplaceBlendTreeNode(targetRoot, EyesAnimationTreePaths.BlinkOneShotNode, targetBlink);
+            animationTree.TreeRoot = targetRoot;
+
+            (AnimationNodeBlendSpace2D locomotion, AnimationNodeBlendSpace2D movement) = ResolveWalkingBlendSpaces(targetRoot);
+            BlendSpaceTopology locomotionTopology = CaptureTopology(locomotion);
+            BlendSpaceTopology movementTopology = CaptureTopology(movement);
+
+            SceneInstallationResult result = installer.Install(new SceneInstallationContext(root));
+
+            Assert.True(result.Succeeded, string.Join('\n', result.Errors));
+            AnimationNodeBlendTree installedRoot = Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false);
+            (AnimationNodeBlendSpace2D installedLocomotion, AnimationNodeBlendSpace2D installedMovement) = ResolveWalkingBlendSpaces(installedRoot);
+            Assert.Same(locomotion, installedLocomotion);
+            Assert.Same(movement, installedMovement);
+            AssertTopology(locomotionTopology, installedLocomotion);
+            AssertTopology(movementTopology, installedMovement);
+            AnimationNode installedBlink = installedRoot.GetNode(EyesAnimationTreePaths.BlinkOneShotNode);
+            Assert.NotSame(targetBlink, installedBlink);
+            Assert.False(targetBlink.FilterEnabled);
+            Assert.True(installedBlink.FilterEnabled);
+        }
+        finally
+        {
+            root.Free();
+        }
+    }
+
+    private static void ReplaceBlendTreeNode(AnimationNodeBlendTree treeRoot, string nodeName, AnimationNode replacement)
+    {
+        var nodeNameKey = new StringName(nodeName);
+        Vector2 position = treeRoot.GetNodePosition(nodeNameKey);
+        Godot.Collections.Array serialisedConnections = treeRoot.Get("node_connections").AsGodotArray();
+        var retainedConnections = new List<BlendTreeConnection>();
+        for (int index = 0; index < serialisedConnections.Count; index += 3)
+        {
+            StringName inputNode = serialisedConnections[index].AsStringName();
+            int inputIndex = serialisedConnections[index + 1].AsInt32();
+            StringName outputNode = serialisedConnections[index + 2].AsStringName();
+            if (inputNode == nodeNameKey || outputNode == nodeNameKey)
+            {
+                retainedConnections.Add(new BlendTreeConnection(inputNode, inputIndex, outputNode));
+            }
+        }
+
+        treeRoot.RemoveNode(nodeNameKey);
+        treeRoot.AddNode(nodeNameKey, replacement, position);
+        foreach (BlendTreeConnection connection in retainedConnections)
+        {
+            treeRoot.ConnectNode(connection.InputNode, connection.InputIndex, connection.OutputNode);
+        }
+    }
+
+    private static async Task AssertLocomotionReturnsToAnimatedIdlePoseAsync(
+        string scenePath,
+        string skeletonPath,
+        string expectedIdleState,
+        StringName expectedIdleAnimation,
+        Action<AnimationTree, AnimationPlayer, StringName> assertIdleBinding)
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node root = LoadPackedScene(scenePath).Instantiate();
+        sceneTree.Root.AddChild(root);
+
+        try
+        {
+            await WaitForFramesAsync(sceneTree, 12);
+            EnsureCharacterRuntimeInstalled(root);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+
+            CharacterLocomotion locomotion = root.GetNode<CharacterLocomotion>("Locomotion");
+            AnimationTree animationTree = root.GetNode<AnimationTree>("AnimationTree");
+            AnimationPlayer animationPlayer = root.GetNode<AnimationPlayer>("AnimationPlayer");
+            Skeleton3D skeleton = root.GetNode<Skeleton3D>(skeletonPath);
+            animationTree.Active = true;
+
+            locomotion.Move(new Vector2(0f, 1f));
+            locomotion.Rotate(new Vector2(0.5f, 0f));
+            locomotion._PhysicsProcess(1d / 60d);
+            animationTree.Advance(1d / 60d);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+            Assert.Equal("Walking", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+
+            locomotion.Move(Vector2.Zero);
+            locomotion.Rotate(Vector2.Zero);
+            locomotion._PhysicsProcess(1d / 60d);
+            animationTree.Advance(0.5d);
+            await WaitForPhysicsFramesAsync(sceneTree, 24);
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Equal(expectedIdleState, ResolvePlayback(animationTree).GetCurrentNode().ToString());
+            assertIdleBinding(animationTree, animationPlayer, expectedIdleAnimation);
+            AssertBoneHasAnimatedPose(skeleton, "Hips");
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
+
+    private static void AssertBoneHasAnimatedPose(Skeleton3D skeleton, string boneName)
+    {
+        int boneIndex = skeleton.FindBone(boneName);
+        Assert.True(boneIndex >= 0, $"Expected representative skeleton bone '{boneName}' to resolve.");
+
+        Transform3D restRelativePose = Transform3D.Identity;
+        Transform3D animatedPose = skeleton.GetBonePose(boneIndex);
+        Assert.False(
+            restRelativePose.IsEqualApprox(animatedPose),
+            $"Expected representative skeleton bone '{boneName}' to have a non-rest animated pose after returning to idle.");
+    }
+
+    private static AnimationNodeStateMachinePlayback ResolvePlayback(AnimationTree animationTree)
+        => animationTree.Get("parameters/States/playback").As<AnimationNodeStateMachinePlayback>()
+           ?? throw new Xunit.Sdk.XunitException("Expected nested AnimationTree state-machine playback to be available.");
+
+    private static void AssertTopLevelIdleBindingResolves(
+        AnimationTree animationTree,
+        AnimationPlayer animationPlayer,
+        StringName expectedAnimationName)
+    {
+        AnimationNodeStateMachine states = Assert.IsType<AnimationNodeStateMachine>(
+            Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false).GetNode("States"),
+            exactMatch: false);
+        AnimationNodeAnimation idle = Assert.IsType<AnimationNodeAnimation>(states.GetNode("Idle"), exactMatch: false);
+
+        Assert.Equal(expectedAnimationName, idle.Animation);
+        Assert.True(animationPlayer.HasAnimation(expectedAnimationName), $"Expected top-level Idle animation '{expectedAnimationName}' to resolve.");
+        Assert.True(animationPlayer.GetAnimation(expectedAnimationName).GetTrackCount() > 0, "Expected the resolved Idle clip to drive animation tracks.");
+    }
+
+    private static void AssertWalkingIdleBindingResolves(
+        AnimationTree animationTree,
+        AnimationPlayer animationPlayer,
+        StringName expectedAnimationName)
+    {
+        (AnimationNodeBlendSpace2D _, AnimationNodeBlendSpace2D movement) = ResolveWalkingBlendSpaces(
+            Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false));
+        int idleIndex = movement.FindBlendPointByName("Idle");
+        Assert.True(idleIndex >= 0, "Expected the shared player Walking blend space to define an Idle point.");
+        AnimationNodeAnimation idle = Assert.IsType<AnimationNodeAnimation>(movement.GetBlendPointNode(idleIndex), exactMatch: false);
+
+        Assert.Equal(expectedAnimationName, idle.Animation);
+        Assert.True(animationPlayer.HasAnimation(expectedAnimationName), $"Expected player Walking Idle animation '{expectedAnimationName}' to resolve.");
+        Assert.True(animationPlayer.GetAnimation(expectedAnimationName).GetTrackCount() > 0, "Expected the resolved shared idle clip to drive animation tracks.");
+    }
+
+    private static (AnimationNodeBlendSpace2D Locomotion, AnimationNodeBlendSpace2D Movement) ResolveWalkingBlendSpaces(
+        AnimationNodeBlendTree root)
+    {
+        AnimationNodeStateMachine states = Assert.IsType<AnimationNodeStateMachine>(root.GetNode("States"), exactMatch: false);
+        AnimationNodeBlendTree walking = Assert.IsType<AnimationNodeBlendTree>(states.GetNode("Walking"), exactMatch: false);
+        AnimationNodeBlendSpace2D locomotion = Assert.IsType<AnimationNodeBlendSpace2D>(
+            walking.GetNode("Locomotion"), exactMatch: false);
+        int movementIndex = locomotion.FindBlendPointByName("Movement");
+        Assert.True(movementIndex >= 0);
+        AnimationNodeBlendSpace2D movement = Assert.IsType<AnimationNodeBlendSpace2D>(
+            locomotion.GetBlendPointNode(movementIndex), exactMatch: false);
+        return (locomotion, movement);
+    }
+
+    private static BlendSpaceTopology CaptureTopology(AnimationNodeBlendSpace2D blendSpace)
+    {
+        string[] pointNames = new string[blendSpace.GetBlendPointCount()];
+        var pointPositions = new Vector2[pointNames.Length];
+        for (int pointIndex = 0; pointIndex < pointNames.Length; pointIndex++)
+        {
+            pointNames[pointIndex] = blendSpace.GetBlendPointName(pointIndex).ToString();
+            pointPositions[pointIndex] = blendSpace.GetBlendPointPosition(pointIndex);
+        }
+
+        int[][] triangles = new int[blendSpace.GetTriangleCount()][];
+        for (int triangleIndex = 0; triangleIndex < triangles.Length; triangleIndex++)
+        {
+            triangles[triangleIndex] =
+            [
+                blendSpace.GetTrianglePoint(triangleIndex, 0),
+                blendSpace.GetTrianglePoint(triangleIndex, 1),
+                blendSpace.GetTrianglePoint(triangleIndex, 2),
+            ];
+        }
+
+        return new BlendSpaceTopology(pointNames, pointPositions, triangles);
+    }
+
+    private static void AssertTopology(BlendSpaceTopology expected, AnimationNodeBlendSpace2D actual)
+    {
+        Assert.Equal(expected.PointNames.Length, actual.GetBlendPointCount());
+        for (int pointIndex = 0; pointIndex < expected.PointNames.Length; pointIndex++)
+        {
+            Assert.Equal(expected.PointNames[pointIndex], actual.GetBlendPointName(pointIndex).ToString());
+            Assert.Equal(expected.PointPositions[pointIndex], actual.GetBlendPointPosition(pointIndex));
+        }
+
+        Assert.Equal(expected.Triangles.Length, actual.GetTriangleCount());
+        for (int triangleIndex = 0; triangleIndex < expected.Triangles.Length; triangleIndex++)
+        {
+            Assert.Equal(expected.Triangles[triangleIndex][0], actual.GetTrianglePoint(triangleIndex, 0));
+            Assert.Equal(expected.Triangles[triangleIndex][1], actual.GetTrianglePoint(triangleIndex, 1));
+            Assert.Equal(expected.Triangles[triangleIndex][2], actual.GetTrianglePoint(triangleIndex, 2));
+        }
     }
 
     private static void AssertRuntimeEyeAnimationTracksResolve(AnimationPlayer animationPlayer)
@@ -432,6 +711,10 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
 
         return maxDelta;
     }
+
+    private sealed record BlendSpaceTopology(string[] PointNames, Vector2[] PointPositions, int[][] Triangles);
+
+    private readonly record struct BlendTreeConnection(StringName InputNode, int InputIndex, StringName OutputNode);
 
     private sealed class RuntimeEyeAnimationFixture : IDisposable
     {

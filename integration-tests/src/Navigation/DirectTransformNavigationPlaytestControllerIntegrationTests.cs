@@ -1,6 +1,7 @@
 using AlleyCat.Navigation;
 using AlleyCat.TestFramework;
 using Godot;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
@@ -39,6 +40,79 @@ public sealed partial class DirectTransformNavigationPlaytestControllerIntegrati
             AssertVectorClose(lockedDestination, rig.Navigation.Destination.Origin);
             AssertBasisClose(Basis.LookingAt(expectedFacing.Normalized(), Vector3.Up), rig.Navigation.Destination.Basis);
             Assert.Same(rig.PreviewMaterial, rig.MarkerSurface.MaterialOverride);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies each acceptance attempt emits structured world-space reproduction coordinates and a monotonic request ID.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task DragRelease_LogsStructuredDestinationAttemptWithMonotonicRequestID()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreateRigAsync(sceneTree);
+
+        try
+        {
+            Vector3 firstDestination = new(1.0f, 0.0f, 1.0f);
+            Vector3 secondDestination = new(2.0f, 0.0f, 1.5f);
+            rig.Controller.BeginDestinationPlacementAt(firstDestination);
+            rig.Controller.CompleteDestinationPlacementAt(firstDestination + Vector3.Forward);
+            rig.Controller.BeginDestinationPlacementAt(secondDestination);
+            rig.Controller.CompleteDestinationPlacementAt(secondDestination + Vector3.Right);
+
+            Assert.Collection(
+                rig.Controller.Logger.Entries,
+                first => AssertDestinationLog(first, 1, firstDestination, Mathf.Sqrt(2.0f)),
+                second => AssertDestinationLog(second, 2, secondDestination, 2.5f));
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies input only queues click placement and that the physics callback performs the ground projection and placement.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task UnhandledInput_ClickPlacementIsQueuedUntilPhysicsProcess()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreateRigAsync(sceneTree);
+
+        try
+        {
+            var destinationMousePosition = new Vector2(1.0f, 1.0f);
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = true,
+                Position = destinationMousePosition,
+            });
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = false,
+                Position = destinationMousePosition,
+            });
+
+            Assert.True(rig.Controller.HasPendingDestinationPlacementRequest);
+            Assert.False(rig.Navigation.HasDestination);
+            Assert.Equal(0, rig.Controller.ProjectionAttemptCount);
+
+            rig.Controller._PhysicsProcess(0.0);
+
+            Assert.False(rig.Controller.HasPendingDestinationPlacementRequest);
+            Assert.True(rig.Navigation.HasDestination);
+            Assert.Equal(3, rig.Controller.ProjectionAttemptCount);
+            AssertVectorClose(new Vector3(1.0f, 0.0f, 1.0f), rig.Navigation.Destination.Origin);
         }
         finally
         {
@@ -319,11 +393,12 @@ public sealed partial class DirectTransformNavigationPlaytestControllerIntegrati
         {
             ResourceName = "PressedMaterial"
         };
-        DirectTransformNavigationPlaytestController controller = new()
+        ProjectionTrackingPlaytestController controller = new()
         {
             Name = "Controller",
             Camera = camera,
             Navigation = navigation,
+            Actor = target,
             DestinationMarker = marker,
             DestinationMarkerSurface = markerSurface,
             DestinationMarkerPreviewMaterial = previewMaterial,
@@ -409,14 +484,81 @@ public sealed partial class DirectTransformNavigationPlaytestControllerIntegrati
     private static void AssertVectorClose(Vector3 expected, Vector3 actual, float tolerance = PositionTolerance)
         => Assert.True(expected.DistanceTo(actual) <= tolerance, $"Expected {actual} to be within {tolerance} of {expected}.");
 
+    private static void AssertDestinationLog(
+        CapturedLogEntry entry,
+        int expectedRequestID,
+        Vector3 expectedDestination,
+        float expectedDistance)
+    {
+        Assert.Equal(LogLevel.Information, entry.Level);
+        Assert.Equal(expectedRequestID, entry.Properties["RequestID"]);
+        Assert.Equal(NavigationDestinationResult.Accepted, entry.Properties["Result"]);
+        AssertVectorClose(expectedDestination, Assert.IsType<Vector3>(entry.Properties["DestinationWorldPosition"]));
+        AssertVectorClose(Vector3.Zero, Assert.IsType<Vector3>(entry.Properties["ActorWorldPosition"]));
+        AssertVectorClose(Vector3.Forward, Assert.IsType<Vector3>(entry.Properties["ActorWorldForward"]));
+        Assert.InRange(Assert.IsType<float>(entry.Properties["ActorToDestinationDistance"]), expectedDistance - BasisTolerance, expectedDistance + BasisTolerance);
+        Assert.True(entry.Properties.ContainsKey("DestinationWorldYaw"));
+        Assert.True(entry.Properties.ContainsKey("DestinationWorldForward"));
+        Assert.True(entry.Properties.ContainsKey("ActorWorldYaw"));
+    }
+
     private sealed record PlaytestControllerRig(
         Node3D Root,
         Node3D Target,
         DirectTransformNavigation Navigation,
         Camera3D Camera,
-        DirectTransformNavigationPlaytestController Controller,
+        ProjectionTrackingPlaytestController Controller,
         Node3D Marker,
         GeometryInstance3D MarkerSurface,
         Material PreviewMaterial,
         Rid NavigationMap);
+
+    private sealed partial class ProjectionTrackingPlaytestController : DirectTransformNavigationPlaytestController
+    {
+        public CapturingLogger Logger { get; } = new();
+
+        public int ProjectionAttemptCount
+        {
+            get; private set;
+        }
+
+        protected override bool TryProjectMouseToGround(Vector2 mousePosition, out Vector3 hitPosition)
+        {
+            ProjectionAttemptCount++;
+            hitPosition = new Vector3(mousePosition.X, 0.0f, mousePosition.Y);
+            return true;
+        }
+
+        protected override ILogger<DirectTransformNavigationPlaytestController> ResolveLogger() => Logger;
+    }
+
+    private sealed class CapturingLogger : ILogger<DirectTransformNavigationPlaytestController>
+    {
+        public List<CapturedLogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            var properties = new Dictionary<string, object?>();
+            if (state is IEnumerable<KeyValuePair<string, object?>> structuredState)
+            {
+                foreach ((string key, object? value) in structuredState)
+                {
+                    properties[key] = value;
+                }
+            }
+
+            Entries.Add(new CapturedLogEntry(logLevel, properties));
+        }
+    }
+
+    private sealed record CapturedLogEntry(LogLevel Level, IReadOnlyDictionary<string, object?> Properties);
 }

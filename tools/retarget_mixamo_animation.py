@@ -80,6 +80,13 @@ MIXAMO_SANITISE_ANGULAR_EPSILON = 1e-4
 ROOT_VERTICAL_AXIS_MIN_CONFIDENCE = 0.75
 ROOT_VERTICAL_AXIS_AMBIGUITY_EPSILON = 0.05
 ROOT_LOCATION_DATA_PATH = 'pose.bones["Root"].location'
+# Version 3 compares each retained bone in its own local basis. Root translation and yaw
+# are excluded by construction, while retained translation, rotation, and scale remain
+# eligible seam signals for both direct Root children and descendants.
+LOOP_ANALYSIS_VERSION = 3
+LOOP_POSE_TRANSLATION_TOLERANCE = 0.061
+LOOP_POSE_ANGULAR_TOLERANCE_RADIANS = math.radians(3.0)
+LOOP_POSE_SCALE_TOLERANCE = 0.01
 
 
 class ScriptError(Exception):
@@ -112,6 +119,8 @@ class RetargetArgs:
     selection_motion_class: str
     selection_tags: tuple[str, ...]
     metrics_output: Path | None
+    action_name: str | None
+    metrics_action_name: str | None
 
 
 @dataclass(frozen=True)
@@ -191,6 +200,14 @@ def parse_args(argv: list[str]) -> RetargetArgs:
         default="",
         help="Semicolon-separated curated selection tags used for Root reconstruction policy selection.",
     )
+    parser.add_argument(
+        "--action-name",
+        help="Optional Blender action name. Use '-loop' only to communicate Godot import loop intent.",
+    )
+    parser.add_argument(
+        "--metrics-action-name",
+        help="Optional canonical action name written to metrics when the Blender action uses an import suffix.",
+    )
 
     parsed = parser.parse_args(blender_script_args(argv))
     if parsed.prepare_inspection and parsed.create_root_motion:
@@ -216,6 +233,8 @@ def parse_args(argv: list[str]) -> RetargetArgs:
         selection_motion_class=parsed.selection_motion_class.strip(),
         selection_tags=selection_tags,
         metrics_output=absolute_path(parsed.metrics_output) if parsed.metrics_output else None,
+        action_name=parsed.action_name.strip() if parsed.action_name else None,
+        metrics_action_name=parsed.metrics_action_name.strip() if parsed.metrics_action_name else None,
     )
 
 
@@ -739,8 +758,8 @@ def slugify(value: str) -> str:
     return slug or "motion"
 
 
-def baked_action_name(row: MotionManifestRow) -> str:
-    return f'mixamo_{row.motion_id.replace("-", "_")}'
+def baked_action_name(row: MotionManifestRow, action_name: str | None = None) -> str:
+    return action_name or f'mixamo_{row.motion_id.replace("-", "_")}'
 
 
 def select_target_for_bake(target_armature: bpy.types.Object) -> None:
@@ -777,13 +796,14 @@ def bake_mixamo_action(
     source_armature: bpy.types.Object,
     source_action: bpy.types.Action,
     row: MotionManifestRow,
+    action_name: str | None = None,
 ) -> bpy.types.Action:
     target_animation_data = target_armature.animation_data_create()
     source_animation_data = source_armature.animation_data_create()
     if target_animation_data is None or source_animation_data is None:
         raise ScriptError("Mixamo animation bake failed because animation data could not be created.")
 
-    target_name = baked_action_name(row)
+    target_name = baked_action_name(row, action_name)
     if bpy.data.actions.get(target_name) is not None:
         raise ScriptError(
             f'Mixamo animation bake failed because action "{target_name}" already exists.'
@@ -1654,6 +1674,95 @@ def yaw_matrix(location: Vector, yaw_radians: float, scale: Vector | None = None
     )
 
 
+def visible_clockwise_heading_to_canonical_root_euler_z(visible_heading_radians: float) -> float:
+    """Map a clockwise-positive visible heading to the canonical right-handed Root channel.
+
+    The canonical Root tail points along Blender +Y.  Applying a positive Euler-Z rotates
+    that tail counter-clockwise when viewed from above, so authored Root Euler-Z is the
+    opposite representation of the physical/visible heading.
+    """
+    return -float(visible_heading_radians)
+
+
+def evaluated_root_physical_heading_radians(root_matrix: Matrix) -> float:
+    """Measure clockwise-positive physical Root heading from its evaluated +Y tail."""
+    forward = root_matrix.to_3x3() @ Vector((0.0, 1.0, 0.0))
+    if horizontal_length(forward) <= 1e-6:
+        raise ScriptError("Evaluated Root heading encountered a vertical/degenerate +Y tail vector.")
+    return math.atan2(float(forward.x), float(forward.y))
+
+
+def body_heading_radians(matrix: Matrix) -> float:
+    """Return a legacy pelvis-axis diagnostic only; never use this for turn reconstruction."""
+    forward = matrix.to_3x3() @ Vector((0.0, 1.0, 0.0))
+    if horizontal_length(forward) <= 1e-6:
+        raise ScriptError("Body-heading diagnostic encountered a vertical/degenerate pelvis forward vector.")
+    return math.atan2(float(forward.x), float(forward.y))
+
+
+def rig_aware_body_heading_radians(target_armature: bpy.types.Object) -> float:
+    """Measure visible torso heading from bilateral landmarks, not a pelvis local axis.
+
+    The target rig's pelvis local axes are an import implementation detail.  The line between
+    the clavicles gives a stable anatomical left/right axis; crossing it with canonical up
+    yields the visible chest-forward direction in the Root ground plane.
+    """
+    left = target_armature.pose.bones.get("clavicle_l") or target_armature.pose.bones.get("upperarm_l")
+    right = target_armature.pose.bones.get("clavicle_r") or target_armature.pose.bones.get("upperarm_r")
+    if left is None or right is None:
+        raise ScriptError("Rig-aware turn measurement requires bilateral clavicle or upper-arm landmarks.")
+    lateral = right.matrix.translation - left.matrix.translation
+    forward = Vector((0.0, 0.0, 1.0)).cross(lateral)
+    if horizontal_length(forward) <= 1e-6:
+        raise ScriptError("Rig-aware turn measurement encountered degenerate bilateral torso landmarks.")
+    return math.atan2(float(forward.x), float(forward.y))
+
+
+def relative_visible_turn_headings(body_headings: list[float]) -> list[float]:
+    """Produce clockwise-positive visible turn headings relative to the first sample."""
+    unwrapped = unwrap_angle_sequence(body_headings)
+    return [heading - unwrapped[0] for heading in unwrapped]
+
+
+def validate_class_specific_root_sequences(
+    metadata: RootReconstructionInput,
+    positions: list[Vector],
+    canonical_root_euler_zs: list[float],
+    visible_turn_headings: list[float],
+) -> None:
+    """Validate role semantics against evaluated Root-tail heading, never a raw channel."""
+    classification = classify_root_reconstruction(metadata)
+    if not positions or len(positions) != len(canonical_root_euler_zs) or len(canonical_root_euler_zs) != len(visible_turn_headings):
+        raise ScriptError("Class-specific Root validation received inconsistent sample sequences.")
+    planar_distance = planar_path_distance(positions)
+    physical_root_headings = [
+        evaluated_root_physical_heading_radians(yaw_matrix(Vector(), euler_z))
+        for euler_z in canonical_root_euler_zs
+    ]
+    physical_delta = unwrap_angle_sequence(physical_root_headings)[-1] - unwrap_angle_sequence(physical_root_headings)[0]
+    visible_delta = visible_turn_headings[-1] - visible_turn_headings[0]
+    expected_turn = signed_turn_angle_from_metadata(metadata.tags)
+    if classification.policy == ROOT_POLICY_TURN_IN_PLACE:
+        if any(horizontal_length(position) > ROOT_GROUND_EPSILON for position in positions):
+            raise ScriptError("Pivot Root reconstruction has non-zero planar translation.")
+        if abs(physical_delta) <= ROOT_MOTION_STATIC_PLANAR_EPSILON or physical_delta * visible_delta <= 0.0:
+            raise ScriptError("Pivot evaluated Root tail does not agree with visible rig-aware body turn.")
+        if expected_turn is not None and physical_delta * expected_turn <= 0.0:
+            raise ScriptError("Pivot evaluated Root tail contradicts selected turn role semantics.")
+    elif classification.policy == ROOT_POLICY_MOVING and classification.subtype == ROOT_SUBTYPE_CURVED_MOVING:
+        if planar_distance <= ROOT_MOTION_STATIC_PLANAR_EPSILON:
+            raise ScriptError("Walk-arc Root reconstruction has no planar travel.")
+        if abs(physical_delta) <= ROOT_MOTION_STATIC_PLANAR_EPSILON or physical_delta * visible_delta <= 0.0:
+            raise ScriptError("Walk-arc evaluated Root tail does not agree with visible rig-aware body turn.")
+        if expected_turn is not None and physical_delta * expected_turn <= 0.0:
+            raise ScriptError("Walk-arc evaluated Root tail contradicts selected arc role semantics.")
+    elif classification.policy == ROOT_POLICY_MOVING:
+        if planar_distance <= ROOT_MOTION_STATIC_PLANAR_EPSILON:
+            raise ScriptError("Straight/side-step Root reconstruction has no graph-role planar travel.")
+        if abs(physical_delta) > ROOT_MOTION_STATIC_PLANAR_EPSILON:
+            raise ScriptError("Straight/side-step Root reconstruction has unintended physical heading rotation.")
+
+
 def sample_viewpoint_proxy_path(
     scene: bpy.types.Scene,
     target_armature: bpy.types.Object,
@@ -1708,6 +1817,7 @@ def reconstruct_root_matrices(
     frames: list[int],
     sampled_root_matrices: dict[int, Matrix],
     viewpoint_positions: list[Vector],
+    visible_body_headings: list[float],
     metadata: RootReconstructionInput,
 ) -> tuple[dict[int, Matrix], dict[str, Any]]:
     classification = classify_root_reconstruction(metadata)
@@ -1715,6 +1825,11 @@ def reconstruct_root_matrices(
     root_planar_positions = [Vector((float(position.x), float(position.y), 0.0)) for position in root_positions]
     root_yaws = [estimate_root_yaw_radians(sampled_root_matrices[frame]) for frame in frames]
     cleaned_yaws = clean_yaw_sequence(root_yaws)
+    visible_turn_headings = relative_visible_turn_headings(visible_body_headings)
+    canonical_root_euler_zs = [
+        visible_clockwise_heading_to_canonical_root_euler_z(heading)
+        for heading in visible_turn_headings
+    ]
     before_yaw_delta = unwrap_angle_sequence(root_yaws)[-1] - unwrap_angle_sequence(root_yaws)[0] if len(root_yaws) > 1 else 0.0
     reconstructed_positions: list[Vector] = []
     reconstructed_yaws: list[float] = []
@@ -1726,7 +1841,7 @@ def reconstruct_root_matrices(
     if classification.policy == ROOT_POLICY_MOVING and classification.subtype == ROOT_SUBTYPE_CURVED_MOVING:
         start = viewpoint_positions[0]
         reconstructed_positions = [position - start for position in viewpoint_positions]
-        reconstructed_yaws = cleaned_yaws
+        reconstructed_yaws = canonical_root_euler_zs
     elif classification.policy == ROOT_POLICY_MOVING:
         plan = straight_moving_plan_from_metadata(metadata.tags)
         straight_direction_source = plan.direction_source
@@ -1767,13 +1882,18 @@ def reconstruct_root_matrices(
     elif classification.policy == ROOT_POLICY_TURN_IN_PLACE:
         reconstructed_positions = [Vector((0.0, 0.0, 0.0)) for _ in frames]
         metadata_turn = signed_turn_angle_from_metadata(metadata.tags)
-        if metadata_turn is not None and len(frames) > 1:
-            reconstructed_yaws = [metadata_turn * (index / float(len(frames) - 1)) for index in range(len(frames))]
-        elif metadata_turn is not None:
-            reconstructed_yaws = [metadata_turn]
-        else:
-            reconstructed_yaws = cleaned_yaws
+        # Source Root is unreliable. The evaluated bilateral torso turn authors yaw;
+        # metadata verifies semantic direction and never invents it.
+        reconstructed_yaws = canonical_root_euler_zs
+        if metadata_turn is None:
             suspicious.append("turn_in_place_missing_angle_metadata")
+        else:
+            observed_turn = reconstructed_yaws[-1] - reconstructed_yaws[0] if len(reconstructed_yaws) > 1 else 0.0
+            observed_physical_turn = -observed_turn
+            if observed_physical_turn == 0.0 or math.copysign(1.0, observed_physical_turn) != math.copysign(1.0, metadata_turn):
+                suspicious.append("turn_metadata_disagrees_with_evaluated_root_heading_direction")
+            if abs(abs(observed_turn) - abs(metadata_turn)) > math.radians(12.0):
+                suspicious.append("turn_metadata_disagrees_with_baked_yaw_magnitude")
     else:
         reconstructed_positions = [Vector((0.0, 0.0, 0.0)) for _ in frames]
         initial_yaw = cleaned_yaws[0] if cleaned_yaws else 0.0
@@ -1786,6 +1906,7 @@ def reconstruct_root_matrices(
         reconstructed[frame] = yaw_matrix(position, yaw, scale)
 
     after_yaw_delta = reconstructed_yaws[-1] - reconstructed_yaws[0] if len(reconstructed_yaws) > 1 else 0.0
+    validate_class_specific_root_sequences(metadata, reconstructed_positions, reconstructed_yaws, visible_turn_headings)
     diagnostics = {
         "root_reconstruction_policy": classification.policy,
         "root_reconstruction_subtype": classification.subtype,
@@ -1801,9 +1922,70 @@ def reconstruct_root_matrices(
         "straight_progress_source": straight_progress_source,
         "root_yaw_delta_before": before_yaw_delta,
         "root_yaw_delta_after": after_yaw_delta,
+        "visible_turn_measurement": "bilateral_torso_landmarks_cross_canonical_up",
+        "visible_body_turn_delta_radians": visible_turn_headings[-1] - visible_turn_headings[0],
+        "canonical_root_euler_z_delta_radians": after_yaw_delta,
+        "evaluated_root_physical_heading_delta_radians": -after_yaw_delta,
+        "source_root_reliability": "unreliable_reconstruction_input",
         "suspicious_metadata_root_disagreement_flags": suspicious,
     }
     return reconstructed, diagnostics
+
+
+def retained_non_root_local_basis(bone_matrix_basis: Matrix) -> Matrix:
+    """Return the Root-motion-invariant local seam representation for a retained bone."""
+
+    return bone_matrix_basis.copy()
+
+
+def analyse_non_root_pose_seam(
+    scene: bpy.types.Scene,
+    target_armature: bpy.types.Object,
+    action: bpy.types.Action,
+) -> dict[str, Any]:
+    """Measure the Root-motion-invariant retained non-Root local pose seam."""
+    animation_data = target_armature.animation_data_create()
+    if animation_data is None:
+        raise ScriptError("Loop seam analysis could not create animation data.")
+    animation_data.action = action
+    frame_start, frame_end = action_frame_range(action, "Loop seam analysis")
+    retained = sorted(bone.name for bone in target_armature.pose.bones if bone.name != "Root")
+
+    def sample(frame: int) -> dict[str, Matrix]:
+        scene.frame_set(frame)
+        bpy.context.view_layer.update()
+        samples: dict[str, Matrix] = {}
+        for name in retained:
+            pose_bone = target_armature.pose.bones[name]
+            samples[name] = retained_non_root_local_basis(pose_bone.matrix_basis)
+        return samples
+
+    start, end = sample(frame_start), sample(frame_end)
+    maxima = {"translation": 0.0, "angular_radians": 0.0, "scale": 0.0}
+    offending: list[dict[str, Any]] = []
+    for name in retained:
+        start_location, start_rotation, start_scale = start[name].decompose()
+        end_location, end_rotation, end_scale = end[name].decompose()
+        translation = float((end_location - start_location).length)
+        angular = float(start_rotation.rotation_difference(end_rotation).angle)
+        scale = max(abs(float(end_scale[index] - start_scale[index])) for index in range(3))
+        maxima["translation"] = max(maxima["translation"], translation)
+        maxima["angular_radians"] = max(maxima["angular_radians"], angular)
+        maxima["scale"] = max(maxima["scale"], scale)
+        if (translation > LOOP_POSE_TRANSLATION_TOLERANCE or angular > LOOP_POSE_ANGULAR_TOLERANCE_RADIANS
+                or scale > LOOP_POSE_SCALE_TOLERANCE):
+            offending.append({"bone": name, "translation": translation, "angular_radians": angular, "scale": scale})
+    return {
+        "analysis_version": LOOP_ANALYSIS_VERSION,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "thresholds": {"translation": LOOP_POSE_TRANSLATION_TOLERANCE, "angular_radians": LOOP_POSE_ANGULAR_TOLERANCE_RADIANS, "scale": LOOP_POSE_SCALE_TOLERANCE},
+        "retained_bone_count": len(retained),
+        "maxima": maxima,
+        "offending_bones": offending,
+        "raw_eligible": not offending,
+        "effective_loop_intent": not offending,
+        "override": None,
+    }
 
 
 def sanitise_mixamo_baked_root_action(
@@ -1835,15 +2017,19 @@ def sanitise_mixamo_baked_root_action(
 
     reference_matrices: dict[int, dict[str, Matrix]] = {}
     sampled_root_matrices: dict[int, Matrix] = {}
+    visible_body_headings: list[float] = []
     viewpoint_positions = sample_viewpoint_proxy_path(scene, target_armature, frames)
     non_root_names = [pose_bone.name for pose_bone in target_armature.pose.bones if pose_bone.name != "Root"]
     for frame in frames:
         scene.frame_set(frame)
         bpy.context.view_layer.update()
         sampled_root_matrices[frame] = root.matrix.copy()
+        visible_body_headings.append(rig_aware_body_heading_radians(target_armature))
         reference_matrices[frame] = {
             bone_name: target_armature.pose.bones[bone_name].matrix.copy() for bone_name in non_root_names
         }
+
+    baked_body_headings = visible_body_headings
 
     reconstruction_diagnostics: dict[str, Any] = {
         "root_reconstruction_policy": "SanitiseOnly",
@@ -1867,6 +2053,7 @@ def sanitise_mixamo_baked_root_action(
             frames,
             sampled_root_matrices,
             viewpoint_positions,
+            visible_body_headings,
             reconstruction_input,
         )
 
@@ -1902,6 +2089,21 @@ def sanitise_mixamo_baked_root_action(
         failure_context,
     )
     validation.update(reconstruction_diagnostics)
+    reconstructed_body_headings: list[float] = []
+    for frame in frames:
+        scene.frame_set(frame)
+        bpy.context.view_layer.update()
+        reconstructed_body_headings.append(rig_aware_body_heading_radians(target_armature))
+    baked_unwrapped = unwrap_angle_sequence(baked_body_headings)
+    reconstructed_unwrapped = unwrap_angle_sequence(reconstructed_body_headings)
+    validation["source_baked_reconstructed_heading_proof"] = {
+        "measurement": "bilateral_torso_landmarks_cross_canonical_up",
+        "baked_body_heading_start_end_radians": [baked_unwrapped[0], baked_unwrapped[-1]],
+        "reconstructed_body_heading_start_end_radians": [reconstructed_unwrapped[0], reconstructed_unwrapped[-1]],
+        "baked_body_heading_delta_radians": baked_unwrapped[-1] - baked_unwrapped[0],
+        "reconstructed_body_heading_delta_radians": reconstructed_unwrapped[-1] - reconstructed_unwrapped[0],
+        "reconstructed_root_yaw_delta_radians": validation["root_yaw_delta_after"],
+    }
     if validation.get("root_path_distance_after") is None:
         validation["root_path_distance_after"] = sample_root_planar_path_distance(scene, target_armature, action)
     return validation
@@ -2032,6 +2234,7 @@ def extract_motion_metrics(
     action: bpy.types.Action,
     row: MotionManifestRow,
     root_motion_metadata: RootMotionMetadata,
+    canonical_action_name: str | None = None,
 ) -> dict:
     animation_data = target_armature.animation_data_create()
     if animation_data is None:
@@ -2255,7 +2458,7 @@ def extract_motion_metrics(
             "description": row.description,
             "type": row.motion_type,
         },
-        "action": action.name,
+        "action": canonical_action_name or action.name,
         "root_source": root_motion_metadata.source,
         "root_created": root_motion_metadata.created,
         "frame_range": {"start": frame_start, "end": frame_end},
@@ -2305,6 +2508,7 @@ def extract_motion_metrics(
             "avg_root_speed": root_path_distance / duration_seconds if duration_seconds > 0.0 else 0.0,
             "avg_root_planar_speed": root_planar_path_distance / duration_seconds if duration_seconds > 0.0 else 0.0,
         },
+        "loop_intent": analyse_non_root_pose_seam(scene, target_armature, action),
         "samples": samples,
     }
     if root_motion_metadata.diagnostics is not None:
@@ -2319,8 +2523,11 @@ def write_motion_metrics(
     action: bpy.types.Action,
     row: MotionManifestRow,
     root_motion_metadata: RootMotionMetadata,
+    canonical_action_name: str | None = None,
 ) -> None:
-    metrics = extract_motion_metrics(scene, target_armature, action, row, root_motion_metadata)
+    metrics = extract_motion_metrics(
+        scene, target_armature, action, row, root_motion_metadata, canonical_action_name
+    )
     metrics_output.parent.mkdir(parents=True, exist_ok=True)
     try:
         with metrics_output.open("w", encoding="utf-8") as handle:
@@ -2378,7 +2585,9 @@ def run(args: RetargetArgs) -> bpy.types.Action:
 
     bind_target_to_source(scene, target_armature, source_armature)
 
-    baked_action = bake_mixamo_action(scene, target_armature, source_armature, source_action, row)
+    baked_action = bake_mixamo_action(
+        scene, target_armature, source_armature, source_action, row, args.action_name
+    )
     target_armature_name = target_armature.name
     baked_action_name_value = baked_action.name
     source_action_name = source_action.name
@@ -2503,6 +2712,7 @@ def run(args: RetargetArgs) -> bpy.types.Action:
             final_action,
             row,
             root_motion_metadata,
+            args.metrics_action_name,
         )
 
     print(

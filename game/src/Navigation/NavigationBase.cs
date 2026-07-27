@@ -16,6 +16,9 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     private bool _hasInitialSample;
     private Vector3[] _acceptedPath = [];
     private int _acceptedPathIndex;
+    private Vector3 _pathTraversalStart;
+    private long _destinationRequestGeneration;
+    private long _routeRevision;
 
     /// <inheritdoc/>
     public bool HasDestination
@@ -118,6 +121,22 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         get; private set;
     }
 
+    /// <summary>
+    /// Gets whether the latest call to <see cref="Poll" /> produced a valid sample rather than returning cached intent.
+    /// </summary>
+    protected bool LastPollProducedValidSample
+    {
+        get; private set;
+    }
+
+    /// <summary>
+    /// Gets the immutable route sample produced by the latest valid poll, or <see langword="null" /> before one exists.
+    /// </summary>
+    protected NavigationRouteSnapshot? CurrentRouteSnapshot
+    {
+        get; private set;
+    }
+
     /// <inheritdoc/>
     public NavigationDestinationResult SetDestination(Transform3D destination)
     {
@@ -131,12 +150,16 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
             return NavigationDestinationResult.NotReady;
         }
 
-        if (!CanReach(destination.Origin, out Vector3[] acceptedPath))
+        Vector3 navigationStartPosition = GetNavigationStartPosition();
+        if (!CanReach(navigationStartPosition, destination.Origin, out Vector3[] acceptedPath))
         {
             return NavigationDestinationResult.Unreachable;
         }
 
         TargetPosition = destination.Origin;
+        _destinationRequestGeneration++;
+        _routeRevision++;
+        CurrentRouteSnapshot = null;
         _destination = destination;
         HasDestination = true;
         _hasInitialSample = false;
@@ -147,6 +170,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         LastSampledPathIndex = 0;
         _acceptedPath = acceptedPath;
         _acceptedPathIndex = 0;
+        _pathTraversalStart = navigationStartPosition;
         _intent = PendingIntent(destination.Origin);
         OnDestinationAccepted(destination);
         return NavigationDestinationResult.Accepted;
@@ -162,12 +186,16 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         LastSampledPathIndex = 0;
         _acceptedPath = [];
         _acceptedPathIndex = 0;
+        CurrentRouteSnapshot = null;
         _intent = CompletedIntent(_destination.Origin);
+        LastPollProducedValidSample = false;
+        OnDestinationCleared();
     }
 
     /// <inheritdoc/>
     public NavigationMotionIntent Poll(Transform3D actorTransform)
     {
+        LastPollProducedValidSample = false;
         if (!HasDestination || !IsNavigationMapReady)
         {
             return _intent;
@@ -183,8 +211,23 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         {
             UsedAcceptedPathFallbackForLastPoll = true;
             path = _acceptedPath;
-            _acceptedPathIndex = AdvanceAcceptedPathIndex(actorTransform.Origin);
+            _acceptedPathIndex = AdvancePathIndex(
+                actorTransform.Origin,
+                path,
+                _acceptedPathIndex,
+                _pathTraversalStart,
+                Mathf.Max(PathDesiredDistance, 0.0f));
             pathIndex = _acceptedPathIndex;
+            nextPathPosition = path[pathIndex];
+        }
+        else if (path.Length > 0)
+        {
+            pathIndex = AdvancePathIndex(
+                actorTransform.Origin,
+                path,
+                pathIndex,
+                _pathTraversalStart,
+                Mathf.Max(PathDesiredDistance, 0.0f));
             nextPathPosition = path[pathIndex];
         }
         LastSampledPathIndex = pathIndex;
@@ -240,7 +283,28 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
                 Mathf.DegToRad(Mathf.Max(FacingToleranceDegrees, 0.0f)));
         }
 
+        bool geometryChanged = CurrentRouteSnapshot is not null
+            && CurrentRouteSnapshot.DestinationRequestGeneration == _destinationRequestGeneration
+            && !HasSamePath(CurrentRouteSnapshot.PathPoints, path);
+        bool indexChanged = CurrentRouteSnapshot is not null
+            && CurrentRouteSnapshot.DestinationRequestGeneration == _destinationRequestGeneration
+            && CurrentRouteSnapshot.ActivePathIndex != pathIndex;
+        if (geometryChanged || indexChanged)
+        {
+            _routeRevision++;
+        }
+
+        CurrentRouteSnapshot = new NavigationRouteSnapshot(
+            path,
+            pathIndex,
+            nextPathPosition,
+            _destination,
+            _destinationRequestGeneration,
+            _routeRevision,
+            UsedAcceptedPathFallbackForLastPoll,
+            geometryChanged);
         _intent = sampledIntent;
+        LastPollProducedValidSample = true;
         return _intent;
     }
 
@@ -248,6 +312,13 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     /// Allows concrete implementations to react to accepted destination intent without moving an actor.
     /// </summary>
     protected virtual void OnDestinationAccepted(Transform3D destination)
+    {
+    }
+
+    /// <summary>
+    /// Allows concrete implementations to react immediately after destination state is cleared.
+    /// </summary>
+    protected virtual void OnDestinationCleared()
     {
     }
 
@@ -292,11 +363,29 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         return facing.IsFinite() && facing.LengthSquared() > 0.000001f ? facing.Normalized() : fallback;
     }
 
-    private bool CanReach(Vector3 destination, out Vector3[] path)
+    private static bool HasSamePath(IReadOnlyList<Vector3> previous, ReadOnlySpan<Vector3> current)
+    {
+        if (previous.Count != current.Length)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < current.Length; index++)
+        {
+            if (previous[index] != current[index])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool CanReach(Vector3 start, Vector3 destination, out Vector3[] path)
     {
         path = NavigationServer3D.MapGetPath(
             GetNavigationMap(),
-            GetNavigationStartPosition(),
+            start,
             destination,
             optimize: true,
             NavigationLayers);
@@ -309,13 +398,22 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         return path[^1].DistanceSquaredTo(destination) <= tolerance * tolerance;
     }
 
-    private int AdvanceAcceptedPathIndex(Vector3 actorPosition)
+    private static int AdvancePathIndex(
+        Vector3 actorPosition,
+        IReadOnlyList<Vector3> path,
+        int currentIndex,
+        Vector3 pathTraversalStart,
+        float desiredDistance)
     {
-        int index = Math.Clamp(_acceptedPathIndex, 0, _acceptedPath.Length - 1);
-        float desiredDistance = Mathf.Max(PathDesiredDistance, 0.0f);
+        int index = Math.Clamp(currentIndex, 0, path.Count - 1);
         float desiredDistanceSquared = desiredDistance * desiredDistance;
-        while (index < _acceptedPath.Length - 1
-            && HasReachedOrPassedAcceptedPathPoint(actorPosition, index, desiredDistanceSquared))
+        while (index < path.Count - 1
+            && HasReachedOrPassedPathPoint(
+                actorPosition,
+                path,
+                index,
+                pathTraversalStart,
+                desiredDistanceSquared))
         {
             index++;
         }
@@ -323,12 +421,14 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         return index;
     }
 
-    private bool HasReachedOrPassedAcceptedPathPoint(
+    private static bool HasReachedOrPassedPathPoint(
         Vector3 actorPosition,
+        IReadOnlyList<Vector3> path,
         int index,
+        Vector3 pathTraversalStart,
         float desiredDistanceSquared)
     {
-        Vector3 point = _acceptedPath[index];
+        Vector3 point = path[index];
         if (!actorPosition.IsFinite() || !point.IsFinite())
         {
             return false;
@@ -341,18 +441,27 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
 
         if (index == 0)
         {
-            Vector3 outgoingSegment = _acceptedPath[1] - point;
-            return _acceptedPath[1].IsFinite()
-                && outgoingSegment.LengthSquared() > 0.000001f
-                && (actorPosition - point).Dot(outgoingSegment) >= 0.0f;
+            if (!pathTraversalStart.IsFinite())
+            {
+                return false;
+            }
+
+            if (pathTraversalStart.DistanceSquaredTo(point) <= desiredDistanceSquared)
+            {
+                return true;
+            }
+
+            Vector3 initialSegment = point - pathTraversalStart;
+            return initialSegment.LengthSquared() > 0.000001f
+                && (actorPosition - point).Dot(initialSegment) >= 0.0f;
         }
 
-        if (!_acceptedPath[index - 1].IsFinite())
+        if (!path[index - 1].IsFinite())
         {
             return false;
         }
 
-        Vector3 incomingSegment = point - _acceptedPath[index - 1];
+        Vector3 incomingSegment = point - path[index - 1];
         return incomingSegment.LengthSquared() > 0.000001f
             && (actorPosition - point).Dot(incomingSegment) >= 0.0f;
     }

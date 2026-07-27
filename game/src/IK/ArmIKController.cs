@@ -256,18 +256,6 @@ public partial class ArmIKController : SkeletonModifier3D
             return;
         }
 
-        bool usesAuthoredPoleOverride = false;
-        if (shoulderPos.DistanceTo(handPos) <= (_restArmLength * 0.75f))
-        {
-            baselinePole = Side == LimbSide.Left ? Vector3.Left : Vector3.Right;
-            usesAuthoredPoleOverride = true;
-        }
-        else if (Mathf.Abs(armDirBody.X) >= 0.75f && Mathf.Abs(armDirBody.Z) <= 0.6f)
-        {
-            baselinePole = Vector3.Forward;
-            usesAuthoredPoleOverride = true;
-        }
-
         // Phase 3 (hand-rotation adjustment) is deferred to a subsequent delivery phase.
 
         // Phase 4 -- Pole Target Placement
@@ -280,10 +268,6 @@ public partial class ArmIKController : SkeletonModifier3D
         float currentArmLength = solvedShoulderPos.DistanceTo(handPos);
         float ratioBasedOffset = currentArmLength * PoleOffsetRatio;
         float offset = Mathf.Max(MinimumPoleOffset, ratioBasedOffset);
-        if (usesAuthoredPoleOverride)
-        {
-            offset = Mathf.Max(offset, 0.8f);
-        }
 
         float compressionRatioThreshold = Mathf.Clamp(CompressionRatioForRestPoleFloor, 0.1f, 1.0f);
         bool isArmCompressed = currentArmLength <= (_restArmLength * compressionRatioThreshold);

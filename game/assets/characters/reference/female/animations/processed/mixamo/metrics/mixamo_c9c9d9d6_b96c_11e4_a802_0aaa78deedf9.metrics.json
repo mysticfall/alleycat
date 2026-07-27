@@ -29,9 +29,9 @@
       "motion_class": "StandingLocomotion",
       "tags": [
         "walk",
-        "strafe",
+        "sidestep",
         "left",
-        "relaxed"
+        "role_side_step_left"
       ]
     }
   },
@@ -94,6 +94,25 @@
     "source_bone": "head",
     "standing_height": 1.4594106674194336
   },
+  "loop_intent": {
+    "analysis_version": 3,
+    "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+    "effective_loop_intent": true,
+    "maxima": {
+      "angular_radians": 0.006176325958222151,
+      "scale": 3.5762786865234375e-07,
+      "translation": 0.008081304347520581
+    },
+    "offending_bones": [],
+    "override": null,
+    "raw_eligible": true,
+    "retained_bone_count": 54,
+    "thresholds": {
+      "angular_radians": 0.05235987755982989,
+      "scale": 0.01,
+      "translation": 0.061
+    }
+  },
   "manifest": {
     "description": "Walking Strafe To The Left",
     "motion_id": "c9c9d9d6-b96c-11e4-a802-0aaa78deedf9",
@@ -102,6 +121,8 @@
   },
   "root_created": true,
   "root_reconstruction": {
+    "canonical_root_euler_z_delta_radians": 0.0,
+    "evaluated_root_physical_heading_delta_radians": -0.0,
     "frame_end": 45,
     "frame_start": 1,
     "max_non_root_angular_drift": 0.0,
@@ -118,6 +139,21 @@
     "root_reconstruction_subtype": "StraightMoving",
     "root_yaw_delta_after": 0.0,
     "root_yaw_delta_before": 1.5760890192950683e-07,
+    "source_baked_reconstructed_heading_proof": {
+      "baked_body_heading_delta_radians": 1.678597470800014e-06,
+      "baked_body_heading_start_end_radians": [
+        2.522023238974512,
+        2.522024917571983
+      ],
+      "measurement": "bilateral_torso_landmarks_cross_canonical_up",
+      "reconstructed_body_heading_delta_radians": 1.4912347299222972e-06,
+      "reconstructed_body_heading_start_end_radians": [
+        2.5220232882280946,
+        2.5220247794628246
+      ],
+      "reconstructed_root_yaw_delta_radians": 0.0
+    },
+    "source_root_reliability": "unreliable_reconstruction_input",
     "straight_direction_source": "metadata_strafe_left",
     "straight_progress_source": "viewpoint_path_distance",
     "straight_reconstructed_delta_blender_root_xy": [
@@ -131,7 +167,9 @@
       4.470348358154297e-08
     ],
     "viewpoint_path_distance": 0.8184705993935086,
-    "viewpoint_proxy": "target_head_projected_to_ground"
+    "viewpoint_proxy": "target_head_projected_to_ground",
+    "visible_body_turn_delta_radians": 1.678597470800014e-06,
+    "visible_turn_measurement": "bilateral_torso_landmarks_cross_canonical_up"
   },
   "root_source": "reconstructed_root",
   "sample_count": 45,
@@ -10765,12 +10803,12 @@
     "group": "locomotion_standing",
     "motion_class": "StandingLocomotion",
     "motion_id": "c9c9d9d6-b96c-11e4-a802-0aaa78deedf9",
-    "notes": "Walk Strafe Left; preview shows clean upright lateral walking with relaxed arms, selected for low-speed left strafe variety.",
+    "notes": "Role=SideStepLeft; natural matching ordinary upright unarmed left strafe pair; looped continuous source.",
     "tags": [
       "walk",
-      "strafe",
+      "sidestep",
       "left",
-      "relaxed"
+      "role_side_step_left"
     ]
   },
   "tracked_bones": [

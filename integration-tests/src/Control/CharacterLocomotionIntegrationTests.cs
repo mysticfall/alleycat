@@ -17,6 +17,8 @@ public sealed partial class CharacterLocomotionIntegrationTests
     private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
     private const string PlayerAnimationTreeRootUID = "uid://bge48ng374i85";
     private const string NpcAnimationTreeRootUID = "uid://c485owf86etdu";
+    private const string NpcAnimationGraphPath = "res://assets/characters/templates/animation/animation_tree_root_npc.tres";
+    private const string LibraryPath = "res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres";
 
     /// <summary>
     /// Verifies the component enables its own physics processing during ready.
@@ -36,6 +38,22 @@ public sealed partial class CharacterLocomotionIntegrationTests
         {
             await DestroyRigAsync(sceneTree, rig);
         }
+    }
+
+    /// <summary>
+    /// Verifies locomotion exposes no dormant snap-turn type or runtime configuration.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void CharacterLocomotion_SnapTurnConfiguration_IsAbsent()
+    {
+        Type locomotionType = typeof(CharacterLocomotion);
+
+        Assert.Null(locomotionType.Assembly.GetType("AlleyCat.Control.Locomotion.TurnMode"));
+        Assert.Null(locomotionType.GetProperty("TurnMode"));
+        Assert.Null(locomotionType.GetProperty("SnapTurnAngleDegrees"));
+        Assert.Null(locomotionType.GetProperty("SnapTurnCooldownSeconds"));
+        Assert.Null(locomotionType.GetProperty("SnapTurnActivationThreshold"));
     }
 
     /// <summary>
@@ -159,6 +177,47 @@ public sealed partial class CharacterLocomotionIntegrationTests
     }
 
     /// <summary>
+    /// Verifies movement and signed turn parameters update independently and reverse without transition delay.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_BlendParameters_PreserveMovementAndReverseTurnImmediately()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        AnimationTree animationTree = CreateBlendedLocomotionAnimationTree();
+        CharacterLocomotion locomotion = new()
+        {
+            AnimationBlendParameter = new StringName("parameters/Walking/Movement/blend_position"),
+            AnimationTurnBlendParameter = new StringName("parameters/Walking/Turn/blend_amount"),
+            RotationSpeedMultiplier = 1f,
+            SmoothTurnSensitivity = 2.5f,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: animationTree, locomotion: locomotion);
+
+        try
+        {
+            locomotion.Move(new Vector2(0.25f, 0.5f));
+            locomotion.Rotate(new Vector2(-0.2f, 0f));
+            locomotion._PhysicsProcess(0.016d);
+
+            Vector2 input = new(0.25f, 0.5f);
+            float remappedLength = (input.Length() - locomotion.InputDeadzone) / (1.0f - locomotion.InputDeadzone);
+            Vector2 expectedMovement = input.Normalized() * remappedLength;
+            Assert.Equal(expectedMovement, animationTree.Get(locomotion.AnimationBlendParameter).AsVector2());
+            Assert.Equal(-0.1470588f, animationTree.Get(locomotion.AnimationTurnBlendParameter).AsSingle(), Tolerance);
+
+            locomotion.Rotate(new Vector2(0.2f, 0f));
+            locomotion._PhysicsProcess(0.016d);
+
+            Assert.Equal(0.1470588f, animationTree.Get(locomotion.AnimationTurnBlendParameter).AsSingle(), Tolerance);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
     /// Verifies shipped character scenes expose one active animation tree per actor with the expected start state.
     /// </summary>
     [Headless]
@@ -176,26 +235,27 @@ public sealed partial class CharacterLocomotionIntegrationTests
     }
 
     /// <summary>
-    /// Verifies smooth-turn input rotates the controlled body.
+    /// Verifies smooth-turn input enters Walking but cannot rotate without animation root yaw.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task CharacterLocomotion_Rotate_SmoothTurnRotatesBody()
+    public async Task CharacterLocomotion_Rotate_SmoothTurnDoesNotApplyDirectYaw()
     {
         SceneTree sceneTree = GetSceneTree();
-        RecordingTurnCharacterLocomotion locomotion = new();
-        LocomotionTestRig rig = await CreateRigAsync(sceneTree, locomotion: locomotion);
+        RootMotionCharacterLocomotion locomotion = new();
+        AnimationTree animationTree = CreateLocomotionAnimationTree();
+        LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: animationTree, locomotion: locomotion);
 
         try
         {
-            locomotion.TurnMode = TurnMode.Smooth;
-            locomotion.RotationSpeedMultiplier = 2f;
-            locomotion.SmoothTurnSensitivity = 3f;
             locomotion.Rotate(new Vector2(-0.5f, 0f));
 
             locomotion._PhysicsProcess(0.2d);
+            animationTree.Advance(0d);
+            locomotion._PhysicsProcess(0.2d);
 
-            Assert.True(Mathf.Abs(locomotion.LastAppliedYawDelta - 0.6f) <= Tolerance, $"Expected smooth turn to apply 0.6 radians of yaw. Got {locomotion.LastAppliedYawDelta:F6}.");
+            Assert.Equal("Walking", ResolvePlayback(animationTree).GetCurrentNode().ToString());
+            Assert.Equal(0f, locomotion.TotalAppliedYawDelta, Tolerance);
         }
         finally
         {
@@ -204,37 +264,48 @@ public sealed partial class CharacterLocomotionIntegrationTests
     }
 
     /// <summary>
-    /// Verifies snap-turn cooldown prevents a second immediate turn.
+    /// Verifies every finite walking root-yaw sample is consumed without snap clamping or cooldown.
     /// </summary>
     [Headless]
     [Fact]
-    public async Task CharacterLocomotion_SnapTurnCooldown_BlocksImmediateSecondTurn()
+    public async Task CharacterLocomotion_RootYaw_ConsumesEachWalkingSampleContinuously()
     {
         SceneTree sceneTree = GetSceneTree();
-        RecordingTurnCharacterLocomotion locomotion = new();
-        LocomotionTestRig rig = await CreateRigAsync(sceneTree, locomotion: locomotion);
+        RootMotionCharacterLocomotion locomotion = new()
+        {
+            RootMotionYawDelta = -1f,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: CreateLocomotionAnimationTree(), locomotion: locomotion);
 
         try
         {
-            locomotion.TurnMode = TurnMode.Snap;
-            locomotion.SnapTurnAngleDegrees = 45f;
-            locomotion.SnapTurnActivationThreshold = 0.5f;
-            locomotion.SnapTurnCooldownSeconds = 0.25f;
             locomotion.Rotate(new Vector2(0.8f, 0f));
+            StartPlayback(rig.AnimationTree, "Walking");
 
             locomotion._PhysicsProcess(0.016d);
-            float firstTurnDelta = locomotion.LastAppliedYawDelta;
-
             locomotion._PhysicsProcess(0.016d);
 
-            Assert.True(Mathf.Abs(firstTurnDelta + (Mathf.Pi * 0.25f)) <= Tolerance, $"Expected first snap turn to apply -45 degrees. Got {firstTurnDelta:F6}.");
-            Assert.True(Mathf.IsZeroApprox(locomotion.LastAppliedYawDelta), $"Expected snap-turn cooldown to block the second immediate turn. Got {locomotion.LastAppliedYawDelta:F6}.");
+            Assert.Equal(-2f, locomotion.TotalAppliedYawDelta, Tolerance);
         }
         finally
         {
             await DestroyRigAsync(sceneTree, rig);
         }
     }
+
+    /// <summary>
+    /// Verifies production left arc root yaw reaches the actor once with its authored positive sign.
+    /// </summary>
+    [Fact]
+    public Task ProductionGraph_WalkArcLeft_AppliesAuthoredRootYawToActorOnce()
+        => AssertProductionRootYawApplicationAsync("WalkArcLeft", expectedYawSign: 1f);
+
+    /// <summary>
+    /// Verifies production right pivot root yaw reaches the actor once with its authored negative sign.
+    /// </summary>
+    [Fact]
+    public Task ProductionGraph_TurnInPlaceRight_AppliesAuthoredRootYawToActorOnce()
+        => AssertProductionRootYawApplicationAsync("TurnInPlaceRight90", expectedYawSign: -1f);
 
     /// <summary>
     /// Verifies sub-deadzone movement intent remains suppressed.
@@ -283,7 +354,6 @@ public sealed partial class CharacterLocomotionIntegrationTests
 
         try
         {
-            locomotion.TurnMode = TurnMode.Smooth;
             locomotion.RotationSpeedMultiplier = 2f;
             locomotion.SmoothTurnSensitivity = 3f;
             locomotion.Move(new Vector2(0f, 1f));
@@ -396,19 +466,24 @@ public sealed partial class CharacterLocomotionIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         PoseStateMachine stateMachine = CreatePoseStateMachine(new KneelingPoseState());
         _ = stateMachine.Tick(new PoseStateContext());
-        RecordingTurnCharacterLocomotion locomotion = new();
-        LocomotionTestRig rig = await CreateRigAsync(sceneTree, permissionSourceNodes: [stateMachine], locomotion: locomotion);
+        RootMotionCharacterLocomotion locomotion = new()
+        {
+            RootMotionYawDelta = 0.2f,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(
+            sceneTree,
+            permissionSourceNodes: [stateMachine],
+            animationTree: CreateLocomotionAnimationTree(),
+            locomotion: locomotion);
 
         try
         {
-            locomotion.TurnMode = TurnMode.Smooth;
-            locomotion.RotationSpeedMultiplier = 2f;
-            locomotion.SmoothTurnSensitivity = 3f;
             locomotion.Rotate(new Vector2(-0.5f, 0f));
+            StartPlayback(rig.AnimationTree, "Walking");
 
             locomotion._PhysicsProcess(0.2d);
 
-            Assert.True(Mathf.Abs(locomotion.LastAppliedYawDelta - 0.6f) <= Tolerance, $"Expected rotation to remain allowed while kneeling. Got {locomotion.LastAppliedYawDelta:F6}.");
+            Assert.Equal(0.2f, locomotion.TotalAppliedYawDelta, Tolerance);
         }
         finally
         {
@@ -451,6 +526,44 @@ public sealed partial class CharacterLocomotionIntegrationTests
     }
 
     /// <summary>
+    /// Verifies independently sampled root-motion deltas retain per-frame delta semantics across a simulated clip loop.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_RootMotionDeltasAcrossLoopBoundary_PreservePerFrameDeltaSemantics()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RootMotionCharacterLocomotion locomotion = new()
+        {
+            RootMotionPositionDelta = new Vector3(0f, 0f, -0.1f),
+        };
+        LocomotionTestRig rig = await CreateRigAsync(
+            sceneTree,
+            animationTree: CreateLocomotionAnimationTree(),
+            locomotion: locomotion);
+
+        try
+        {
+            StartPlayback(rig.AnimationTree, "Walking");
+            locomotion.Move(Vector2.Up);
+
+            float integratedDisplacement = 0f;
+            for (int sample = 0; sample < 3; sample++)
+            {
+                locomotion._PhysicsProcess(0.1d);
+                Assert.Equal(-1f, rig.Body.Velocity.Z, Tolerance);
+                integratedDisplacement += rig.Body.Velocity.Z * 0.1f;
+            }
+
+            Assert.Equal(-0.3f, integratedDisplacement, Tolerance);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
     /// Verifies locomotion root motion is transformed through the configured world-space reference.
     /// </summary>
     [Headless]
@@ -478,6 +591,153 @@ public sealed partial class CharacterLocomotionIntegrationTests
             Vector3 velocity = rig.Body.Velocity;
             Assert.True(Mathf.Abs(velocity.X + 0.8f) <= Tolerance, $"Expected rotated root motion to resolve to -0.8 m/s on X. Got {velocity.X:F6}.");
             Assert.True(Mathf.Abs(velocity.Z) <= Tolerance, $"Expected rotated root motion to remove forward Z velocity. Got {velocity.Z:F6}.");
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies one walking sample drives simultaneous translation and yaw exactly once.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_RootMotionActive_AppliesSimultaneousTranslationAndYawOnce()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RootMotionCharacterLocomotion locomotion = new()
+        {
+            RootMotionPositionDelta = new Vector3(0f, 0f, -0.0064f),
+            RootMotionYawDelta = 0.15f,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(
+            sceneTree,
+            animationTree: CreateLocomotionAnimationTree(),
+            locomotion: locomotion);
+
+        try
+        {
+            StartPlayback(rig.AnimationTree, "Walking");
+            locomotion.Move(Vector2.Up);
+            locomotion.Rotate(new Vector2(-0.5f, 0f));
+
+            locomotion._PhysicsProcess(0.016d);
+
+            Assert.Equal(-0.4f, rig.Body.Velocity.Z, Tolerance);
+            Assert.Equal(0.15f, locomotion.TotalAppliedYawDelta, Tolerance);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies smooth animation yaw reverses immediately with the selected root-motion sample.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_SmoothRootYaw_ReversesImmediately()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RootMotionCharacterLocomotion locomotion = new()
+        {
+            RootMotionYawDelta = -0.2f,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(
+            sceneTree,
+            animationTree: CreateLocomotionAnimationTree(),
+            locomotion: locomotion);
+
+        try
+        {
+            StartPlayback(rig.AnimationTree, "Walking");
+            locomotion.Rotate(Vector2.Right);
+            locomotion._PhysicsProcess(0.016d);
+
+            locomotion.RootMotionYawDelta = 0.3f;
+            locomotion.Rotate(Vector2.Left);
+            locomotion._PhysicsProcess(0.016d);
+
+            Assert.Equal(0.1f, locomotion.TotalAppliedYawDelta, Tolerance);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies movement and rotation permissions independently gate their matching root-motion components.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_RootMotionPermissions_GateComponentsIndependently()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        MutablePermissionSource permissions = new(LocomotionPermissions.RotationOnly);
+        RootMotionCharacterLocomotion locomotion = new()
+        {
+            RootMotionPositionDelta = new Vector3(0f, 0f, -0.0064f),
+            RootMotionYawDelta = 0.2f,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(
+            sceneTree,
+            permissionSourceNodes: [permissions],
+            animationTree: CreateLocomotionAnimationTree(),
+            locomotion: locomotion);
+
+        try
+        {
+            StartPlayback(rig.AnimationTree, "Walking");
+            locomotion.Move(Vector2.Up);
+            locomotion.Rotate(Vector2.Left);
+            locomotion._PhysicsProcess(0.016d);
+
+            Assert.True(rig.Body.Velocity.IsZeroApprox());
+            Assert.Equal(0.2f, locomotion.TotalAppliedYawDelta, Tolerance);
+
+            permissions.LocomotionPermissions = new LocomotionPermissions(MovementAllowed: true, RotationAllowed: false);
+            locomotion._PhysicsProcess(0.016d);
+
+            Assert.Equal(-0.4f, rig.Body.Velocity.Z, Tolerance);
+            Assert.Equal(0.2f, locomotion.TotalAppliedYawDelta, Tolerance);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>
+    /// Verifies non-finite root translation and yaw cannot reach the character body.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterLocomotion_RootMotionNonFinite_IgnoresBothComponents()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        RootMotionCharacterLocomotion locomotion = new()
+        {
+            RootMotionPositionDelta = new Vector3(float.NaN, 0f, float.PositiveInfinity),
+            RootMotionYawDelta = float.NaN,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(
+            sceneTree,
+            animationTree: CreateLocomotionAnimationTree(),
+            locomotion: locomotion);
+
+        try
+        {
+            StartPlayback(rig.AnimationTree, "Walking");
+            locomotion.Move(Vector2.Up);
+            locomotion.Rotate(Vector2.Left);
+
+            locomotion._PhysicsProcess(0.016d);
+
+            Assert.True(rig.Body.Velocity.IsZeroApprox());
+            Assert.Equal(0f, locomotion.TotalAppliedYawDelta);
         }
         finally
         {
@@ -720,6 +980,57 @@ public sealed partial class CharacterLocomotionIntegrationTests
         return new LocomotionTestRig(root, body, animationTree, rootMotionReference, locomotion);
     }
 
+    private static async Task AssertProductionRootYawApplicationAsync(string graphPointName, float expectedYawSign)
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Quaternion rootRotation = GetProductionGraphRootRotation(graphPointName);
+        RootRotationCharacterLocomotion locomotion = new()
+        {
+            RootMotionRotation = rootRotation,
+        };
+        LocomotionTestRig rig = await CreateRigAsync(sceneTree, animationTree: CreateLocomotionAnimationTree(), locomotion: locomotion);
+
+        try
+        {
+            StartPlayback(rig.AnimationTree, "Walking");
+            float rootYaw = rootRotation.GetEuler().Y;
+            float actorYawBefore = rig.Body.GlobalRotation.Y;
+            Assert.True(float.IsFinite(rootYaw) && (rootYaw * expectedYawSign) > 0.0001f,
+                $"Expected production graph point {graphPointName} Root yaw sign {expectedYawSign:F0}; got {rootYaw:F6}.");
+
+            locomotion._PhysicsProcess(1.0 / 30.0);
+            float actorYawAfterFirstApplication = rig.Body.GlobalRotation.Y;
+            float actorYawDelta = Mathf.Wrap(actorYawAfterFirstApplication - actorYawBefore, -Mathf.Pi, Mathf.Pi);
+            Assert.Equal(rootYaw, actorYawDelta, 0.001f);
+
+            locomotion.RootMotionRotation = Quaternion.Identity;
+            locomotion._PhysicsProcess(1.0 / 30.0);
+            float actorYawAfterSecondApplication = rig.Body.GlobalRotation.Y;
+            Assert.Equal(actorYawAfterFirstApplication, actorYawAfterSecondApplication, 0.001f);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    private static Quaternion GetProductionGraphRootRotation(string graphPointName)
+    {
+        AnimationNodeBlendTree root = Assert.IsType<AnimationNodeBlendTree>(ResourceLoader.Load(NpcAnimationGraphPath), exactMatch: false);
+        AnimationNodeStateMachine states = Assert.IsType<AnimationNodeStateMachine>(root.GetNode("States"), exactMatch: false);
+        AnimationNodeBlendTree walking = Assert.IsType<AnimationNodeBlendTree>(states.GetNode("Walking"), exactMatch: false);
+        AnimationNodeBlendSpace2D locomotion = Assert.IsType<AnimationNodeBlendSpace2D>(walking.GetNode("Locomotion"), exactMatch: false);
+        AnimationNodeAnimation graphPoint = Assert.IsType<AnimationNodeAnimation>(
+            locomotion.GetBlendPointNode(locomotion.FindBlendPointByName(graphPointName)), exactMatch: false);
+        string key = graphPoint.Animation.ToString()["locomotion/".Length..];
+        Animation animation = Assert.IsType<AnimationLibrary>(ResourceLoader.Load(LibraryPath), exactMatch: false).GetAnimation(key);
+        int track = animation.FindTrack(new NodePath("%GeneralSkeleton:Root"), Animation.TrackType.Rotation3D);
+        Assert.True(track >= 0, $"Production graph point {graphPointName} must retain its Root rotation track.");
+        Quaternion start = animation.RotationTrackInterpolate(track, 0.0);
+        Quaternion sample = animation.RotationTrackInterpolate(track, animation.Length);
+        return start.Inverse() * sample;
+    }
+
     private static async Task DestroyRigAsync(SceneTree sceneTree, LocomotionTestRig rig)
     {
         rig.Root.QueueFree();
@@ -790,6 +1101,34 @@ public sealed partial class CharacterLocomotionIntegrationTests
         };
     }
 
+    private static AnimationTree CreateBlendedLocomotionAnimationTree()
+    {
+        AnimationNodeBlendSpace2D movement = new();
+        movement.AddBlendPoint(new AnimationNodeAnimation(), Vector2.Zero);
+
+        AnimationNodeBlend2 turn = new();
+        AnimationNodeBlendTree walking = new();
+        walking.AddNode("Movement", movement, Vector2.Zero);
+        walking.AddNode("Turn", turn, Vector2.Right * 200f);
+        walking.ConnectNode("Turn", 0, "Movement");
+        walking.ConnectNode("Turn", 1, "Movement");
+        walking.ConnectNode("output", 0, "Turn");
+
+        AnimationNodeStateMachine stateMachine = new();
+        stateMachine.AddNode("Idle", new AnimationNodeAnimation(), Vector2.Zero);
+        stateMachine.AddNode("Walking", walking, Vector2.Right * 200f);
+        stateMachine.AddTransition("Start", "Idle", new AnimationNodeStateMachineTransition());
+        stateMachine.AddTransition("Idle", "Walking", new AnimationNodeStateMachineTransition());
+        stateMachine.AddTransition("Walking", "Idle", new AnimationNodeStateMachineTransition());
+
+        return new AnimationTree
+        {
+            Name = "AnimationTree",
+            TreeRoot = stateMachine,
+            Active = true,
+        };
+    }
+
     private static void StartPlayback(AnimationTree animationTree, string nodeName)
     {
         AnimationNodeStateMachinePlayback playback = ResolvePlayback(animationTree);
@@ -828,7 +1167,12 @@ public sealed partial class CharacterLocomotionIntegrationTests
                         + string.Join(", ", animationTrees.Select(tree => $"{tree.GetPath()}={GetTreeRootUID(tree)} path={GetAuthoredTreeRootResourcePath(tree)}")));
 
                 Assert.True(animationTree.Active, $"Expected {scenePath} AnimationTree {expectedTree.TreeRootUID} to be active.");
-                Assert.NotEqual(Variant.Type.Nil, animationTree.Get("parameters/States/Walking/blend_position").VariantType);
+                Assert.Equal(
+                    Variant.Type.Vector2,
+                    animationTree.Get("parameters/States/Walking/Locomotion/Movement/blend_position").VariantType);
+                Assert.Equal(
+                    Variant.Type.Vector2,
+                    animationTree.Get("parameters/States/Walking/Locomotion/blend_position").VariantType);
 
                 AnimationNodeStateMachine stateMachine = Assert.IsType<AnimationNodeStateMachine>(
                     Assert.IsType<AnimationNodeBlendTree>(animationTree.TreeRoot, exactMatch: false).GetNode("States"),
@@ -950,35 +1294,47 @@ public sealed partial class CharacterLocomotionIntegrationTests
             set;
         } = Basis.Identity;
 
+        public float RootMotionYawDelta
+        {
+            get; set;
+        }
+
+        public float TotalAppliedYawDelta
+        {
+            get; private set;
+        }
+
         protected override Vector3 GetRootMotionPositionDelta() => RootMotionPositionDelta;
 
-        protected override Basis GetRootMotionReferenceBasis() => RootMotionBasis;
-    }
+        protected override float GetRootMotionYawDelta() => RootMotionYawDelta;
 
-    private sealed partial class RecordingTurnCharacterLocomotion : CharacterLocomotion
-    {
-        public float LastAppliedYawDelta
-        {
-            get;
-            private set;
-        }
+        protected override Basis GetRootMotionReferenceBasis() => RootMotionBasis;
 
         protected override void ApplyYawRotation(float yawDelta)
         {
-            LastAppliedYawDelta = yawDelta;
+            TotalAppliedYawDelta += yawDelta;
             base.ApplyYawRotation(yawDelta);
         }
+    }
 
-        public override void _PhysicsProcess(double delta)
-        {
-            LastAppliedYawDelta = 0f;
-            base._PhysicsProcess(delta);
-        }
+    private sealed partial class RootRotationCharacterLocomotion : CharacterLocomotion
+    {
+        public Quaternion RootMotionRotation { get; set; } = Quaternion.Identity;
+
+        protected override Quaternion GetRootMotionRotation() => RootMotionRotation;
     }
 
     private sealed partial class StubPermissionSource(LocomotionPermissions permissions) : Node, ILocomotionPermissionSource
     {
         public LocomotionPermissions LocomotionPermissions => permissions;
+    }
+
+    private sealed partial class MutablePermissionSource(LocomotionPermissions permissions) : Node, ILocomotionPermissionSource
+    {
+        public LocomotionPermissions LocomotionPermissions
+        {
+            get; set;
+        } = permissions;
     }
 
     private sealed partial class StubAnimationSource(

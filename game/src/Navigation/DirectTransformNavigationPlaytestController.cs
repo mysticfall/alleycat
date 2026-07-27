@@ -1,9 +1,11 @@
+using AlleyCat.Core.Logging;
 using Godot;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Navigation;
 
 /// <summary>
-/// Minimal non-XR click-to-move controller for the direct-transform navigation playtest scene.
+/// Minimal non-XR click-to-move controller for an explicitly bound navigation actor.
 /// </summary>
 [GlobalClass]
 public partial class DirectTransformNavigationPlaytestController : Node3D
@@ -19,11 +21,15 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     private int _startupCameraActivationFramesRemaining;
     private bool _hasMousePosition;
     private bool _hasPreviewHit;
+    private bool _hasPendingDestinationPlacementPress;
+    private bool _hasPendingDestinationPlacementRelease;
     private bool _isDestinationPlacementActive;
     private bool _isMiddleButtonPanActive;
     private bool _isRightButtonOrbitActive;
     private bool _isCameraOrbitInitialised;
     private Vector2 _lastMousePosition;
+    private Vector2 _pendingDestinationPlacementPressPosition;
+    private Vector2 _pendingDestinationPlacementReleasePosition;
     private Vector3 _previewHitPosition;
     private Vector3 _lockedDestinationPosition;
     private Vector3 _cameraOrbitOrigin;
@@ -31,6 +37,11 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     private float _cameraYaw;
     private float _cameraPitch;
     private float _cameraDistance;
+    private int _nextDestinationPlacementRequestId;
+    private int _pendingDestinationPlacementPressRequestId;
+    private int _pendingDestinationPlacementReleaseRequestId;
+    private int _activeDestinationPlacementRequestId;
+    private ILogger<DirectTransformNavigationPlaytestController>? _logger;
 
     /// <summary>
     /// Gets or sets the camera used to project mouse clicks into the playtest world.
@@ -46,7 +57,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     /// Gets or sets the navigation component driven by click destinations.
     /// </summary>
     [Export]
-    public DirectTransformNavigation? Navigation
+    public NavigationBase? Navigation
     {
         get; set;
     }
@@ -92,6 +103,15 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     /// </summary>
     [Export]
     public NodePath NavigationPath { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the actor used for camera and facing fallback intent.
+    /// </summary>
+    [Export]
+    public Node3D? Actor
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Gets or sets the physics layers used when raycasting for click targets.
@@ -141,6 +161,9 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
     internal Vector3 LastCameraOrbitPosition => _lastCameraOrbitPosition;
 
+    internal bool HasPendingDestinationPlacementRequest
+        => _hasPendingDestinationPlacementPress || _hasPendingDestinationPlacementRelease;
+
     internal void ReinitialiseCameraOrbit()
     {
         _isCameraOrbitInitialised = false;
@@ -150,6 +173,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     /// <inheritdoc/>
     public override void _Ready()
     {
+        _logger = ResolveLogger();
         _startupCameraActivationFramesRemaining = StartupCameraActivationFrameCount;
         SetProcess(true);
         SetPhysicsProcess(true);
@@ -189,6 +213,8 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     /// <inheritdoc/>
     public override void _PhysicsProcess(double delta)
     {
+        ResolveQueuedDestinationPlacement();
+
         if (!_hasMousePosition)
         {
             return;
@@ -213,6 +239,9 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         _hasPreviewHit = true;
         UpdateDestinationMarker(hitPosition);
     }
+
+    /// <inheritdoc/>
+    public override void _ExitTree() => CancelQueuedDestinationPlacement();
 
     private void HandleMouseButton(InputEventMouseButton mouseButton)
     {
@@ -319,14 +348,14 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
     private void BeginDestinationPlacement(Vector2 mousePosition)
     {
-        if (_hasPreviewHit || TryProjectMouseToGround(mousePosition, out _previewHitPosition))
-        {
-            _lockedDestinationPosition = _previewHitPosition;
-            _hasPreviewHit = true;
-            _isDestinationPlacementActive = true;
-            UpdateDestinationMarker(_previewHitPosition);
-            UpdateDestinationMarkerMaterial();
-        }
+        // Direct-space queries are valid only from _PhysicsProcess. A new press supersedes any unresolved
+        // press/release pair, so rapid clicks always resolve the most recent complete request.
+        _isDestinationPlacementActive = false;
+        _hasPendingDestinationPlacementRelease = false;
+        _pendingDestinationPlacementPressRequestId = ++_nextDestinationPlacementRequestId;
+        _pendingDestinationPlacementPressPosition = mousePosition;
+        _hasPendingDestinationPlacementPress = true;
+        UpdateDestinationMarkerMaterial();
     }
 
     internal void PreviewDestinationAt(Vector3 hitPosition)
@@ -336,15 +365,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         UpdateDestinationMarker(hitPosition);
     }
 
-    internal void BeginDestinationPlacementAt(Vector3 hitPosition)
-    {
-        _previewHitPosition = hitPosition;
-        _lockedDestinationPosition = hitPosition;
-        _hasPreviewHit = true;
-        _isDestinationPlacementActive = true;
-        UpdateDestinationMarker(hitPosition);
-        UpdateDestinationMarkerMaterial();
-    }
+    internal void BeginDestinationPlacementAt(Vector3 hitPosition) => ActivateDestinationPlacement(hitPosition, ++_nextDestinationPlacementRequestId);
 
     internal void UpdateDestinationFacingProbe(Vector3 hitPosition)
     {
@@ -362,12 +383,53 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
     private void CompleteDestinationPlacement(Vector2 mousePosition)
     {
+        if (_hasPendingDestinationPlacementPress)
+        {
+            _pendingDestinationPlacementReleaseRequestId = _pendingDestinationPlacementPressRequestId;
+            _pendingDestinationPlacementReleasePosition = mousePosition;
+            _hasPendingDestinationPlacementRelease = true;
+            return;
+        }
+
         if (!_isDestinationPlacementActive)
         {
             return;
         }
 
-        if (TryProjectMouseToGround(mousePosition, out Vector3 releaseHitPosition))
+        _pendingDestinationPlacementReleaseRequestId = _activeDestinationPlacementRequestId;
+        _pendingDestinationPlacementReleasePosition = mousePosition;
+        _hasPendingDestinationPlacementRelease = true;
+    }
+
+    private void ResolveQueuedDestinationPlacement()
+    {
+        if (_hasPendingDestinationPlacementPress)
+        {
+            int requestId = _pendingDestinationPlacementPressRequestId;
+            Vector2 pressPosition = _pendingDestinationPlacementPressPosition;
+            _hasPendingDestinationPlacementPress = false;
+
+            if (TryProjectMouseToGround(pressPosition, out Vector3 pressHitPosition))
+            {
+                ActivateDestinationPlacement(pressHitPosition, requestId);
+            }
+            else if (_hasPendingDestinationPlacementRelease
+                && _pendingDestinationPlacementReleaseRequestId == requestId)
+            {
+                _hasPendingDestinationPlacementRelease = false;
+            }
+        }
+
+        if (!_hasPendingDestinationPlacementRelease
+            || !_isDestinationPlacementActive
+            || _pendingDestinationPlacementReleaseRequestId != _activeDestinationPlacementRequestId)
+        {
+            return;
+        }
+
+        Vector2 releasePosition = _pendingDestinationPlacementReleasePosition;
+        _hasPendingDestinationPlacementRelease = false;
+        if (TryProjectMouseToGround(releasePosition, out Vector3 releaseHitPosition))
         {
             _previewHitPosition = releaseHitPosition;
             _hasPreviewHit = true;
@@ -376,13 +438,33 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         CompleteDestinationPlacement();
     }
 
+    private void ActivateDestinationPlacement(Vector3 hitPosition, int requestId)
+    {
+        _previewHitPosition = hitPosition;
+        _lockedDestinationPosition = hitPosition;
+        _hasPreviewHit = true;
+        _activeDestinationPlacementRequestId = requestId;
+        _isDestinationPlacementActive = true;
+        UpdateDestinationMarker(hitPosition);
+        UpdateDestinationMarkerMaterial();
+    }
+
+    private void CancelQueuedDestinationPlacement()
+    {
+        _hasPendingDestinationPlacementPress = false;
+        _hasPendingDestinationPlacementRelease = false;
+        _isDestinationPlacementActive = false;
+    }
+
     private void CompleteDestinationPlacement()
     {
-        DirectTransformNavigation? navigation = ResolveNavigation();
+        INavigation? navigation = ResolveNavigation();
         if (navigation is not null)
         {
             Basis destinationBasis = BuildFacingBasis(navigation, _lockedDestinationPosition, _previewHitPosition);
-            _ = navigation.SetDestination(new Transform3D(destinationBasis, _lockedDestinationPosition));
+            var destination = new Transform3D(destinationBasis, _lockedDestinationPosition);
+            NavigationDestinationResult result = navigation.SetDestination(destination);
+            LogDestinationRequest(_activeDestinationPlacementRequestId, result, destination);
         }
 
         _isDestinationPlacementActive = false;
@@ -422,14 +504,17 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
     private bool IsNavigationMoving()
     {
-        DirectTransformNavigation? navigation = ResolveNavigation();
+        INavigation? navigation = ResolveNavigation();
         return navigation is not null
             && navigation.HasDestination
             && navigation.IsNavigationRunning
-            && !((INavigation)navigation).IsNavigationFinished;
+            && !navigation.IsNavigationFinished;
     }
 
-    private bool TryProjectMouseToGround(Vector2 mousePosition, out Vector3 hitPosition)
+    /// <summary>
+    /// Projects a mouse position onto the configured ground collision layers during physics processing.
+    /// </summary>
+    protected virtual bool TryProjectMouseToGround(Vector2 mousePosition, out Vector3 hitPosition)
     {
         hitPosition = default;
         Camera3D? camera = Camera;
@@ -519,35 +604,36 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     }
 
     private Vector3 ResolveInitialCameraOrbitOrigin()
-    {
-        DirectTransformNavigation? navigation = ResolveNavigation();
-        return navigation is null ? GlobalPosition : ResolveNavigationTargetPosition(navigation);
-    }
+        => Actor is { } actor && IsInstanceValid(actor) ? actor.GlobalPosition : GlobalPosition;
 
-    private static Basis BuildFacingBasis(DirectTransformNavigation? navigation, Vector3 destinationPosition, Vector3 facingProbePosition)
+    private Basis BuildFacingBasis(INavigation? navigation, Vector3 destinationPosition, Vector3 facingProbePosition)
     {
         Vector3 facingDirection = facingProbePosition - destinationPosition;
         facingDirection.Y = 0.0f;
 
         return facingDirection.LengthSquared() > MinFacingDragDistanceSquared
             ? Basis.LookingAt(facingDirection.Normalized(), Vector3.Up)
-            : navigation is not null ? BuildFallbackFacingBasis(navigation, destinationPosition) : Basis.Identity;
+            : navigation is not null ? BuildFallbackFacingBasis(destinationPosition) : Basis.Identity;
     }
 
-    private static Basis BuildFallbackFacingBasis(DirectTransformNavigation navigation, Vector3 destinationPosition)
+    private Basis BuildFallbackFacingBasis(Vector3 destinationPosition)
     {
-        Vector3 npcPosition = ResolveNavigationTargetPosition(navigation);
-        Vector3 npcToDestination = destinationPosition - npcPosition;
+        Node3D? actor = Actor;
+        if (actor is null || !IsInstanceValid(actor))
+        {
+            return Basis.Identity;
+        }
+
+        Vector3 npcToDestination = destinationPosition - actor.GlobalPosition;
         npcToDestination.Y = 0.0f;
         if (npcToDestination.LengthSquared() > MinFacingDragDistanceSquared)
         {
             return Basis.LookingAt(npcToDestination.Normalized(), Vector3.Up);
         }
 
-        Node3D? target = navigation.Target ?? navigation.GetParentOrNull<Node3D>();
-        if (target is not null)
+        if (actor is not null)
         {
-            Vector3 currentForward = -target.GlobalTransform.Basis.Z;
+            Vector3 currentForward = -actor.GlobalTransform.Basis.Z;
             currentForward.Y = 0.0f;
             if (currentForward.LengthSquared() > Mathf.Epsilon)
             {
@@ -572,7 +658,53 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
         }
     }
 
-    private DirectTransformNavigation? ResolveNavigation()
+    /// <summary>
+    /// Resolves the structured logger used by playtest destination diagnostics.
+    /// </summary>
+    protected virtual ILogger<DirectTransformNavigationPlaytestController> ResolveLogger()
+        => GameLoggerResolver.ResolveRequired<DirectTransformNavigationPlaytestController>();
+
+    private void LogDestinationRequest(
+        int requestId,
+        NavigationDestinationResult result,
+        Transform3D destination)
+    {
+        ILogger<DirectTransformNavigationPlaytestController> logger = _logger ??= ResolveLogger();
+        Vector3 destinationForward = GetHorizontalForward(destination.Basis);
+        float destinationYaw = GetWorldYaw(destinationForward);
+        Node3D? actor = Actor;
+        bool hasActor = actor is not null && IsInstanceValid(actor);
+        Vector3 actorPosition = hasActor ? actor!.GlobalPosition : new Vector3(float.NaN, float.NaN, float.NaN);
+        Vector3 actorForward = hasActor
+            ? GetHorizontalForward(actor!.GlobalBasis)
+            : new Vector3(float.NaN, float.NaN, float.NaN);
+        float actorYaw = GetWorldYaw(actorForward);
+        float distance = hasActor ? actorPosition.DistanceTo(destination.Origin) : float.NaN;
+
+        logger.LogInformation(
+            "Navigation destination request {RequestID} result={Result} destination_world_position={DestinationWorldPosition} destination_world_yaw={DestinationWorldYaw} destination_world_forward={DestinationWorldForward} actor_world_position={ActorWorldPosition} actor_world_yaw={ActorWorldYaw} actor_world_forward={ActorWorldForward} actor_to_destination_distance={ActorToDestinationDistance}",
+            requestId,
+            result,
+            destination.Origin,
+            destinationYaw,
+            destinationForward,
+            actorPosition,
+            actorYaw,
+            actorForward,
+            distance);
+    }
+
+    private static Vector3 GetHorizontalForward(Basis basis)
+    {
+        Vector3 forward = -basis.Z;
+        forward.Y = 0.0f;
+        return forward.LengthSquared() > Mathf.Epsilon ? forward.Normalized() : Vector3.Forward;
+    }
+
+    private static float GetWorldYaw(Vector3 forward)
+        => forward.IsFinite() ? Mathf.Atan2(-forward.X, -forward.Z) : float.NaN;
+
+    private INavigation? ResolveNavigation()
     {
         if (Navigation is not null)
         {
@@ -584,29 +716,9 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
             return null;
         }
 
-        Navigation = GetNodeOrNull<DirectTransformNavigation>(NavigationPath);
+        Navigation = GetNodeOrNull<NavigationBase>(NavigationPath);
 
         return Navigation;
     }
 
-    private static Vector3 ResolveNavigationTargetPosition(DirectTransformNavigation navigation)
-    {
-        if (navigation.Target is not null)
-        {
-            return navigation.Target.GlobalPosition;
-        }
-
-        Node? parent = navigation.GetParent();
-        while (parent is not null)
-        {
-            if (parent is Node3D node3D)
-            {
-                return node3D.GlobalPosition;
-            }
-
-            parent = parent.GetParent();
-        }
-
-        return Vector3.Zero;
-    }
 }

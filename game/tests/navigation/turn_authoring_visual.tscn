@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://6b8las20aee4" path="res://assets/testing/photobooth/photobooth.tscn" id="1_qq0j6"]
+[ext_resource type="PackedScene" uid="uid://utn2mx2dm0vl" path="res://assets/testing/photobooth/camera_rig.tscn" id="2_46lwn"]
+[ext_resource type="Script" uid="uid://dxxg2ed4pj3mr" path="res://scripts/photobooth/camera_rig.gd" id="3_lkhmr"]
+
+[node name="TurnAuthoringVisual" unique_id=406188165 instance=ExtResource("1_qq0j6")]
+
+[node name="TopTrajectoryCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("2_46lwn")]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 8, 0)
+script = ExtResource("3_lkhmr")
+image_size = Vector2(1200, 900)
+orthogonal_scale = 7.0
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"

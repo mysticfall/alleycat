@@ -9,6 +9,7 @@ namespace AlleyCat.Control.Locomotion;
 [GlobalClass]
 public partial class CharacterLocomotion : LocomotionBase
 {
+    private const int RootMotionConsumptionPhysicsPriority = 100;
     private static readonly StringName _playbackParameter = HandPoseAnimationTreePaths.GetNestedStateMachinePlaybackParameter();
     private static readonly StringName _legacyRootPlaybackParameter = new("parameters/playback");
     private static readonly StringName _stateMachineStartNodeName = new("Start");
@@ -35,9 +36,16 @@ public partial class CharacterLocomotion : LocomotionBase
 
     private Vector2 _movementInput;
     private Vector2 _rotationInput;
-    private double _snapTurnCooldownRemainingSeconds;
     private bool _warnedMissingAnimationBlendParameter;
     private bool _warnedUnsupportedAnimationBlendParameterType;
+    private bool _warnedMissingAnimationTurnBlendParameter;
+    private bool _warnedUnsupportedAnimationTurnBlendParameterType;
+
+    /// <summary>Initialises root-motion consumption after default-priority AnimationTree physics evaluation.</summary>
+    public CharacterLocomotion()
+    {
+        ProcessPhysicsPriority = RootMotionConsumptionPhysicsPriority;
+    }
 
     /// <summary>
     /// Character body moved by this locomotion component.
@@ -95,6 +103,16 @@ public partial class CharacterLocomotion : LocomotionBase
     } = new();
 
     /// <summary>
+    /// Optional animation parameter path driven by signed turn input.
+    /// </summary>
+    [Export]
+    public StringName AnimationTurnBlendParameter
+    {
+        get;
+        set;
+    } = new();
+
+    /// <summary>
     /// Default idle state used when no pose-specific locomotion animation source is active.
     /// </summary>
     [Export]
@@ -105,16 +123,6 @@ public partial class CharacterLocomotion : LocomotionBase
     } = _standingAnimationStateName;
 
     /// <summary>
-    /// Locomotion turn mode.
-    /// </summary>
-    [Export]
-    public TurnMode TurnMode
-    {
-        get;
-        set;
-    } = TurnMode.Smooth;
-
-    /// <summary>
     /// Rotation speed multiplier.
     /// </summary>
     [Export(PropertyHint.Range, "0,20,0.01,or_greater")]
@@ -123,36 +131,6 @@ public partial class CharacterLocomotion : LocomotionBase
         get;
         set;
     } = 1.0f;
-
-    /// <summary>
-    /// Snap-turn increment in degrees.
-    /// </summary>
-    [Export(PropertyHint.Range, "0,180,0.1,or_greater")]
-    public float SnapTurnAngleDegrees
-    {
-        get;
-        set;
-    } = 45f;
-
-    /// <summary>
-    /// Snap-turn cooldown duration in seconds.
-    /// </summary>
-    [Export(PropertyHint.Range, "0,5,0.01,or_greater")]
-    public float SnapTurnCooldownSeconds
-    {
-        get;
-        set;
-    } = 0.25f;
-
-    /// <summary>
-    /// Stick magnitude threshold used to trigger snap turns.
-    /// </summary>
-    [Export(PropertyHint.Range, "0,1,0.01")]
-    public float SnapTurnActivationThreshold
-    {
-        get;
-        set;
-    } = 0.5f;
 
     /// <summary>
     /// Smooth-turn sensitivity in radians per second at full input before the rotation multiplier is applied.
@@ -237,10 +215,18 @@ public partial class CharacterLocomotion : LocomotionBase
     }
 
     /// <inheritdoc />
-    public override void Move(Vector2 input) => _movementInput = ApplyDeadzone(input, InputDeadzone);
+    public override void Move(Vector2 input)
+    {
+        _movementInput = ApplyRadialDeadzone(input, InputDeadzone);
+        PublishAnimationControls();
+    }
 
     /// <inheritdoc />
-    public override void Rotate(Vector2 input) => _rotationInput = ApplyDeadzone(input, InputDeadzone);
+    public override void Rotate(Vector2 input)
+    {
+        _rotationInput = ApplyRadialDeadzone(input, InputDeadzone);
+        PublishAnimationControls();
+    }
 
     /// <inheritdoc />
     public override void _PhysicsProcess(double delta)
@@ -251,113 +237,112 @@ public partial class CharacterLocomotion : LocomotionBase
         }
 
         LocomotionPermissions permissions = GetCurrentLocomotionPermissions();
+        LocomotionStateTarget locomotionStateTarget = PublishAnimationControls(permissions);
 
-        ApplyRotation(delta, permissions);
-        Vector2 locomotionBlendInput = GetLocomotionBlendInput(permissions);
-        LocomotionStateTarget locomotionStateTarget = ResolveLocomotionStateTarget();
-        UpdateLocomotionAnimationState(locomotionBlendInput, locomotionStateTarget);
-        UpdateAnimationBlend(locomotionBlendInput);
-        Vector3 planarVelocity = ResolvePlanarVelocity(delta, permissions, locomotionStateTarget);
+        RootMotionSample rootMotion = ResolveRootMotionSample(delta, permissions, locomotionStateTarget);
+        if (!Mathf.IsZeroApprox(rootMotion.YawDelta))
+        {
+            ApplyYawRotation(rootMotion.YawDelta);
+        }
 
         CharacterBody3D targetCharacterBody = GetTargetCharacterBody();
         targetCharacterBody.Velocity = new Vector3(
-            planarVelocity.X,
+            rootMotion.PlanarVelocity.X,
             targetCharacterBody.Velocity.Y,
-            planarVelocity.Z);
+            rootMotion.PlanarVelocity.Z);
 
         _ = targetCharacterBody.MoveAndSlide();
     }
 
-    private void ApplyRotation(double delta, LocomotionPermissions permissions)
+    private void PublishAnimationControls()
     {
-        float yawDelta = TurnMode switch
-        {
-            TurnMode.Smooth => ComputeSmoothYawDelta(
-                _rotationInput.X,
-                delta,
-                RotationSpeedMultiplier,
-                SmoothTurnSensitivity,
-                InputDeadzone),
-            TurnMode.Snap => ApplySnapTurn(delta),
-            _ => throw new InvalidOperationException($"Unsupported {nameof(TurnMode)} value '{TurnMode}'."),
-        };
-
-        yawDelta = ApplyRotationPermissions(yawDelta, permissions);
-
-        if (Mathf.IsZeroApprox(yawDelta))
+        if (AnimationTreeResolved is null)
         {
             return;
         }
 
-        ApplyYawRotation(yawDelta);
+        _ = PublishAnimationControls(GetCurrentLocomotionPermissions());
     }
 
-    private float ApplySnapTurn(double delta)
+    private LocomotionStateTarget PublishAnimationControls(LocomotionPermissions permissions)
     {
-        float yawDelta = ComputeSnapYawDelta(
-            _rotationInput.X,
-            Mathf.DegToRad(SnapTurnAngleDegrees),
-            SnapTurnActivationThreshold,
-            InputDeadzone,
-            ref _snapTurnCooldownRemainingSeconds,
-            delta);
-
-        if (!Mathf.IsZeroApprox(yawDelta))
-        {
-            _snapTurnCooldownRemainingSeconds = SnapTurnCooldownSeconds;
-        }
-
-        return yawDelta;
+        Vector2 locomotionBlendInput = GetLocomotionBlendInput(permissions);
+        float turnBlendInput = GetTurnBlendInput(permissions);
+        LocomotionStateTarget locomotionStateTarget = ResolveLocomotionStateTarget();
+        bool hasLocomotionIntent = !locomotionBlendInput.IsZeroApprox()
+            || !Mathf.IsZeroApprox(turnBlendInput);
+        UpdateLocomotionAnimationState(hasLocomotionIntent, locomotionStateTarget);
+        UpdateAnimationBlend(AnimationBlendParameter, locomotionBlendInput, ref _warnedMissingAnimationBlendParameter, ref _warnedUnsupportedAnimationBlendParameterType);
+        UpdateAnimationBlend(AnimationTurnBlendParameter, turnBlendInput, ref _warnedMissingAnimationTurnBlendParameter, ref _warnedUnsupportedAnimationTurnBlendParameterType);
+        return locomotionStateTarget;
     }
 
     private Vector2 GetLocomotionBlendInput(LocomotionPermissions permissions)
         => ApplyMovementPermissions(_movementInput, permissions);
 
-    private Vector3 ResolvePlanarVelocity(
+    private float GetTurnBlendInput(LocomotionPermissions permissions)
+        => !permissions.RotationAllowed
+            ? 0f
+            : ComputeSmoothTurnBlend(
+                 _rotationInput.X,
+                 RotationSpeedMultiplier,
+                 SmoothTurnSensitivity);
+
+    private RootMotionSample ResolveRootMotionSample(
         double delta,
         LocomotionPermissions permissions,
         LocomotionStateTarget locomotionStateTarget)
     {
-        if (!permissions.MovementAllowed)
-        {
-            return Vector3.Zero;
-        }
-
         if (AnimationTreeResolved is null || RootMotionReferenceResolved is null)
         {
-            return Vector3.Zero;
+            return default;
         }
 
         if (!IsRootMotionStateActive(locomotionStateTarget, out _))
         {
-            return Vector3.Zero;
+            return default;
         }
 
         Vector3 rootMotionDelta = GetRootMotionPositionDelta();
-        Vector3 worldRootMotionVelocity = GetRootMotionReferenceBasis() * rootMotionDelta / (float)delta;
-        return new Vector3(worldRootMotionVelocity.X, 0f, worldRootMotionVelocity.Z);
+        Vector3 planarVelocity = Vector3.Zero;
+        if (permissions.MovementAllowed && rootMotionDelta.IsFinite())
+        {
+            Vector3 worldRootMotionVelocity = GetRootMotionReferenceBasis() * rootMotionDelta / (float)delta;
+            if (worldRootMotionVelocity.IsFinite())
+            {
+                planarVelocity = new Vector3(worldRootMotionVelocity.X, 0f, worldRootMotionVelocity.Z);
+            }
+        }
+
+        float rootYawDelta = GetRootMotionYawDelta();
+        float yawDelta = permissions.RotationAllowed && float.IsFinite(rootYawDelta)
+            ? rootYawDelta
+            : 0f;
+
+        return new RootMotionSample(planarVelocity, yawDelta);
     }
 
-    private void UpdateAnimationBlend(Vector2 locomotionBlendInput)
+    private void UpdateAnimationBlend(
+        StringName parameter,
+        Variant desiredValue,
+        ref bool warnedMissing,
+        ref bool warnedUnsupported)
     {
-        if (AnimationTreeResolved is null || AnimationBlendParameter.IsEmpty)
+        if (AnimationTreeResolved is null || parameter.IsEmpty)
         {
             return;
         }
 
-        float safeThreshold = Mathf.Max(AnimationBlendThreshold, 1e-3f);
-        float blend = Mathf.Clamp(locomotionBlendInput.Length() / safeThreshold, 0f, 1f);
-
-        StringName resolvedBlendParameter = ResolveAnimationParameter(AnimationBlendParameter);
+        StringName resolvedBlendParameter = ResolveAnimationParameter(parameter);
         Variant currentValue = AnimationTreeResolved.Get(resolvedBlendParameter);
         if (currentValue.VariantType == Variant.Type.Nil)
         {
-            if (!_warnedMissingAnimationBlendParameter)
+            if (!warnedMissing)
             {
                 GD.PushWarning(
-                    $"{nameof(CharacterLocomotion)} could not resolve animation blend parameter '{AnimationBlendParameter}'. " +
-                    "Locomotion movement still runs, but walk blending remains blocked until the animation tree is reconciled.");
-                _warnedMissingAnimationBlendParameter = true;
+                    $"{nameof(CharacterLocomotion)} could not resolve animation blend parameter '{parameter}'. " +
+                    "Locomotion still runs, but blending remains blocked until the animation tree is reconciled.");
+                warnedMissing = true;
             }
 
             return;
@@ -365,29 +350,45 @@ public partial class CharacterLocomotion : LocomotionBase
 
         if (currentValue.VariantType is Variant.Type.Float or Variant.Type.Int)
         {
-            AnimationTreeResolved.Set(resolvedBlendParameter, blend);
+            float scalar = desiredValue.VariantType == Variant.Type.Vector2
+                ? Mathf.Clamp(desiredValue.AsVector2().Length() / Mathf.Max(AnimationBlendThreshold, 1e-3f), 0f, 1f)
+                : desiredValue.AsSingle();
+            AnimationTreeResolved.Set(resolvedBlendParameter, scalar);
             return;
         }
 
-        if (currentValue.VariantType == Variant.Type.Vector2)
+        if (currentValue.VariantType == Variant.Type.Vector2 && desiredValue.VariantType == Variant.Type.Vector2)
         {
-            AnimationTreeResolved.Set(resolvedBlendParameter, locomotionBlendInput);
+            AnimationTreeResolved.Set(resolvedBlendParameter, desiredValue.AsVector2());
             return;
         }
 
-        if (_warnedUnsupportedAnimationBlendParameterType)
+        if (currentValue.VariantType == Variant.Type.Vector2
+            && desiredValue.VariantType is Variant.Type.Float or Variant.Type.Int)
+        {
+            float movementMagnitude = Mathf.Clamp(
+                _movementInput.Length() / Mathf.Max(AnimationBlendThreshold, 1e-3f),
+                0f,
+                1f);
+            AnimationTreeResolved.Set(
+                resolvedBlendParameter,
+                new Vector2(Mathf.Clamp(desiredValue.AsSingle(), -1f, 1f), movementMagnitude));
+            return;
+        }
+
+        if (warnedUnsupported)
         {
             return;
         }
 
         GD.PushWarning(
-            $"{nameof(CharacterLocomotion)} resolved animation blend parameter '{AnimationBlendParameter}' " +
+            $"{nameof(CharacterLocomotion)} resolved animation blend parameter '{parameter}' " +
             $"with unsupported type '{currentValue.VariantType}'.");
-        _warnedUnsupportedAnimationBlendParameterType = true;
+        warnedUnsupported = true;
     }
 
     private void UpdateLocomotionAnimationState(
-        Vector2 locomotionBlendInput,
+        bool hasLocomotionIntent,
         LocomotionStateTarget locomotionStateTarget)
     {
         AnimationNodeStateMachinePlayback? playback = ResolvePlayback();
@@ -397,8 +398,7 @@ public partial class CharacterLocomotion : LocomotionBase
         }
 
         StringName currentNode = playback.GetCurrentNode();
-        bool hasMovementInput = !locomotionBlendInput.IsZeroApprox();
-        StringName targetNode = hasMovementInput
+        StringName targetNode = hasLocomotionIntent
             ? locomotionStateTarget.MovementStateName
             : locomotionStateTarget.IdleStateName;
 
@@ -408,13 +408,13 @@ public partial class CharacterLocomotion : LocomotionBase
             return;
         }
 
-        if (currentNode == locomotionStateTarget.IdleStateName && hasMovementInput)
+        if (currentNode == locomotionStateTarget.IdleStateName && hasLocomotionIntent)
         {
             playback.Travel(locomotionStateTarget.MovementStateName);
             return;
         }
 
-        if (currentNode == locomotionStateTarget.MovementStateName && !hasMovementInput)
+        if (currentNode == locomotionStateTarget.MovementStateName && !hasLocomotionIntent)
         {
             playback.Travel(locomotionStateTarget.IdleStateName);
         }
@@ -475,6 +475,24 @@ public partial class CharacterLocomotion : LocomotionBase
             ApplyDeadzone(input.X, deadzone),
             ApplyDeadzone(input.Y, deadzone));
 
+    private static Vector2 ApplyRadialDeadzone(Vector2 input, float deadzone)
+    {
+        if (!input.IsFinite())
+        {
+            return Vector2.Zero;
+        }
+
+        float threshold = Mathf.Clamp(deadzone, 0.0f, 0.999f);
+        float length = input.Length();
+        if (length <= threshold)
+        {
+            return Vector2.Zero;
+        }
+
+        float remappedLength = Mathf.Clamp((length - threshold) / (1.0f - threshold), 0.0f, 1.0f);
+        return input * (remappedLength / length);
+    }
+
     private CharacterBody3D GetTargetCharacterBody()
         => TargetCharacterBodyResolved
             ?? throw new InvalidOperationException($"{nameof(CharacterLocomotion)} target body is not available before _Ready.");
@@ -483,6 +501,25 @@ public partial class CharacterLocomotion : LocomotionBase
     /// Resolves the current locomotion root-motion position delta from the animation runtime.
     /// </summary>
     protected virtual Vector3 GetRootMotionPositionDelta() => AnimationTreeResolved?.GetRootMotionPosition() ?? Vector3.Zero;
+
+    /// <summary>
+    /// Resolves the current animation-owned root-motion yaw delta.
+    /// </summary>
+    protected virtual float GetRootMotionYawDelta()
+    {
+        Quaternion rotation = GetRootMotionRotation();
+        return !float.IsFinite(rotation.X)
+            || !float.IsFinite(rotation.Y)
+            || !float.IsFinite(rotation.Z)
+            || !float.IsFinite(rotation.W)
+            ? 0f
+            : rotation.GetEuler().Y;
+    }
+
+    /// <summary>
+    /// Resolves the current animation-owned root-motion rotation delta.
+    /// </summary>
+    protected virtual Quaternion GetRootMotionRotation() => AnimationTreeResolved?.GetRootMotionRotation() ?? Quaternion.Identity;
 
     /// <summary>
     /// Resolves the world-space basis used to convert authored root motion into world-space velocity.
@@ -497,33 +534,15 @@ public partial class CharacterLocomotion : LocomotionBase
     private static float ApplyDeadzone(float input, float deadzone)
         => Mathf.Abs(input) >= Mathf.Clamp(deadzone, 0f, 1f) ? input : 0f;
 
-    private static float ComputeSmoothYawDelta(
+    private static float ComputeSmoothTurnBlend(
         float inputX,
-        double delta,
         float rotationSpeedMultiplier,
-        float smoothTurnSensitivity,
-        float inputDeadzone)
+        float smoothTurnSensitivity)
     {
-        float filteredInput = ApplyDeadzone(inputX, inputDeadzone);
-        float scaledDelta = (float)delta;
-        return Mathf.IsZeroApprox(filteredInput)
+        return Mathf.IsZeroApprox(inputX)
             ? 0f
-            : -filteredInput * rotationSpeedMultiplier * smoothTurnSensitivity * scaledDelta;
+            : Mathf.Clamp(inputX * rotationSpeedMultiplier * smoothTurnSensitivity, -1f, 1f);
     }
 
-    private static float ComputeSnapYawDelta(
-        float inputX,
-        float snapTurnAngleRadians,
-        float activationThreshold,
-        float inputDeadzone,
-        ref double cooldownRemainingSeconds,
-        double delta)
-    {
-        cooldownRemainingSeconds = Math.Max(0d, cooldownRemainingSeconds - delta);
-
-        float filteredInput = ApplyDeadzone(inputX, inputDeadzone);
-        return cooldownRemainingSeconds > 0d || Mathf.Abs(filteredInput) < activationThreshold
-            ? 0f
-            : -Mathf.Sign(filteredInput) * snapTurnAngleRadians;
-    }
+    private readonly record struct RootMotionSample(Vector3 PlanarVelocity, float YawDelta);
 }

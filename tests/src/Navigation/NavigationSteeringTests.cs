@@ -250,6 +250,19 @@ public sealed class NavigationSteeringTests
         Assert.InRange(Mathf.Abs(Mathf.RadToDeg(yaw)), 1.999f, 2.001f);
     }
 
+    /// <summary>
+    /// Establishes Godot world-yaw signs independently of animation or command labels.
+    /// </summary>
+    [Fact]
+    public void SignedYaw_IdentityForwardToActorRightIsNegativeAndLeftIsPositive()
+    {
+        float rightYaw = NavigationSteering.SignedYaw(Vector3.Forward, Vector3.Right);
+        float leftYaw = NavigationSteering.SignedYaw(Vector3.Forward, Vector3.Left);
+
+        Assert.Equal(-Mathf.Pi / 2.0f, rightYaw, 4);
+        Assert.Equal(Mathf.Pi / 2.0f, leftYaw, 4);
+    }
+
     /// <inheritdoc/>
     [Fact]
     public void Calculate_DegenerateNonFiniteInputs_ReturnsFiniteStableIntent()

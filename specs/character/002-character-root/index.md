@@ -32,6 +32,8 @@ exists.
    authored appearance cues.
 9. Shared character templates provide a whole-character cue, while Ally NPC, Ally player, and Vadim describe their own
    appearances.
+10. NPC role templates visibly bind production navigation to their locomotion-capable character root, while player
+    templates remain free of AI navigation.
 
 ## Technical Requirements
 
@@ -105,7 +107,15 @@ exists.
     `body` at `Head/BodyVisualCue` (a sibling of the existing `Viewpoint`); its generic template may use placeholder
     description content.
 36. Ally NPC, Ally player, and Vadim assets override the inherited `body` cue template with character-specific
-    appearance descriptions rather than replacing the shared cue topology.
+     appearance descriptions rather than replacing the shared cue topology.
+37. Final NPC role templates compose `LocomotiveNavigation` as their production navigation consumer. Its explicit actor
+    reference targets the root, which supplies both `Node3D` identity and the `ILocomotive` facade.
+38. Player and shared player-base templates do not compose `LocomotiveNavigation`; player locomotion remains tracker
+    driven through CTRL-001. NPC installation validates the rebased navigation actor before processing, and fails
+    clearly when the binding is absent or is not both `Node3D` and `ILocomotive`.
+39. Production installer and playtest composition bind navigation through `INavigation`, the explicit actor `Node3D`,
+    and `ILocomotive`, without requiring `DirectTransformNavigation` fields. That component remains the deterministic
+    test and diagnostic baseline, not the NPC production component.
 
 ## In Scope
 
@@ -124,6 +134,7 @@ exists.
 - Lowest-shared-base character-card context wiring.
 - `ICharacter` aggregation of the BODY-004 visual observer and visual subject roles.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
+- NPC-only `LocomotiveNavigation` composition through the character root's `Node3D` and `ILocomotive` contracts.
 
 ## Out Of Scope
 
@@ -157,6 +168,8 @@ exists.
    observer.
 10. Ally player, Ally NPC, and Vadim return their own authored appearance descriptions rather than generic placeholder
     text.
+11. Final NPC templates expose root-bound production navigation, while player templates contain no AI navigation and
+    retain tracker-driven locomotion.
 
 ### Technical Requirements
 
@@ -199,6 +212,10 @@ exists.
 24. Validation enforces the BODY-004 cue contract, including non-empty, ordinally unique IDs per character provider.
 25. Ally player, Ally NPC, and Vadim retain the shared `body` cue topology and provide character-specific template
     overrides.
+26. NPC composition tests prove `LocomotiveNavigation` binds the installed root as both `Node3D` and `ILocomotive` only
+    after rebase and validation. Installer and playtest composition use `INavigation` without production dependence on
+    `DirectTransformNavigation`; direct-consumer baseline tests remain valid.
+27. Player-template inspection proves neither final player roles nor shared player bases install `LocomotiveNavigation`.
 
 ## References
 

@@ -7,7 +7,7 @@ const INDEX_PATH := "res://assets/characters/reference/female/animations/process
 const SIDECAR_PATH := "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend.import"
 const CLIP_DIR := "res://assets/characters/reference/female/animations/locomotion/clips"
 const EXPECTED_SCHEMA_VERSION := 2
-const EXPECTED_CLIP_COUNT := 46
+const EXPECTED_CLIP_COUNT := 9
 
 var _errors: Array[String] = []
 
@@ -23,19 +23,17 @@ func _init() -> void:
 		_fail("Failed to load import sidecar: %s" % error_string(load_error))
 		_finish()
 		return
-	var preserved_settings := _snapshot_non_animation_settings(config)
-
 	var subresources = config.get_value("params", "_subresources", {})
 	if not (subresources is Dictionary):
 		_fail("Import sidecar _subresources is not a Dictionary")
 		_finish()
 		return
-	var original_nodes: Dictionary = (subresources as Dictionary).get("nodes", {}).duplicate(true)
-	if original_nodes.is_empty():
-		_fail("Import sidecar has no node import settings to preserve")
-		_finish()
-		return
-
+	_ensure_retarget_node_settings(subresources)
+	var preserved_settings := _snapshot_non_animation_settings(config)
+	var preserved_subresources := _snapshot_non_animation_subresources(subresources)
+	for key in subresources.keys().duplicate():
+		if _is_animation_settings(subresources[key]):
+			subresources.erase(key)
 	var animations := {}
 	for action in actions:
 		var path := "%s/%s.res" % [CLIP_DIR, action]
@@ -44,13 +42,11 @@ func _init() -> void:
 			"save_to_file/fallback_path": path,
 			"save_to_file/keep_custom_tracks": false,
 			"save_to_file/path": path,
-			"settings/loop_mode": 0,
+			"settings/loop_mode": Animation.LOOP_LINEAR if actions[action] else Animation.LOOP_NONE,
 			"slices/amount": 0,
 		}
-
-	# Replace any prior action dictionary with the minimal pre-import configuration.
-	# Godot may later expand it with valid canonical opaque slice defaults.
 	subresources["animations"] = animations
+
 	config.set_value("params", "_subresources", subresources)
 	var save_error := config.save(SIDECAR_PATH)
 	if save_error != OK:
@@ -58,21 +54,21 @@ func _init() -> void:
 		_finish()
 		return
 
-	_verify_saved(actions, original_nodes, preserved_settings)
+	_verify_saved(actions, preserved_subresources, preserved_settings)
 	if not _has_errors():
 		print("Configured %d standing locomotion animation extraction entries" % actions.size())
 	_finish()
 
-func _read_actions() -> Array[String]:
+func _read_actions() -> Dictionary:
 	var index := _load_json(INDEX_PATH)
 	if int(index.get("schema_version", -1)) != EXPECTED_SCHEMA_VERSION:
 		_fail("Processed index must use schema version %d" % EXPECTED_SCHEMA_VERSION)
-		return []
+		return {}
 	var motions = index.get("motions", {})
 	if not (motions is Dictionary):
 		_fail("Processed index motions is not a Dictionary")
-		return []
-	var unique := {}
+		return {}
+	var actions := {}
 	for motion_id in motions:
 		var motion = motions[motion_id]
 		if not (motion is Dictionary):
@@ -82,19 +78,15 @@ func _read_actions() -> Array[String]:
 		var action := String(motion.get("action", ""))
 		if action.is_empty():
 			_fail("Successful standing motion %s has an empty action" % motion_id)
-		elif unique.has(action):
+		elif actions.has(action):
 			_fail("Duplicate standing action: %s" % action)
 		else:
-			unique[action] = true
-	var actions: Array[String] = []
-	for action in unique.keys():
-		actions.append(String(action))
-	actions.sort()
+			actions[action] = _effective_loop_intent(motion)
 	if actions.size() != EXPECTED_CLIP_COUNT:
 		_fail("Expected %d successful standing actions, found %d" % [EXPECTED_CLIP_COUNT, actions.size()])
 	return actions
 
-func _verify_saved(expected_actions: Array[String], expected_nodes: Dictionary, expected_preserved: Dictionary) -> void:
+func _verify_saved(expected_actions: Dictionary, expected_subresources: Dictionary, expected_preserved: Dictionary) -> void:
 	var config := ConfigFile.new()
 	var load_error := config.load(SIDECAR_PATH)
 	if load_error != OK:
@@ -104,8 +96,8 @@ func _verify_saved(expected_actions: Array[String], expected_nodes: Dictionary, 
 	if not (subresources is Dictionary):
 		_fail("Reloaded _subresources is not a Dictionary")
 		return
-	if subresources.get("nodes", {}) != expected_nodes:
-		_fail("Node import settings changed while configuring animations")
+	if _snapshot_non_animation_subresources(subresources) != expected_subresources:
+		_fail("Non-animation import subresources changed while configuring animations")
 	if _snapshot_non_animation_settings(config) != expected_preserved:
 		_fail("Non-animation import settings changed while configuring animations")
 	var animations = subresources.get("animations", {})
@@ -116,7 +108,11 @@ func _verify_saved(expected_actions: Array[String], expected_nodes: Dictionary, 
 	for action in animations.keys():
 		actual_actions.append(String(action))
 	actual_actions.sort()
-	if actual_actions != expected_actions:
+	var expected_action_names: Array[String] = []
+	for action in expected_actions:
+		expected_action_names.append(String(action))
+	expected_action_names.sort()
+	if actual_actions != expected_action_names:
 		_fail("Reloaded animation action set does not match the processed index")
 	for action in expected_actions:
 		var settings = animations.get(action, {})
@@ -136,8 +132,52 @@ func _verify_saved(expected_actions: Array[String], expected_nodes: Dictionary, 
 			_fail("Animation save path uses a UID: %s" % action)
 		if settings.get("save_to_file/keep_custom_tracks") != false:
 			_fail("Animation keeps custom tracks: %s" % action)
-		if int(settings.get("settings/loop_mode", -1)) != 0 or int(settings.get("slices/amount", -1)) != 0:
-			_fail("Animation has invalid loop or slice settings: %s" % action)
+		var expected_loop_mode := Animation.LOOP_LINEAR if expected_actions[action] else Animation.LOOP_NONE
+		if int(settings.get("settings/loop_mode", -1)) != expected_loop_mode or int(settings.get("slices/amount", -1)) != 0:
+			_fail("Animation loop policy or slice setting is invalid: %s" % action)
+
+func _effective_loop_intent(motion: Dictionary) -> bool:
+	var intent = motion.get("loop_intent", {})
+	if not (intent is Dictionary) or not (intent as Dictionary).get("effective_loop_intent") is bool:
+		_fail("Standing motion has no persisted ANIM-001 effective loop intent: %s" % motion.get("motion_id", ""))
+		return false
+	return bool((intent as Dictionary)["effective_loop_intent"])
+
+func _is_animation_settings(value) -> bool:
+	return value is Dictionary and (value as Dictionary).has("save_to_file/enabled")
+
+func _snapshot_non_animation_subresources(subresources: Dictionary) -> Dictionary:
+	var snapshot := subresources.duplicate(true)
+	snapshot.erase("animations")
+	for key in snapshot.keys():
+		if _is_animation_settings(snapshot[key]):
+			snapshot.erase(key)
+	return snapshot
+
+func _ensure_retarget_node_settings(subresources: Dictionary) -> void:
+	var bone_map := load("res://assets/characters/reference/skeleton_profiles/bone_map_makehuman.tres")
+	if bone_map == null:
+		_fail("Required MakeHuman bone map cannot be loaded")
+		return
+	var nodes: Dictionary = subresources.get("nodes", {})
+	nodes["PATH:Female/Skeleton3D"] = {
+		"retarget/bone_map": bone_map,
+		"retarget/rest_fixer/fix_silhouette/enable": true,
+		"retarget/rest_fixer/fix_silhouette/filter": [
+			&"Head", &"Neck", &"UpperChest", &"Chest", &"Spine", &"Hips",
+			&"RightThumbMetacarpal", &"RightThumbProximal", &"RightThumbDistal",
+			&"RightIndexProximal", &"RightIndexIntermediate", &"RightIndexDistal",
+			&"RightMiddleProximal", &"RightMiddleIntermediate", &"RightMiddleDistal",
+			&"RightRingProximal", &"RightRingIntermediate", &"RightRingDistal",
+			&"RightLittleProximal", &"RightLittleIntermediate", &"RightLittleDistal",
+			&"LeftThumbMetacarpal", &"LeftThumbProximal", &"LeftThumbDistal",
+			&"LeftIndexProximal", &"LeftIndexIntermediate", &"LeftIndexDistal",
+			&"LeftMiddleProximal", &"LeftMiddleIntermediate", &"LeftMiddleDistal",
+			&"LeftRingProximal", &"LeftRingIntermediate", &"LeftRingDistal",
+			&"LeftLittleProximal", &"LeftLittleIntermediate", &"LeftLittleDistal", &"RightFoot", &"LeftFoot",
+		],
+	}
+	subresources["nodes"] = nodes
 
 func _snapshot_non_animation_settings(config: ConfigFile) -> Dictionary:
 	var snapshot := {}
@@ -146,8 +186,7 @@ func _snapshot_non_animation_settings(config: ConfigFile) -> Dictionary:
 		for key in config.get_section_keys(section):
 			var value = config.get_value(section, key)
 			if section == "params" and key == "_subresources" and value is Dictionary:
-				value = value.duplicate(true)
-				value.erase("animations")
+				value = _snapshot_non_animation_subresources(value)
 			values[key] = value
 		snapshot[section] = values
 	return snapshot

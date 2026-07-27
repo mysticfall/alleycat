@@ -22,9 +22,6 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
         "res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres";
     private const string CataloguePath =
         "res://assets/characters/reference/female/animations/locomotion/standing_locomotion_catalogue.json";
-    private const double ExpectedDuration = 106.66666668653485;
-    private const double DurationTolerance = 0.00001;
-
     private static readonly string[] _requiredBones =
     [
         "Root",
@@ -42,14 +39,19 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
         "Female/GeneralSkeleton",
     ];
 
-    private static readonly HashSet<string> _requiredLateralMotionIDs =
-    [
-        "c9c9d9d6-b96c-11e4-a802-0aaa78deedf9",
-        "c9c9db9e-b96c-11e4-a802-0aaa78deedf9",
-        "c9c9829c-b96c-11e4-a802-0aaa78deedf9",
-        "c9c985b7-b96c-11e4-a802-0aaa78deedf9",
-        "c9c7ff20-b96c-11e4-a802-0aaa78deedf9",
-    ];
+    private static readonly IReadOnlyDictionary<string, string> _expectedRoleKeys =
+        new Dictionary<string, string>
+        {
+            ["Idle"] = "mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9",
+            ["ForwardWalk"] = "mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9",
+            ["BackwardWalk"] = "mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9",
+            ["WalkArcLeft"] = "mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+            ["WalkArcRight"] = "derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+            ["SideStepLeft"] = "mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9",
+            ["SideStepRight"] = "mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9",
+            ["TurnInPlaceLeft90"] = "mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9",
+            ["TurnInPlaceRight90"] = "mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9",
+        };
 
     /// <inheritdoc/>
     [Headless]
@@ -135,12 +137,12 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
         using var document = JsonDocument.Parse(catalogueText);
         JsonElement root = document.RootElement;
 
-        Assert.Equal(1, root.GetProperty("catalogue_schema_version").GetInt32());
+        Assert.Equal(2, root.GetProperty("catalogue_schema_version").GetInt32());
         Assert.Equal(IndexPath, root.GetProperty("source_index").GetString());
         Assert.Equal(2, root.GetProperty("source_index_schema_version").GetInt32());
         Assert.Equal(2, root.GetProperty("metrics_schema_version").GetInt32());
         Assert.Equal(LibraryPath, root.GetProperty("animation_library").GetString());
-        Assert.Equal(46, root.GetProperty("clip_count").GetInt32());
+        Assert.Equal(9, root.GetProperty("clip_count").GetInt32());
 
         JsonElement.ArrayEnumerator clips = root.GetProperty("clips").EnumerateArray();
         var clipsByKey = clips.ToDictionary(
@@ -149,12 +151,10 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
         );
         Assert.Equal(motions.Keys, clipsByKey.Keys.Order());
 
-        int sampleCount = 0;
-        double duration = 0.0;
-        HashSet<string> lateralMotionIDs = [];
-        Dictionary<string, int> classCounts = [];
         foreach ((string action, JsonElement clip) in clipsByKey)
         {
+            Assert.Contains(clip.GetProperty("role").GetString(), _expectedRoleKeys.Keys);
+            Assert.Equal(action, _expectedRoleKeys[clip.GetProperty("role").GetString()!]);
             Assert.Equal(action, clip.GetProperty("action").GetString());
             Assert.Equal($"{ClipDirectory}/{action}.res", clip.GetProperty("animation_resource").GetString());
             Assert.Equal("locomotion_standing", clip.GetProperty("group").GetString());
@@ -162,24 +162,33 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
             Assert.Equal("reconstructed_root", clip.GetProperty("root_source").GetString());
             Assert.True(clip.GetProperty("root_created").GetBoolean());
             Assert.StartsWith("download/", clip.GetProperty("source_manifest").GetProperty("file").GetString());
-
-            sampleCount += clip.GetProperty("sample_count").GetInt32();
-            duration += clip.GetProperty("length").GetDouble();
-            string motionID = Assert.IsType<string>(clip.GetProperty("motion_id").GetString());
-            string motionClass = Assert.IsType<string>(clip.GetProperty("motion_class").GetString());
-            classCounts[motionClass] = classCounts.GetValueOrDefault(motionClass) + 1;
-            if (_requiredLateralMotionIDs.Contains(motionID))
-            {
-                _ = lateralMotionIDs.Add(motionID);
-            }
+            AssertDerivedMirrorSchema(action, clip);
         }
 
-        Assert.Equal(2612, sampleCount);
-        Assert.InRange(duration, ExpectedDuration - DurationTolerance, ExpectedDuration + DurationTolerance);
-        Assert.Equal(_requiredLateralMotionIDs, lateralMotionIDs);
-        Assert.Equal(4, classCounts["StandingIdle"]);
-        Assert.Equal(36, classCounts["StandingLocomotion"]);
-        Assert.Equal(6, classCounts["TurnInPlace"]);
+        Assert.Equal(_expectedRoleKeys.Values.Order(), clipsByKey.Keys.Order());
+
+        JsonElement roleMaps = root.GetProperty("role_maps");
+        Assert.Equal(["reference_female", "reference_male"], roleMaps.EnumerateObject().Select(property => property.Name).Order());
+        foreach (JsonProperty map in roleMaps.EnumerateObject())
+        {
+            JsonElement.ArrayEnumerator entries = map.Value.EnumerateArray();
+            var entriesByRole = entries.ToDictionary(
+                entry => Assert.IsType<string>(entry.GetProperty("graph_role").GetString()),
+                entry => entry.Clone());
+            Assert.Equal(_expectedRoleKeys.Keys.Order(), entriesByRole.Keys.Order());
+            foreach ((string role, string key) in _expectedRoleKeys)
+            {
+                JsonElement entry = entriesByRole[role];
+                Assert.Equal(key, entry.GetProperty("library_key").GetString());
+                Assert.Equal(role, entry.GetProperty("graph_role").GetString());
+                Assert.False(string.IsNullOrWhiteSpace(entry.GetProperty("motion_family").GetString()));
+                Assert.False(string.IsNullOrWhiteSpace(entry.GetProperty("clip_gender").GetString()));
+                Assert.False(string.IsNullOrWhiteSpace(entry.GetProperty("replacement_note").GetString()));
+                Assert.Equal(
+                    ["clip_gender", "graph_role", "library_key", "motion_family", "replacement_note", "temporary"],
+                    entry.EnumerateObject().Select(property => property.Name).Order());
+            }
+        }
 
         Assert.DoesNotContain("uid://", catalogueText, StringComparison.Ordinal);
         Assert.DoesNotContain("locomotion_" + "crouch", catalogueText, StringComparison.Ordinal);
@@ -191,14 +200,13 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
     /// <inheritdoc/>
     [Headless]
     [Fact]
-    public void RepresentativeClips_PassThroughImportedAnimationDataExceptAcceptedPrefixNormalisation()
+    public void RepresentativeClips_PreserveImportedDataExceptPrefixAndRootOwnedHipsHeadingNeutralisation()
     {
-        SortedDictionary<string, JsonElement> motions = LoadStandingMotions();
         string[] representativeActions =
         [
-            motions.First(pair => pair.Value.GetProperty("motion_class").GetString() == "StandingIdle").Key,
-            motions.Single(pair => pair.Value.GetProperty("motion_id").GetString() == "c9c7ff20-b96c-11e4-a802-0aaa78deedf9").Key,
-            motions.First(pair => pair.Value.GetProperty("motion_class").GetString() == "TurnInPlace").Key,
+            _expectedRoleKeys["Idle"],
+            _expectedRoleKeys["SideStepLeft"],
+            _expectedRoleKeys["TurnInPlaceLeft90"],
         ];
 
         PackedScene packedScene = Assert.IsType<PackedScene>(
@@ -225,7 +233,8 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
                     ResourceLoader.Load($"{ClipDirectory}/{action}.res"),
                     exactMatch: false
                 );
-                AssertPassThroughAnimation(imported, extracted);
+                AssertAuthoredAnimationPreservation(imported, extracted);
+                AssertRootOwnsAccumulatedHeading(extracted);
             }
         }
         finally
@@ -253,8 +262,29 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
             Assert.True(motions.TryAdd(action, motion.Clone()), $"Duplicate action: {action}");
         }
 
-        Assert.Equal(46, motions.Count);
+        Assert.Equal(9, motions.Count);
         return motions;
+    }
+
+    private static void AssertDerivedMirrorSchema(string action, JsonElement clip)
+    {
+        JsonElement provenance = clip.GetProperty("derived_provenance");
+        if (action != _expectedRoleKeys["WalkArcRight"])
+        {
+            Assert.Equal(JsonValueKind.Object, provenance.ValueKind);
+            Assert.Empty(provenance.EnumerateObject());
+            return;
+        }
+
+        Assert.Equal(action, provenance.GetProperty("derived_identity").GetString());
+        Assert.Equal("mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9", provenance.GetProperty("source_action").GetString());
+        Assert.Equal("c9ccf8d5-b96c-11e4-a802-0aaa78deedf9", provenance.GetProperty("source_motion_id").GetString());
+        Assert.Equal("sagittal_world_matrix_reflection", provenance.GetProperty("derivation_type").GetString());
+        Assert.Matches("^[0-9a-f]{64}$", provenance.GetProperty("source_artifact_sha256").GetString());
+        Assert.Matches("^[0-9a-f]{64}$", provenance.GetProperty("recipe_sha256").GetString());
+        Assert.Equal(
+            "sagittal_world_matrix_reflection",
+            provenance.GetProperty("canonical_reflection_recipe").GetProperty("type").GetString());
     }
 
     private static string ReadProjectFile(string resourcePath)
@@ -282,7 +312,7 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
         }
     }
 
-    private static void AssertPassThroughAnimation(GodotAnimation imported, GodotAnimation extracted)
+    private static void AssertAuthoredAnimationPreservation(GodotAnimation imported, GodotAnimation extracted)
     {
         Assert.Equal(imported.Length, extracted.Length);
         Assert.Equal(imported.LoopMode, extracted.LoopMode);
@@ -309,12 +339,64 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
                     imported.TrackGetKeyTransition(trackIndex, keyIndex),
                     extracted.TrackGetKeyTransition(trackIndex, keyIndex)
                 );
-                Assert.Equal(
-                    imported.TrackGetKeyValue(trackIndex, keyIndex),
-                    extracted.TrackGetKeyValue(trackIndex, keyIndex)
-                );
+                Variant importedValue = imported.TrackGetKeyValue(trackIndex, keyIndex);
+                Variant extractedValue = extracted.TrackGetKeyValue(trackIndex, keyIndex);
+                if (IsHipsRotationTrack(imported, trackIndex) && !importedValue.Equals(extractedValue))
+                {
+                    Quaternion importedRotation = importedValue.AsQuaternion().Normalized();
+                    Quaternion extractedRotation = extractedValue.AsQuaternion().Normalized();
+                    Quaternion difference = (extractedRotation * importedRotation.Inverse()).Normalized();
+                    Assert.InRange(Mathf.Abs(difference.X), 0.0f, 0.0001f);
+                    Assert.InRange(Mathf.Abs(difference.Z), 0.0f, 0.0001f);
+                }
+                else
+                {
+                    Assert.Equal(importedValue, extractedValue);
+                }
             }
         }
+    }
+
+    private static void AssertRootOwnsAccumulatedHeading(GodotAnimation animation)
+    {
+        var rootPath = new NodePath("%GeneralSkeleton:Root");
+        var hipsPath = new NodePath("%GeneralSkeleton:Hips");
+        int rootTrack = animation.FindTrack(rootPath, GodotAnimation.TrackType.Rotation3D);
+        int hipsTrack = animation.FindTrack(hipsPath, GodotAnimation.TrackType.Rotation3D);
+        Assert.True(rootTrack >= 0);
+        Assert.True(hipsTrack >= 0);
+
+        Quaternion rootStart = animation.RotationTrackInterpolate(rootTrack, 0.0);
+        Quaternion rootFinish = animation.RotationTrackInterpolate(rootTrack, animation.Length);
+        float rootHeading = SignedHeading(rootFinish * rootStart.Inverse());
+        if (Mathf.Abs(rootHeading) <= 0.001f)
+        {
+            return;
+        }
+
+        Quaternion hipsStart = animation.RotationTrackInterpolate(hipsTrack, 0.0);
+        Quaternion hipsFinish = animation.RotationTrackInterpolate(hipsTrack, animation.Length);
+        Assert.InRange(Mathf.Abs(SignedHeading(hipsFinish * hipsStart.Inverse())), 0.0f, 0.01f);
+    }
+
+    private static bool IsHipsRotationTrack(GodotAnimation animation, int trackIndex)
+        => animation.TrackGetType(trackIndex) == GodotAnimation.TrackType.Rotation3D
+            && NormaliseTrackPath(animation.TrackGetPath(trackIndex)).ToString() == "%GeneralSkeleton:Hips";
+
+    private static float SignedHeading(Quaternion rotation)
+    {
+        Vector3 vector = new(rotation.X, rotation.Y, rotation.Z);
+        Vector3 projected = Vector3.Up * vector.Dot(Vector3.Up);
+        Quaternion twist = new(projected.X, projected.Y, projected.Z, rotation.W);
+        float magnitude = Mathf.Sqrt(
+            (twist.X * twist.X) + (twist.Y * twist.Y) + (twist.Z * twist.Z) + (twist.W * twist.W));
+        if (magnitude <= 0.000001f)
+        {
+            return 0.0f;
+        }
+
+        twist = new Quaternion(twist.X / magnitude, twist.Y / magnitude, twist.Z / magnitude, twist.W / magnitude);
+        return Mathf.Wrap(2.0f * Mathf.Atan2(new Vector3(twist.X, twist.Y, twist.Z).Dot(Vector3.Up), twist.W), -Mathf.Pi, Mathf.Pi);
     }
 
     private static NodePath NormaliseTrackPath(NodePath path)
@@ -323,6 +405,6 @@ public sealed class StandingLocomotionCatalogueIntegrationTests
         int separator = value.LastIndexOf(':');
         return separator <= 0 || !_acceptedSkeletonPrefixes.Contains(value[..separator])
             ? path
-            : new NodePath("GeneralSkeleton" + value[separator..]);
+            : new NodePath("%GeneralSkeleton" + value[separator..]);
     }
 }

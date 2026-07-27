@@ -19,6 +19,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
     private static readonly StringName _eyesLibraryName = new("eyes");
     private static readonly StringName _actorsGroupName = new("Actors");
     private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
+    private static readonly StringName _locomotionLibraryName = new("locomotion");
     private static readonly StringName _authoredTreeRootResourcePathMeta = new("authored_tree_root_resource_path");
     private static readonly StringName[] _requiredEyeAnimationNames =
     [
@@ -78,6 +79,14 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             AnimationPlayer animationPlayer = FindSingleDescendant<AnimationPlayer>(context.TargetRoot)
                 ?? throw new InvalidOperationException("Character runtime subsystem installer requires an authored AnimationPlayer copied from the role template.");
 
+            AnimationPlayer? templateAnimationPlayer = FindSingleDescendant<AnimationPlayer>(context.TemplateRoot, required: false);
+            bool animationLibrariesChanged = templateAnimationPlayer is not null
+                && RetainAuthoredLocomotionLibrary(templateAnimationPlayer, animationPlayer);
+            if (animationLibrariesChanged && animationTree.Active)
+            {
+                animationTree.Active = false;
+                animationTree.Active = true;
+            }
             RebaseAnimationMixerRoots(animationTree, animationPlayer, context.Skeleton);
             EyeAnimationTreeFilterTargets eyeFilterTargets = ValidateEyeAnimationLibrary(animationPlayer);
             ConfigureEyeAnimationTreeFilters(animationTree, eyeFilterTargets);
@@ -107,6 +116,28 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         NodePath modelRootPath = animationTree.GetPathTo(modelRoot);
         animationTree.RootNode = modelRootPath;
         animationPlayer.RootNode = animationPlayer.GetPathTo(modelRoot);
+    }
+
+    private static bool RetainAuthoredLocomotionLibrary(
+        AnimationPlayer templateAnimationPlayer,
+        AnimationPlayer targetAnimationPlayer)
+    {
+        if (!templateAnimationPlayer.HasAnimationLibrary(_locomotionLibraryName))
+        {
+            return false;
+        }
+
+        if (targetAnimationPlayer.HasAnimationLibrary(_locomotionLibraryName))
+        {
+            return false;
+        }
+
+        AnimationLibrary locomotionLibrary = templateAnimationPlayer.GetAnimationLibrary(_locomotionLibraryName);
+        Error result = targetAnimationPlayer.AddAnimationLibrary(_locomotionLibraryName, locomotionLibrary);
+        return result == Error.Ok && targetAnimationPlayer.HasAnimationLibrary(_locomotionLibraryName)
+            ? true
+            : throw new InvalidOperationException(
+                $"Character runtime subsystem installer could not retain authored AnimationLibrary '{_locomotionLibraryName}' on '{targetAnimationPlayer.GetPath()}'.");
     }
 
     private static EyeAnimationTreeFilterTargets ValidateEyeAnimationLibrary(AnimationPlayer animationPlayer)
@@ -217,7 +248,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         }
 
         AnimationNodeBlendTree instanceTreeRoot = RequiresPerCharacterEyeFilterInstance(treeRoot, filterTargets)
-            ? treeRoot.Duplicate(true) as AnimationNodeBlendTree
+            ? treeRoot.Duplicate(false) as AnimationNodeBlendTree
                 ?? throw new InvalidOperationException(
                     $"Character runtime subsystem installer could not duplicate AnimationTree root for per-character eye filter setup on '{animationTree.GetPath()}'.")
             : treeRoot;
@@ -228,14 +259,17 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         }
 
         ConfigureFilteredNode<AnimationNodeBlend2>(
+            treeRoot,
             instanceTreeRoot,
             EyesAnimationTreePaths.HorizontalLookBlendNode,
             filterTargets.HorizontalLookFilterPaths);
         ConfigureFilteredNode<AnimationNodeBlend2>(
+            treeRoot,
             instanceTreeRoot,
             EyesAnimationTreePaths.VerticalLookBlendNode,
             filterTargets.VerticalLookFilterPaths);
         ConfigureFilteredNode<AnimationNodeOneShot>(
+            treeRoot,
             instanceTreeRoot,
             EyesAnimationTreePaths.BlinkOneShotNode,
             filterTargets.BlinkFilterPaths);
@@ -244,27 +278,27 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
     private static bool RequiresPerCharacterEyeFilterInstance(
         AnimationNodeBlendTree treeRoot,
         EyeAnimationTreeFilterTargets filterTargets)
-        => !HasRequiredFilters<AnimationNodeBlend2>(
+        => !HasExactFilters<AnimationNodeBlend2>(
                 treeRoot,
                 EyesAnimationTreePaths.HorizontalLookBlendNode,
                 filterTargets.HorizontalLookFilterPaths)
-            || !HasRequiredFilters<AnimationNodeBlend2>(
+            || !HasExactFilters<AnimationNodeBlend2>(
                 treeRoot,
                 EyesAnimationTreePaths.VerticalLookBlendNode,
                 filterTargets.VerticalLookFilterPaths)
-            || !HasRequiredFilters<AnimationNodeOneShot>(
+            || !HasExactFilters<AnimationNodeOneShot>(
                 treeRoot,
                 EyesAnimationTreePaths.BlinkOneShotNode,
                 filterTargets.BlinkFilterPaths);
 
-    private static bool HasRequiredFilters<T>(AnimationNodeBlendTree treeRoot, string nodeName, IReadOnlyList<NodePath> expectedFilterPaths)
+    private static bool HasExactFilters<T>(AnimationNodeBlendTree treeRoot, string nodeName, IReadOnlyList<NodePath> expectedFilterPaths)
         where T : AnimationNode
     {
         T node = treeRoot.GetNode(nodeName) as T
             ?? throw new InvalidOperationException(
                 $"Character runtime subsystem installer requires AnimationTree eye node '{nodeName}' to be {typeof(T).Name}.");
 
-        if (!node.FilterEnabled)
+        if (!node.FilterEnabled || node.Get("filters").AsGodotArray().Count != expectedFilterPaths.Count)
         {
             return false;
         }
@@ -280,12 +314,31 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         return true;
     }
 
-    private static void ConfigureFilteredNode<T>(AnimationNodeBlendTree treeRoot, string nodeName, IReadOnlyList<NodePath> filterPaths)
+    private static void ConfigureFilteredNode<T>(
+        AnimationNodeBlendTree authoredTreeRoot,
+        AnimationNodeBlendTree instanceTreeRoot,
+        string nodeName,
+        IReadOnlyList<NodePath> filterPaths)
         where T : AnimationNode
     {
-        T node = treeRoot.GetNode(nodeName) as T
+        T authoredNode = authoredTreeRoot.GetNode(nodeName) as T
             ?? throw new InvalidOperationException(
                 $"Character runtime subsystem installer requires AnimationTree eye node '{nodeName}' to be {typeof(T).Name}.");
+
+        if (HasExactFilters<T>(authoredTreeRoot, nodeName, filterPaths))
+        {
+            return;
+        }
+
+        T node = authoredNode.Duplicate(false) as T
+            ?? throw new InvalidOperationException(
+                $"Character runtime subsystem installer could not duplicate AnimationTree eye node '{nodeName}' for per-character filter setup.");
+        ReplaceBlendTreeNode(instanceTreeRoot, nodeName, node);
+        if (!ReferenceEquals(instanceTreeRoot.GetNode(nodeName), node))
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer could not isolate AnimationTree eye node '{nodeName}' for per-character filter setup.");
+        }
 
         ClearExistingFilters(node);
         node.FilterEnabled = true;
@@ -296,6 +349,34 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         }
 
         ValidateConfiguredFilters(nodeName, node, filterPaths);
+    }
+
+    private static void ReplaceBlendTreeNode(
+        AnimationNodeBlendTree treeRoot,
+        string nodeName,
+        AnimationNode replacement)
+    {
+        var nodeNameKey = new StringName(nodeName);
+        Vector2 position = treeRoot.GetNodePosition(nodeNameKey);
+        Godot.Collections.Array serialisedConnections = treeRoot.Get("node_connections").AsGodotArray();
+        var retainedConnections = new List<BlendTreeConnection>();
+        for (int index = 0; index < serialisedConnections.Count; index += 3)
+        {
+            StringName inputNode = serialisedConnections[index].AsStringName();
+            int inputIndex = serialisedConnections[index + 1].AsInt32();
+            StringName outputNode = serialisedConnections[index + 2].AsStringName();
+            if (inputNode == nodeNameKey || outputNode == nodeNameKey)
+            {
+                retainedConnections.Add(new BlendTreeConnection(inputNode, inputIndex, outputNode));
+            }
+        }
+
+        treeRoot.RemoveNode(nodeNameKey);
+        treeRoot.AddNode(nodeNameKey, replacement, position);
+        foreach (BlendTreeConnection connection in retainedConnections)
+        {
+            treeRoot.ConnectNode(connection.InputNode, connection.InputIndex, connection.OutputNode);
+        }
     }
 
     private static void ClearExistingFilters(AnimationNode node)
@@ -435,16 +516,43 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         RequireAssigned(locomotion.RootMotionReference, locomotion, nameof(CharacterLocomotion.RootMotionReference));
     }
 
-    private static void ValidateNavigation(DirectTransformNavigation? navigation, Node targetRoot)
+    private static void ValidateNavigation(NavigationBase? navigation, Node targetRoot)
     {
         if (navigation is null)
         {
             return;
         }
 
-        navigation.Target ??= targetRoot as CharacterBody3D
-            ?? throw new InvalidOperationException(
-                $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for navigation binding.");
+        if (navigation is DirectTransformNavigation directTransformNavigation)
+        {
+            directTransformNavigation.Target ??= targetRoot as CharacterBody3D
+                ?? throw new InvalidOperationException(
+                    $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for navigation binding.");
+            return;
+        }
+
+        if (navigation is not LocomotiveNavigation locomotiveNavigation)
+        {
+            return;
+        }
+
+        if (targetRoot is not Node3D actor || targetRoot is not ILocomotive)
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a Node3D implementing {nameof(ILocomotive)} for locomotive navigation binding.");
+        }
+
+        if (locomotiveNavigation.Actor is null)
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires template-authored '{nameof(LocomotiveNavigation.Actor)}' on '{locomotiveNavigation.GetPath()}'.");
+        }
+
+        if (!ReferenceEquals(locomotiveNavigation.Actor, actor) || locomotiveNavigation.Actor is not ILocomotive)
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires '{nameof(LocomotiveNavigation.Actor)}' on '{locomotiveNavigation.GetPath()}' to reference target root '{targetRoot.GetPath()}', which must implement {nameof(ILocomotive)}.");
+        }
     }
 
     internal static Character ValidateCharacterHub(Node targetRoot)
@@ -516,4 +624,9 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         IReadOnlyList<NodePath> BlinkFilterPaths,
         IReadOnlyList<NodePath> HorizontalLookFilterPaths,
         IReadOnlyList<NodePath> VerticalLookFilterPaths);
+
+    private readonly record struct BlendTreeConnection(
+        StringName InputNode,
+        int InputIndex,
+        StringName OutputNode);
 }

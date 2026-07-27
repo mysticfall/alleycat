@@ -7,257 +7,197 @@ title: Standing Locomotion Catalogue
 
 ## Requirement
 
-Define the authoritative curated standing-locomotion collection, its source provenance, its reproducible ANIM-001
-processed outputs, and its reusable Godot `AnimationLibrary` packaging.
+Define the authoritative minimal standing-locomotion library, its portable Godot package, and the response data used by
+its consumers.
 
 ## Goal
 
-Technical artists and gameplay implementers can review, regenerate, import, and reuse one portable collection of 46
-standing clips without depending on a particular locomotion runtime.
+Players and NPCs have a small, ordinary, unarmed standing library that supports idle, forward and backward walking,
+smooth walking direction changes, short local correction, and deliberate bilateral in-place pivots.
 
 ## User Requirements
 
-1. Contributors can review why each source clip is included and trace it to stable Mixamo source metadata.
-2. The catalogue provides ordinary standing idle, forward and backward movement, lateral movement, moving arcs, starts,
-   stops, speed variation, and turn-in-place coverage.
-3. The complete collection is available as individually loadable Godot animations and as one reusable
-   `AnimationLibrary`.
-4. Regenerating or reimporting the catalogue does not silently omit clips, retain removed clips, or depend on a
-   contributor's local source location.
-5. Catalogue completeness is not presented as proof that walking-to-idle transitions or subjective animation quality
-   are natural in a consuming runtime.
+1. The shipped standing library contains exactly nine clips: idle, ordinary forward and backward walks, left and right
+   walk arcs, short left and right sidesteps, and ordinary unarmed left and right 90-degree in-place turns.
+2. Walking direction changes remain smooth through the forward and walk-arc clips. Short local rear or lateral
+   correction uses a rear/lateral diagonal blend; a distant destination behind the character turns, then walks forward.
+3. Every selected clip has an ordinary upright, unarmed standing pose. Sad or hunched posture, raised-arm or combat
+   poses, running, starts, stops, weapon motion, and unused alternatives are excluded. The former 45-degree crouched
+   clip remains excluded.
+4. Both in-place turns are deliberate, ordinary unarmed looped pivots. They turn in opposing directions through
+   90 degrees with Root held exactly at `(0, 0, 0)`, remain continuous at every Root-motion loop wrap, and are not
+   moving direction changes.
+5. Consumers can load the clips individually or from one reusable `AnimationLibrary`, and can trace each selection to
+   portable source provenance.
+6. The selected clips supplied to `ILocomotion` make their graph role legible: pivots visibly turn without travel,
+   straight walks and side steps travel without unintended turning, and walk arcs visibly turn while travelling.
 
 ## Technical Requirements
 
-### Ownership and Normative Inputs
+### Ownership And Selection
 
-1. ANIM-003 owns the concrete 46-row standing selection, its review notes, `locomotion_standing.blend`, the associated
-   metrics and processed-index entries, Godot extraction settings, the 46 extracted clips, and the standing catalogue
-   library and package manifest.
-2. [ANIM-001](../001-animation-source-pipeline/index.md) is a normative dependency for the source-manifest and selection
-   schemas, action naming, retargeting, root reconstruction, metrics schema, portable processed-index format, and
-   MakeHuman Godot import handoff. ANIM-003 must apply those contracts and must not duplicate or weaken them.
-3. ANIM-003 defines the authoritative 46-clip baseline through the committed source manifest, selection CSV,
-   processed artefacts, counts, invariants, and curation provenance specified on this page.
-4. The stable source inputs are:
-   - `game/assets/characters/reference/female/animations/source/mixamo/manifest.csv`;
-   - `game/assets/characters/reference/female/animations/source/mixamo/selection.csv`.
-5. The selection CSV is the reviewable source of truth for inclusion, classification, tags, gender, group, root-motion
-   policy, and curation notes. Its 46 rows are all enabled, use category `locomotion`, use group
-   `locomotion_standing`, and join uniquely by `motion_id` to the source manifest.
-6. Source-manifest `file` values remain portable paths relative to the configured source root, such as
-   `download/<motion_id>.fbx`. No local download root or other source-machine path is part of this specification.
+1. ANIM-003 owns the nine enabled `locomotion_standing` selection rows, their curation notes, processed outputs,
+   extraction settings, package, role maps, and response profile.
+2. [ANIM-001](../001-animation-source-pipeline/index.md) is the normative dependency for manifest and selection
+   schemas, action naming, retargeting, root reconstruction, metrics, and portable processed-index contracts.
+3. The selection CSV is the reviewable inclusion source of truth. Each enabled row joins uniquely to the source
+   manifest by `motion_id`, uses category `locomotion` and group `locomotion_standing`, and records its role.
+4. Only ordinary, upright, unarmed standing motion is eligible. The approved backward-walk role is permitted; running,
+   starts, stops, combat, weapon, boxing, guard, crouched, prone, injured, stylised, sad, hunched, raised-arm, and
+   unused alternatives are excluded from the enabled selection. The former 45-degree crouched clip remains excluded.
+5. Native matched pairs are preferred for opposing directional roles. A derived mirror is allowed only for a vetted
+   natural eligible source when no approved native counterpart exists; it is processed under the ANIM-001
+   derived-mirror contract, never mirrored at runtime, and records its exception rationale.
+6. A rejected sad, hunched, crouched, combat, weapon, raised-arm, running, or stylised source must never be mirrored.
+   Rejected source-role rows are replaced rather than retained as native or derived fallbacks.
 
-### Curated Collection
+### Shipping Library And Role Map
 
-1. The collection contains exactly:
-   - 4 `StandingIdle` clips;
-   - 36 `StandingLocomotion` clips;
-   - 6 `TurnInPlace` clips.
-2. The selected tags and notes must retain coverage of:
-   - neutral, female, and look-around standing idles;
-   - forward walk and run at varied speeds, forward starts, walk/run stops, and a stop-start clip;
-   - backward walking and running;
-   - left/right walk strafes, run strafes, strafe starts and stops, relaxed strafes, and sidesteps;
-   - left/right walking and running arcs;
-   - left/right turn-in-place coverage at 90 and 180 degrees, plus the selected 45-degree-left and ordinary-right
-     variants.
-3. The five preview-screened lateral additions at the baseline are normative selection provenance:
+1. The collection contains exactly these roles, each mapped to one clip: `Idle`, `ForwardWalk`, `BackwardWalk`,
+   `WalkArcLeft`, `WalkArcRight`, `SideStepLeft`, `SideStepRight`, `TurnInPlaceLeft90`, and `TurnInPlaceRight90`.
+2. `TurnInPlaceLeft90` uses source `c9ceef5f-b96c-11e4-a802-0aaa78deedf9`; `TurnInPlaceRight90` uses source
+   `c9cef01d-b96c-11e4-a802-0aaa78deedf9`. Each is an ordinary, unarmed deliberate pivot with Root held exactly at
+   `(0, 0, 0)` and source-informed, opposing signed 90-degree yaw. Its yaw direction and progress agree with the
+   visible body turn and role semantics. Both pivot actions must be ANIM-001 loop-eligible and remain continuous at
+   every loop wrap.
+   `TurnInPlaceRight90` has clockwise-positive visible/body heading and negative canonical Blender Root Euler-Z;
+   `TurnInPlaceLeft90` has the opposite signs.
+3. The bilateral native 90-degree pivots are retained. No derived pivot substitute, synthetic yaw, fallback binding, or
+   additional in-place-turn role is permitted.
+4. Female and male graphs share one `AnimationLibrary`. Each graph has a deterministic role map containing the nine
+   roles, library key, motion family, clip gender, graph role, and temporary-selection metadata when applicable.
+5. Role selection may use only the nine library keys. It must not select excluded movement classes or infer a missing
+   role by runtime mirroring an opposite clip.
 
-   | Motion ID | Selection | Curation Rationale |
-   | --- | --- | --- |
-   | `c9c9d9d6-b96c-11e4-a802-0aaa78deedf9` | Walk Strafe Left | Clean upright lateral walk with relaxed arms; low-speed left variety. |
-   | `c9c9db9e-b96c-11e4-a802-0aaa78deedf9` | Walk Strafe Right | Clean upright lateral walk with relaxed arms; low-speed right variety. |
-   | `c9c9829c-b96c-11e4-a802-0aaa78deedf9` | Left Strafe Walk | Clear side travel, relaxed posture, and no weapon or combat pose. |
-   | `c9c985b7-b96c-11e4-a802-0aaa78deedf9` | Right Strafe Walk | Clear side travel, relaxed posture, and no weapon or combat pose. |
-   | `c9c7ff20-b96c-11e4-a802-0aaa78deedf9` | Side Step | Generic unarmed side-to-side adjustment with relaxed arms. |
+### Import, Retarget, And Root Motion
 
-4. Selection notes must remain in the CSV and survive into processed provenance where the ANIM-001 schema carries
-   them. The table above summarises, rather than replaces, those normative rows.
-5. Ordinary reusable locomotion is preferred over combat, weapon, boxing, guard, action-pose, crouched, prone,
-   injured, stylised, or object-carrying motion. Such candidates are excluded; if retained for comparative review
-   outside this selection, they must be disabled or explicitly down-ranked and the reason recorded.
-6. Curation notes provide reviewable quality provenance: weapon-biased turn and movement candidates were replaced by
-   ordinary or unarmed clips, while candidates that lacked mapped source bones or failed the Godot generation round
-   trip were not selected.
+1. ANIM-001 processing produces `locomotion_standing.blend`, its `.import` sidecar, `index.json`, and one metrics file
+   per selected action under the existing processed Mixamo paths.
+2. The `.blend` contains one target armature and exactly nine persistent, uniquely named actions. Native action names
+   use `mixamo_<motion_id>` with hyphens replaced by underscores. Derived action names use the ANIM-001
+   derived identity.
+3. Import uses the ANIM-001 MakeHuman bone map, silhouette-rest-fixer handoff, and class-specific root-reconstruction
+   contract. Every selected clip retains `Root` motion. Pivots retain only role-consistent signed yaw at Root
+   `(0, 0, 0)`; straight walks and side steps retain role-consistent planar translation with deliberately fixed
+   canonical heading and no unintended yaw; and walk arcs retain role-consistent planar translation and signed yaw.
+   Source Root tracks are unreliable and are not blindly adopted; metadata validates semantics and direction but cannot
+   be the only yaw author. Under ANIM-001's normative heading terminology, clockwise-positive visible/body heading is
+   represented by negative right-handed canonical Blender Root Euler-Z because the canonical Root tail is `+Y`:
+   `root_euler_z = -visible_heading_delta`. This representation contract applies to pivots and arcs only; it does not
+   alter the deliberate straight/side-step policy or permit a runtime/Godot workaround.
+4. The generated import and catalogue consume each selected action's persisted ANIM-001 effective loop intent,
+   including the required looped pivots. Actions with that intent use the Blender `-loop` suffix before import and
+   import as looping `Animation` resources; other actions do not and import as non-looping resources. The suffix is
+   stripped at the external boundary and never appears in selection, library, package, role-map, or runtime references.
+5. Every extracted clip provides exactly one position track and one rotation track targeting `GeneralSkeleton:Root`.
+   Every consuming runtime `AnimationTree` resolves that exact root-motion track on its unique-name
+   `GeneralSkeleton` binding. No alternate Root target, duplicate root-motion target, or per-clip track path is
+   permitted.
+6. Before import, the idempotent configurator writes exactly nine enabled top-level contained-animation entries. Each
+   has the expected literal `res://assets/characters/reference/female/animations/locomotion/clips/<action>.res` primary
+   and fallback paths; stale or duplicate entries are removed.
+7. Godot may canonicalise a primary sidecar path to `uid://` only when it resolves to the expected clip and retains the
+   enabled extraction and literal fallback path. Durable package references remain literal portable `res://` paths.
+8. Packaging may normalise the accepted skeleton-track prefix and must deterministically neutralise duplicated Hips
+   heading while preserving Root translation and yaw, Hips swing, translation, scale, timing, interpolation,
+   non-heading pose, and full-body appearance. Runtime correction, warping, or synthetic root motion is prohibited.
 
-### Processed Artefacts and Invariants
+### Package And Response Profile
 
-1. ANIM-001 processing produces these standing-catalogue artefacts:
-   - `game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend`;
-   - `game/assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend.import`;
-   - `game/assets/characters/reference/female/animations/processed/mixamo/index.json`;
-   - 46 files at
-     `game/assets/characters/reference/female/animations/processed/mixamo/metrics/<action>.metrics.json`.
-2. The `.blend` contains one coherent `locomotion_standing` group with one target armature and exactly 46 persistent,
-   uniquely named actions. Each action follows `mixamo_<motion_id>` with hyphens replaced by underscores.
-3. The baseline processed index and metrics have these cross-consistent invariants:
-   - processed-index schema version 2 and metrics schema version 2;
-   - 46 successful motions, 46 unique actions, and 46 metrics files;
-   - one category, `locomotion`, and one group, `locomotion_standing`;
-   - 2,612 total metric samples at 30 fps;
-   - `root_source` equal to `reconstructed_root` and `root_created=true` for every clip;
-   - 106.66666668653485 seconds when summing the 46 imported animation lengths, reported as 106.67 seconds for
-     human-readable summaries.
-4. `index.json`, metrics files, source references, `.blend` references, and generated package references must use
-   repository-relative paths or `res://` paths. Absolute paths, temporary paths, and source-machine locations are
-   forbidden.
-5. No `locomotion_crouch` motion, action, metrics entry, extracted clip, library entry, or package-manifest entry may be
-   emitted as part of this collection. `locomotion_crouch.blend` is not an ANIM-003 output and must not become an orphan
-   referenced by standing-catalogue generation.
+1. The durable package is `standing_locomotion_library.tres` and `standing_locomotion_catalogue.json` at the existing
+   locomotion paths. The library contains exactly nine extracted resources keyed by processed action name.
+2. The catalogue records each clip's portable source and processed provenance, key, resource path, role, metrics path,
+   persisted loop intent and analysis provenance, and root-motion metadata. A derived clip additionally records its
+   distinct derived identity, source action and motion, reflection recipe, and source-artifact and recipe SHA-256
+   hashes. Library keys, clip basenames, actions, and package entries are one-to-one.
+3. The compact character-aware response profile derives deterministically from the role maps and selected metrics. It
+   records signed forward, backward, lateral, walk-arc, and bilateral 90-degree pivot response with normalised-cycle
+   timing provenance. It supports rear/lateral diagonal blending only from the selected backward and lateral roles and
+   does not invent running, start/stop, combat, or other excluded response.
+4. [CTRL-001](../../ctrl/001-locomotion/index.md) owns graph topology and root-motion consumption.
+   [NAV-001](../../nav/001-npc-navigation/index.md) owns route planning. Both consume this role-map limitation and
+   response profile; neither may add an animation role or substitute direct transform motion for it.
 
-### Godot Import and Extraction
+### Validation
 
-1. `locomotion_standing.blend` must use the ANIM-001 MakeHuman bone map and complete silhouette-rest-fixer handoff,
-   including the normative filter defined there.
-2. Godot imports the `.blend` as a `PackedScene` with animation import enabled at 30 fps. The imported scene must expose
-   one `AnimationPlayer`, one `AnimationLibrary`, one `Skeleton3D`, and all 46 selected actions.
-3. Before import, the minimal, idempotent import configurator must write one top-level contained-animation entry for
-   each of the 46 actions, including the five preview-screened lateral additions. Every entry must set:
-   - `save_to_file/enabled` to `true`;
-   - `save_to_file/path` to the literal expected path
-     `res://assets/characters/reference/female/animations/locomotion/clips/<action>.res`;
-   - `save_to_file/fallback_path` to that identical literal expected path.
-   The configurator must remove stale top-level action entries and must produce no duplicate action or resource path.
-4. After Godot import, Godot 4.7 may canonicalise a top-level `save_to_file/path` value to `uid://...`. A canonical UID
-   is valid only when all of these conditions hold:
-   - Godot resolves it to exactly the expected clip resource for that action;
-   - `save_to_file/fallback_path` remains the exact expected literal `res://` path;
-   - `save_to_file/enabled` remains `true`;
-   - all 46 unique action-to-resource correspondences remain exact;
-   - the UID is resolved, non-duplicated, and does not conceal an empty, missing, or mismatched fallback.
-5. Importer-generated slice-default metadata is canonical opaque import state. Its volume and default values are not
-   stale and do not require stripping or normalisation. Validation must ignore this metadata except when it introduces
-   an extra top-level action or an enabled slice that changes extraction semantics.
-6. No post-import repair may replace a valid canonical UID merely to normalise or simplify the sidecar. Repeated
-   unchanged imports must produce equivalent canonical post-import action, UID resolution, fallback, enablement, and
-   extraction state.
-7. Extraction produces exactly 46 binary `Animation` resources at
-   `game/assets/characters/reference/female/animations/locomotion/clips/<action>.res`. Each resource is loadable,
-   retains the imported animation keys, and has `resource_name=<action>`.
-8. Extraction and packaging are deterministic. When the `.blend`, selection, index, metrics, or import metadata
-   changes, all affected clips, paths, catalogue entries, and library references refresh in one run; stale extracted
-   clips and stale library entries are removed.
-9. Packaging may normalise an accepted imported skeleton track prefix to `GeneralSkeleton`, but must otherwise pass
-   through imported track types, key counts, key times, and key values. It must not reconstruct poses or roots, apply
-   grounding, or add runtime compensation.
-
-### Reusable Godot Package
-
-1. The durable library path is
-   `game/assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres`. It is an
-   `AnimationLibrary` containing exactly the 46 extracted resources, keyed by their processed action names.
-2. The durable package-manifest path is
-   `game/assets/characters/reference/female/animations/locomotion/standing_locomotion_catalogue.json`. It records the
-   source index, schema versions, library path, clip count, and one entry per clip with its key, resource path,
-   `motion_id`, action, group, group `.blend`, metrics path, motion class, category, tags, source-manifest metadata,
-   imported length, track count, fps, frame range, sample count, root source, and root-created flag.
-3. `mixamo_locomotion_library.tres` and `mixamo_locomotion_manifest.json` are non-normative runtime-oriented names.
-   Restored or regenerated assets must use the catalogue-neutral paths above.
-4. Library keys, extracted clip basenames, processed actions, metrics actions, and package-manifest keys correspond
-   one-to-one. Ordering is deterministic by action key.
-5. Durable package-manifest clip fields and externally documented clip paths must remain literal portable `res://`
-   paths. A library `.tres` may contain normal Godot UID metadata alongside resource paths, but UIDs must not replace
-   its path-resolvable resource contract. The durable catalogue JSON must never substitute `uid://` values for its
-   literal `res://` paths.
-6. The package exposes the complete collection without motion-matching, player-control, navigation, scoring,
-   transition, or `AnimationTree` coupling. Runtime query structures, scoring, transitions, `AnimationTree` topology,
-   and navigation integration belong to runtime and navigation consumer specifications.
-
-### Validation Contract
-
-1. A catalogue validation pass must fail on disagreement among selection rows, source-manifest joins, processed-index
-   motions, metrics files, `.blend` actions, import metadata, extracted clips, package-manifest entries, library keys,
-   or the required 4/36/6 coverage split.
-2. Validation must reject duplicate or empty `motion_id` values, actions, clip keys, resource paths, and library keys.
-3. The exact collection count is 46 at every post-selection stage, and all five laterals must be present.
-4. Git LFS validation must confirm that `.blend` and `.res` paths are LFS-tracked, their Git objects are valid LFS
-   pointers, and their working-tree files are materialised payloads rather than pointer text before Blender or Godot
-   validation.
-5. Godot validation must import and instantiate `locomotion_standing.blend`, load every extracted `.res` as an
-   `Animation`, load the library as an `AnimationLibrary`, and resolve every library entry to the corresponding clip.
-6. Pre-import validation must confirm the ANIM-001 retarget settings and exactly 46 top-level action entries with
-   enabled extraction, literal expected `save_to_file/path` values, identical literal fallback paths, and no stale or
-   duplicate actions.
-7. Post-import validation must accept either the unchanged expected literal primary path or a canonical `uid://`
-   primary path that Godot resolves to that exact resource. It must reject unresolved, mismatched, or duplicate UIDs;
-   disabled extraction; empty or mismatched fallbacks; missing or extra top-level actions; and enabled slices that alter
-   extraction semantics. Opaque slice-default metadata otherwise remains unchecked.
-8. Import validation must also confirm required `Root`, `Hips`, foot, and toe tracks and pass-through key preservation.
-   Repeated unchanged imports must have equivalent canonical post-import outputs without UID-rewriting repair.
-9. Portability validation must scan CSV, index, metrics, package manifest, and text resources for absolute paths,
-   temporary paths, UID substitution for durable literal clip paths, and other source-machine leakage. Canonical
-   top-level import-sidecar UIDs are allowed only under the post-import contract above.
-10. Validation must confirm that no crouch group or orphan crouch output is referenced by the standing collection.
-
-### Known Quality Gaps
-
-1. Catalogue completeness does not prove walking-to-idle synchronisation or naturalness.
-2. Crouch content is absent and outside this standing collection.
-3. Subjective animation quality, transition feel, and naturalness require evidence and playtesting by each consumer.
-4. ANIM-003 does not own runtime transition solutions for these gaps.
+1. Validation fails unless the selection rows, manifest joins, processed index, metrics, `.blend` actions, import
+   metadata, extracted clips, package entries, library keys, role maps, and response profile agree on exactly nine
+   unique clips and the required role map.
+2. Validation rejects duplicate or empty motion IDs, actions, keys, resource paths, and roles; excluded classes;
+   rejected source-role rows, missing source joins, stale outputs, runtime mirroring, synthetic yaw, and an unapproved
+   in-place-turn role. It accepts only ANIM-001-compliant derived mirrors of vetted natural sources.
+3. Import validation confirms ANIM-001 retarget settings, required Root and skeletal tracks, exactly one position and
+   one rotation track at `GeneralSkeleton:Root`, nine enabled extraction entries, loadable clip resources, loadable
+   library, per-clip loop modes matching persisted ANIM-001 effective intent, portable paths, and deterministic
+   repeated imports. It accepts canonical sidecar UIDs only under the import contract above and proves looped
+   Root-motion continuity at every wrap.
+4. Class-specific Root-motion validation replaces delta-only proof. It derives visible/body heading from the evaluated
+   physical Root forward/tail vector, not a raw Euler-Z or `matrix_basis` channel, and applies ANIM-001's canonical
+   `+Y`-tail mapping, `root_euler_z = -visible_heading_delta`. It confirms `TurnInPlaceRight90` has clockwise-positive
+   visible/body heading and negative canonical Root Euler-Z, `TurnInPlaceLeft90` has opposite signs, and representative
+   opposite arcs meet the same mapping while travelling. Pivots have Root `(0, 0, 0)` throughout with only signed,
+   role-consistent yaw; forward, backward, and lateral roles retain role-consistent planar translation, their deliberate
+   canonical heading, and no unintended yaw; and arcs retain role-consistent planar translation plus source-informed
+   signed-yaw direction and progress. Obsolete delta-only comparison or evidence helpers from prior failed fixes are
+   removed or replaced. Validation also confirms preserved Hips and Root data after packaging. Representative pivot,
+   straight/side-step, and arc captures are retained as visual evidence. Response-profile validation confirms complete
+   nine-role coverage, deterministic derivation, signed response, and timing provenance. Independent visual review
+   confirms upright, unarmed poses and each role's intended motion, including any derived travel role.
 
 ## In Scope
 
-- The concrete 46-clip standing selection and its reviewable source provenance.
-- ANIM-001 generation of the standing `.blend`, metrics, and portable processed index.
-- Godot import metadata, deterministic extraction, reusable library packaging, and catalogue package metadata.
-- Cross-layer count, coverage, portability, LFS, import, loadability, and correspondence validation.
+- The nine-clip selection, provenance, processing, import, extraction, packaging, role maps, response profile, and
+  validation contracts, generated assets, and visual evidence required to ship it.
+- Smooth walking direction changes through walk arcs, brief lateral corrections through sidesteps, and bilateral
+  deliberate 90-degree in-place pivots.
 
 ## Out Of Scope
 
-- Crouch, prone, seated, interaction, combat, weapon, boxing, guard, and bespoke animation collections.
-- Runtime motion matching, query data, scoring, transition policy, state machines, `AnimationTree` topology, player
-  locomotion, and navigation integration.
-- Claims of natural transition quality without consumer playtest evidence.
-- Final tuning of consumer-specific transition thresholds, blend durations, or scoring weights.
+- Additional standing clips and unrelated locomotion collections, including run, start/stop, combat, weapon,
+  crouch, prone, seated, and interaction motion.
+- Consumer-specific blend thresholds, route scoring weights, and playtest tuning.
+- Full motion matching, motion warping, player-specific snap turning, and navigation-owned root-motion application.
+- No out-of-scope item excludes required processing, metrics, generated assets, validation, regeneration, or visual
+  evidence for the nine selected clips.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. A contributor can trace every enabled selection row through the stable source manifest, retained selection notes,
-   processed outputs, extracted clip, package manifest, and library key without a local source path.
-2. Catalogue review confirms exactly 4 standing idles, 36 standing locomotion clips, and 6 turn-in-place clips with the
-   stated directional, speed, start/stop, lateral, arc, and turn coverage.
-3. The five named preview-screened laterals are present with their rationale, while unsuitable combat, weapon, boxing,
-   guard, crouch, and other non-ordinary candidates are absent or explicitly disabled outside the selection.
-4. Godot consumers can load all 46 clips individually and enumerate the same complete collection from one reusable
-   `AnimationLibrary` without adopting a runtime motion-matching or navigation architecture.
-5. Catalogue documentation states that walking-to-idle synchronisation, naturalness, crouch coverage, and subjective
-   quality remain consumer validation work rather than solved catalogue outcomes.
+1. Catalogue review shows exactly the nine named roles and no excluded clip class.
+2. Playback review shows an animated idle, ordinary forward and backward walking, smooth left and right walking arcs,
+   and brief left and right lateral corrections.
+3. Independent playback review shows both ordinary unarmed looped pivots turn 90 degrees in opposing directions with
+   Root fixed at `(0, 0, 0)` and no Root-motion discontinuity at a wrap; straight walks and side steps do not
+   unintentionally turn; and moving direction changes use walk arcs rather than pivots. Each clip's repeat behaviour
+   matches its persisted pose-derived loop intent.
+4. A contributor can trace every selected clip from selection row and source manifest through processed output,
+   extracted resource, package entry, library key, and graph role without a local path, including source-pair rationale
+   and, for a derived mirror, its distinct identity, source, recipe, and SHA-256 hashes.
 
 ### Technical Requirement Acceptance
 
-1. Automated cross-consistency checks join 46 unique selection rows to the source manifest and confirm 46 unique
-   processed actions, metrics files, `.blend` actions, contained-import entries, extracted resources, package entries,
-   and library keys.
-2. The processed index and every metric validate as schema version 2, one coherent `locomotion_standing` group,
-   `reconstructed_root`, `root_created=true`, 2,612 total samples, and the inspected 106.66666668653485-second imported
-   duration total.
-3. The pre-import configuration uses the normative ANIM-001 MakeHuman bone map and silhouette-rest-fixer settings and
-   writes exactly 46 enabled top-level actions with literal expected primary and identical fallback `res://` paths,
-   without stale or duplicate actions.
-4. Post-import inspection accepts a Godot 4.7 canonical `uid://` primary path only when it resolves to the exact
-   expected clip, retains the exact literal fallback and enabled extraction, and maintains all 46 unique
-   action-to-resource correspondences. Opaque slice defaults are ignored unless an enabled slice changes extraction.
-5. Repeated unchanged imports produce equivalent canonical post-import outputs without rewriting valid UIDs;
-   regeneration after a `.blend` change refreshes affected clips, removes stale clips and keys, and maintains
-   one-to-one action, metrics, clip, package-manifest, and library correspondence.
-6. LFS checks prove valid tracked pointers and materialised `.blend` and `.res` payloads; Godot then imports the source
-   and loads every clip and the library successfully.
-7. Portability checks find no source-machine or temporary path leakage. Durable catalogue JSON and documented clip
-   fields use literal `res://` paths; library resources remain path-resolvable even when normal UID metadata is present.
-8. The generated collection contains no crouch action, metrics entry, clip, package entry, library key, or orphan
-   crouch reference.
-9. Package inspection confirms pass-through animation data apart from allowed skeleton-prefix normalisation and no
-   dependency on runtime query, scoring, transition, `AnimationTree`, player-locomotion, or navigation structures.
-10. Restored or regenerated assets use `standing_locomotion_library.tres` and
-   `standing_locomotion_catalogue.json`; the non-normative runtime-oriented filenames are not part of the durable
-   contract.
+1. Automated checks prove nine unique manifest-joined selection rows, actions, metrics, extraction entries, clips,
+   package entries, library keys, role-map entries, and response-profile entries, with no stale output.
+2. Import and package checks prove the ANIM-001 retarget and class-specific Root-motion contract, including unreliable
+   source Root handling, metadata as semantic validation rather than sole yaw author, per-clip loop modes matching
+   persisted loop intent and analysis provenance, the exact `GeneralSkeleton:Root` position and rotation tracks,
+   loadability, portable paths, continuous loop-wrap Root motion, and deterministic Hips heading neutralisation without
+   runtime compensation. Focused checks derive heading from the evaluated physical Root tail;
+   prove the named right pivot's clockwise-positive visible/body heading maps to negative canonical Root Euler-Z, the
+   left pivot's opposite signs, and representative opposite arcs; and reject raw Euler-Z, `matrix_basis`, or obsolete
+   delta-only helpers as visible-heading evidence.
+3. Role-map checks prove each consumer graph maps only the nine roles from the shared library, including both required
+   stationary pivot roles, with no fallback or runtime-generated counterpart.
+4. Response-profile checks prove deterministic character-role resolution, signed bilateral pivot response, and
+    normalised-cycle timing for forward, backward, lateral, walk-arc, and pivot roles only. Visual checks reject sad,
+    hunched, crouched, raised-arm, combat, weapon, running, and stylised poses, including as mirror sources.
+5. Regeneration checks reproduce all nine generated actions, metrics, extracted clips, package entries, role maps, and
+   representative pivot, straight/side-step, and arc validation captures without manual per-clip repair.
 
 ## References
 
 - [ANIM: Animation](../index.md)
 - [ANIM-001: Animation Source Pipeline](../001-animation-source-pipeline/index.md)
-- `tools/process_mixamo_animations.py`
+- [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)

@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/photobooth.tscn" id="1_photobooth"]
+[ext_resource type="PackedScene" path="res://assets/testing/navigation/navigation_test.tscn" id="2_playtest"]
+[ext_resource type="Script" path="res://tests/navigation/navigation_playtest_photobooth.gd" id="3_runner"]
+
+[node name="NavigationPlaytestPhotobooth" instance=ExtResource("1_photobooth")]
+script = ExtResource("3_runner")
+
+[node name="NavigationPlaytest" parent="." instance=ExtResource("2_playtest")]
+
+[node name="VerificationCamera" type="Camera3D" parent="."]
+current = true
+fov = 52.0

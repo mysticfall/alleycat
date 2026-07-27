@@ -1,762 +1,85 @@
 {
-  "catalogue_schema_version": 1,
+  "catalogue_schema_version": 2,
   "source_index": "res://assets/characters/reference/female/animations/processed/mixamo/index.json",
   "source_index_schema_version": 2,
   "metrics_schema_version": 2,
   "animation_library": "res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres",
-  "clip_count": 46,
+  "clip_count": 9,
   "clips": [
     {
-      "key": "mixamo_c9c68c4c_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c68c4c_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c68c4c-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c68c4c_b96c_11e4_a802_0aaa78deedf9",
+      "key": "derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+      "role": "WalkArcRight",
+      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9.res",
+      "motion_id": "derived_mirror_c9ccf8d5-b96c-11e4-a802-0aaa78deedf9",
+      "action": "derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
       "group": "locomotion_standing",
       "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c68c4c_b96c_11e4_a802_0aaa78deedf9.metrics.json",
+      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9.metrics.json",
       "motion_class": "StandingLocomotion",
       "category": "locomotion",
       "tags": [
         "walk",
-        "start",
-        "forward",
-        "female"
-      ],
-      "source_manifest": {
-        "file": "download/c9c68c4c-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Female Start Walking",
-        "description": "Female Start Walking",
-        "type": "Motion"
-      },
-      "length": 2.375,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 57.0,
-        "start": 1.0
-      },
-      "sample_count": 57,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c68d24_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c68d24_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c68d24-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c68d24_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c68d24_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "stop",
-        "forward",
-        "female"
-      ],
-      "source_manifest": {
-        "file": "download/c9c68d24-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Female Stop Walking",
-        "description": "Female Stop Walking",
-        "type": "Motion"
-      },
-      "length": 1.95833337306976,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 47.0,
-        "start": 1.0
-      },
-      "sample_count": 47,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c68dee_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c68dee_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c68dee-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c68dee_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c68dee_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "stop",
-        "start",
-        "forward",
-        "female"
-      ],
-      "source_manifest": {
-        "file": "download/c9c68dee-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Female Stop And Start Walking",
-        "description": "Female Stop Start Walking",
-        "type": "Motion"
-      },
-      "length": 4.70833349227905,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 113.0,
-        "start": 1.0
-      },
-      "sample_count": 113,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c7ff20_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c7ff20_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c7ff20-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c7ff20_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c7ff20_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "sidestep",
-        "lateral"
-      ],
-      "source_manifest": {
-        "file": "download/c9c7ff20-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Side Step",
-        "description": "Side Step",
-        "type": "Motion"
-      },
-      "length": 1.875,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 45.0,
-        "start": 1.0
-      },
-      "sample_count": 45,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c89530_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c89530_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c89530-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c89530_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89530_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
-        "left",
-        "start"
-      ],
-      "source_manifest": {
-        "file": "download/c9c89530-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Strafing",
-        "description": "Start Left Upright Strafe Walk",
-        "type": "Motion"
-      },
-      "length": 1.625,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 39.0,
-        "start": 1.0
-      },
-      "sample_count": 39,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c89ca4_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c89ca4_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c89ca4-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c89ca4_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89ca4_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
-        "left",
-        "stop"
-      ],
-      "source_manifest": {
-        "file": "download/c9c89ca4-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Strafing",
-        "description": "Left Upright Strafe Walk To Stop",
-        "type": "Motion"
-      },
-      "length": 1.375,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 33.0,
-        "start": 1.0
-      },
-      "sample_count": 33,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c89d61_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c89d61_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c89d61-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c89d61_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89d61_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
+        "arc",
         "right",
-        "start"
+        "forward",
+        "derived_mirror",
+        "role_walk_arc_right"
       ],
       "source_manifest": {
-        "file": "download/c9c89d61-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Strafe Right",
-        "description": "Start Strafe Walk Right",
-        "type": "Motion"
-      },
-      "length": 1.95833337306976,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 47.0,
-        "start": 1.0
-      },
-      "sample_count": 47,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c89f96_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c89f96_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c89f96-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c89f96_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c89f96_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
-        "right",
-        "stop"
-      ],
-      "source_manifest": {
-        "file": "download/c9c89f96-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Strafe Right Stop",
-        "description": "Stop Strafe Walk Right",
-        "type": "Motion"
-      },
-      "length": 2.625,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 63.0,
-        "start": 1.0
-      },
-      "sample_count": 63,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c8b661_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c8b661_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c8b661-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c8b661_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c8b661_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "start",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9c8b661-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Start Walking",
-        "description": "Walking From Standing",
-        "type": "Motion"
-      },
-      "length": 3.70833325386047,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 89.0,
-        "start": 1.0
-      },
-      "sample_count": 89,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c8d966_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c8d966_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c8d966-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c8d966_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c8d966_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "stop",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9c8d966-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Stop Walking",
-        "description": "Walking To Standing Idle",
-        "type": "Motion"
-      },
-      "length": 3.79166674613953,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 91.0,
-        "start": 1.0
-      },
-      "sample_count": 91,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c94322_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c94322_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c94322-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c94322_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c94322_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "TurnInPlace",
-      "category": "locomotion",
-      "tags": [
-        "turn",
-        "in_place",
-        "left",
-        "45"
-      ],
-      "source_manifest": {
-        "file": "download/c9c94322-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Left Turn 45",
-        "description": "45 Degree Left Turn From Idle",
-        "type": "Motion"
-      },
-      "length": 1.70833337306976,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 41.0,
-        "start": 1.0
-      },
-      "sample_count": 41,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c96857_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c96857_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c96857-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c96857_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96857_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
-        "left"
-      ],
-      "source_manifest": {
-        "file": "download/c9c96857-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Left Strafe Walking",
-        "description": "Strafe Walking To The Left",
+        "file": "download/c9ccf8d5-b96c-11e4-a802-0aaa78deedf9.fbx",
+        "name": "Derived Mirror Walk Arc Right",
+        "description": "Post-retarget sagittal mirror of vetted natural female Walk Arc Left",
         "type": "Motion"
       },
       "length": 1.33333337306976,
       "track_count": 58,
-      "fps": 30,
+      "fps": 24,
       "frame_range": {
         "end": 32.0,
         "start": 1.0
       },
       "sample_count": 32,
       "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c96924_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c96924_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c96924-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c96924_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96924_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
-        "right"
-      ],
-      "source_manifest": {
-        "file": "download/c9c96924-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Right Strafe Walking",
-        "description": "Strafe Walking To The Right",
-        "type": "Motion"
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.0,
+          "scale": 0.000000298023223876953,
+          "translation": 0.0600189939126433
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
       },
-      "length": 1.33333337306976,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 32.0,
-        "start": 1.0
-      },
-      "sample_count": 32,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c96c6d_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c96c6d_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c96c6d-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c96c6d_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96c6d_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "strafe",
-        "left"
-      ],
-      "source_manifest": {
-        "file": "download/c9c96c6d-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Left Strafe",
-        "description": "Running Strafe To The Left",
-        "type": "Motion"
-      },
-      "length": 0.875,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 21.0,
-        "start": 1.0
-      },
-      "sample_count": 21,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c96eae_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c96eae_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c96eae-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c96eae_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96eae_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "TurnInPlace",
-      "category": "locomotion",
-      "tags": [
-        "turn",
-        "in_place",
-        "left",
-        "180"
-      ],
-      "source_manifest": {
-        "file": "download/c9c96eae-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Left Turn",
-        "description": "Standing 180 Left Turn",
-        "type": "Motion"
-      },
-      "length": 2.08333325386047,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 50.0,
-        "start": 1.0
-      },
-      "sample_count": 50,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c96f9e_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c96f9e_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c96f9e-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c96f9e_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c96f9e_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "strafe",
-        "right"
-      ],
-      "source_manifest": {
-        "file": "download/c9c96f9e-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Right Strafe",
-        "description": "Running Strafe To The Right",
-        "type": "Motion"
-      },
-      "length": 0.875,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 21.0,
-        "start": 1.0
-      },
-      "sample_count": 21,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c9713c_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c9713c_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c9713c-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c9713c_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9713c_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "TurnInPlace",
-      "category": "locomotion",
-      "tags": [
-        "turn",
-        "in_place",
-        "right",
-        "180"
-      ],
-      "source_manifest": {
-        "file": "download/c9c9713c-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Right Turn",
-        "description": "Standing 180 Right Turn",
-        "type": "Motion"
-      },
-      "length": 2.08333325386047,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 50.0,
-        "start": 1.0
-      },
-      "sample_count": 50,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c972d1_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c972d1_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c972d1-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c972d1_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c972d1_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingIdle",
-      "category": "locomotion",
-      "tags": [
-        "idle",
-        "standing",
-        "neutral"
-      ],
-      "source_manifest": {
-        "file": "download/c9c972d1-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Idle",
-        "description": "Standing Idle",
-        "type": "Motion"
-      },
-      "length": 10.4166669845581,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 251.0,
-        "start": 1.0
-      },
-      "sample_count": 251,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c9829c_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c9829c_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c9829c-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c9829c_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9829c_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
-        "left",
-        "relaxed"
-      ],
-      "source_manifest": {
-        "file": "download/c9c9829c-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Left Strafe Walk",
-        "description": "Walking Strafe To The Left",
-        "type": "Motion"
-      },
-      "length": 1.20833337306976,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 29.0,
-        "start": 1.0
-      },
-      "sample_count": 29,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c985b7_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c985b7_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c985b7-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c985b7_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c985b7_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "strafe",
-        "right",
-        "relaxed"
-      ],
-      "source_manifest": {
-        "file": "download/c9c985b7-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Right Strafe Walk",
-        "description": "Walking Strafe To The Right",
-        "type": "Motion"
-      },
-      "length": 1.20833337306976,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 29.0,
-        "start": 1.0
-      },
-      "sample_count": 29,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c98676_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c98676_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c98676-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c98676_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c98676_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "TurnInPlace",
-      "category": "locomotion",
-      "tags": [
-        "turn",
-        "in_place",
-        "right"
-      ],
-      "source_manifest": {
-        "file": "download/c9c98676-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Right Turn",
-        "description": "Standing Right Turn",
-        "type": "Motion"
-      },
-      "length": 1.5,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 36.0,
-        "start": 1.0
-      },
-      "sample_count": 36,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c98e99_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c98e99_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c98e99-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c98e99_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c98e99_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingIdle",
-      "category": "locomotion",
-      "tags": [
-        "idle",
-        "standing",
-        "look"
-      ],
-      "source_manifest": {
-        "file": "download/c9c98e99-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Idle",
-        "description": "Looking Over Both Shoulders",
-        "type": "Motion"
-      },
-      "length": 5.04166650772095,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 121.0,
-        "start": 1.0
-      },
-      "sample_count": 121,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9c9a5a7_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c9a5a7_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9c9a5a7-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9c9a5a7_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9c9a5a7_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "stop",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9c9a5a7-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Run To Stop",
-        "description": "Fast Stop From Full Run",
-        "type": "Motion"
-      },
-      "length": 1.16666662693024,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 28.0,
-        "start": 1.0
-      },
-      "sample_count": 28,
-      "root_source": "reconstructed_root",
-      "root_created": true
+      "derived_provenance": {
+        "canonical_reflection_recipe": {
+          "metrics": "freshly sampled from derived action; foot channels follow swapped pose",
+          "paired_bones": "Left<->Right and _l<->_r",
+          "reflection": "S=diag(-1,1,1); M'=S*M*S",
+          "root": "Root.location.x and yaw negated",
+          "type": "sagittal_world_matrix_reflection",
+          "version": 1.0
+        },
+        "derivation_type": "sagittal_world_matrix_reflection",
+        "derived_identity": "derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+        "recipe_sha256": "6a90608a00b9cc03b34db9eae64745f168c286198691f26b91ba04748ec34afc",
+        "source_action": "mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+        "source_artifact_sha256": "a8a5363af4c3436305f98ce61ad2e8e35e07a8fd6f3a458a239d717768040181",
+        "source_motion_id": "c9ccf8d5-b96c-11e4-a802-0aaa78deedf9"
+      }
     },
     {
       "key": "mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9",
+      "role": "SideStepLeft",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9c9d9d6-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9",
@@ -767,9 +90,9 @@
       "category": "locomotion",
       "tags": [
         "walk",
-        "strafe",
+        "sidestep",
         "left",
-        "relaxed"
+        "role_side_step_left"
       ],
       "source_manifest": {
         "file": "download/c9c9d9d6-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -786,10 +109,31 @@
       },
       "sample_count": 45,
       "root_source": "reconstructed_root",
-      "root_created": true
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.00617632595822215,
+          "scale": 0.000000357627868652344,
+          "translation": 0.00808130434752058
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
+      },
+      "derived_provenance": {}
     },
     {
       "key": "mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9",
+      "role": "SideStepRight",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9c9db9e-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9",
@@ -800,9 +144,9 @@
       "category": "locomotion",
       "tags": [
         "walk",
-        "strafe",
+        "sidestep",
         "right",
-        "relaxed"
+        "role_side_step_right"
       ],
       "source_manifest": {
         "file": "download/c9c9db9e-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -819,235 +163,31 @@
       },
       "sample_count": 45,
       "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9cbef68_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9cbef68_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9cbef68-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9cbef68_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cbef68_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "backward"
-      ],
-      "source_manifest": {
-        "file": "download/c9cbef68-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Walking Backwards",
-        "description": "Walking Backwards",
-        "type": "Motion"
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.0,
+          "scale": 0.000000417232513427734,
+          "translation": 0.00808181468076246
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
       },
-      "length": 1.54166662693024,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 37.0,
-        "start": 1.0
-      },
-      "sample_count": 37,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ccc2e9_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccc2e9_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ccc2e9-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ccc2e9_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccc2e9_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "standard",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9ccc2e9-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Standard Walk",
-        "description": "Standard Walk",
-        "type": "Motion"
-      },
-      "length": 1.5,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 36.0,
-        "start": 1.0
-      },
-      "sample_count": 36,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ccc5dd_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccc5dd_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ccc5dd-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ccc5dd_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccc5dd_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "standard",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9ccc5dd-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Standard Run",
-        "description": "Standard Running",
-        "type": "Motion"
-      },
-      "length": 0.958333313465118,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 23.0,
-        "start": 1.0
-      },
-      "sample_count": 23,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ccc765_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccc765_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ccc765-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ccc765_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccc765_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "backward"
-      ],
-      "source_manifest": {
-        "file": "download/c9ccc765-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Running Backward",
-        "description": "Backwards Running",
-        "type": "Motion"
-      },
-      "length": 0.833333313465118,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 20.0,
-        "start": 1.0
-      },
-      "sample_count": 20,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ccdbe3_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccdbe3_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ccdbe3-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ccdbe3_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccdbe3_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "arc",
-        "right",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9ccdbe3-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Walk Forward Arc Right",
-        "description": "Walking Forward Right Arc In A Sad Disposition",
-        "type": "Motion"
-      },
-      "length": 1.875,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 45.0,
-        "start": 1.0
-      },
-      "sample_count": 45,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9cceeed_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9cceeed_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9cceeed-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9cceeed_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cceeed_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "slow",
-        "forward",
-        "happy"
-      ],
-      "source_manifest": {
-        "file": "download/c9cceeed-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Happy Walk",
-        "description": "Happy Walking Forward",
-        "type": "Motion"
-      },
-      "length": 1.41666662693024,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 34.0,
-        "start": 1.0
-      },
-      "sample_count": 34,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ccf2b8_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccf2b8_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ccf2b8-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ccf2b8_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccf2b8_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "arc",
-        "right",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9ccf2b8-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Run Forward Arc Right",
-        "description": "Happy Run Forward Right Arc",
-        "type": "Motion"
-      },
-      "length": 1.16666662693024,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 28.0,
-        "start": 1.0
-      },
-      "sample_count": 28,
-      "root_source": "reconstructed_root",
-      "root_created": true
+      "derived_provenance": {}
     },
     {
       "key": "mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9",
+      "role": "Idle",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9ccf750-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9",
@@ -1059,7 +199,8 @@
       "tags": [
         "idle",
         "standing",
-        "female"
+        "female",
+        "role_idle"
       ],
       "source_manifest": {
         "file": "download/c9ccf750-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -1076,10 +217,31 @@
       },
       "sample_count": 301,
       "root_source": "reconstructed_root",
-      "root_created": true
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.0,
+          "scale": 0.000000238418579101562,
+          "translation": 0.000000178813934326172
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
+      },
+      "derived_provenance": {}
     },
     {
       "key": "mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9",
+      "role": "ForwardWalk",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9ccf814-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9",
@@ -1092,7 +254,8 @@
         "walk",
         "standard",
         "forward",
-        "female"
+        "female",
+        "role_forward_walk"
       ],
       "source_manifest": {
         "file": "download/c9ccf814-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -1109,10 +272,31 @@
       },
       "sample_count": 31,
       "root_source": "reconstructed_root",
-      "root_created": true
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.0,
+          "scale": 0.000000357627868652344,
+          "translation": 0.00526091521504187
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
+      },
+      "derived_provenance": {}
     },
     {
       "key": "mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+      "role": "WalkArcLeft",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9ccf8d5-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
@@ -1126,7 +310,8 @@
         "arc",
         "left",
         "forward",
-        "female"
+        "female",
+        "role_walk_arc_left"
       ],
       "source_manifest": {
         "file": "download/c9ccf8d5-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -1143,10 +328,31 @@
       },
       "sample_count": 32,
       "root_source": "reconstructed_root",
-      "root_created": true
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.0,
+          "scale": 0.000000298023223876953,
+          "translation": 0.0600189939126433
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
+      },
+      "derived_provenance": {}
     },
     {
       "key": "mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9",
+      "role": "BackwardWalk",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9ccf998-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9",
@@ -1158,7 +364,8 @@
       "tags": [
         "walk",
         "backward",
-        "female"
+        "female",
+        "role_backward_walk"
       ],
       "source_manifest": {
         "file": "download/c9ccf998-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -1175,140 +382,31 @@
       },
       "sample_count": 30,
       "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ccfbe8_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ccfbe8_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ccfbe8-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ccfbe8_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ccfbe8_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "arc",
-        "left",
-        "forward",
-        "female"
-      ],
-      "source_manifest": {
-        "file": "download/c9ccfbe8-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Run Arc Left",
-        "description": "Female Run Arc Left",
-        "type": "Motion"
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.0,
+          "scale": 0.000000298023223876953,
+          "translation": 0.00444522621909266
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
       },
-      "length": 0.708333313465118,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 17.0,
-        "start": 1.0
-      },
-      "sample_count": 17,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ce777f_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ce777f_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ce777f-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ce777f_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ce777f_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "slow",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9ce777f-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Slow Run",
-        "description": "Slow Run Forward",
-        "type": "Motion"
-      },
-      "length": 0.958333313465118,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 23.0,
-        "start": 1.0
-      },
-      "sample_count": 23,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ce7bbc_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ce7bbc_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ce7bbc-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ce7bbc_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ce7bbc_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "run",
-        "fast",
-        "forward"
-      ],
-      "source_manifest": {
-        "file": "download/c9ce7bbc-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Fast Run",
-        "description": "Running Fast",
-        "type": "Motion"
-      },
-      "length": 0.708333313465118,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 17.0,
-        "start": 1.0
-      },
-      "sample_count": 17,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9ceeb89_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ceeb89_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9ceeb89-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9ceeb89_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9ceeb89_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingIdle",
-      "category": "locomotion",
-      "tags": [
-        "idle",
-        "standing",
-        "look"
-      ],
-      "source_manifest": {
-        "file": "download/c9ceeb89-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Unarmed Idle Looking Ver. 2",
-        "description": "Looking Around",
-        "type": "Motion"
-      },
-      "length": 9.83333301544189,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 236.0,
-        "start": 1.0
-      },
-      "sample_count": 236,
-      "root_source": "reconstructed_root",
-      "root_created": true
+      "derived_provenance": {}
     },
     {
       "key": "mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9",
+      "role": "TurnInPlaceLeft90",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9ceef5f-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9",
@@ -1321,7 +419,8 @@
         "turn",
         "in_place",
         "left",
-        "90"
+        "90",
+        "role_turn_in_place_left_90"
       ],
       "source_manifest": {
         "file": "download/c9ceef5f-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -1338,10 +437,31 @@
       },
       "sample_count": 46,
       "root_source": "reconstructed_root",
-      "root_created": true
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.00539324432611465,
+          "scale": 0.000000298023223876953,
+          "translation": 0.00000650580515717489
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
+      },
+      "derived_provenance": {}
     },
     {
       "key": "mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9",
+      "role": "TurnInPlaceRight90",
       "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9.res",
       "motion_id": "c9cef01d-b96c-11e4-a802-0aaa78deedf9",
       "action": "mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9",
@@ -1354,7 +474,8 @@
         "turn",
         "in_place",
         "right",
-        "90"
+        "90",
+        "role_turn_in_place_right_90"
       ],
       "source_manifest": {
         "file": "download/c9cef01d-b96c-11e4-a802-0aaa78deedf9.fbx",
@@ -1371,136 +492,177 @@
       },
       "sample_count": 46,
       "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9cef0de_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9cef0de_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9cef0de-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9cef0de_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cef0de_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "backward",
-        "unarmed"
-      ],
-      "source_manifest": {
-        "file": "download/c9cef0de-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Unarmed Walk Back",
-        "description": "Walking Backwards",
-        "type": "Motion"
+      "root_created": true,
+      "loop_intent": {
+        "analysis_version": 3.0,
+        "comparison": "retained_non_root_local_matrix_basis_start_end_excluding_Root",
+        "effective_loop_intent": true,
+        "maxima": {
+          "angular_radians": 0.0,
+          "scale": 0.000000298023223876953,
+          "translation": 0.00000029195442498466
+        },
+        "offending_bones": [],
+        "override": null,
+        "raw_eligible": true,
+        "retained_bone_count": 54.0,
+        "thresholds": {
+          "angular_radians": 0.0523598775598299,
+          "scale": 0.01,
+          "translation": 0.061
+        }
       },
-      "length": 1.66666662693024,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 40.0,
-        "start": 1.0
-      },
-      "sample_count": 40,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_c9cef1a4_b96c_11e4_a802_0aaa78deedf9",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9cef1a4_b96c_11e4_a802_0aaa78deedf9.res",
-      "motion_id": "c9cef1a4-b96c-11e4-a802-0aaa78deedf9",
-      "action": "mixamo_c9cef1a4_b96c_11e4_a802_0aaa78deedf9",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_c9cef1a4_b96c_11e4_a802_0aaa78deedf9.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "standard",
-        "forward",
-        "unarmed"
-      ],
-      "source_manifest": {
-        "file": "download/c9cef1a4-b96c-11e4-a802-0aaa78deedf9.fbx",
-        "name": "Unarmed Walk Forward",
-        "description": "Walking Forward",
-        "type": "Motion"
-      },
-      "length": 1.75,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 42.0,
-        "start": 1.0
-      },
-      "sample_count": 42,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_cf0d35fa_e14c_479d_9e70_422b7db09010",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_cf0d35fa_e14c_479d_9e70_422b7db09010.res",
-      "motion_id": "cf0d35fa-e14c-479d-9e70-422b7db09010",
-      "action": "mixamo_cf0d35fa_e14c_479d_9e70_422b7db09010",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_cf0d35fa_e14c_479d_9e70_422b7db09010.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "sidestep",
-        "right"
-      ],
-      "source_manifest": {
-        "file": "download/cf0d35fa-e14c-479d-9e70-422b7db09010.fbx",
-        "name": "Standing Walk Right",
-        "description": "Walking Right",
-        "type": "Motion"
-      },
-      "length": 1.54166662693024,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 37.0,
-        "start": 1.0
-      },
-      "sample_count": 37,
-      "root_source": "reconstructed_root",
-      "root_created": true
-    },
-    {
-      "key": "mixamo_dafc5687_c69f_487c_a672_dfb04cd28c30",
-      "animation_resource": "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_dafc5687_c69f_487c_a672_dfb04cd28c30.res",
-      "motion_id": "dafc5687-c69f-487c-a672-dfb04cd28c30",
-      "action": "mixamo_dafc5687_c69f_487c_a672_dfb04cd28c30",
-      "group": "locomotion_standing",
-      "group_blend": "res://assets/characters/reference/female/animations/processed/mixamo/locomotion_standing.blend",
-      "metrics": "res://assets/characters/reference/female/animations/processed/mixamo/metrics/mixamo_dafc5687_c69f_487c_a672_dfb04cd28c30.metrics.json",
-      "motion_class": "StandingLocomotion",
-      "category": "locomotion",
-      "tags": [
-        "walk",
-        "sidestep",
-        "left"
-      ],
-      "source_manifest": {
-        "file": "download/dafc5687-c69f-487c-a672-dfb04cd28c30.fbx",
-        "name": "Standing Walk Left",
-        "description": "Walking Left",
-        "type": "Motion"
-      },
-      "length": 1.5,
-      "track_count": 58,
-      "fps": 30,
-      "frame_range": {
-        "end": 36.0,
-        "start": 1.0
-      },
-      "sample_count": 36,
-      "root_source": "reconstructed_root",
-      "root_created": true
+      "derived_provenance": {}
     }
-  ]
+  ],
+  "role_maps": {
+    "reference_female": [
+      {
+        "library_key": "mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "Idle",
+        "temporary": false,
+        "replacement_note": "Female ordinary idle."
+      },
+      {
+        "library_key": "mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "ForwardWalk",
+        "temporary": false,
+        "replacement_note": "Female ordinary forward walk."
+      },
+      {
+        "library_key": "mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "BackwardWalk",
+        "temporary": false,
+        "replacement_note": "Female ordinary bounded rear correction."
+      },
+      {
+        "library_key": "mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "SideStepLeft",
+        "temporary": false,
+        "replacement_note": "Natural ordinary left lateral correction."
+      },
+      {
+        "library_key": "mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "SideStepRight",
+        "temporary": false,
+        "replacement_note": "Natural ordinary right lateral correction."
+      },
+      {
+        "library_key": "mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "WalkArcLeft",
+        "temporary": false,
+        "replacement_note": "Female ordinary left walking arc."
+      },
+      {
+        "library_key": "derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "WalkArcRight",
+        "temporary": false,
+        "replacement_note": "Derived mirror of vetted natural female left arc."
+      },
+      {
+        "library_key": "mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "TurnInPlaceLeft90",
+        "temporary": false,
+        "replacement_note": "Ordinary unarmed left 90-degree pivot."
+      },
+      {
+        "library_key": "mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "TurnInPlaceRight90",
+        "temporary": false,
+        "replacement_note": "Ordinary unarmed right 90-degree pivot."
+      }
+    ],
+    "reference_male": [
+      {
+        "library_key": "mixamo_c9ccf750_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "Idle",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "mixamo_c9ccf814_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "ForwardWalk",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "mixamo_c9ccf998_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "BackwardWalk",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "mixamo_c9c9d9d6_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "SideStepLeft",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "mixamo_c9c9db9e_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "SideStepRight",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "mixamo_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "WalkArcLeft",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "derived_mirror_c9ccf8d5_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "female_ordinary",
+        "clip_gender": "female",
+        "graph_role": "WalkArcRight",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "mixamo_c9ceef5f_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "TurnInPlaceLeft90",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      },
+      {
+        "library_key": "mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9",
+        "motion_family": "ordinary_unarmed",
+        "clip_gender": "neutral",
+        "graph_role": "TurnInPlaceRight90",
+        "temporary": true,
+        "replacement_note": "Shared selected standing library; replace only with an approved male role map revision."
+      }
+    ]
+  }
 }

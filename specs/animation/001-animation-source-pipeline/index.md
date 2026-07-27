@@ -23,11 +23,15 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
 2. Contributors can inspect downloaded clips through consistent static previews before curating them.
 3. Technical artists can curate Mixamo animations through reviewable selection metadata without changing the tools.
 4. Contributors can regenerate selected target-rig animation groups and metrics without manual per-clip Blender edits.
-5. Locomotion clips provide reconstructed target `Root` translation and yaw while child compensation prevents visible
-   double motion.
+5. Locomotion clips provide reconstructed target `Root` motion whose class-specific direction and progress agree with
+   visible body motion and graph-role semantics, while child compensation prevents visible double motion.
 6. Batch processing supports narrowed, interrupted, and resumed work.
 7. Processed outputs do not expose local Mixamo source or temporary paths and provide reusable inputs for later Godot
    content packaging.
+8. Standing-locomotion consumers receive source actions with an unambiguous, pose-derived loop intent and continuous
+   repeated Root motion, so only clips whose retained pose permits repetition repeat naturally.
+9. When a vetted natural source has no approved native counterpart, content specifications can use a reproducible,
+   traceable derived mirror without changing the source pipeline's Root or clip-contract guarantees.
 
 ## Technical Requirements
 
@@ -40,6 +44,10 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
 3. Future ANIM-003 owns the concrete standing-locomotion selection rows, the generated
    `locomotion_standing.blend`, extracted per-clip `.res` resources, and the corresponding Godot animation library.
 4. ANIM-001 does not require a particular runtime consumer.
+5. ANIM-001 defines the Blender source naming convention for loop intent. ANIM-003 normatively applies that convention
+   when importing and packaging the concrete standing-locomotion catalogue.
+6. ANIM-001 provides the reusable derived-mirror processing and provenance contract. A content specification decides
+   whether a source is eligible and whether a native matched pair is available.
 
 ### Source Manifests
 
@@ -95,25 +103,86 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
    target-rig preset, bakes one target-rig action, removes source data, and retains the action persistently.
 2. Normal processing canonicalises the unparented target `Root` rest bone at the origin, with its tail along Blender
    `+Y`, and reconstructs a sanitised `Root` track in Blender planar `X/Y` with `Z` up.
-3. Root reconstruction compensates direct `Root` children, including `pelvis`, so non-Root evaluated poses remain
+3. **Normative Heading Terminology:** A **visible/body heading** is the clockwise-positive planar heading observed from
+   the evaluated body and Root tail. A **canonical Blender Root Euler-Z** is the right-handed `Root` Euler-Z channel.
+   Because the canonical Root tail is `+Y`, a visible heading delta maps as
+   `root_euler_z = -visible_heading_delta`. This is a representation contract, not a change to role semantics.
+4. Heading validation must measure the evaluated physical Root forward/tail vector in the Blender plane and derive
+   visible/body heading from that vector. It must not infer visible direction or signed turn solely from a raw
+   Euler-Z channel or `matrix_basis` channel.
+5. Root reconstruction compensates direct `Root` children, including `pelvis`, so non-Root evaluated poses remain
    equivalent within the historical tool tolerances and no double motion is introduced.
-4. Selection `category`, `motion_class`, and `tags` are the primary root-policy source. Track analysis only reports
+6. Selection `category`, `motion_class`, and `tags` are the primary root-policy source. Track analysis only reports
    disagreement or static-motion outliers; it does not replace curated metadata.
-5. Policies serialise exactly as:
+7. Policies serialise exactly as:
    - `Moving` for translational locomotion;
    - `Turn-In-Place` for clips tagged `turn` and `in_place`;
    - `Stationary` for other clips.
-6. Moving clips use `StraightMoving` by default and `CurvedMoving` for `arc` metadata. Straight semantic directions map
+8. Moving clips use `StraightMoving` by default and `CurvedMoving` for `arc` metadata. Straight semantic directions map
    to the Blender root plane as forward `-Y`, backward `+Y`, left `+X`, and right `-X`.
-7. Turn-in-place metadata may define left or right turns of 45, 90, or 180 degrees. Stationary processing suppresses
-   planar movement while retaining a stable initial yaw.
-8. Reconstruction records policy, subtype, path and yaw changes, source signals, straight-motion decisions, suppressed
-   lateral deviation, and metadata-disagreement flags in `root_reconstruction` diagnostics.
-9. Sanitised output has no target `Root` vertical drift or local-X tilt beyond the historical checks, uses linear keys,
-   and is validated after save. Final thresholds remain implementation tuning values.
-10. `--skip-root-reconstruction` is an exceptional inspection option that preserves raw baked root tracks.
+9. Source `Root` tracks are unreliable inputs to reconstruction. Curated metadata validates class and semantics, but
+   cannot be the sole author of reconstructed yaw; source-informed visible-pose measurement and validation remain
+   required.
+10. Turn-in-place reconstruction keeps `Root` translation exactly at `(0, 0, 0)` throughout. Only signed yaw changes,
+    and its direction and progress must agree with the visible body turn and the selected turn-role semantics. For the
+    named right pivot, visible/body heading is clockwise-positive and `root_euler_z` is negative; the left pivot uses
+    the opposite signs.
+11. Straight travel and side-step reconstruction supplies graph-role planar translation and a deliberately fixed
+   canonical heading when source yaw is unreliable. It must have no unintended yaw rotation or role contradiction;
+   generic alignment between raw-source Root yaw and body heading is not required.
+12. Walk-arc reconstruction supplies planar translation and signed yaw whose direction and progress agree with the
+    visible turn and graph-role semantics. Its clockwise-positive visible/body heading maps to negative canonical
+    Blender Root Euler-Z under the heading terminology above. It uses source-informed measurement and validation, not
+    blind adoption of source Root values.
+13. Stationary processing suppresses planar movement while retaining a stable initial yaw.
+14. Reconstruction records policy, subtype, path and yaw changes, source signals, straight-motion decisions,
+    suppressed lateral deviation, and metadata-disagreement flags in `root_reconstruction` diagnostics.
+15. Sanitised output has no target `Root` vertical drift or local-X tilt beyond the historical checks, uses linear keys,
+    and is validated after save. Final thresholds remain implementation tuning values.
+16. `--skip-root-reconstruction` is an exceptional inspection option that preserves raw baked root tracks.
     `--create-root-motion` is only valid with that debug path and may synthesise planar root movement from pelvis
     displacement; neither option defines normal production output.
+17. Obsolete delta-only comparison or evidence helpers from prior failed heading fixes must be removed or replaced.
+    Replacement helpers must validate evaluated physical Root-tail heading, retain visual evidence, and must not
+    reinstate raw Euler-Z or `matrix_basis` as proof of visible/body direction.
+
+### Source Loop Intent
+
+1. The processor determines per-clip loop eligibility by comparing evaluated start and end poses for every retained
+   target bone other than `Root`. Root translation and Root yaw are excluded from this comparison.
+2. The analysis uses versioned, configurable pose-comparison thresholds. It records the analysis version, thresholds,
+   per-bone maxima, offending bones, raw eligibility result, effective loop intent, and any override with its provenance
+   in the metrics sidecar and processed index.
+3. Effective loop intent derives from the persisted eligibility result. An override is permitted only when explicitly
+   recorded with its provenance; it must not silently replace the analysis result.
+4. Every selected standing action uses its persisted effective intent. A content role that must remain held, including
+   an in-place pivot, must select a loop-eligible action; an ineligible action cannot satisfy that role. A loop-eligible
+   action has the Blender action-name suffix `-loop` before Godot import; an ineligible action does not. The suffix is
+   an internal Blender/import marker only.
+5. The `-loop` marker must be stripped before any external action selection, catalogue key, package-manifest field, or
+   runtime reference is emitted. It is not part of the externally selectable animation identity.
+6. ANIM-003 normatively consumes the persisted loop intent for its Godot `Animation` resource loop mode, regenerated
+   resource preservation, and runtime graph consumption boundary; it does not independently classify clips.
+7. For a loop-eligible action, repeated-cycle Root translation and yaw deltas must remain continuous at the wrap. This
+   does not require moving Root transforms to return to their initial values. A held in-place pivot retains zero Root
+   translation and continuous role-consistent yaw through every wrap.
+
+### Derived Mirror Contract
+
+1. Native matched source pairs are preferred. A derived mirror is permitted only when the content specification vets the
+   source as natural and records why no approved native counterpart is used.
+2. The derivation reflects every animated transform across the sagittal plane. It reverses Root planar `X` translation
+   and Root yaw sign, swaps left/right bone tracks, and swaps left/right metric and foot-contact channels.
+3. The processor recomputes all derived metrics from the reflected action. It must not relabel, copy, or sign-edit the
+   source metrics as a substitute for recomputation.
+4. A derived action has a distinct identity, `derived_mirror_<source_motion_id>`, and must not be represented as a
+   native source action. Its processed-index and package provenance records identify the source motion and action,
+   derivation type, canonical reflection recipe, SHA-256 source-artifact hash, and SHA-256 canonical-recipe hash.
+5. Derived processing preserves the normal Root reconstruction invariants, including planar Root motion, no vertical
+   drift or local-X tilt beyond the historical checks, child-pose compensation, and post-save validation. It also
+   preserves the source loop intent; reflection cannot make an ineligible clip cyclic.
+6. Runtime consumers receive a fully processed derived action. They must not mirror an action, metrics, contacts, Root
+   motion, or yaw at runtime.
 
 ### Batch Processing and Reusable Outputs
 
@@ -121,7 +190,9 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
    `--force`, `--dry-run`, and the exceptional root-reconstruction debug option.
 2. A dry run validates inputs and prints planned actions, groups, root-motion flags, and source basenames without
    writing processed outputs.
-3. Normal action names are `mixamo_<motion_id>` with hyphens replaced by underscores.
+3. Native external action identities are `mixamo_<motion_id>` with hyphens replaced by underscores. Derived mirrors use
+   the distinct identity defined by the derived-mirror contract. An action with persisted loop intent appends the
+   internal `-loop` suffix under the source-loop contract; the suffix is not external.
 4. Each configured output directory contains:
    - `<group>.blend` files, each retaining one shared target armature and multiple persistent actions;
    - `metrics/<action>.metrics.json` sidecars;
@@ -134,8 +205,10 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
 6. An unfiltered forced run resets outputs represented by that selection before rebuilding them. Unforced or filtered
    runs do not perform this full-run reset; filtered runs preserve unrelated groups and index entries.
 7. The processed index uses its implemented `schema_version`, `processor_version`, `metrics_schema_version`,
-   `selection`, and `motions` structure. Each motion entry records source identity and portable source basename,
-   action, group, group `.blend`, metrics path, selection metadata, status, processor version, and processing time.
+   `selection`, and `motions` structure. Each native motion entry records source identity and portable source basename,
+   action, group, group `.blend`, metrics path, selection metadata, persisted loop-intent analysis, status, processor
+   version, and processing time. A derived entry additionally records the derived identity and the derivation provenance
+   required by the derived-mirror contract.
 8. Processed metrics and indexes must not contain the supplied local Mixamo source directory, selected absolute FBX
    path, or temporary processing paths.
 
@@ -229,8 +302,10 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
 - Stable Mixamo source and curated selection CSV schemas.
 - Four-frame source preview generation.
 - Direct Mixamo-to-target-rig retargeting and metadata-led root reconstruction.
+- Class-specific Root reconstruction and validation for turn-in-place, straight/side-step, and walk-arc motion.
 - Filtered, dry-run, interruptible, and resumable batch processing.
 - Reusable grouped `.blend`, metrics-sidecar, and processed-index schemas.
+- Reproducible derived-mirror processing, metrics recomputation, and provenance for content-approved sources.
 - The reusable Godot retarget-import handoff boundary.
 
 ## Out Of Scope
@@ -241,8 +316,11 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
 - Runtime locomotion, motion matching, pose search, blend policy, state machines, and navigation integration.
 - Non-Mixamo acquisition or retargeting providers and any multi-provider abstraction.
 - Complete Godot import automation.
-- Final preview, reconstruction, contact, or quality tuning values, provided the implemented checks remain effective.
+- Final preview, reconstruction, contact, or quality tuning values, provided the required processing, metrics,
+  generated outputs, validation, and visual evidence remain delivered.
 - Character-rig topology or MakeHuman bone-map changes.
+- No ownership boundary or out-of-scope item excludes processing, metrics, generated assets, validation, regeneration,
+  or visual evidence needed to deliver a selected locomotion input.
 
 ## Acceptance Criteria
 
@@ -257,9 +335,13 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
 4. A selected batch produces reusable grouped target-rig actions, metrics, and an index without manual per-clip Blender
    edits or persisted local source and temporary paths.
 5. Moving, turn-in-place, and stationary examples follow selection metadata; reconstruction preserves non-Root poses
-   through child compensation and reports source-track disagreements without replacing policy.
+   through child compensation and reports source-track disagreements without replacing policy. Representative pivot,
+   straight/side-step, and arc captures evidence visible direction and progress against their graph-role semantics.
 6. An interrupted run can continue by skipping outputs that the historical current-entry checks still validate.
-7. No acceptance step requires a concrete standing-locomotion selection, Godot `.res` clip, or animation library.
+7. Loop eligibility is visibly derived from retained non-Root target-bone start/end poses; Root translation and yaw do
+   not make a clip loop-eligible or ineligible, any override is traceable, and looped Root-motion deltas remain
+   continuous at each wrap. A held pivot is accepted only from a loop-eligible action.
+8. No acceptance step requires a concrete standing-locomotion selection, Godot `.res` clip, or animation library.
 
 ### Technical Requirement Acceptance
 
@@ -273,8 +355,16 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
    existing-output skipping, forced regeneration, and non-zero failure reporting.
 4. Single-clip retarget checks confirm direct preset-based baking, persistent deterministic action naming, source-data
    cleanup, root canonicalisation, child-pose compensation, finite tolerances, and fresh-file root persistence.
-5. `check_mixamo_root_policy.py` confirms the implemented forward, backward, and strafe coordinate mappings,
-   metadata-led turn classification, and disagreement flags.
+5. `check_mixamo_root_policy.py` confirms that source Root tracks are not blindly adopted and that metadata is not the
+   sole yaw author. It validates visible/body heading from the evaluated physical Root tail rather than raw Euler-Z or
+   `matrix_basis`, and applies `root_euler_z = -visible_heading_delta` for the canonical `+Y` Root tail. It proves the
+   named right pivot has clockwise-positive visible/body heading and negative canonical Root Euler-Z, with the left
+   pivot proving the opposite signs. It also proves representative left/right arcs use the same representation while
+   retaining role-consistent travel. Pivots remain at Root `(0, 0, 0)` with only role-consistent signed yaw; straight
+   and side-step roles retain their deliberate canonical-heading/no-unintended-yaw policy; and arcs use
+   role-consistent planar translation and source-informed signed-yaw direction and progress. Obsolete delta-only
+   comparison or evidence helpers are removed or replaced. Representative pivot, straight/side-step, and arc captures
+   are retained as validation evidence.
 6. Batch checks confirm enabled-row processing, motion and group filters, write-free dry runs, reset on an unfiltered
    forced run but no full-run reset without force or with active filters, and per-item index updates. Current-entry
    skipping checks output existence; metrics schema and tags; action; group; group and metrics output paths; category;
@@ -286,6 +376,18 @@ Future ANIM-003 work will own concrete standing-locomotion content and Godot pac
    portable basenames rather than downloader-run or machine-local paths.
 9. Ownership review confirms ANIM-001 does not require `locomotion_standing.blend`, extracted `.res` clips, a concrete
    animation library, a runtime consumer, complete Godot import automation, or a provider-extensible redesign.
+10. Source-loop inspection confirms each action's evaluated non-Root start/end pose comparison, Root translation/yaw
+    exclusion, versioned thresholds, maxima, offending bones, raw result, effective intent, and override provenance in
+    both metrics and index entries. It confirms that only persisted loop-intent actions use the internal Blender `-loop`
+    suffix and that the marker is absent from processed external selection and catalogue identities. Repeated-cycle
+    Root-motion checks confirm continuous translation and yaw deltas at loop wraps, including zero-translation,
+    role-consistent-yaw held pivots.
+11. Derived-mirror inspection confirms sagittal reflection, Root `X` and yaw sign reversal, left/right bone, metric,
+    and contact swaps, recomputed metrics, distinct derived identity, and complete source, recipe, and SHA-256
+    provenance. It also confirms preserved Root invariants and preserved loop intent.
+12. Focused root-policy tests and regeneration from the same selected inputs reproduce the class-specific Root policy,
+    evaluated-tail heading evidence, metrics, generated outputs, and representative validation evidence without manual
+    per-clip repair.
 
 ## References
 
