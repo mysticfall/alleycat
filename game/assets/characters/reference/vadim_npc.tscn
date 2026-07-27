@@ -6,7 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://bsfkxbo34s5ch" path="res://assets/characters/reference/male/reference_male.blend" id="3_megh4"]
 
 [node name="Vadim" unique_id=504240789 instance=ExtResource("1_0e151")]
-Id = "Vadim"
+Id = "vadim"
 
 [node name="BodyVisualCue" parent="Male/GeneralSkeleton/Head" index="2" unique_id=1094214123]
 Description = "Vadim is a sturdily built European man in his late twenties, standing around 180 centimetres tall. Light blond hair and pale skin frame an austere face, while his icy blue eyes lend him a distinctly stern appearance."

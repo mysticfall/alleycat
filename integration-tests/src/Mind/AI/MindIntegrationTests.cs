@@ -94,7 +94,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             Assert.Equal("Spoken through the configured voice.", result);
             ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.GetTimelineForTest()));
-            Assert.Equal(character.Id, observation.ActorId);
+            Assert.Equal(character.FullId, observation.ActorId);
             Assert.Null(observation.VoiceId);
             Assert.Equal("Hello there.", observation.Content);
         }
@@ -238,7 +238,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         PlainVoice ownedVoice = new("voice.Mixed-Case");
         PlainVoice spoofedVoice = new("voice.Mixed-Case");
         TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
-        TestCharacter speaker = AddSceneCharacter(sceneTree, "Known-Character", ownedVoice);
+        TestCharacter speaker = AddSceneCharacter(sceneTree, "known_character", ownedVoice);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -248,7 +248,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Observations));
             Assert.Equal("voice.Mixed-Case", observation.VoiceId);
-            Assert.Equal("Known-Character", observation.ActorId);
+            Assert.Equal("char:known_character", observation.ActorId);
             Assert.Equal("trimmed speech", observation.Content);
         }
         finally
@@ -270,7 +270,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         PlainVoice voice = new("private-device-id");
         TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
-        TestCharacter speaker = AddSceneCharacter(sceneTree, "Known Character", voice);
+        TestCharacter speaker = AddSceneCharacter(sceneTree, "known_character", voice);
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -280,7 +280,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
             ObservedSpeech observation = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Observations));
             Assert.Equal("private-device-id", observation.VoiceId);
-            Assert.Equal("Known Character", observation.ActorId);
+            Assert.Equal("char:known_character", observation.ActorId);
         }
         finally
         {
@@ -300,8 +300,8 @@ public sealed partial class MindIntegrationTests : IDisposable
             ObservationImportanceThreshold = 1f,
         };
         TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
-        TestCharacter exactSpeaker = AddSceneCharacter(sceneTree, "ExactSpeaker", new PlainVoice("Voice.Exact"));
-        TestCharacter blankSpeaker = AddSceneCharacter(sceneTree, "BlankSpeaker", new PlainVoice("  "));
+        TestCharacter exactSpeaker = AddSceneCharacter(sceneTree, "exact_speaker", new PlainVoice("Voice.Exact"));
+        TestCharacter blankSpeaker = AddSceneCharacter(sceneTree, "blank_speaker", new PlainVoice("  "));
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -336,7 +336,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         PlainVoice voice = new("off-scene-device");
         var offSceneCharacter = new TestCharacter(new Dictionary<string, object?>())
         {
-            Id = "OffSceneCharacter",
+            Id = "off_scene_character",
             Components = [voice],
         };
         TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
@@ -368,8 +368,8 @@ public sealed partial class MindIntegrationTests : IDisposable
         RecognitionTestMind mind = new();
         PlainVoice source = new("shared-device");
         TestCharacter owner = AddAgenticMindFixture(sceneTree, mind);
-        TestCharacter first = AddSceneCharacter(sceneTree, "FirstOwner", new PlainVoice("shared-device"));
-        TestCharacter second = AddSceneCharacter(sceneTree, "SecondOwner", new PlainVoice("shared-device"));
+        TestCharacter first = AddSceneCharacter(sceneTree, "first_owner", new PlainVoice("shared-device"));
+        TestCharacter second = AddSceneCharacter(sceneTree, "second_owner", new PlainVoice("shared-device"));
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -378,8 +378,8 @@ public sealed partial class MindIntegrationTests : IDisposable
                 () => mind.ReceiveVoice("ambiguous speech", source));
 
             Assert.Contains("ambiguously matches current-scene characters", exception.Message, StringComparison.Ordinal);
-            Assert.Contains("FirstOwner", exception.Message, StringComparison.Ordinal);
-            Assert.Contains("SecondOwner", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("char:first_owner", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("char:second_owner", exception.Message, StringComparison.Ordinal);
             Assert.Empty(mind.Observations);
         }
         finally
@@ -401,7 +401,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "Speaker",
+            Id = "speaker",
         };
         FakeClientProvider clientProvider = new()
         {
@@ -473,24 +473,24 @@ public sealed partial class MindIntegrationTests : IDisposable
                 observation =>
                 {
                     Assert.Null(observation.ActorId);
-                    Assert.Equal("Speaker", observation.VoiceId);
+                    Assert.Equal("speaker", observation.VoiceId);
                     Assert.Equal("hello Alley", observation.Content);
                 },
                 observation =>
                 {
-                    Assert.Equal(character.Id, observation.ActorId);
+                    Assert.Equal(character.FullId, observation.ActorId);
                     Assert.Null(observation.VoiceId);
                     Assert.Equal("First reply.", observation.Content);
                 },
                 observation =>
                 {
                     Assert.Null(observation.ActorId);
-                    Assert.Equal("Speaker", observation.VoiceId);
+                    Assert.Equal("speaker", observation.VoiceId);
                     Assert.Equal("interrupting player speech", observation.Content);
                 },
                 observation =>
                 {
-                    Assert.Equal(character.Id, observation.ActorId);
+                    Assert.Equal(character.FullId, observation.ActorId);
                     Assert.Null(observation.VoiceId);
                     Assert.Equal("Second reply.", observation.Content);
                 });
@@ -575,7 +575,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "Speaker",
+            Id = "speaker",
         };
         FakeClientProvider clientProvider = new();
         AgenticMind mind = new()
@@ -908,7 +908,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "Speaker",
+            Id = "speaker",
         };
         ThrowingClientProvider clientProvider = new();
         AgenticMind mind = new()
@@ -1002,7 +1002,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "Speaker",
+            Id = "speaker",
         };
         FakeClientProvider clientProvider = new()
         {
@@ -1161,7 +1161,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         })
         {
             Name = "AgenticMindFixtureCharacter",
-            Id = "agentic-mind-fixture-character",
+            Id = "agentic_mind_fixture_character",
             Components = mind.Voice is IComponent voice ? [voice] : [],
         };
 
@@ -1208,7 +1208,7 @@ public sealed partial class MindIntegrationTests : IDisposable
                     new EventHistoryPromptFragment
                     {
                         TypeKey = "speech.observed",
-                        Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId \"agentic-mind-fixture-character\")}}Said: {{Content}}{{else}}Heard {{ActorId}}: {{Content}}{{/if}}{{else}}Heard an unknown speaker: {{Content}}{{/if}}\n",
+                        Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId \"char:agentic_mind_fixture_character\")}}Said: {{Content}}{{else}}Heard {{ActorId}}: {{Content}}{{/if}}{{else}}Heard an unknown speaker: {{Content}}{{/if}}\n",
                     },
                 ],
                 FallbackSource = "((Received {{TypeKey}} event.))\n",
@@ -1232,7 +1232,7 @@ public sealed partial class MindIntegrationTests : IDisposable
         };
         RecordingVoice playerVoice = new()
         {
-            Id = "Speaker"
+            Id = "speaker"
         };
         ToolOnlyLoopClientProvider clientProvider = new(cancelDuringSecondModelCall);
         using RecordingLoggerProvider loggerProvider = new();
@@ -1586,7 +1586,7 @@ public sealed partial class MindIntegrationTests : IDisposable
 
     private sealed class StandaloneCharacter : ICharacter
     {
-        public string Id { get; set; } = "standalone-mind-owner";
+        public string Id { get; set; } = "standalone_mind_owner";
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 
@@ -1672,6 +1672,10 @@ public sealed partial class MindIntegrationTests : IDisposable
     private sealed partial class TestCharacter(IReadOnlyDictionary<string, object?> context) : Node, ICharacter
     {
         public string Id { get; set; } = string.Empty;
+
+        public string Type => "char";
+
+        public string FullId => $"{Type}:{Id}";
 
         public IReadOnlyList<IComponent> Components { get; init; } = [];
 

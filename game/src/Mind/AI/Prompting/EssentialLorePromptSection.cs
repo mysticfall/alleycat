@@ -20,7 +20,7 @@ public partial class EssentialLorePromptSection : PromptSection
         LoreQuery query;
         try
         {
-            query = LoreQuery.Essential(buildContext.Character.Id);
+            query = LoreQuery.Essential(buildContext.Character.FullId);
         }
         catch (ArgumentException exception)
         {

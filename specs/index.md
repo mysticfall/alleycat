@@ -14,6 +14,7 @@
 - [CORE-006: Microsoft Configuration Integration](core/006-microsoft-configuration-integration/index.md)
 - [CORE-007: Microsoft Logging Integration](core/007-microsoft-logging-integration/index.md)
 - [CORE-008: Content Pack Resolution](core/008-content-pack-resolution/index.md)
+- [CORE-009: Identifiable Identity](core/009-identifiable-identity/index.md)
 
 ## AI
 

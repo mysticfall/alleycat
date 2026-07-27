@@ -16,11 +16,11 @@ bounce = 0.5
 [node name="Ally" type="CharacterBody3D" parent="Actors" unique_id=58109474 groups=["Actors"] instance=ExtResource("1_pre7u")]
 transform = Transform3D(-0.7993387, 0, 0.6008807, 0, 1, 0, -0.6008807, 0, -0.7993387, -1.324, 0, -0.868)
 script = ExtResource("2_1rt1i")
-Id = "Ally"
+Id = "ally"
 
 [node name="Player" type="CharacterBody3D" parent="Actors" unique_id=1411573683 groups=["Player"] instance=ExtResource("3_jifym")]
 script = ExtResource("2_1rt1i")
-Id = "ReferencePlayer"
+Id = "reference_player"
 
 [node name="Items" type="Node3D" parent="." unique_id=110533895]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7552289, -0.6124832)

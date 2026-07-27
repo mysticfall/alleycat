@@ -1,8 +1,8 @@
 ---
 id: vadim.ally
 title: Ally
-type: character
-subject_id: character.ally
+type: char
+subject_id: char:ally
 ---
 
 # Ally

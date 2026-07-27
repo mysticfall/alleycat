@@ -19,10 +19,10 @@ public sealed class ObservationTests
     [Fact]
     public void ObservedSpeech_UsesUnifiedStableTypeKey()
     {
-        var observation = new ObservedSpeech("Character", "raw-voice", "Hello");
+        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello");
 
         Assert.Equal("speech.observed", observation.TypeKey);
-        Assert.Equal("Character", observation.ActorId);
+        Assert.Equal("char:character", observation.ActorId);
         Assert.Equal("raw-voice", observation.VoiceId);
         Assert.Equal("Hello", observation.Content);
     }
@@ -31,9 +31,9 @@ public sealed class ObservationTests
     /// Importance uses exact actor-to-owner identity while unknown and external speech remain important.
     /// </summary>
     [Theory]
-    [InlineData("Owner.Mixed-Case", 0f)]
-    [InlineData("owner.mixed-case", 1f)]
-    [InlineData("Other", 1f)]
+    [InlineData("char:owner", 0f)]
+    [InlineData("owner", 1f)]
+    [InlineData("char:other", 1f)]
     [InlineData(null, 1f)]
     public void ObservedSpeech_CalculateImportance_IsOwnerRelativeAndOrdinalExact(
         string? actorId,
@@ -41,7 +41,7 @@ public sealed class ObservationTests
     {
         FakeCharacter owner = new()
         {
-            Id = "Owner.Mixed-Case"
+            Id = "owner"
         };
         var observation = new ObservedSpeech(actorId, "private-device", "Hello");
 

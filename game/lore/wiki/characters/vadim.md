@@ -1,6 +1,6 @@
 ---
-id: character.vadim
-type: character
+id: char:vadim
+type: char
 title: Vadim
 ---
 

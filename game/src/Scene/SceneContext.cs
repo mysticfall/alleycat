@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AlleyCat.Character;
+using AlleyCat.Core;
 using AlleyCat.Core.Content;
 
 namespace AlleyCat.Scene;
@@ -26,17 +27,22 @@ public sealed record SceneContext : ISceneContext
         for (int index = 0; index < _characters.Length; index++)
         {
             ICharacter character = _characters[index];
-            if (string.IsNullOrWhiteSpace(character.Id))
+            try
+            {
+                IdentityValidator.Validate(character, nameof(characters));
+            }
+            catch (ArgumentException exception)
             {
                 throw new ArgumentException(
-                    $"Scene context character at snapshot index {index} ('{character.GetType().FullName}') has an empty or whitespace-only ID.",
-                    nameof(characters));
+                    $"Scene context character at snapshot index {index} ('{character.GetType().FullName}') has invalid identity '{character.FullId}': {exception.Message}",
+                    nameof(characters),
+                    exception);
             }
 
-            if (!characterIDIndexes.TryAdd(character.Id, index))
+            if (!characterIDIndexes.TryAdd(character.FullId, index))
             {
                 throw new ArgumentException(
-                    $"Scene context characters at snapshot indexes {characterIDIndexes[character.Id]} and {index} share duplicate exact character ID '{character.Id}'. Character IDs must be unique using ordinal, case-sensitive comparison.",
+                    $"Scene context characters at snapshot indexes {characterIDIndexes[character.FullId]} and {index} share duplicate exact character identity '{character.FullId}'. Character identities must be unique using ordinal, case-sensitive comparison.",
                     nameof(characters));
             }
         }

@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
+using AlleyCat.Core;
 using AlleyCat.Scene;
 using Xunit;
 
@@ -48,22 +49,22 @@ public sealed class CharacterContextTests
     }
 
     /// <summary>
-    /// Character cards expose only the contextual character's exact asset-owned ID.
+    /// Character cards expose only the contextual character's canonical typed identity.
     /// </summary>
     [Fact]
-    public void CharacterCardContextSource_ReturnsOnlyExactSubjectID()
+    public void CharacterCardContextSource_ReturnsOnlySubjectFullId()
     {
         var source = (CharacterCardContextSource)RuntimeHelpers.GetUninitializedObject(
             typeof(CharacterCardContextSource));
-        var subject = new FakeCharacter { Id = "Case-Sensitive.Identity" };
+        var subject = new FakeCharacter { Id = "case_sensitive_identity" };
         var observer = new FakeCharacter { Id = "observer" };
         var scene = new FakeSceneContext([subject, observer]);
 
         IReadOnlyDictionary<string, object?> context = source.GetContext(subject, scene, observer);
 
         KeyValuePair<string, object?> entry = Assert.Single(context);
-        Assert.Equal("Id", entry.Key);
-        Assert.Equal("Case-Sensitive.Identity", entry.Value);
+        Assert.Equal(nameof(IIdentifiable.FullId), entry.Key);
+        Assert.Equal("char:case_sensitive_identity", entry.Value);
     }
 
     /// <summary>
@@ -287,9 +288,9 @@ public sealed class CharacterContextTests
         public string Id
         {
             get; set;
-        } = "FakeCharacter";
+        } = "fake_character";
 
-        public IReadOnlyList<AlleyCat.Core.IComponent> Components { get; } = [];
+        public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
 

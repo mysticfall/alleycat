@@ -1,6 +1,7 @@
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging.Installation;
@@ -84,15 +85,15 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
             ValidateLocomotion(targetCharacter.Locomotion, context.TargetRoot);
             ValidateNavigation(targetCharacter.Navigation, context.TargetRoot);
+            IdentityValidator.Validate(targetCharacter, nameof(context));
             Body.Voice.Voice targetVoice = targetCharacter.Voice
                 ?? throw new InvalidOperationException(
                     $"Character runtime subsystem installer requires template-authored '{nameof(Character.Voice)}' on '{targetCharacter.GetPath()}'.");
-            targetVoice.Id = targetCharacter.Id;
             targetCharacter.RefreshComponents();
 
             return SceneInstallationResult.Successful();
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
             return SceneInstallationResult.Failed(ex.Message);
         }

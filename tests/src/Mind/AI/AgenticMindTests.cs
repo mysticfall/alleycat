@@ -26,10 +26,10 @@ public sealed class AgenticMindTests
     [Fact]
     public void ObservedSpeech_RecognisedSpeakerRetainsIdentityAndProvenance()
     {
-        ObservedSpeech observation = new("Speaker", "microphone-7", "hello");
+        ObservedSpeech observation = new("char:speaker", "microphone-7", "hello");
 
         Assert.Equal("microphone-7", observation.VoiceId);
-        Assert.Equal("Speaker", observation.ActorId);
+        Assert.Equal("char:speaker", observation.ActorId);
         Assert.Equal("hello", observation.Content);
     }
 
@@ -103,37 +103,37 @@ public sealed class AgenticMindTests
     {
         Dictionary<string, object?> ownerContext = new()
         {
-            ["Id"] = "owner"
+            ["FullId"] = "char:owner"
         };
         Dictionary<string, object?> firstContext = new()
         {
-            ["Id"] = "Alpha"
+            ["FullId"] = "char:alpha"
         };
         FakeCharacter owner = new(ownerContext)
         {
             Id = "owner"
         };
-        FakeCharacter last = new(new Dictionary<string, object?> { ["Id"] = "zulu" })
+        FakeCharacter last = new(new Dictionary<string, object?> { ["FullId"] = "char:zulu" })
         {
             Id = "zulu"
         };
         FakeCharacter first = new(firstContext)
         {
-            Id = "Alpha"
+            Id = "alpha"
         };
         SceneContext scene = new([last, owner, first]);
-        ObservedSpeech speech = new("Alpha", "voice-alpha", "Hello");
+        ObservedSpeech speech = new("char:alpha", "voice-alpha", "Hello");
         AgentObservation[] timeline = [speech];
 
         IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(owner, scene, timeline);
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
         IReadOnlyList<AgentObservation> observations = Assert.IsAssignableFrom<IReadOnlyList<AgentObservation>>(result["observations"]);
 
-        Assert.Equal(["Alpha", "owner", "zulu"], characters.Keys);
+        Assert.Equal(["char:alpha", "char:owner", "char:zulu"], characters.Keys);
         Assert.Same(ownerContext, result["character"]);
-        Assert.Same(firstContext, characters["Alpha"]);
-        Assert.Same(characters["owner"], result["character"]);
-        Assert.Equal("owner", Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["character"])["Id"]);
+        Assert.Same(firstContext, characters["char:alpha"]);
+        Assert.Same(characters["char:owner"], result["character"]);
+        Assert.Equal("char:owner", Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["character"])["FullId"]);
         Assert.Same(timeline, observations);
         Assert.Same(speech, Assert.Single(observations));
         _ = Assert.Throws<NotSupportedException>(
@@ -153,7 +153,7 @@ public sealed class AgenticMindTests
     {
         FakeCharacter sceneCharacter = new(new Dictionary<string, object?>())
         {
-            Id = "scene-character"
+            Id = "scene_character"
         };
         FakeCharacter owner = new(new Dictionary<string, object?>())
         {
@@ -166,6 +166,64 @@ public sealed class AgenticMindTests
 
         Assert.Contains("absent", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, sceneCharacter.ContextRequestCount);
+    }
+
+    /// <summary>Arbitrary scene contexts cannot bypass CTX-001 character identity validation.</summary>
+    [Theory]
+    [InlineData("invalid-type", "subject", null)]
+    [InlineData("char", "invalid-id", null)]
+    [InlineData("char", "subject", "malformed")]
+    [InlineData("char", "subject", "char:other_subject")]
+    public void CreateRenderContext_WithCustomSceneAndInvalidCharacterIdentity_FailsClearly(
+        string type,
+        string id,
+        string? fullIdOverride)
+    {
+        FakeCharacter owner = new(new Dictionary<string, object?>())
+        {
+            Id = "owner",
+        };
+        FakeCharacter invalidSubject = new(new Dictionary<string, object?>())
+        {
+            Type = type,
+            Id = id,
+            FullIdOverride = fullIdOverride,
+        };
+        ArbitrarySceneContext scene = new([owner, invalidSubject]);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => AgenticMind.CreateRenderContext(owner, scene));
+
+        Assert.Contains("invalid identity", exception.Message, StringComparison.OrdinalIgnoreCase);
+        ArgumentException innerException = Assert.IsType<ArgumentException>(exception.InnerException);
+        Assert.Equal("character", innerException.ParamName);
+        Assert.Equal(0, owner.ContextRequestCount);
+        Assert.Equal(0, invalidSubject.ContextRequestCount);
+    }
+
+    /// <summary>Valid identities from arbitrary scene-context implementations retain CTX-001 output semantics.</summary>
+    [Fact]
+    public void CreateRenderContext_WithCustomSceneAndValidCharacterIdentities_BuildsContext()
+    {
+        Dictionary<string, object?> ownerContext = [];
+        Dictionary<string, object?> subjectContext = [];
+        FakeCharacter owner = new(ownerContext)
+        {
+            Id = "owner",
+        };
+        FakeCharacter subject = new(subjectContext)
+        {
+            Id = "subject",
+        };
+        ArbitrarySceneContext scene = new([subject, owner]);
+
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(owner, scene);
+        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
+
+        Assert.Equal(["char:owner", "char:subject"], characters.Keys);
+        Assert.Same(ownerContext, result["character"]);
+        Assert.Same(subjectContext, characters["char:subject"]);
+        Assert.Same(owner, subject.ReceivedObserver);
     }
 
     /// <summary>
@@ -249,6 +307,15 @@ public sealed class AgenticMindTests
     {
         public string Id { get; set; } = "fake-character";
 
+        public string Type { get; set; } = "char";
+
+        public string? FullIdOverride
+        {
+            get; set;
+        }
+
+        public string FullId => FullIdOverride ?? $"{Type}:{Id}";
+
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
@@ -275,5 +342,10 @@ public sealed class AgenticMindTests
             ReceivedObserver = observer;
             return context;
         }
+    }
+
+    private sealed record ArbitrarySceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
+    {
+        public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
     }
 }

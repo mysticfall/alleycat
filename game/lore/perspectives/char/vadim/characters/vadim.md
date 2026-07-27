@@ -1,8 +1,8 @@
 ---
 id: vadim.self
 title: Vadim
-type: character
-subject_id: character.vadim
+type: char
+subject_id: char:vadim
 ---
 
 # Vadim

@@ -2,7 +2,6 @@ using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
-using AlleyCat.Common;
 using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
@@ -27,7 +26,7 @@ public sealed class ICharacterTests
     public void ICharacter_AggregatesFullyEmbodiedHumanoidHolderTraits()
     {
         Assert.True(typeof(IComponentHolder).IsAssignableFrom(typeof(ICharacter)));
-        Assert.True(typeof(IEntity).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(IIdentifiable).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasHands).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IEyesHolder).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasVoice).IsAssignableFrom(typeof(ICharacter)));
@@ -52,6 +51,9 @@ public sealed class ICharacterTests
         Transform3D destination = Transform3D.Identity.Translated(new Vector3(1.0f, 0.0f, 2.0f));
         ICharacter character = new FakeCharacter(leftHand, eyes, voice, locomotion, navigation);
 
+        Assert.Equal("char", character.Type);
+        Assert.Equal("char:fake_character", character.FullId);
+
         character.Move(new Vector2(0.5f, -0.25f));
         character.Rotate(new Vector2(-1.0f, 0.25f));
         NavigationDestinationResult navigationResult = character.SetNavigationDestination(destination);
@@ -73,7 +75,7 @@ public sealed class ICharacterTests
         public string Id
         {
             get; set;
-        } = "FakeCharacter";
+        } = "fake_character";
 
         public IReadOnlyList<IComponent> Components { get; } = components;
 

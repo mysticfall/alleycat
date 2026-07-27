@@ -19,9 +19,10 @@ public sealed class MarkdownLoreQueryService : ILoreQueryService
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string perspectiveRoot = CombineResourcePath(
-            content.RootPath,
-            $"lore/perspectives/{query.ObserverID}/");
+        int observerSeparator = query.ObserverID.IndexOf(':', StringComparison.Ordinal);
+        string observerType = query.ObserverID[..observerSeparator];
+        string observerId = query.ObserverID[(observerSeparator + 1)..];
+        string perspectiveRoot = CombineResourcePath(content.RootPath, $"lore/perspectives/{observerType}/{observerId}/");
         Dictionary<LoreSubjectKind, IReadOnlyList<LoreMarkdownDocument>> documentsByKind = [];
         List<LoreEntry> entries = [];
 
@@ -220,7 +221,10 @@ public sealed class MarkdownLoreQueryService : ILoreQueryService
         string subjectID = GetRequiredField(frontmatter, "subject_id", sourcePath);
         try
         {
-            return LoreQuery.NormaliseID(subjectID, "subject_id");
+            LoreSubjectRequest request = kind == LoreSubjectKind.Character
+                ? LoreSubjectRequest.Character(subjectID)
+                : LoreSubjectRequest.Location(subjectID);
+            return request.SubjectID;
         }
         catch (ArgumentException exception)
         {

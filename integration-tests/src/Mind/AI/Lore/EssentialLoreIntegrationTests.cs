@@ -16,7 +16,7 @@ namespace AlleyCat.IntegrationTests.Mind.AI.Lore;
 public sealed class EssentialLoreIntegrationTests
 {
     /// <summary>
-    /// Character lore requests the owner first and remaining exact runtime IDs in ordinal order.
+    /// Character lore requests the owner first and remaining FullIds in ordinal order.
     /// </summary>
     [Fact]
     public async Task CharacterLorePromptSection_QueriesOwnerFirstThenOrdinalSceneCharacters()
@@ -31,15 +31,15 @@ public sealed class EssentialLoreIntegrationTests
             .BuildServiceProvider();
         PromptOwnerCharacter owner = new("owner");
         PromptOwnerCharacter zulu = new("zulu");
-        PromptOwnerCharacter alpha = new("Alpha");
+        PromptOwnerCharacter alpha = new("alpha");
         SceneContext scene = new([zulu, owner, alpha], ContentContext.Default);
         CharacterLorePromptSection section = new();
 
         string content = await section.GetContentAsync(new PromptSectionBuildContext(services, scene, owner));
 
-        Assert.Equal("owner", queryService.Query!.ObserverID);
+        Assert.Equal("char:owner", queryService.Query!.ObserverID);
         Assert.Equal(
-            ["character.owner", "character.alpha", "character.zulu"],
+            ["char:owner", "char:alpha", "char:zulu"],
             queryService.Query.Subjects.Select(subject => subject.SubjectID));
         Assert.Contains("Known lore.", content, StringComparison.Ordinal);
     }
@@ -65,23 +65,18 @@ public sealed class EssentialLoreIntegrationTests
     }
 
     /// <summary>
-    /// Case-distinct runtime identities must not be silently deduplicated at the lore boundary.
+    /// Invalid runtime identities fail before lore query construction.
     /// </summary>
     [Fact]
-    public async Task CharacterLorePromptSection_WhenRuntimeIDsNormaliseTogether_FailsClearly()
+    public void CharacterLorePromptSection_WhenRuntimeIdentityIsInvalid_FailsClearly()
     {
-        using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
-        PromptOwnerCharacter owner = new("Owner");
-        PromptOwnerCharacter collision = new("owner");
-        SceneContext scene = new([owner, collision], ContentContext.Default);
+        PromptOwnerCharacter owner = new("owner");
+        PromptOwnerCharacter invalid = new("Owner");
 
-        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => new CharacterLorePromptSection().GetContentAsync(
-                new PromptSectionBuildContext(services, scene, owner)));
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => new SceneContext([owner, invalid], ContentContext.Default));
 
-        Assert.Contains("same canonical lore subject", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("invalid identity", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Owner", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("owner", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -92,7 +87,7 @@ public sealed class EssentialLoreIntegrationTests
     {
         using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
         PromptOwnerCharacter owner = new("owner");
-        PromptOwnerCharacter sceneCharacter = new("scene-character");
+        PromptOwnerCharacter sceneCharacter = new("scene_character");
         SceneContext scene = new([sceneCharacter], ContentContext.Default);
 
         InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -106,13 +101,13 @@ public sealed class EssentialLoreIntegrationTests
     /// Vadim's essential world lore is selected from his perspective and sorted by stable ID when priorities tie.
     /// </summary>
     [Fact]
-    public async Task QueryAsync_SelectsEssentialWorldLoreForNormalisedObserver()
+    public async Task QueryAsync_SelectsEssentialWorldLoreForCanonicalObserver()
     {
         MarkdownLoreQueryService service = new();
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(
             ContentContext.Default,
-            LoreQuery.Essential("VADIM"));
+            LoreQuery.Essential("char:vadim"));
 
         Assert.Equal(
             ["vadim.charter", "vadim.charter_office", "vadim.peoples", "vadim.reclassification"],
@@ -122,18 +117,18 @@ public sealed class EssentialLoreIntegrationTests
     }
 
     /// <summary>
-    /// Contextual results retain request grouping and match normalised subject IDs irrespective of essential.
+    /// Contextual results retain request grouping and match canonical subject FullIds irrespective of essential.
     /// </summary>
     [Fact]
     public async Task QueryAsync_SelectsContextualBatchInRequestOrder()
     {
         MarkdownLoreQueryService service = new();
         LoreQuery query = new(
-            "Vadim",
+            "char:vadim",
             [
-                LoreSubjectRequest.Character("ALLY"),
-                LoreSubjectRequest.Location("INTERROGATION_ROOM"),
-                LoreSubjectRequest.Character("vadim"),
+                LoreSubjectRequest.Character("char:ally"),
+                LoreSubjectRequest.Location("loc:interrogation_room"),
+                LoreSubjectRequest.Character("char:vadim"),
             ]);
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(ContentContext.Default, query);
@@ -143,7 +138,7 @@ public sealed class EssentialLoreIntegrationTests
             [LoreSubjectKind.Character, LoreSubjectKind.Location, LoreSubjectKind.Character],
             entries.Select(entry => entry.Kind));
         Assert.Equal(
-            ["character.ally", "location.interrogation_room", "character.vadim"],
+            ["char:ally", "loc:interrogation_room", "char:vadim"],
             entries.Select(entry => entry.SubjectID));
     }
 
@@ -157,7 +152,7 @@ public sealed class EssentialLoreIntegrationTests
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(
             ContentContext.Default,
-            LoreQuery.Essential("observer-without-perspective"));
+            LoreQuery.Essential("char:observer_without_perspective"));
 
         Assert.Empty(entries);
     }
@@ -171,7 +166,7 @@ public sealed class EssentialLoreIntegrationTests
         MarkdownLoreQueryService service = new();
         ContentContext content = new("lore-query-fixture", "res://tests/lore-query-fixture");
 
-        IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("test"));
+        IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("char:test"));
 
         Assert.Collection(
             entries,
@@ -203,7 +198,7 @@ public sealed class EssentialLoreIntegrationTests
         {
             Name = "Essential Lore",
         };
-        PromptOwnerCharacter character = new("Vadim");
+        PromptOwnerCharacter character = new("vadim");
         PromptSectionBuildContext buildContext = new(services, scene, character);
 
         string content = await section.GetContentAsync(buildContext);

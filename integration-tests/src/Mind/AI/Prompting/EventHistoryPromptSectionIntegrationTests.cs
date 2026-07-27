@@ -37,7 +37,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
 
         string output = template.Render(new Dictionary<string, object?>
         {
-            ["character"] = new Dictionary<string, object?> { ["Id"] = "test-character" },
+            ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:test_character" },
         });
 
         Assert.Contains(StrictToolOnlyGuidance, output, StringComparison.Ordinal);
@@ -57,11 +57,11 @@ public sealed class EventHistoryPromptSectionIntegrationTests
         EventHistoryPromptFragment fragment = Assert.Single(section.Fragments);
         Observation[] observations =
         [
-            new ObservedSpeech("test-character", "private-self", "Self line."),
+            new ObservedSpeech("char:test_character", "private-self", "Self line."),
             new TestObservation("world.changed", "door opened"),
-            new ObservedSpeech("Rin", "private-known", "Known line."),
+            new ObservedSpeech("char:rin", "private-known", "Known line."),
             new ObservedSpeech(null, "private-unknown", "Unknown line."),
-            new ObservedSpeech("TEST-CHARACTER", "private-case", "Case-distinct line."),
+            new ObservedSpeech("CHAR:TEST_CHARACTER", "private-case", "Case-distinct line."),
         ];
 
         string output = await CompileAndRenderAsync(section, observations);
@@ -70,9 +70,9 @@ public sealed class EventHistoryPromptSectionIntegrationTests
         Assert.Equal(
             "Said aloud: Self line.\n"
                 + "((Received world.changed event.))\n"
-                + "Heard Rin say: Known line.\n"
+                + "Heard char:rin say: Known line.\n"
                 + "Heard an unknown speaker say: Unknown line.\n"
-                + "Heard TEST-CHARACTER say: Case-distinct line.\n",
+                + "Heard CHAR:TEST_CHARACTER say: Case-distinct line.\n",
             output);
         Assert.DoesNotContain("private-", output, StringComparison.Ordinal);
         Assert.DoesNotContain("VoiceId", fragment.Source, StringComparison.Ordinal);
@@ -88,16 +88,16 @@ public sealed class EventHistoryPromptSectionIntegrationTests
         EventHistoryPromptSection section = CreateSpeechSection();
         Observation[] observations =
         [
-            new ObservedSpeech("Rin", "raw-known-device", "Hello"),
+            new ObservedSpeech("char:rin", "raw-known-device", "Hello"),
             new ObservedSpeech(null, "secret-unrecognised-device", "Who is there?"),
-            new ObservedSpeech("test-character", null, "Welcome."),
-            new ObservedSpeech("TEST-CHARACTER", "case-sensitive-device", "Not myself."),
+            new ObservedSpeech("char:test_character", null, "Welcome."),
+            new ObservedSpeech("CHAR:TEST_CHARACTER", "case-sensitive-device", "Not myself."),
         ];
 
         string output = await CompileAndRenderAsync(section, observations);
 
         Assert.Equal(
-            "Heard Rin: Hello\nHeard an unknown speaker: Who is there?\nSaid: Welcome.\nHeard TEST-CHARACTER: Not myself.\n",
+            "Heard char:rin: Hello\nHeard an unknown speaker: Who is there?\nSaid: Welcome.\nHeard CHAR:TEST_CHARACTER: Not myself.\n",
             output);
         Assert.DoesNotContain("raw-known-device", output, StringComparison.Ordinal);
         Assert.DoesNotContain("secret-unrecognised-device", output, StringComparison.Ordinal);
@@ -174,7 +174,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
         [
             new ObservedSpeech(null, "private-first", "first"),
             new TestObservation("world.changed", "door opened"),
-            new ObservedSpeech("test-character", "private-self", "third"),
+            new ObservedSpeech("char:test_character", "private-self", "third"),
         ];
 
         string output = await CompileAndRenderAsync(section, observations);
@@ -256,7 +256,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
                 new EventHistoryPromptFragment
                 {
                     TypeKey = "speech.observed",
-                    Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.Id)}}Said: {{Content}}{{else}}Heard {{ActorId}}: {{Content}}{{/if}}{{else}}Heard an unknown speaker: {{Content}}{{/if}}\n",
+                    Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.FullId)}}Said: {{Content}}{{else}}Heard {{ActorId}}: {{Content}}{{/if}}{{else}}Heard an unknown speaker: {{Content}}{{/if}}\n",
                 },
             ],
             FallbackSource = "((Received {{TypeKey}} event.))\n",
@@ -274,7 +274,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     private static string Render(ITemplate template, IReadOnlyList<Observation> observations)
         => template.Render(new Dictionary<string, object?>
         {
-            ["character"] = new Dictionary<string, object?> { ["Id"] = "test-character" },
+            ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:test_character" },
             [EventHistoryPromptSection.ObservationsContextKey] = observations,
         });
 

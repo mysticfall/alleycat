@@ -809,7 +809,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
                 acceptedMind.Timeline.Cast<ObservedSpeech>().Select(observation => observation.Content));
             Assert.All(
                 acceptedMind.Timeline.Cast<ObservedSpeech>(),
-                observation => Assert.Equal(acceptedMind.Owner.Id, observation.ActorId));
+                observation => Assert.Equal(((IIdentifiable)acceptedMind.Owner).FullId, observation.ActorId));
             Assert.Empty(disabledMind.Timeline);
 
             _ = generationResult.TrySetResult(
@@ -1306,7 +1306,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
     private sealed class ToolCharacter : ICharacter
     {
-        public string Id { get; set; } = "voice-tool-owner";
+        public string Id { get; set; } = "voice_tool_owner";
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 

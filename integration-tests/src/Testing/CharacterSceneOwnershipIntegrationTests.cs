@@ -158,7 +158,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("AlleyCat.Mind.AI.Prompting.TextPromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
         string sectionText = GetPropertyValue<string>(instructionSection, "Text");
-        Assert.Contains("You are {{ character.Id }}", sectionText, StringComparison.Ordinal);
+        Assert.Contains("You are {{ character.FullId }}", sectionText, StringComparison.Ordinal);
         Assert.Contains("You may take no action, one action, or several actions", sectionText, StringComparison.Ordinal);
         Assert.Contains("Use `end_turn` exactly once as the final", sectionText, StringComparison.Ordinal);
         Assert.Contains("Call it alone for zero actions", sectionText, StringComparison.Ordinal);
@@ -180,7 +180,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             .Select(fragment => GetPropertyValue<string>(fragment, "TypeKey")));
         object speechFragment = Assert.Single(fragments.Cast<object>());
         string speechSource = GetPropertyValue<string>(speechFragment, "Source");
-        Assert.Contains("eqOrdinal ActorId @root.character.Id", speechSource, StringComparison.Ordinal);
+        Assert.Contains("eqOrdinal ActorId @root.character.FullId", speechSource, StringComparison.Ordinal);
         Assert.Contains("Said aloud: {{Content}}", speechSource, StringComparison.Ordinal);
         Assert.Contains("Heard {{ActorId}} say: {{Content}}", speechSource, StringComparison.Ordinal);
         Assert.Contains("Heard an unknown speaker say: {{Content}}", speechSource, StringComparison.Ordinal);

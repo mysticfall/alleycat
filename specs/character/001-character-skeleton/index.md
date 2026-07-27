@@ -141,15 +141,16 @@ authored template contents without requiring generators to know internal node pl
 42. Character installation follows CORE-005 target-scene precedence: explicitly local exported properties and
     `Node3D.Transform` values on reused nodes, including direct character-root exported-property copies, win over role
     template defaults. Non-overridden values refresh, and new or missing nodes receive complete template state.
-43. `game/assets/characters/reference/vadim_npc.tscn` owns stable `Character.Id = "Vadim"` and
-    `SpeechGenerator.VoiceOverride = "Ian.wav"`. Generic installation sets the installed character-owned `Voice.Id` to
-    the final `Character.Id`; shared templates do not encode Vadim-specific identity or `Ian.wav`.
+43. `game/assets/characters/reference/vadim_npc.tscn` owns stable `Character.Id = "vadim"` and
+    `SpeechGenerator.VoiceOverride = "Ian.wav"`. `Character` implements CORE-009 with `Type = "char"` and
+    `FullId = "char:vadim"`. Voice ID remains a separate local attribution contract; shared templates do not encode
+    Vadim-specific identity or `Ian.wav`.
 44. `TemplateBaseline` remains a topology-selection input for inherited imported content; it is not unioned into the
     local target `SceneState` used to determine property overrides.
-45. `ally_npc.tscn`, `vadim_npc.tscn`, and `ally_player.tscn` own their stable `Character.Id`; role templates remain
-    identity-neutral.
+45. `ally_npc.tscn`, `vadim_npc.tscn`, and `ally_player.tscn` own stable lower `snake_case` `Character.Id` values;
+    role templates remain identity-neutral. Character cross-object references use the CORE-009 `FullId`.
 46. There is no Vadim player asset in this slice. A lightweight alternate female-player identity fixture must prove that
-    generic installation preserves a different asset-owned player ID and applies it to the installed voice.
+    generic installation preserves a different asset-owned player ID without using voice attribution as identity.
 47. Asset renames must preserve existing Godot UIDs so UID-backed scene and resource references remain valid.
 48. `CharacterCardContextSource` and `Actors` membership are attached at the lowest shared male/female character bases.
     Higher role templates and concrete character scenes must not add redundant compensation.
@@ -175,7 +176,7 @@ authored template contents without requiring generators to know internal node pl
 - Mirror-room and verification-scene consumption rules for actual scenes versus specialised fixtures.
 - Target-scene configuration precedence for character-specific exported properties and transforms.
 - Male template/runtime assets and the production Vadim scene used by the mirror room.
-- Asset-owned stable identity, generic voice-ID installation, and role-explicit runtime scene names.
+- Asset-owned CORE-009 character identity, separate local voice attribution, and role-explicit runtime scene names.
 - Lowest-shared-base character-card context and `Actors` membership.
 
 ## Out Of Scope
@@ -280,8 +281,9 @@ authored template contents without requiring generators to know internal node pl
     - Tests verify CORE-005 precedence preserves explicitly local reused-node exported properties,
         `Node3D.Transform`, and direct character-root exported-property copies while refreshing non-overridden values
         and fully populating new or missing nodes.
-    - Tests verify each installed voice ID equals final exact `Character.Id`; Vadim retains `Character.Id = "Vadim"` and
-        `SpeechGenerator.VoiceOverride = "Ian.wav"` without character-specific shared-template defaults.
+    - Tests verify `vadim_npc.tscn` retains `Character.Id = "vadim"`, `Type = "char"`, and `FullId = "char:vadim"`;
+      `SpeechGenerator.VoiceOverride = "Ian.wav"` remains separate from identity and shared templates stay
+      character-neutral.
     - Tests verify `TemplateBaseline` does not contribute inherited values to local target-scene override detection.
     - Renamed assets preserve Godot UIDs, and UID-backed references continue to resolve.
     - Character-card context and `Actors` membership are present at the lowest shared male/female bases only.
@@ -306,6 +308,7 @@ authored template contents without requiring generators to know internal node pl
 - @game/assets/characters/reference/female/animations/
 - @game/assets/testing/mirror_room/mirror_room.tscn
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
+- [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [CHAR-002: Character Root](../002-character-root/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

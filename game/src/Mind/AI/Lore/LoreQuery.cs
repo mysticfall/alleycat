@@ -1,3 +1,5 @@
+using AlleyCat.Core;
+
 namespace AlleyCat.Mind.AI.Lore;
 
 /// <summary>
@@ -32,7 +34,7 @@ public sealed record LoreSubjectRequest
         get;
     }
 
-    /// <summary>Gets the canonical, normalised subject ID, when the collection is subject-scoped.</summary>
+    /// <summary>Gets the canonical subject FullId, when the collection is subject-scoped.</summary>
     public string? SubjectID
     {
         get;
@@ -43,27 +45,27 @@ public sealed record LoreSubjectRequest
 
     /// <summary>Creates a location-lore request.</summary>
     public static LoreSubjectRequest Location(string subjectID)
-        => CreateSubjectRequest(LoreSubjectKind.Location, "location.", subjectID);
+        => CreateSubjectRequest(LoreSubjectKind.Location, "loc", subjectID);
 
     /// <summary>Creates a character-lore request.</summary>
     public static LoreSubjectRequest Character(string subjectID)
-        => CreateSubjectRequest(LoreSubjectKind.Character, "character.", subjectID);
+        => CreateSubjectRequest(LoreSubjectKind.Character, "char", subjectID);
 
     private static LoreSubjectRequest CreateSubjectRequest(
         LoreSubjectKind kind,
-        string namespacePrefix,
-        string bareSubjectID)
+        string requiredType,
+        string fullSubjectID)
     {
-        string normalisedBareID = LoreQuery.NormaliseID(bareSubjectID, nameof(bareSubjectID));
-        _ = normalisedBareID.StartsWith(namespacePrefix, StringComparison.OrdinalIgnoreCase)
+        IdentityValidator.ValidateFullId(fullSubjectID, nameof(fullSubjectID));
+        int separator = fullSubjectID.IndexOf(':', StringComparison.Ordinal);
+        string type = fullSubjectID[..separator];
+        _ = !string.Equals(type, requiredType, StringComparison.Ordinal)
             ? throw new ArgumentException(
-                $"{kind} lore subject IDs must be bare and must not include the '{namespacePrefix}' namespace prefix.",
-                nameof(bareSubjectID))
+                $"{kind} lore subject IDs must have the '{requiredType}' type; received '{fullSubjectID}'.",
+                nameof(fullSubjectID))
             : false;
 
-        return new LoreSubjectRequest(
-            kind,
-            LoreQuery.NormaliseID(namespacePrefix + normalisedBareID, nameof(bareSubjectID)));
+        return new LoreSubjectRequest(kind, fullSubjectID);
     }
 }
 
@@ -78,7 +80,8 @@ public sealed record LoreQuery
     /// </summary>
     public LoreQuery(string observerID, IEnumerable<LoreSubjectRequest> subjects)
     {
-        ObserverID = NormaliseID(observerID, nameof(observerID));
+        IdentityValidator.ValidateFullId(observerID, nameof(observerID));
+        ObserverID = observerID;
         ArgumentNullException.ThrowIfNull(subjects);
 
         List<LoreSubjectRequest> uniqueSubjects = [];
@@ -95,7 +98,7 @@ public sealed record LoreQuery
         Subjects = uniqueSubjects.AsReadOnly();
     }
 
-    /// <summary>Gets the canonical, normalised observer ID.</summary>
+    /// <summary>Gets the canonical observer FullId.</summary>
     public string ObserverID
     {
         get;
@@ -114,12 +117,4 @@ public sealed record LoreQuery
     /// </summary>
     public static LoreQuery Essential(string observerID) => new(observerID, [LoreSubjectRequest.World()]);
 
-    internal static string NormaliseID(string id, string parameterName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(id, parameterName);
-        string normalised = id.Trim().ToLowerInvariant();
-        return normalised is "." or ".." || normalised.Contains('/') || normalised.Contains('\\')
-            ? throw new ArgumentException("Lore IDs cannot be traversal segments or contain path separators.", parameterName)
-            : normalised;
-    }
 }

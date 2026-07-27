@@ -1,4 +1,5 @@
 using AlleyCat.Context;
+using AlleyCat.Core;
 using AlleyCat.Scene;
 using Godot;
 
@@ -24,6 +25,6 @@ public sealed partial class CharacterCardContextSource : ContextSource, IContext
         IContextual? observer)
         => new Dictionary<string, object?>
         {
-            [nameof(ICharacter.Id)] = subject.Id,
+            [nameof(IIdentifiable.FullId)] = subject.FullId,
         };
 }

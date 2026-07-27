@@ -1,6 +1,6 @@
 ---
-id: location.interrogation_room
-type: location
+id: loc:interrogation_room
+type: loc
 title: Interrogation Room
 ---
 

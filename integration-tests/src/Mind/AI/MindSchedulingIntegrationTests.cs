@@ -409,7 +409,7 @@ public sealed partial class MindSchedulingIntegrationTests
             item =>
             {
                 ObservedSpeech speech = Assert.IsType<ObservedSpeech>(item);
-                Assert.Equal("scheduling-owner", speech.ActorId);
+                Assert.Equal("char:scheduling_owner", speech.ActorId);
                 Assert.Equal("raw-self-device", speech.VoiceId);
             },
             item => Assert.Equal("second", Assert.IsType<TestObservation>(item).Value));
@@ -628,7 +628,7 @@ public sealed partial class MindSchedulingIntegrationTests
 
     private sealed class TestCharacter : ICharacter
     {
-        public string Id { get; set; } = "scheduling-owner";
+        public string Id { get; set; } = "scheduling_owner";
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 

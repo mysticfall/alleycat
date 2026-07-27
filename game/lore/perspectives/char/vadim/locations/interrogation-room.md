@@ -1,8 +1,8 @@
 ---
 id: vadim.interrogation_room
 title: Interrogation Room
-type: location
-subject_id: location.interrogation_room
+type: loc
+subject_id: loc:interrogation_room
 ---
 
 # Interrogation Room

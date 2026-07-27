@@ -9,73 +9,73 @@ namespace AlleyCat.Tests.Mind.AI.Lore;
 /// </summary>
 public sealed class MarkdownLoreQueryServiceTests
 {
-    private const string SourcePath = "res://lore/perspectives/test/world/test-page.md";
+    private const string SourcePath = "res://lore/perspectives/char/test/world/test-page.md";
 
     /// <summary>
-    /// Observer and subject IDs are canonicalised once at the storage-agnostic query boundary.
+    /// Observer and subject FullIds are preserved at the storage-agnostic query boundary.
     /// </summary>
     [Fact]
-    public void Constructor_NormalisesIDsAndPreservesDeduplicatedRequestOrder()
+    public void Constructor_PreservesCanonicalFullIdsAndDeduplicatedRequestOrder()
     {
         LoreQuery query = new(
-            "  VADIM ",
+            "char:vadim",
             [
                 LoreSubjectRequest.World(),
-                LoreSubjectRequest.Location(" INTERROGATION_ROOM "),
-                LoreSubjectRequest.Location("interrogation_room"),
-                LoreSubjectRequest.Character("ALLY"),
+                LoreSubjectRequest.Location("loc:interrogation_room"),
+                LoreSubjectRequest.Location("loc:interrogation_room"),
+                LoreSubjectRequest.Character("char:ally"),
             ]);
 
-        Assert.Equal("vadim", query.ObserverID);
+        Assert.Equal("char:vadim", query.ObserverID);
         Assert.Collection(
             query.Subjects,
             request => Assert.Equal(LoreSubjectKind.World, request.Kind),
             request =>
             {
                 Assert.Equal(LoreSubjectKind.Location, request.Kind);
-                Assert.Equal("location.interrogation_room", request.SubjectID);
+                Assert.Equal("loc:interrogation_room", request.SubjectID);
             },
             request =>
             {
                 Assert.Equal(LoreSubjectKind.Character, request.Kind);
-                Assert.Equal("character.ally", request.SubjectID);
+                Assert.Equal("char:ally", request.SubjectID);
             });
     }
 
     /// <summary>
-    /// Subject factories own canonical namespaces and reject callers that supply them.
+    /// Subject factories accept only canonical FullIds of their required type.
     /// </summary>
     [Theory]
-    [InlineData(LoreSubjectKind.Character, " Ally ", "character.ally")]
-    [InlineData(LoreSubjectKind.Location, " Interrogation_Room ", "location.interrogation_room")]
-    public void SubjectRequest_AddsCanonicalNamespaceToBareID(
+    [InlineData(LoreSubjectKind.Character, "char:ally", "char:ally")]
+    [InlineData(LoreSubjectKind.Location, "loc:interrogation_room", "loc:interrogation_room")]
+    public void SubjectRequest_AcceptsCanonicalFullId(
         LoreSubjectKind kind,
-        string bareID,
+        string fullID,
         string expectedID)
     {
         LoreSubjectRequest request = kind == LoreSubjectKind.Character
-            ? LoreSubjectRequest.Character(bareID)
-            : LoreSubjectRequest.Location(bareID);
+            ? LoreSubjectRequest.Character(fullID)
+            : LoreSubjectRequest.Location(fullID);
 
         Assert.Equal(expectedID, request.SubjectID);
     }
 
     /// <summary>
-    /// Supplying a namespace owned by a subject factory is an authoring error.
+    /// Bare, malformed, and wrong-type subject values are authoring errors.
     /// </summary>
     [Theory]
-    [InlineData(LoreSubjectKind.Character, "character.ally")]
-    [InlineData(LoreSubjectKind.Character, " CHARACTER.ALLY ")]
-    [InlineData(LoreSubjectKind.Location, "location.interrogation_room")]
-    [InlineData(LoreSubjectKind.Location, " LOCATION.INTERROGATION_ROOM ")]
-    public void SubjectRequest_RejectsAlreadyPrefixedInput(LoreSubjectKind kind, string prefixedID)
+    [InlineData(LoreSubjectKind.Character, "ally")]
+    [InlineData(LoreSubjectKind.Character, "loc:ally")]
+    [InlineData(LoreSubjectKind.Location, "interrogation_room")]
+    [InlineData(LoreSubjectKind.Location, "char:interrogation_room")]
+    public void SubjectRequest_RejectsNonCanonicalOrWrongTypeInput(LoreSubjectKind kind, string subjectID)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(() =>
             kind == LoreSubjectKind.Character
-                ? LoreSubjectRequest.Character(prefixedID)
-                : LoreSubjectRequest.Location(prefixedID));
+                ? LoreSubjectRequest.Character(subjectID)
+                : LoreSubjectRequest.Location(subjectID));
 
-        Assert.Contains("bare", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEmpty(exception.Message);
     }
 
     /// <summary>
@@ -196,7 +196,7 @@ public sealed class MarkdownLoreQueryServiceTests
             ---
             id: test.page
             title: Test Page
-            subject_id: CHARACTER.ALLY
+            subject_id: char:ally
             priority: -10
             ---
             Body.
@@ -208,7 +208,7 @@ public sealed class MarkdownLoreQueryServiceTests
             LoreSubjectKind.Character);
 
         Assert.Equal(-10, document.Priority);
-        Assert.Equal("character.ally", document.SubjectID);
+        Assert.Equal("char:ally", document.SubjectID);
     }
 
     /// <summary>
@@ -266,13 +266,14 @@ public sealed class MarkdownLoreQueryServiceTests
             SourcePath: sourcePath);
 
     /// <summary>
-    /// Observer and subject keys reject traversal segments while preserving dotted canonical identifiers.
+    /// Observer and subject FullIds reject traversal, malformed, and mixed-case values.
     /// </summary>
     [Theory]
-    [InlineData(".")]
-    [InlineData("..")]
-    [InlineData("../vadim")]
-    [InlineData("character\\vadim")]
+    [InlineData("char:.")]
+    [InlineData("char:..")]
+    [InlineData("char:../vadim")]
+    [InlineData("char:vadim/other")]
+    [InlineData("Char:vadim")]
     public void QueryIDs_RejectTraversalIdentifiers(string id)
     {
         _ = Assert.Throws<ArgumentException>(() => LoreQuery.Essential(id));
@@ -283,8 +284,8 @@ public sealed class MarkdownLoreQueryServiceTests
     /// Essential metadata never makes a location or character entry match an unrequested subject.
     /// </summary>
     [Theory]
-    [InlineData(LoreSubjectKind.Location, "requested", "location.other")]
-    [InlineData(LoreSubjectKind.Character, "requested", "character.other")]
+    [InlineData(LoreSubjectKind.Location, "loc:requested", "loc:other")]
+    [InlineData(LoreSubjectKind.Character, "char:requested", "char:other")]
     public void Matches_SubjectScopedEssentialEntry_DoesNotBypassSubjectSelection(
         LoreSubjectKind kind,
         string requestedSubjectID,
@@ -316,7 +317,7 @@ public sealed class MarkdownLoreQueryServiceTests
         cancellation.Cancel();
 
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => service.QueryAsync(ContentContext.Default, LoreQuery.Essential("vadim"), cancellation.Token));
+            () => service.QueryAsync(ContentContext.Default, LoreQuery.Essential("char:vadim"), cancellation.Token));
     }
 
     /// <summary>

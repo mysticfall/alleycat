@@ -30,13 +30,13 @@ public abstract record Observation
 /// <summary>
 /// Base contract for a naturally observed action with optional recognised actor identity.
 /// </summary>
-/// <param name="ActorId">Exact stable actor ID, or <see langword="null"/> when the actor is unknown.</param>
+/// <param name="ActorId">Exact stable actor FullId, or <see langword="null"/> when the actor is unknown.</param>
 public abstract record ObservedAction(string? ActorId) : Observation;
 
 /// <summary>
 /// Speech observed from the owning character, a recognised other character, or an unknown speaker.
 /// </summary>
-/// <param name="ActorId">Exact recognised actor ID, or <see langword="null"/> when unknown.</param>
+/// <param name="ActorId">Exact recognised actor FullId, or <see langword="null"/> when unknown.</param>
 /// <param name="VoiceId">Optional raw voice ID used for configured attribution, but not authenticated provenance.</param>
 /// <param name="Content">Observed speech content.</param>
 public sealed record ObservedSpeech(
@@ -51,6 +51,6 @@ public sealed record ObservedSpeech(
     public override float CalculateImportance(ObservationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return string.Equals(ActorId, context.Character.Id, StringComparison.Ordinal) ? 0f : 1f;
+        return string.Equals(ActorId, context.Character.FullId, StringComparison.Ordinal) ? 0f : 1f;
     }
 }

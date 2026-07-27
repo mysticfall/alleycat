@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
+using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
@@ -136,13 +137,13 @@ public partial class AgenticMind : MindBase, IServiceProvider
             if (owner is not null)
             {
                 throw new InvalidOperationException(
-                    $"Voice ID '{voiceID}' ambiguously matches current-scene characters '{owner.Id}' and '{character.Id}'.");
+                    $"Voice ID '{voiceID}' ambiguously matches current-scene characters '{owner.FullId}' and '{character.FullId}'.");
             }
 
             owner = character;
         }
 
-        return owner?.Id;
+        return owner?.FullId;
     }
 
     /// <inheritdoc />
@@ -267,24 +268,25 @@ public partial class AgenticMind : MindBase, IServiceProvider
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(workers);
 
-        ICharacter[] characters = [.. scene.Characters.OrderBy(subject => subject.Id, StringComparer.Ordinal)];
+        ICharacter[] characters = [.. scene.Characters];
+        foreach (ICharacter subject in characters)
+        {
+            ValidateSceneCharacterIdentity(subject);
+        }
+
+        Array.Sort(characters, static (left, right) => StringComparer.Ordinal.Compare(left.FullId, right.FullId));
         if (!characters.Any(subject => ReferenceEquals(subject, character)))
         {
             throw new InvalidOperationException(
-                $"AgenticMind owning character '{character.Id}' is absent from the current scene context.");
+                $"AgenticMind owning character '{character.FullId}' is absent from the current scene context.");
         }
 
         Dictionary<string, object?> characterContexts = new(StringComparer.Ordinal);
         IReadOnlyDictionary<string, object?>? owningCharacterContext = null;
         foreach (ICharacter subject in characters)
         {
-            if (string.IsNullOrEmpty(subject.Id))
-            {
-                throw new InvalidOperationException("Scene character context requires non-empty character IDs.");
-            }
-
             IReadOnlyDictionary<string, object?> subjectContext = subject.GetContext(scene, observer: character);
-            characterContexts.Add(subject.Id, subjectContext);
+            characterContexts.Add(subject.FullId, subjectContext);
             if (ReferenceEquals(subject, character))
             {
                 owningCharacterContext = subjectContext;
@@ -310,6 +312,21 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
 
         return new ReadOnlyDictionary<string, object?>(context);
+    }
+
+    private static void ValidateSceneCharacterIdentity(ICharacter character)
+    {
+        string fullId = character.FullId;
+        try
+        {
+            IdentityValidator.Validate(character, nameof(character));
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                $"Scene character context has invalid identity '{fullId}'. Context assembly requires matching canonical Type, ID, and FullId values.",
+                exception);
+        }
     }
 
     internal static string RenderSystemInstruction(

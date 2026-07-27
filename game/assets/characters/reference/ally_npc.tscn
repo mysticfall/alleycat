@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://dxao507r2dgb2" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_installer"]
 
 [node name="Ally" unique_id=58109474 node_paths=PackedStringArray("AuthoredVisualCues") instance=ExtResource("1_blend")]
-Id = "Ally"
+Id = "ally"
 AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
 
 [node name="Female" parent="." index="0" unique_id=1569261267]

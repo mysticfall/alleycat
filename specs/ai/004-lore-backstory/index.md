@@ -13,7 +13,7 @@ perspective.
 
 ## Goal
 
-Authors should be able to write ordinary Markdown lore from a named character perspective so AI prompts receive
+Authors should be able to write ordinary Markdown lore from a canonical character perspective so AI prompts receive
 stable, deterministic context for that character without requiring graph compilation, memory mutation, or broader
 lore-management workflows in this slice.
 
@@ -42,16 +42,17 @@ lore-management workflows in this slice.
 3. Optional content packs use lore root `res://content/<content-id>/lore`, committed under
    `game/content/<content-id>/lore/` when present.
 4. Perspective lore for the default content root uses this layout:
-    - `game/lore/perspectives/<observer-id>/world/*.md`
-    - `game/lore/perspectives/<observer-id>/locations/*.md`
-    - `game/lore/perspectives/<observer-id>/characters/*.md`
-    - Fixture/sample perspective content should use canonical lower-case subject and observer IDs (for example `vadim`).
+    - `game/lore/perspectives/<observer-type>/<observer-id>/world/*.md`
+    - `game/lore/perspectives/<observer-type>/<observer-id>/locations/*.md`
+    - `game/lore/perspectives/<observer-type>/<observer-id>/characters/*.md`
+    - Observer identity remains canonical `FullId` (for example `char:vadim`), while type-scoped directories avoid
+      colons (for example `perspectives/char/vadim/`).
 5. Perspective lore for content packs uses the same layout under
-    `game/content/<content-id>/lore/perspectives/<observer-id>/`.
-6. Runtime `Character.Id` values remain exact and case-sensitive. Lore observer and subject keys are canonicalised only
-   at the lore boundary; IDs that differ only by case can therefore resolve to the same lore subject.
-7. Runtime lore access must go through an asynchronous query service that accepts content context, observer id, and
-    query intent.
+    `game/content/<content-id>/lore/perspectives/<observer-type>/<observer-id>/`.
+6. Lore observers and subjects are CORE-009 `FullId` values. The directory layout separates the `Type` and `Id` segments
+   without changing their identity; `Id` and `Type` are validated at scene registration or installation.
+7. Runtime lore access must go through an asynchronous query service that accepts content context, observer `FullId`,
+   and query intent.
 8. AgenticMind lore prompt consumption must query lore for its associated character perspective and remain read-only.
 9. Wiki pages may include frontmatter fields such as `id`, `title`, `aliases`, `tags`, `essential`, `priority`, and
     typed `links`.
@@ -67,8 +68,8 @@ lore-management workflows in this slice.
     abstraction and delegating output shape to a lore formatter.
 16. `EssentialLorePromptSection` must be runtime-backed through the `PromptSection` async build contract in AI-003.
 17. `EssentialLorePromptSection` must construct its own essential world query from
-    `buildContext.Character.Id` and query through the lore abstraction rather than hardcoding source paths.
-18. `EssentialLorePromptSection` remains world-only and validates the owning character ID only when used. This
+    `buildContext.Character.FullId` and query through the lore abstraction rather than hardcoding source paths.
+18. `EssentialLorePromptSection` remains world-only and validates the owning character `FullId` only when used. This
     validation must not make lore identity a general prompt-stack requirement.
 19. Lore query state, factories, and resolver methods must not leak into the general `PromptSectionBuildContext` API.
 20. `LoreEntry` must not expose `SourcePath` publicly. The Markdown backend retains source paths privately only for
@@ -91,28 +92,28 @@ lore-management workflows in this slice.
     the value or explicitly scoping it as unknown, unavailable, or not prompt-relevant.
 30. Future dynamic lore retrieval must use the same asynchronous query service abstraction, adding query intents or
     filters rather than introducing a separate retrieval pathway.
-31. `LoreSubjectRequest.Character(id)` and `LoreSubjectRequest.Location(id)` accept bare IDs, add the `character.` or
-    `location.` namespace respectively, normalise the result, and reject already-prefixed inputs.
+31. Character and location lore-subject requests accept canonical `FullId` values only: `char:<id>` and `loc:<id>`.
+    They validate the required type and reject bare or differently typed values.
 32. `CharacterLorePromptSection` must query every character in `ISceneContext.Characters` from the owning character's
-    observer perspective. It orders the owner first and all others by ordinal exact `Character.Id`.
-33. `CharacterLorePromptSection` must fail when distinct exact runtime character IDs normalise to the same lore subject;
-    it must not silently merge their lore.
+    observer perspective. It orders the owner first and all others by ordinal exact `Character.FullId`.
+33. `CharacterLorePromptSection` must fail for invalid or duplicate scene character `FullId` values; it must not
+    silently merge their lore.
 34. The shared NPC prompt stack includes essential world lore before character lore, preserving authored section order.
 
 ## In Scope
 
 - Content-scoped lore repositories rooted at `game/lore/` for `default` and `game/content/<content-id>/lore/` for packs.
-- Perspective Markdown wiki authoring conventions under `perspectives/<observer-id>/`.
+- Perspective Markdown wiki authoring conventions under `perspectives/<observer-type>/<observer-id>/`.
 - `world/`, `locations/`, and `characters/` perspective lore collections.
 - Top-level `essential: true` frontmatter for baseline world-lore prompt injection.
 - Contextual retrieval for location and character lore needed by the current prompt context.
 - Optional `priority` frontmatter and deterministic ordering for retrieved entries.
-- Fixture/sample perspective content for first-slice must use lower-case canonical IDs and consistent
-  `priority` usage in ordering-sensitive cases.
+- Fixture/sample perspective content uses canonical `FullId` values, including typed values `char:ally` and
+  `loc:interrogation_room`, and consistent `priority` usage in ordering-sensitive cases.
 - Async runtime lore query and presentation-agnostic formatting contracts for perspective lore.
 - Essential world-query construction from the typed owning character supplied by AI-003.
 - Character-lore query construction for all scene characters from the owning character's perspective.
-- Bare-ID character and location lore-subject requests with namespace and normalisation validation.
+- Canonical `FullId` character and location lore-subject requests with type validation.
 - Read-only AgenticMind prompt consumption of perspective lore.
 - Perspective entries as the default replacement for canonical lore in AgenticMind prompt consumption.
 - Missing perspective entries as absent observer knowledge with no automatic canonical fallback.
@@ -138,10 +139,11 @@ lore-management workflows in this slice.
 
 1. Runtime loading resolves `default` to `game/lore` / `res://lore` and optional content id `<id>` to
    `game/content/<id>/lore` / `res://content/<id>/lore`.
-2. Runtime loading reads perspective lore from `perspectives/<observer-id>/world/`, `locations/`, and `characters/`
-    collections through the asynchronous query service with normalised observer and subject IDs.
-3. AgenticMind prompt consumption requests lore for its associated character observer id and does not consume canonical
-   facts as a substitute for that perspective.
+2. Runtime loading reads perspective lore from `perspectives/<observer-type>/<observer-id>/world/`, `locations/`,
+   and `characters/` collections through the asynchronous query service using canonical observer and subject `FullId`
+   values; `char:vadim` resolves to `perspectives/char/vadim/` without a colon in the path.
+3. AgenticMind prompt consumption requests lore for its associated character observer `FullId` and does not consume
+   canonical facts as a substitute for that perspective.
 4. AgenticMind prompt lore presents perspective entries as the character's beliefs, not as canonical facts plus
    supplemental belief overlays.
 5. Missing perspective entries do not trigger automatic canonical fallback in AgenticMind prompt lore.
@@ -159,8 +161,8 @@ lore-management workflows in this slice.
 13. Runtime prompt sections query the lore abstraction, not hardcoded prompt-section paths, and do not write lore data.
 14. The default lore formatter produces deterministic pseudo-XML-compatible prompt blocks using each loaded page title
     as the tag and body as the content, without wrapper or child title/body/source tags.
-15. `EssentialLorePromptSection` constructs its essential world query from `buildContext.Character.Id`, validates that
-    lore identity only when used, and queries the lore abstraction.
+15. `EssentialLorePromptSection` constructs its essential world query from `buildContext.Character.FullId` and validates
+    that lore identity only when used before querying the lore abstraction.
 16. The general prompt build context contains no lore query, factory, or resolver, and lore-free stacks do not require a
     non-empty lore identity.
 17. The implementation does not require ontology files, compiled graph artefacts, suggestions directories, lore fragment
@@ -171,12 +173,13 @@ lore-management workflows in this slice.
     value or scoping it as unknown, unavailable, or not prompt-relevant.
 19. This spec is linked from the AI specification index and the project specification index.
 20. `EssentialLorePromptSection` returns only essential world lore.
-21. `CharacterLorePromptSection` queries every scene character from the owner's perspective, with the owner first and
-    remaining characters ordered by ordinal exact ID.
-22. Distinct exact runtime character IDs that normalise to one lore subject fail during character-lore construction.
-23. Character and location subject requests accept bare IDs, add their namespace, normalise deterministically, and
-    reject already-prefixed values.
-24. Exact, case-sensitive runtime `Character.Id` values are not rewritten by lore normalisation.
+21. `CharacterLorePromptSection` queries every scene character from the owner's canonical `FullId` perspective, with
+    the owner first and remaining characters ordered by ordinal exact `FullId`.
+22. Invalid or duplicate scene character `FullId` values fail during character-lore construction.
+23. Character and location subject requests accept only canonical `char:<id>` and `loc:<id>` values, validate their
+    type, and reject bare or differently typed values.
+24. Typed lore values include `char:ally` and `loc:interrogation_room`; the corresponding type-scoped directory layout
+    contains no colon.
 
 ## References
 
@@ -185,5 +188,6 @@ lore-management workflows in this slice.
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [CORE-008: Content Pack Resolution](../../core/008-content-pack-resolution/index.md)
+- [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - `game/lore`
 - `game/content/<content-id>/lore`

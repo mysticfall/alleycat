@@ -350,7 +350,7 @@ public sealed partial class MindInterruptionIntegrationTests
             Assert.Collection(
                 mind.Batches[1],
                 item => Assert.Equal("high", Assert.IsType<TestObservation>(item).Value),
-                item => Assert.Equal(mind.Owner.Id, Assert.IsType<TestAction>(item).ActorId));
+                item => Assert.Equal(((IIdentifiable)mind.Owner).FullId, Assert.IsType<TestAction>(item).ActorId));
             Assert.Equal(3, mind.TimelineSnapshots[1].Count);
         }
         finally
@@ -611,7 +611,7 @@ public sealed partial class MindInterruptionIntegrationTests
 
     private sealed class TestCharacter : ICharacter
     {
-        public string Id { get; set; } = "interruption-owner";
+        public string Id { get; set; } = "interruption_owner";
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 

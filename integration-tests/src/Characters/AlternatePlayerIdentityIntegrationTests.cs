@@ -19,11 +19,11 @@ public sealed class AlternatePlayerIdentityIntegrationTests
         "res://assets/testing/alternate_player_identity/alternate_player_identity.tscn";
 
     /// <summary>
-    /// A concrete non-Ally player retains role discovery while installation propagates its authored identity.
+    /// A concrete non-Ally player retains its authored identity without changing local voice attribution.
     /// </summary>
     [Headless]
     [Fact]
-    public void AlternateIdentity_UsingFemalePlayerRole_PropagatesIdentityAndRoleDiscovery()
+    public void AlternateIdentity_UsingFemalePlayerRole_PreservesIdentityAndRoleDiscovery()
     {
         CharacterHub character = Assert.IsType<CharacterHub>(
             LoadPackedScene(FixtureScenePath).Instantiate(),
@@ -33,9 +33,9 @@ public sealed class AlternatePlayerIdentityIntegrationTests
         {
             EnsureCharacterRuntimeInstalled(character);
 
-            Assert.Equal("Riley", character.Id);
-            Assert.NotEqual("Ally", character.Id);
-            Assert.Equal("Riley", Assert.IsAssignableFrom<Voice>(character.Voice).Id);
+            Assert.Equal("riley", character.Id);
+            Assert.NotEqual("ally", character.Id);
+            Assert.NotEqual(character.Id, Assert.IsAssignableFrom<Voice>(character.Voice).Id);
             Assert.True(character.IsInGroup("Player"));
             Assert.True(character.IsInGroup("Actors"));
 
@@ -44,7 +44,7 @@ public sealed class AlternatePlayerIdentityIntegrationTests
             IReadOnlyDictionary<string, object?> characterCard = character.GetContext(
                 new SceneContext([character]),
                 observer: null);
-            Assert.Equal("Riley", Assert.Single(characterCard).Value);
+            Assert.Equal("char:riley", Assert.Single(characterCard).Value);
         }
         finally
         {

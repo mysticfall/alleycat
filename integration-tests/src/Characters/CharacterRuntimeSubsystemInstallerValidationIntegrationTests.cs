@@ -46,7 +46,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
     {
         using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
         CharacterHub targetRoot = Assert.IsType<CharacterHub>(fixture.TargetRoot, exactMatch: false);
-        targetRoot.Id = "Target.Override.Identity";
+        targetRoot.Id = "target_override_identity";
         const string authoredTargetPath = "user://character-runtime-target-identity-override.tscn";
         var authoredTarget = new CharacterHub { Name = targetRoot.Name, Id = targetRoot.Id };
         var authoredScene = new PackedScene();
@@ -70,7 +70,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.Same(fixture.TargetRightHand, character.RequireHand(LimbSide.Right));
         Assert.Same(fixture.TargetLocomotion, targetRoot.RequireComponent<ILocomotion>());
         Assert.Same(targetRoot, fixture.TargetNavigation!.Target);
-        Assert.Equal("Target.Override.Identity", fixture.TargetVoice!.Id);
+        Assert.Equal("voice", fixture.TargetVoice!.Id);
         AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
         Assert.NotSame(fixture.OriginalAnimationTreeRoot, fixture.TargetAnimationTree!.TreeRoot);
         Assert.Equal(Error.Ok, DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(authoredTargetPath)));
@@ -89,6 +89,24 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
 
         Assert.True(result.Succeeded, string.Join('\n', result.Errors));
         AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
+    }
+
+    /// <summary>
+    /// Installation rejects a concrete character hub whose custom identity implementation reports a canonical-looking
+    /// FullId for different Type and ID values.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_CharacterWithInconsistentCanonicalLookingFullId_FailsBeforeActivation()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithInconsistentFullIdHub();
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        string error = Assert.Single(result.Errors);
+        Assert.False(result.Succeeded);
+        Assert.Contains("exactly match", error);
+        Assert.Contains("char:other_character", error);
     }
 
     /// <summary>
@@ -301,7 +319,17 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
 
         public static RuntimeInstallFixture CreateWithActualRootHub()
         {
-            var targetRoot = new CharacterHub { Name = "CharacterRoot" };
+            var targetRoot = new CharacterHub { Name = "CharacterRoot", Id = "target_character" };
+            return Create(targetRoot);
+        }
+
+        public static RuntimeInstallFixture CreateWithInconsistentFullIdHub()
+        {
+            var targetRoot = new InconsistentFullIdCharacter
+            {
+                Name = "CharacterRoot",
+                Id = "target_character",
+            };
             return Create(targetRoot);
         }
 
@@ -337,7 +365,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
             };
             modelRoot.AddChild(faceMesh);
 
-            var templateRoot = new CharacterHub { Name = "Template" };
+            var templateRoot = new CharacterHub { Name = "Template", Id = "template_character" };
             var templateSkeleton = new Skeleton3D { Name = "Skeleton" };
             templateRoot.AddChild(templateSkeleton);
 
@@ -544,5 +572,10 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
             {
             }
         }
+    }
+
+    private sealed partial class InconsistentFullIdCharacter : CharacterHub, IIdentifiable
+    {
+        string IIdentifiable.FullId => "char:other_character";
     }
 }

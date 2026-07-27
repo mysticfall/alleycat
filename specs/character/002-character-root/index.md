@@ -26,8 +26,8 @@ exists.
    hand capability references on the template root.
 6. Character capability wiring fails clearly when the scene root or required humanoid capability is missing, invalid,
    or unrebasable.
-7. Each character asset owns a stable identity that drives voice attribution and conversation context independently of
-   its player or NPC role.
+7. Each character asset owns a stable identity for conversation context, while voice retains independent local
+   attribution identity regardless of player or NPC role.
 8. Gameplay systems can treat every character as both an observer of visual cues and a visual subject with discoverable,
    authored appearance cues.
 9. Shared character templates provide a whole-character cue, while Ally NPC, Ally player, and Vadim describe their own
@@ -89,14 +89,15 @@ exists.
 25. Character roots that should appear in scene context must be authored into the Godot `Actors` group.
 26. `Actors` is reserved for strict character discovery; every member must implement `ICharacter`.
 27. Items and other non-character nodes must not be added to `Actors`.
-28. `Character.Id` is asset-owned, exact, and case-sensitive at runtime; role templates must not supply a concrete
-    character identity.
-29. Generic character installation must set the installed character-owned `Voice.Id` to the final `Character.Id` after
-    target-scene precedence is resolved.
+28. Character identity semantics defer normatively to CORE-009. `Character` implements `IIdentifiable`: `Id` is a local
+    lower `snake_case` identifier, `Type` is `char`, and external or cross-object context uses canonical `FullId`.
+29. `Voice` retains its own local attribution identity. Its `Id` must not be derived from, substituted for, or used as
+    the `Character.Id` object identity.
 30. `Voiceprint` is a listener-recognition key and must not be used as proof that a voice belongs to a character.
 31. The lowest shared male/female character bases must author `CharacterCardContextSource` and `Actors` membership.
     Higher role templates and concrete scenes must not add redundant compensation.
-32. `CharacterCardContextSource` returns exactly `{ Id: subject.Id }` under CTX-001.
+32. Under CTX-001, `CharacterCardContextSource` must publish canonical character identity as exactly
+    `{ FullId: subject.FullId }`, not a bare local `Id`.
 33. The concrete `Character` root owns a validated, read-only visual-cue collection for its `IVisualSubject` role.
 34. Character installation must preserve, rebase, and validate template-authored visual-cue references. Validation must
     enforce the BODY-004 cue contract, including non-empty and ordinally unique IDs per provider.
@@ -119,7 +120,7 @@ exists.
 - Installer validation, reference rebase, refresh, and dependency-hub usage for character scene assembly.
 - Name conflict and alias guidance for the concrete `Character` type.
 - Character-root membership in the `Actors` group for SCN-001 scene-context discovery.
-- Asset-owned stable character identity and generic installed voice-ID alignment.
+- Asset-owned CORE-009 character identity and independent local voice attribution.
 - Lowest-shared-base character-card context wiring.
 - `ICharacter` aggregation of the BODY-004 visual observer and visual subject roles.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
@@ -150,8 +151,8 @@ exists.
 6. Missing, wrong, duplicate, or unrebasable required humanoid capabilities produce clear validation failures.
 7. Partial reusable base templates may omit role-specific `Voice` only when the final role templates that consume them
    author `Voice` before runtime installation.
-8. Role-explicit Ally player, Ally NPC, and Vadim NPC assets retain their own identities, while an alternate
-   female-player fixture demonstrates configurable identity.
+8. Role-explicit Ally player, Ally NPC, and Vadim NPC assets retain their own local identities, while an alternate
+   female-player fixture demonstrates configurable identity independent of voice attribution.
 9. Every character exposes a discoverable whole-character `body` cue that can describe its appearance to a visual
    observer.
 10. Ally player, Ally NPC, and Vadim return their own authored appearance descriptions rather than generic placeholder
@@ -183,11 +184,13 @@ exists.
     into the character root.
 16. Character roots intended for scene context are members of `Actors`, and no item or non-`ICharacter` node is accepted
     as valid `Actors` membership.
-17. Character installation copies the final exact `Character.Id` to the character-owned voice through generic logic.
-18. Voiceprint remains recognition metadata and is not used to establish character ownership.
+17. `Character` implements CORE-009 `IIdentifiable`: its local lower `snake_case` `Id` has `Type` `char`, and
+    cross-object context uses canonical `FullId`.
+18. Voice retains independent local attribution identity and is not derived from or used as `Character.Id`; Voiceprint
+    remains recognition metadata and is not used to establish character ownership.
 19. Shared male/female bases each author one `CharacterCardContextSource` and `Actors` membership; higher layers do not
     compensate redundantly.
-20. `CharacterCardContextSource` returns only the exact subject `Id` entry.
+20. `CharacterCardContextSource` returns only the canonical `FullId` entry with value `subject.FullId`, not bare `Id`.
 21. `ICharacter` normatively aggregates both `IVisualObserver` and `IVisualSubject` from BODY-004.
 22. Character roots expose validated visual-cue references through a read-only collection, and installation preserves
     or rebases those authored references.
@@ -201,7 +204,9 @@ exists.
 
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
+- [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [CHAR-001: Character Skeleton Profile](../001-character-skeleton/index.md)
+- [AI-004: Lore And Backstory Source Compilation](../../ai/004-lore-backstory/index.md)
 - [BODY-001: Hands](../../body/001-hands/index.md)
 - [BODY-004: Eyes](../../body/004-eyes/index.md)
 - [BODY-006: Voice Component](../../body/006-voice/index.md)

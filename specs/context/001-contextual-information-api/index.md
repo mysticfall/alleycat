@@ -24,7 +24,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 4. Player-visible behaviour can use available context without exposing source wiring, Godot export details, or data
    assembly details.
 5. Names, aliases, and display labels are contextual data when sources provide them, not fixed character properties.
-6. Character identity shown in generated conversation context must come from exact authored character IDs.
+6. Character identity shown in generated conversation context must use the canonical authored character `FullId`.
 
 ## Technical Requirements
 
@@ -53,22 +53,22 @@ consumer APIs, while providing the narrow character-card source and scene-charac
     authored and runtime collections.
 14. Under CHAR-002, `ICharacter` extends `IContextual` for the first character-focused slice without creating a
     dependency from `AlleyCat.Context` to `AlleyCat.Character`.
-15. `IEntity` is not required to extend `IContextual` in the first slice.
+15. CORE-009 `IIdentifiable` is not required to extend `IContextual` in the first slice.
 16. Do not introduce `ContextData`, titled-fragment result objects, `ContextRequest`, `ContextRequestKind`, typed
     request filters, or a detailed item taxonomy.
 17. `CharacterCardContextSource` is the concrete narrow character source for this slice and returns exactly
-    `{ Id: subject.Id }`.
+    `{ FullId: subject.FullId }`.
 18. Names, aliases, and display labels must not be added as fixed properties on `ICharacter` for this slice.
 19. `CreateRenderContext` is AgenticMind's foreground-only aggregation operation. It must create AgenticMind's own
     complete top-level read-only render dictionary containing `character` for the owner, deterministically ordered
-    `characters` keyed by each exact, case-sensitive `Character.Id`, the read-only `observations` snapshot, and all
+    `characters` keyed by each exact `Character.FullId`, the read-only `observations` snapshot, and all
     authored ContextWorker projections.
 20. `CreateRenderContext` must call every subject with `observer` set to the owning character.
-21. The owner must appear in both `character` and `characters[owner.Id]`, and both entries must reference the exact same
-    context dictionary instance.
-22. The `characters` dictionary must be inserted in ordinal order by exact `Character.Id`.
-23. `CreateRenderContext` must fail for empty character IDs, duplicate exact scene character IDs, or an owner absent
-    from the scene context.
+21. The owner must appear in both `character` and `characters[owner.FullId]`, and both entries must reference the exact
+    same context dictionary instance.
+22. The `characters` dictionary must be inserted in ordinal order by exact `Character.FullId`.
+23. `CreateRenderContext` must fail for invalid character identity, duplicate exact scene character `FullId` values, or
+    an owner absent from the scene context.
 24. Existing observer-relative semantics remain unchanged: when an observer is supplied, sources receive that same
     observer; when omitted, sources receive `null`.
 25. Context sources that need narrower observer capabilities may explicitly pattern-match the supplied `IContextual`;
@@ -92,10 +92,10 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - Dual non-generic and generic source contracts for heterogeneous aggregation and typed reuse.
 - Neutral `ContextSource` resource base as the exported Godot type for authored source collections.
 - Integration boundary with `AlleyCat.Scene.ISceneContext` from SCN-001.
-- `ICharacter : IContextual` for the first character-focused slice.
+- `ICharacter : IContextual` for the first character-focused slice and its CORE-009 identity integration.
 - Optional observer-relative context via `IContextual? observer`.
 - Internal source aggregation by subjects or owning systems.
-- `CharacterCardContextSource` as the narrow identity source returning only the subject's exact ID.
+- `CharacterCardContextSource` as the narrow identity source returning only the subject's canonical `FullId`.
 - Deterministic, foreground-only `CreateRenderContext` assembly for prompt rendering and later snapshot publication.
 - Names, aliases, and display labels as possible context entries when future sources provide them.
 - Convention-based direct ContextWorker dictionary publication without a public wrapper or scenario-model requirement.
@@ -109,7 +109,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - Budgeting, ranking, summarisation, omission policy, context-content diagnostics, and evaluation metadata.
 - AI retrieval, memory, perception, lore, relationship, inventory, planner, or other backend architectures.
 - Non-character contextual subjects such as items, scenes, memories, or lore records.
-- Requiring `IEntity : IContextual`.
+- Requiring `IIdentifiable : IContextual`.
 - Adding `ContextData`, titled-fragment result objects, `ContextRequest`, `ContextRequestKind`, typed request filters,
   or detailed context item taxonomy.
 - Redefining SCN-001 scene membership, `Actors` group discovery, or scene-context provider access.
@@ -122,7 +122,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 2. Context retrieval can use the current SCN-001 scene context and optional observer when provided.
 3. Names, aliases, and display labels are representable as dictionary entries from future sources.
 4. No player-facing behaviour exposes source aggregation, Godot export details, or data assembly details.
-5. Generated character context identifies the owner and scene characters by their exact authored IDs.
+5. Generated character context identifies the owner and scene characters by their exact authored `FullId` values.
 6. Existing context remains observer-relative when a contextual observer is supplied and remains available without one.
 
 ### Technical Requirements
@@ -139,15 +139,15 @@ consumer APIs, while providing the narrow character-card source and scene-charac
    successful contextual-subject type check.
 8. `ContextSource` is the neutral abstract exported resource base for Godot-authored source collections.
 9. No character-specific source API under `AlleyCat.Context` or separate authored source collection is required.
-10. `ICharacter` extends `IContextual`, while `IEntity` does not need to extend `IContextual` for CTX-001.
+10. `ICharacter` extends `IContextual`. CORE-009 `IIdentifiable` does not need to extend `IContextual` for CTX-001.
 11. No `ContextRequest`, `ContextRequestKind`, fixed character label property, AI retrieval backend, memory backend,
     lore backend, or perception backend is required by this slice.
-12. `CharacterCardContextSource` returns exactly one `Id` entry whose value is `subject.Id`.
+12. `CharacterCardContextSource` returns exactly one `FullId` entry whose value is `subject.FullId`.
 13. Foreground-only `CreateRenderContext` returns AgenticMind's complete top-level read-only dictionary containing
-    `character`, ordinally inserted `characters[exact Character.Id]`, read-only `observations`, and all authored
+    `character`, ordinally inserted `characters[exact Character.FullId]`, read-only `observations`, and all authored
     ContextWorker projections, with every subject queried using the owning character as observer.
 14. The owner appears in both locations using the same dictionary instance.
-15. Empty IDs, exact duplicate scene IDs, and owner absence fail context assembly clearly.
+15. Invalid identity, exact duplicate scene character `FullId` values, and owner absence fail context assembly clearly.
 16. General context contracts use optional `IContextual? observer` parameters rather than narrower visual- or
     character-domain observer parameters.
 17. The observer contract preserves existing supplied-observer and omitted-observer semantics across contextual subjects
@@ -170,5 +170,6 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [BODY-004: Eyes](../../body/004-eyes/index.md)
 - [AI-005: Context Worker](../../ai/005-context-worker/index.md)
+- [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - `game/src/Context/`
 - `game/src/Character/Character.cs`

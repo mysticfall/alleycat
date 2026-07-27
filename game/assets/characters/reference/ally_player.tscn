@@ -11,7 +11,7 @@ Radius = 0.05
 metadata/_custom_type_script = "uid://b8340t35vo8cv"
 
 [node name="Player" unique_id=619146847 node_paths=PackedStringArray("AuthoredVisualCues") groups=["Player"] instance=ExtResource("1_blend")]
-Id = "Ally"
+Id = "ally"
 AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
 
 [node name="Female" parent="." index="0" unique_id=1569261267]

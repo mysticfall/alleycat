@@ -4,6 +4,7 @@ using AlleyCat.Body.Hands;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
@@ -113,7 +114,9 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         Voice voice = root.GetNode<Voice>("Male/GeneralSkeleton/Head/Voice");
         OpenAISpeechGenerator speechGenerator = root.GetNode<OpenAISpeechGenerator>("Male/GeneralSkeleton/Head/Voice/SpeechGenerator");
 
-        Assert.Equal("Vadim", character.Id);
+        Assert.Equal("vadim", character.Id);
+        Assert.Equal("char", ((IIdentifiable)character).Type);
+        Assert.Equal("char:vadim", ((IIdentifiable)character).FullId);
         Assert.Equal("Vadim", voice.Id);
         Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
         sceneTree.Root.AddChild(root);
@@ -121,7 +124,9 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         try
         {
             await WaitForFramesAsync(sceneTree, 12);
-            Assert.Equal("Vadim", character.Id);
+            Assert.Equal("vadim", character.Id);
+            Assert.Equal("char", ((IIdentifiable)character).Type);
+            Assert.Equal("char:vadim", ((IIdentifiable)character).FullId);
             Assert.Equal("Vadim", voice.Id);
             Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
 
@@ -129,7 +134,9 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             SceneInstallationResult reinstall = installer.Install(new SceneInstallationContext(root));
 
             Assert.True(reinstall.Succeeded, string.Join('\n', reinstall.Errors));
-            Assert.Equal("Vadim", character.Id);
+            Assert.Equal("vadim", character.Id);
+            Assert.Equal("char", ((IIdentifiable)character).Type);
+            Assert.Equal("char:vadim", ((IIdentifiable)character).FullId);
             Assert.Equal("Vadim", voice.Id);
             Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
         }

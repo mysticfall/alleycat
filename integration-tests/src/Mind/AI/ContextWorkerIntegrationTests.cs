@@ -1077,7 +1077,7 @@ public sealed partial class ContextWorkerIntegrationTests
 
     private sealed partial class TestCharacter : Node, ICharacter
     {
-        public string Id { get; set; } = "context-worker-owner";
+        public string Id { get; set; } = "context_worker_owner";
 
         public IReadOnlyList<IComponent> Components { get; } = [];
 

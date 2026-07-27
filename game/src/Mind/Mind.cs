@@ -279,7 +279,7 @@ public abstract partial class Mind : Node, IVoiceListener
             AgentObservation stampedObservation = observation is ObservedAction action
                 ? action with
                 {
-                    ActorId = character.Id
+                    ActorId = character.FullId
                 }
                 : observation;
             float importance = CalculateAndValidateImportance(stampedObservation, context);

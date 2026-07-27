@@ -1,6 +1,6 @@
 ---
-id: character.ally
-type: character
+id: char:ally
+type: char
 title: Ally
 ---
 

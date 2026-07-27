@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Core;
 using AlleyCat.Mind.AI.Lore;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,10 +21,16 @@ public partial class CharacterLorePromptSection : PromptSection
 
         ICharacter owner = buildContext.Character;
         ICharacter[] sceneCharacters = [.. buildContext.Scene.Characters];
+        ValidateCharacterIdentity(owner);
+        foreach (ICharacter character in sceneCharacters)
+        {
+            ValidateCharacterIdentity(character);
+        }
+
         if (!sceneCharacters.Any(character => ReferenceEquals(character, owner)))
         {
             throw new InvalidOperationException(
-                $"CharacterLorePromptSection requires owning character '{owner.Id}' to be present in the scene context.");
+                $"CharacterLorePromptSection requires owning character '{owner.FullId}' to be present in the scene context.");
         }
 
         ICharacter[] orderedCharacters =
@@ -31,7 +38,7 @@ public partial class CharacterLorePromptSection : PromptSection
             owner,
             .. sceneCharacters
                 .Where(character => !ReferenceEquals(character, owner))
-                .OrderBy(character => character.Id, StringComparer.Ordinal),
+                .OrderBy(character => character.FullId, StringComparer.Ordinal),
         ];
 
         List<LoreSubjectRequest> subjects = new(orderedCharacters.Length);
@@ -41,12 +48,12 @@ public partial class CharacterLorePromptSection : PromptSection
             LoreSubjectRequest subject;
             try
             {
-                subject = LoreSubjectRequest.Character(character.Id);
+                subject = LoreSubjectRequest.Character(character.FullId);
             }
             catch (ArgumentException exception)
             {
                 throw new InvalidOperationException(
-                    $"CharacterLorePromptSection requires valid character and observer IDs; runtime ID was '{character.Id}'.",
+                    $"CharacterLorePromptSection requires valid character and observer FullIds; runtime FullId was '{character.FullId}'.",
                     exception);
             }
 
@@ -54,17 +61,17 @@ public partial class CharacterLorePromptSection : PromptSection
             if (runtimeIDsBySubject.TryGetValue(canonicalSubjectID, out string? existingRuntimeID))
             {
                 throw new InvalidOperationException(
-                    $"CharacterLorePromptSection cannot map distinct runtime character IDs '{existingRuntimeID}' and '{character.Id}' to the same canonical lore subject '{canonicalSubjectID}'.");
+                    $"CharacterLorePromptSection cannot map distinct runtime character FullIds '{existingRuntimeID}' and '{character.FullId}' to the same canonical lore subject '{canonicalSubjectID}'.");
             }
 
-            runtimeIDsBySubject.Add(canonicalSubjectID, character.Id);
+            runtimeIDsBySubject.Add(canonicalSubjectID, character.FullId);
             subjects.Add(subject);
         }
 
         LoreQuery query;
         try
         {
-            query = new LoreQuery(owner.Id, subjects);
+            query = new LoreQuery(owner.FullId, subjects);
         }
         catch (ArgumentException exception)
         {
@@ -81,5 +88,20 @@ public partial class CharacterLorePromptSection : PromptSection
             cancellationToken);
 
         return formatter.Format(entries);
+    }
+
+    private static void ValidateCharacterIdentity(ICharacter character)
+    {
+        string fullId = character.FullId;
+        try
+        {
+            IdentityValidator.Validate(character, nameof(character));
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                $"CharacterLorePromptSection requires matching canonical character Type, ID, and FullId values; runtime FullId was '{fullId}'.",
+                exception);
+        }
     }
 }

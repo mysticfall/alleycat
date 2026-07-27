@@ -47,7 +47,7 @@ public sealed class ConversationWiringIntegrationTests
             AgenticMind mind = FindSingleDescendant<AgenticMind>(npc);
             Voice npcVoice = Assert.IsAssignableFrom<Voice>(mind.Voice);
 
-            Assert.Equal("conversation-player", playerVoice.Id);
+            Assert.Equal("conversation_player", playerVoice.Id);
             Assert.Same(transcriber, playerVoice.Transcriber);
             Assert.True(mind.IsInGroup(IVoiceListener.GroupName));
             Assert.Contains(mind, sceneTree.GetNodesInGroup(IVoiceListener.GroupName).Cast<Node>());
@@ -67,8 +67,8 @@ public sealed class ConversationWiringIntegrationTests
 
             RecordingChatClient client = Assert.IsType<RecordingChatClient>(clientProvider.Client);
             string prompt = Assert.Single(client.Prompts);
-            Assert.Contains("You are conversation-npc", prompt, StringComparison.Ordinal);
-            Assert.Contains("Heard conversation-player say: hello reference friend", prompt, StringComparison.Ordinal);
+            Assert.Contains("You are char:conversation_npc", prompt, StringComparison.Ordinal);
+            Assert.Contains("Heard char:conversation_player say: hello reference friend", prompt, StringComparison.Ordinal);
             Assert.Equal(["speak", ToolOnlyTurnRunner.EndTurnToolName], client.ToolNamesByRun);
         }
         finally
@@ -92,13 +92,13 @@ public sealed class ConversationWiringIntegrationTests
         Node player = LoadPackedScene(ReferenceFemalePlayerScenePath).Instantiate();
         player.Name = "Player";
         CharacterHub playerCharacter = Assert.IsType<CharacterHub>(player, exactMatch: false);
-        playerCharacter.Id = "conversation-player";
+        playerCharacter.Id = "conversation_player";
         FindSingleDescendant<PlayerVoice>(player).Id = playerCharacter.Id;
         playerCharacter.RefreshComponents();
         Node npc = LoadPackedScene(ReferenceFemaleNpcScenePath).Instantiate();
         npc.Name = "NPC";
         CharacterHub npcCharacter = Assert.IsType<CharacterHub>(npc, exactMatch: false);
-        npcCharacter.Id = "conversation-npc";
+        npcCharacter.Id = "conversation_npc";
         npcCharacter.RefreshComponents();
 
         fixture.AddChild(actors);

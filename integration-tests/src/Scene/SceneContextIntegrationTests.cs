@@ -59,12 +59,12 @@ public sealed class SceneContextIntegrationTests
         var firstCharacter = new CharacterHub
         {
             Name = "LiveFirstActor",
-            Id = "live-first",
+            Id = "live_first",
         };
         var secondCharacter = new CharacterHub
         {
             Name = "LiveSecondActor",
-            Id = "live-second",
+            Id = "live_second",
         };
         Node contextRoot = new()
         {
@@ -137,13 +137,13 @@ public sealed class SceneContextIntegrationTests
             ISceneContext initialContext = provider.GetCurrent();
 
             secondCharacter.AddToGroup("Actors");
-            firstCharacter.Id = "first-mutated";
+            firstCharacter.Id = "first_mutated";
 
             ISceneContext updatedContext = provider.GetCurrent();
 
             Assert.Equal(baselineActorCount + 1, initialContext.Characters.Count);
             ICharacter initialCharacter = Assert.Single(initialContext.Characters, character => ReferenceEquals(character, firstCharacter));
-            Assert.Equal("first-mutated", initialCharacter.Id);
+            Assert.Equal("char:first_mutated", initialCharacter.FullId);
             Assert.DoesNotContain(secondCharacter, initialContext.Characters);
             Assert.Equal(baselineActorCount + 2, updatedContext.Characters.Count);
             Assert.Contains(firstCharacter, updatedContext.Characters);
@@ -168,12 +168,12 @@ public sealed class SceneContextIntegrationTests
         var firstCharacter = new CharacterHub
         {
             Name = "WrappedFirstActor",
-            Id = "wrapped-first",
+            Id = "wrapped_first",
         };
         var secondCharacter = new CharacterHub
         {
             Name = "WrappedSecondActor",
-            Id = "wrapped-second",
+            Id = "wrapped_second",
         };
         var sourceCharacters = new List<ICharacter>
         {
@@ -222,27 +222,24 @@ public sealed class SceneContextIntegrationTests
 
             ArgumentException exception = Assert.Throws<ArgumentException>(() => new SceneContext([character]));
 
-            Assert.Contains("empty or whitespace", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("non-empty lower snake_case", exception.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(typeof(CharacterHub).FullName!, exception.Message, StringComparison.Ordinal);
         }
     }
 
     /// <summary>
-    /// Exact duplicate IDs fail, while case-only differences remain distinct at the runtime scene boundary.
+    /// Exact duplicate canonical character identities fail at the runtime scene boundary.
     /// </summary>
     [Headless]
     [Fact]
-    public void Constructor_UsesOrdinalCaseSensitiveCharacterIDUniqueness()
+    public void Constructor_RejectsDuplicateCanonicalCharacterIdentity()
     {
-        var first = new CharacterHub { Name = "First", Id = "Ally" };
-        var caseDistinct = new CharacterHub { Name = "CaseDistinct", Id = "ally" };
-        var duplicate = new CharacterHub { Name = "Duplicate", Id = "Ally" };
+        var first = new CharacterHub { Name = "First", Id = "ally" };
+        var duplicate = new CharacterHub { Name = "Duplicate", Id = "ally" };
 
-        SceneContext accepted = new([first, caseDistinct]);
         ArgumentException exception = Assert.Throws<ArgumentException>(() => new SceneContext([first, duplicate]));
 
-        Assert.Equal(2, accepted.Characters.Count);
-        Assert.Contains("Ally", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("char:ally", exception.Message, StringComparison.Ordinal);
         Assert.Contains("duplicate exact", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
