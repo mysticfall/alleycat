@@ -47,8 +47,8 @@ membership and content root through dependency injection while character and God
     for content identity and root resolution.
 15. SCN-001 must not define lore, AI, prompt, retrieval, or content-domain path semantics on top of the CORE content
     context.
-16. Every character role template must join `Actors` at the lowest shared male/female character base. Higher role or
-    concrete character scenes must not add redundant compensating membership.
+16. Every character role template must join `Actors` and `VisualSubjects` at the lowest shared male/female character
+    base. Higher role or concrete character scenes must not add redundant compensating membership.
 17. `VisualSubjects` is the group for nodes authored as `IVisualSubject` instances. BODY-004 owns direct group
     querying, member validation, and scan authoring-failure behaviour.
 18. `VisualSubjects` membership is independent of `Actors`. A scene node may be a visual subject without being a
@@ -63,6 +63,7 @@ membership and content root through dependency injection while character and God
 - Immediate validation failure for non-`ICharacter` nodes in `Actors`.
 - Immediate validation failure for empty or exact duplicate character IDs.
 - Shared-base `Actors` membership for all character role templates.
+- Shared-base `VisualSubjects` membership for all character role templates, as delegated to CHAR-002 and BODY-004.
 - Membership-snapshot semantics with live referenced objects.
 - Convenience exposure of the CORE current-content context.
 - `VisualSubjects` group-membership semantics for BODY-004 visual scans.
@@ -102,8 +103,9 @@ membership and content root through dependency injection while character and God
 8. Context instances preserve membership from creation time while returning live `ICharacter` object references.
 9. Scene-context construction rejects empty and exact duplicate character IDs without normalising their case.
 10. Scene context contains no lore-specific path, AI prompt, or retrieval contract.
-11. Male and female character bases add their character root to `Actors` at the lowest shared level, with no redundant
-    higher-scene compensation.
+11. Male and female character bases add their character root to `Actors` and `VisualSubjects` at the lowest shared
+    level, with no redundant higher-scene compensation. BODY-004 and CHAR-002 normatively define visual-subject and
+    cue contracts.
 12. `VisualSubjects` is reserved for nodes authored as `IVisualSubject` instances; BODY-004 owns direct querying,
     member validation, and invalid-member failure for visual scans.
 13. `VisualSubjects` does not relax, replace, or imply `Actors` membership.

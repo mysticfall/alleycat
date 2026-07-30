@@ -136,7 +136,7 @@ public partial class Character : CharacterBody3D, ICharacter
         ValidateVisualCues();
 
         _components = [.. components];
-        VisualCues = Array.AsReadOnly(AuthoredVisualCues);
+        VisualCues = Array.AsReadOnly(AuthoredVisualCues.ToArray());
     }
 
     /// <inheritdoc />
@@ -147,7 +147,7 @@ public partial class Character : CharacterBody3D, ICharacter
         return ContextSources.Length switch
         {
             0 => new Dictionary<string, object?>(),
-            1 => ContextSources[0].GetContext(this, scene, observer),
+            1 => ContextSources[0].GetContext(this, scene, observer as IIdentifiable),
             _ => AggregateContextSources(scene, observer),
         };
     }
@@ -159,7 +159,7 @@ public partial class Character : CharacterBody3D, ICharacter
         Dictionary<string, object?> context = [];
         foreach (IContextSource source in ContextSources)
         {
-            foreach (KeyValuePair<string, object?> entry in source.GetContext(this, scene, observer))
+            foreach (KeyValuePair<string, object?> entry in source.GetContext(this, scene, observer as IIdentifiable))
             {
                 if (!context.TryAdd(entry.Key, entry.Value))
                 {
@@ -232,8 +232,36 @@ public partial class Character : CharacterBody3D, ICharacter
                 throw new InvalidOperationException(
                     $"Character node '{GetPath()}' has duplicate visual cue ID '{cue.ID}'. IDs must be ordinally unique.");
             }
+
+            IProvidesVisualCues? nearestProvider = FindNearestVisualCueProvider(cue);
+            if (!ReferenceEquals(nearestProvider, this))
+            {
+                string ownership = nearestProvider is null
+                    ? "no IProvidesVisualCues ancestor was found"
+                    : $"the nearest provider is {DescribeVisualCueProvider(nearestProvider)}";
+                throw new InvalidOperationException(
+                    $"Character node '{GetPath()}' visual cue '{cue.ID}' at index {index} must have this Character as its nearest {nameof(IProvidesVisualCues)} ancestor, but {ownership}.");
+            }
         }
     }
+
+    private static IProvidesVisualCues? FindNearestVisualCueProvider(VisualCue cue)
+    {
+        for (Node? ancestor = cue.GetParent(); ancestor is not null; ancestor = ancestor.GetParent())
+        {
+            if (ancestor is IProvidesVisualCues provider)
+            {
+                return provider;
+            }
+        }
+
+        return null;
+    }
+
+    private static string DescribeVisualCueProvider(IProvidesVisualCues provider)
+        => provider is Node node
+            ? $"{provider.GetType().FullName ?? provider.GetType().Name} node '{node.Name}' ({node.GetPath()})"
+            : provider.GetType().FullName ?? provider.GetType().Name;
 
     private static string DescribeComponentNode(Node? node)
         => node is null

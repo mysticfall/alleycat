@@ -301,7 +301,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
         };
         foreach (ContextWorker worker in workers)
         {
-            foreach (KeyValuePair<string, object?> entry in worker.GetContext(scene, character))
+            foreach (KeyValuePair<string, object?> entry in worker.GetProjection())
             {
                 if (!context.TryAdd(entry.Key, entry.Value))
                 {

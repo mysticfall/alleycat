@@ -99,14 +99,14 @@ public sealed class CharacterContextTests
     }
 
     /// <summary>
-    /// Character context aggregation passes the subject, scene, and non-visual contextual observer to each source.
+    /// Character context aggregation passes the subject, scene, and identifiable observer to each source.
     /// </summary>
     [Fact]
     public void GetContext_PassesSubjectSceneAndObserverToSource()
     {
         var source = CapturingContextSource.Create();
         AlleyCat.Character.Character character = CreateCharacter(source);
-        var observer = new FakeContextual();
+        var observer = new FakeCharacter { Id = "observer" };
         var scene = new FakeSceneContext([character]);
 
         _ = character.GetContext(scene, observer);
@@ -136,6 +136,19 @@ public sealed class CharacterContextTests
         Assert.Same(observer, source.Observer);
     }
 
+    /// <summary>Context sources accept identity inputs without requiring completed-context composition.</summary>
+    [Fact]
+    public void ContextSourceContract_AcceptsIdentifiableInputsRatherThanContextualInputs()
+    {
+        Type[] parameterTypes = [.. typeof(IContextSource).GetMethod(nameof(IContextSource.GetContext))!
+            .GetParameters()
+            .Select(parameter => parameter.ParameterType)];
+
+        Assert.Equal(typeof(IIdentifiable), parameterTypes[0]);
+        Assert.Equal(typeof(IIdentifiable), parameterTypes[2]);
+        Assert.False(typeof(IContextual).IsAssignableFrom(typeof(IIdentifiable)));
+    }
+
     /// <summary>
     /// Duplicate keys from multiple authored sources fail fast instead of overwriting earlier entries.
     /// </summary>
@@ -162,14 +175,14 @@ public sealed class CharacterContextTests
     public void TypedContextSourceBridge_WithIncompatibleSubject_ThrowsClearException()
     {
         var source = new TypedBridgeContextSource();
-        var subject = new FakeContextual();
+        var subject = new FakeIdentifiable();
         var scene = new FakeSceneContext([]);
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
             () => ((IContextSource)source).GetContext(subject, scene, observer: null));
 
         Assert.Contains(typeof(ICharacter).FullName!, exception.Message);
-        Assert.Contains(typeof(FakeContextual).FullName!, exception.Message);
+        Assert.Contains(typeof(FakeIdentifiable).FullName!, exception.Message);
     }
 
     private sealed class FakeContextSource : ContextSource, IContextSource<ICharacter>
@@ -185,15 +198,15 @@ public sealed class CharacterContextTests
         }
 
         public override IReadOnlyDictionary<string, object?> GetContext(
-            IContextual subject,
+            IIdentifiable subject,
             ISceneContext scene,
-            IContextual? observer)
+            IIdentifiable? observer)
             => GetContext(RequireCompatibleSubject<ICharacter>(subject), scene, observer);
 
         public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
-            IContextual? observer)
+            IIdentifiable? observer)
             => _context;
     }
 
@@ -221,21 +234,21 @@ public sealed class CharacterContextTests
             get; private set;
         }
 
-        public IContextual? Observer
+        public IIdentifiable? Observer
         {
             get; private set;
         }
 
         public override IReadOnlyDictionary<string, object?> GetContext(
-            IContextual subject,
+            IIdentifiable subject,
             ISceneContext scene,
-            IContextual? observer)
+            IIdentifiable? observer)
             => GetContext(RequireCompatibleSubject<ICharacter>(subject), scene, observer);
 
         public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
-            IContextual? observer)
+            IIdentifiable? observer)
         {
             Subject = subject;
             Scene = scene;
@@ -257,7 +270,7 @@ public sealed class CharacterContextTests
             get; private set;
         }
 
-        public IContextual? Observer
+        public IIdentifiable? Observer
         {
             get; private set;
         }
@@ -265,7 +278,7 @@ public sealed class CharacterContextTests
         public IReadOnlyDictionary<string, object?> GetContext(
             ICharacter subject,
             ISceneContext scene,
-            IContextual? observer)
+            IIdentifiable? observer)
         {
             Subject = subject;
             Scene = scene;
@@ -298,9 +311,11 @@ public sealed class CharacterContextTests
             => new Dictionary<string, object?>();
     }
 
-    private sealed class FakeContextual : IContextual
+    private sealed class FakeIdentifiable : IIdentifiable
     {
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
+        public string Id { get; set; } = "fake_identifiable";
+
+        public string Type => "fake";
+
     }
 }

@@ -1,5 +1,5 @@
 using AlleyCat.Body.Eyes;
-using AlleyCat.Context;
+using AlleyCat.Core;
 using Xunit;
 
 namespace AlleyCat.Tests.Body.Eyes;
@@ -9,14 +9,12 @@ namespace AlleyCat.Tests.Body.Eyes;
 /// </summary>
 public sealed class VisualCueContractTests
 {
-    /// <summary>Visual observer and subject roles aggregate their specified base contracts.</summary>
+    /// <summary>Visual subjects aggregate their specified ownership and identity contracts.</summary>
     [Fact]
-    public void VisualRoles_AggregateRequiredContracts()
+    public void VisualSubject_AggregatesRequiredContracts()
     {
-        Assert.True(typeof(IEyesHolder).IsAssignableFrom(typeof(IVisualObserver)));
-        Assert.True(typeof(IContextual).IsAssignableFrom(typeof(IVisualObserver)));
         Assert.True(typeof(IProvidesVisualCues).IsAssignableFrom(typeof(IVisualSubject)));
-        Assert.True(typeof(IContextual).IsAssignableFrom(typeof(IVisualSubject)));
+        Assert.True(typeof(IIdentifiable).IsAssignableFrom(typeof(IVisualSubject)));
     }
 
     /// <summary>Eyes expose synchronous visual scanning and scan results expose immutable read-only contracts.</summary>
@@ -47,9 +45,10 @@ public sealed class VisualCueContractTests
 
     private sealed class TestVisualSubject : IVisualSubject
     {
-        public IReadOnlyList<VisualCue> VisualCues => [];
+        public string Id { get; set; } = "test_subject";
 
-        public IReadOnlyDictionary<string, object?> GetContext(Scene.ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
+        public string Type => "test";
+
+        public IReadOnlyList<VisualCue> VisualCues => [];
     }
 }

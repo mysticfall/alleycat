@@ -1,3 +1,4 @@
+using AlleyCat.Core;
 using AlleyCat.Scene;
 using Godot;
 
@@ -11,25 +12,25 @@ public abstract partial class ContextSource : Resource, IContextSource
 {
     /// <inheritdoc />
     public abstract IReadOnlyDictionary<string, object?> GetContext(
-        IContextual subject,
+        IIdentifiable subject,
         ISceneContext scene,
-        IContextual? observer);
+        IIdentifiable? observer);
 
     /// <summary>
     /// Validates a non-generic subject before delegating to a typed source implementation.
     /// </summary>
-    /// <typeparam name="TContextual">Expected subject type.</typeparam>
-    /// <param name="subject">Contextual subject supplied through the non-generic surface.</param>
-    /// <returns>The subject as <typeparamref name="TContextual" />.</returns>
-    protected static TContextual RequireCompatibleSubject<TContextual>(IContextual subject)
-        where TContextual : IContextual
+    /// <typeparam name="TSubject">Expected subject type.</typeparam>
+    /// <param name="subject">Identifiable subject supplied through the non-generic surface.</param>
+    /// <returns>The subject as <typeparamref name="TSubject" />.</returns>
+    protected static TSubject RequireCompatibleSubject<TSubject>(IIdentifiable subject)
+        where TSubject : IIdentifiable
     {
-        if (subject is TContextual typedSubject)
+        if (subject is TSubject typedSubject)
         {
             return typedSubject;
         }
 
-        string expectedType = typeof(TContextual).FullName ?? typeof(TContextual).Name;
+        string expectedType = typeof(TSubject).FullName ?? typeof(TSubject).Name;
         string actualType = subject.GetType().FullName ?? subject.GetType().Name;
         throw new InvalidOperationException(
             $"Context source expected subject type {expectedType}, but received {actualType}.");

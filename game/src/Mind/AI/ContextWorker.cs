@@ -1,7 +1,5 @@
 using System.Collections.ObjectModel;
-using AlleyCat.Context;
 using AlleyCat.Core.Logging;
-using AlleyCat.Scene;
 using Godot;
 using Microsoft.Extensions.Logging;
 
@@ -9,7 +7,7 @@ namespace AlleyCat.Mind.AI;
 
 /// <summary>Background, projection-owning contextual worker attached directly to an <see cref="AgenticMind"/>.</summary>
 [GlobalClass]
-public abstract partial class ContextWorker : Node, IContextual
+public abstract partial class ContextWorker : Node
 {
     private static readonly EventId _runStartedEvent = new(1, "ContextWorkerRunStarted");
     private static readonly EventId _requestCoalescedEvent = new(2, "ContextWorkerRequestCoalesced");
@@ -64,12 +62,8 @@ public abstract partial class ContextWorker : Node, IContextual
         }
     }
 
-    /// <inheritdoc />
-    public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-    {
-        ArgumentNullException.ThrowIfNull(scene);
-        return Volatile.Read(ref _projection);
-    }
+    /// <summary>Gets this worker's most recently published projection for foreground context composition.</summary>
+    internal IReadOnlyDictionary<string, object?> GetProjection() => Volatile.Read(ref _projection);
 
     /// <summary>Builds a projection from the shared published render dictionary.</summary>
     protected abstract Task<IReadOnlyDictionary<string, object?>> RunAsync(

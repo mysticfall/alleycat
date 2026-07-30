@@ -311,7 +311,7 @@ public sealed partial class ContextWorkerIntegrationTests
             await WaitUntilAsync(sceneTree, () => worker.RunCount == 2, maxFrames: 60);
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
-            IReadOnlyDictionary<string, object?> projection = worker.GetContext(new SceneContext([]), observer: null);
+            IReadOnlyDictionary<string, object?> projection = worker.GetProjection();
             Assert.Equal("first", projection["projection"]);
         }
         finally
@@ -345,14 +345,14 @@ public sealed partial class ContextWorkerIntegrationTests
             trigger.RequestForTest();
             await WaitUntilAsync(
                 sceneTree,
-                () => ReferenceEquals(expected, worker.GetContext(new SceneContext([]), observer: null)),
+                () => ReferenceEquals(expected, worker.GetProjection()),
                 maxFrames: 60);
 
             trigger.RequestForTest();
             await WaitUntilAsync(sceneTree, () => worker.RunCount == 2, maxFrames: 60);
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
-            IReadOnlyDictionary<string, object?> retained = worker.GetContext(new SceneContext([]), observer: null);
+            IReadOnlyDictionary<string, object?> retained = worker.GetProjection();
             Assert.Same(expected, retained);
             Assert.Equal("first", retained["projection"]);
             _ = Assert.Single(
@@ -386,10 +386,10 @@ public sealed partial class ContextWorkerIntegrationTests
             trigger.RequestForTest();
             await WaitUntilAsync(
                 sceneTree,
-                () => ReferenceEquals(supplied, worker.GetContext(new SceneContext([]), observer: null)),
+                () => ReferenceEquals(supplied, worker.GetProjection()),
                 maxFrames: 60);
 
-            IReadOnlyDictionary<string, object?> published = worker.GetContext(new SceneContext([]), observer: null);
+            IReadOnlyDictionary<string, object?> published = worker.GetProjection();
             Assert.Same(supplied, published);
             Assert.Same(nested, published["nested"]);
         }
@@ -476,7 +476,7 @@ public sealed partial class ContextWorkerIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 3);
 
             Assert.True(worker.CancellationObserved);
-            Assert.Empty(worker.GetContext(new SceneContext([]), observer: null));
+            Assert.Empty(worker.GetProjection());
         }
         finally
         {
@@ -558,7 +558,7 @@ public sealed partial class ContextWorkerIntegrationTests
 
             Assert.Equal(1, section.ContentRequestCount);
             Assert.Equal(0, provider.InvocationCount);
-            Assert.Empty(worker.GetContext(new SceneContext([]), observer: null));
+            Assert.Empty(worker.GetProjection());
             Assert.Equal(
                 1,
                 loggerProvider.Entries.Count(entry => entry.Message.Contains("prompt compilation failed", StringComparison.Ordinal)));
@@ -602,7 +602,7 @@ public sealed partial class ContextWorkerIntegrationTests
 
             Assert.Equal(1, section.ContentRequestCount);
             Assert.Equal(0, provider.InvocationCount);
-            Assert.Empty(worker.GetContext(new SceneContext([]), observer: null));
+            Assert.Empty(worker.GetProjection());
             Assert.DoesNotContain(
                 loggerProvider.Entries,
                 entry => entry.Message.Contains("prompt compilation failed", StringComparison.Ordinal));

@@ -254,7 +254,11 @@ public sealed class AgenticMindTests
         Type workerType = typeof(ContextWorker);
         Assembly assembly = workerType.Assembly;
 
-        Assert.True(typeof(IContextual).IsAssignableFrom(workerType));
+        Assert.False(typeof(IContextual).IsAssignableFrom(workerType));
+        Assert.Null(workerType.GetMethod("GetContext", BindingFlags.Instance | BindingFlags.Public));
+        Assert.Equal(
+            typeof(IReadOnlyDictionary<string, object?>),
+            workerType.GetMethod("GetProjection", BindingFlags.Instance | BindingFlags.NonPublic)!.ReturnType);
         Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextWorkerState"));
         Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextWorkerRunInput"));
         Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextualSnapshot"));

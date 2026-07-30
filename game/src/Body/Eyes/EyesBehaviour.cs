@@ -397,7 +397,7 @@ public partial class EyesBehaviour : Node, IEyes
             List<VisualCue> visibleCues = [];
             foreach (VisualCue cue in subject.VisualCues)
             {
-                if (cue is null || cue.Prominence <= 0f || !float.IsFinite(cue.Prominence))
+                if (cue.Prominence <= 0f || !float.IsFinite(cue.Prominence))
                 {
                     continue;
                 }

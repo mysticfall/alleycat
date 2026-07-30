@@ -64,9 +64,10 @@ execution from constructing context, refreshing the timeline, or feeding project
 12. Observation timeline snapshot records included by foreground context construction must pass directly to Handlebars.
     Exact `TypeKey` dispatch, record property visibility, and fallback record data must be preserved under AI-003.
 13. A worker run returns `IReadOnlyDictionary<string, object?>`; no public `ContextualSnapshot` or worker-specific
-    `IContextual` wrapper is introduced. ContextWorker must atomically store and return the exact dictionary returned by
-    the worker. The producer must treat that dictionary and its nested values as immutable after return. Mutation after
-    publication violates the producer contract, and resulting behaviour may be undefined or stale.
+    `IContextual` wrapper is introduced. `ContextWorker` is a projection publisher and reader, not `IContextual`.
+    ContextWorker must atomically store and return the exact dictionary returned by the worker. The producer must treat
+    that dictionary and its nested values as immutable after return. Mutation after publication violates the producer
+    contract, and resulting behaviour may be undefined or stale.
 14. `IReadOnlyDictionary` must not be described as proof of deep immutability. Aggregation and publication require no
     recursive defensive copying or freezing, cycle detection, scalar allowlist, reflection observation projection, or
     rejection of live Godot objects. `ContextWorkerState` must not exist. A failed run must emit error diagnostics and
@@ -144,7 +145,8 @@ execution from constructing context, refreshing the timeline, or feeding project
     by a worker. Producer fixtures treat the dictionary and nested values as immutable after return. Contract tests
     document post-publication mutation as a producer violation with potentially undefined or stale behaviour.
 11. API tests verify `IReadOnlyDictionary` is not claimed to prove deep immutability and no public
-    `ContextualSnapshot`, worker-specific `IContextual` wrapper, or `ContextWorkerState` exists. Aggregation and
+    `ContextualSnapshot`, worker-specific `IContextual` wrapper, or `ContextWorkerState` exists; ContextWorker is not
+    `IContextual`. Aggregation and
     publication tests require no recursive copying or freezing, cycle detection, scalar allowlist, reflection
     observation projection, or live Godot-object rejection. Failed runs retain the prior projection.
 12. LLM-worker tests verify immutable lifetime PromptStack capture, one cached compilation after attachment, no

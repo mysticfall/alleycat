@@ -24,20 +24,22 @@ public sealed partial class StaticVisualCue : VisualCue
     public override Vector3 SampleGlobalPosition() => GlobalPosition;
 
     /// <inheritdoc />
-    public override string Describe(ISceneContext scene, IVisualObserver observer)
+    public override string Describe(ISceneContext scene, IEyesHolder observer)
     {
         ArgumentNullException.ThrowIfNull(observer);
         ArgumentNullException.ThrowIfNull(scene);
 
         Dictionary<string, object?> root = new(StringComparer.Ordinal)
         {
-            ["observer"] = observer.GetContext(scene, observer),
+            ["scene"] = scene,
+            ["observer"] = observer,
+            ["cue"] = this,
         };
 
         IVisualSubject? subject = FindNearestSubject();
         if (subject is not null)
         {
-            root["subject"] = subject.GetContext(scene, observer);
+            root["subject"] = subject;
         }
 
         return GetTemplate().Render(root);

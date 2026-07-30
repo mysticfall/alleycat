@@ -1,10 +1,10 @@
-using AlleyCat.Context;
+using AlleyCat.Core;
 
 namespace AlleyCat.Body.Eyes;
 
 /// <summary>
-/// A contextual visual subject with discoverable authored cues.
+/// An identifiable visual subject with discoverable authored cues.
 /// </summary>
-public interface IVisualSubject : IProvidesVisualCues, IContextual
+public interface IVisualSubject : IIdentifiable, IProvidesVisualCues
 {
 }

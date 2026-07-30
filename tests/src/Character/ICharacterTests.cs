@@ -33,7 +33,6 @@ public sealed class ICharacterTests
         Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(INavigator).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IContextual).IsAssignableFrom(typeof(ICharacter)));
-        Assert.True(typeof(IVisualObserver).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IVisualSubject).IsAssignableFrom(typeof(ICharacter)));
     }
 

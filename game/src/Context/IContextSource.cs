@@ -1,3 +1,4 @@
+using AlleyCat.Core;
 using AlleyCat.Scene;
 
 namespace AlleyCat.Context;
@@ -10,38 +11,38 @@ public interface IContextSource
     /// <summary>
     /// Gets contextual information for the supplied subject within the current scene and optional observer.
     /// </summary>
-    /// <param name="subject">Contextual subject being described.</param>
+    /// <param name="subject">Identifiable subject being described.</param>
     /// <param name="scene">Current scene membership snapshot.</param>
-    /// <param name="observer">Optional contextual observer.</param>
+    /// <param name="observer">Optional identifiable observer.</param>
     /// <returns>Context entries contributed by this source, keyed by stable field name.</returns>
-    IReadOnlyDictionary<string, object?> GetContext(IContextual subject, ISceneContext scene, IContextual? observer);
+    IReadOnlyDictionary<string, object?> GetContext(IIdentifiable subject, ISceneContext scene, IIdentifiable? observer);
 }
 
 /// <summary>
-/// Provides typed contextual information for a contextual subject.
+/// Provides typed contextual information for an identifiable subject.
 /// </summary>
-/// <typeparam name="TContextual">Subject type handled by this source.</typeparam>
-public interface IContextSource<in TContextual> : IContextSource
-    where TContextual : IContextual
+/// <typeparam name="TSubject">Subject type handled by this source.</typeparam>
+public interface IContextSource<in TSubject> : IContextSource
+    where TSubject : IIdentifiable
 {
     /// <summary>
     /// Gets contextual information for the supplied subject within the current scene and optional observer.
     /// </summary>
-    /// <param name="subject">Contextual subject being described.</param>
+    /// <param name="subject">Identifiable subject being described.</param>
     /// <param name="scene">Current scene membership snapshot.</param>
-    /// <param name="observer">Optional contextual observer.</param>
+    /// <param name="observer">Optional identifiable observer.</param>
     /// <returns>Context entries contributed by this source, keyed by stable field name.</returns>
-    IReadOnlyDictionary<string, object?> GetContext(TContextual subject, ISceneContext scene, IContextual? observer);
+    IReadOnlyDictionary<string, object?> GetContext(TSubject subject, ISceneContext scene, IIdentifiable? observer);
 
     /// <inheritdoc />
     IReadOnlyDictionary<string, object?> IContextSource.GetContext(
-        IContextual subject,
+        IIdentifiable subject,
         ISceneContext scene,
-        IContextual? observer)
+        IIdentifiable? observer)
     {
-        if (subject is not TContextual typedSubject)
+        if (subject is not TSubject typedSubject)
         {
-            string expectedType = typeof(TContextual).FullName ?? typeof(TContextual).Name;
+            string expectedType = typeof(TSubject).FullName ?? typeof(TSubject).Name;
             string actualType = subject.GetType().FullName ?? subject.GetType().Name;
             throw new InvalidOperationException(
                 $"Context source expected subject type {expectedType}, but received {actualType}.");

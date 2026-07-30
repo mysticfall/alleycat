@@ -33,6 +33,8 @@ cross-object references unambiguous.
 8. `ICharacter` has the mandatory `Type` value `char`.
 9. Voice ID is a separate local attribution contract. It is not derived from, substituted for, or used as object
    identity.
+10. `IIdentifiable` is the shared subject and optional-observer input boundary for CTX-001 context sources. This does
+    not make every identifiable object contextual or a visual subject.
 
 ## In Scope
 
@@ -40,6 +42,7 @@ cross-object references unambiguous.
 - Validation at scene registration and installation boundaries.
 - The `char` and `loc` type vocabulary for this migration.
 - Normative identity integration for character, context, and lore specifications.
+- Identifiable inputs for CTX-001 sources and BODY-004 visual subjects.
 
 ## Out Of Scope
 
@@ -64,6 +67,8 @@ cross-object references unambiguous.
 5. The migration accepts `char` and `loc` types, including `char:ally` and `loc:interrogation_room` as typed lore
    values.
 6. Voice ID remains independently local and cannot satisfy an `IIdentifiable` identity reference.
+7. CTX-001 sources accept `IIdentifiable` subject and optional-observer inputs without expanding the `char`/`loc` type
+   vocabulary or requiring `IIdentifiable` to implement contextual or visual-subject contracts.
 
 ## References
 

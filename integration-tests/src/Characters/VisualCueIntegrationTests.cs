@@ -9,7 +9,6 @@ using AlleyCat.Core.Content;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Scene;
-using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -21,7 +20,6 @@ namespace AlleyCat.IntegrationTests.Characters;
 /// <summary>
 /// Godot-runtime coverage for authored visual cues, contextual descriptions, and character installation.
 /// </summary>
-[Headless]
 public sealed class VisualCueIntegrationTests
 {
     private const string ReferenceFemaleBaseScenePath =
@@ -80,17 +78,17 @@ public sealed class VisualCueIntegrationTests
     }
 
     /// <summary>
-    /// Description rendering uses the configured template service and exposes nested observer and subject context.
+    /// Description rendering uses only its local root and exposes direct observer, cue, and subject values.
     /// </summary>
     [Fact]
-    public void Describe_WithVisualSubjectAncestor_RendersNestedObserverAndSubjectContext()
+    public void Describe_WithVisualSubjectAncestor_RendersLocalRootWithoutContextRequests()
     {
         SceneTree sceneTree = GetSceneTree();
         var observer = new TestVisualObserver("Observer Context");
         var subject = new TestVisualSubject("Subject Context");
         var cue = new StaticVisualCue
         {
-            Description = "observer={{observer.label}}; subject={{subject.label}}",
+            Description = "observer={{observer.Label}}; cue={{cue.ID}}; subject={{subject.Id}}",
         };
         subject.AddChild(cue);
         subject.VisualCues = [cue];
@@ -100,11 +98,9 @@ public sealed class VisualCueIntegrationTests
         {
             string description = cue.Describe(EmptySceneContext.Instance, observer);
 
-            Assert.Equal("observer=Observer Context; subject=Subject Context", description);
-            Assert.Equal(1, observer.ContextRequestCount);
-            Assert.Equal(1, subject.ContextRequestCount);
-            Assert.Same(observer, observer.LastObserver);
-            Assert.Same(observer, subject.LastObserver);
+            Assert.Equal("observer=Observer Context; cue=; subject=subject_context", description);
+            Assert.Equal(0, observer.ContextRequestCount);
+            Assert.Equal(0, subject.ContextRequestCount);
         }
         finally
         {
@@ -113,7 +109,7 @@ public sealed class VisualCueIntegrationTests
     }
 
     /// <summary>
-    /// A cue without a visual-subject ancestor renders observer context while leaving subject absent.
+    /// A cue without a visual-subject ancestor renders its local observer while leaving subject absent.
     /// </summary>
     [Fact]
     public void Describe_WithoutVisualSubjectAncestor_RendersObserverAndOmitsSubject()
@@ -123,7 +119,7 @@ public sealed class VisualCueIntegrationTests
         var root = new Node3D();
         var cue = new StaticVisualCue
         {
-            Description = "observer={{observer.label}}; {{#if subject}}subject-present{{else}}subject-absent{{/if}}",
+            Description = "observer={{observer.Label}}; {{#if subject}}subject-present{{else}}subject-absent{{/if}}",
         };
         root.AddChild(cue);
         sceneTree.Root.AddChild(root);
@@ -133,7 +129,7 @@ public sealed class VisualCueIntegrationTests
             string description = cue.Describe(EmptySceneContext.Instance, observer);
 
             Assert.Equal("observer=Observer Only; subject-absent", description);
-            Assert.Equal(1, observer.ContextRequestCount);
+            Assert.Equal(0, observer.ContextRequestCount);
         }
         finally
         {
@@ -198,6 +194,55 @@ public sealed class VisualCueIntegrationTests
         }
     }
 
+    /// <summary>Publication snapshots authored cue topology until the character explicitly refreshes it.</summary>
+    [Fact]
+    public void CharacterProviderPublication_RetainsTopologyUntilExplicitRefresh()
+    {
+        StaticVisualCue publishedCue = CreateCue("published", 1.0f);
+        StaticVisualCue replacementCue = CreateCue("replacement", 1.0f);
+        CharacterHub character = CreateAuthoredCharacter([publishedCue]);
+        character.AddChild(replacementCue);
+        try
+        {
+            character.RefreshComponents();
+            character.AuthoredVisualCues[0] = replacementCue;
+
+            Assert.Same(publishedCue, Assert.Single(character.VisualCues));
+
+            character.RefreshComponents();
+
+            Assert.Same(replacementCue, Assert.Single(character.VisualCues));
+        }
+        finally
+        {
+            character.Free();
+        }
+    }
+
+    /// <summary>Character refresh rejects an authored cue whose nearest provider is a nested character.</summary>
+    [Fact]
+    public void CharacterProviderValidation_RejectsCueOwnedByNestedProvider()
+    {
+        StaticVisualCue cue = CreateCue("body", 1.0f);
+        CharacterHub outerCharacter = CreateAuthoredCharacter([cue]);
+        var nestedCharacter = new CharacterHub { Name = "NestedCharacter" };
+        outerCharacter.AddChild(nestedCharacter);
+        outerCharacter.RemoveChild(cue);
+        nestedCharacter.AddChild(cue);
+
+        try
+        {
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(outerCharacter.RefreshComponents);
+
+            Assert.Contains("nearest IProvidesVisualCues ancestor", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("NestedCharacter", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            outerCharacter.Free();
+        }
+    }
+
     private static void AssertBaseTemplateCue(string scenePath)
     {
         CharacterHub character = Assert.IsType<CharacterHub>(LoadPackedScene(scenePath).Instantiate(), exactMatch: false);
@@ -206,6 +251,7 @@ public sealed class VisualCueIntegrationTests
             StaticVisualCue cue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
             Assert.Equal("body", cue.ID);
             Assert.Equal(1.0f, cue.Prominence);
+            Assert.True(character.IsInGroup("VisualSubjects"));
             Assert.Equal("Head", cue.GetParent().Name.ToString());
             Assert.Same(cue, Assert.Single(FindDescendants<StaticVisualCue>(character)));
         }
@@ -222,6 +268,7 @@ public sealed class VisualCueIntegrationTests
         {
             EnsureCharacterRuntimeInstalled(character);
 
+            Assert.True(character.IsInGroup("VisualSubjects"));
             StaticVisualCue authoredCue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
             StaticVisualCue exposedCue = Assert.IsType<StaticVisualCue>(Assert.Single(character.VisualCues), exactMatch: false);
             StaticVisualCue descendantCue = Assert.Single(FindDescendants<StaticVisualCue>(character));
@@ -316,16 +363,13 @@ public sealed class VisualCueIntegrationTests
         }
     }
 
-    private sealed class TestVisualObserver(string label) : IVisualObserver
+    private sealed class TestVisualObserver(string label) : IEyesHolder, IContextual
     {
         public IReadOnlyList<IComponent> Components { get; } = [];
 
-        public int ContextRequestCount
-        {
-            get; private set;
-        }
+        public string Label => label;
 
-        public IContextual? LastObserver
+        public int ContextRequestCount
         {
             get; private set;
         }
@@ -333,13 +377,18 @@ public sealed class VisualCueIntegrationTests
         public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
         {
             ContextRequestCount++;
-            LastObserver = observer;
-            return new Dictionary<string, object?> { ["label"] = label };
+            throw new InvalidOperationException("Visual cue rendering must not request observer context.");
         }
     }
 
-    private sealed partial class TestVisualSubject(string label) : Node3D, IVisualSubject
+    private sealed partial class TestVisualSubject(string label) : Node3D, IVisualSubject, IContextual
     {
+        public string Id { get; set; } = label.ToLowerInvariant().Replace(' ', '_');
+
+        public string Type => "test";
+
+        public string Label => label;
+
         public IReadOnlyList<VisualCue> VisualCues { get; set; } = [];
 
         public int ContextRequestCount
@@ -347,16 +396,10 @@ public sealed class VisualCueIntegrationTests
             get; private set;
         }
 
-        public IContextual? LastObserver
-        {
-            get; private set;
-        }
-
         public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
         {
             ContextRequestCount++;
-            LastObserver = observer;
-            return new Dictionary<string, object?> { ["label"] = label };
+            throw new InvalidOperationException("Visual cue rendering must not request subject context.");
         }
     }
 

@@ -31,12 +31,13 @@ Provide a reusable eye component system that:
 5. Left and right eyes must move together as a unit.
 6. The eyes must make bounded saccade movements around the active gaze anchor.
 7. Systems can discover authored visual cues that identify meaningful points on a character or other visual subject.
-8. A visual cue can describe itself relative to the observing character and, when applicable, its containing visual
-   subject.
+8. A visual cue can describe itself using the observing character's eyes and, when applicable, its containing visual
+   subject, without requesting completed context.
 9. Whole-character cues provide character-specific appearance descriptions while allowing shared character templates
    to use placeholder text.
 10. A character can inspect visible cues without changing its current gaze target or saccade behaviour.
 11. Only cues within the character's field of view, distance limit, and unobstructed line of sight are reported.
+12. Invalid authored cue ownership fails clearly when its provider is published or explicitly refreshed.
 
 ## Technical Requirements
 
@@ -99,26 +100,33 @@ Provide a reusable eye component system that:
     animations, and blend-shape track targets are present before enabling eye behaviour.
 17. Player and NPC AnimationTree roots include the eye partial blend setup.
 18. Define the visual-cue contracts in `AlleyCat.Body.Eyes`:
-    - `IVisualObserver : IEyesHolder, IContextual` represents an observer that can supply observer-relative context.
-    - `IProvidesVisualCues` exposes a read-only collection of `VisualCue` instances.
-    - `IVisualSubject : IProvidesVisualCues, IContextual` represents a contextual subject that owns discoverable cues.
+    - `IProvidesVisualCues` exposes its authoritative, published, read-only `VisualCues` collection of owned
+      `VisualCue` instances.
+    - `IVisualSubject : IIdentifiable, IProvidesVisualCues` represents an identifiable subject that owns discoverable
+      cues. Its `IIdentifiable` identity semantics are authoritatively defined by
+      [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md). `IVisualObserver` must not
+      exist.
 19. `VisualCue` is an abstract `Node3D` base that supports Godot authoring and exports:
     - A non-empty `ID` that is ordinally unique within its `IProvidesVisualCues` provider.
     - A finite, non-negative relative `Prominence`, defaulting to `1`; `0` disables the cue and there is no fixed upper
       bound.
     - Cue-local `VisualBounds` used exclusively to determine representative visual-scan geometry.
 20. `VisualCue` defines `Vector3 SampleGlobalPosition()` and
-    `string Describe(ISceneContext scene, IVisualObserver observer)`.
-21. `Describe` requires a non-null observer even though general CTX-001 context observers remain optional.
-22. The description render root always contains
-    `observer = observer.GetContext(scene, observer)`.
-23. The description render root contains `subject = subject.GetContext(scene, observer)` only when the cue's nearest
-    `IVisualSubject` ancestor exists. A cue without such ancestry is valid and omits `subject`.
-24. `StaticVisualCue` is the concrete fixed-description implementation: its exported authored `Description` property
+    `string Describe(ISceneContext scene, IEyesHolder observer)`.
+21. `Describe` requires a non-null eyes holder. It must not call `GetContext`, compose completed context, or accept an
+    `IContextual` or `IContextSource` input.
+22. `Describe` builds its own local template root from the supplied scene and eyes holder. When present, it adds the
+    nearest `IVisualSubject` ancestor as `subject`; a cue without subject ancestry is valid and omits `subject`.
+23. `StaticVisualCue` is the concrete fixed-description implementation: its exported authored `Description` property
     is template-backed, and `Describe` compiles and renders it through the existing `ITemplate` system.
     `SampleGlobalPosition()` returns `GlobalPosition` regardless of the assigned `VisualBounds`.
-25. Visual-cue providers validate non-empty IDs, finite non-negative prominence, and ordinal ID uniqueness within each
-    provider. Validation may occur at provider or character call sites; no standalone validation helper is prescribed.
+24. On initialisation/publication and each explicit provider refresh, visual-cue providers validate non-empty IDs,
+    finite non-negative prominence, ordinal ID uniqueness, and that each published cue has that provider as its nearest
+    `IProvidesVisualCues` ancestor. Invalid ownership fails at that boundary; no standalone validation helper is
+    prescribed.
+25. A provider's published `VisualCues` collection is its authoritative owned list. Visual-cue topology is immutable
+    after publication until that provider explicitly refreshes it. The nearest `IVisualSubject` ancestor is the
+    scan-result subject.
 26. The shared reference female and male character templates each author one whole-character cue with ID `body` at
     `Head/BodyVisualCue`, a sibling of the existing `Viewpoint`. Its generic template may contain placeholder
     description content.
@@ -127,14 +135,16 @@ Provide a reusable eye component system that:
 28. `IEyes` exposes `IReadOnlyList<VisualScanResult> Scan()`. Calling `Scan()` synchronously returns one result for
     each discovered non-self `IVisualSubject` with one or more visible cues; it must not schedule deferred work or
     return a collection whose membership can change after return.
-29. `VisualScanResult` is an immutable value object for one visual subject. Its cue membership and scan-time cue data
-    must be fixed at construction; consumers must not mutate the result or use it as a live view of scene state.
+29. `VisualScanResult` is an immutable value object for one authoritative visual subject. Its cue membership and
+    scan-time cue data are fixed at construction; consumers must not mutate the result or use it as a live view of
+    scene state.
 30. `EyesBehaviour` directly queries `SceneTree.GetNodesInGroup("VisualSubjects")` for scan discovery. It owns the
     strict discovery, member-validation, and authoring-failure boundary: every member must implement `IVisualSubject`,
     and a non-`IVisualSubject` member is an authoring error that fails the scan immediately. SCN-001 defines only the
     `VisualSubjects` group-membership semantics.
-31. A scan snapshots `VisualSubjects` membership synchronously before evaluating cues. It excludes the observer's own
-    subject and cues whose effective `Prominence` is `0`; it returns no result for a subject with no visible cues.
+31. A scan snapshots `VisualSubjects` membership synchronously before evaluating each subject's valid published cue
+    collection. It excludes the observer's own subject and cues whose effective `Prominence` is `0`; it returns no
+    result for a subject with no visible cues.
 32. `EyesBehaviour` owns an `EyeOrigin` authoring reference for scan geometry. Its default field-of-view cone uses
     horizontal and vertical half angles of 60° and 45° respectively; these defaults remain export-overrideable.
 33. Every `VisualCue` has cue-local `VisualBounds` authoring. `VisualBounds` subclasses support point, sphere, and
@@ -152,6 +162,9 @@ Provide a reusable eye component system that:
     a ray from `EyeOrigin` to the sample point and treats only a `VisionOccluder` hit before the endpoint as occlusion.
     Hits within a configurable endpoint tolerance do not occlude the cue, preventing its own or coincident geometry
     from hiding the sample.
+38. Scan assumes valid published cue collections and selects visibility only; it must not reconcile ownership, filter
+    nested-provider leaks, or refresh cue topology. `Describe` renders a cue description only, and CTX-001
+    completed-context composition aggregates context only. No operation may perform another operation's responsibility.
 
 ## In Scope
 
@@ -167,9 +180,9 @@ Provide a reusable eye component system that:
 - Import-time generation of eye tracks from discovered eye blend shapes, or invisible
   placeholder/no-op tracks when no recognised eye blend shapes exist.
 - Per-character AnimationTree integration.
-- Visual observer, visual subject, visual-cue provider, and visual-cue contracts under `AlleyCat.Body.Eyes`.
-- Static cue origin sampling, fixed template-backed descriptions, nested observer and optional subject context, and
-  provider validation.
+- Visual subject, visual-cue provider, ownership, and visual-cue contracts under `AlleyCat.Body.Eyes`.
+- Static cue origin sampling, fixed template-backed local descriptions, optional nearest-subject input, provider
+  publication/refresh validation, and immutable published cue topology.
 - Authored whole-character `body` cues and character-specific appearance overrides.
 - Synchronous `IEyes.Scan()` snapshots with one immutable result per discovered non-self subject that has visible cues.
 - `EyesBehaviour`-owned strict `VisualSubjects` querying, member validation, authoring failure, scan filtering,
@@ -246,20 +259,21 @@ Provide a reusable eye component system that:
 |    |                   | appearance description for Ally NPC, Ally player, and Vadim. |
 | 30 | User              | Shared female and male templates provide a usable `body` cue even when its |
 |    |                   | description is placeholder text. |
-| 31 | Technical         | `IVisualObserver`, `IProvidesVisualCues`, and `IVisualSubject` have the |
-|    |                   | inheritance and read-only collection contracts specified in Technical |
-|    |                   | Requirement 18. |
+| 31 | Technical         | `IProvidesVisualCues` and `IVisualSubject` have the authoritative ownership, |
+|    |                   | `IIdentifiable`, and read-only collection contracts specified in Technical |
+|    |                   | Requirement 18; `IVisualObserver` does not exist. |
 | 32 | Technical         | `VisualCue` and `StaticVisualCue` expose the authoring, sampling, prominence, |
 |    |                   | and required-observer description contracts specified in Technical |
-|    |                   | Requirements 19–24, including `Describe(ISceneContext scene, IVisualObserver observer)`, |
+|    |                   | Requirements 19–24, including `Describe(ISceneContext scene, IEyesHolder observer)`, |
 |    |                   | the exported `StaticVisualCue.Description` property, and origin sampling independent of |
 |    |                   | bounds. |
-| 33 | Technical         | Description rendering always supplies observer context and supplies subject |
-|    |                   | context only for the nearest `IVisualSubject` ancestor; missing subject |
-|    |                   | ancestry remains valid. |
-| 34 | Technical         | Validation rejects empty cue IDs, non-finite or negative prominence, and |
-|    |                   | ordinally duplicate IDs within one provider, while accepting disabled |
-|    |                   | prominence `0` and finite values above `1`; no standalone helper is required. |
+| 33 | Technical         | Description rendering builds a local root without `GetContext`, uses the supplied |
+|    |                   | `IEyesHolder`, and supplies the nearest `IVisualSubject` ancestor only when present. |
+|    |                   | Missing subject ancestry remains valid. |
+| 34 | Technical         | Provider publication or explicit refresh rejects empty cue IDs, non-finite |
+|    |                   | or negative prominence, ordinally duplicate IDs, and cues not owned by that |
+|    |                   | nearest provider; it accepts disabled prominence `0` and finite values above |
+|    |                   | `1`. Published cue topology remains immutable until explicit refresh. |
 | 35 | Technical         | Shared female and male templates each author exactly one `body` `StaticVisualCue` |
 |    |                   | at `Head/BodyVisualCue`, a sibling of the existing `Viewpoint`; Ally NPC, Ally player, |
 |    |                   | and Vadim supply character-specific template overrides. |
@@ -286,12 +300,19 @@ Provide a reusable eye component system that:
 |    |                   | bounds samples; a passing sample must satisfy distance, cone, and ray tests. |
 | 45 | Technical         | Ray tests recognise only pre-endpoint `VisionOccluder` hits as occlusion and |
 |    |                   | honour a configurable endpoint tolerance. |
+| 46 | Technical         | Tests verify provider-side nearest-provider ownership validation and clear |
+|    |                   | publication or refresh failure for invalid cue ownership; scans consume only |
+|    |                   | valid published collections and perform visibility selection without ownership |
+|    |                   | reconciliation or nested-leak filtering. |
+| 47 | Technical         | Tests verify visibility selection, cue description, and CTX-001 completed-context |
+|    |                   | aggregation remain separate operations. |
 
 ## References
 
 - [BODY-001: Hands](../001-hands/index.md)
 - [BODY-002: Character Physical Response System](../002-character-physical-response/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
+- [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)

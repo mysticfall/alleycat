@@ -28,12 +28,13 @@ exists.
    or unrebasable.
 7. Each character asset owns a stable identity for conversation context, while voice retains independent local
    attribution identity regardless of player or NPC role.
-8. Gameplay systems can treat every character as both an observer of visual cues and a visual subject with discoverable,
-   authored appearance cues.
+8. Gameplay systems can treat every character as an eyes holder and visual subject with discoverable, authored
+   appearance cues.
 9. Shared character templates provide a whole-character cue, while Ally NPC, Ally player, and Vadim describe their own
    appearances.
 10. NPC role templates visibly bind production navigation to their locomotion-capable character root, while player
     templates remain free of AI navigation.
+10. Invalid visual-cue ownership fails clearly when a character publishes or explicitly refreshes its authored cues.
 
 ## Technical Requirements
 
@@ -45,7 +46,7 @@ exists.
    - `IEyesHolder` from BODY-004.
    - `IHasVoice` from BODY-006.
    - `ILocomotive` from CTRL-001.
-   - `IVisualObserver` and `IVisualSubject` from BODY-004.
+   - `IVisualSubject` from BODY-004.
 3. `ICharacter` must also remain an `IComponentHolder`, with deterministic component iteration inherited from CORE-003.
 4. The concrete Godot type must be named `AlleyCat.Character.Character`.
 5. Consumers should depend on `ICharacter` by default. Code that must reference the concrete type from a conflicting
@@ -96,13 +97,17 @@ exists.
 29. `Voice` retains its own local attribution identity. Its `Id` must not be derived from, substituted for, or used as
     the `Character.Id` object identity.
 30. `Voiceprint` is a listener-recognition key and must not be used as proof that a voice belongs to a character.
-31. The lowest shared male/female character bases must author `CharacterCardContextSource` and `Actors` membership.
-    Higher role templates and concrete scenes must not add redundant compensation.
+31. The lowest shared male/female character bases must author `CharacterCardContextSource`, `Actors` membership, and
+    `VisualSubjects` membership. Both bases must be valid `IVisualSubject` scan members. Higher role templates and
+    concrete scenes must not add redundant compensation; BODY-004 normatively owns cue and scan details.
 32. Under CTX-001, `CharacterCardContextSource` must publish canonical character identity as exactly
     `{ FullId: subject.FullId }`, not a bare local `Id`.
-33. The concrete `Character` root owns a validated, read-only visual-cue collection for its `IVisualSubject` role.
-34. Character installation must preserve, rebase, and validate template-authored visual-cue references. Validation must
-    enforce the BODY-004 cue contract, including non-empty and ordinally unique IDs per provider.
+33. The concrete `Character` root owns a validated, read-only published visual-cue collection for its `IVisualSubject`
+    role. Its visual-cue topology is immutable after publication until an explicit refresh.
+34. `Character.RefreshComponents()` must perform provider-side nearest-provider cue-ownership validation when it
+    publishes or explicitly refreshes the collection. It must fail clearly for invalid ownership; EyesBehaviour must
+    not reconcile or filter ownership while scanning. Character installation must preserve, rebase, and validate
+    template-authored visual-cue references, including non-empty and ordinally unique IDs per provider.
 35. The lowest shared reference female and male character templates each author exactly one `StaticVisualCue` with ID
     `body` at `Head/BodyVisualCue` (a sibling of the existing `Viewpoint`); its generic template may use placeholder
     description content.
@@ -135,6 +140,9 @@ exists.
 - `ICharacter` aggregation of the BODY-004 visual observer and visual subject roles.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
 - NPC-only `LocomotiveNavigation` composition through the character root's `Node3D` and `ILocomotive` contracts.
+- `ICharacter` aggregation of the BODY-004 visual-subject role and eyes-holder capability.
+- Validated, published template-authored whole-character visual-cue references, explicit refresh, and
+  character-specific description overrides.
 
 ## Out Of Scope
 
@@ -164,12 +172,13 @@ exists.
    author `Voice` before runtime installation.
 8. Role-explicit Ally player, Ally NPC, and Vadim NPC assets retain their own local identities, while an alternate
    female-player fixture demonstrates configurable identity independent of voice attribution.
-9. Every character exposes a discoverable whole-character `body` cue that can describe its appearance to a visual
-   observer.
+9. Every character exposes a discoverable whole-character `body` cue that can describe its appearance through an eyes
+   holder.
 10. Ally player, Ally NPC, and Vadim return their own authored appearance descriptions rather than generic placeholder
     text.
 11. Final NPC templates expose root-bound production navigation, while player templates contain no AI navigation and
     retain tracker-driven locomotion.
+11. Invalid template-authored cue ownership produces a clear character publication or refresh failure.
 
 ### Technical Requirements
 
@@ -201,15 +210,18 @@ exists.
     cross-object context uses canonical `FullId`.
 18. Voice retains independent local attribution identity and is not derived from or used as `Character.Id`; Voiceprint
     remains recognition metadata and is not used to establish character ownership.
-19. Shared male/female bases each author one `CharacterCardContextSource` and `Actors` membership; higher layers do not
-    compensate redundantly.
+19. Shared male/female bases each author one `CharacterCardContextSource`, `Actors` membership, and `VisualSubjects`
+    membership; each is a valid `IVisualSubject` scan member and higher layers do not compensate redundantly.
 20. `CharacterCardContextSource` returns only the canonical `FullId` entry with value `subject.FullId`, not bare `Id`.
-21. `ICharacter` normatively aggregates both `IVisualObserver` and `IVisualSubject` from BODY-004.
-22. Character roots expose validated visual-cue references through a read-only collection, and installation preserves
-    or rebases those authored references.
+21. `ICharacter` normatively aggregates `IEyesHolder` and `IVisualSubject` from BODY-004; `IVisualObserver` does not
+    exist.
+22. Character roots expose validated published visual-cue references through a read-only collection; installation
+    preserves or rebases those authored references, and published cue topology is immutable until explicit refresh.
 23. Shared reference female and male templates each contain exactly one `StaticVisualCue` with ID `body` at
     `Head/BodyVisualCue`.
-24. Validation enforces the BODY-004 cue contract, including non-empty, ordinally unique IDs per character provider.
+24. `Character.RefreshComponents()` validates its published cue list at publication and explicit refresh, including
+    non-empty and ordinally unique IDs and nearest-provider ownership. Invalid ownership fails clearly at that
+    boundary, while EyesBehaviour scanning does not reconcile or filter it.
 25. Ally player, Ally NPC, and Vadim retain the shared `body` cue topology and provide character-specific template
     overrides.
 26. NPC composition tests prove `LocomotiveNavigation` binds the installed root as both `Node3D` and `ILocomotive` only

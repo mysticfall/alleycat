@@ -1,7 +1,4 @@
 using AlleyCat.Body.Eyes;
-using AlleyCat.Context;
-using AlleyCat.Scene;
-using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -9,7 +6,6 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.Body.Eyes;
 
 /// <summary>Godot physics coverage for synchronous visual-cue scanning.</summary>
-[Headless]
 public sealed class VisualScanningIntegrationTests
 {
     private const uint VisionOccluderLayer = 1u << 4;
@@ -296,9 +292,10 @@ public sealed class VisualScanningIntegrationTests
 
     private sealed partial class TestVisualSubject : Node3D, IVisualSubject
     {
-        public IReadOnlyList<VisualCue> VisualCues { get; set; } = [];
+        public string Id { get; set; } = "test_subject";
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
+        public string Type => "test";
+
+        public IReadOnlyList<VisualCue> VisualCues { get; set; } = [];
     }
 }

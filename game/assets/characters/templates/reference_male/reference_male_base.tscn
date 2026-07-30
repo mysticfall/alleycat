@@ -61,7 +61,7 @@ transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0
 [node name="BodyVisualCue" type="Node3D" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1094214123]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.00018767762, 0.012320638, 0.06855364)
 script = ExtResource("13_e6bn2")
-Description = "{{subject.Id}} is a character."
+Description = "A character."
 ID = "body"
 Bounds = SubResource("Resource_c6lj4")
 metadata/_custom_type_script = "uid://tb33120b0yo"
