@@ -90,6 +90,8 @@ public sealed class SceneContextIntegrationTests
             Assert.Equal(baselineActorCount + 2, context.Characters.Count);
             Assert.Contains(firstCharacter, context.Characters);
             Assert.Contains(secondCharacter, context.Characters);
+            Assert.Same(firstCharacter, context.Find("char:live_first"));
+            Assert.Null(context.Find("loc:interrogation_room"));
         }
         finally
         {

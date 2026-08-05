@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using AlleyCat.Character;
+using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using Godot;
 
@@ -11,31 +13,43 @@ namespace AlleyCat.Scene;
 /// <param name="contentResolver">CORE content resolver used to expose active content context.</param>
 public sealed class SceneContextProvider(Node treeOwner, IContentResolver? contentResolver = null) : ISceneContextProvider
 {
-    private static readonly StringName _actorsGroup = "Actors";
+    private static readonly IReadOnlyDictionary<string, SceneGroupDefinition> _sceneGroupsByType =
+        new ReadOnlyDictionary<string, SceneGroupDefinition>(new Dictionary<string, SceneGroupDefinition>(StringComparer.Ordinal)
+        {
+            ["char"] = new("Actors", static node => node as ICharacter),
+        });
 
     /// <inheritdoc />
     public ISceneContext GetCurrent()
     {
-        Godot.Collections.Array<Node> actorNodes = GetActorNodes();
-        var characters = new ICharacter[actorNodes.Count];
-
-        for (int i = 0; i < actorNodes.Count; i++)
+        SceneTree sceneTree = GetSceneTree();
+        var membershipByType = new Dictionary<string, IIdentifiable[]>(_sceneGroupsByType.Count, StringComparer.Ordinal);
+        foreach (KeyValuePair<string, SceneGroupDefinition> entry in _sceneGroupsByType)
         {
-            Node actorNode = actorNodes[i];
-            characters[i] = actorNode as ICharacter
-                ?? throw new InvalidOperationException(
-                    $"Scene authoring error: node '{actorNode.Name}' ({actorNode.GetPath()}) is in the Actors group but does not implement {typeof(ICharacter).FullName}.");
+            Godot.Collections.Array<Node> nodes = sceneTree.GetNodesInGroup(entry.Value.Group);
+            var identifiables = new IIdentifiable[nodes.Count];
+            for (int index = 0; index < nodes.Count; index++)
+            {
+                Node node = nodes[index];
+                identifiables[index] = entry.Value.ResolveIdentifiable(node)
+                    ?? throw new InvalidOperationException(
+                        $"Scene authoring error: node '{node.Name}' ({node.GetPath()}) is in the {entry.Value.Group} group but does not implement {typeof(ICharacter).FullName}.");
+            }
+
+            membershipByType.Add(entry.Key, identifiables);
         }
 
-        return new SceneContext(characters, (contentResolver ?? new ContentResolver()).GetCurrentContentContext());
+        return new SceneContext(membershipByType, (contentResolver ?? new ContentResolver()).GetCurrentContentContext());
     }
 
-    private Godot.Collections.Array<Node> GetActorNodes()
+    private SceneTree GetSceneTree()
     {
         SceneTree sceneTree = treeOwner.GetTree()
             ?? throw new InvalidOperationException(
                 $"Cannot resolve scene context because node '{treeOwner.Name}' is not inside a SceneTree.");
 
-        return sceneTree.GetNodesInGroup(_actorsGroup);
+        return sceneTree;
     }
+
+    private sealed record SceneGroupDefinition(StringName Group, Func<Node, IIdentifiable?> ResolveIdentifiable);
 }

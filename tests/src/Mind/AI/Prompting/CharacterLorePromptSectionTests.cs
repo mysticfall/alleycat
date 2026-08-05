@@ -100,6 +100,15 @@ public sealed class CharacterLorePromptSectionTests
     private sealed record FakeSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
     {
         public ContentContext Content => ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+        {
+            IdentityValidator.ValidateFullId(fullId, nameof(fullId));
+            return Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
+        }
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
     }
 
     private sealed class FakeCharacter(string id, string? fullIdOverride = null) : ICharacter

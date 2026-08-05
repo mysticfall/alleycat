@@ -294,6 +294,15 @@ public sealed class CharacterContextTests
     private sealed record FakeSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
     {
         public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+        {
+            IdentityValidator.ValidateFullId(fullId, nameof(fullId));
+            return Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
+        }
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
     }
 
     private sealed class FakeCharacter : ICharacter

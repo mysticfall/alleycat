@@ -417,5 +417,14 @@ public sealed class VisualCueIntegrationTests
         public IReadOnlyCollection<ICharacter> Characters { get; } = [];
 
         public ContentContext Content => ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+        {
+            IdentityValidator.ValidateFullId(fullId, nameof(fullId));
+            return null;
+        }
+
+        public IIdentifiable Resolve(string fullId)
+            => throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
     }
 }

@@ -72,6 +72,56 @@ public sealed class SceneContextTests
         Assert.Contains("char:ally", exception.Message);
     }
 
+    /// <summary>Canonical character FullIds resolve to their live snapshot members using ordinal matching.</summary>
+    [Fact]
+    public void FindAndResolve_WhenCanonicalCharacterFullIdMatches_ReturnLiveCharacter()
+    {
+        var character = new FakeCharacter("ally");
+        SceneContext context = new([character]);
+
+        Assert.Same(character, context.Find("char:ally"));
+        Assert.Same(character, context.Resolve("char:ally"));
+        Assert.Null(context.Find("char:other_ally"));
+    }
+
+    /// <summary>Lookup membership is fixed while a member's identity remains live.</summary>
+    [Fact]
+    public void Find_PreservesSnapshotMembershipWithLiveIdentity()
+    {
+        var character = new FakeCharacter("ally");
+        SceneContext context = new([character]);
+
+        character.Id = "renamed_ally";
+
+        Assert.Null(context.Find("char:ally"));
+        Assert.Same(character, context.Find("char:renamed_ally"));
+    }
+
+    /// <summary>Unmapped and absent canonical types are not scene members.</summary>
+    [Fact]
+    public void FindAndResolve_WhenIdentityIsAbsentOrTypeIsUnmapped_ReturnsNullOrThrows()
+    {
+        SceneContext context = new([new FakeCharacter("ally")]);
+
+        Assert.Null(context.Find("char:missing"));
+        Assert.Null(context.Find("loc:interrogation_room"));
+        _ = Assert.Throws<InvalidOperationException>(() => context.Resolve("char:missing"));
+        _ = Assert.Throws<InvalidOperationException>(() => context.Resolve("loc:interrogation_room"));
+    }
+
+    /// <summary>Lookup only accepts canonical CORE-009 FullId input.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("ally")]
+    [InlineData("char:Ally")]
+    public void FindAndResolve_WhenFullIdIsNotCanonical_ThrowsArgumentException(string fullId)
+    {
+        SceneContext context = new([new FakeCharacter("ally")]);
+
+        _ = Assert.Throws<ArgumentException>(() => context.Find(fullId));
+        _ = Assert.Throws<ArgumentException>(() => context.Resolve(fullId));
+    }
+
     private sealed class FakeCharacter(string id, string type = "char", string? fullIdOverride = null) : ICharacter
     {
         public string Id { get; set; } = id;
