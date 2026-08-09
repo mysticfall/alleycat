@@ -36,6 +36,10 @@ responsive and interruption-safe in-world behaviour.
     post-destruction effects from that Mind.
 11. A turn must end through protocol control rather than ordinary assistant text, and invalid output must not trigger a
     model repair attempt or automatic retry.
+12. An NPC's Mind must synchronously interpret sense-owned percepts into attention and zero or more ordered durable
+    observations without delaying normal gameplay.
+13. Foreground character context must contain self and every currently resolvable contextual subject whose attention
+    meets the context threshold, rather than every scene character unconditionally.
 
 ## Technical Requirements
 
@@ -76,8 +80,8 @@ responsive and interruption-safe in-world behaviour.
     be relative to the observing Mind; unknown speech must remain representable without inventing an actor identity.
 16. Owning-character speech must calculate importance `0`. Recognised-external and unknown speech must retain effective
     importance `1`, while final broader importance models remain tunable and deferred.
-17. Mind must stamp tool-produced `ObservedAction` actor IDs with the owning character's exact ID before calculating
-    importance. A tool-supplied actor ID must not spoof another character.
+17. Mind must stamp tool-produced `ObservedAction` actor IDs with the owning character's exact `FullId` before
+    calculating importance. A tool-supplied actor ID must not spoof another character.
 18. Mind must atomically ingest each ordered observation batch produced by a tool result. Validation failure must append
     none of the batch to either timeline or pending state.
 19. Mind must expose read-only, atomic timeline snapshots while keeping mutable timeline storage private. Observation
@@ -90,12 +94,13 @@ responsive and interruption-safe in-world behaviour.
     cancels active observation processing. Deferred callbacks must not access Mind services after exit.
 23. Node-lifetime cancellation must propagate through active agent and tool work. Expected interruption and lifetime
     cancellation must not be reported as backend failures or trigger retries or unintended turns.
-24. AgenticMind must capture the received `source.Id` as `VoiceId` and resolve attribution only against `ICharacter`
-    instances in the current scene. It must compare `VoiceId` ordinally with each character's composed `IVoice.Id`.
-    Voice object reference identity, lore prose, character names, and aliases must not participate in matching.
-25. Blank received IDs and blank configured character voice IDs must not match. Zero matches must leave `ActorId` null;
-    exactly one match must set `ActorId` to that character's exact case-sensitive `Character.Id`; multiple matches must
-    fail clearly without selecting an actor.
+24. Mind's `SpeechPerception` faculty must resolve attribution only against `ICharacter` instances in the current scene.
+    It must compare the percept's raw source voice `Id` ordinally with each character's composed `IVoice.Id`. Voice
+    object-reference identity, lore prose, character names, and aliases must not participate in matching.
+25. During character attribution, blank received IDs and blank configured character voice IDs must not match. Zero
+    matches must leave `ActorId` null;
+    exactly one match must set `ActorId` to that character's exact case-sensitive `Character.FullId`; multiple matches
+    must fail clearly without selecting an actor.
 26. Voice-ID matching is configured, operational attribution rather than authenticated provenance. A source that
     presents another character's voice ID can therefore be attributed to that character; same-ID spoofing is an accepted
     limitation of this model.
@@ -108,8 +113,8 @@ responsive and interruption-safe in-world behaviour.
     and may retain them solely for deterministic projection aggregation during foreground `CreateRenderContext` calls.
 30. AgenticMind must initialise its latest render dictionary to an empty top-level read-only dictionary. Only foreground
     prompt execution may call `CreateRenderContext` to create AgenticMind's own top-level read-only render dictionary
-    from current character context, deterministic scene-character context, the complete timeline snapshot, and authored
-    worker projections.
+    from current character context, deterministic attention-eligible subject context, the complete timeline snapshot,
+    and authored worker projections. AI-006 normatively defines attention eligibility and scene resolution.
 31. The foreground template must use the exact dictionary returned by `CreateRenderContext`. AgenticMind must atomically
     publish that exact dictionary as the cached latest foreground context only after rendering succeeds. Construction or
     rendering failure must retain the previous published dictionary.
@@ -119,6 +124,16 @@ responsive and interruption-safe in-world behaviour.
 33. ContextWorker event handling and activity must remain independent of foreground scheduling and within the Mind
     node-lifetime boundary. Workers may only capture the published render snapshot; they must not initiate context
     construction, aggregation, or timeline refresh.
+34. Mind must subscribe to configured `ISense` components and own authorable Resource faculties, exact percept-type
+    registration, synchronous interpretation, attention, result validation, and observation ingestion. AI-006 is the
+    normative percept, sense, faculty, attention, and result contract.
+35. Before activation, Mind must require exactly one exact faculty mapping for every exact percept type declared by its
+    configured senses. Missing, duplicate, incompatible, or undeclared mappings must fail clearly.
+36. Mind must validate a complete `PerceptionResult`, including every calculated observation importance, before any
+    mutation. It then applies ordered attention effects sequentially and atomically ingests ordered observations through
+    the existing timeline, pending FIFO, scheduling, and interruption path.
+37. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation must
+    remain on Mind. The existing speech output tool and exactly-once self-action observation path must remain unchanged.
 
 ## In Scope
 
@@ -127,6 +142,8 @@ responsive and interruption-safe in-world behaviour.
 - Unified external and tool-result observation ingestion.
 - Threshold, maximum-wait, minimum-interval, disable, and active-turn interruption behaviour.
 - Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
+- Synchronous percept interpretation, exact faculty dispatch, and Mind-owned attention under AI-006.
+- Attention-filtered foreground contextual-subject selection.
 - AgenticMind orchestration through AI-002 and AI-003.
 - AgenticMind ownership and lifetime integration of AI-005 ContextWorker child nodes.
 - Foreground-only render-context construction and success-only publication of the latest top-level read-only dictionary.
@@ -140,9 +157,9 @@ responsive and interruption-safe in-world behaviour.
 - Cancelling or reversing world actions already admitted before interruption.
 - Timeline summarisation, compaction, token budgeting, or persistence beyond the Mind node lifetime.
 - Automatic retry or backoff policy beyond existing failure containment.
-- Multi-agent orchestration, long-term relationship state, and NPC attention loops.
+- Multi-agent orchestration and long-term relationship state.
 - Final tuning values for importance thresholds and wait durations.
-- Visual verification, because this refactor has no visual acceptance surface.
+- Perception-driven changes to eye presentation; unchanged eye presentation remains mandatory acceptance scope.
 
 ## Acceptance Criteria
 
@@ -170,8 +187,9 @@ responsive and interruption-safe in-world behaviour.
 12. After tree exit, tests verify no new intake, delayed action, replacement turn, timer, or node-service access occurs.
 13. Tests verify `source.Id` is captured as `VoiceId` and compared ordinally with every current-scene character's
     composed `IVoice.Id`, without comparing voice object references.
-14. Tests verify blank received and configured IDs do not match, zero matches remain unknown, one exact match yields the
-    character's exact case-sensitive `Character.Id`, and multiple exact matches fail clearly without choosing an actor.
+14. Tests verify blank received and configured IDs do not match during attribution, zero matches remain unknown, one
+    exact match yields the character's exact case-sensitive `Character.FullId`, and multiple exact matches fail clearly
+    without choosing an actor.
 15. Tests verify same-ID spoofing follows the configured attribution, while `ActorId` and nullable `VoiceId` remain
     separate and rendered speech history never exposes `VoiceId` as identity wording or authenticated provenance.
 16. Tests verify AI-002's `end_turn` marker never enters Mind, invalid output causes no model repair or automatic retry,
@@ -191,6 +209,17 @@ responsive and interruption-safe in-world behaviour.
 21. Tests verify workers capture only the currently published snapshot and never initiate context construction,
     aggregation, or timeline refresh. A worker projection reaches workers only through a subsequent successfully
     rendered and published foreground context.
+22. Tests verify Mind subscribes to configured senses, requires one exact faculty per declared exact percept type before
+    activation, and synchronously dispatches immutable percepts without inheritance fallback, queues, or background
+    processing.
+23. Tests verify complete `PerceptionResult` and calculated-importance validation occurs before mutation, duplicate
+    attention effects apply sequentially in order, and ordered observations use the existing atomic ingestion and
+    scheduling path.
+24. Tests verify foreground context contains self plus all currently resolvable attention-eligible `IContextual`
+    subjects, with no unconditional all-scene-character inclusion, second visual scan, hidden subject cache, or Mind
+    state passed to `IContextual.GetContext`.
+25. Tests verify Mind, not AgenticMind, owns incoming interpretation; AgenticMind retains provider, prompt, render, and
+    tool concerns; and successful speech output still creates exactly one self-action observation.
 
 ## References
 
@@ -208,6 +237,7 @@ responsive and interruption-safe in-world behaviour.
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-005: Context Worker](../005-context-worker/index.md)
+- [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [BODY-006: Voice Component](../../body/006-voice/index.md)

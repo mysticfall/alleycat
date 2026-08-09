@@ -30,13 +30,15 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 9. Completed nonblank player transcription must trigger player voice output; blank transcription must be ignored.
 10. Removing a voice from the scene must prevent queued or active work from accessing freed Godot nodes.
 11. A manual test scene must allow testers to enter arbitrary speech and observe character speech output.
+12. NPC Hearing receives completed speech as immutable sensory data; Mind later filters self speech and attributes
+    speakers by ordinal voice-ID values.
 
 ## Technical Requirements
 
 1. An abstract `[GlobalClass]` `Voice : Node3D` must be defined under `AlleyCat.Body.Voice` and implement `IVoice`.
-2. `IVoice` must expose `string Id { get; }`, `Vector3 Origin { get; }`,
-   `ValueTask SpeakAsync(string speech, CancellationToken cancellationToken = default)`, and compatibility
-   `void Speak(string speech)`.
+2. `IVoice : IComponent, IIdentifiable` must expose mutable authored `string Id`, `Vector3 Origin`,
+    `ValueTask SpeakAsync(string speech, CancellationToken cancellationToken = default)`, and compatibility
+    `void Speak(string speech)`.
 3. `SpeakAsync` must return no dispatch-result value. Successful completion means the request has been submitted or
    admitted to the FIFO queue; it does not mean generation, playback hand-off, or playback has completed.
 4. `SpeakAsync` must throw `ArgumentException` for blank speech and `InvalidOperationException` when voice output is
@@ -46,49 +48,61 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 6. `Speak` must remain a safe, deliberately lossy compatibility API. It must perform synchronous validation where
    possible, initiate `SpeakAsync`, and explicitly observe and log or signal asynchronous faults so no task exception is
    abandoned.
-7. `Voice` must expose exported `Id` and `Enabled`, resolve `Origin` from `GlobalPosition`, retain the
-   `SpeechFailed(string error)` signal, and provide deferred Godot action-dispatch helpers.
-8. `Voice` must define a protected virtual post-generation hook. The hook must query `IVoiceListener.GroupName`, filter
-   `IVoiceListener` implementations, and invoke them with the speech and source `IVoice`.
-9. `IVoiceListener.GroupName` must remain the global Godot group constant `"voice_listeners"`.
-10. Runtime control state such as `Enabled` must remain on `Voice`, not on the `IVoice` capability contract.
-11. `IHasVoice` must follow the component-holder trait pattern and expose `TryGetVoice(out IVoice? voice)` and
+7. `Voice` must expose exported mutable authored `Id` and `Enabled`, resolve `Origin` from `GlobalPosition`, retain the
+    `SpeechFailed(string error)` signal, and provide deferred Godot action-dispatch helpers.
+8. `IVoice.Type` is exactly `voice`, and its canonical CORE-009 `FullId` is exactly `voice:<id>`. Semantic voice
+   identity comparisons use ordinal `Id` or `FullId` values as appropriate, never object-reference equality.
+9. `Voice` must define a protected virtual post-generation hook. The hook must query `IVoiceListener.GroupName`, filter
+    `IVoiceListener` implementations, and invoke them with the speech and source `IVoice`.
+10. `IVoiceListener.GroupName` must remain the global Godot group constant `"voice_listeners"`.
+11. Runtime control state such as `Enabled` must remain on `Voice`, not on the `IVoice` capability contract.
+12. `IHasVoice` must follow the component-holder trait pattern and expose `TryGetVoice(out IVoice? voice)` and
     `RequireVoice()` over `IComponentHolder`.
-12. `AIVoice` must admit valid requests atomically into one FIFO queue and drain it serially. At most one generation,
+13. `AIVoice` must admit valid requests atomically into one FIFO queue and drain it serially. At most one generation,
     conversion, lip-sync preparation, and playback hand-off pipeline may run at a time.
-13. Busy requests must queue in admission order. `AIVoice` must not reject a valid request merely because another item
+14. Busy requests must queue in admission order. `AIVoice` must not reject a valid request merely because another item
     is active.
-14. For each admitted item, `AIVoice` must:
+15. For each admitted item, `AIVoice` must:
     - generate audio through the configured `SpeechGenerator`;
     - convert generated `byte[]` to compatible `AudioStreamWav` data;
     - await `LipSyncPlayer.PreparePlaybackAsync(...)`;
     - invoke `LipSyncPlayer.PlayPrepared(...)` as the playback initiation boundary; and
     - invoke the post-generation hook only after successful playback hand-off.
-15. Generated audio must be PCM 16-bit, 16 kHz, mono WAV before lip-sync preparation. `SpeechGenerator` owns sample-rate
+16. Generated audio must be PCM 16-bit, 16 kHz, mono WAV before lip-sync preparation. `SpeechGenerator` owns sample-rate
     normalisation; `AIVoice` must not resample.
-16. Failure of an admitted item's generation, conversion, preparation, or hand-off must be logged and emit
+17. Failure of an admitted item's generation, conversion, preparation, or hand-off must be logged and emit
     `SpeechFailed`. It must not notify listeners and must not prevent later FIFO items from running.
-17. Voice or node teardown must settle active and queued submissions safely and prevent later callbacks from accessing
+18. Voice or node teardown must settle active and queued submissions safely and prevent later callbacks from accessing
     freed Godot nodes. Expected teardown cancellation must not be reported as a generation failure.
-18. `PlayerVoice` must subscribe once to its exported `Transcriber.TranscriptionCompleted` source during `_Ready()`,
+19. `PlayerVoice` must subscribe once to its exported `Transcriber.TranscriptionCompleted` source during `_Ready()`,
     unsubscribe during `_ExitTree()`, and forward only nonblank transcript text through `Speak`.
-19. The manual voice test scene must place `AIVoice` under the character's head attachment and keep playback audio
+20. The manual voice test scene must place `AIVoice` under the character's head attachment and keep playback audio
     spatially attached to the voice origin.
-20. Generic character installation must set a character-owned voice `Id` to the final exact `Character.Id` after
-    target-scene precedence is resolved. AI-001 may use this configured ID for operational attribution; another source
-    presenting the same ID is an accepted limitation rather than authenticated ownership.
-21. `Voiceprint` is a listener-recognition key. Matching or possessing it does not prove that a voice is owned by a
+21. After CORE-005 target-scene precedence resolves the final `Character.Id`, generic character installation must assign
+    every character-owned Voice local `Id` to that exact value. The resulting canonical voice identity is
+    `voice:<character-id>`. Template placeholder voice IDs must be valid lower `snake_case`; installation replaces them
+    before voice identity is exposed and validates the assigned voice identity at the final installation boundary.
+    AI-001 may use the local ID for operational attribution; another source presenting the same ID is an accepted
+    limitation rather than authenticated ownership.
+22. `Voiceprint` is a listener-recognition key. Matching or possessing it does not prove that a voice is owned by a
     particular character.
+23. Hearing is a Body component implementing `ISense` and `IVoiceListener`. It owns listener lifecycle and declares
+    exactly `SpeechPercept`.
+24. Hearing rejects only null, empty, or whitespace-only transport speech. For each accepted publication, it snapshots
+    speech and the source's raw local `Id` into one immutable `SpeechPercept` and publishes it synchronously.
+25. Hearing must not know its observer's voice, filter self speech, attribute a character, create an observation, or
+    reference Mind. AI-006 assigns those interpretation responsibilities to `SpeechPerception`.
 
 ## In Scope
 
-- Abstract `Voice` identity, location, control, submission, compatibility, failure, and listener contracts.
+- Abstract `Voice` component identity, location, control, submission, compatibility, failure, and listener contracts.
 - Non-result `IVoice.SpeakAsync(...)` and safe lossy `Speak(...)` compatibility.
 - FIFO `AIVoice` admission and serial generation, preparation, and playback hand-off.
 - Failure isolation and safe active and queued work settlement on teardown.
 - `PlayerVoice` transcription integration.
 - PCM 16-bit, 16 kHz, mono WAV compatibility and lip-sync synchronisation.
 - Character-owned voice ID installation and spatial voice origins.
+- Hearing-owned synchronous `SpeechPercept` acquisition for AI-006.
 - Manual voice test scene and automated unit and integration coverage.
 
 ## Out Of Scope
@@ -99,14 +113,16 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 - New live microphone capture or real-time streaming beyond the existing `Transcriber` dependency.
 - Additional speech-generation implementations beyond `AIVoice` and `PlayerVoice`.
 - Audio processing beyond conversion to the required WAV format.
+- Spatial hearing, acoustic propagation, distance attenuation, or directional perception filtering.
 - Character animation beyond lip-sync and playback-completion notification.
-- Empty voice-ID authoring validation.
 
 ## Voice Contract
 
 | Member | Type | Description |
 |--------|------|-------------|
-| `Id` | `string` | Stable voice identifier. |
+| `Id` | `string` | Mutable authored local voice identifier. |
+| `Type` | `string` | Read-only canonical type `voice`. |
+| `FullId` | `string` | Canonical identifiable identity `voice:<id>`. |
 | `Enabled` | `bool` | Controls whether speech is permitted. Default: `true`. |
 | `Origin` | `Vector3` | World-space origin matching the voice node `GlobalPosition`. |
 | `SpeakAsync(...)` | `ValueTask` | Cancellable FIFO submission; completion means admission only. |
@@ -152,10 +168,18 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 11. Tests verify audio supplied to lip-sync is PCM 16-bit, 16 kHz, mono WAV and `AIVoice` does not resample it.
 12. Tests verify `PlayerVoice` forwards one nonblank transcription, ignores blank transcription, honours `Enabled`, and
     disconnects on exit.
-13. Generic installation sets each character-owned voice ID to final exact `Character.Id`; tests verify this supports
-    configured attribution without claiming authenticated provenance or rejecting a source that presents the same ID.
+13. Generic installation replaces each valid lower-`snake_case` character-owned voice placeholder ID with the final
+    exact `Character.Id` after target-scene precedence, validates `voice:<character-id>` before identity exposure, and
+    supports configured attribution without claiming authenticated provenance or rejecting a source that presents the
+    same ID.
 14. Acceptance verifies both user-visible FIFO speech and failure isolation and the validation, admission,
     serialisation, cancellation, listener, and node-lifetime contracts.
+15. Tests verify `IVoice : IComponent, IIdentifiable`, mutable authored local `Id`, exact Type `voice`, canonical
+    `voice:<id>` `FullId`, and ordinal semantic identity comparison without object-reference equality.
+16. Tests verify Hearing's Body composition and listener lifecycle, rejection of blank transport speech only, and one
+    synchronous immutable speech/raw-source-ID percept for each accepted publication.
+17. Tests verify Hearing has no observer-voice, attribution, observation, or Mind dependency; AI-006 speech perception
+    owns ordinal self filtering and attribution.
 
 ## References
 
@@ -174,6 +198,7 @@ serial generation, spatial attribution, lip-sync, and safe node-lifetime behavio
 
 - [AI-001: Mind Component](../../ai/001-mind/index.md)
 - [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)
+- [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
 - [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)

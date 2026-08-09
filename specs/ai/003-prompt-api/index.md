@@ -29,6 +29,8 @@ control over how concrete observation types appear in chronological event histor
 5. Shared NPC prompt assets present stable instructions and lore before dynamic event history.
 6. Shared action guidance lets an NPC complete chosen actions efficiently in one response when it does not need their
    results, while preserving result-dependent continuation when it does.
+7. Foreground prompts include the NPC and all currently resolvable contextual characters meeting its attention
+   threshold, without unconditionally including every scene character.
 
 ## Technical Requirements
 
@@ -68,15 +70,15 @@ control over how concrete observation types appear in chronological event histor
     voice provenance.
 17. The shared prompt stack must use exactly one actor-relative fragment for `ObservedSpeech`, selected by the exact
     `speech.observed` key. Separate heard-speech and self-spoken fragments or semantic keys must not be authored.
-18. The observed-speech fragment must compare `ObservedAction.ActorId` with the owning `ICharacter.Id` to render
+18. The observed-speech fragment must compare `ObservedAction.ActorId` with the owning `ICharacter.FullId` to render
     owning-character speech as self speech, a recognised other actor by character identity, and an absent or unknown
     actor with privacy-safe wording.
 19. Raw `VoiceId` provenance must never be rendered by the observed-speech fragment or used as fallback identity
     wording.
 20. AgenticMind must compile the foreground `PromptStack` on every turn, call `CreateRenderContext`, and render the
     template with the exact top-level read-only dictionary returned. The complete context includes current character
-    context, deterministic scene-character context, the complete unbounded observation timeline, and authored worker
-    projections.
+    context, deterministic attention-eligible character context under AI-006, the complete unbounded observation
+    timeline, and authored worker projections.
 21. AgenticMind must atomically publish that exact dictionary as its latest render snapshot only after template
     rendering succeeds. Context construction or rendering failure must retain the previously published snapshot.
 22. The rendered stack must become the turn's sole system instruction under AI-002. No observation-summary user message
@@ -98,8 +100,11 @@ control over how concrete observation types appear in chronological event histor
     request with the latest foreground-published snapshot captured at run start. It must not request context
     construction or aggregation, invalidate the cache, or recompile it. A compile failure logs once,
     invokes no provider, and leaves the worker inactive with its prior projection as fallback. Typed schema responses
-    map to worker dictionary output for direct publication under AI-005; they are not foreground-turn output and must
-    not alter the foreground sole-system-instruction or tool-only contracts.
+     map to worker dictionary output for direct publication under AI-005; they are not foreground-turn output and must
+     not alter the foreground sole-system-instruction or tool-only contracts.
+28. AgenticMind owns provider, prompt compilation, render-context construction and publication, and tool orchestration.
+    It must consume Mind's committed observations and attention eligibility without interpreting incoming percepts,
+    subscribing to senses, or owning perception faculties.
 
 ## In Scope
 
@@ -108,10 +113,12 @@ control over how concrete observation types appear in chronological event histor
 - Exact keyed event-history fragments, direct record rendering, and mandatory fallback rendering.
 - One actor-relative `speech.observed` fragment for every observed-speech perspective.
 - Foreground-only `CreateRenderContext`, exact-context rendering, and success-only snapshot publication.
+- AI-006 attention-filtered character context without prompt-owned scanning or attention policy.
 - Shared generic NPC prompt-stack authoring and static-before-dynamic asset policy.
 - Tool-only action, result-dependent continuation, and final `end_turn` guidance aligned with AI-002.
 - Default pseudo-XML prompt writer and existing templating-system integration.
 - Immutable PromptStack lifetime and compilation-cache boundary for AI-005 LLM-backed ContextWorkers.
+- AgenticMind's prompt/render/tool boundary from AI-006, excluding incoming percept interpretation.
 
 ## Out Of Scope
 
@@ -130,9 +137,9 @@ control over how concrete observation types appear in chronological event histor
 3. Writer tests verify matching pseudo-XML tags, existing lax authored names, replacement of only `<`, `>`, and `/` in
    tag names, exact content preservation, and clear invalid-authoring failures.
 4. Every AgenticMind foreground turn compiles its prompt stack, calls `CreateRenderContext`, and renders with its exact
-   top-level read-only dictionary: `character`, deterministic `characters`, complete read-only `observations`, and
-   authored worker projections. Publication occurs atomically only after rendering succeeds; construction or rendering
-   failure retains the previous published dictionary.
+   top-level read-only dictionary: `character`, deterministic attention-eligible `characters`, complete read-only
+   `observations`, and authored worker projections. Publication occurs atomically only after rendering succeeds;
+   construction or rendering failure retains the previous published dictionary.
 5. Capturing-client tests verify the rendered stack is the sole system instruction and no observation-summary user
    message or prior transcript accompanies it.
 6. Event-history tests cover self speech, recognised-other speech, unknown speech, empty history, chronological
@@ -159,6 +166,11 @@ control over how concrete observation types appear in chronological event histor
     AgenticMind attachment, and caches it without invalidation or recompilation. Each run renders with the published
     snapshot captured at run start without requesting context construction or aggregation. A compile failure logs once,
     invokes no provider, preserves the prior projection, and does not change foreground prompt or tool-only contracts.
+15. Tests verify foreground rendering includes self and every currently resolvable attention-eligible contextual
+    character, omits ineligible or unresolved subjects, and does not trigger a second scan or prompt-owned attention
+    update.
+16. Tests verify AgenticMind uses Mind-owned observations and attention eligibility without sense subscriptions,
+    percept-type dispatch, perception faculties, or incoming sensory interpretation.
 
 ## References
 
@@ -168,6 +180,7 @@ control over how concrete observation types appear in chronological event histor
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-005: Context Worker](../005-context-worker/index.md)
+- [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [AI System](../index.md)
 

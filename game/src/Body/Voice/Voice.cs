@@ -28,6 +28,12 @@ public abstract partial class Voice : Node3D, IVoice
     [Export]
     public string Id { get; set; } = string.Empty;
 
+    /// <inheritdoc />
+    public string Type => "voice";
+
+    /// <inheritdoc />
+    public string FullId => $"{Type}:{Id}";
+
     /// <summary>
     /// Enables voice playback.
     /// </summary>

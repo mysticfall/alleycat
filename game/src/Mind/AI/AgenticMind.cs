@@ -2,13 +2,13 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
+using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
-using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using Godot;
@@ -89,64 +89,6 @@ public partial class AgenticMind : MindBase, IServiceProvider
     public Godot.Collections.Array<AgentTool> Tools { get; set; } = [];
 
     /// <inheritdoc />
-    public override void ReceiveVoice(string speech, IVoice source)
-    {
-        if (!ShouldHandleVoice(speech, source))
-        {
-            return;
-        }
-
-        string trimmedSpeech = speech.Trim();
-        if (AIPipelineDebugLog.IsEnabled)
-        {
-            AIPipelineDebugLog.Stage("LLM observation received", $"{trimmedSpeech.Length} chars");
-        }
-
-        string voiceID = source.Id;
-        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-        _ = Observe(new ObservedSpeech(
-            ResolveRecognisedCharacterID(voiceID, scene),
-            voiceID,
-            trimmedSpeech));
-    }
-
-    /// <summary>
-    /// Resolves a configured voice ID to a character in the current scene.
-    /// </summary>
-    protected virtual string? ResolveRecognisedCharacterID(string voiceID, ISceneContext scene)
-    {
-        ArgumentNullException.ThrowIfNull(voiceID);
-        ArgumentNullException.ThrowIfNull(scene);
-
-        if (string.IsNullOrWhiteSpace(voiceID))
-        {
-            return null;
-        }
-
-        ICharacter? owner = null;
-        foreach (ICharacter character in scene.Characters)
-        {
-            if (!character.TryGetVoice(out IVoice? characterVoice)
-                || characterVoice is null
-                || string.IsNullOrWhiteSpace(characterVoice.Id)
-                || !string.Equals(characterVoice.Id, voiceID, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (owner is not null)
-            {
-                throw new InvalidOperationException(
-                    $"Voice ID '{voiceID}' ambiguously matches current-scene characters '{owner.FullId}' and '{character.FullId}'.");
-            }
-
-            owner = character;
-        }
-
-        return owner?.FullId;
-    }
-
-    /// <inheritdoc />
     protected override async Task ProcessObservationsAsync(
         IReadOnlyList<AgentObservation> observations,
         IReadOnlyList<AgentObservation> timelineSnapshot,
@@ -194,7 +136,12 @@ public partial class AgenticMind : MindBase, IServiceProvider
         ICharacter character = ResolveOwningCharacter();
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
-        IReadOnlyDictionary<string, object?> renderContext = CreateRenderContext(character, scene, timeline, _contextWorkers);
+        IReadOnlyDictionary<string, object?> renderContext = CreateRenderContext(
+            character,
+            scene,
+            timeline,
+            _contextWorkers,
+            GetContextEligibleAttentionIDs());
         string instructions = RenderAndPublishSystemInstruction(template, renderContext);
         TurnInvocationServices invocationServices = new(this, character, Voice);
         List<AITool> turnTools = CreateTurnTools(invocationServices);
@@ -242,12 +189,23 @@ public partial class AgenticMind : MindBase, IServiceProvider
     internal static IReadOnlyDictionary<string, object?> CreateRenderContext(
         ICharacter character,
         ISceneContext scene,
-        IReadOnlyList<AgentObservation>? observations = null)
+        IReadOnlyList<AgentObservation>? observations = null,
+        IReadOnlyList<string>? attentionEligibleFullIDs = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
 
-        return CreateRenderContext(character, scene, observations, []);
+        if (attentionEligibleFullIDs is null)
+        {
+            foreach (ICharacter subject in scene.Characters)
+            {
+                ValidateSceneCharacterIdentity(subject);
+            }
+        }
+
+        IReadOnlyList<string> eligibleIDs = attentionEligibleFullIDs
+            ?? [.. scene.Characters.Select(static subject => subject.FullId)];
+        return CreateRenderContext(character, scene, observations, [], eligibleIDs);
     }
 
     /// <summary>Constructs the complete foreground render context for a claimed timeline snapshot.</summary>
@@ -255,39 +213,58 @@ public partial class AgenticMind : MindBase, IServiceProvider
     {
         ArgumentNullException.ThrowIfNull(timeline);
         ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-        return CreateRenderContext(ResolveOwningCharacter(), scene, timeline, _contextWorkers);
+        return CreateRenderContext(
+            ResolveOwningCharacter(),
+            scene,
+            timeline,
+            _contextWorkers,
+            GetContextEligibleAttentionIDs());
     }
 
     private static IReadOnlyDictionary<string, object?> CreateRenderContext(
         ICharacter character,
         ISceneContext scene,
         IReadOnlyList<AgentObservation>? observations,
-        IReadOnlyList<ContextWorker> workers)
+        IReadOnlyList<ContextWorker> workers,
+        IReadOnlyList<string> attentionEligibleFullIDs)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(workers);
 
-        ICharacter[] characters = [.. scene.Characters];
-        foreach (ICharacter subject in characters)
-        {
-            ValidateSceneCharacterIdentity(subject);
-        }
-
-        Array.Sort(characters, static (left, right) => StringComparer.Ordinal.Compare(left.FullId, right.FullId));
-        if (!characters.Any(subject => ReferenceEquals(subject, character)))
+        ValidateSceneCharacterIdentity(character);
+        if (!ReferenceEquals(scene.Find(character.FullId), character))
         {
             throw new InvalidOperationException(
                 $"AgenticMind owning character '{character.FullId}' is absent from the current scene context.");
         }
 
+        var included = new SortedDictionary<string, IContextual>(StringComparer.Ordinal)
+        {
+            [character.FullId] = character,
+        };
+        foreach (string fullID in attentionEligibleFullIDs)
+        {
+            IdentityValidator.ValidateFullId(fullID, nameof(attentionEligibleFullIDs));
+            if (scene.Find(fullID) is not IContextual contextual)
+            {
+                continue;
+            }
+
+            ValidateIncludedContextualIdentity(contextual, fullID);
+            if (!included.TryAdd(fullID, contextual) && !ReferenceEquals(included[fullID], contextual))
+            {
+                throw new InvalidOperationException($"Foreground context contains duplicate exact FullId '{fullID}'.");
+            }
+        }
+
         Dictionary<string, object?> characterContexts = new(StringComparer.Ordinal);
         IReadOnlyDictionary<string, object?>? owningCharacterContext = null;
-        foreach (ICharacter subject in characters)
+        foreach (KeyValuePair<string, IContextual> entry in included)
         {
-            IReadOnlyDictionary<string, object?> subjectContext = subject.GetContext(scene, observer: character);
-            characterContexts.Add(subject.FullId, subjectContext);
-            if (ReferenceEquals(subject, character))
+            IReadOnlyDictionary<string, object?> subjectContext = entry.Value.GetContext(scene, observer: character);
+            characterContexts.Add(entry.Key, subjectContext);
+            if (ReferenceEquals(entry.Value, character))
             {
                 owningCharacterContext = subjectContext;
             }
@@ -312,6 +289,32 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
 
         return new ReadOnlyDictionary<string, object?>(context);
+    }
+
+    private static void ValidateIncludedContextualIdentity(IContextual contextual, string expectedFullID)
+    {
+        if (contextual is not IIdentifiable identifiable)
+        {
+            throw new InvalidOperationException(
+                $"Foreground contextual subject for '{expectedFullID}' must retain an identifiable canonical identity.");
+        }
+
+        try
+        {
+            IdentityValidator.Validate(identifiable, "character");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                $"Foreground contextual subject has invalid identity '{identifiable.FullId}'.",
+                exception);
+        }
+
+        if (!string.Equals(identifiable.FullId, expectedFullID, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Foreground contextual subject resolved for '{expectedFullID}' reported mismatched identity '{identifiable.FullId}'.");
+        }
     }
 
     private static void ValidateSceneCharacterIdentity(ICharacter character)
@@ -474,7 +477,13 @@ public partial class AgenticMind : MindBase, IServiceProvider
 
     private sealed class DeferredVoice(AgenticMind mind, IVoice voice) : IVoice
     {
-        public string Id => voice.Id;
+        public string Id
+        {
+            get => voice.Id;
+            set => voice.Id = value;
+        }
+
+        public string Type => voice.Type;
 
         public Vector3 Origin => voice.Origin;
 

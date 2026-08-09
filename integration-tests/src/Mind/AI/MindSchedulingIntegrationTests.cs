@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Diagnostics;
 using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -521,10 +520,6 @@ public sealed partial class MindSchedulingIntegrationTests
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
 
         public void ReleaseProcessing() => _processingRelease?.TrySetResult();
-
-        public override void ReceiveVoice(string speech, IVoice source)
-        {
-        }
 
         protected override async Task ProcessObservationsAsync(
             IReadOnlyList<AgentObservation> observations,

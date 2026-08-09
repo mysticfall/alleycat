@@ -21,7 +21,7 @@ public sealed class VisualCueContractTests
     [Fact]
     public void VisualScanning_ExposesRequiredContracts()
     {
-        Assert.Equal(typeof(IReadOnlyList<VisualScanResult>), typeof(IEyes).GetMethod(nameof(IEyes.Scan))?.ReturnType);
+        Assert.Null(typeof(IEyes).GetMethod("Scan"));
         Assert.NotNull(typeof(VisualScanResult).GetProperty(nameof(VisualScanResult.Subject))?.GetMethod);
         Assert.Null(typeof(VisualScanResult).GetProperty(nameof(VisualScanResult.Subject))?.SetMethod);
         Assert.Null(typeof(VisualScanResult).GetProperty(nameof(VisualScanResult.VisibleCues))?.SetMethod);

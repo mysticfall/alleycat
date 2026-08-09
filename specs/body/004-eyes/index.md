@@ -17,10 +17,10 @@ Provide a reusable eye component system that:
 
 - Exposes an optional target node representing where the eyes are currently looking.
 - Drives horizontal and vertical eye rotation through blend shape animation parameters.
-- Adds subtle saccade motion around the current gaze anchor without adding sight AI.
+- Adds subtle saccade motion around the current gaze anchor without owning semantic visual interpretation.
 - Supports randomised blinking with configurable cadence.
 - Integrates with AnimationTree partial blending analogous to hand pose setup.
-- Produces a synchronous, queryable snapshot of authored visual cues that are visible to the character.
+- Periodically publishes a synchronous immutable survey of authored visual subjects visible to the character.
 
 ## User Requirements
 
@@ -35,13 +35,15 @@ Provide a reusable eye component system that:
    subject, without requesting completed context.
 9. Whole-character cues provide character-specific appearance descriptions while allowing shared character templates
    to use placeholder text.
-10. A character can inspect visible cues without changing its current gaze target or saccade behaviour.
+10. A character can sense visible subjects without changing its current gaze target or saccade behaviour.
 11. Only cues within the character's field of view, distance limit, and unobstructed line of sight are reported.
 12. Invalid authored cue ownership fails clearly when its provider is published or explicitly refreshed.
+13. NPC perception can inspect visible subjects periodically without creating routine visual memories or changing gaze
+    and eye presentation.
 
 ## Technical Requirements
 
-1. Define `IEyes : IComponent` capability interface in `AlleyCat.Body.Eyes`:
+1. Define `IEyes : ISense` capability interface in `AlleyCat.Body.Eyes`:
    - `LookTarget: Node3D?` — optional target node the eyes are looking at.
    - `SetLookTarget(Node3D? target)` — sets the look target.
    - `ClearLookTarget()` — clears the look target.
@@ -132,39 +134,42 @@ Provide a reusable eye component system that:
     description content.
 27. Ally NPC, Ally player, and Vadim character assets override the `body` cue template with character-specific
     appearance descriptions.
-28. `IEyes` exposes `IReadOnlyList<VisualScanResult> Scan()`. Calling `Scan()` synchronously returns one result for
-    each discovered non-self `IVisualSubject` with one or more visible cues; it must not schedule deferred work or
-    return a collection whose membership can change after return.
-29. `VisualScanResult` is an immutable value object for one authoritative visual subject. Its cue membership and
-    scan-time cue data are fixed at construction; consumers must not mutate the result or use it as a live view of
-    scene state.
-30. `EyesBehaviour` directly queries `SceneTree.GetNodesInGroup("VisualSubjects")` for scan discovery. It owns the
+28. `IEyes` must not expose a public `Scan()` operation. As an `ISense`, it declares exactly
+    `VisualSurveyPercept` and publishes percepts synchronously through `Perceived`.
+29. `EyesBehaviour` owns its polling lifecycle. Its exported survey interval must be finite and positive; invalid
+    authored or runtime values fail before activation. The final minimum and default remain tunable.
+30. `EyesBehaviour` performs at most one survey per frame. A delayed frame performs one survey without catch-up and
+    starts the next interval from that survey.
+31. `EyesBehaviour` directly queries `SceneTree.GetNodesInGroup("VisualSubjects")` for survey discovery. It owns the
     strict discovery, member-validation, and authoring-failure boundary: every member must implement `IVisualSubject`,
-    and a non-`IVisualSubject` member is an authoring error that fails the scan immediately. SCN-001 defines only the
+    and a non-`IVisualSubject` member is an authoring error that fails the survey immediately. SCN-001 defines only the
     `VisualSubjects` group-membership semantics.
-31. A scan snapshots `VisualSubjects` membership synchronously before evaluating each subject's valid published cue
-    collection. It excludes the observer's own subject and cues whose effective `Prominence` is `0`; it returns no
-    result for a subject with no visible cues.
-32. `EyesBehaviour` owns an `EyeOrigin` authoring reference for scan geometry. Its default field-of-view cone uses
+32. A survey snapshots `VisualSubjects` membership synchronously before evaluating each subject's valid published cue
+    collection. It excludes the observer's own subject and cues whose effective `Prominence` is `0`; it publishes no
+    subject identity for a subject with no visible cues.
+33. `EyesBehaviour` owns an `EyeOrigin` authoring reference for survey geometry. Its default field-of-view cone uses
     horizontal and vertical half angles of 60° and 45° respectively; these defaults remain export-overrideable.
-33. Every `VisualCue` has cue-local `VisualBounds` authoring. `VisualBounds` subclasses support point, sphere, and
-    oriented-box forms and alone determine the representative geometry used for scan distance, cone, and visibility
+34. Every `VisualCue` has cue-local `VisualBounds` authoring. `VisualBounds` subclasses support point, sphere, and
+    oriented-box forms and alone determine the representative geometry used for survey distance, cone, and visibility
     evaluation; they do not alter a `StaticVisualCue` description or origin-based `SampleGlobalPosition()` contract.
-34. Every `VisualCue` exposes `MaxVisibleDistance`. A value of `0` means unlimited distance; a positive value limits
+35. Every `VisualCue` exposes `MaxVisibleDistance`. A value of `0` means unlimited distance; a positive value limits
     the cue to that world-space distance from `EyeOrigin`.
-35. Scan visibility evaluation is separate from gaze sampling and selection. `Scan()` must neither change `LookTarget`
-    nor select a gaze anchor; `SampleGlobalPosition()` remains the representative cue-position API for consumers that
-    require gaze or presentation sampling.
-36. Visibility tests use representative sample points appropriate to the cue's `VisualBounds`, rather than treating a
+36. Survey visibility evaluation is separate from gaze sampling and selection. Acquisition must neither change
+    `LookTarget` nor select a gaze anchor; `SampleGlobalPosition()` remains the representative cue-position API for
+    consumers that require gaze or presentation sampling.
+37. Visibility tests use representative sample points appropriate to the cue's `VisualBounds`, rather than treating a
     bounded cue as visible or hidden from one arbitrary point only. A cue is visible when at least one valid
     representative sample passes its distance, cone, and occlusion tests.
-37. `VisionOccluder` identifies geometry that can block a visual scan. Each representative-sample visibility test casts
-    a ray from `EyeOrigin` to the sample point and treats only a `VisionOccluder` hit before the endpoint as occlusion.
-    Hits within a configurable endpoint tolerance do not occlude the cue, preventing its own or coincident geometry
-    from hiding the sample.
-38. Scan assumes valid published cue collections and selects visibility only; it must not reconcile ownership, filter
-    nested-provider leaks, or refresh cue topology. `Describe` renders a cue description only, and CTX-001
-    completed-context composition aggregates context only. No operation may perform another operation's responsibility.
+38. `VisionOccluder` identifies geometry that can block a visual survey. Each representative-sample visibility test
+    casts a ray from `EyeOrigin` to the sample point and treats only a `VisionOccluder` hit before the endpoint as
+    occlusion. Hits within a configurable endpoint tolerance do not occlude the cue.
+39. Survey acquisition assumes valid published cue collections and selects visibility only; it must not reconcile
+    ownership, filter nested-provider leaks, or refresh cue topology. Description and context composition remain
+    separate operations.
+40. Each survey publishes one `VisualSurveyPercept` containing only a producer-owned immutable ordered snapshot of
+    canonical visible-subject `FullId` values. It contains no cues, descriptions, observations, or live subjects.
+41. Routine surveys must not call `VisualCue.Describe`, produce visual observations, select gaze, change `LookTarget`,
+    or otherwise alter saccade, blink, or eye-presentation state.
 
 ## In Scope
 
@@ -184,14 +189,14 @@ Provide a reusable eye component system that:
 - Static cue origin sampling, fixed template-backed local descriptions, optional nearest-subject input, provider
   publication/refresh validation, and immutable published cue topology.
 - Authored whole-character `body` cues and character-specific appearance overrides.
-- Synchronous `IEyes.Scan()` snapshots with one immutable result per discovered non-self subject that has visible cues.
+- Eyes-owned periodic `VisualSurveyPercept` publication for discovered non-self subjects with visible cues.
 - `EyesBehaviour`-owned strict `VisualSubjects` querying, member validation, authoring failure, scan filtering,
   `EyeOrigin` cone evaluation, and `VisionOccluder` ray tests.
 - Cue-local `VisualBounds`, per-cue distance limits, and representative visibility sampling.
 
 ## Out Of Scope
 
-- Perception, sight AI, or independent gaze-selection logic.
+- Attention, Mind interpretation, or independent gaze-selection logic.
 - Visual landmark selection policy beyond a future hook owned by `EyesBehaviour`.
 - Automatic visual-cue selection or gaze movement towards cues.
 - Emotional-state policy that modifies saccade tuning.
@@ -205,7 +210,7 @@ Provide a reusable eye component system that:
 
 | ID | Requirement Layer | Criterion |
 |----|-------------------|----------|
-| 1  | Technical         | `IEyes : IComponent` interface is defined with `LookTarget`, `SetLookTarget`, |
+| 1  | Technical         | `IEyes : ISense` interface is defined with `LookTarget`, `SetLookTarget`, |
 |    |                   | and `ClearLookTarget`. |
 | 2  | Technical         | `IEyesHolder` defines `TryGetEyes` and `RequireEyes` methods. |
 | 3  | Technical         | `EyesBehaviour` implements `IEyes` and delegates supplied look points to the |
@@ -239,8 +244,8 @@ Provide a reusable eye component system that:
 |    |                   | invalid blend-shape track targets before enabling eye behaviour. |
 | 20 | Technical         | Eye animation resources for imported characters do not depend on hard-coded |
 |    |                   | reference-female mesh paths or hard-loading a reference-female `eyes.tres`. |
-| 21 | Technical         | Implementation does not depend on perception, sight AI, physical eye-collision |
-|    |                   | response, or network systems; required scan-only occlusion rays are permitted. |
+| 21 | Technical         | Implementation does not depend on Mind, physical eye-collision response, or |
+|    |                   | network systems; required survey-only occlusion rays are permitted. |
 | 22 | Technical         | Tests verify the eyes component is discoverable via `IEyesHolder`. |
 | 23 | Technical         | Tests verify fallback target resolution and bounded saccade offsets around |
 |    |                   | assigned and fallback gaze anchors. |
@@ -280,18 +285,16 @@ Provide a reusable eye component system that:
 | 36 | Technical         | Automated tests verify cue discovery, sampling, description context rendering, |
 |    |                   | authoring, overrides, and validation without requiring screenshot or |
 |    |                   | visual-rendering acceptance. |
-| 37 | User              | A character can obtain currently visible authored cues without changing its |
+| 37 | User              | A character can sense currently visible authored subjects without changing its |
 |    |                   | look target, blink cadence, or saccade anchor. |
 | 38 | User              | Cues outside the field of view or positive distance limit, behind an occluder, |
 |    |                   | on the observing subject, or disabled by zero prominence are not reported. |
-| 39 | Technical         | `IEyes.Scan()` returns an `IReadOnlyList<VisualScanResult>` containing one |
-|    |                   | immutable result per discovered non-self subject with one or more visible cues; |
-|    |                   | its membership is a synchronous scan-time snapshot, not a live or deferred |
-|    |                   | scene query. |
-| 40 | Technical         | `EyesBehaviour` directly queries and snapshots `VisualSubjects` before |
-|    |                   | evaluation, validates every member as an `IVisualSubject`, and fails the |
-|    |                   | scan immediately for an invalid member. |
-| 41 | Technical         | Scan evaluation excludes the observer's own subject and zero-prominence cues. |
+| 39 | Technical         | `IEyes : ISense` declares only `VisualSurveyPercept`, publishes synchronously, |
+|    |                   | and exposes no public `Scan()` operation. |
+| 40 | Technical         | `EyesBehaviour` owns a finite positive interval, performs |
+|    |                   | at most one survey per frame, performs no delayed-frame catch-up, and rejects |
+|    |                   | invalid authored or runtime cadence before activation. |
+| 41 | Technical         | Survey evaluation excludes the observer's own subject and zero-prominence cues. |
 | 42 | Technical         | `EyesBehaviour` evaluates from `EyeOrigin` using export-overrideable 60° |
 |    |                   | horizontal and 45° vertical half-angle defaults. |
 | 43 | Technical         | Cues support cue-local point, sphere, and oriented-box `VisualBounds`, plus |
@@ -301,11 +304,17 @@ Provide a reusable eye component system that:
 | 45 | Technical         | Ray tests recognise only pre-endpoint `VisionOccluder` hits as occlusion and |
 |    |                   | honour a configurable endpoint tolerance. |
 | 46 | Technical         | Tests verify provider-side nearest-provider ownership validation and clear |
-|    |                   | publication or refresh failure for invalid cue ownership; scans consume only |
+|    |                   | publication or refresh failure for invalid cue ownership; surveys consume only |
 |    |                   | valid published collections and perform visibility selection without ownership |
 |    |                   | reconciliation or nested-leak filtering. |
 | 47 | Technical         | Tests verify visibility selection, cue description, and CTX-001 completed-context |
 |    |                   | aggregation remain separate operations. |
+| 48 | User              | Periodic NPC visual perception can notice all visible subjects without creating routine |
+|    |                   | visual history or changing gaze and eye presentation. |
+| 49 | Technical         | Each survey emits one producer-owned immutable ordered snapshot containing only |
+|    |                   | canonical visible-subject `FullId` values, never descriptions or observations. |
+| 50 | Technical         | Tests verify surveys never invoke `VisualCue.Describe`, select gaze, change |
+|    |                   | `LookTarget`, or alter saccades, blink cadence, or other eye presentation. |
 
 ## References
 
@@ -317,6 +326,7 @@ Provide a reusable eye component system that:
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
+- [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/assets/characters/import/eye_animation_library_import.gd`
 - `game/src/Body/Eyes/IEyes.cs`

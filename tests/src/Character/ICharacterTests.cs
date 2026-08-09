@@ -9,6 +9,7 @@ using AlleyCat.Interaction;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Scene;
+using AlleyCat.Sense;
 using Godot;
 using Xunit;
 
@@ -104,16 +105,29 @@ public sealed class ICharacterTests
             get; set;
         }
 
+        public IReadOnlyList<Type> PerceptTypes => throw new NotImplementedException();
+
+        public event Action<IPercept>? Perceived
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public void SetLookTarget(Node3D? target) => LookTarget = target;
 
         public void ClearLookTarget() => LookTarget = null;
 
-        public IReadOnlyList<VisualScanResult> Scan() => [];
     }
 
     private sealed class FakeVoice : IVoice
     {
-        public string Id => "fake";
+        public string Id { get; set; } = "fake";
+
+        public string Type => "voice";
 
         public Vector3 Origin => Vector3.Zero;
 

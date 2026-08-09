@@ -1,5 +1,6 @@
 using AlleyCat.Body.Eyes;
 using AlleyCat.Body.Hands;
+using AlleyCat.Body.Voice;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
@@ -94,10 +95,17 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
             ValidateLocomotion(targetCharacter.Locomotion, context.TargetRoot);
             ValidateNavigation(targetCharacter.Navigation, context.TargetRoot);
+            ValidatePerception(templateCharacter, targetCharacter);
             IdentityValidator.Validate(targetCharacter, nameof(context));
-            Body.Voice.Voice targetVoice = targetCharacter.Voice
+            Voice templateVoice = templateCharacter.Voice
+                ?? throw new InvalidOperationException(
+                    $"Character runtime subsystem installer requires template-authored '{nameof(Character.Voice)}' on '{templateCharacter.GetPath()}'.");
+            ValidateVoiceIdentity(templateVoice, "template");
+            Voice targetVoice = targetCharacter.Voice
                 ?? throw new InvalidOperationException(
                     $"Character runtime subsystem installer requires template-authored '{nameof(Character.Voice)}' on '{targetCharacter.GetPath()}'.");
+            targetVoice.Id = targetCharacter.Id;
+            ValidateVoiceIdentity(targetVoice, "final installed");
             targetCharacter.RefreshComponents();
 
             return SceneInstallationResult.Successful();
@@ -107,6 +115,51 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             return SceneInstallationResult.Failed(ex.Message);
         }
     }
+
+    private static void ValidatePerception(Character templateCharacter, Character targetCharacter)
+    {
+        Hearing? templateHearing = templateCharacter.Hearing;
+        Hearing? targetHearing = targetCharacter.Hearing;
+        if (templateHearing is null)
+        {
+            if (targetHearing is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Character '{targetCharacter.GetPath()}' must not acquire a Hearing sense absent from its template.");
+            }
+
+            return;
+        }
+
+        if (targetHearing is null || !ReferenceEquals(targetHearing.GetParent(), targetCharacter))
+        {
+            throw new InvalidOperationException(
+                $"Character '{targetCharacter.GetPath()}' requires a rebased direct Hearing child when its template declares one.");
+        }
+    }
+
+    private static void ValidateVoiceIdentity(IVoice voice, string boundary)
+    {
+        if (!string.Equals(voice.Type, "voice", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires {boundary} voice '{DescribeNode(voice)}' to have exact Type 'voice', but found '{voice.Type}'.");
+        }
+
+        try
+        {
+            IdentityValidator.Validate(voice, nameof(voice));
+        }
+        catch (ArgumentException ex)
+        {
+            throw new InvalidOperationException(
+                $"Character runtime subsystem installer requires {boundary} voice '{DescribeNode(voice)}' to have a valid canonical voice identity: {ex.Message}",
+                ex);
+        }
+    }
+
+    private static string DescribeNode(IVoice voice)
+        => voice is Node node ? node.GetPath().ToString() : voice.GetType().FullName ?? voice.GetType().Name;
 
     private static void RebaseAnimationMixerRoots(AnimationTree animationTree, AnimationPlayer animationPlayer, Skeleton3D skeleton)
     {

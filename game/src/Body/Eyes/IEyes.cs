@@ -1,4 +1,4 @@
-using AlleyCat.Core;
+using AlleyCat.Sense;
 using Godot;
 
 namespace AlleyCat.Body.Eyes;
@@ -6,7 +6,7 @@ namespace AlleyCat.Body.Eyes;
 /// <summary>
 /// Component capability representing paired eye look and blink control.
 /// </summary>
-public interface IEyes : IComponent
+public interface IEyes : ISense
 {
     /// <summary>
     /// Gets or sets the optional target node the eyes should look towards.
@@ -26,9 +26,4 @@ public interface IEyes : IComponent
     /// Clears the current directed look target.
     /// </summary>
     void ClearLookTarget();
-
-    /// <summary>
-    /// Synchronously scans the configured visual-subject group from this eye component's origin.
-    /// </summary>
-    IReadOnlyList<VisualScanResult> Scan();
 }

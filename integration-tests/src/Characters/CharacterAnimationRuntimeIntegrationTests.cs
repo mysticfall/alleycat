@@ -171,7 +171,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         Assert.Equal("vadim", character.Id);
         Assert.Equal("char", ((IIdentifiable)character).Type);
         Assert.Equal("char:vadim", ((IIdentifiable)character).FullId);
-        Assert.Equal("Vadim", voice.Id);
+        Assert.Equal("vadim", voice.Id);
         Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
         sceneTree.Root.AddChild(root);
 
@@ -181,7 +181,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             Assert.Equal("vadim", character.Id);
             Assert.Equal("char", ((IIdentifiable)character).Type);
             Assert.Equal("char:vadim", ((IIdentifiable)character).FullId);
-            Assert.Equal("Vadim", voice.Id);
+            Assert.Equal("vadim", voice.Id);
             Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
 
             RigRoleTemplateSceneInstaller installer = root.GetNode<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
@@ -191,7 +191,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
             Assert.Equal("vadim", character.Id);
             Assert.Equal("char", ((IIdentifiable)character).Type);
             Assert.Equal("char:vadim", ((IIdentifiable)character).FullId);
-            Assert.Equal("Vadim", voice.Id);
+            Assert.Equal("vadim", voice.Id);
             Assert.Equal("Ian.wav", speechGenerator.VoiceOverride);
         }
         finally

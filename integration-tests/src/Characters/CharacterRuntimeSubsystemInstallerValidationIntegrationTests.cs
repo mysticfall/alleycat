@@ -4,11 +4,16 @@ using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
+using AlleyCat.Core.Content;
 using AlleyCat.Core.Installer;
+using AlleyCat.Mind.Observation;
+using AlleyCat.Mind.Perception;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Rigging.Physics;
+using AlleyCat.Scene;
+using AlleyCat.Sense;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -70,7 +75,9 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.Same(fixture.TargetRightHand, character.RequireHand(LimbSide.Right));
         Assert.Same(fixture.TargetLocomotion, targetRoot.RequireComponent<ILocomotion>());
         Assert.Same(targetRoot, fixture.TargetNavigation!.Target);
-        Assert.Equal("voice", fixture.TargetVoice!.Id);
+        Assert.Equal("voice", fixture.TargetVoice!.Type);
+        Assert.Equal("target_override_identity", fixture.TargetVoice!.Id);
+        Assert.Equal("voice:target_override_identity", fixture.TargetVoice.FullId);
         AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
         Assert.NotSame(fixture.OriginalAnimationTreeRoot, fixture.TargetAnimationTree!.TreeRoot);
         Assert.Equal(Error.Ok, DirAccess.RemoveAbsolute(ProjectSettings.GlobalizePath(authoredTargetPath)));
@@ -89,6 +96,58 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
 
         Assert.True(result.Succeeded, string.Join('\n', result.Errors));
         AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
+    }
+
+    /// <summary>
+    /// Final voice identity follows target-scene precedence and remains unique operational attribution for each NPC.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_DistinctFinalCharacterIDs_AssignsDistinctVoicesAndRecognisesCrossNpcSpeech()
+    {
+        using var firstFixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        using var secondFixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        CharacterHub first = Assert.IsType<CharacterHub>(firstFixture.TargetRoot, exactMatch: false);
+        CharacterHub second = Assert.IsType<CharacterHub>(secondFixture.TargetRoot, exactMatch: false);
+        firstFixture.TemplateCharacter.Id = "first_npc";
+        secondFixture.TemplateCharacter.Id = "second_npc";
+
+        Assert.True(new CharacterRuntimeSubsystemInstaller().Install(firstFixture.CreateContext()).Succeeded);
+        Assert.True(new CharacterRuntimeSubsystemInstaller().Install(secondFixture.CreateContext()).Succeeded);
+
+        Assert.Equal("first_npc", firstFixture.TargetVoice!.Id);
+        Assert.Equal("voice", firstFixture.TargetVoice.Type);
+        Assert.Equal("voice:first_npc", firstFixture.TargetVoice.FullId);
+        Assert.Equal("second_npc", secondFixture.TargetVoice!.Id);
+        Assert.Equal("voice", secondFixture.TargetVoice.Type);
+        Assert.Equal("voice:second_npc", secondFixture.TargetVoice.FullId);
+        Assert.NotEqual(firstFixture.TargetVoice.Id, secondFixture.TargetVoice.Id);
+
+        PerceptionResult result = new SpeechPerception().Perceive(
+            new SpeechPercept("hello", firstFixture.TargetVoice.Id),
+            new PerceptionContext(second, new TestSceneContext([first, second]), null!));
+
+        ObservedSpeech speech = Assert.IsType<ObservedSpeech>(Assert.Single(result.Observations));
+        Assert.Equal(((IIdentifiable)first).FullId, speech.ActorId);
+        Assert.Equal(((IIdentifiable)first).FullId, Assert.Single(result.AttentionEffects).SubjectFullId);
+    }
+
+    /// <summary>
+    /// Invalid template voice identity fails before it can be assigned or exposed on the installed character.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Install_InvalidTemplateVoiceIdentity_FailsClearlyAtInstallationBoundary()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        fixture.TemplateVoice!.Id = "Elena.wav";
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.False(result.Succeeded);
+        string error = Assert.Single(result.Errors);
+        Assert.Contains("template voice", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("lower snake_case", error, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -277,6 +336,8 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
             get;
         }
 
+        public CharacterHub TemplateCharacter => Assert.IsType<CharacterHub>(_templateRoot, exactMatch: false);
+
         public CharacterLocomotion? TargetLocomotion
         {
             get; private init;
@@ -303,6 +364,11 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         }
 
         public IVoice? TargetVoice
+        {
+            get; private init;
+        }
+
+        public IVoice? TemplateVoice
         {
             get; private init;
         }
@@ -408,6 +474,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                     TargetNavigation = targetCapabilities.Navigation,
                     TargetEyes = targetCapabilities.Eyes,
                     TargetVoice = targetCapabilities.Voice,
+                    TemplateVoice = templateCapabilities.Voice,
                     TargetLeftHand = targetCapabilities.LeftHand,
                     TargetRightHand = targetCapabilities.RightHand,
                 };
@@ -577,5 +644,16 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
     private sealed partial class InconsistentFullIdCharacter : CharacterHub, IIdentifiable
     {
         string IIdentifiable.FullId => "char:other_character";
+    }
+
+    private sealed class TestSceneContext(IReadOnlyCollection<ICharacter> characters) : ISceneContext
+    {
+        public IReadOnlyCollection<ICharacter> Characters => characters;
+
+        public ContentContext Content => ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId) => null;
+
+        public IIdentifiable Resolve(string fullId) => throw new InvalidOperationException();
     }
 }

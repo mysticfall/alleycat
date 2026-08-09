@@ -6,16 +6,12 @@ namespace AlleyCat.Body.Voice;
 /// <summary>
 /// Component capability for objects that can initiate spoken speech from a world-space origin.
 /// </summary>
-public interface IVoice : IComponent
+public interface IVoice : IComponent, IIdentifiable
 {
-    /// <summary>
-    /// Stable voice identifier used by characters and authoring tools.
-    /// </summary>
-    string Id
-    {
-        get;
-    }
+    /// <inheritdoc />
+    string IIdentifiable.Type => "voice";
 
+    /// <inheritdoc />
     /// <summary>
     /// World-space position where this voice originates.
     /// </summary>

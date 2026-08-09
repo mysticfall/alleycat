@@ -1,5 +1,4 @@
 using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -474,10 +473,6 @@ public sealed partial class MindInterruptionIntegrationTests
         public void ObserveForTest(AgentObservation observation) => _ = Observe(observation);
 
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
-
-        public override void ReceiveVoice(string speech, IVoice source)
-        {
-        }
 
         protected override ICharacter ResolveOwningCharacter() => Owner;
 

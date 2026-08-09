@@ -66,7 +66,7 @@ roleplay without breaking immersion or performance.
 
 - Parent index for AI character behaviour specifications.
 - Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory
-  Source Compilation, and AI-005: Context Worker.
+  Source Compilation, AI-005: Context Worker, and AI-006: Percept-Based Sensing And Attention.
 - CTX-001 as the normative top-level contextual information API used by AI and non-AI consumers.
 - High-level contracts covering the six requirement themes above, with scene membership delegated to SCN-001.
 - Extensibility points for lore, actions, and context providers.
@@ -98,7 +98,8 @@ roleplay without breaking immersion or performance.
    - Parallel workflow expectation stated.
    - Extensibility contracts for external data and pluggable components.
 3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory Source Compilation,
-   and AI-005: Context Worker are identified as current normative child contracts for their respective scopes.
+   AI-005: Context Worker, and AI-006: Percept-Based Sensing And Attention are identified as current normative child
+   contracts for their respective scopes.
 4. CTX-001 is discoverable as the normative top-level contextual information API.
 
 ## Specifications
@@ -108,6 +109,7 @@ roleplay without breaking immersion or performance.
 - [AI-003: Prompt API](003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](004-lore-backstory/index.md)
 - [AI-005: Context Worker](005-context-worker/index.md)
+- [AI-006: Percept-Based Sensing And Attention](006-character-perception-and-attention/index.md)
 - [CTX-001: Contextual Information API](../context/001-contextual-information-api/index.md)
 - [SCN-001: Scene Context API](../scene/001-scene-context-api/index.md)
 
@@ -118,5 +120,6 @@ roleplay without breaking immersion or performance.
 - AI-003: Prompt API
 - AI-004: Lore And Backstory Source Compilation
 - AI-005: Context Worker
+- AI-006: Percept-Based Sensing And Attention
 - CTX-001: Contextual Information API
 - SCN-001: Scene Context API

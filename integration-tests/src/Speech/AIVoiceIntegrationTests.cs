@@ -1291,10 +1291,6 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         public IReadOnlyList<Observation> Timeline => GetObservationTimelineSnapshot();
 
-        public override void ReceiveVoice(string speech, IVoice source)
-        {
-        }
-
         protected override ICharacter ResolveOwningCharacter() => Owner;
 
         protected override Task ProcessObservationsAsync(

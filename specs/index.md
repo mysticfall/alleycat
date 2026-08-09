@@ -24,6 +24,7 @@
 - [AI-003: Prompt API](ai/003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](ai/004-lore-backstory/index.md)
 - [AI-005: Context Worker](ai/005-context-worker/index.md)
+- [AI-006: Percept-Based Sensing And Attention](ai/006-character-perception-and-attention/index.md)
 
 ## Context
 

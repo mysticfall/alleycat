@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using AlleyCat.Sense;
 using Godot;
 using Godot.Collections;
 
@@ -12,8 +14,11 @@ public partial class EyesBehaviour : Node, IEyes
     private const float DefaultSaccadeIntervalSeconds = 1f;
     private const float DefaultSaccadeSpeedMetresPerSecond = 0.6f;
     private const float DefaultSaccadeAmplitudeMetres = 0.075f;
+    private const double MinimumVisualSurveyIntervalSeconds = 0.05d;
     private const uint VisionOccluderLayer = 1u << 4;
     private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
+    private static readonly IReadOnlyList<Type> _perceptTypes =
+        new ReadOnlyCollection<Type>([typeof(VisualSurveyPercept)]);
 
     private EyesController? _controller;
     private Node3D? _lookTarget;
@@ -26,6 +31,13 @@ public partial class EyesBehaviour : Node, IEyes
     private float _timeUntilSaccadeAnchorPoll;
     private bool _hasSaccadeAnchor;
     private readonly Array<Rid> _selfCollisionExclusions = [];
+    private double _secondsUntilVisualSurvey;
+
+    /// <inheritdoc />
+    public event Action<IPercept>? Perceived;
+
+    /// <inheritdoc />
+    public IReadOnlyList<Type> PerceptTypes => _perceptTypes;
 
     /// <summary>
     /// Gets or sets the animation tree controlled by this behaviour.
@@ -249,29 +261,36 @@ public partial class EyesBehaviour : Node, IEyes
     [Export(PropertyHint.Range, "0,1,0.001,or_greater")]
     public float VisionEndpointTolerance { get; set; } = 0.025f;
 
-    /// <inheritdoc />
-    public override void _EnterTree()
-        => SetProcess(true);
+    /// <summary>Gets or sets the interval between visual surveys.</summary>
+    [Export(PropertyHint.Range, "0.05,30,0.05,or_greater")]
+    public double VisualSurveyIntervalSeconds
+    {
+        get;
+        set
+        {
+            ValidateVisualSurveyInterval(value);
+            field = value;
+        }
+    } = 1d;
 
     /// <inheritdoc />
-    public override void _Notification(int what)
+    public override void _EnterTree()
     {
-        if (what is (int)NotificationProcess)
-        {
-            ProcessLookAndBlink(GetProcessDeltaTime());
-        }
+        ValidateVisualSurveyInterval(VisualSurveyIntervalSeconds);
+        _secondsUntilVisualSurvey = VisualSurveyIntervalSeconds;
+        SetProcess(true);
     }
 
     /// <inheritdoc />
     public override void _Ready()
     {
+        ValidateVisualSurveyInterval(VisualSurveyIntervalSeconds);
         _saccadeRandom.Randomize();
         AnimationTree ??= GetParentOrNull<AnimationTree>();
         EyeOrigin ??= GetParentOrNull<Node3D>();
         TryInitialiseController();
         if (_controller is null)
         {
-            GD.PushWarning($"{nameof(EyesBehaviour)} '{Name}' is waiting for an AnimationTree binding.");
             return;
         }
 
@@ -327,7 +346,10 @@ public partial class EyesBehaviour : Node, IEyes
 
     /// <inheritdoc />
     public override void _Process(double delta)
-        => ProcessLookAndBlink(delta);
+    {
+        ProcessLookAndBlink(delta);
+        ProcessVisualSurvey(delta);
+    }
 
     private void ProcessLookAndBlink(double delta)
     {
@@ -369,7 +391,7 @@ public partial class EyesBehaviour : Node, IEyes
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<VisualScanResult> Scan()
+    private IReadOnlyList<VisualScanResult> AcquireVisualScan()
     {
         if (!IsInsideTree())
         {
@@ -415,6 +437,37 @@ public partial class EyesBehaviour : Node, IEyes
         }
 
         return System.Array.AsReadOnly(results.ToArray());
+    }
+
+    private void ProcessVisualSurvey(double delta)
+    {
+        ValidateVisualSurveyInterval(VisualSurveyIntervalSeconds);
+        _secondsUntilVisualSurvey -= Math.Max(delta, 0d);
+        if (_secondsUntilVisualSurvey > 0d)
+        {
+            return;
+        }
+
+        _secondsUntilVisualSurvey = VisualSurveyIntervalSeconds;
+        IReadOnlyList<VisualScanResult> results = AcquireVisualScan();
+        string[] subjectFullIDs = new string[results.Count];
+        for (int index = 0; index < results.Count; index++)
+        {
+            subjectFullIDs[index] = results[index].Subject.FullId;
+        }
+
+        Perceived?.Invoke(new VisualSurveyPercept(subjectFullIDs));
+    }
+
+    private static void ValidateVisualSurveyInterval(double value)
+    {
+        if (!double.IsFinite(value) || value < MinimumVisualSurveyIntervalSeconds)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(VisualSurveyIntervalSeconds),
+                value,
+                $"Visual survey interval must be finite and at least {MinimumVisualSurveyIntervalSeconds} seconds.");
+        }
     }
 
     private bool IsCueVisible(Transform3D eyeTransform, VisualCue cue)

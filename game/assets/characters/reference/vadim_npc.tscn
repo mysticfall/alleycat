@@ -12,7 +12,7 @@ Id = "vadim"
 Description = "Vadim is a sturdily built European man in his late twenties, standing around 180 centimetres tall. Light blond hair and pale skin frame an austere face, while his icy blue eyes lend him a distinctly stern appearance."
 
 [node name="Voice" parent="Male/GeneralSkeleton/Head" index="1" unique_id=1295007558]
-Id = "Vadim"
+Id = "vadim"
 
 [node name="SpeechGenerator" parent="Male/GeneralSkeleton/Head/Voice" index="0" unique_id=1402629371]
 VoiceOverride = "Ian.wav"

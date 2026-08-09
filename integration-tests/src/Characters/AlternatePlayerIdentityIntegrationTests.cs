@@ -19,7 +19,7 @@ public sealed class AlternatePlayerIdentityIntegrationTests
         "res://assets/testing/alternate_player_identity/alternate_player_identity.tscn";
 
     /// <summary>
-    /// A concrete non-Ally player retains its authored identity without changing local voice attribution.
+    /// A concrete non-Ally player retains its authored identity and assigns it to the local voice attribution.
     /// </summary>
     [Headless]
     [Fact]
@@ -35,7 +35,7 @@ public sealed class AlternatePlayerIdentityIntegrationTests
 
             Assert.Equal("riley", character.Id);
             Assert.NotEqual("ally", character.Id);
-            Assert.NotEqual(character.Id, Assert.IsAssignableFrom<Voice>(character.Voice).Id);
+            Assert.Equal(character.Id, Assert.IsAssignableFrom<Voice>(character.Voice).Id);
             Assert.True(character.IsInGroup("Player"));
             Assert.True(character.IsInGroup("Actors"));
 

@@ -34,7 +34,9 @@ exists.
    appearances.
 10. NPC role templates visibly bind production navigation to their locomotion-capable character root, while player
     templates remain free of AI navigation.
-10. Invalid visual-cue ownership fails clearly when a character publishes or explicitly refreshes its authored cues.
+11. Invalid visual-cue ownership fails clearly when a character publishes or explicitly refreshes its authored cues.
+12. Character composition exposes configured senses through the ordinary component projection; NPC templates provide
+    visual and hearing senses without a bespoke perception component.
 
 ## Technical Requirements
 
@@ -73,7 +75,7 @@ exists.
 14. Required capability references must not be discovered by hard-coded installer topology scans or stored in an
     exported generic authoring list such as legacy `ComponentNodes`.
 15. `IComponentHolder.Components` on `Character` is a deterministic projection of the explicit required capability
-    references for generic component and trait consumers.
+    references and configured `ISense` components for generic component and trait consumers.
 16. The component projection must be holder-defined and stable; recursive implicit component discovery must not be the
     default component collection strategy.
 17. Character installers must target the scene root as the authoritative `Character` instance.
@@ -94,8 +96,11 @@ exists.
 27. Items and other non-character nodes must not be added to `Actors`.
 28. Character identity semantics defer normatively to CORE-009. `Character` implements `IIdentifiable`: `Id` is a local
     lower `snake_case` identifier, `Type` is `char`, and external or cross-object context uses canonical `FullId`.
-29. `Voice` retains its own local attribution identity. Its `Id` must not be derived from, substituted for, or used as
-    the `Character.Id` object identity.
+29. After CORE-005 target-scene precedence resolves the final `Character.Id`, installation must assign every
+     character-owned Voice local `Id` to that exact value. This creates canonical `voice:<character-id>` identity while
+     preserving the raw local voice ID solely as operational attribution, not authenticated character provenance.
+     Template placeholder voice IDs must be valid lower `snake_case`; installers must replace them and validate the
+     resulting voice identity at the final installation boundary before exposure to scene consumers.
 30. `Voiceprint` is a listener-recognition key and must not be used as proof that a voice belongs to a character.
 31. The lowest shared male/female character bases must author `CharacterCardContextSource`, `Actors` membership, and
     `VisualSubjects` membership. Both bases must be valid `IVisualSubject` scan members. Higher role templates and
@@ -121,6 +126,11 @@ exists.
 39. Production installer and playtest composition bind navigation through `INavigation`, the explicit actor `Node3D`,
     and `ILocomotive`, without requiring `DirectTransformNavigation` fields. That component remains the deterministic
     test and diagnostic baseline, not the NPC production component.
+40. `Character.Components` deliberately includes every configured `ISense` in deterministic holder order. A component
+    that is both a required embodied capability and a configured sense appears once.
+41. Final NPC role templates configure Eyes and Hearing senses under AI-006. Character and Body production code must not
+    depend on Mind, although scene composition may place Mind beneath Character.
+42. `CharacterPerception`, `MindStimulus`, and their bespoke installer or scene wiring must not exist.
 
 ## In Scope
 
@@ -131,15 +141,16 @@ exists.
 - Template-authored root references for eyes, locomotion, voice, left hand, and right hand capabilities on final role
   templates.
 - Partial reusable base templates that may omit role-specific references only when role templates complete the contract.
-- Deterministic `Components` projection from explicit required capability references.
+- Deterministic `Components` projection from explicit required capability references and configured senses.
 - Installer validation, reference rebase, refresh, and dependency-hub usage for character scene assembly.
 - Name conflict and alias guidance for the concrete `Character` type.
 - Character-root membership in the `Actors` group for SCN-001 scene-context discovery.
-- Asset-owned CORE-009 character identity and independent local voice attribution.
+- Asset-owned CORE-009 character identity and character-owned voice-ID installation for operational attribution.
 - Lowest-shared-base character-card context wiring.
 - `ICharacter` aggregation of the BODY-004 visual observer and visual subject roles.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
 - NPC-only `LocomotiveNavigation` composition through the character root's `Node3D` and `ILocomotive` contracts.
+- NPC Eyes and Hearing composition through the ordinary component projection under AI-006.
 - `ICharacter` aggregation of the BODY-004 visual-subject role and eyes-holder capability.
 - Validated, published template-authored whole-character visual-cue references, explicit refresh, and
   character-specific description overrides.
@@ -155,7 +166,6 @@ exists.
 - Optional capability discovery systems beyond the explicit required humanoid capability references.
 - Item or non-human actor discovery through `Actors`.
 - A Vadim player asset; this slice uses a lightweight alternate female-player identity fixture for configurability.
-- Empty voice-ID authoring validation.
 
 ## Acceptance Criteria
 
@@ -178,7 +188,8 @@ exists.
     text.
 11. Final NPC templates expose root-bound production navigation, while player templates contain no AI navigation and
     retain tracker-driven locomotion.
-11. Invalid template-authored cue ownership produces a clear character publication or refresh failure.
+12. Invalid template-authored cue ownership produces a clear character publication or refresh failure.
+13. NPCs expose visual and hearing senses through ordinary character component composition.
 
 ### Technical Requirements
 
@@ -198,8 +209,8 @@ exists.
 10. Character scene installers fail clearly when the scene root is not the required `ICharacter` and `CharacterBody3D`.
 11. `Character.RefreshComponents()` and installer validation fail clearly when `Voice` is missing from an installed or
     final character root.
-12. `Character.Components` is a deterministic projection of explicit required capability references, not an exported
-    `ComponentNodes` authoring list or recursive topology scan.
+12. `Character.Components` is a deterministic projection of explicit required capability references and configured
+    `ISense` components, not an exported `ComponentNodes` list or recursive topology scan.
 13. C# installer logic stays within generic rebase and validation boundaries instead of hard-coding capability topology.
 14. Validation paths cover root identity, import root script settings, reference refresh or rebase, and clear failures.
 15. The implementation preserves existing subsystem contracts instead of moving hands, eyes, voice, or locomotion APIs
@@ -208,8 +219,10 @@ exists.
     as valid `Actors` membership.
 17. `Character` implements CORE-009 `IIdentifiable`: its local lower `snake_case` `Id` has `Type` `char`, and
     cross-object context uses canonical `FullId`.
-18. Voice retains independent local attribution identity and is not derived from or used as `Character.Id`; Voiceprint
-    remains recognition metadata and is not used to establish character ownership.
+18. After target-scene precedence, installation assigns every character-owned Voice local `Id` to the final exact
+    `Character.Id`, validates canonical `voice:<character-id>` before identity exposure, and replaces only valid lower
+    `snake_case` template placeholder IDs. The raw local voice ID remains operational attribution rather than
+    authenticated provenance; Voiceprint remains recognition metadata and is not used to establish character ownership.
 19. Shared male/female bases each author one `CharacterCardContextSource`, `Actors` membership, and `VisualSubjects`
     membership; each is a valid `IVisualSubject` scan member and higher layers do not compensate redundantly.
 20. `CharacterCardContextSource` returns only the canonical `FullId` entry with value `subject.FullId`, not bare `Id`.
@@ -228,6 +241,10 @@ exists.
     after rebase and validation. Installer and playtest composition use `INavigation` without production dependence on
     `DirectTransformNavigation`; direct-consumer baseline tests remain valid.
 27. Player-template inspection proves neither final player roles nor shared player bases install `LocomotiveNavigation`.
+28. Composition tests verify final NPC roles configure Eyes and Hearing, every configured `ISense` appears exactly once
+    in deterministic `Character.Components` order, and required holder traits remain unchanged.
+29. Dependency and composition tests verify Character production code has no Mind dependency, scene composition may
+    place Mind beneath Character, and no `CharacterPerception`, `MindStimulus`, or bespoke wiring remains.
 
 ## References
 
@@ -236,6 +253,7 @@ exists.
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [CHAR-001: Character Skeleton Profile](../001-character-skeleton/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../../ai/004-lore-backstory/index.md)
+- [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [BODY-001: Hands](../../body/001-hands/index.md)
 - [BODY-004: Eyes](../../body/004-eyes/index.md)
 - [BODY-006: Voice Component](../../body/006-voice/index.md)

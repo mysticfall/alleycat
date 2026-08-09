@@ -63,6 +63,15 @@ public partial class Character : CharacterBody3D, ICharacter
     }
 
     /// <summary>
+    /// Gets or sets the optional body-owned speech sense.
+    /// </summary>
+    [Export]
+    public Hearing? Hearing
+    {
+        get; set;
+    }
+
+    /// <summary>
     /// Gets or sets the template-authored left hand capability reference.
     /// </summary>
     [Export]
@@ -114,11 +123,11 @@ public partial class Character : CharacterBody3D, ICharacter
 
     /// <summary>
     /// Rebuilds the deterministic component cache from explicit template-authored capability references.
-    /// The projection order is stable: locomotion, navigation, eyes, voice, left hand, right hand.
+    /// The projection order is stable: locomotion, navigation, eyes, voice, hearing, left hand, right hand.
     /// </summary>
     public void RefreshComponents()
     {
-        var components = new List<IComponent>(6)
+        var components = new List<IComponent>(7)
         {
             RequireComponentReference(Locomotion, nameof(Locomotion)),
         };
@@ -129,6 +138,10 @@ public partial class Character : CharacterBody3D, ICharacter
 
         components.Add(RequireComponentReference(Eyes, nameof(Eyes)));
         components.Add(RequireComponentReference(Voice, nameof(Voice)));
+        if (Hearing is not null)
+        {
+            components.Add(Hearing);
+        }
         components.Add(RequireHandReference(LeftHand, LimbSide.Left, nameof(LeftHand)));
         components.Add(RequireHandReference(RightHand, LimbSide.Right, nameof(RightHand)));
 

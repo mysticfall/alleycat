@@ -96,7 +96,7 @@ public sealed class AgenticMindTests
     }
 
     /// <summary>
-    /// AgenticMind obtains observer-relative CTX-001 data for every character in ordinal exact-ID order.
+    /// AgenticMind obtains observer-relative CTX-001 data for self and explicitly eligible characters in ordinal exact-ID order.
     /// </summary>
     [Fact]
     public void CreateRenderContext_BuildsDeterministicOwnerAndCharacterContext()
@@ -125,7 +125,11 @@ public sealed class AgenticMindTests
         ObservedSpeech speech = new("char:alpha", "voice-alpha", "Hello");
         AgentObservation[] timeline = [speech];
 
-        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(owner, scene, timeline);
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(
+            owner,
+            scene,
+            timeline,
+            ["char:zulu", "char:alpha"]);
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
         IReadOnlyList<AgentObservation> observations = Assert.IsAssignableFrom<IReadOnlyList<AgentObservation>>(result["observations"]);
 
@@ -217,13 +221,87 @@ public sealed class AgenticMindTests
         };
         ArbitrarySceneContext scene = new([subject, owner]);
 
-        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(owner, scene);
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(
+            owner,
+            scene,
+            attentionEligibleFullIDs: ["char:subject"]);
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
 
         Assert.Equal(["char:owner", "char:subject"], characters.Keys);
         Assert.Same(ownerContext, result["character"]);
         Assert.Same(subjectContext, characters["char:subject"]);
         Assert.Same(owner, subject.ReceivedObserver);
+    }
+
+    /// <summary>
+    /// Foreground context always aliases the owner's exact dictionary and omits unresolved or non-contextual attention
+    /// identities without mutating the supplied eligible set.
+    /// </summary>
+    [Fact]
+    public void CreateRenderContext_WithAttentionEligibility_ResolvesContextualSubjectsOnlyInOrdinalOrder()
+    {
+        Dictionary<string, object?> ownerContext = new()
+        {
+            ["FullId"] = "char:owner"
+        };
+        Dictionary<string, object?> alphaContext = new()
+        {
+            ["FullId"] = "char:alpha"
+        };
+        Dictionary<string, object?> zuluContext = new()
+        {
+            ["FullId"] = "char:zulu"
+        };
+        FakeCharacter owner = new(ownerContext)
+        {
+            Id = "owner"
+        };
+        FakeCharacter alpha = new(alphaContext)
+        {
+            Id = "alpha"
+        };
+        FakeCharacter zulu = new(zuluContext)
+        {
+            Id = "zulu"
+        };
+        var nonContextual = new FakeIdentifiable("object", "prop");
+        var scene = new MappingSceneContext(
+            [owner],
+            new Dictionary<string, IIdentifiable>(StringComparer.Ordinal)
+            {
+                [owner.FullId] = owner,
+                [alpha.FullId] = alpha,
+                [zulu.FullId] = zulu,
+                [nonContextual.FullId] = nonContextual,
+            });
+        string[] eligibleIDs =
+        [
+            "char:zulu",
+            "char:missing",
+            "object:prop",
+            "char:alpha",
+        ];
+
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(
+            owner,
+            scene,
+            observations: [],
+            attentionEligibleFullIDs: eligibleIDs);
+        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            result["characters"]);
+
+        Assert.Equal(["char:alpha", "char:owner", "char:zulu"], characters.Keys);
+        Assert.Same(ownerContext, result["character"]);
+        Assert.Same(result["character"], characters[owner.FullId]);
+        Assert.Same(alphaContext, characters[alpha.FullId]);
+        Assert.Same(zuluContext, characters[zulu.FullId]);
+        Assert.Equal(new[] { "char:zulu", "char:missing", "object:prop", "char:alpha" }, eligibleIDs);
+        Assert.All([owner, alpha, zulu], subject =>
+        {
+            Assert.Equal(1, subject.ContextRequestCount);
+            Assert.Same(scene, subject.ReceivedScene);
+            Assert.Same(owner, subject.ReceivedObserver);
+        });
     }
 
     /// <summary>
@@ -360,5 +438,30 @@ public sealed class AgenticMindTests
 
         public IIdentifiable Resolve(string fullId)
             => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
+    }
+
+    private sealed record MappingSceneContext(
+        IReadOnlyCollection<ICharacter> Characters,
+        IReadOnlyDictionary<string, IIdentifiable> Mappings) : ISceneContext
+    {
+        public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+        {
+            IdentityValidator.ValidateFullId(fullId, nameof(fullId));
+            return Mappings.GetValueOrDefault(fullId);
+        }
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
+    }
+
+    private sealed class FakeIdentifiable(string type, string id) : IIdentifiable
+    {
+        public string Type { get; set; } = type;
+
+        public string Id { get; set; } = id;
+
+        public string FullId => $"{Type}:{Id}";
     }
 }

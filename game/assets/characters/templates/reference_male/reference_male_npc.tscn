@@ -11,15 +11,25 @@
 [ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="10_y1xmj"]
 [ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="11_vk3vc"]
 [ext_resource type="Script" uid="uid://bfalxt2riwwdb" path="res://src/Navigation/LocomotiveNavigation.cs" id="12_navigation"]
+[ext_resource type="Script" uid="uid://qs2mgtgqvri5" path="res://src/Body/Voice/Hearing.cs" id="13_hearing"]
+[ext_resource type="Script" uid="uid://nb7frvgohlfq" path="res://src/Mind/Perception/SpeechPerception.cs" id="14_speech_perception"]
+[ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
 
 [sub_resource type="Resource" id="Resource_agentic_speech_tool"]
 script = ExtResource("11_vk3vc")
 ToolName = "speak"
 ToolDescription = "Speak the supplied text aloud through the configured voice."
 
-[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Voice", "Navigation") instance=ExtResource("1_p3faa")]
+[sub_resource type="Resource" id="Resource_speech_perception"]
+script = ExtResource("14_speech_perception")
+
+[sub_resource type="Resource" id="Resource_visual_perception"]
+script = ExtResource("15_visual_perception")
+
+[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Voice", "Navigation", "Hearing") instance=ExtResource("1_p3faa")]
 Voice = NodePath("Male/GeneralSkeleton/Head/Voice")
 Navigation = NodePath("Navigation")
+Hearing = NodePath("Hearing")
 
 [node name="Navigation" type="NavigationAgent3D" parent="." index="2" unique_id=1815019827 node_paths=PackedStringArray("Actor")]
 script = ExtResource("12_navigation")
@@ -32,7 +42,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2221888e-05, -0.035407424,
 script = ExtResource("2_3qwye")
 SpeechGenerator = NodePath("SpeechGenerator")
 LipSyncPlayer = NodePath("LipSyncPlayer")
-Id = "Elena.wav"
+Id = "reference_male_npc"
 metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
 
 [node name="SpeechGenerator" type="Node" parent="Male/GeneralSkeleton/Head/Voice" index="0" unique_id=1402629371]
@@ -83,5 +93,10 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 script = ExtResource("7_dvj2u")
 SystemInstruction = ExtResource("9_e0v3v")
 Tools = Array[ExtResource("10_y1xmj")]([SubResource("Resource_agentic_speech_tool")])
+Perceptions = Array[Resource]([SubResource("Resource_speech_perception"), SubResource("Resource_visual_perception")])
 Voice = NodePath("../Male/GeneralSkeleton/Head/Voice")
 metadata/_custom_type_script = "uid://hadsjgek6b2p"
+
+[node name="Hearing" type="Node" parent="."]
+script = ExtResource("13_hearing")
+metadata/_custom_type_script = "uid://qs2mgtgqvri5"

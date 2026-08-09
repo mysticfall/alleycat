@@ -15,6 +15,7 @@ Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2221888e-05, -0.035407424, 0.08069722)
 script = ExtResource("8_player_voice")
 Transcriber = NodePath("../../../../OpenAITranscriber")
+Id = "reference_female_player"
 metadata/_custom_type_script = "uid://dyffnsg0122vb"
 
 [node name="HipReconciliationModifier" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" index="10" unique_id=1650923012 node_paths=PackedStringArray("StateMachine")]

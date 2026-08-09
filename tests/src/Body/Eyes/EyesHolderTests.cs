@@ -1,5 +1,6 @@
 using AlleyCat.Body.Eyes;
 using AlleyCat.Core;
+using AlleyCat.Sense;
 using Godot;
 using Xunit;
 
@@ -36,10 +37,22 @@ public sealed class EyesHolderTests
             get; set;
         }
 
+        public IReadOnlyList<Type> PerceptTypes => throw new NotImplementedException();
+
+        public event Action<IPercept>? Perceived
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public void SetLookTarget(Node3D? target) => LookTarget = target;
 
         public void ClearLookTarget() => LookTarget = null;
 
-        public IReadOnlyList<VisualScanResult> Scan() => [];
+        public static IReadOnlyList<VisualScanResult> Scan() => [];
     }
 }

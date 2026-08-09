@@ -3,19 +3,24 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using AlleyCat.Body.Voice;
 using AlleyCat.Character;
+using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Mind.Observation;
+using AlleyCat.Mind.Perception;
+using AlleyCat.Scene;
+using AlleyCat.Sense;
 using Godot;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.Mind;
 
 /// <summary>
-/// Abstract base for NPC mind-like components that can receive player voice events.
+/// Abstract base for NPC mind-like components that synchronously interpret stimuli and schedule durable observations.
 /// </summary>
 [GlobalClass]
-public abstract partial class Mind : Node, IVoiceListener
+public abstract partial class Mind : Node
 {
     private static readonly TimeSpan _defaultMaxObservationWait = TimeSpan.FromSeconds(10);
 
@@ -34,6 +39,10 @@ public abstract partial class Mind : Node, IVoiceListener
     private bool _interruptionRequested;
     private bool _immediateReplacementPending;
     private int _nodeLifetimeEnded;
+    private readonly AttentionPolicy _attention = new(GetTimestamp);
+    private readonly Dictionary<Type, IPerception> _perceptions = [];
+    private readonly Dictionary<ISense, Action<IPercept>> _senseHandlers = [];
+    private ISense[] _senses = [];
     [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Enabled setter controls scheduling.")]
     private bool _enabled = true;
 
@@ -44,7 +53,7 @@ public abstract partial class Mind : Node, IVoiceListener
     }
 
     /// <summary>
-    /// Enables player speech handling and observation processing.
+    /// Enables stimulus intake and observation processing.
     /// </summary>
     [ExportGroup("Settings")]
     [Export]
@@ -132,6 +141,27 @@ public abstract partial class Mind : Node, IVoiceListener
     [Export(PropertyHint.Range, "0.01,100,0.01")]
     public float HighImportanceInterruptionThreshold { get; set; } = 1f;
 
+    /// <summary>Maximum value of one attention entry.</summary>
+    [ExportGroup("Attention")]
+    [Export(PropertyHint.Range, "0.01,100,0.01,or_greater")]
+    public float AttentionMaximum { get; set; } = 1f;
+
+    /// <summary>Attention removed per elapsed second.</summary>
+    [Export(PropertyHint.Range, "0,10,0.01,or_greater")]
+    public float AttentionDecayPerSecond { get; set; } = 0.1f;
+
+    /// <summary>Entries strictly below this value are forgotten.</summary>
+    [Export(PropertyHint.Range, "0,100,0.01,or_greater")]
+    public float AttentionRetentionThreshold { get; set; } = 0.05f;
+
+    /// <summary>Entries at or above this separate value enter foreground context.</summary>
+    [Export(PropertyHint.Range, "0,100,0.01,or_greater")]
+    public float AttentionContextThreshold { get; set; } = 0.25f;
+
+    /// <summary>Authorable exact-type perception faculties used for composed senses.</summary>
+    [Export]
+    public PerceptionResource[] Perceptions { get; set; } = [];
+
     /// <summary>
     /// NPC voice used for spoken output when a derived mind can speak.
     /// </summary>
@@ -160,7 +190,7 @@ public abstract partial class Mind : Node, IVoiceListener
             return;
         }
 
-        AddToGroup(IVoiceListener.GroupName);
+        ActivatePerceptions();
         _ = EnsureSchedulingTimer();
         if (HasPendingObservations && Enabled)
         {
@@ -182,6 +212,14 @@ public abstract partial class Mind : Node, IVoiceListener
         }
 
         StopSchedulingTimer();
+        foreach (KeyValuePair<ISense, Action<IPercept>> entry in _senseHandlers)
+        {
+            entry.Key.Perceived -= entry.Value;
+        }
+
+        _senses = [];
+        _senseHandlers.Clear();
+        _perceptions.Clear();
         if (_schedulingTimer is { } schedulingTimer)
         {
             schedulingTimer.Timeout -= OnSchedulingTimerTimeout;
@@ -189,7 +227,6 @@ public abstract partial class Mind : Node, IVoiceListener
 
         _nodeLifetimeCancellation.Cancel();
         OnNodeLifetimeEnding();
-        RemoveFromGroup(IVoiceListener.GroupName);
     }
 
     /// <summary>
@@ -209,16 +246,105 @@ public abstract partial class Mind : Node, IVoiceListener
     /// </summary>
     protected CancellationToken NodeLifetimeCancellationToken => _nodeLifetimeCancellation.Token;
 
-    /// <inheritdoc />
-    public abstract void ReceiveVoice(string speech, IVoice source);
+    private void OnPerceived(IPercept percept)
+    {
+        ArgumentNullException.ThrowIfNull(percept);
+        if (IsNodeLifetimeEnded || !Enabled)
+        {
+            return;
+        }
 
-    /// <summary>
-    /// Returns whether an incoming voice event is eligible for this mind.
-    /// </summary>
-    protected bool ShouldHandleVoice(string speech, IVoice source)
-        => Enabled
-            && !string.IsNullOrWhiteSpace(speech)
-            && !ReferenceEquals(source, Voice);
+        AttentionSettings attentionSettings = CreateAttentionSettings();
+        IPerception perception = _perceptions.GetValueOrDefault(percept.GetType())
+            ?? throw new InvalidOperationException($"Mind '{GetPath()}' received undeclared percept type '{percept.GetType().FullName}'.");
+        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+        PerceptionResult result = perception.Perceive(percept, new PerceptionContext(ResolveOwningCharacter(), scene, attentionSettings));
+        ApplyPerceptionResult(result, attentionSettings);
+    }
+
+    private void ActivatePerceptions()
+    {
+        AttentionSettings _ = CreateAttentionSettings();
+        ICharacter character = ResolveOwningCharacter();
+        _senses = [.. character.Components.OfType<ISense>()];
+        _perceptions.Clear();
+        var declaredTypes = new HashSet<Type>();
+        foreach (ISense sense in _senses)
+        {
+            foreach (Type perceptType in sense.PerceptTypes)
+            {
+                if (perceptType is null || !typeof(IPercept).IsAssignableFrom(perceptType) || !declaredTypes.Add(perceptType))
+                {
+                    throw new InvalidOperationException($"Mind '{GetPath()}' requires each configured sense to declare unique exact IPercept runtime types.");
+                }
+            }
+        }
+
+        foreach (PerceptionResource faculty in Perceptions)
+        {
+            if (faculty is null)
+            {
+                throw new InvalidOperationException($"Mind '{GetPath()}' has a null perception faculty.");
+            }
+
+            Type perceptType = faculty.PerceptType;
+            if (!declaredTypes.Contains(perceptType)
+                || !faculty.GetType().GetInterfaces().Any(type => type.IsGenericType
+                    && type.GetGenericTypeDefinition() == typeof(IPerception<>)
+                    && type.GenericTypeArguments[0] == perceptType)
+                || !_perceptions.TryAdd(perceptType, faculty))
+            {
+                throw new InvalidOperationException($"Mind '{GetPath()}' has an invalid, duplicate, or undeclared perception faculty mapping for '{perceptType.FullName}'.");
+            }
+        }
+
+        if (_perceptions.Count != declaredTypes.Count)
+        {
+            throw new InvalidOperationException($"Mind '{GetPath()}' requires exactly one perception faculty for every configured sense percept type.");
+        }
+
+        foreach (ISense sense in _senses)
+        {
+            void handler(IPercept percept)
+            {
+                if (!sense.PerceptTypes.Contains(percept.GetType()))
+                {
+                    throw new InvalidOperationException($"Sense '{sense.GetType().FullName}' published undeclared percept type '{percept.GetType().FullName}'.");
+                }
+
+                OnPerceived(percept);
+            }
+            _senseHandlers.Add(sense, handler);
+            sense.Perceived += handler;
+        }
+    }
+
+    /// <summary>Reinforces one canonical identity using the exact configured policy.</summary>
+    protected void ReinforceAttention(string fullID, float contribution, AttentionSettings attentionSettings)
+        => _attention.Reinforce(fullID, contribution, attentionSettings);
+
+    /// <summary>Gets one decayed attention value, or zero when no retained entry exists.</summary>
+    public float GetAttention(string fullID)
+    {
+        AttentionSettings settings = CreateAttentionSettings();
+        return _attention.GetValue(fullID, settings);
+    }
+
+    /// <summary>Gets an immutable, ordinally ordered snapshot after lazy decay.</summary>
+    public AttentionSnapshot GetAttentionSnapshot()
+    {
+        AttentionSettings settings = CreateAttentionSettings();
+        return _attention.GetSnapshot(settings);
+    }
+
+    /// <summary>Gets every currently retained identity meeting the separate context threshold.</summary>
+    protected IReadOnlyList<string> GetContextEligibleAttentionIDs()
+    {
+        AttentionSettings settings = CreateAttentionSettings();
+        return _attention.GetContextEligibleIDs(settings);
+    }
+
+    internal void SetAttentionClockForTesting(Func<double> clock) => _attention.SetClock(clock);
 
     /// <summary>
     /// Appends an observation to the timeline and pending importance queue.
@@ -237,6 +363,47 @@ public abstract partial class Mind : Node, IVoiceListener
 
         return CommitObservations([new PendingObservation(observation, importance)]);
     }
+
+    private void ApplyPerceptionResult(PerceptionResult result, AttentionSettings attentionSettings)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        ICharacter character = ResolveOwningCharacter();
+        var context = new ObservationContext(character);
+        var pending = new PendingObservation[result.Observations.Count];
+        for (int index = 0; index < result.AttentionEffects.Count; index++)
+        {
+            AttentionEffect effect = result.AttentionEffects[index]
+                ?? throw new ArgumentException($"Perception attention effect at index {index} cannot be null.", nameof(result));
+            IdentityValidator.ValidateFullId(effect.SubjectFullId, nameof(result));
+            AttentionSettings.ValidateContribution(effect.Contribution, nameof(result));
+        }
+
+        for (int index = 0; index < result.Observations.Count; index++)
+        {
+            AgentObservation observation = result.Observations[index]
+                ?? throw new ArgumentException($"Perception observation at index {index} cannot be null.", nameof(result));
+            pending[index] = new PendingObservation(observation, CalculateAndValidateImportance(observation, context));
+        }
+
+        _attention.ApplyElapsedDecay(attentionSettings);
+        foreach (AttentionEffect effect in result.AttentionEffects)
+        {
+            ReinforceAttention(effect.SubjectFullId, effect.Contribution, attentionSettings);
+        }
+
+        if (pending.Length > 0)
+        {
+            _ = CommitObservations(pending);
+        }
+    }
+
+    private AttentionSettings CreateAttentionSettings()
+        => AttentionSettings.Create(
+            AttentionMaximum,
+            AttentionDecayPerSecond,
+            AttentionRetentionThreshold,
+            AttentionContextThreshold);
 
     /// <summary>
     /// Resolves the character that owns this subjective Mind boundary.
