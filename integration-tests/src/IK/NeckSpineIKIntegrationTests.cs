@@ -26,6 +26,7 @@ public sealed class NeckSpineIKIntegrationTests
     private const float MinimumStoopForwardConstrainedMovement = 0.001f;
     private const float MinimumStoopForwardAbsoluteDirectionalAlignment = 0.6f;
     private const float MinimumStoopForwardDirectionalAlignmentFloor = -0.75f;
+    private const int PoseSettlementFrameCount = 4;
     private const string StoopForwardPoseName = "TargetStoopForward";
 
     private static readonly string[] _requiredPoseMarkerNames =
@@ -35,6 +36,12 @@ public sealed class NeckSpineIKIntegrationTests
         "TargetRight",
         "TargetStoopForward",
         "TargetLeanBack",
+    ];
+
+    private static readonly string[][] _poseOrderVariants =
+    [
+        _requiredPoseMarkerNames,
+        [.. _requiredPoseMarkerNames.Reverse()],
     ];
 
     /// <summary>
@@ -73,6 +80,26 @@ public sealed class NeckSpineIKIntegrationTests
 
         IReadOnlyList<int> trackedBoneIndices = ResolveTrackedBoneIndices(skeleton, ikNode);
 
+        foreach (IReadOnlyList<string> poseOrder in _poseOrderVariants)
+        {
+            await ValidatePoseOrderAsync(
+                sceneTree,
+                skeleton,
+                headTarget,
+                poseMarkers,
+                poseOrder,
+                trackedBoneIndices);
+        }
+    }
+
+    private static async Task ValidatePoseOrderAsync(
+        SceneTree sceneTree,
+        Skeleton3D skeleton,
+        Node3D headTarget,
+        IReadOnlyDictionary<string, Node3D> poseMarkers,
+        IReadOnlyList<string> poseOrder,
+        IReadOnlyList<int> trackedBoneIndices)
+    {
         await SetHeadTargetToMarkerAsync(sceneTree, headTarget, poseMarkers["TargetForward"]);
         Vector3 neutralMarkerPosition = poseMarkers["TargetForward"].GlobalPosition;
         Dictionary<int, Vector3> neutralBonePositions = await CaptureTrackedBoneWorldPositionsAsync(
@@ -82,8 +109,9 @@ public sealed class NeckSpineIKIntegrationTests
         float neutralResidualDistance = ResolveClosestDistanceToTarget(neutralBonePositions, neutralMarkerPosition);
         Assert.InRange(neutralResidualDistance, 0.0f, MaximumResidualDistance);
 
-        foreach ((string markerName, Node3D markerNode) in poseMarkers)
+        foreach (string markerName in poseOrder)
         {
+            Node3D markerNode = poseMarkers[markerName];
             await SetHeadTargetToMarkerAsync(sceneTree, headTarget, markerNode);
 
             Vector3 markerPosition = markerNode.GlobalPosition;
@@ -526,6 +554,7 @@ public sealed class NeckSpineIKIntegrationTests
     private static async Task SetHeadTargetToMarkerAsync(SceneTree sceneTree, Node3D headTarget, Node3D marker)
     {
         headTarget.GlobalTransform = marker.GlobalTransform;
-        await WaitForFramesAsync(sceneTree, 1);
+        // Match the verification runner's settling contract so constrained CCDIK reaches the target from either pose order.
+        await WaitForFramesAsync(sceneTree, PoseSettlementFrameCount);
     }
 }
