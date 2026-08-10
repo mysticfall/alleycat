@@ -1,5 +1,6 @@
 using System.Reflection;
 using AlleyCat.Core;
+using AlleyCat.Core.Threading;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
@@ -240,12 +241,16 @@ public sealed partial class GameStartupIntegrationTests
         {
             Assert.Same(fixture.Game, Game.Instance);
             _ = Assert.IsAssignableFrom<IServiceProvider>(fixture.Game);
+            IMainThreadDispatcher resolvedDispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
 
             XRManager resolvedXRManager = Game.Instance.GetRequiredService<XRManager>();
             ISceneContextProvider sceneContextProvider = Game.Instance.GetRequiredService<ISceneContextProvider>();
 
             Assert.Same(fixture.XRManager, resolvedXRManager);
             Assert.Same(fixture.XRManager, Game.Instance.GetService<XRManager>());
+            Assert.Same(fixture.Game.MainThreadDispatcher, resolvedDispatcher);
+            _ = Assert.IsType<GodotMainThreadDispatcher>(resolvedDispatcher);
+            Assert.False(Game.Instance is IMainThreadDispatcher);
             _ = Assert.IsType<SceneContextProvider>(sceneContextProvider);
         }
         finally

@@ -3,6 +3,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
+using AlleyCat.Core.Threading;
 using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Scene;
 using AlleyCat.Testing;
@@ -23,6 +24,24 @@ public partial class Game : Node, IServiceProvider
     private static Game? _instance;
 
     private readonly ServiceCollection _services = [];
+
+    /// <inheritdoc/>
+    public Game()
+    {
+        MainThreadDispatcher = new GodotMainThreadDispatcher(ScheduleDeferred);
+    }
+
+    internal Game(Action? beforeWorkItemStart)
+    {
+        MainThreadDispatcher = new GodotMainThreadDispatcher(ScheduleDeferred, beforeWorkItemStart);
+    }
+
+    internal GodotMainThreadDispatcher MainThreadDispatcher
+    {
+        get;
+    }
+
+    private void ScheduleDeferred(Action action) => Callable.From(action).CallDeferred();
 
     /// <summary>
     /// Fallback start scene used when no content pack resolves.
@@ -65,6 +84,7 @@ public partial class Game : Node, IServiceProvider
         SetInstance();
         if (_serviceProvider is null)
         {
+            _ = _services.AddSingleton<IMainThreadDispatcher>(MainThreadDispatcher);
             RegisterInfrastructureServices(_services);
             RegisterServices(_services);
             RegisterConfiguredServices(_services);
@@ -216,6 +236,8 @@ public partial class Game : Node, IServiceProvider
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        MainThreadDispatcher.Close();
+
         if (_xrManager is XRManager xrManager && _isSubscribedToXRInitialised)
         {
             xrManager.Initialised -= OnXRInitialised;
@@ -316,4 +338,5 @@ public partial class Game : Node, IServiceProvider
 
         _loadingScreen.Hide();
     }
+
 }

@@ -51,6 +51,9 @@ game and replacing ad-hoc static accessors.
    initialisation.
 10. `Game` must register core configuration and logging services before the
     provider is built; their normative contracts live in CORE-006 and CORE-007.
+11. `Game` must register its dedicated owned dispatcher under `IMainThreadDispatcher`, so resolving that interface
+    returns the exact dispatcher instance and never the `Game` singleton. The dispatcher behaviour is normatively
+    defined by [CORE-010: Main-Thread Dispatcher](../010-main-thread-dispatcher/index.md).
 
 ## In Scope
 
@@ -63,6 +66,8 @@ game and replacing ad-hoc static accessors.
 - `XRManager` self-registration via the registrar interface.
 - Post-construction resolution of required startup services from DI.
 - Startup registration boundary for configuration and logging infrastructure.
+- Registration of the dispatcher instance owned by `Game` as `IMainThreadDispatcher`; dispatcher behaviour belongs to
+  CORE-010.
 
 ## Service Registrar Interface Contract
 
@@ -120,6 +125,8 @@ hard-coded node paths or names.
    resolution contracts needed for CORE-004 and dependent specs.
 9. Configuration and logging registrations are present before provider build,
    with detailed behaviour delegated to CORE-006 and CORE-007.
+10. Resolving `IMainThreadDispatcher` returns the exact dispatcher instance owned by `Game`, not the `Game` singleton,
+    with detailed dispatcher behaviour verified under CORE-010.
 
 ## References
 
@@ -135,6 +142,7 @@ hard-coded node paths or names.
 - [CORE-002: Configuration API](../002-configuration-api/index.md)
 - [CORE-006: Microsoft Configuration Integration](../006-microsoft-configuration-integration/index.md)
 - [CORE-007: Microsoft Logging Integration](../007-microsoft-logging-integration/index.md)
+- [CORE-010: Main-Thread Dispatcher](../010-main-thread-dispatcher/index.md)
 
 ### External
 

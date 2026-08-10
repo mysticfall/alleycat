@@ -45,6 +45,9 @@ from startup.
    the scene to load after startup.
 6. The `Game` node must export `SplashScreenScene` as a `PackedScene` property for
    dynamic instantiation.
+7. The `Game` node must own the global main-thread dispatcher for its lifetime and provide its Godot scheduling and
+   lifecycle boundary, as normatively specified in
+   [CORE-010: Main-Thread Dispatcher](../010-main-thread-dispatcher/index.md).
 
 ## In Scope
 
@@ -54,6 +57,7 @@ from startup.
 - Game node export properties for startup scene loading:
   - `FallbackStartScene`
   - `SplashScreenScene`
+- Owning the global main-thread dispatcher on `Game`; its detailed contract belongs to CORE-010.
 
 ## Out Of Scope
 
@@ -103,6 +107,7 @@ when the game starts and persists throughout the entire session. This provides:
 - Persistent UI viewport for overlays
 - Centralised XR state management
 - Scene loading contract through Game node exports
+- Main-thread dispatcher ownership and Godot-bound hosting through `Game`, as defined by CORE-010
 
 ## Acceptance Criteria
 
@@ -117,6 +122,8 @@ when the game starts and persists throughout the entire session. This provides:
    behaviour across scene changes (User Requirement 1).
 7. Dedicated SubViewport with transparent background directly verifies reliable VR overlay
    and full-screen UI rendering (User Requirement 2).
+8. The `Game` node owns the dedicated dispatcher specified by CORE-010 and supplies its Godot-bound scheduling and
+   lifecycle boundary without an authored dispatcher scene child.
 
 ## References
 
@@ -129,3 +136,4 @@ when the game starts and persists throughout the entire session. This provides:
 
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [UI-001: Splash Screen](../../ui/001-splash-screen/index.md)
+- [CORE-010: Main-Thread Dispatcher](../010-main-thread-dispatcher/index.md)
