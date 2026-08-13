@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
@@ -161,17 +160,6 @@ public abstract partial class Mind : Node
     /// <summary>Authorable exact-type perception faculties used for composed senses.</summary>
     [Export]
     public PerceptionResource[] Perceptions { get; set; } = [];
-
-    /// <summary>
-    /// NPC voice used for spoken output when a derived mind can speak.
-    /// </summary>
-    [ExportGroup("Output")]
-    [Export]
-    public Voice? Voice
-    {
-        get;
-        set;
-    }
 
     /// <inheritdoc />
     public override void _EnterTree()

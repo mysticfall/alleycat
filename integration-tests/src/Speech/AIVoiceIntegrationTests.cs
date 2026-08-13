@@ -4,6 +4,8 @@ using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
+using AlleyCat.Core.Content;
+using AlleyCat.Core.Threading;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
@@ -14,6 +16,7 @@ using AlleyCat.Speech.Transcription;
 using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 
@@ -783,11 +786,18 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             SpeechGenerator = speechGenerator,
             LipSyncPlayer = lipSyncPlayer,
         };
-        ToolMind acceptedMind = new();
-        ToolMind disabledMind = new();
+        ToolMind acceptedMind = new(voice);
+        ToolMind disabledMind = new(disabledVoice);
         SpeechTool tool = new();
-        AIFunction activeFunction = tool.CreateFunction(new ToolServiceProvider(voice, acceptedMind));
-        AIFunction disabledFunction = tool.CreateFunction(new ToolServiceProvider(disabledVoice, disabledMind));
+        IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
+        AIFunction activeFunction = tool.CreateFunction(
+            new AgentToolContext(acceptedMind.Owner, new ToolSceneContext([acceptedMind.Owner])),
+            acceptedMind,
+            dispatcher);
+        AIFunction disabledFunction = tool.CreateFunction(
+            new AgentToolContext(disabledMind.Owner, new ToolSceneContext([disabledMind.Owner])),
+            disabledMind,
+            dispatcher);
 
         sceneTree.Root.AddChild(speechGenerator);
         sceneTree.Root.AddChild(lipSyncPlayer);
@@ -824,6 +834,48 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             disabledMind.Free();
             await DestroyFixtureAsync(sceneTree, voice, disabledVoice, speechGenerator, lipSyncPlayer);
         }
+    }
+
+    /// <summary>
+    /// Invalid, unavailable, ambiguous, failed, and cancelled speech submissions never become observations.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeechTool_UncommittedRequests_ProduceNoObservation()
+    {
+        var acceptingVoice = new ToolFailureVoice();
+        var failingVoice = new ToolFailureVoice { Failure = new InvalidOperationException("speech failed") };
+        var missingMind = new ToolMind([]);
+        var duplicateMind = new ToolMind([acceptingVoice, failingVoice]);
+        var failingMind = new ToolMind([failingVoice]);
+        var cancelledMind = new ToolMind([acceptingVoice]);
+        SpeechTool tool = new();
+        IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
+
+        AIFunction missing = CreateSpeechFunction(tool, missingMind, dispatcher);
+        AIFunction duplicate = CreateSpeechFunction(tool, duplicateMind, dispatcher);
+        AIFunction failing = CreateSpeechFunction(tool, failingMind, dispatcher);
+        AIFunction cancelled = CreateSpeechFunction(tool, cancelledMind, dispatcher);
+
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => InvokeSpeechToolAsync(missing, "   "));
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => InvokeSpeechToolAsync(missing, "Missing"));
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => InvokeSpeechToolAsync(duplicate, "Duplicate"));
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => InvokeSpeechToolAsync(failing, "Failing"));
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => cancelled.InvokeAsync(new AIFunctionArguments { ["speech"] = "Cancelled" }, cancellation.Token).AsTask());
+
+        Assert.Empty(missingMind.Timeline);
+        Assert.Empty(duplicateMind.Timeline);
+        Assert.Empty(failingMind.Timeline);
+        Assert.Empty(cancelledMind.Timeline);
+        missingMind.Free();
+        duplicateMind.Free();
+        failingMind.Free();
+        cancelledMind.Free();
+        acceptingVoice.Free();
+        failingVoice.Free();
     }
 
     /// <summary>
@@ -1104,6 +1156,15 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             new AIFunctionArguments { ["speech"] = speech },
             CancellationToken.None);
 
+    private static AIFunction CreateSpeechFunction(
+        SpeechTool tool,
+        ToolMind mind,
+        IMainThreadDispatcher dispatcher)
+        => tool.CreateFunction(
+            new AgentToolContext(mind.Owner, new ToolSceneContext([mind.Owner])),
+            mind,
+            dispatcher);
+
     private sealed partial class TestVoice : Voice
     {
         public int SpeechGeneratedCallCount
@@ -1285,9 +1346,17 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
     private sealed record VoiceListenerEvent(string Speech, IVoice Source);
 
-    private sealed partial class ToolMind : AlleyCat.Mind.Mind
+    private sealed partial class ToolMind(IReadOnlyList<IComponent> components) : AlleyCat.Mind.Mind
     {
-        public new ToolCharacter Owner { get; } = new();
+        public ToolMind(IVoice voice)
+            : this([voice])
+        {
+        }
+
+        public new ToolCharacter Owner
+        {
+            get;
+        } = new ToolCharacter(components);
 
         public IReadOnlyList<Observation> Timeline => GetObservationTimelineSnapshot();
 
@@ -1300,11 +1369,11 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             => Task.CompletedTask;
     }
 
-    private sealed class ToolCharacter : ICharacter
+    private sealed class ToolCharacter(IReadOnlyList<IComponent> components) : ICharacter
     {
         public string Id { get; set; } = "voice_tool_owner";
 
-        public IReadOnlyList<IComponent> Components { get; } = [];
+        public IReadOnlyList<IComponent> Components => components;
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
 
@@ -1312,13 +1381,31 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             => new Dictionary<string, object?>();
     }
 
-    private sealed class ToolServiceProvider(IVoice voice, ToolMind mind) : IServiceProvider
+    private sealed partial class ToolFailureVoice : Voice
     {
-        public object? GetService(Type serviceType)
-            => serviceType == typeof(IVoice) ? voice
-                : serviceType == typeof(ICharacter) ? mind.Owner
-                : serviceType.IsInstanceOfType(mind) ? mind
-                : null;
+        public Exception? Failure
+        {
+            get; init;
+        }
+
+        public override ValueTask SpeakAsync(string speech, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Failure is null
+                ? ValueTask.CompletedTask
+                : ValueTask.FromException(Failure);
+        }
+    }
+
+    private sealed record ToolSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
+    {
+        public ContentContext Content => ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+            => Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException();
     }
 
     private sealed partial class FakeSpeechGenerator : SpeechGenerator

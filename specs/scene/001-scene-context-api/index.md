@@ -65,6 +65,9 @@ character and Godot node objects remain live.
     other identifiable types.
 22. A type without a scene-group mapping has no current-scene match: `Find` returns `null` and `Resolve` throws. The
     implementation must not scan arbitrary groups or infer membership for an unmapped type.
+23. AI-002 may capture one `ISceneContext` at turn start and pass that exact snapshot through its trusted typed tool
+    context. This use preserves fixed membership and live referenced objects; it does not add AI-specific members or
+    mutable snapshot semantics to `ISceneContext`.
 
 ## In Scope
 
@@ -133,6 +136,8 @@ character and Godot node objects remain live.
 16. The internal type-to-group mapping initially contains only `char` to `Actors`. It neither scans arbitrary groups
     nor includes locations, items, visual subjects, or other identifiable types in current-scene membership.
 17. Lookup membership is captured with the context snapshot, while returned object references remain live.
+18. Agent-runtime tests verify a turn-captured `ISceneContext` passed to tools retains fixed membership and live object
+    references without changing SCN-001's general contract.
 
 ## References
 
@@ -142,3 +147,6 @@ character and Godot node objects remain live.
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [BODY-004: Eyes](../../body/004-eyes/index.md)
+- [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
+- [AI-001: Mind Component](../../ai/001-mind/index.md)
+- [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)

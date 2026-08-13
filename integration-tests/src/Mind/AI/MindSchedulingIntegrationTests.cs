@@ -4,6 +4,8 @@ using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
+using AlleyCat.Core.Content;
+using AlleyCat.Core.Threading;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
@@ -11,6 +13,7 @@ using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 using MindBase = AlleyCat.Mind.Mind;
@@ -388,9 +391,10 @@ public sealed partial class MindSchedulingIntegrationTests
         {
             Enabled = false
         };
-        ToolServiceProvider services = new(mind);
+        AgentToolContext context = CreateToolContext(mind.Owner);
+        IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         ToolHost.Reset();
-        AIFunction function = AgentTool.CreateFunction(ToolHost.WaitForResultAsync, services, "test_tool");
+        AIFunction function = AgentTool.CreateFunction(ToolHost.WaitForResultAsync, context, mind, dispatcher, "test_tool");
         ValueTask<object?> invocation = function.InvokeAsync([], CancellationToken.None);
 
         Assert.Empty(mind.GetTimelineForTest());
@@ -426,12 +430,13 @@ public sealed partial class MindSchedulingIntegrationTests
         {
             Enabled = false
         };
-        ToolServiceProvider services = new(mind);
-        AIFunction emptyFunction = AgentTool.CreateFunction(ToolHost.EmptyAsync, services);
-        AIFunction invalidBatchFunction = AgentTool.CreateFunction(ToolHost.InvalidBatchAsync, services);
-        AIFunction throwingFunction = AgentTool.CreateFunction(ToolHost.ThrowAsync, services);
-        AIFunction nullFunction = AgentTool.CreateFunction(ToolHost.NullAsync, services);
-        AIFunction cancellingFunction = AgentTool.CreateFunction(ToolHost.CancelAsync, services);
+        AgentToolContext context = CreateToolContext(mind.Owner);
+        IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
+        AIFunction emptyFunction = AgentTool.CreateFunction(ToolHost.EmptyAsync, context, mind, dispatcher);
+        AIFunction invalidBatchFunction = AgentTool.CreateFunction(ToolHost.InvalidBatchAsync, context, mind, dispatcher);
+        AIFunction throwingFunction = AgentTool.CreateFunction(ToolHost.ThrowAsync, context, mind, dispatcher);
+        AIFunction nullFunction = AgentTool.CreateFunction(ToolHost.NullAsync, context, mind, dispatcher);
+        AIFunction cancellingFunction = AgentTool.CreateFunction(ToolHost.CancelAsync, context, mind, dispatcher);
 
         Assert.Null(await emptyFunction.InvokeAsync([], CancellationToken.None));
         _ = await Assert.ThrowsAsync<InvalidOperationException>(invalidBatchFunction.InvokeAsync([], CancellationToken.None).AsTask);
@@ -551,12 +556,18 @@ public sealed partial class MindSchedulingIntegrationTests
         private static double GetTimestamp() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
     }
 
-    private sealed class ToolServiceProvider(TestMind mind) : IServiceProvider
+    private static AgentToolContext CreateToolContext(ICharacter owner)
+        => new(owner, new TestSceneContext([owner]));
+
+    private sealed record TestSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
     {
-        public object? GetService(Type serviceType)
-            => serviceType == typeof(ICharacter) ? mind.Owner
-                : serviceType.IsInstanceOfType(mind) ? mind
-                : null;
+        public ContentContext Content => ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+            => Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException();
     }
 
     private static class ToolHost

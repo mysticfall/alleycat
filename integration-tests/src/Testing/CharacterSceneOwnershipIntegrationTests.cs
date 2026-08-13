@@ -102,6 +102,9 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.DoesNotContain("You are Alley", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("../../../Female/Female/GeneralSkeleton", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("[node name=\"Mind\" type=\"Node\" parent=\".\" index=\"9\" unique_id=917502219 node_paths=PackedStringArray(\"Voice\")", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Voice = NodePath(\"../Female/GeneralSkeleton/Head/Voice\")", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Voice = NodePath(\"../Male/GeneralSkeleton/Head/Voice\")", maleSceneText, StringComparison.Ordinal);
 
         Assert.Contains("Skeleton = NodePath(\"../../..\")", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("Meshes = [NodePath", sceneText, StringComparison.Ordinal);
@@ -124,12 +127,10 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Equal("reference_female_npc", GetPropertyValue<string>(voice, "Id"));
             Assert.Same(speechGenerator, GetPropertyValue<Node>(voice, "SpeechGenerator"));
             Assert.Same(lipSyncPlayer, GetPropertyValue<Node>(voice, "LipSyncPlayer"));
-            Assert.Same(voice, GetPropertyValue<Node>(mind, "Voice"));
             Assert.Same(femaleNpc, femaleHearing.GetParent());
             Assert.Same(maleNpc, maleHearing.GetParent());
             _ = Assert.Single(femaleNpc.GetChildren(), child => child.GetType().FullName == HearingTypeName);
             _ = Assert.Single(maleNpc.GetChildren(), child => child.GetType().FullName == HearingTypeName);
-            Assert.Equal(new NodePath("../Female/GeneralSkeleton/Head/Voice"), mind.GetPathTo(voice));
             Assert.Equal("Elena.wav", GetPropertyValue<string>(speechGenerator, "VoiceOverride"));
             Assert.Equal(16000, GetPropertyValue<int>(speechGenerator, "TargetSampleRate"));
             Assert.Equal(0.6f, GetPropertyValue<float>(lipSyncPlayer, "InputStrength"), 4);

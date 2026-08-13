@@ -40,6 +40,8 @@ responsive and interruption-safe in-world behaviour.
     observations without delaying normal gameplay.
 13. Foreground character context must contain self and every currently resolvable contextual subject whose attention
     meets the context threshold, rather than every scene character unconditionally.
+14. NPC speech uses the voice authored on the owning Character; contributors do not author a second output voice on
+    Mind.
 
 ## Technical Requirements
 
@@ -132,8 +134,14 @@ responsive and interruption-safe in-world behaviour.
 36. Mind must validate a complete `PerceptionResult`, including every calculated observation importance, before any
     mutation. It then applies ordered attention effects sequentially and atomically ingests ordered observations through
     the existing timeline, pending FIFO, scheduling, and interruption path.
-37. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation must
-    remain on Mind. The existing speech output tool and exactly-once self-action observation path must remain unchanged.
+37. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation
+    remains synchronous through Mind's `IPerception` faculties. Outbound production-tool invocation must start once
+    through `AgentTool` and the shared `IMainThreadDispatcher`; cancellation remains linked to turn and Mind lifetime.
+    The Game-scoped dispatcher owns accepted-work queueing and settlement, and AgenticMind must not retain local
+    deferred voice or Godot-action machinery. Successful speech admission still produces exactly one actor-stamped
+    self-action observation through ordinary Mind ingestion.
+38. Mind must not own or export an output-voice reference. Character-owned capabilities required by tools must enter
+    through AI-002's typed `AgentToolContext`; Character remains the sole authored voice source under CHAR-002.
 
 ## In Scope
 
@@ -145,10 +153,11 @@ responsive and interruption-safe in-world behaviour.
 - Synchronous percept interpretation, exact faculty dispatch, and Mind-owned attention under AI-006.
 - Attention-filtered foreground contextual-subject selection.
 - AgenticMind orchestration through AI-002 and AI-003.
+- Typed tool-context hand-off of Character-owned capabilities without Mind-owned voice authoring.
 - AgenticMind ownership and lifetime integration of AI-005 ContextWorker child nodes.
 - Foreground-only render-context construction and success-only publication of the latest top-level read-only dictionary.
 - Tool-only turn settlement without assistant-text completion or synthetic-marker observations.
-- Irreversible node-lifetime shutdown of scheduling, provider requests, tools, and deferred action work.
+- Irreversible node-lifetime shutdown of scheduling, provider requests, tools, and dispatcher-queued action work.
 
 ## Out Of Scope
 
@@ -163,63 +172,73 @@ responsive and interruption-safe in-world behaviour.
 
 ## Acceptance Criteria
 
+### User Requirements
+
 1. An NPC records owning-character, recognised-other, and unknown speech in timeline order through one
    `ObservedSpeech : ObservedAction` contract with exact key `speech.observed`.
 2. Rendered speech history uses actor-relative self, recognised-other, and unknown wording and never renders `VoiceId`
    as identity wording or treats it as authenticated provenance.
-3. Tests verify every observation enters both timeline and pending FIFO, with importance calculated and validated
+3. Acceptance verifies bounded, privacy-safe, non-overlapping behaviour, Character-owned speech, and safe containment
+   for missing configuration, backend failure, cancellation, and node exit.
+
+### Technical Requirements
+
+1. Tests verify every observation enters both timeline and pending FIFO, with importance calculated and validated
    exactly once before atomic mutation.
-4. Tests verify self-speech stores importance `0`, external and unknown speech store effective importance `1`, and zero
+2. Tests verify self-speech stores importance `0`, external and unknown speech store effective importance `1`, and zero
    importance still processes through maximum wait.
-5. Tests verify cumulative-importance threshold, maximum wait, the 0–5-second minimum-interval authoring range,
+3. Tests verify cumulative-importance threshold, maximum wait, the 0–5-second minimum-interval authoring range,
    disable/re-enable, pre-`_Ready()` intake, and atomic snapshots.
-6. Tests verify one qualifying observation cancels an active invocation and starts exactly one fresh replacement after
+4. Tests verify one qualifying observation cancels an active invocation and starts exactly one fresh replacement after
    full settlement, with one minimum-interval bypass and no overlap.
-7. Tests verify cumulative sub-threshold entries do not interrupt, multiple qualifying arrivals coalesce, FIFO order is
+5. Tests verify cumulative sub-threshold entries do not interrupt, multiple qualifying arrivals coalesce, FIFO order is
    retained, and committed events survive interruption.
-8. Tests verify natural completion, cancellation, disable, and node-exit races neither duplicate a replacement nor emit
+6. Tests verify natural completion, cancellation, disable, and node-exit races neither duplicate a replacement nor emit
    erroneous failure diagnostics.
-9. Tests verify Mind stamps tool-produced actors, prevents spoofing, atomically ingests ordered batches, and exposes no
+7. Tests verify Mind stamps tool-produced actors, prevents spoofing, atomically ingests ordered batches, and exposes no
    public observation recorder, sink, or timeline-only path.
-10. A later turn's sole system instruction reflects the complete ordered timeline without carrying forward transient
+8. A later turn's sole system instruction reflects the complete ordered timeline without carrying forward transient
     provider transcripts or observation-summary messages.
-11. Missing configuration and genuine backend failures are logged and contained without crashing the scene.
-12. After tree exit, tests verify no new intake, delayed action, replacement turn, timer, or node-service access occurs.
-13. Tests verify `source.Id` is captured as `VoiceId` and compared ordinally with every current-scene character's
+9. Missing configuration and genuine backend failures are logged and contained without crashing the scene.
+10. After tree exit, tests verify no new intake, delayed action, replacement turn, timer, or node-service access occurs.
+11. Tests verify `source.Id` is captured as `VoiceId` and compared ordinally with every current-scene character's
     composed `IVoice.Id`, without comparing voice object references.
-14. Tests verify blank received and configured IDs do not match during attribution, zero matches remain unknown, one
+12. Tests verify blank received and configured IDs do not match during attribution, zero matches remain unknown, one
     exact match yields the character's exact case-sensitive `Character.FullId`, and multiple exact matches fail clearly
     without choosing an actor.
-15. Tests verify same-ID spoofing follows the configured attribution, while `ActorId` and nullable `VoiceId` remain
+13. Tests verify same-ID spoofing follows the configured attribution, while `ActorId` and nullable `VoiceId` remain
     separate and rendered speech history never exposes `VoiceId` as identity wording or authenticated provenance.
-16. Tests verify AI-002's `end_turn` marker never enters Mind, invalid output causes no model repair or automatic retry,
+14. Tests verify AI-002's `end_turn` marker never enters Mind, invalid output causes no model repair or automatic retry,
     and observations from actions committed before a later turn failure remain in timeline order.
-17. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
+15. Acceptance verifies both the user-visible bounded, privacy-safe, non-overlapping behaviour and the importance,
     ingestion, speaker-attribution, scheduling, interruption, cancellation, and lifetime contracts.
-18. Tests verify ContextWorker child-node ownership and foreground-only `CreateRenderContext` assembly. AgenticMind
+16. Tests verify ContextWorker child-node ownership and foreground-only `CreateRenderContext` assembly. AgenticMind
     starts with an empty top-level read-only latest dictionary and retains authored workers only for deterministic
     projection aggregation, not trigger notification.
-19. Tests verify general typed C# events are published only after observation commitment and genuinely successful
+17. Tests verify general typed C# events are published only after observation commitment and genuinely successful
     foreground completion, never for contained failures or cancellations. Relevant triggers subscribe and unsubscribe
     directly without delaying foreground turns; AI-005 remains normative for trigger, projection, and lifetime
     contracts.
-20. Tests verify the foreground template renders with AgenticMind's exact complete top-level read-only dictionary from
+18. Tests verify the foreground template renders with AgenticMind's exact complete top-level read-only dictionary from
     `CreateRenderContext`. AgenticMind publishes that exact dictionary atomically only after successful rendering and
     retains the previous published dictionary after construction or rendering failure.
-21. Tests verify workers capture only the currently published snapshot and never initiate context construction,
+19. Tests verify workers capture only the currently published snapshot and never initiate context construction,
     aggregation, or timeline refresh. A worker projection reaches workers only through a subsequent successfully
     rendered and published foreground context.
-22. Tests verify Mind subscribes to configured senses, requires one exact faculty per declared exact percept type before
+20. Tests verify Mind subscribes to configured senses, requires one exact faculty per declared exact percept type before
     activation, and synchronously dispatches immutable percepts without inheritance fallback, queues, or background
     processing.
-23. Tests verify complete `PerceptionResult` and calculated-importance validation occurs before mutation, duplicate
+21. Tests verify complete `PerceptionResult` and calculated-importance validation occurs before mutation, duplicate
     attention effects apply sequentially in order, and ordered observations use the existing atomic ingestion and
     scheduling path.
-24. Tests verify foreground context contains self plus all currently resolvable attention-eligible `IContextual`
+22. Tests verify foreground context contains self plus all currently resolvable attention-eligible `IContextual`
     subjects, with no unconditional all-scene-character inclusion, second visual scan, hidden subject cache, or Mind
     state passed to `IContextual.GetContext`.
-25. Tests verify Mind, not AgenticMind, owns incoming interpretation; AgenticMind retains provider, prompt, render, and
-    tool concerns; and successful speech output still creates exactly one self-action observation.
+23. Tests verify Mind, not AgenticMind, owns synchronous incoming `IPerception` interpretation; every outbound
+    production tool starts once through `AgentTool` and `IMainThreadDispatcher`; AgenticMind has no local deferred
+    action machinery; and successful speech admission creates exactly one actor-stamped self-action observation.
+24. Scene and contract tests verify Mind has no exported output-voice reference and SpeechTool receives the owning
+    Character through AI-002's typed context to resolve the Character-authored voice.
 
 ## References
 
@@ -243,6 +262,10 @@ responsive and interruption-safe in-world behaviour.
 - [BODY-006: Voice Component](../../body/006-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
+- [CORE-010: Main-Thread Dispatcher](../../core/010-main-thread-dispatcher/index.md)
+- [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
+- [CHAR-002: Character Root](../../character/002-character-root/index.md)
+- [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 
 ### Design Background
 

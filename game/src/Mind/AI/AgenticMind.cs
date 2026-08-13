@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
+using AlleyCat.Core.Threading;
 using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
@@ -24,14 +24,13 @@ namespace AlleyCat.Mind.AI;
 /// NPC mind that reconstructs every agent turn from its complete subjective timeline.
 /// </summary>
 [GlobalClass]
-public partial class AgenticMind : MindBase, IServiceProvider
+public partial class AgenticMind : MindBase
 {
     private static readonly IReadOnlyDictionary<string, object?> _emptyRenderContext =
         new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>());
-    private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
-    private readonly Lock _deferredGodotActionsLock = new();
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
-    private bool _deferredGodotActionFlushQueued;
+    private Func<ISceneContext> _sceneContextLoader = static ()
+        => Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
     private ContextWorker[] _contextWorkers = [];
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
 
@@ -132,7 +131,7 @@ public partial class AgenticMind : MindBase, IServiceProvider
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
-        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+        ISceneContext scene = _sceneContextLoader();
         ICharacter character = ResolveOwningCharacter();
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
@@ -143,8 +142,9 @@ public partial class AgenticMind : MindBase, IServiceProvider
             _contextWorkers,
             GetContextEligibleAttentionIDs());
         string instructions = RenderAndPublishSystemInstruction(template, renderContext);
-        TurnInvocationServices invocationServices = new(this, character, Voice);
-        List<AITool> turnTools = CreateTurnTools(invocationServices);
+        IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
+        AgentToolContext toolContext = new(character, scene);
+        List<AITool> turnTools = CreateTurnTools(toolContext, dispatcher);
 
         IChatClient chatClient = AIChatClientDiagnostics.Decorate(
             clientProvider.CreateChatClient(),
@@ -172,14 +172,14 @@ public partial class AgenticMind : MindBase, IServiceProvider
         }
     }
 
-    private List<AITool> CreateTurnTools(IServiceProvider invocationServices)
+    private List<AITool> CreateTurnTools(AgentToolContext context, IMainThreadDispatcher dispatcher)
     {
         List<AITool> tools = new(Tools.Count);
         foreach (AgentTool? tool in Tools)
         {
             if (tool is not null)
             {
-                tools.Add(tool.CreateFunction(invocationServices));
+                tools.Add(tool.CreateFunction(context, this, dispatcher));
             }
         }
 
@@ -381,242 +381,10 @@ public partial class AgenticMind : MindBase, IServiceProvider
         _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
 
-    /// <inheritdoc />
-    protected override void OnNodeLifetimeEnding()
+    internal void SetSceneContextLoaderForTesting(Func<ISceneContext> sceneContextLoader)
     {
-        base.OnNodeLifetimeEnding();
-        DeferredGodotAction[] actions;
-        lock (_deferredGodotActionsLock)
-        {
-            actions = [.. _deferredGodotActions];
-            _deferredGodotActions.Clear();
-            _deferredGodotActionFlushQueued = false;
-        }
-
-        foreach (DeferredGodotAction action in actions)
-        {
-            action.Cancel(NodeLifetimeCancellationToken);
-        }
-    }
-
-    private Task DispatchDeferredSpeechAsync(
-        IVoice voice,
-        string speech,
-        CancellationToken cancellationToken)
-    {
-        var dispatchCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            NodeLifetimeCancellationToken);
-        DeferredGodotAction action = new(
-            voice,
-            speech,
-            dispatchCancellation);
-        lock (_deferredGodotActionsLock)
-        {
-            if (IsNodeLifetimeEnded)
-            {
-                action.Cancel(NodeLifetimeCancellationToken);
-                return action.Task;
-            }
-
-            _deferredGodotActions.Enqueue(action);
-            if (!_deferredGodotActionFlushQueued)
-            {
-                _deferredGodotActionFlushQueued = true;
-                _ = CallDeferred(nameof(FlushDeferredGodotActions));
-            }
-        }
-
-        return action.Task;
-    }
-
-    private void FlushDeferredGodotActions()
-    {
-        DeferredGodotAction[] actions;
-        lock (_deferredGodotActionsLock)
-        {
-            actions = [.. _deferredGodotActions];
-            _deferredGodotActions.Clear();
-            _deferredGodotActionFlushQueued = false;
-        }
-
-        foreach (DeferredGodotAction action in actions)
-        {
-            if (IsNodeLifetimeEnded)
-            {
-                action.Cancel(NodeLifetimeCancellationToken);
-            }
-            else
-            {
-                action.Invoke();
-            }
-        }
-    }
-
-    /// <inheritdoc />
-    public object? GetService(Type serviceType)
-    {
-        ArgumentNullException.ThrowIfNull(serviceType);
-        return IsNodeLifetimeEnded
-            ? null
-            : serviceType == typeof(ICharacter)
-                ? ResolveOwningCharacter()
-                : new TurnInvocationServices(this, character: null, Voice).GetService(serviceType);
-    }
-
-    private sealed class TurnInvocationServices(AgenticMind mind, ICharacter? character, IVoice? voice) : IServiceProvider
-    {
-        private readonly DeferredVoice? _voice = voice is null ? null : new DeferredVoice(mind, voice);
-
-        public object? GetService(Type serviceType)
-            => serviceType == typeof(IVoice) ? _voice
-                : serviceType == typeof(ICharacter) ? character ?? mind.ResolveOwningCharacter()
-                : serviceType.IsInstanceOfType(mind) ? mind
-                : null;
-    }
-
-    private sealed class DeferredVoice(AgenticMind mind, IVoice voice) : IVoice
-    {
-        public string Id
-        {
-            get => voice.Id;
-            set => voice.Id = value;
-        }
-
-        public string Type => voice.Type;
-
-        public Vector3 Origin => voice.Origin;
-
-        public void Speak(string speech) => _ = ObserveCompatibilitySubmissionAsync(SpeakAsync(speech));
-
-        public ValueTask SpeakAsync(
-            string speech,
-            CancellationToken cancellationToken = default)
-            => new(mind.DispatchDeferredSpeechAsync(voice, speech, cancellationToken));
-
-        private static async Task ObserveCompatibilitySubmissionAsync(ValueTask submission)
-        {
-            try
-            {
-                await submission;
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                LogOptionalResponseFailure(ex);
-            }
-        }
-    }
-
-    private sealed class DeferredGodotAction
-    {
-        private readonly IVoice _voice;
-        private readonly string _speech;
-        private readonly CancellationTokenSource _cancellation;
-        private readonly TaskCompletionSource _completionSource = new(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly CancellationTokenRegistration _cancellationRegistration;
-        private int _settled;
-
-        public DeferredGodotAction(
-            IVoice voice,
-            string speech,
-            CancellationTokenSource cancellation)
-        {
-            _voice = voice;
-            _speech = speech;
-            _cancellation = cancellation;
-            _cancellationRegistration = cancellation.Token.Register(
-                () => _completionSource.TrySetCanceled(cancellation.Token));
-        }
-
-        public Task Task => _completionSource.Task;
-
-        public void Cancel(CancellationToken cancellationToken)
-        {
-            if (Volatile.Read(ref _settled) != 0)
-            {
-                return;
-            }
-
-            try
-            {
-                if (!_cancellation.IsCancellationRequested)
-                {
-                    _cancellation.Cancel();
-                }
-            }
-            catch (ObjectDisposedException)
-            {
-                return;
-            }
-
-            _ = _completionSource.TrySetCanceled(cancellationToken);
-            Cleanup();
-        }
-
-        public void Invoke()
-        {
-            if (_completionSource.Task.IsCompleted || _cancellation.IsCancellationRequested)
-            {
-                Cleanup();
-                return;
-            }
-
-            try
-            {
-                ValueTask invocation = _voice.SpeakAsync(
-                    _speech,
-                    _cancellation.Token);
-                if (invocation.IsCompletedSuccessfully)
-                {
-                    _ = _completionSource.TrySetResult();
-                    Cleanup();
-                    return;
-                }
-
-                _ = CompleteAsync(invocation);
-            }
-            catch (Exception ex)
-            {
-                _ = _completionSource.TrySetException(ex);
-                Cleanup();
-            }
-        }
-
-        private async Task CompleteAsync(ValueTask invocation)
-        {
-            try
-            {
-                await invocation;
-                _ = _completionSource.TrySetResult();
-            }
-            catch (OperationCanceledException ex)
-            {
-                _ = _completionSource.TrySetCanceled(ex.CancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _ = _completionSource.TrySetException(ex);
-            }
-            finally
-            {
-                Cleanup();
-            }
-        }
-
-        private void Cleanup()
-        {
-            if (Interlocked.Exchange(ref _settled, 1) != 0)
-            {
-                return;
-            }
-
-            _ = _cancellationRegistration.Unregister();
-            _cancellation.Dispose();
-        }
+        ArgumentNullException.ThrowIfNull(sceneContextLoader);
+        _sceneContextLoader = sceneContextLoader;
     }
 
 }

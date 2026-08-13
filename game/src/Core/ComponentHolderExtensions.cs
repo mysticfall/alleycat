@@ -18,30 +18,8 @@ public static class ComponentHolderExtensions
         public bool TryGetComponent<T>(out T? component)
             where T : class, IComponent
         {
-            T? match = null;
-            int count = 0;
-
-            foreach (IComponent candidate in holder.Components)
-            {
-                if (candidate is not T typedCandidate)
-                {
-                    continue;
-                }
-
-                count++;
-                if (count == 1)
-                {
-                    match = typedCandidate;
-                }
-                else
-                {
-                    component = null;
-                    return false;
-                }
-            }
-
-            component = count == 1 ? match : null;
-
+            IComponent? match = ComponentResolution.FindSingle(holder, typeof(T), out int count);
+            component = count == 1 ? (T)match! : null;
             return count == 1;
         }
 
@@ -52,19 +30,7 @@ public static class ComponentHolderExtensions
         /// <returns>Matching components in deterministic holder order.</returns>
         public IReadOnlyList<T> GetComponents<T>()
             where T : class, IComponent
-        {
-            List<T> components = [];
-
-            foreach (IComponent candidate in holder.Components)
-            {
-                if (candidate is T typedCandidate)
-                {
-                    components.Add(typedCandidate);
-                }
-            }
-
-            return components;
-        }
+            => ComponentResolution.GetComponents<T>(holder);
 
         /// <summary>
         /// Resolves exactly one component assignable to <typeparamref name="T"/>.
@@ -75,14 +41,72 @@ public static class ComponentHolderExtensions
         public T RequireComponent<T>()
             where T : class, IComponent
         {
-            IReadOnlyList<T> components = holder.GetComponents<T>();
-            return components.Count == 1
-                ? components[0]
-                : throw new InvalidOperationException(
-                $"Required exactly one component of type {FormatType(typeof(T))} on {DescribeHolder(holder)}. " +
-                $"Expected exactly 1, found {components.Count}.");
+            IComponent? match = ComponentResolution.FindSingle(holder, typeof(T), out int count);
+            return count == 1
+                ? (T)match!
+                : throw ComponentResolution.CreateCardinalityException(holder, typeof(T), count, "Required");
         }
     }
+}
+
+internal static class ComponentResolution
+{
+    internal static object? GetService(IComponentHolder holder, Type serviceType)
+    {
+        ArgumentNullException.ThrowIfNull(serviceType);
+
+        IComponent? match = FindSingle(holder, serviceType, out int count);
+        return count switch
+        {
+            0 => null,
+            1 => match,
+            _ => throw CreateCardinalityException(holder, serviceType, count, "Resolved"),
+        };
+    }
+
+    internal static IComponent? FindSingle(IComponentHolder holder, Type requestedType, out int count)
+    {
+        IComponent? match = null;
+        count = 0;
+
+        foreach (IComponent candidate in holder.Components)
+        {
+            if (!requestedType.IsInstanceOfType(candidate))
+            {
+                continue;
+            }
+
+            count++;
+            match ??= candidate;
+        }
+
+        return match;
+    }
+
+    internal static IReadOnlyList<T> GetComponents<T>(IComponentHolder holder)
+        where T : class, IComponent
+    {
+        List<T> components = [];
+
+        foreach (IComponent candidate in holder.Components)
+        {
+            if (candidate is T typedCandidate)
+            {
+                components.Add(typedCandidate);
+            }
+        }
+
+        return components;
+    }
+
+    internal static InvalidOperationException CreateCardinalityException(
+        IComponentHolder holder,
+        Type requestedType,
+        int actualCount,
+        string action)
+        => new(
+            $"{action} exactly one component of type {FormatType(requestedType)} on {DescribeHolder(holder)}. " +
+            $"Expected exactly 1, found {actualCount}.");
 
     private static string DescribeHolder(IComponentHolder holder)
     {

@@ -1,4 +1,4 @@
-using AlleyCat.Character;
+using AlleyCat.Core.Threading;
 using Godot;
 using Microsoft.Extensions.AI;
 using MindBase = AlleyCat.Mind.Mind;
@@ -25,30 +25,39 @@ public abstract partial class AgentTool : Resource
     public string ToolDescription { get; set; } = string.Empty;
 
     /// <summary>
-    /// Creates an AI function whose invocation arguments resolve services from the supplied turn context.
+    /// Creates an AI function bound to the trusted turn context and owning runtime boundary.
     /// </summary>
-    public AIFunction CreateFunction(IServiceProvider services)
+    public AIFunction CreateFunction(
+        AgentToolContext context,
+        MindBase mind,
+        IMainThreadDispatcher dispatcher)
     {
         Delegate method = CreateDelegate();
         ArgumentNullException.ThrowIfNull(method);
-        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(mind);
+        ArgumentNullException.ThrowIfNull(dispatcher);
 
         string? name = string.IsNullOrWhiteSpace(ToolName) ? null : ToolName.Trim();
         string? description = string.IsNullOrWhiteSpace(ToolDescription) ? null : ToolDescription.Trim();
-        return CreateFunction(method, services, name, description);
+        return CreateFunction(method, context, mind, dispatcher, name, description);
     }
 
     /// <summary>
-    /// Creates an AI function for non-Resource tests and helpers using the same invocation-service wiring.
+    /// Creates an AI function for non-Resource tests and helpers using the same trusted binding.
     /// </summary>
     public static AIFunction CreateFunction(
         Delegate method,
-        IServiceProvider services,
+        AgentToolContext context,
+        MindBase mind,
+        IMainThreadDispatcher dispatcher,
         string? name = null,
         string? description = null)
     {
         ArgumentNullException.ThrowIfNull(method);
-        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(mind);
+        ArgumentNullException.ThrowIfNull(dispatcher);
         ValidateDelegateResultType(method);
 
         AIFunction inner = AIFunctionFactory.Create(method, new AIFunctionFactoryOptions
@@ -57,8 +66,15 @@ public abstract partial class AgentTool : Resource
             Description = description,
             ExcludeResultSchema = true,
             MarshalResult = static (result, _, _) => ValueTask.FromResult(result),
+            ConfigureParameterBinding = parameter => parameter.ParameterType == typeof(AgentToolContext)
+                ? new AIFunctionFactoryOptions.ParameterBindingOptions
+                {
+                    BindParameter = (_, _) => context,
+                    ExcludeFromSchema = true,
+                }
+                : default,
         });
-        return new ServiceProviderFunction(inner, services);
+        return new RuntimeBoundFunction(inner, context, mind, dispatcher);
     }
 
     /// <summary>
@@ -78,40 +94,34 @@ public abstract partial class AgentTool : Resource
         }
     }
 
-    private sealed class ServiceProviderFunction(AIFunction inner, IServiceProvider services) : DelegatingAIFunction(inner)
+    private sealed class RuntimeBoundFunction(
+        AIFunction inner,
+        AgentToolContext context,
+        MindBase mind,
+        IMainThreadDispatcher dispatcher) : DelegatingAIFunction(inner)
     {
         protected override async ValueTask<object?> InvokeCoreAsync(
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
-            arguments.Context ??= new Dictionary<object, object?>();
-            arguments.Services = services;
+            if (!ReferenceEquals(context.Character, mind.OwningCharacter))
+            {
+                throw new InvalidOperationException(
+                    $"Agent tool '{Name}' context character does not own its Mind.");
+            }
 
-            object? rawResult = await base.InvokeCoreAsync(arguments, cancellationToken);
+            object? rawResult = null;
+            await dispatcher.InvokeAsync(
+                async invocationCancellationToken => rawResult = await base.InvokeCoreAsync(arguments, invocationCancellationToken),
+                cancellationToken);
             if (rawResult is not AgentToolResult result)
             {
                 throw new InvalidOperationException(
                     $"Agent tool '{Name}' returned an invalid result shape. Expected {nameof(AgentToolResult)}.");
             }
 
-            if (services.GetService(typeof(MindBase)) is not MindBase mind)
-            {
-                throw new InvalidOperationException(
-                    $"Agent tool '{Name}' requires an owning {nameof(MindBase)} invocation service.");
-            }
-
-            if (services.GetService(typeof(ICharacter)) is not ICharacter character
-                || !ReferenceEquals(character, mind.OwningCharacter))
-            {
-                throw new InvalidOperationException(
-                    $"Agent tool '{Name}' requires the owning character associated with its Mind invocation service.");
-            }
-
             mind.IngestToolObservations(result.Observations);
             return result.Message;
         }
-
-        public override object? GetService(Type serviceType, object? serviceKey = null)
-            => services.GetService(serviceType) ?? base.GetService(serviceType, serviceKey);
     }
 }

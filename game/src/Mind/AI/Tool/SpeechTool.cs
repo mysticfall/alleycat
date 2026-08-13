@@ -6,7 +6,7 @@ using Godot;
 namespace AlleyCat.Mind.AI.Tool;
 
 /// <summary>
-/// Action tool that speaks natural-language output through the invocation voice context.
+/// Action tool that speaks natural-language output through the owning character's voice.
 /// </summary>
 [Tool]
 [GlobalClass]
@@ -27,7 +27,7 @@ public partial class SpeechTool : AgentTool
     [Description("Speak natural-language output through the configured voice.")]
     private static async ValueTask<AgentToolResult> Speak(
         [Description("Exact words to say aloud.")] string speech,
-        IServiceProvider services,
+        AgentToolContext context,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -37,12 +37,8 @@ public partial class SpeechTool : AgentTool
             throw new ArgumentException("Speech request cannot be blank.", nameof(speech));
         }
 
-        if (services.GetService(typeof(IVoice)) is not IVoice voice)
-        {
-            throw new InvalidOperationException("Speech voice context is unavailable.");
-        }
-
         string acceptedSpeech = speech.Trim();
+        IVoice voice = context.Character.RequireVoice();
         await voice.SpeakAsync(acceptedSpeech, cancellationToken);
         return new AgentToolResult(
             "Spoken through the configured voice.",

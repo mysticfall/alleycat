@@ -57,6 +57,8 @@ for Godot-deferred execution without making the `Game` host itself the dispatche
 17. `Game._ExitTree` must notify its owned dispatcher to atomically stop admission, cancel queued work and active
     asynchronous work, and settle every accepted dispatcher awaitable. Submissions after admission stops must return as
     cancelled.
+18. AgenticMind outbound production-tool invocation must use the shared `IMainThreadDispatcher` through `AgentTool`.
+    AgenticMind must not retain local deferred voice or Godot-action scheduling, queueing, or settlement machinery.
 
 ## In Scope
 
@@ -64,12 +66,13 @@ for Godot-deferred execution without making the `Game` host itself the dispatche
 - `GodotMainThreadDispatcher` as the dedicated plain dispatcher service owned by `Game`.
 - Dependency-injection registration of the exact dispatcher instance owned by `Game`.
 - Deferred FIFO batching, cancellation, error propagation, asynchronous continuations, and shutdown semantics.
+- AgenticMind migration of outbound production-tool invocation to the shared dispatcher.
 - Automated verification of queue ordering, thread-of-invocation, cancellation, completion, error, and shutdown
   contracts.
 
 ## Out Of Scope
 
-- Migrating `AgenticMind`, `Voice`, `SpeechGenerator`, or `Transcriber` to the dispatcher.
+- Migrating unrelated deferred-action implementations in `Voice`, `SpeechGenerator`, or `Transcriber`.
 - Requiring arbitrary asynchronous continuations within submitted work to remain on Godot's main thread.
 - Additional dispatcher priorities, parallel queues, or scene-local dispatcher instances.
 
@@ -94,8 +97,10 @@ for Godot-deferred execution without making the `Game` host itself the dispatche
 8. Automated verification confirms that `Game._ExitTree` closes dispatcher admission, cancels queued and active work,
    settles all accepted awaitables, and returns subsequent submissions as cancelled (User Requirement 4 and Technical
    Requirement 17).
-9. Delivery includes the dispatcher implementation, dependency-injection wiring, and mandatory verification while
-   leaving the named consumer migrations unchanged (Technical Requirements 2-5).
+9. AgenticMind production tools start through the shared dispatcher via `AgentTool`, and AgenticMind retains no local
+   deferred voice or Godot-action scheduling, queueing, or settlement machinery (Technical Requirement 18).
+10. Delivery includes the dispatcher implementation, dependency-injection wiring, AgenticMind migration, and mandatory
+    verification (Technical Requirements 2-5 and 18).
 
 ## References
 
@@ -108,3 +113,5 @@ for Godot-deferred execution without making the `Game` host itself the dispatche
 
 - [CORE-001: Global Singleton](../001-global-scene/index.md)
 - [CORE-004: Global Service Resolution](../004-global-service-resolution/index.md)
+- [AI-001: Mind Component](../../ai/001-mind/index.md)
+- [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)

@@ -2,6 +2,8 @@ using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
+using AlleyCat.Core.Content;
+using AlleyCat.Core.Threading;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
@@ -323,6 +325,54 @@ public sealed partial class MindInterruptionIntegrationTests
     }
 
     /// <summary>
+    /// A queued production tool submission observes its turn and node-lifetime cancellation before the shared dispatcher starts it.
+    /// </summary>
+    [Fact]
+    [Headless(false)]
+    public async Task NodeExitBeforeQueuedToolDispatch_CancelsWithoutDelegateObservationOrExitedServiceAccess()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        var dispatcher = new StartBarrierDispatcher();
+        var toolHost = new QueuedToolHost();
+        AgentToolInvocationMind mind = new(dispatcher, toolHost);
+        Node parent = sceneTree.CurrentScene ?? sceneTree.Root;
+        parent.AddChild(mind);
+
+        try
+        {
+            mind.ObserveForTest(new TestObservation(1f, "begin queued tool"));
+            CancellationToken queuedCancellation = await dispatcher.Queued.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.False(dispatcher.DelegateStarted);
+            Assert.False(queuedCancellation.IsCancellationRequested);
+
+            parent.RemoveChild(mind);
+            Assert.True(queuedCancellation.IsCancellationRequested);
+
+            dispatcher.AllowStart();
+            await mind.TurnSettled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.Equal(0, toolHost.DelegateCalls);
+            Assert.Equal(0, toolHost.WorldEffects);
+            Assert.Collection(
+                mind.GetTimelineForTest(),
+                item => Assert.Equal("begin queued tool", Assert.IsType<TestObservation>(item).Value));
+            Assert.DoesNotContain(mind.GetTimelineForTest(), item => item is TestAction);
+            Assert.False(mind.HasPendingForTest);
+        }
+        finally
+        {
+            dispatcher.AllowStart();
+            if (mind.GetParent() is { } currentParent)
+            {
+                currentParent.RemoveChild(mind);
+            }
+
+            mind.Free();
+        }
+    }
+
+    /// <summary>
     /// Tool observations committed during cancellation settlement remain ordered in replacement memory.
     /// </summary>
     [Fact]
@@ -341,7 +391,12 @@ public sealed partial class MindInterruptionIntegrationTests
             mind.ObserveForTest(new TestObservation(5f, "high"));
             await firstTurn.CancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-            AIFunction function = AgentTool.CreateFunction(ToolHost.CommitActionAsync, new ToolServices(mind));
+            var context = new AgentToolContext(mind.Owner, new TestSceneContext([mind.Owner]));
+            AIFunction function = AgentTool.CreateFunction(
+                ToolHost.CommitActionAsync,
+                context,
+                mind,
+                Game.Instance.GetRequiredService<IMainThreadDispatcher>());
             Assert.Equal("committed", await function.InvokeAsync([], CancellationToken.None));
             firstTurn.ReleaseSettlement();
             await replacement.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -498,6 +553,113 @@ public sealed partial class MindInterruptionIntegrationTests
         }
     }
 
+    private sealed partial class AgentToolInvocationMind(
+        IMainThreadDispatcher dispatcher,
+        QueuedToolHost toolHost) : MindBase
+    {
+        private readonly TestCharacter _owner = new();
+
+        public TaskCompletionSource TurnSettled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool HasPendingForTest => HasPendingObservations;
+
+        public bool IsQueuedToolTestLifetimeEnded => IsNodeLifetimeEnded;
+
+        public void ObserveForTest(AgentObservation observation) => _ = Observe(observation);
+
+        public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
+
+        protected override ICharacter ResolveOwningCharacter() => _owner;
+
+        protected override async Task ProcessObservationsAsync(
+            IReadOnlyList<AgentObservation> observations,
+            IReadOnlyList<AgentObservation> timelineSnapshot,
+            CancellationToken cancellationToken)
+        {
+            _ = observations;
+            _ = timelineSnapshot;
+            var context = new AgentToolContext(_owner, new TestSceneContext([_owner]));
+            AIFunction function = AgentTool.CreateFunction(
+                toolHost.InvokeAsync,
+                context,
+                this,
+                dispatcher,
+                "queued_production_tool");
+            try
+            {
+                _ = await function.InvokeAsync([], cancellationToken);
+            }
+            finally
+            {
+                _ = TurnSettled.TrySetResult();
+            }
+        }
+    }
+
+    private sealed class StartBarrierDispatcher : IMainThreadDispatcher
+    {
+        private readonly TaskCompletionSource _startAllowed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<CancellationToken> Queued { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool DelegateStarted
+        {
+            get; private set;
+        }
+
+        public ValueTask InvokeAsync(Action action, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            return InvokeAsync(_ =>
+            {
+                action();
+                return ValueTask.CompletedTask;
+            }, cancellationToken);
+        }
+
+        public ValueTask InvokeAsync(
+            Func<CancellationToken, ValueTask> action,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+            _ = Queued.TrySetResult(cancellationToken);
+            return new ValueTask(WaitForStartAsync(action, cancellationToken));
+        }
+
+        public void AllowStart() => _startAllowed.TrySetResult();
+
+        private async Task WaitForStartAsync(Func<CancellationToken, ValueTask> action, CancellationToken cancellationToken)
+        {
+            await _startAllowed.Task;
+            cancellationToken.ThrowIfCancellationRequested();
+            DelegateStarted = true;
+            await action(cancellationToken);
+        }
+    }
+
+    private sealed class QueuedToolHost
+    {
+        public int DelegateCalls
+        {
+            get; private set;
+        }
+
+        public int WorldEffects
+        {
+            get; private set;
+        }
+
+        public ValueTask<AgentToolResult> InvokeAsync(CancellationToken cancellationToken)
+        {
+            DelegateCalls++;
+            WorldEffects++;
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(new AgentToolResult(
+                "unexpected dispatch",
+                [new TestAction("spoofed", "unexpected world effect")]));
+        }
+    }
+
     private sealed class TurnGate
     {
         private readonly TurnMode _mode;
@@ -624,12 +786,15 @@ public sealed partial class MindInterruptionIntegrationTests
                 [new TestAction("spoofed", "tool action")]));
     }
 
-    private sealed class ToolServices(InterruptionMind mind) : IServiceProvider
+    private sealed record TestSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
     {
-        public object? GetService(Type serviceType)
-            => serviceType == typeof(ICharacter) ? mind.Owner
-                : serviceType.IsInstanceOfType(mind) ? mind
-                : null;
+        public ContentContext Content => ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+            => Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException();
     }
 
     private sealed class RecordingLoggerProvider : ILoggerProvider

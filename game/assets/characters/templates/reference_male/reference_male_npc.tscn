@@ -89,12 +89,11 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 script = ExtResource("6_dvj2u")
 metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 
-[node name="Mind" type="Node" parent="." index="8" unique_id=2028818158 node_paths=PackedStringArray("Voice")]
+[node name="Mind" type="Node" parent="." index="8" unique_id=2028818158]
 script = ExtResource("7_dvj2u")
 SystemInstruction = ExtResource("9_e0v3v")
 Tools = Array[ExtResource("10_y1xmj")]([SubResource("Resource_agentic_speech_tool")])
 Perceptions = Array[Resource]([SubResource("Resource_speech_perception"), SubResource("Resource_visual_perception")])
-Voice = NodePath("../Male/GeneralSkeleton/Head/Voice")
 metadata/_custom_type_script = "uid://hadsjgek6b2p"
 
 [node name="Hearing" type="Node" parent="."]

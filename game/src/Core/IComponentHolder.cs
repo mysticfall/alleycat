@@ -5,7 +5,7 @@ namespace AlleyCat.Core;
 /// stable contract. Holders define the authoritative component set for an entity or scene object without exposing
 /// storage details.
 /// </summary>
-public interface IComponentHolder
+public interface IComponentHolder : IServiceProvider
 {
     /// <summary>
     /// Gets the holder-defined component collection in deterministic iteration order.
@@ -14,4 +14,11 @@ public interface IComponentHolder
     {
         get;
     }
+
+    /// <summary>
+    /// Resolves exactly one component assignable to <paramref name="serviceType"/>.
+    /// </summary>
+    /// <param name="serviceType">The requested component or capability type.</param>
+    /// <returns>The single matching component, or null when no component matches.</returns>
+    object? IServiceProvider.GetService(Type serviceType) => ComponentResolution.GetService(this, serviceType);
 }

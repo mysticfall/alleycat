@@ -43,8 +43,9 @@ interfaces per component, and deterministic query ordering.
    system types.
 2. An `IComponent` marker interface must be defined as the root interface for
    all components.
-3. An `IComponentHolder` interface must be defined with
-   `IReadOnlyList<IComponent> Components { get; }` and deterministic iteration.
+3. `IComponentHolder` must inherit `IServiceProvider`, expose
+   `IReadOnlyList<IComponent> Components { get; }`, and define local component-only service resolution through an
+   interface-level default implementation.
 4. Component query extension methods must be provided on `IComponentHolder`:
    - `bool TryGetComponent<T>(out T? component)` — returns true when exactly
      one match is found.
@@ -67,10 +68,23 @@ interfaces per component, and deterministic query ordering.
     implicit recursive discovery.
 12. Extension methods must use the `extension` block syntax consistent with
     `@game/src/Common/NodeExtensions.cs`.
+13. `IComponentHolder.GetService(Type)` must match entries in `Components` whose runtime instances are assignable to the
+    requested service type. Zero matches return `null`; one match returns that exact component reference; multiple
+    matches throw `InvalidOperationException`.
+14. Multiple matches include duplicate entries that reference the same component instance. The provider bridge must not
+    silently deduplicate entries or choose a preferred match.
+15. The provider bridge resolves only component entries. It must not resolve the holder itself, traverse nested holders,
+    fall back to `Game` or global dependency injection, construct or cache services, dispose components, register or
+    inject dependencies, wire an object graph, or manage service lifetimes.
+16. `GetService(Type)` coexists with the typed query APIs rather than replacing them:
+    - `TryGetComponent<T>` retains its existing exact-one success and otherwise-false semantics.
+    - `GetComponents<T>` retains deterministic access to every assignable component entry.
+    - `RequireComponent<T>` retains its detailed fail-fast zero-or-multiple semantics.
 
 ## In Scope
 
 - `IComponent` and `IComponentHolder` core interfaces.
+- Local component-only `IServiceProvider` resolution through `IComponentHolder`.
 - `TryGetComponent<T>`, `GetComponents<T>`, `RequireComponent<T>` extension
   methods.
 - Fail-fast semantics with detailed error messages.
@@ -85,7 +99,7 @@ interfaces per component, and deterministic query ordering.
 
 - Implicit recursive component discovery across scene trees.
 - Component lifecycle management (activation/deactivation).
-- Component dependency injection or wiring.
+- Dependency registration, injection, graph wiring, and lifetime management beyond the local component-provider bridge.
 - Hot-reloading of components at runtime.
 - Component serialisation or persistence.
 - Dynamic component composition (adding/removing at runtime beyond MVP).
@@ -93,19 +107,31 @@ interfaces per component, and deterministic query ordering.
 
 ## Acceptance Criteria
 
+### User Requirements
+
 1. A developer can define a capability interface and a holder trait interface,
    and attach a component to a holder that implements both.
-2. `TryGetComponent<T>` returns true with the component when exactly one match
+
+### Technical Requirements
+
+1. `TryGetComponent<T>` returns true with the component when exactly one match
    exists, and false otherwise.
-3. `GetComponents<T>` returns all matching components in deterministic order.
-4. `RequireComponent<T>` throws `InvalidOperationException` with holder type
+2. `GetComponents<T>` returns all matching components in deterministic order.
+3. `RequireComponent<T>` throws `InvalidOperationException` with holder type
    and path information when zero or multiple matches are found.
-5. The same holder type supports multiple components each implementing multiple
+4. The same holder type supports multiple components each implementing multiple
    capability interfaces.
-6. Extension methods follow the `extension` block pattern from
+5. Extension methods follow the `extension` block pattern from
    `@game/src/Common/NodeExtensions.cs`.
-7. The spec does not exclude mandatory resolution API through `Out Of Scope`.
-8. CORE-003 is listed under Core Systems in `specs/index.md`.
+6. The spec does not exclude mandatory resolution API through `Out Of Scope`.
+7. CORE-003 is listed under Core Systems in `specs/index.md`.
+8. Resolving a service through an `IComponentHolder` returns `null` for zero assignable component entries, returns the
+   exact component reference for one entry, and throws `InvalidOperationException` for multiple entries, including
+   duplicate references.
+9. Provider resolution tests verify that holder/self resolution, recursive-holder traversal, global DI fallback,
+    construction, caching, disposal, registration, injection, graph wiring, and lifetime management do not occur.
+10. Tests verify provider resolution coexists with the distinct `TryGetComponent<T>`, `GetComponents<T>`, and
+    `RequireComponent<T>` contracts.
 
 ## References
 
@@ -114,3 +140,5 @@ interfaces per component, and deterministic query ordering.
 - [CORE-001: Global Singleton](../001-global-scene/index.md)
 - [CORE-002: Configuration API](../002-configuration-api/index.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [CHAR-002: Character Root](../../character/002-character-root/index.md)
+- [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)

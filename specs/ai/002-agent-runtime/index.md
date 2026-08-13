@@ -39,6 +39,7 @@ failures contained without treating assistant text or provider history as charac
     promise complete HTTP wire bodies.
 13. Sensitive AI request and response detail must remain suppressed unless both dedicated diagnostics controls permit
     it, without changing NPC behaviour.
+14. An action must never execute against a character other than the character that owns the active Mind turn.
 
 ## Technical Requirements
 
@@ -92,10 +93,15 @@ failures contained without treating assistant text or provider history as charac
     observations committed before a later failure or pre-emption remain committed.
 19. Every `AgentTool` delegate must return the standard `AgentToolResult`, containing an optional model-facing `Message`
     and an ordered observation collection. A null message and an empty collection are valid.
-20. The common `AgentTool` wrapper must await and validate the complete result before exposing any part of it. It must
-    ask the owning Mind to atomically ingest the ordered observations, then return only `Message` as the tool result.
-21. Mind owns all observation mutation. Tool invocation services must expose the owning Mind boundary and
-    action-specific capabilities, but must not expose a public observation recorder or sink.
+20. For every production action, the common `AgentTool` wrapper must submit the action delegate exactly once through
+    the shared `IMainThreadDispatcher`, then await and validate the complete result before exposing any part of it.
+    The dispatcher guarantees main-thread affinity only for the delegate's initial invocation, not continuations after
+    an incomplete await. The wrapper must ask the owning Mind to atomically ingest the ordered observations, then
+    return only `Message` as the tool result.
+21. Mind owns all observation mutation. The common `AgentTool` wrapper must keep Mind and `IMainThreadDispatcher`
+    private. `AgentToolContext` must expose only the typed `Character` and `SceneContext` runtime bindings; concrete
+    action capabilities must come through `Character`. No invocation service bag, public observation recorder, or sink
+    may be exposed.
 22. Tools must not mutate Mind directly. Tool-result ingestion must stamp every `ObservedAction` with the owning
     character's exact actor ID before contextual importance is calculated, preventing actor spoofing.
 23. A throwing, cancelled, malformed, wrong-shaped, or otherwise invalid tool result must contribute no observations.
@@ -145,6 +151,25 @@ failures contained without treating assistant text or provider history as charac
 42. AI-005 ContextWorker runs are separate background projections, not AgenticMind foreground turns. They capture the
     latest foreground-published render dictionary at run start and must not construct or aggregate context. They must
     not weaken this runtime's tool-only, no-terminal-response-schema, or no-assistant-text guarantees.
+43. The cancellation token supplied to each `AgentTool` dispatcher submission must remain linked to the active turn and
+    Mind node lifetime. The shared Game-scoped dispatcher owns queueing and settlement of accepted submissions;
+    AgenticMind must not retain local deferred voice or Godot-action queueing or settlement machinery.
+44. Every production tool invocation must receive an `AgentToolContext` containing the exact public properties
+    `ICharacter Character` and `ISceneContext SceneContext`. `SceneContext` must hold the snapshot captured once for the
+    turn and retain SCN-001's fixed-membership and live-reference semantics.
+45. `AgentToolContext` is a trusted runtime binding. It must be excluded from the model-visible tool schema and must not
+    be supplied, replaced, or overridden by model arguments.
+46. `AgentToolContext` must not implement or expose `IServiceProvider`, duplicate component query APIs, or act as a
+    general service bag. Concrete tools decide whether to consume typed Character traits or extensions, or use
+    `ICharacter`'s CORE-003 `IServiceProvider` contract.
+47. Mind and `IMainThreadDispatcher` remain private to the common `AgentTool` wrapper and must not be exposed through
+    `AgentToolContext`. Cancellation remains a per-invocation wrapper input and must not become shared context state.
+48. Before dispatcher submission or any world effect, the wrapper must verify that the context Character is the exact
+    Character owned by the Mind boundary. An ownership mismatch must fail closed.
+49. `SpeechTool` must resolve the raw `IVoice` from the context Character's authored component projection. It must not
+    depend on an AgenticMind voice property, special case, or duplicate voice binding.
+50. `ISceneContext` may later be replaced by a dedicated turn-context contract without changing the current requirement
+    to pass the turn-captured SCN-001 snapshot.
 
 ## In Scope
 
@@ -156,6 +181,8 @@ failures contained without treating assistant text or provider history as charac
 - Configurable multiple-call preference and named request and action bounds.
 - Responses-default stateless transport and explicitly selected Chat Completions rollback.
 - Standard `AgentToolResult` validation, projection, and atomic Mind hand-off.
+- Trusted typed `AgentToolContext` binding through `Character` and turn-captured `SceneContext` properties.
+- Shared-dispatcher start of every outbound production tool, with turn- and Mind-lifetime cancellation.
 - Speech admission, transient acknowledgement, and exactly-once observed-speech production.
 - Expected interruption and node-lifetime cancellation settlement.
 - Preservation of foreground tool-only protocol boundaries while AI-005 workers run independently.
@@ -174,60 +201,82 @@ failures contained without treating assistant text or provider history as charac
 
 ## Acceptance Criteria
 
+### User Requirements
+
 1. Tests verify a zero-action turn returns sole `end_turn` on its first response, executes no action, creates no
    observation, and produces no accepted or player-visible assistant text.
 2. Tests verify one model response can call `speak` and then final `end_turn`, executing speech once and completing the
    turn without result replay or another provider request. Equivalent final-marker batches with multiple production
    actions execute each action serially in provider order before completion.
-3. Tests verify every request requires a tool call, registers all configured actions plus `end_turn`, and sends no
+3. Acceptance verifies speech and other actions remain bounded, failures produce no false memory, interruption and node
+   exit prevent delayed effects, and ownership mismatch produces no world effect.
+
+### Technical Requirements
+
+1. Tests verify every request requires a tool call, registers all configured actions plus `end_turn`, and sends no
    provider response format or terminal schema.
-4. Tests verify `end_turn` is reserved, argument-free, accepted at most once and only as the final call, and may be sole
+2. Tests verify `end_turn` is reserved, argument-free, accepted at most once and only as the final call, and may be sole
    or follow one or more production actions. It is never invoked, returned as a result, ingested, or counted as an
    action.
-5. Tests reject empty or malformed responses, assistant text, unknown content and tools, duplicate call identifiers,
+3. Tests reject empty or malformed responses, assistant text, unknown content and tools, duplicate call identifiers,
    invalid arguments, and non-final, repeated, or malformed `end_turn` before executing any action in the invalid batch.
-6. Tests verify `AllowMultipleToolCalls` is configurable and defaults to `false`, while local validation still accepts a
+4. Tests verify `AllowMultipleToolCalls` is configurable and defaults to `false`, while local validation still accepts a
    valid all-action batch and executes it serially.
-7. Tests verify a successful action-only batch replays all calls and results in full on a later model request, including
+5. Tests verify a successful action-only batch replays all calls and results in full on a later model request, including
    when the model needs those results to continue. A final-marker batch performs no such replay or request. Transient
    history is discarded at turn end, and a later turn receives only its newly rendered instruction, provider bootstrap
    input, and Mind timeline context.
-8. Tests verify `MaxModelRequests` and `MaxToolActions` default to `8`, count requests and production actions
+6. Tests verify `MaxModelRequests` and `MaxToolActions` default to `8`, count requests and production actions
    respectively, reject a batch that would exceed the action bound before execution, and stop when the request bound is
    exhausted without `end_turn`.
-9. Tests verify malformed, unknown, text, invalid-marker, tool-error, backend-error, and bounds failures stop without
+7. Tests verify malformed, unknown, text, invalid-marker, tool-error, backend-error, and bounds failures stop without
    model repair, request or action retry, or continued execution; earlier actions and observations committed before a
    later action fails remain committed.
-10. Responses transport tests verify it is the default and that every sequential request sets `store: false`, omits
+8. Responses transport tests verify it is the default and that every sequential request sets `store: false`, omits
     `previous_response_id`, and replays complete ordered per-turn history.
-11. Configuration and transport tests verify Chat Completions is available only through explicit selection, is never an
+9. Configuration and transport tests verify Chat Completions is available only through explicit selection, is never an
     automatic fallback, and preserves the tool-only protocol semantics.
-12. Tool tests verify delegates return one `AgentToolResult`; the common wrapper validates it, atomically hands ordered
-    observations to Mind, and exposes only the optional transient message as the tool result.
-13. Tests verify Mind stamps tool action actors with the owning character ID, prevents spoofing, and provides no public
+10. Tool tests verify delegates return one `AgentToolResult`; the common wrapper validates it, atomically hands ordered
+    observations to Mind, and exposes only the optional transient message as the tool result. They also verify each
+    production delegate starts exactly once through `IMainThreadDispatcher` and make no continuation-affinity claim.
+11. Tests verify Mind stamps tool action actors with the owning character ID, prevents spoofing, and provides no public
     observation recorder, sink, or direct tool-mutation path.
-14. Speech tests verify exactly one self-relative `ObservedSpeech` after successful voice admission and none for blank,
-    unavailable, unconfigured, failed-before-admission, or cancelled requests.
-15. Speech tests verify admission does not await playback and self-listener exclusion prevents duplicate observed
+12. Speech tests verify exactly one Mind actor-stamped, self-relative `ObservedSpeech` after successful voice admission
+    and none for blank, unavailable, unconfigured, failed-before-admission, or cancelled requests.
+13. Speech tests verify admission does not await playback and self-listener exclusion prevents duplicate observed
     speech.
-16. Interruption tests verify expected cancellation settles requests and tools before one fresh replacement starts,
+14. Interruption tests verify expected cancellation settles requests and tools before one fresh replacement starts,
     committed action observations survive, and no turns overlap.
-17. A capturing client verifies every sequential request is logged at the Microsoft.Extensions.AI abstraction only when
+15. A capturing client verifies every sequential request is logged at the Microsoft.Extensions.AI abstraction only when
     the diagnostics option and `Microsoft.Extensions.AI.LoggingChatClient` `Trace` category are both enabled.
-18. Suppression tests verify either disabled diagnostics control prevents serialisation of sensitive payload detail.
-19. Integration tests verify `LoggingChatClient` decorates the tool-only client, shared `System.ClientModel` body
+16. Suppression tests verify either disabled diagnostics control prevents serialisation of sensitive payload detail.
+17. Integration tests verify `LoggingChatClient` decorates the tool-only client, shared `System.ClientModel` body
     logging is not used, and STT and TTS request and response logging is unaffected.
-20. Equivalent runs with diagnostics enabled and disabled preserve requests, tool calls, results, cancellation,
+18. Equivalent runs with diagnostics enabled and disabled preserve requests, tool calls, results, cancellation,
     validation, actions, completion, and failure handling.
-21. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
+19. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
     replacement, exited-node service access, or erroneous expected-cancellation diagnostics.
-22. Acceptance verifies both NPC-visible action and speech behaviour and the tool-only protocol, provider transport,
+20. Acceptance verifies both NPC-visible action and speech behaviour and the tool-only protocol, provider transport,
     transient-history, observation-ingestion, diagnostics, cancellation, settlement, and failure contracts.
-23. Tests verify every production turn uses the explicit tool-only loop and no diagnostic flag or legacy generic
+21. Tests verify every production turn uses the explicit tool-only loop and no diagnostic flag or legacy generic
     terminal-result route can select a competing execution path.
-24. Tests verify foreground execution publishes its exact render dictionary only after successful template rendering.
+22. Tests verify foreground execution publishes its exact render dictionary only after successful template rendering.
     ContextWorker execution captures the latest published snapshot without constructing or aggregating context and
     cannot alter the foreground route, tool-only requirement, or absence of a terminal response schema.
+23. Node-exit and interruption tests verify each `AgentTool` submission retains turn- and Mind-lifetime cancellation;
+    the shared Game-scoped dispatcher settles accepted work, and AgenticMind has no local deferred action queue or
+    settlement path.
+24. Tests verify every tool receives a trusted `AgentToolContext` whose exact public properties are the owning
+    `ICharacter Character` and turn-captured `ISceneContext SceneContext`; the context is absent from model schema and
+    cannot be model supplied or overridden.
+25. Tests verify `AgentToolContext` exposes neither `IServiceProvider` nor duplicate component APIs, while concrete
+    tools may use typed Character capabilities or the Character's inherited CORE-003 provider contract.
+26. Tests verify Mind and `IMainThreadDispatcher` remain wrapper-private, cancellation remains per invocation, and a
+    Character ownership mismatch fails before dispatcher submission or world effects.
+27. Speech tests verify `SpeechTool` resolves the raw Character-authored `IVoice` through its typed context and has no
+    AgenticMind output-voice special case or duplicate voice binding.
+28. Scene-context tests verify the supplied snapshot retains SCN-001 fixed-membership and live-reference semantics for
+    the complete turn.
 
 ## References
 
@@ -255,6 +304,10 @@ failures contained without treating assistant text or provider history as charac
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
 - [CORE-007: Microsoft Logging Integration](../../core/007-microsoft-logging-integration/index.md)
+- [CORE-010: Main-Thread Dispatcher](../../core/010-main-thread-dispatcher/index.md)
+- [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
+- [CHAR-002: Character Root](../../character/002-character-root/index.md)
+- [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 
 ### External Dependencies
 

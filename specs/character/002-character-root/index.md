@@ -37,6 +37,7 @@ exists.
 11. Invalid visual-cue ownership fails clearly when a character publishes or explicitly refreshes its authored cues.
 12. Character composition exposes configured senses through the ordinary component projection; NPC templates provide
     visual and hearing senses without a bespoke perception component.
+13. Downstream systems use the character's authored voice capability as the authoritative voice for that character.
 
 ## Technical Requirements
 
@@ -49,7 +50,8 @@ exists.
    - `IHasVoice` from BODY-006.
    - `ILocomotive` from CTRL-001.
    - `IVisualSubject` from BODY-004.
-3. `ICharacter` must also remain an `IComponentHolder`, with deterministic component iteration inherited from CORE-003.
+3. `ICharacter` must also remain an `IComponentHolder`, inheriting CORE-003 deterministic component iteration and its
+   local component-only `IServiceProvider` contract through the holder traits.
 4. The concrete Godot type must be named `AlleyCat.Character.Character`.
 5. Consumers should depend on `ICharacter` by default. Code that must reference the concrete type from a conflicting
    context should use a local alias, such as `using CharacterNode = AlleyCat.Character.Character;`.
@@ -131,6 +133,9 @@ exists.
 41. Final NPC role templates configure Eyes and Hearing senses under AI-006. Character and Body production code must not
     depend on Mind, although scene composition may place Mind beneath Character.
 42. `CharacterPerception`, `MindStimulus`, and their bespoke installer or scene wiring must not exist.
+43. The Character component projection is the sole authored voice source for downstream systems. Mind must not export,
+    author, or duplicate an output-voice reference; tools resolve the character-owned voice from the supplied
+    `ICharacter`.
 
 ## In Scope
 
@@ -146,6 +151,7 @@ exists.
 - Name conflict and alias guidance for the concrete `Character` type.
 - Character-root membership in the `Actors` group for SCN-001 scene-context discovery.
 - Asset-owned CORE-009 character identity and character-owned voice-ID installation for operational attribution.
+- Character component projection as the sole authored downstream voice source.
 - Lowest-shared-base character-card context wiring.
 - `ICharacter` aggregation of the BODY-004 visual observer and visual subject roles.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
@@ -190,6 +196,8 @@ exists.
     retain tracker-driven locomotion.
 12. Invalid template-authored cue ownership produces a clear character publication or refresh failure.
 13. NPCs expose visual and hearing senses through ordinary character component composition.
+14. Speech and other downstream systems use the voice authored on the Character component projection, with no duplicate
+    Mind-authored output voice.
 
 ### Technical Requirements
 
@@ -245,6 +253,10 @@ exists.
     in deterministic `Character.Components` order, and required holder traits remain unchanged.
 29. Dependency and composition tests verify Character production code has no Mind dependency, scene composition may
     place Mind beneath Character, and no `CharacterPerception`, `MindStimulus`, or bespoke wiring remains.
+30. `ICharacter` inherits CORE-003 `IComponentHolder` service-provider semantics, including local component-only
+    resolution and the specified zero-, one-, and multiple-match outcomes.
+31. Composition tests verify the Character projection is the sole authored voice source and Mind has no exported or
+    duplicated output-voice reference.
 
 ## References
 
@@ -254,6 +266,8 @@ exists.
 - [CHAR-001: Character Skeleton Profile](../001-character-skeleton/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../../ai/004-lore-backstory/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
+- [AI-001: Mind Component](../../ai/001-mind/index.md)
+- [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)
 - [BODY-001: Hands](../../body/001-hands/index.md)
 - [BODY-004: Eyes](../../body/004-eyes/index.md)
 - [BODY-006: Voice Component](../../body/006-voice/index.md)
