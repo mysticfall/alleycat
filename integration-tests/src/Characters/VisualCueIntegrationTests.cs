@@ -1,18 +1,17 @@
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Hands;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Scene;
+using AlleyCat.Speech.Voice;
+using AlleyCat.Vision;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
-
 using CharacterHub = AlleyCat.Character.Character;
 
 namespace AlleyCat.IntegrationTests.Characters;
@@ -363,7 +362,7 @@ public sealed class VisualCueIntegrationTests
         }
     }
 
-    private sealed class TestVisualObserver(string label) : IEyesHolder, IContextual
+    private sealed class TestVisualObserver(string label) : IHasVision, IContextual
     {
         public IReadOnlyList<IComponent> Components { get; } = [];
 

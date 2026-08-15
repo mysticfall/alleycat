@@ -1,12 +1,13 @@
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Hands;
-using AlleyCat.Body.Voice;
 using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Scene;
+using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
+using AlleyCat.Vision;
 using Godot;
 
 namespace AlleyCat.Character;
@@ -63,7 +64,7 @@ public partial class Character : CharacterBody3D, ICharacter
     }
 
     /// <summary>
-    /// Gets or sets the optional body-owned speech sense.
+    /// Gets or sets the optional Hearing-modality-owned speech sense.
     /// </summary>
     [Export]
     public Hearing? Hearing

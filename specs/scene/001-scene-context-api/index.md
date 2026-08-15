@@ -51,7 +51,7 @@ character and Godot node objects remain live.
     context.
 16. Every character role template must join `Actors` and `VisualSubjects` at the lowest shared male/female character
     base. Higher role or concrete character scenes must not add redundant compensating membership.
-17. `VisualSubjects` is the group for nodes authored as `IVisualSubject` instances. BODY-004 owns direct group
+17. `VisualSubjects` is the group for nodes authored as `IVisualSubject` instances. VISION-001 owns direct group
     querying, member validation, and scan authoring-failure behaviour.
 18. `VisualSubjects` membership is independent of `Actors`. A scene node may be a visual subject without being a
     current humanoid character, and `Actors` retains its `ICharacter`-only contract.
@@ -79,10 +79,10 @@ character and Godot node objects remain live.
 - Immediate validation failure for non-`ICharacter` nodes in `Actors`.
 - Immediate validation failure for empty character IDs or exact duplicate character `FullId` values.
 - Shared-base `Actors` membership for all character role templates.
-- Shared-base `VisualSubjects` membership for all character role templates, as delegated to CHAR-002 and BODY-004.
+- Shared-base `VisualSubjects` membership for all character role templates, as delegated to CHAR-002 and VISION-001.
 - Membership-snapshot semantics with live referenced objects.
 - Convenience exposure of the CORE current-content context.
-- `VisualSubjects` group-membership semantics for BODY-004 visual scans.
+- `VisualSubjects` group-membership semantics for VISION-001 visual scans.
 
 ## Out Of Scope
 
@@ -94,7 +94,7 @@ character and Godot node objects remain live.
 - Non-human actor support before the `ICharacter` model is revisited.
 - Scene-group mappings or membership support for identifiable types other than `char`.
 - Lore-normalised identity collision validation, which belongs to AI-004 character-lore construction.
-- Visibility policy, bounds sampling, field-of-view calculations, and raycast behaviour, which belong to BODY-004.
+- Visibility policy, bounds sampling, field-of-view calculations, and raycast behaviour, which belong to VISION-001.
 
 ## Acceptance Criteria
 
@@ -125,9 +125,9 @@ character and Godot node objects remain live.
    normalising case.
 10. Scene context contains no lore-specific path, AI prompt, or retrieval contract.
 11. Male and female character bases add their character root to `Actors` and `VisualSubjects` at the lowest shared
-    level, with no redundant higher-scene compensation. BODY-004 and CHAR-002 normatively define visual-subject and
+     level, with no redundant higher-scene compensation. VISION-001 and CHAR-002 normatively define visual-subject and
     cue contracts.
-12. `VisualSubjects` is reserved for nodes authored as `IVisualSubject` instances; BODY-004 owns direct querying,
+12. `VisualSubjects` is reserved for nodes authored as `IVisualSubject` instances; VISION-001 owns direct querying,
     member validation, and invalid-member failure for visual scans.
 13. `VisualSubjects` does not relax, replace, or imply `Actors` membership.
 14. `ISceneContext.Find(FullId)` and `ISceneContext.Resolve(FullId)` accept canonical CORE-009 `FullId` values and
@@ -146,7 +146,7 @@ character and Godot node objects remain live.
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
-- [BODY-004: Eyes](../../body/004-eyes/index.md)
+- [VISION-001: Eyes](../../vision/001-eyes/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [AI-001: Mind Component](../../ai/001-mind/index.md)
 - [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)

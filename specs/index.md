@@ -53,21 +53,12 @@
 
 - [XR-001: XRManager](xr/001-xr-manager/index.md)
 
-## Body
-
-- [BODY-001: Hands](body/001-hands/index.md)
-- [BODY-002: Character Physical Response System](body/002-character-physical-response/index.md)
-  - [BODY-002 Design Notes](body/002-character-physical-response/design-notes.md)
-  - [BODY-005: IK Target Pipeline Foundation](body/005-ik-target-pipeline-foundation/index.md)
-  - [BODY-008: Character Physical Interaction API](body/008-character-stimulus-detection-and-routing/index.md)
-  - [BODY-003: Full-Body Collision Decision](body/003-full-body-collision-decision/index.md)
-- [BODY-004: Eyes](body/004-eyes/index.md)
-- [BODY-006: Voice Component](body/006-voice/index.md)
-
 ## Character
 
 - [CHAR-001: Character Skeleton Profile](character/001-character-skeleton/index.md)
 - [CHAR-002: Character Root](character/002-character-root/index.md)
+- [CHAR-003: Character Physical Response](character/003-physical-response/index.md)
+  - [Character Physical Response Design Notes](character/003-physical-response/design-notes.md)
 
 ## Character Control
 
@@ -90,6 +81,15 @@
   - [IK-004: VRIK Pose State Machine And Hip Reconciliation](ik/004-vrik-pose-state-machine/index.md)
     - [Pose State Machine Contract](ik/004-vrik-pose-state-machine/pose-state-machine-contract.md)
     - [Hip Reconciliation Contract](ik/004-vrik-pose-state-machine/hip-reconciliation-contract.md)
+  - [IK-005: Target Pipeline](ik/005-target-pipeline/index.md)
+
+## Rigging
+
+- [RIG-001: Physical Collision](rigging/001-physical-collision/index.md)
+
+## Vision
+
+- [VISION-001: Eyes](vision/001-eyes/index.md)
 
 ## UI
 
@@ -106,6 +106,8 @@
 - [INTR-001: Grabbable Interface](interaction/001-grabbable/index.md)
   - [INTR-001-A: Spherical Grab Point](interaction/001-grabbable/spherical-grab-point.md)
 - [INTR-002: Hand Grab Execution](interaction/002-hand-grab-execution/index.md)
+- [INTR-003: Hands](interaction/003-hands/index.md)
+- [INTR-004: Character Physical Interaction API](interaction/004-physical-interaction/index.md)
 
 ## Speech
 
@@ -113,6 +115,8 @@
 - [SPCH-002: Audio2Face LipSync Player](speech/002-audio2face-lipsync-player/index.md)
 - [SPCH-003: Transcriber Component](speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](speech/004-speech-generation/index.md)
+- [SPCH-005: Voice Component](speech/005-voice/index.md)
+- [SPCH-006: Hearing Component](speech/006-hearing/index.md)
 
 ## Testing
 

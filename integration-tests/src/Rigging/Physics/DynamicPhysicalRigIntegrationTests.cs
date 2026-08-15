@@ -1,5 +1,4 @@
 using System.Reflection;
-using AlleyCat.Body;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK;
 using AlleyCat.Interaction.Physical;

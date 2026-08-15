@@ -1,6 +1,6 @@
 using System.ComponentModel;
-using AlleyCat.Body.Voice;
 using AlleyCat.Mind.Observation;
+using AlleyCat.Speech.Voice;
 using Godot;
 
 namespace AlleyCat.Mind.AI.Tool;

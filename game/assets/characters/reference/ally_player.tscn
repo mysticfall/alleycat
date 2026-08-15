@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://c1rexm45hq1rf"]
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_blend"]
-[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Body/Eyes/StaticVisualCue.cs" id="2_amqjb"]
+[ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Vision/StaticVisualCue.cs" id="2_amqjb"]
 [ext_resource type="PackedScene" uid="uid://deek4lix763je" path="res://assets/characters/templates/installers/player_installer.tscn" id="2_installer"]
-[ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Body/Eyes/SphereVisualBounds.cs" id="3_58pyc"]
+[ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Vision/SphereVisualBounds.cs" id="3_58pyc"]
 
 [sub_resource type="Resource" id="Resource_3nump"]
 script = ExtResource("3_58pyc")

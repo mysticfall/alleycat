@@ -8,7 +8,7 @@ title: Percept-Based Sensing And Attention
 ## Requirement
 
 NPC senses must publish immutable percepts for Mind-owned interpretation, attention updates, and observation ingestion
-without coupling Body or Character production code to Mind.
+without coupling Vision, Speech, Interaction, or Character production code to Mind.
 
 ## Goal
 
@@ -31,13 +31,12 @@ attention, existing speech history, and existing eye visibility and presentation
 ### Dependency Direction
 
 1. Production source dependencies must follow these directions:
-   - Sense may depend on Core.
-   - Body may depend on Sense.
-   - Character may depend on Body.
-   - Mind may depend on Sense and may depend transitively on Character and Body.
-   - Body and Character must not depend on Mind.
+    - Sense owns neutral percept contracts and may depend on Core.
+    - Vision, `Speech`, `Speech.Voice`, Interaction, and other modality or delivery domains may depend on Sense and Core
+      as required by their contracts.
+    - Mind may depend on Sense contracts, but Mind and modality or delivery domains must not depend on one another.
 2. Scene composition may place a Mind node beneath a Character node without creating a Character-to-Mind source
-   dependency.
+    dependency.
 3. The refactor must remove `CharacterPerception`, `MindStimulus`, and their bespoke production wiring.
 
 ### Percept And Sense Contracts
@@ -51,24 +50,25 @@ attention, existing speech history, and existing eye visibility and presentation
 7. There is no active or passive sense distinction. Each sense owns its acquisition, polling, activation, and teardown
    lifecycle.
 
-### Eyes And Visual Survey
+### Vision And Visual Survey
 
-8. `IEyes` must not expose `Scan()` publicly. Eyes owns periodic visual acquisition and publishes
+8. `IVision` must not expose `Scan()` publicly. EyesBehaviour owns periodic visual acquisition and publishes
    `VisualSurveyPercept` through `ISense`.
 9. The scan interval must be finite and meet the exported minimum cadence. Invalid authored or runtime values must fail
    before activation.
-10. Eyes performs at most one survey per frame. A delayed frame performs one survey without catch-up and starts the
-    next interval from that survey.
+10. EyesBehaviour performs at most one survey per frame. A delayed frame performs one survey without catch-up and
+    starts the next interval from that survey.
 11. `VisualSurveyPercept` contains only a producer-owned, immutable, ordered snapshot of canonical visible-subject
     `FullId` values. Snapshot membership and order cannot change after publication.
-12. Survey acquisition preserves BODY-004 visibility, cue ownership, field-of-view, range, occlusion, and discovery
+12. Survey acquisition preserves VISION-001 visibility, cue ownership, field-of-view, range, occlusion, and discovery
     behaviour. It does not call `VisualCue.Describe`, create observations, select gaze, change `LookTarget`, or alter
     saccades, blinking, or other eye presentation.
 
 ### Hearing And Speech
 
-13. Hearing is a Body component, an `ISense`, and an `IVoiceListener`. It owns voice-listener subscription and teardown
-    and declares exactly `SpeechPercept`.
+13. `SpeechPercept`, `Hearing`, `IHearing`, and `IHasHearing` live directly in `AlleyCat.Speech`.
+    `Hearing : Node, IHearing` owns voice-listener subscription and teardown; `IHearing : ISense` declares exactly
+    `SpeechPercept` and receives voice publications through `ReceiveVoice(string, IVoice)`.
 14. Hearing rejects only null, empty, or whitespace-only transport speech publications. It must not filter publications
     by observer voice or source identity.
 15. For each accepted publication, Hearing snapshots the speech and raw local source voice `Id` into one immutable
@@ -138,7 +138,7 @@ attention, existing speech history, and existing eye visibility and presentation
 ## In Scope
 
 - Immutable percept and synchronous sense contracts.
-- Eyes-owned visual survey cadence and Hearing-owned speech acquisition.
+- EyesBehaviour-owned visual survey cadence and Hearing-owned speech acquisition.
 - Mind-owned Resource faculties, exact type registry, attention, and atomic result handling.
 - Speech interpretation and observation-free visual reinforcement.
 - Sense projection through `Character.Components` and approved dependency direction.
@@ -171,16 +171,18 @@ attention, existing speech history, and existing eye visibility and presentation
 
 ### Technical Requirements
 
-1. Dependency checks verify Sense may depend only on Core within this slice, Body depends on Sense, Character depends on
-   Body, Mind may consume Sense and Character/Body, and Body and Character production code do not depend on Mind.
+1. Dependency checks verify that Sense remains the neutral percept-contract domain; modality and delivery domains
+   depend on Sense as required; and Mind and modality or delivery domains have no cyclic dependency.
 2. Contract tests verify immutable behaviour-free `IPercept`, synchronous `ISense.Perceived`, deterministic exact-type
    metadata, sense-owned lifecycle, and no active/passive distinction.
-3. Eyes tests verify no public `IEyes.Scan()`, finite validated cadence, at most one survey per frame, no catch-up, and
-   one producer-owned immutable ordered `FullId` snapshot per survey.
+3. Vision tests verify `IVision` has no public `Scan()`, `VisualSurveyPercept` lives in `AlleyCat.Vision`, cadence is
+    finite and validated, at most one survey occurs per frame, there is no catch-up, and each survey has one
+    producer-owned immutable ordered `FullId` snapshot.
 4. Visual integration tests verify unchanged subject discovery, cue validation, field of view, distance, and occlusion,
    with no descriptions, observations, gaze selection, `LookTarget` change, saccade change, or blink change.
-5. Hearing tests verify Body composition and voice-listener lifecycle, rejection of blank transport speech only, and
-   synchronous immutable speech and raw source-ID snapshots without observer-voice or Mind knowledge.
+5. Hearing tests verify top-level `AlleyCat.Speech` ownership, `IHearing.ReceiveVoice(string, IVoice)` listener
+    lifecycle, rejection of blank transport speech only, and synchronous immutable speech and raw source-ID snapshots
+    without observer-voice or Mind knowledge.
 6. Registry tests verify one exact typed faculty per exact type declared by configured senses and pre-activation failure
    for every missing, duplicate, incompatible, or undeclared mapping.
 7. Speech tests verify ordinal source/observer ID self filtering, including the installed character-owned voice ID;
@@ -205,8 +207,9 @@ attention, existing speech history, and existing eye visibility and presentation
 
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
-- [BODY-004: Eyes](../../body/004-eyes/index.md)
-- [BODY-006: Voice Component](../../body/006-voice/index.md)
+- [VISION-001: Eyes](../../vision/001-eyes/index.md)
+- [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
+- [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)

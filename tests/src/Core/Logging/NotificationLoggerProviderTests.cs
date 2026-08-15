@@ -35,12 +35,12 @@ public sealed class NotificationLoggerProviderTests
     {
         CapturingNotificationSink sink = new();
         using NotificationLoggerProvider provider = new(sink);
-        ILogger logger = provider.CreateLogger("AlleyCat.Body.Voice.AIVoice");
+        ILogger logger = provider.CreateLogger("AlleyCat.Speech.Voice.AIVoice");
 
         logger.LogError("Ordinary runtime failure.");
 
         string message = Assert.Single(sink.Messages);
-        Assert.Contains("AlleyCat.Body.Voice.AIVoice", message, StringComparison.Ordinal);
+        Assert.Contains("AlleyCat.Speech.Voice.AIVoice", message, StringComparison.Ordinal);
         Assert.Contains("Ordinary runtime failure.", message, StringComparison.Ordinal);
     }
 

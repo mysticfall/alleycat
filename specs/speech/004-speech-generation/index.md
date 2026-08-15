@@ -116,7 +116,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 - SPCH-001: Wav2Arkit LipSync Player
 - SPCH-002: Audio2Face LipSync Player
 - SPCH-003: Transcriber Component
-- BODY-006: Voice Component
+- SPCH-005: Voice Component
 - CORE-006: Microsoft Configuration Integration
 - CORE-007: Microsoft Logging Integration
 

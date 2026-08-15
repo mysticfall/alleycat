@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cktwyl5p5gfwx"]
 
 [ext_resource type="PackedScene" uid="uid://baxl54fq0rpj3" path="res://assets/characters/templates/reference_male/reference_male_base.tscn" id="1_p3faa"]
-[ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Body/Voice/AIVoice.cs" id="2_3qwye"]
+[ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Speech/Voice/AIVoice.cs" id="2_3qwye"]
 [ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="3_rnwpi"]
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_jj16n"]
 [ext_resource type="Script" uid="uid://bxb7ysth4n1du" path="res://src/IK/CharacterIK.cs" id="5_7cm3m"]
@@ -11,7 +11,7 @@
 [ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="10_y1xmj"]
 [ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="11_vk3vc"]
 [ext_resource type="Script" uid="uid://bfalxt2riwwdb" path="res://src/Navigation/LocomotiveNavigation.cs" id="12_navigation"]
-[ext_resource type="Script" uid="uid://qs2mgtgqvri5" path="res://src/Body/Voice/Hearing.cs" id="13_hearing"]
+[ext_resource type="Script" uid="uid://qs2mgtgqvri5" path="res://src/Speech/Hearing.cs" id="13_hearing"]
 [ext_resource type="Script" uid="uid://nb7frvgohlfq" path="res://src/Mind/Perception/SpeechPerception.cs" id="14_speech_perception"]
 [ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
 

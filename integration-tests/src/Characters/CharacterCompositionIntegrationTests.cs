@@ -1,13 +1,12 @@
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Hands;
-using AlleyCat.Body.Voice;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
+using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
+using AlleyCat.Vision;
 using Godot;
 using Xunit;
-
 using CharacterContract = AlleyCat.Character.ICharacter;
 using CharacterHub = AlleyCat.Character.Character;
 

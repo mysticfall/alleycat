@@ -1,11 +1,10 @@
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Scene;
+using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
-
 using CharacterHub = AlleyCat.Character.Character;
 
 namespace AlleyCat.IntegrationTests.Characters;

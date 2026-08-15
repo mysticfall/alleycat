@@ -1,5 +1,6 @@
 using System.Collections;
 using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Speech;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -17,12 +18,12 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private const string AllyNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
     private const string AgenticMindTypeName = "AlleyCat.Mind.AI.AgenticMind";
-    private const string AIVoiceTypeName = "AlleyCat.Body.Voice.AIVoice";
+    private const string AIVoiceTypeName = "AlleyCat.Speech.Voice.AIVoice";
     private const string A2FLipSyncPlayerTypeName = "AlleyCat.Speech.LipSync.A2FLipSyncPlayer";
     private const string OpenAISpeechGeneratorTypeName = "AlleyCat.Speech.Generation.OpenAISpeechGenerator";
     private const string OpenAITranscriberTypeName = "AlleyCat.Speech.Transcription.OpenAITranscriber";
-    private const string PlayerVoiceTypeName = "AlleyCat.Body.Voice.PlayerVoice";
-    private const string HearingTypeName = "AlleyCat.Body.Voice.Hearing";
+    private const string PlayerVoiceTypeName = "AlleyCat.Speech.Voice.PlayerVoice";
+    private static readonly string _hearingTypeName = typeof(Hearing).FullName!;
 
     /// <summary>
     /// Voice and mind components live with the reference-female player/NPC character scenes.
@@ -63,7 +64,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private static void AssertReferenceFemalePlayerVoice()
     {
         string sceneText = ReadResourceText(ReferenceFemalePlayerScenePath);
-        Assert.Contains("uid=\"uid://dyffnsg0122vb\" path=\"res://src/Body/Voice/PlayerVoice.cs\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("uid=\"uid://dyffnsg0122vb\" path=\"res://src/Speech/Voice/PlayerVoice.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("Voice = NodePath(\"Female/GeneralSkeleton/Head/Voice\")", sceneText, StringComparison.Ordinal);
         Assert.Contains("[node name=\"Voice\" type=\"Node3D\" parent=\"Female/GeneralSkeleton/Head\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("Transcriber = NodePath(\"../../../../OpenAITranscriber\")", sceneText, StringComparison.Ordinal);
@@ -90,7 +91,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string sceneText = ReadResourceText(ReferenceFemaleNpcScenePath);
         string maleSceneText = ReadResourceText("res://assets/characters/templates/reference_male/reference_male_npc.tscn");
 
-        Assert.Contains("uid=\"uid://cwfjtq7oif2yk\" path=\"res://src/Body/Voice/AIVoice.cs\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("uid=\"uid://cwfjtq7oif2yk\" path=\"res://src/Speech/Voice/AIVoice.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://rqxjkfgkwfpc\" path=\"res://src/Speech/Generation/OpenAISpeechGenerator.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://cjjllyn8qs4nk\" path=\"res://src/Speech/LipSync/A2FLipSyncPlayer.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://hadsjgek6b2p\" path=\"res://src/Mind/AI/AgenticMind.cs\"", sceneText, StringComparison.Ordinal);
@@ -116,8 +117,8 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Node voice = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice", AIVoiceTypeName);
             Node mind = RequireScriptedNode(femaleNpc, "Mind", AgenticMindTypeName);
             Node maleMind = RequireScriptedNode(maleNpc, "Mind", AgenticMindTypeName);
-            Node femaleHearing = RequireScriptedNode(femaleNpc, "Hearing", HearingTypeName);
-            Node maleHearing = RequireScriptedNode(maleNpc, "Hearing", HearingTypeName);
+            Node femaleHearing = RequireScriptedNode(femaleNpc, "Hearing", _hearingTypeName);
+            Node maleHearing = RequireScriptedNode(maleNpc, "Hearing", _hearingTypeName);
             Node speechGenerator = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice/SpeechGenerator", OpenAISpeechGeneratorTypeName);
             Node lipSyncPlayer = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice/LipSyncPlayer", A2FLipSyncPlayerTypeName);
             AudioStreamPlayer3D audioPlayer = Assert.IsType<AudioStreamPlayer3D>(
@@ -129,8 +130,8 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Same(lipSyncPlayer, GetPropertyValue<Node>(voice, "LipSyncPlayer"));
             Assert.Same(femaleNpc, femaleHearing.GetParent());
             Assert.Same(maleNpc, maleHearing.GetParent());
-            _ = Assert.Single(femaleNpc.GetChildren(), child => child.GetType().FullName == HearingTypeName);
-            _ = Assert.Single(maleNpc.GetChildren(), child => child.GetType().FullName == HearingTypeName);
+            _ = Assert.Single(femaleNpc.GetChildren(), child => child.GetType().FullName == _hearingTypeName);
+            _ = Assert.Single(maleNpc.GetChildren(), child => child.GetType().FullName == _hearingTypeName);
             Assert.Equal("Elena.wav", GetPropertyValue<string>(speechGenerator, "VoiceOverride"));
             Assert.Equal(16000, GetPropertyValue<int>(speechGenerator, "TargetSampleRate"));
             Assert.Equal(0.6f, GetPropertyValue<float>(lipSyncPlayer, "InputStrength"), 4);

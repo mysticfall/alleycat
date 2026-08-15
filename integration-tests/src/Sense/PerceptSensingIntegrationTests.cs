@@ -1,5 +1,3 @@
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -8,8 +6,10 @@ using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;
-using AlleyCat.Sense;
+using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
+using AlleyCat.Vision;
 using Godot;
 using Xunit;
 
@@ -36,7 +36,7 @@ public sealed class PerceptSensingIntegrationTests
             List<SpeechPercept> received = [];
             hearing.Perceived += percept => received.Add(Assert.IsType<SpeechPercept>(percept));
 
-            Assert.True(hearing.IsInGroup(IVoiceListener.GroupName));
+            Assert.True(hearing.IsInGroup(IHearing.GroupName));
             Assert.Equal([typeof(SpeechPercept)], hearing.PerceptTypes);
             hearing.ReceiveVoice(" \t", source);
             hearing.ReceiveVoice("  accepted speech  ", source);
@@ -49,7 +49,7 @@ public sealed class PerceptSensingIntegrationTests
         finally
         {
             root.RemoveChild(hearing);
-            Assert.False(hearing.IsInGroup(IVoiceListener.GroupName));
+            Assert.False(hearing.IsInGroup(IHearing.GroupName));
             hearing.QueueFree();
             root.QueueFree();
             await TestUtils.WaitForFramesAsync(tree, 2);

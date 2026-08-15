@@ -2,17 +2,19 @@ using Xunit;
 
 namespace AlleyCat.Tests.Architecture;
 
-/// <summary>Guards the approved Body/Character-to-Mind dependency boundary without assembly partitioning.</summary>
+/// <summary>Guards the approved modality, Sense, Character, and Mind dependency boundary without assembly partitioning.</summary>
 public sealed class PerceptSensingDependencyTests
 {
-    /// <summary>Sense stays body/mind-free while Body and Character stay mind-free.</summary>
+    /// <summary>Modality implementations, Sense, and Character stay Mind-free while Sense remains delivery-domain-neutral.</summary>
     [Fact]
-    public void ProductionSense_DoesNotReferenceBodyOrMind_AndBodyCharacterDoNotReferenceMind()
+    public void ProductionModalitiesSenseAndCharacter_DoNotReferenceMind_AndSenseDoesNotReferenceRigging()
     {
-        AssertDirectoryDoesNotReference("game", "src", "Sense", forbiddenNamespace: "AlleyCat.Body");
+        AssertDirectoryDoesNotReference("game", "src", "Sense", forbiddenNamespace: "AlleyCat.Rigging");
         AssertDirectoryDoesNotReference("game", "src", "Sense", forbiddenNamespace: "AlleyCat.Mind");
-        AssertDirectoryDoesNotReference("game", "src", "Body", forbiddenNamespace: "AlleyCat.Mind");
         AssertDirectoryDoesNotReference("game", "src", "Character", forbiddenNamespace: "AlleyCat.Mind");
+        AssertDirectoryDoesNotReference("game", "src", "Speech", forbiddenNamespace: "AlleyCat.Mind");
+        AssertDirectoryDoesNotReference("game", "src", "Vision", forbiddenNamespace: "AlleyCat.Mind");
+        AssertDirectoryDoesNotReference("game", "src", "Vision", forbiddenNamespace: "AlleyCat.Speech.Voice");
     }
 
     private static void AssertDirectoryDoesNotReference(string first, string second, string third, string forbiddenNamespace)

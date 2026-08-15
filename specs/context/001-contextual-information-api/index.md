@@ -50,7 +50,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
     implementation path.
 11. `ContextSource` is a neutral abstract Godot resource base under `AlleyCat.Context` and is the exported property type
     for Godot-authored source collections.
-12. `AlleyCat.Context` must not depend on `AlleyCat.Body.Eyes` or `AlleyCat.Character`, and must not contain
+12. `AlleyCat.Context` must not depend on `AlleyCat.Vision` or `AlleyCat.Character`, and must not contain
     character-specific source APIs or character-specific source resource bases.
 13. A contextual composer owns source aggregation. Each source fully owns its local template root and uses only its
     supplied identifiable inputs and direct, narrow capabilities; sources do not call `GetContext`.
@@ -76,8 +76,8 @@ consumer APIs, while providing the narrow character-card source and scene-charac
     values, or an owner absent from the scene context.
 25. When supplied, an `IIdentifiable` observer is passed unchanged to each source; when omitted, sources receive `null`.
     A source may require or pattern-match a narrower direct capability.
-26. `IContextual` neither defines visual-observer capability nor participates in visual-cue description. BODY-004 owns
-    visual inspection through `IEyesHolder` and `IVisualSubject`.
+26. `IContextual` neither defines visual-observer capability nor participates in visual-cue description. VISION-001 owns
+    visual inspection through `IHasVision` and `IVisualSubject`.
 27. A ContextWorker run under AI-005 returns `IReadOnlyDictionary<string, object?>` directly. No public
     `ContextualSnapshot`, worker-specific `IContextual` wrapper, `ContextWorkerState`, or alternative worker-state
     boundary is introduced.
@@ -166,7 +166,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 17. Sources accept optional `IIdentifiable` observers and preserve supplied-observer and omitted-observer semantics.
     Sources use direct, narrow capabilities when needed.
 18. Each composer owns source aggregation, and each source owns its local template root. `AlleyCat.Context` has no
-    dependency on `AlleyCat.Body.Eyes` or `AlleyCat.Character`.
+     dependency on `AlleyCat.Vision` or `AlleyCat.Character`.
 19. A ContextWorker run returns `IReadOnlyDictionary<string, object?>` directly, with no public `ContextualSnapshot`,
     worker-specific `IContextual` wrapper, `ContextWorkerState`, or alternative worker-state boundary.
 20. Tests verify a ContextWorker atomically stores and returns the exact dictionary returned by the worker. Producer
@@ -185,7 +185,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
-- [BODY-004: Eyes](../../body/004-eyes/index.md)
+- [VISION-001: Eyes](../../vision/001-eyes/index.md)
 - [AI-005: Context Worker](../../ai/005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)

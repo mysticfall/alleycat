@@ -1,8 +1,8 @@
-using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Scene;
+using AlleyCat.Vision;
 
 namespace AlleyCat.IntegrationTests.Support;
 

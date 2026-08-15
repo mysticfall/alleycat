@@ -1,5 +1,5 @@
-using AlleyCat.Body.Hands;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Rigging;
 using AlleyCat.XR;
 using Godot;

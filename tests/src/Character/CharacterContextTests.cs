@@ -1,9 +1,9 @@
 using System.Runtime.CompilerServices;
-using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Scene;
+using AlleyCat.Vision;
 using Xunit;
 
 namespace AlleyCat.Tests.Character;

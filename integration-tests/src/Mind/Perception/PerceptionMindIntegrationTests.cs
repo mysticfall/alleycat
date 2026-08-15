@@ -1,5 +1,3 @@
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -9,7 +7,10 @@ using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;
 using AlleyCat.Sense;
+using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
+using AlleyCat.Vision;
 using Godot;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
@@ -147,8 +148,8 @@ public sealed class PerceptionMindIntegrationTests
 
         try
         {
-            Assert.Contains(hearing, tree.GetNodesInGroup(IVoiceListener.GroupName));
-            Assert.DoesNotContain(mind, tree.GetNodesInGroup(IVoiceListener.GroupName));
+            Assert.Contains(hearing, tree.GetNodesInGroup(IHearing.GroupName));
+            Assert.DoesNotContain(mind, tree.GetNodesInGroup(IHearing.GroupName));
             source.Speak("external speech");
             Assert.Equal("external speech", Assert.IsType<ObservedSpeech>(Assert.Single(mind.Timeline)).Content);
         }

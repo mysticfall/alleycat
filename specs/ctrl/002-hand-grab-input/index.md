@@ -105,6 +105,6 @@ Provide a hand grab input system that:
 - [CTRL: Player Character Control System](../index.md)
 - [CTRL-001: Locomotion](../001-locomotion/index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
-- [BODY-001: Hands](../../body/001-hands/index.md)
+- [INTR-003: Hands](../../interaction/003-hands/index.md)
 - [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
 - `game/src/Control/` (implementation namespace)

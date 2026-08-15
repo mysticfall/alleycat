@@ -9,7 +9,7 @@ namespace AlleyCat.Tests.Testing;
 public sealed class RuntimeContextTests
 {
     private const string MainScenePath = "res://assets/scenes/main.tscn";
-    private const string TestScenePath = "res://tests/body/voice/voice_test.tscn";
+    private const string TestScenePath = "res://tests/speech/voice/voice_test.tscn";
     private const string TestingAssetScenePath = "res://assets/testing/navigation/navigation_test.tscn";
 
     /// <summary>

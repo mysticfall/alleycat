@@ -1,8 +1,8 @@
 using System.Collections;
 using System.Reflection;
-using AlleyCat.Body.Hands;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Interaction;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;

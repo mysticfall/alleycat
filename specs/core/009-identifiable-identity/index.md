@@ -52,7 +52,7 @@ cross-object references unambiguous.
 - The `char`, `loc`, and `voice` type vocabulary for this migration.
 - Normative identity integration for character, context, and lore specifications.
 - Character-owned voice-ID installation after target-scene precedence.
-- Identifiable inputs for CTX-001 sources and BODY-004 visual subjects.
+- Identifiable inputs for CTX-001 sources and VISION-001 visual subjects.
 
 ## Out Of Scope
 
@@ -92,6 +92,6 @@ cross-object references unambiguous.
 - [CHAR-001: Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../../ai/004-lore-backstory/index.md)
-- [BODY-006: Voice Component](../../body/006-voice/index.md)
+- [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)

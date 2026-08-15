@@ -1,4 +1,4 @@
-using AlleyCat.Body;
+using AlleyCat.Interaction.Physical;
 using Godot;
 
 namespace AlleyCat.Rigging.Physics;

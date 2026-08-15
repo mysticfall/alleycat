@@ -299,7 +299,7 @@ failures contained without treating assistant text or provider history as charac
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-005: Context Worker](../005-context-worker/index.md)
-- [BODY-006: Voice Component](../../body/006-voice/index.md)
+- [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)

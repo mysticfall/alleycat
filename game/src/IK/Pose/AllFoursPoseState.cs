@@ -1,6 +1,6 @@
-using AlleyCat.Body.Hands;
 using AlleyCat.Common;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Interaction.Hands;
 using Godot;
 
 namespace AlleyCat.IK.Pose;

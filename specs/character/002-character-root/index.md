@@ -28,7 +28,7 @@ exists.
    or unrebasable.
 7. Each character asset owns a stable identity for conversation context, while voice retains independent local
    attribution identity regardless of player or NPC role.
-8. Gameplay systems can treat every character as an eyes holder and visual subject with discoverable, authored
+8. Gameplay systems can treat every character as a vision holder and visual subject with discoverable, authored
    appearance cues.
 9. Shared character templates provide a whole-character cue, while Ally NPC, Ally player, and Vadim describe their own
    appearances.
@@ -45,11 +45,12 @@ exists.
    character.
 2. `ICharacter` must follow the CORE-003 holder trait pattern and aggregate required holder traits for current humanoid
    capability groups:
-   - `IHasHands` from BODY-001.
-   - `IEyesHolder` from BODY-004.
-   - `IHasVoice` from BODY-006.
+    - `IHasHands` from INTR-003.
+    - `IHasVision` from VISION-001.
+    - `IHasHearing` from SPCH-006.
+    - `IHasVoice` from SPCH-005.
    - `ILocomotive` from CTRL-001.
-   - `IVisualSubject` from BODY-004.
+    - `IVisualSubject` from VISION-001.
 3. `ICharacter` must also remain an `IComponentHolder`, inheriting CORE-003 deterministic component iteration and its
    local component-only `IServiceProvider` contract through the holder traits.
 4. The concrete Godot type must be named `AlleyCat.Character.Character`.
@@ -106,7 +107,7 @@ exists.
 30. `Voiceprint` is a listener-recognition key and must not be used as proof that a voice belongs to a character.
 31. The lowest shared male/female character bases must author `CharacterCardContextSource`, `Actors` membership, and
     `VisualSubjects` membership. Both bases must be valid `IVisualSubject` scan members. Higher role templates and
-    concrete scenes must not add redundant compensation; BODY-004 normatively owns cue and scan details.
+     concrete scenes must not add redundant compensation; VISION-001 normatively owns cue and scan details.
 32. Under CTX-001, `CharacterCardContextSource` must publish canonical character identity as exactly
     `{ FullId: subject.FullId }`, not a bare local `Id`.
 33. The concrete `Character` root owns a validated, read-only published visual-cue collection for its `IVisualSubject`
@@ -130,8 +131,8 @@ exists.
     test and diagnostic baseline, not the NPC production component.
 40. `Character.Components` deliberately includes every configured `ISense` in deterministic holder order. A component
     that is both a required embodied capability and a configured sense appears once.
-41. Final NPC role templates configure Eyes and Hearing senses under AI-006. Character and Body production code must not
-    depend on Mind, although scene composition may place Mind beneath Character.
+41. Final NPC role templates configure Vision and Hearing senses under AI-006. Character and modality or delivery
+    domains must not depend on Mind, although scene composition may place Mind beneath Character.
 42. `CharacterPerception`, `MindStimulus`, and their bespoke installer or scene wiring must not exist.
 43. The Character component projection is the sole authored voice source for downstream systems. Mind must not export,
     author, or duplicate an output-voice reference; tools resolve the character-owned voice from the supplied
@@ -153,11 +154,11 @@ exists.
 - Asset-owned CORE-009 character identity and character-owned voice-ID installation for operational attribution.
 - Character component projection as the sole authored downstream voice source.
 - Lowest-shared-base character-card context wiring.
-- `ICharacter` aggregation of the BODY-004 visual observer and visual subject roles.
+- `ICharacter` aggregation of the VISION-001 vision-holder and visual-subject roles.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
 - NPC-only `LocomotiveNavigation` composition through the character root's `Node3D` and `ILocomotive` contracts.
-- NPC Eyes and Hearing composition through the ordinary component projection under AI-006.
-- `ICharacter` aggregation of the BODY-004 visual-subject role and eyes-holder capability.
+- NPC Vision and Hearing composition through the ordinary component projection under AI-006.
+- `ICharacter` aggregation of the VISION-001 visual-subject role and vision-holder capability.
 - Validated, published template-authored whole-character visual-cue references, explicit refresh, and
   character-specific description overrides.
 
@@ -165,7 +166,7 @@ exists.
 
 - Non-humanoid character contracts or alternate future character kinds.
 - Optional capability groups not required by the current fully embodied humanoid scope.
-- Replacing BODY, CTRL, IK, or speech subsystem contracts with character-root-specific APIs.
+- Replacing embodied-component, CTRL, IK, or speech subsystem contracts with character-root-specific APIs.
 - Exact scene-node names for art, mesh, or imported visual roots.
 - Final component ordering beyond deterministic holder-defined ordering required by CORE-003.
 - Migration support for legacy no-root or near-root character scenes beyond clearly failing validation.
@@ -188,7 +189,7 @@ exists.
    author `Voice` before runtime installation.
 8. Role-explicit Ally player, Ally NPC, and Vadim NPC assets retain their own local identities, while an alternate
    female-player fixture demonstrates configurable identity independent of voice attribution.
-9. Every character exposes a discoverable whole-character `body` cue that can describe its appearance through an eyes
+9. Every character exposes a discoverable whole-character `body` cue that can describe its appearance through a vision
    holder.
 10. Ally player, Ally NPC, and Vadim return their own authored appearance descriptions rather than generic placeholder
     text.
@@ -202,8 +203,8 @@ exists.
 ### Technical Requirements
 
 1. `ICharacter` exists in `AlleyCat.Character` and represents only the current fully embodied humanoid character kind.
-2. `ICharacter` extends or otherwise normatively aggregates `IComponentHolder`, `IHasHands`, `IEyesHolder`, `IHasVoice`,
-   and `ILocomotive`.
+2. `ICharacter` extends or otherwise normatively aggregates `IComponentHolder`, `IHasHands`, `IHasVision`,
+   `IHasHearing`, `IHasVoice`, and `ILocomotive`.
 3. `AlleyCat.Character.Character` inherits from `CharacterBody3D`, implements `ICharacter`, and is the scene root.
 4. The concrete type is referenced directly only where needed; conflicting contexts use local aliases.
 5. Installed and final role `Character` roots expose explicit required capability references for eyes, locomotion,
@@ -234,8 +235,8 @@ exists.
 19. Shared male/female bases each author one `CharacterCardContextSource`, `Actors` membership, and `VisualSubjects`
     membership; each is a valid `IVisualSubject` scan member and higher layers do not compensate redundantly.
 20. `CharacterCardContextSource` returns only the canonical `FullId` entry with value `subject.FullId`, not bare `Id`.
-21. `ICharacter` normatively aggregates `IEyesHolder` and `IVisualSubject` from BODY-004; `IVisualObserver` does not
-    exist.
+21. `ICharacter` normatively aggregates `IHasVision` and `IVisualSubject` from VISION-001 and `IHasHearing` from
+    SPCH-006; `IVisualObserver` does not exist.
 22. Character roots expose validated published visual-cue references through a read-only collection; installation
     preserves or rebases those authored references, and published cue topology is immutable until explicit refresh.
 23. Shared reference female and male templates each contain exactly one `StaticVisualCue` with ID `body` at
@@ -249,8 +250,8 @@ exists.
     after rebase and validation. Installer and playtest composition use `INavigation` without production dependence on
     `DirectTransformNavigation`; direct-consumer baseline tests remain valid.
 27. Player-template inspection proves neither final player roles nor shared player bases install `LocomotiveNavigation`.
-28. Composition tests verify final NPC roles configure Eyes and Hearing, every configured `ISense` appears exactly once
-    in deterministic `Character.Components` order, and required holder traits remain unchanged.
+28. Composition tests verify final NPC roles configure Vision and Hearing, every configured `ISense` appears exactly
+    once in deterministic `Character.Components` order, and required holder traits resolve those components.
 29. Dependency and composition tests verify Character production code has no Mind dependency, scene composition may
     place Mind beneath Character, and no `CharacterPerception`, `MindStimulus`, or bespoke wiring remains.
 30. `ICharacter` inherits CORE-003 `IComponentHolder` service-provider semantics, including local component-only
@@ -268,9 +269,10 @@ exists.
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [AI-001: Mind Component](../../ai/001-mind/index.md)
 - [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)
-- [BODY-001: Hands](../../body/001-hands/index.md)
-- [BODY-004: Eyes](../../body/004-eyes/index.md)
-- [BODY-006: Voice Component](../../body/006-voice/index.md)
+- [INTR-003: Hands](../../interaction/003-hands/index.md)
+- [VISION-001: Eyes](../../vision/001-eyes/index.md)
+- [SPCH-005: Voice Component](../../speech/005-voice/index.md)
+- [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)

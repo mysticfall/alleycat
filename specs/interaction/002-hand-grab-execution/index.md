@@ -182,7 +182,7 @@ Provide a grab execution system that:
 31. On commit, the grab point's `GrabPointCandidate.Animation` resource is passed
     to `HandPoseController.SetHandPose()` (internal, not via `IHand`).
 32. `HandPoseController` validates the resource as Godot `Animation` before use.
-33. Hand pose transition uses the existing smooth transition from BODY-001 (default 0.2s).
+33. Hand pose transition uses the existing smooth transition from INTR-003 (default 0.2s).
 34. Both left and right hand pose animations are supported while holding.
 35. On release, `HandPoseController.ClearHandPose()` restores upstream animation
     pass-through.
@@ -435,7 +435,7 @@ Provide a grab execution system that:
 - [Project Specifications Index](../../index.md)
 - [INTR-001: Grabbable Interface](../001-grabbable/index.md)
 - [INTR-001-A: Spherical Grab Point](../001-grabbable/spherical-grab-point.md)
-- [BODY-001: Hands](../../body/001-hands/index.md)
+- [INTR-003: Hands](../003-hands/index.md)
 - [IK-002: Arm And Shoulder IK System](../../ik/002-arm-shoulder-ik/index.md)
 - [IK Implementation Notes](../../ik/implementation-notes.md)
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)

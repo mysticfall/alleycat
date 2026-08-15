@@ -259,7 +259,7 @@ responsive and interruption-safe in-world behaviour.
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
-- [BODY-006: Voice Component](../../body/006-voice/index.md)
+- [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
 - [CORE-010: Main-Thread Dispatcher](../../core/010-main-thread-dispatcher/index.md)

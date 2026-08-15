@@ -1,4 +1,3 @@
-using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -7,6 +6,7 @@ using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Scene;
+using AlleyCat.Vision;
 using Microsoft.Extensions.AI;
 using Xunit;
 

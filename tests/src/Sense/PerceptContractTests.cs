@@ -1,8 +1,9 @@
 using System.Collections;
 using System.Reflection;
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Voice;
 using AlleyCat.Sense;
+using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
+using AlleyCat.Vision;
 using Xunit;
 
 namespace AlleyCat.Tests.Sense;
@@ -21,7 +22,7 @@ public sealed class PerceptContractTests
         Assert.All(typeof(SpeechPercept).GetProperties(), property => Assert.False(property.CanWrite));
         Assert.DoesNotContain(typeof(SpeechPercept).GetProperties(), property =>
             typeof(IVoice).IsAssignableFrom(property.PropertyType)
-            || (property.PropertyType.IsClass && property.PropertyType.Namespace?.StartsWith("AlleyCat.Body", StringComparison.Ordinal) == true));
+            || (property.PropertyType.IsClass && property.PropertyType.Namespace?.StartsWith("AlleyCat", StringComparison.Ordinal) == true));
     }
 
     /// <summary>Visual transport owns an ordered read-only identity copy.</summary>
@@ -45,9 +46,25 @@ public sealed class PerceptContractTests
         EventInfo perceived = Assert.Single(typeof(ISense).GetEvents());
         Assert.Equal(typeof(Action<IPercept>), perceived.EventHandlerType);
         Assert.Equal(typeof(IReadOnlyList<Type>), typeof(ISense).GetProperty(nameof(ISense.PerceptTypes))!.PropertyType);
-        Assert.DoesNotContain(typeof(IEyes).GetMethods(), method => method.Name == "Scan");
+        Assert.DoesNotContain(typeof(IVision).GetMethods(), method => method.Name == "Scan");
         Assert.True(typeof(ISense).IsAssignableFrom(typeof(EyesBehaviour)));
         Assert.True(typeof(ISense).IsAssignableFrom(typeof(Hearing)));
+    }
+
+    /// <summary>Speech ownership remains top-level while voice implementations remain isolated below Voice.</summary>
+    [Fact]
+    public void HearingContracts_AreTopLevelSpeechCapabilities()
+    {
+        Assert.Equal("AlleyCat.Speech", typeof(SpeechPercept).Namespace);
+        Assert.Equal("AlleyCat.Speech", typeof(IHearing).Namespace);
+        Assert.Equal("AlleyCat.Speech", typeof(IHasHearing).Namespace);
+        Assert.Equal("AlleyCat.Speech", typeof(Hearing).Namespace);
+        Assert.Equal("AlleyCat.Speech.Voice", typeof(IVoice).Namespace);
+        Assert.True(typeof(ISense).IsAssignableFrom(typeof(IHearing)));
+        Assert.Equal(typeof(IReadOnlyList<Type>), typeof(ISense).GetProperty(nameof(ISense.PerceptTypes))!.PropertyType);
+        Assert.Equal(
+            [typeof(string), typeof(IVoice)],
+            typeof(IHearing).GetMethod(nameof(IHearing.ReceiveVoice))!.GetParameters().Select(parameter => parameter.ParameterType));
     }
 
     /// <summary>Voice semantic identity remains canonical and identifiable.</summary>

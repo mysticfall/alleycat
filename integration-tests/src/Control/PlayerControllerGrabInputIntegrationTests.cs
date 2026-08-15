@@ -1,8 +1,8 @@
 using System.Reflection;
-using AlleyCat.Body.Hands;
 using AlleyCat.Control;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Rigging;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
@@ -229,7 +229,7 @@ public sealed class PlayerControllerGrabInputIntegrationTests
 
     private static Node? TryGetHandNode(object hands, string sideName)
     {
-        MethodInfo tryGetHand = hands.GetType().GetInterface("AlleyCat.Body.Hands.IHasHands")
+        MethodInfo tryGetHand = hands.GetType().GetInterface("AlleyCat.Interaction.Hands.IHasHands")
             ?.GetMethod("TryGetHand")
             ?? throw new InvalidOperationException($"Expected {hands.GetType().FullName} to expose IHasHands.TryGetHand.");
         Type sideType = tryGetHand.GetParameters()[0].ParameterType;

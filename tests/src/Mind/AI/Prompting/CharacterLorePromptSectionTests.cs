@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -7,6 +6,7 @@ using AlleyCat.Core.Content;
 using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
+using AlleyCat.Vision;
 using Xunit;
 
 namespace AlleyCat.Tests.Mind.AI.Prompting;

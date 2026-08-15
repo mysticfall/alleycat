@@ -19,7 +19,8 @@ log. It is explanatory only; the linked specifications are authoritative.
 - [AI-002](../specs/ai/002-agent-runtime/index.md) defines bounded tool-only turns, transient request replay, provider
   transport, standard action results, and the synthetic `end_turn` marker.
 - [AI-003](../specs/ai/003-prompt-api/index.md) defines complete timeline rendering and actor-relative observed speech.
-- [BODY-006](../specs/body/006-voice/index.md) defines FIFO speech admission, serial production, and voice teardown.
+- [SPCH-005](../specs/speech/005-voice/index.md) defines FIFO speech admission, serial production, and voice teardown.
+- [SPCH-006](../specs/speech/006-hearing/index.md) defines completed-speech acquisition without interpretation.
 - [CTX-001](../specs/context/001-contextual-information-api/index.md) defines non-AI-specific contextual data and scene
   requests through `AlleyCat.Context`.
 - CTX-001 excludes prompt placement, rendering, ranking, summarisation, AI retrieval, memory, lore, perception backends,
@@ -152,4 +153,5 @@ receives a complete replay rather than stored state or `previous_response_id` ch
 ## Specification Follow-Up
 
 Future context-management proposals must preserve distinct user and technical requirements and explicitly amend AI-001,
-AI-002, AI-003, or BODY-006 before changing the approved observation, tool-result, prompt, or voice architecture.
+AI-002, AI-003, SPCH-005, or SPCH-006 before changing the approved observation, tool-result, prompt, voice, or
+hearing architecture.

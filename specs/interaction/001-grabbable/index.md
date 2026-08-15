@@ -187,4 +187,4 @@ hand pose from grab point) is covered by [INTR-002: Hand Grab Execution](../002-
 - `game/src/Interaction/GrabPointCandidate.cs`
 - [INTR-001-A: Spherical Grab Point](spherical-grab-point.md)
 - [INTR-001-B: Cylindrical Grab Point](cylindrical-grab-point.md)
-- [BODY-001: Hands](../../body/001-hands/index.md)
+- [INTR-003: Hands](../003-hands/index.md)

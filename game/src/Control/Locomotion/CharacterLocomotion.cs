@@ -1,4 +1,4 @@
-using AlleyCat.Body.Hands;
+using AlleyCat.Interaction.Hands;
 using Godot;
 
 namespace AlleyCat.Control.Locomotion;

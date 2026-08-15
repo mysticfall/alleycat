@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
 [ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/templates/ik/vrik.tscn" id="7_2a5tg"]
 [ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
-[ext_resource type="Script" uid="uid://dyffnsg0122vb" path="res://src/Body/Voice/PlayerVoice.cs" id="8_player_voice"]
+[ext_resource type="Script" uid="uid://dyffnsg0122vb" path="res://src/Speech/Voice/PlayerVoice.cs" id="8_player_voice"]
 [ext_resource type="Script" uid="uid://2whl41iq7k4b" path="res://src/Control/PlayerController.cs" id="10_ctrlplayer"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/templates/animation/animation_tree_root_player.tres" id="11_pose_tree"]
 

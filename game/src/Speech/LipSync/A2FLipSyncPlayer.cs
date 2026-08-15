@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using AlleyCat.Body.Eyes;
+using AlleyCat.Vision;
 using Godot;
 using HttpClient = System.Net.Http.HttpClient;
 

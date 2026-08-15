@@ -1,4 +1,3 @@
-using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -9,6 +8,7 @@ using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
+using AlleyCat.Vision;
 using Godot;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;

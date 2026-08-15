@@ -1,6 +1,6 @@
 using System.Reflection;
-using AlleyCat.Body.Hands;
 using AlleyCat.IK.Pose;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;

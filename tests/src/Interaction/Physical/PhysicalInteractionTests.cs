@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using AlleyCat.Body;
 using AlleyCat.Common;
 using AlleyCat.IK;
 using AlleyCat.Interaction.Physical;

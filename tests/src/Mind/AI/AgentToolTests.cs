@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using AlleyCat.Body.Eyes;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -9,6 +8,7 @@ using AlleyCat.Core.Threading;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
+using AlleyCat.Vision;
 using Microsoft.Extensions.AI;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;

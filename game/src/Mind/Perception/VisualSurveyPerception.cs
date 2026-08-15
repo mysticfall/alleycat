@@ -1,4 +1,4 @@
-using AlleyCat.Sense;
+using AlleyCat.Vision;
 using Godot;
 
 namespace AlleyCat.Mind.Perception;

@@ -1,8 +1,8 @@
-using AlleyCat.Body.Voice;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.Perception;
+using AlleyCat.Speech;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -59,7 +59,7 @@ public sealed class PerceptionCompositionIntegrationTests
         {
             CharacterHub npc = Assert.IsType<CharacterHub>(npcNode, exactMatch: false);
             npc.RefreshComponents();
-            Hearing hearing = Assert.IsType<Hearing>(npc.Hearing);
+            Hearing hearing = Assert.IsType<Hearing>(npc.Hearing!);
             AgenticMind mind = Assert.IsType<AgenticMind>(npc.GetNode("Mind"), exactMatch: false);
 
             Assert.Same(npc, hearing.GetParent());

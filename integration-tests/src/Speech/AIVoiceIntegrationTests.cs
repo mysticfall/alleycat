@@ -1,6 +1,4 @@
 using System.Text;
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -10,10 +8,14 @@ using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
+using AlleyCat.Sense;
+using AlleyCat.Speech;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using AlleyCat.Speech.Transcription;
+using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
+using AlleyCat.Vision;
 using Godot;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -111,15 +113,15 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         AddTestNode(sceneTree, listener);
         AddTestNode(sceneTree, nonListener);
         await WaitForFramesAsync(sceneTree, 2);
-        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
-        nonListener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        nonListener.AddToGroup(new StringName(IHearing.GroupName));
         await WaitForFramesAsync(sceneTree, 2);
 
         try
         {
-            Assert.Equal("voice_listeners", IVoiceListener.GroupName);
-            Assert.True(listener.IsInGroup(new StringName(IVoiceListener.GroupName)));
-            Assert.True(nonListener.IsInGroup(new StringName(IVoiceListener.GroupName)));
+            Assert.Equal("voice_listeners", IHearing.GroupName);
+            Assert.True(listener.IsInGroup(new StringName(IHearing.GroupName)));
+            Assert.True(nonListener.IsInGroup(new StringName(IHearing.GroupName)));
 
             Assert.True(voice.IsInsideTree());
 
@@ -153,7 +155,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         AddTestNode(sceneTree, voice);
         AddTestNode(sceneTree, listener);
         await WaitForFramesAsync(sceneTree, 2);
-        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        listener.AddToGroup(new StringName(IHearing.GroupName));
         await WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -359,7 +361,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         AddTestNode(sceneTree, lipSyncPlayer);
         AddTestNode(sceneTree, voice);
         AddTestNode(sceneTree, listener);
-        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        listener.AddToGroup(new StringName(IHearing.GroupName));
         await WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -393,7 +395,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         AddTestNode(sceneTree, voice);
         AddTestNode(sceneTree, listener);
-        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        listener.AddToGroup(new StringName(IHearing.GroupName));
         await WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -434,7 +436,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         AddTestNode(sceneTree, lipSyncPlayer);
         AddTestNode(sceneTree, voice);
         AddTestNode(sceneTree, listener);
-        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        listener.AddToGroup(new StringName(IHearing.GroupName));
         await WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -720,7 +722,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         commonParent.AddChild(voice);
         AddTestNode(sceneTree, commonParent);
         AddTestNode(sceneTree, listener);
-        listener.AddToGroup(new StringName(IVoiceListener.GroupName));
+        listener.AddToGroup(new StringName(IHearing.GroupName));
         await WaitForFramesAsync(sceneTree, 2);
 
         try
@@ -1336,12 +1338,19 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         }
     }
 
-    private sealed partial class RecordingVoiceListener : Node, IVoiceListener
+    private sealed partial class RecordingVoiceListener : Node, IHearing
     {
         public List<VoiceListenerEvent> Events { get; } = [];
 
+        public IReadOnlyList<Type> PerceptTypes { get; } = [typeof(SpeechPercept)];
+
+        public event Action<IPercept>? Perceived;
+
         public void ReceiveVoice(string speech, IVoice source)
-            => Events.Add(new VoiceListenerEvent(speech, source));
+        {
+            Events.Add(new VoiceListenerEvent(speech, source));
+            Perceived?.Invoke(new SpeechPercept(speech, source.Id));
+        }
     }
 
     private sealed record VoiceListenerEvent(string Speech, IVoice Source);

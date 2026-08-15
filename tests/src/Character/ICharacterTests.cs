@@ -1,15 +1,16 @@
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Hands;
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Scene;
 using AlleyCat.Sense;
+using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
+using AlleyCat.Vision;
 using Godot;
 using Xunit;
 
@@ -29,8 +30,9 @@ public sealed class ICharacterTests
         Assert.True(typeof(IComponentHolder).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IIdentifiable).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasHands).IsAssignableFrom(typeof(ICharacter)));
-        Assert.True(typeof(IEyesHolder).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(IHasVision).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasVoice).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(IHasHearing).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(INavigator).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IContextual).IsAssignableFrom(typeof(ICharacter)));
@@ -46,10 +48,11 @@ public sealed class ICharacterTests
         var leftHand = new FakeHand(LimbSide.Left);
         var eyes = new FakeEyes();
         var voice = new FakeVoice();
+        var hearing = new FakeHearing();
         var locomotion = new FakeLocomotion();
         var navigation = new FakeNavigation();
         Transform3D destination = Transform3D.Identity.Translated(new Vector3(1.0f, 0.0f, 2.0f));
-        ICharacter character = new FakeCharacter(leftHand, eyes, voice, locomotion, navigation);
+        ICharacter character = new FakeCharacter(leftHand, eyes, voice, hearing, locomotion, navigation);
 
         Assert.Equal("char", character.Type);
         Assert.Equal("char:fake_character", character.FullId);
@@ -60,9 +63,10 @@ public sealed class ICharacterTests
 
         Assert.True(character.TryGetHand(LimbSide.Left, out IHand? resolvedHand));
         Assert.Same(leftHand, resolvedHand);
-        Assert.Same(eyes, character.RequireEyes());
+        Assert.Same(eyes, character.RequireVision());
         Assert.True(character.TryGetVoice(out IVoice? resolvedVoice));
         Assert.Same(voice, resolvedVoice);
+        Assert.Same(hearing, character.RequireHearing());
         Assert.Same(navigation, character.RequireNavigation());
         Assert.Equal(NavigationDestinationResult.Accepted, navigationResult);
         Assert.Equal(destination, navigation.Destination);
@@ -98,7 +102,7 @@ public sealed class ICharacterTests
         }
     }
 
-    private sealed class FakeEyes : IEyes
+    private sealed class FakeEyes : IVision
     {
         public Node3D? LookTarget
         {
@@ -146,6 +150,15 @@ public sealed class ICharacterTests
             Speak(speech);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class FakeHearing : IHearing
+    {
+        public IReadOnlyList<Type> PerceptTypes => [typeof(SpeechPercept)];
+
+        public event Action<IPercept>? Perceived;
+
+        public void ReceiveVoice(string speech, IVoice source) => Perceived?.Invoke(new SpeechPercept(speech, source.Id));
     }
 
     private sealed class FakeLocomotion : ILocomotion

@@ -1,11 +1,12 @@
-using AlleyCat.Body.Eyes;
-using AlleyCat.Body.Hands;
-using AlleyCat.Body.Voice;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
+using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging.Installation;
+using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
+using AlleyCat.Vision;
 using Godot;
 
 namespace AlleyCat.Character;

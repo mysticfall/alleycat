@@ -1,7 +1,7 @@
-using AlleyCat.Body.Voice;
 using AlleyCat.Character;
 using AlleyCat.Mind.Observation;
-using AlleyCat.Sense;
+using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
 using Godot;
 
 namespace AlleyCat.Mind.Perception;
