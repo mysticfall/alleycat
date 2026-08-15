@@ -58,6 +58,8 @@ README.md                         # Repository overview and developer onboarding
 
 - Load the `godot-integration-testing` skill before authoring, running, triaging, or reporting integration tests.
 - Keep execution and fixture-authoring rules in that dedicated skill so this global entrypoint stays lean.
+- When `xvfb-run` is available, run windowed integration tests under a virtual framebuffer to avoid disruptive
+  windows; see the `godot-integration-testing` skill for the exact wrapper and the software-rendering caveat.
 
 ## Language
 

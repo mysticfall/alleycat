@@ -46,6 +46,50 @@ dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
 If a test validates rendering, screenshots, visual timing, viewport contents, animation visibility, or other
 renderer-backed behaviour, prefer windowed execution unless the test's own contract says headless is valid.
 
+## Virtual Display (Xvfb)
+
+Windowed integration runs open real Godot windows on the active display server. For the full suite this means
+windows pop up and vanish for several minutes, which disrupts the machine being used to run them. When
+`xvfb-run` (or `Xvfb`) is available, wrap windowed integration runs so Godot renders into a virtual framebuffer
+instead of the interactive display:
+
+```bash
+xvfb-run -a dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
+  --test-class Fully.Qualified.TypeName
+```
+
+The integration test framework launches Godot with `UseShellExecute = false`, so the Godot subprocess inherits the
+`DISPLAY` that `xvfb-run` sets. No extra flags are required for the Godot side.
+
+Enforce this wrapper whenever the host has a display server and `xvfb-run` is on `PATH`, including the final
+handoff windowed gate. It preserves the actual-renderer requirement of the windowed gate (Godot still
+initialises a renderer under Xvfb, so renderer-dependent failures are still caught) while keeping the
+interactive display free.
+
+Use `xvfb-run -a` so a free display number is chosen automatically. If `xvfb-run` is unavailable, fall back to a
+plain windowed run and report the limitation.
+
+### Software-Rendering Caveat
+
+Xvfb has no GPU, so Godot falls back to software rendering (typically Mesa llvmpipe). Software rendering changes
+per-frame timing compared with a real GPU:
+
+- Per-frame `delta` values are larger and more variable.
+- Frame/timing-sensitive assertions that assume tight GPU pacing can fail under Xvfb even though they pass on real
+  hardware. For example, `UI/SplashScreenIntegrationTests.SplashScreen_FadeLifecycleFixtures_MatchConfiguredTimingAndCompletionSignal`
+  was frame-pacing-sensitive under software rendering (it failed under Xvfb but passed on a real display). Because the
+  assertion checks animation timing rather than renderer output, it was marked `[Headless]`, while the sibling layout
+  test stays windowed to keep exercising the actual renderer.
+
+Handle this caveat as follows:
+
+- For windowed tests whose assertions are frame-pacing-sensitive and that do not truly need a visible renderer,
+  mark them `[Headless]` so they run deterministically without any window.
+- Where a windowed renderer is genuinely required, use tolerant ranges for timing/animation assertions rather than
+  exact GPU-paced bounds, or validate those specific tests on the real display when exact pacing matters.
+- Treat a failure that only reproduces under software rendering as an environment limitation, not a product defect,
+  unless the test contract explicitly requires real-GPU pacing.
+
 ## Targeted Runs
 
 Coder agents should use targeted runs while iterating on a feature:
@@ -93,6 +137,7 @@ For final handoff, report:
 
 - exact integration command used;
 - whether the run was windowed or headless, and why headless was valid if used;
+- whether the run used Xvfb (`xvfb-run`) and any software-rendering caveats observed;
 - pass/fail counts;
 - duration or timeout used;
 - any known limitations, especially if only targeted or headless-safe tests were run.
