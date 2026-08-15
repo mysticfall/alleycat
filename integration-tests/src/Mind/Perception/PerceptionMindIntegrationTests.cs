@@ -43,14 +43,31 @@ public sealed class PerceptionMindIntegrationTests
         {
             Assert.Equal(1, firstSense.SubscriptionCount);
             Assert.Equal(1, secondSense.SubscriptionCount);
+            Assert.Equal(1, owner.ComponentsRefreshedHandlerCount);
             firstSense.Publish(new FirstPercept());
             secondSense.Publish(new SecondPercept());
             Assert.Equal(2, mind.Ingested.Count);
 
+            mind.Perceptions = [new SecondFaculty()];
+            owner.RefreshComponents(secondSense);
+            Assert.Equal(0, firstSense.SubscriptionCount);
+            Assert.Equal(1, secondSense.SubscriptionCount);
+            firstSense.Publish(new FirstPercept());
+            secondSense.Publish(new SecondPercept());
+            Assert.Equal(3, mind.Ingested.Count);
+
+            owner.RefreshComponents(secondSense);
+            Assert.Equal(1, secondSense.SubscriptionCount);
+            secondSense.Publish(new SecondPercept());
+            Assert.Equal(4, mind.Ingested.Count);
+
             root.RemoveChild(mind);
             firstSense.Publish(new FirstPercept());
-            Assert.Equal(2, mind.Ingested.Count);
+            secondSense.Publish(new SecondPercept());
+            Assert.Equal(4, mind.Ingested.Count);
             Assert.Equal(0, firstSense.SubscriptionCount);
+            Assert.Equal(0, secondSense.SubscriptionCount);
+            Assert.Equal(0, owner.ComponentsRefreshedHandlerCount);
         }
         finally
         {
@@ -197,12 +214,39 @@ public sealed class PerceptionMindIntegrationTests
         public void Publish(IPercept percept) => _perceived?.Invoke(percept);
     }
 
-    private sealed class TestCharacter(params IComponent[] components) : ICharacter
+    private sealed class TestCharacter(params IComponent[] components) : ICharacter, IComponentProjectionNotifier
     {
+        private IComponent[] _components = components;
+        private Action? _componentsRefreshed;
+
         public string Id { get; set; } = "owner";
-        public IReadOnlyList<IComponent> Components { get; } = components;
+        public IReadOnlyList<IComponent> Components => _components;
+        public bool HasComponentProjection { get; private set; } = true;
         public IReadOnlyList<VisualCue> VisualCues => [];
+        public int ComponentsRefreshedHandlerCount
+        {
+            get; private set;
+        }
+        public event Action? ComponentsRefreshed
+        {
+            add
+            {
+                _componentsRefreshed += value;
+                ComponentsRefreshedHandlerCount++;
+            }
+            remove
+            {
+                _componentsRefreshed -= value;
+                ComponentsRefreshedHandlerCount--;
+            }
+        }
         public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer) => new Dictionary<string, object?>();
+        public void RefreshComponents(params IComponent[] components)
+        {
+            _components = components;
+            HasComponentProjection = true;
+            _componentsRefreshed?.Invoke();
+        }
     }
 
     private sealed partial class TestMind(ICharacter owner) : MindBase

@@ -25,6 +25,8 @@ attention, existing speech history, and existing eye visibility and presentation
    memories.
 5. Sensing must not redirect gaze, alter eye presentation, or delay normal gameplay with asynchronous processing.
 6. Invalid sensing or perception configuration must fail before sensory processing activates.
+7. After character installation or recomposition, NPCs continue to perceive eligible speech reliably, without duplicate
+   observations.
 
 ## Technical Requirements
 
@@ -85,54 +87,58 @@ attention, existing speech history, and existing eye visibility and presentation
     publish undeclared types must fail clearly before activation or publication, as applicable.
 20. On `ISense.Perceived`, Mind synchronously selects the one exact faculty and receives one `PerceptionResult`. It must
     not use inheritance dispatch, fallback handlers, queues, tasks, Rx, or background processing.
-21. Each concrete faculty type owns one fixed, non-authorable initial semantic attention contribution in the inclusive
+21. When a live owning Character commits a replacement `Components` projection, Mind must synchronously revalidate and
+    replace its sense bindings as one refresh operation. For a successful rebind, it must remove every previous sense
+    handler before subscribing to current senses. Repeated equivalent refreshes must not duplicate delivery; node exit
+    must unsubscribe both projection and sense handlers. Exact mapping validation remains mandatory on every refresh.
+22. Each concrete faculty type owns one fixed, non-authorable initial semantic attention contribution in the inclusive
     range `0..1`. Generic `AttentionSettings` contains only maximum, decay, retention threshold, and context threshold
     values.
 
 ### Faculty Behaviour
 
-22. `SpeechPerception` compares the percept's source voice `Id` with the observer's current voice `Id` using ordinal
+23. `SpeechPerception` compares the percept's source voice `Id` with the observer's current voice `Id` using ordinal
     value equality. Equal values, including the installed character-owned voice ID, identify self speech and produce no
     attention effect or observation.
-23. For non-self speech, `SpeechPerception` resolves current-scene characters whose composed voice `Id` ordinally equals
+24. For non-self speech, `SpeechPerception` resolves current-scene characters whose composed voice `Id` ordinally equals
     the source voice `Id`. Blank configured candidate IDs do not match.
-24. Other values follow ordinary attribution handling: zero matches produce exactly one unknown `ObservedSpeech`; one
+25. Other values follow ordinary attribution handling: zero matches produce exactly one unknown `ObservedSpeech`; one
     match reinforces that character's canonical `FullId` and produces exactly one recognised `ObservedSpeech` with that
     `ActorId`; and multiple matches fail without attention, timeline, pending-scheduling, or other effects.
-25. Recognised and unknown observations retain the speech and raw local source voice `Id`. That ID remains operational
+26. Recognised and unknown observations retain the speech and raw local source voice `Id`. That ID remains operational
     attribution, not authenticated provenance.
-26. `VisualSurveyPerception` returns one attention reinforcement for every subject `FullId` in percept order and no
+27. `VisualSurveyPerception` returns one attention reinforcement for every subject `FullId` in percept order and no
     observations.
 
 ### Results, Attention, And Atomicity
 
-27. `PerceptionResult` contains an ordered sequence of attention effects and an ordered sequence of zero or more
+28. `PerceptionResult` contains an ordered sequence of attention effects and an ordered sequence of zero or more
     `Observation` records. Both sequences are immutable after return.
-28. Before any mutation, Mind validates the complete result, every attention effect, every observation, and every
+29. Before any mutation, Mind validates the complete result, every attention effect, every observation, and every
     calculated observation importance. Any failure leaves attention, timeline, pending scheduling, and scheduling state
     unchanged.
-29. After successful validation, Mind applies attention effects sequentially in declared order. Duplicate subject
+30. After successful validation, Mind applies attention effects sequentially in declared order. Duplicate subject
     effects are valid and compound in that order.
-30. Mind then atomically ingests all observations in result order through AI-001's existing timeline, pending FIFO, and
+31. Mind then atomically ingests all observations in result order through AI-001's existing timeline, pending FIFO, and
     scheduling path. Existing scheduling and interruption behaviour remains unchanged.
-31. Attention is keyed by canonical `FullId` using ordinal comparison. Reinforcement applies
+32. Attention is keyed by canonical `FullId` using ordinal comparison. Reinforcement applies
     `current + (maximum - current) * contribution` without exceeding maximum.
-32. Attention decays lazily and linearly with elapsed game time on percept handling, queries, and snapshots. Entries
+33. Attention decays lazily and linearly with elapsed game time on percept handling, queries, and snapshots. Entries
     below retention are evicted; every entry at or above the context threshold is eligible for context.
-33. Maximum must be finite and positive; decay must be finite and non-negative; thresholds must be finite and satisfy
+34. Maximum must be finite and positive; decay must be finite and non-negative; thresholds must be finite and satisfy
     `0 <= retention <= context <= maximum`. Settings validation must complete before activation or mutation.
-34. Attention snapshots are immutable identity/value sequences ordered by `FullId` using ordinal comparison. Attention
+35. Attention snapshots are immutable identity/value sequences ordered by `FullId` using ordinal comparison. Attention
     stores no live subject, percept, or observation reference.
 
 ### Ownership And Composition
 
-35. Mind owns incoming percept subscription, exact faculty dispatch, result validation, attention mutation, observation
+36. Mind owns incoming percept subscription, exact faculty dispatch, result validation, attention mutation, observation
     ingestion, and existing scheduling.
-36. AgenticMind owns only provider, prompt, render-context, and tool concerns. It must not interpret incoming percepts.
+37. AgenticMind owns only provider, prompt, render-context, and tool concerns. It must not interpret incoming percepts.
     The existing speech output tool and exactly-once self-action observation path remain unchanged.
-37. `Character.Components` deliberately includes configured `ISense` components in deterministic holder order, in
+38. `Character.Components` deliberately includes configured `ISense` components in deterministic holder order, in
     addition to its required embodied components. No `CharacterPerception` component or bespoke wiring remains.
-38. AgenticMind foreground context contains self and each attention-eligible `FullId` that currently resolves through
+39. AgenticMind foreground context contains self and each attention-eligible `FullId` that currently resolves through
     `ISceneContext.Find(FullId)` to an `IContextual` subject. It performs no additional visual survey.
 
 ## In Scope
@@ -142,6 +148,7 @@ attention, existing speech history, and existing eye visibility and presentation
 - Mind-owned Resource faculties, exact type registry, attention, and atomic result handling.
 - Speech interpretation and observation-free visual reinforcement.
 - Sense projection through `Character.Components` and approved dependency direction.
+- Post-commit projection refresh and Mind sense rebinding.
 
 ## Out Of Scope
 
@@ -168,6 +175,8 @@ attention, existing speech history, and existing eye visibility and presentation
 4. Visual sensing preserves all existing visibility and eye presentation behaviour, including gaze, saccades, and
    blinking.
 5. Invalid sense, faculty, cadence, or attention authoring fails before sensing activates.
+6. After character installation or recomposition, eligible speech still creates exactly one recognised or unknown
+   memory per accepted non-self publication.
 
 ### Technical Requirements
 
@@ -184,23 +193,26 @@ attention, existing speech history, and existing eye visibility and presentation
     lifecycle, rejection of blank transport speech only, and synchronous immutable speech and raw source-ID snapshots
     without observer-voice or Mind knowledge.
 6. Registry tests verify one exact typed faculty per exact type declared by configured senses and pre-activation failure
-   for every missing, duplicate, incompatible, or undeclared mapping.
-7. Speech tests verify ordinal source/observer ID self filtering, including the installed character-owned voice ID;
+    for every missing, duplicate, incompatible, or undeclared mapping.
+7. Live-composition tests verify a committed Character component refresh revalidates mappings and rebinds Mind exactly
+   once against current senses without duplicate delivery, while invalid mappings fail and tree exit removes every
+   projection and sense handler.
+8. Speech tests verify ordinal source/observer ID self filtering, including the installed character-owned voice ID;
    ordinal zero, one, and ambiguous scene matching; ambiguity without effects; recognised `FullId` reinforcement; and
    exactly one recognised or unknown observation.
-8. Visual faculty tests verify effects follow percept order, duplicate IDs remain ordered effects, and no observations
+9. Visual faculty tests verify effects follow percept order, duplicate IDs remain ordered effects, and no observations
    are returned.
-9. Settings tests verify generic settings contain only maximum, decay, retention, and context thresholds, while each
+10. Settings tests verify generic settings contain only maximum, decay, retention, and context thresholds, while each
    concrete faculty supplies its fixed valid semantic contribution.
-10. Atomicity tests verify complete result and calculated-importance validation precedes mutation; failure changes no
-    attention, timeline, pending, or scheduling state; valid duplicate effects compound sequentially in order; and all
-    observations ingest atomically in result order.
-11. Attention tests verify ordinal canonical identity, the reinforcement formula, lazy decay, retention, context
-    eligibility, immutable ordered snapshots, and absence of live object references.
-12. Composition tests verify Mind owns interpretation, AgenticMind retains only provider/prompt/render/tool concerns,
-    the speech tool's exactly-once self-action observation path remains, configured senses appear in deterministic
-    `Character.Components`, and `CharacterPerception` and `MindStimulus` do not exist.
-13. Foreground-context tests verify self inclusion, eligible `FullId` resolution, omission of unresolved or
+11. Atomicity tests verify complete result and calculated-importance validation precedes mutation; failure changes no
+   attention, timeline, pending, or scheduling state; valid duplicate effects compound sequentially in order; and all
+   observations ingest atomically in result order.
+12. Attention tests verify ordinal canonical identity, the reinforcement formula, lazy decay, retention, context
+   eligibility, immutable ordered snapshots, and absence of live object references.
+13. Composition tests verify Mind owns interpretation, AgenticMind retains only provider/prompt/render/tool concerns,
+   the speech tool's exactly-once self-action observation path remains, configured senses appear in deterministic
+   `Character.Components`, and `CharacterPerception` and `MindStimulus` do not exist.
+14. Foreground-context tests verify self inclusion, eligible `FullId` resolution, omission of unresolved or
     non-contextual subjects, no top-N selection, and no second visual survey.
 
 ## References

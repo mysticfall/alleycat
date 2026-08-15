@@ -1,8 +1,12 @@
+using AlleyCat.Common;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
+using AlleyCat.Rigging.Installation;
 using AlleyCat.Speech;
+using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -15,6 +19,8 @@ namespace AlleyCat.IntegrationTests.Character;
 [Headless]
 public sealed class PerceptionCompositionIntegrationTests
 {
+    private const string VadimNPCScenePath = "res://assets/characters/reference/vadim_npc.tscn";
+
     /// <inheritdoc/>
     [Fact]
     public void TemplateReferenceRebaser_RebasesSenseReferencesAndRejectsUnmappableReferences()
@@ -99,6 +105,72 @@ public sealed class PerceptionCompositionIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies Vadim's authored speech faculty activates against the composed Hearing sense in a fresh scene tree.
+    /// </summary>
+    [Fact]
+    public async Task VadimNPCScene_LiveTree_ActivatesSpeechPerceptionForHearing()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node vadimNode = LoadPackedScene(VadimNPCScenePath).Instantiate();
+        CharacterHub vadim = Assert.IsType<CharacterHub>(vadimNode, exactMatch: false);
+        RigRoleTemplateSceneInstaller installer = vadimNode.RequireNode<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
+        Assert.True(installer.AutoInstallOnReady);
+        TaskCompletionSource componentProjectionCommitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        vadim.ComponentsRefreshed += OnComponentProjectionCommitted;
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(vadimNode);
+
+        try
+        {
+            await componentProjectionCommitted.Task;
+
+            Assert.True(vadim.HasComponentProjection);
+            Hearing hearing = Assert.IsType<Hearing>(vadim.Hearing);
+            AgenticMind mind = Assert.IsType<AgenticMind>(vadim.GetNode("Mind"), exactMatch: false);
+            SpeechPerception speechPerception = Assert.IsType<SpeechPerception>(
+                Assert.Single(mind.Perceptions, perception => perception is SpeechPerception));
+
+            Assert.Contains(hearing, vadim.Components);
+            Assert.True(mind.Enabled);
+            Assert.Equal([typeof(SpeechPercept)], hearing.PerceptTypes);
+            Assert.Equal(typeof(SpeechPercept), speechPerception.PerceptType);
+
+            List<SpeechPercept> published = [];
+            List<ObservedSpeech> committed = [];
+            hearing.Perceived += percept => published.Add(Assert.IsType<SpeechPercept>(percept));
+            mind.ObservationCommitted += observation => committed.Add(Assert.IsType<ObservedSpeech>(observation));
+
+            hearing.ReceiveVoice("runtime activation evidence", new TestVoice("external_test_voice"));
+
+            SpeechPercept publishedPercept = Assert.Single(published);
+            Assert.Equal("runtime activation evidence", publishedPercept.Content);
+            Assert.Equal("external_test_voice", publishedPercept.SourceVoiceID);
+            ObservedSpeech committedObservation = Assert.Single(committed);
+            Assert.Equal("runtime activation evidence", committedObservation.Content);
+            Assert.Equal("external_test_voice", committedObservation.VoiceId);
+
+            vadim.RefreshComponents();
+            hearing.ReceiveVoice("second runtime activation evidence", new TestVoice("external_test_voice"));
+            Assert.Equal(2, committed.Count);
+            Assert.Equal("second runtime activation evidence", committed[1].Content);
+
+            hearing.ReceiveVoice("self speech", vadim.Voice!);
+            Assert.Equal(2, committed.Count);
+
+        }
+        finally
+        {
+            vadim.ComponentsRefreshed -= OnComponentProjectionCommitted;
+            vadimNode.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+
+        void OnComponentProjectionCommitted()
+        {
+            _ = componentProjectionCommitted.TrySetResult();
+        }
+    }
+
     private sealed partial class ReferenceProbe : Node
     {
         [Export]
@@ -111,5 +183,18 @@ public sealed class PerceptionCompositionIntegrationTests
     private sealed class NoOpInstaller : ISceneInstaller
     {
         public SceneInstallationResult Install(SceneInstallationContext context) => SceneInstallationResult.Successful();
+    }
+
+    private sealed class TestVoice(string id) : IVoice
+    {
+        public string Id { get; set; } = id;
+
+        public Vector3 Origin => Vector3.Zero;
+
+        public void Speak(string speech)
+        {
+        }
+
+        public ValueTask SpeakAsync(string speech, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 }

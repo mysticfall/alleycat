@@ -42,6 +42,7 @@ public abstract partial class Mind : Node
     private readonly Dictionary<Type, IPerception> _perceptions = [];
     private readonly Dictionary<ISense, Action<IPercept>> _senseHandlers = [];
     private ISense[] _senses = [];
+    private IComponentProjectionNotifier? _componentProjectionNotifier;
     [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Enabled setter controls scheduling.")]
     private bool _enabled = true;
 
@@ -167,7 +168,10 @@ public abstract partial class Mind : Node
         if (IsNodeLifetimeEnded)
         {
             _ = CallDeferred(nameof(RejectEndedLifetimeReentry));
+            return;
         }
+
+        SubscribeToComponentProjectionRefreshes();
     }
 
     /// <inheritdoc />
@@ -178,7 +182,11 @@ public abstract partial class Mind : Node
             return;
         }
 
-        ActivatePerceptions();
+        SubscribeToComponentProjectionRefreshes();
+        if (_componentProjectionNotifier is null || _componentProjectionNotifier.HasComponentProjection)
+        {
+            ActivatePerceptions();
+        }
         _ = EnsureSchedulingTimer();
         if (HasPendingObservations && Enabled)
         {
@@ -200,13 +208,8 @@ public abstract partial class Mind : Node
         }
 
         StopSchedulingTimer();
-        foreach (KeyValuePair<ISense, Action<IPercept>> entry in _senseHandlers)
-        {
-            entry.Key.Perceived -= entry.Value;
-        }
-
-        _senses = [];
-        _senseHandlers.Clear();
+        UnsubscribeFromComponentProjectionRefreshes();
+        UnsubscribeFromSenses();
         _perceptions.Clear();
         if (_schedulingTimer is { } schedulingTimer)
         {
@@ -254,10 +257,10 @@ public abstract partial class Mind : Node
     {
         AttentionSettings _ = CreateAttentionSettings();
         ICharacter character = ResolveOwningCharacter();
-        _senses = [.. character.Components.OfType<ISense>()];
-        _perceptions.Clear();
+        ISense[] senses = [.. character.Components.OfType<ISense>()];
+        var perceptions = new Dictionary<Type, IPerception>();
         var declaredTypes = new HashSet<Type>();
-        foreach (ISense sense in _senses)
+        foreach (ISense sense in senses)
         {
             foreach (Type perceptType in sense.PerceptTypes)
             {
@@ -280,17 +283,25 @@ public abstract partial class Mind : Node
                 || !faculty.GetType().GetInterfaces().Any(type => type.IsGenericType
                     && type.GetGenericTypeDefinition() == typeof(IPerception<>)
                     && type.GenericTypeArguments[0] == perceptType)
-                || !_perceptions.TryAdd(perceptType, faculty))
+                || !perceptions.TryAdd(perceptType, faculty))
             {
                 throw new InvalidOperationException($"Mind '{GetPath()}' has an invalid, duplicate, or undeclared perception faculty mapping for '{perceptType.FullName}'.");
             }
         }
 
-        if (_perceptions.Count != declaredTypes.Count)
+        if (perceptions.Count != declaredTypes.Count)
         {
             throw new InvalidOperationException($"Mind '{GetPath()}' requires exactly one perception faculty for every configured sense percept type.");
         }
 
+        UnsubscribeFromSenses();
+        _perceptions.Clear();
+        foreach (KeyValuePair<Type, IPerception> perception in perceptions)
+        {
+            _perceptions.Add(perception.Key, perception.Value);
+        }
+
+        _senses = senses;
         foreach (ISense sense in _senses)
         {
             void handler(IPercept percept)
@@ -305,6 +316,51 @@ public abstract partial class Mind : Node
             _senseHandlers.Add(sense, handler);
             sense.Perceived += handler;
         }
+    }
+
+    private void SubscribeToComponentProjectionRefreshes()
+    {
+        if (_componentProjectionNotifier is not null)
+        {
+            return;
+        }
+
+        ICharacter character = ResolveOwningCharacter();
+        if (character is not IComponentProjectionNotifier notifier)
+        {
+            return;
+        }
+
+        _componentProjectionNotifier = notifier;
+        notifier.ComponentsRefreshed += OnComponentProjectionRefreshed;
+    }
+
+    private void UnsubscribeFromComponentProjectionRefreshes()
+    {
+        if (_componentProjectionNotifier is { } notifier)
+        {
+            notifier.ComponentsRefreshed -= OnComponentProjectionRefreshed;
+            _componentProjectionNotifier = null;
+        }
+    }
+
+    private void OnComponentProjectionRefreshed()
+    {
+        if (!IsNodeLifetimeEnded)
+        {
+            ActivatePerceptions();
+        }
+    }
+
+    private void UnsubscribeFromSenses()
+    {
+        foreach (KeyValuePair<ISense, Action<IPercept>> entry in _senseHandlers)
+        {
+            entry.Key.Perceived -= entry.Value;
+        }
+
+        _senses = [];
+        _senseHandlers.Clear();
     }
 
     /// <summary>Reinforces one canonical identity using the exact configured policy.</summary>

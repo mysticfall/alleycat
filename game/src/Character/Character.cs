@@ -16,7 +16,7 @@ namespace AlleyCat.Character;
 /// Godot scene composition hub for a fully embodied humanoid character.
 /// </summary>
 [GlobalClass]
-public partial class Character : CharacterBody3D, ICharacter
+public partial class Character : CharacterBody3D, ICharacter, IComponentProjectionNotifier
 {
     private IComponent[] _components = [];
 
@@ -115,6 +115,15 @@ public partial class Character : CharacterBody3D, ICharacter
     public IReadOnlyList<IComponent> Components => _components;
 
     /// <inheritdoc />
+    public bool HasComponentProjection
+    {
+        get; private set;
+    }
+
+    /// <inheritdoc />
+    public event Action? ComponentsRefreshed;
+
+    /// <inheritdoc />
     public override void _Ready()
     {
         // Runtime role installation instantiates imported character roots before the installer copies and rebases the
@@ -151,6 +160,8 @@ public partial class Character : CharacterBody3D, ICharacter
 
         _components = [.. components];
         VisualCues = Array.AsReadOnly(AuthoredVisualCues.ToArray());
+        HasComponentProjection = true;
+        ComponentsRefreshed?.Invoke();
     }
 
     /// <inheritdoc />

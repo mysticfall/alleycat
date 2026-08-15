@@ -137,6 +137,9 @@ exists.
 43. The Character component projection is the sole authored voice source for downstream systems. Mind must not export,
     author, or duplicate an output-voice reference; tools resolve the character-owned voice from the supplied
     `ICharacter`.
+44. After `RefreshComponents()` commits its replacement projection, Character must expose the committed state through a
+    Core-level component-projection refresh contract and publish its notification. Character remains Mind-free;
+    subscribers own any downstream rebinding.
 
 ## In Scope
 
@@ -158,6 +161,7 @@ exists.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
 - NPC-only `LocomotiveNavigation` composition through the character root's `Node3D` and `ILocomotive` contracts.
 - NPC Vision and Hearing composition through the ordinary component projection under AI-006.
+- A Core-level post-commit component-projection refresh contract for downstream consumers.
 - `ICharacter` aggregation of the VISION-001 visual-subject role and vision-holder capability.
 - Validated, published template-authored whole-character visual-cue references, explicit refresh, and
   character-specific description overrides.
@@ -258,6 +262,8 @@ exists.
     resolution and the specified zero-, one-, and multiple-match outcomes.
 31. Composition tests verify the Character projection is the sole authored voice source and Mind has no exported or
     duplicated output-voice reference.
+32. Composition tests verify a post-commit component-projection refresh contract is available without introducing a
+    Character-to-Mind dependency.
 
 ## References
 
