@@ -82,8 +82,10 @@ public sealed class PerceptSensingIntegrationTests
             eyes.Perceived += percept => received.Add(Assert.IsType<VisualSurveyPercept>(percept));
 
             Assert.Equal([typeof(VisualSurveyPercept)], eyes.PerceptTypes);
-            eyes._Process(1d);
-            eyes._Process(0d);
+            // Stop the live physics loop so only the manual _PhysicsProcess(1d) drives the survey; without this a
+            // second live survey can fire during the measurement window and cause a 2-percept flake under windowed runs.
+            eyes.SetPhysicsProcess(false);
+            await TriggerPhysicsSurveyOnceAsync(tree, eyes);
 
             VisualSurveyPercept percept = Assert.Single(received);
             Assert.Equal(["test:first", "test:second"], percept.SubjectFullIDs);
@@ -151,6 +153,31 @@ public sealed class PerceptSensingIntegrationTests
 
     private static void AddToTree(SceneTree tree, Node node)
         => (tree.CurrentScene ?? tree.Root).AddChild(node);
+
+    /// <summary>
+    /// Runs one physics frame and drives <see cref="EyesBehaviour._PhysicsProcess"/> from within it so the survey
+    /// resolves a direct space state during the physics step rather than from a process frame. The 1d-then-0d cadence
+    /// fires exactly one survey (the large delta triggers publication and resets the interval, then the zero delta
+    /// preserves the single-publish contract without delayed-frame catch-up).
+    /// </summary>
+    private static async Task TriggerPhysicsSurveyOnceAsync(SceneTree tree, params EyesBehaviour[] eyes)
+    {
+        var completed = new TaskCompletionSource();
+        void OnPhysicsFrame()
+        {
+            tree.PhysicsFrame -= OnPhysicsFrame;
+            foreach (EyesBehaviour eye in eyes)
+            {
+                eye._PhysicsProcess(1d);
+                eye._PhysicsProcess(0d);
+            }
+
+            completed.SetResult();
+        }
+
+        tree.PhysicsFrame += OnPhysicsFrame;
+        await completed.Task;
+    }
 
     private sealed partial class TestVisualSubject(string id) : Node3D, IVisualSubject
     {

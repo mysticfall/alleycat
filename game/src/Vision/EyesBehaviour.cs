@@ -279,6 +279,7 @@ public partial class EyesBehaviour : Node, IVision
         ValidateVisualSurveyInterval(VisualSurveyIntervalSeconds);
         _secondsUntilVisualSurvey = VisualSurveyIntervalSeconds;
         SetProcess(true);
+        SetPhysicsProcess(true);
     }
 
     /// <inheritdoc />
@@ -295,6 +296,7 @@ public partial class EyesBehaviour : Node, IVision
         }
 
         SetProcess(true);
+        SetPhysicsProcess(true);
     }
 
     private void TryInitialiseController()
@@ -345,11 +347,10 @@ public partial class EyesBehaviour : Node, IVision
     }
 
     /// <inheritdoc />
-    public override void _Process(double delta)
-    {
-        ProcessLookAndBlink(delta);
-        ProcessVisualSurvey(delta);
-    }
+    public override void _Process(double delta) => ProcessLookAndBlink(delta);
+
+    /// <inheritdoc />
+    public override void _PhysicsProcess(double delta) => ProcessVisualSurvey(delta);
 
     private void ProcessLookAndBlink(double delta)
     {
@@ -485,6 +486,9 @@ public partial class EyesBehaviour : Node, IVision
 
     private bool IsSampleVisible(Transform3D eyeTransform, Vector3 sample, float maximumDistance)
     {
+        Node3D eyeOrigin = ResolveEyeOriginNode();
+        PhysicsDirectSpaceState3D directSpaceState = eyeOrigin.GetWorld3D().DirectSpaceState;
+
         Vector3 offset = sample - eyeTransform.Origin;
         float distance = offset.Length();
         if (distance <= VisionEndpointTolerance)
@@ -510,7 +514,7 @@ public partial class EyesBehaviour : Node, IVision
         }
 
         var query = PhysicsRayQueryParameters3D.Create(eyeTransform.Origin, sample, VisionOcclusionMask, _selfCollisionExclusions);
-        Dictionary hit = ResolveEyeOriginNode().GetWorld3D().DirectSpaceState.IntersectRay(query);
+        Dictionary hit = directSpaceState.IntersectRay(query);
         return hit.Count == 0 || hit["position"].AsVector3().DistanceTo(eyeTransform.Origin) >= distance - VisionEndpointTolerance;
     }
 
@@ -528,9 +532,10 @@ public partial class EyesBehaviour : Node, IVision
     }
 
     private Node3D ResolveEyeOriginNode()
-        => EyeOrigin is Node3D eyeOrigin && IsValidNode(eyeOrigin) && eyeOrigin.IsInsideTree()
-            ? eyeOrigin
-            : throw new InvalidOperationException($"{nameof(EyesBehaviour)} '{Name}' requires a valid {nameof(EyeOrigin)} to scan visual cues.");
+        => IsValidNode(EyeOrigin) && EyeOrigin!.IsInsideTree()
+            ? EyeOrigin
+            : throw new InvalidOperationException(
+                $"{nameof(EyeOrigin)} must be a valid node inside the scene tree before a visual survey can resolve a direct space state.");
 
     private void PopulateSelfCollisionExclusions(IVisualSubject? selfSubject)
     {
