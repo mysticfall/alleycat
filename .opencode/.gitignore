@@ -2,3 +2,7 @@ node_modules
 package.json
 package-lock.json
 bun.lock
+plugins
+ocx.jsonc
+worktree.jsonc
+
