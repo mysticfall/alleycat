@@ -146,6 +146,10 @@ responsive and interruption-safe in-world behaviour.
 39. AI-007 separately defines the direct Mind-child post-attention consumer that may assign a look target. It consumes
     Mind's published attention snapshot after perception has completed; Mind's sensing and attention-mutation contracts
     remain gaze-neutral.
+40. Mind must stamp each committed observation exactly once with a UTC `ObservedAt` timestamp (`DateTimeOffset?`,
+    init-only) at ingestion, before the record enters the timeline or pending queue. The identical stamped record must
+    be used for the timeline, pending FIFO, and ingestion notification. Observations are otherwise unchanged and remain
+    immutable after publication.
 
 ## In Scope
 
@@ -249,6 +253,8 @@ responsive and interruption-safe in-world behaviour.
     Character through AI-002's typed context to resolve the Character-authored voice.
 25. Contract tests verify that gaze assignment is outside Mind's sensing and perception path and is owned only by the
     separately composed AI-007 post-attention selector.
+26. Tests verify every committed observation carries a non-null, monotonically non-decreasing `ObservedAt` stamped
+    exactly once at ingestion, and that records published in snapshots are unchanged afterwards.
 
 ## References
 

@@ -55,27 +55,51 @@ public sealed class EventHistoryPromptSectionIntegrationTests
         PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
         EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[3], exactMatch: false);
         EventHistoryPromptFragment fragment = Assert.Single(section.Fragments);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
         Observation[] observations =
         [
-            new ObservedSpeech("char:test_character", "private-self", "Self line."),
-            new TestObservation("world.changed", "door opened"),
-            new ObservedSpeech("char:rin", "private-known", "Known line."),
-            new ObservedSpeech(null, "private-unknown", "Unknown line."),
-            new ObservedSpeech("CHAR:TEST_CHARACTER", "private-case", "Case-distinct line."),
+            new ObservedSpeech("char:test_character", "private-self", "Self line.") { ObservedAt = now.AddSeconds(-30) },
+            new TestObservation("world.changed", "door opened") { ObservedAt = now.AddMinutes(-5) },
+            new ObservedSpeech("char:rin", "private-known", "Known line.") { ObservedAt = now.AddHours(-2) },
+            new ObservedSpeech(null, "private-unknown", "Unknown line.") { ObservedAt = now.AddDays(-3) },
+            new ObservedSpeech("CHAR:TEST_CHARACTER", "private-case", "Case-distinct line.") { ObservedAt = now.AddDays(-10) },
         ];
 
         string output = await CompileAndRenderAsync(section, observations);
 
         Assert.Equal("speech.observed", fragment.TypeKey);
         Assert.Equal(
-            "Said aloud: Self line.\n"
-                + "((Received world.changed event.))\n"
-                + "Heard char:rin say: Known line.\n"
-                + "Heard an unknown speaker say: Unknown line.\n"
-                + "Heard CHAR:TEST_CHARACTER say: Case-distinct line.\n",
+            "I said: Self line. (30 seconds ago)\n"
+                + "((Received world.changed event.)) (5 minutes ago)\n"
+                + "Heard char:rin say: Known line. (2 hours ago)\n"
+                + "Heard an unknown speaker say: Unknown line. (3 days ago)\n"
+                + "Heard CHAR:TEST_CHARACTER say: Case-distinct line. (1 week ago)\n",
             output);
         Assert.DoesNotContain("private-", output, StringComparison.Ordinal);
         Assert.DoesNotContain("VoiceId", fragment.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("VoiceId", section.FallbackSource, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Unstamped observations render without any relative-time label for both fragment and fallback entries.
+    /// </summary>
+    [Fact]
+    public async Task ProductionPromptResource_RendersUnstampedObservationsWithoutLabels()
+    {
+        PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
+        EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[3], exactMatch: false);
+        Observation[] observations =
+        [
+            new ObservedSpeech("char:test_character", "private-self", "Self line."),
+            new TestObservation("world.changed", "door opened"),
+        ];
+
+        string output = await CompileAndRenderAsync(section, observations);
+
+        Assert.Equal(
+            "I said: Self line.\n((Received world.changed event.))\n",
+            output);
+        Assert.DoesNotContain("ago", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("VoiceId", section.FallbackSource, StringComparison.Ordinal);
     }
 

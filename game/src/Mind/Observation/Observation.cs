@@ -22,6 +22,16 @@ public abstract record Observation
     }
 
     /// <summary>
+    /// UTC timestamp stamped exactly once by the owning Mind at ingestion, or null when the record was not
+    /// ingested through a Mind. Used for authored relative-time labels such as "(30 seconds ago)".
+    /// </summary>
+    public DateTimeOffset? ObservedAt
+    {
+        get;
+        init;
+    }
+
+    /// <summary>
     /// Calculates significance relative to the observing character at ingestion time.
     /// </summary>
     public abstract float CalculateImportance(ObservationContext context);

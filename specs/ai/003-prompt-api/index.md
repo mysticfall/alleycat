@@ -66,8 +66,8 @@ control over how concrete observation types appear in chronological event histor
 15. Each observation record from the timeline snapshot must pass directly to Handlebars as the current context when its
     selected fragment renders. This must preserve the record's prompt-visible properties. Unknown concrete observations
     must render the fallback with the same record data.
-16. The fallback must use terse event wording equivalent to `((Received {{TypeKey}} event.))` and must not render raw
-    voice provenance.
+16. The fallback must keep terse event wording equivalent to `((Received {{TypeKey}} event.))` and may append the same
+    relative-time label; it must still never render raw voice provenance.
 17. The shared prompt stack must use exactly one actor-relative fragment for `ObservedSpeech`, selected by the exact
     `speech.observed` key. Separate heard-speech and self-spoken fragments or semantic keys must not be authored.
 18. The observed-speech fragment must compare `ObservedAction.ActorId` with the owning `ICharacter.FullId` to render
@@ -105,6 +105,12 @@ control over how concrete observation types appear in chronological event histor
 28. AgenticMind owns provider, prompt compilation, render-context construction and publication, and tool orchestration.
     It must consume Mind's committed observations and attention eligibility without interpreting incoming percepts,
     subscribing to senses, or owning perception faculties.
+29. Each `Observation` record in the timeline snapshot exposes a UTC `ObservedAt` timestamp stamped exactly once at
+    ingestion by the owning Mind. The timestamp is a prompt-visible record property, nullable when the record was not
+    ingested through Mind.
+30. Event-history entries may render a relative-time label through the built-in `ago` template tool under TMPL-001,
+    authored as `({{ago ObservedAt}})` guarded by `{{#if ObservedAt}}` so unstamped records render without a label. The
+    label must not leak voice provenance or other private payloads.
 
 ## In Scope
 
@@ -171,6 +177,11 @@ control over how concrete observation types appear in chronological event histor
     update.
 16. Tests verify AgenticMind uses Mind-owned observations and attention eligibility without sense subscriptions,
     percept-type dispatch, perception faculties, or incoming sensory interpretation.
+17. Event-history tests verify relative-time labels render for stamped observations through the `ago` tool, and
+    unstamped observations render no label, without changing exact TypeKey dispatch, chronological ordering, privacy,
+    or the exact render-context dictionary contract (no new top-level key).
+18. Tests verify the prompt API adds no top-level `now` key to the render context; the `ago` helper defaults to UTC now
+    at render time.
 
 ## References
 

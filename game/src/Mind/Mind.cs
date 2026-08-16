@@ -509,6 +509,7 @@ public abstract partial class Mind : Node
         bool shouldEvaluateScheduling;
         bool shouldProcessImmediately;
         CancellationTokenSource? interruptionCancellation = null;
+        var stampedObservations = new List<AgentObservation>();
 
         lock (_observationStateLock)
         {
@@ -521,22 +522,33 @@ public abstract partial class Mind : Node
 
             bool wasPendingQueueEmpty = _pendingObservations.Count == 0;
             bool wasBelowThreshold = _cumulativeObservationImportance < EffectiveObservationImportanceThreshold;
+            DateTimeOffset stamp = DateTimeOffset.UtcNow;
             foreach (PendingObservation pendingObservation in observations)
             {
-                _observationTimeline.Add(pendingObservation.Observation);
-                _pendingObservations.Enqueue(pendingObservation);
-                _cumulativeObservationImportance += pendingObservation.Importance;
+                AgentObservation stampedObservation = pendingObservation.Observation with
+                {
+                    ObservedAt = stamp
+                };
+                PendingObservation stampedPending = pendingObservation with
+                {
+                    Observation = stampedObservation
+                };
+                _observationTimeline.Add(stampedObservation);
+                _pendingObservations.Enqueue(stampedPending);
+                _cumulativeObservationImportance += stampedPending.Importance;
 
                 if (_enabled
                     && HighImportanceInterruptionEnabled
                     && _isProcessingObservations
                     && !_interruptionRequested
-                    && pendingObservation.Importance >= EffectiveHighImportanceInterruptionThreshold)
+                    && stampedPending.Importance >= EffectiveHighImportanceInterruptionThreshold)
                 {
                     _interruptionRequested = true;
                     _immediateReplacementPending = true;
                     interruptionCancellation = _activeTurnCancellation;
                 }
+
+                stampedObservations.Add(stampedObservation);
             }
 
             if (wasPendingQueueEmpty && observations.Count > 0)
@@ -575,9 +587,9 @@ public abstract partial class Mind : Node
             QueueSchedulingEvaluation();
         }
 
-        foreach (PendingObservation observation in observations)
+        foreach (AgentObservation observation in stampedObservations)
         {
-            OnObservationIngested(observation.Observation);
+            OnObservationIngested(observation);
         }
 
         return new MindScheduleDecision(shouldProcessImmediately, shouldEvaluateScheduling && !shouldProcessImmediately);

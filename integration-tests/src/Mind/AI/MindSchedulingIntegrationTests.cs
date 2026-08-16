@@ -48,8 +48,67 @@ public sealed partial class MindSchedulingIntegrationTests
             mind.ObserveForTest(self);
             mind.ObserveForTest(external);
 
-            Assert.Equal([self, external], mind.GetTimelineForTest());
+            IReadOnlyList<AgentObservation> timeline = mind.GetTimelineForTest();
+            Assert.Collection(
+                timeline,
+                item => Assert.Equal("self", Assert.IsType<TestObservation>(item).Value),
+                item => Assert.Equal("external", Assert.IsType<TestObservation>(item).Value));
             Assert.True(mind.HasPendingObservationsForTest);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, mind);
+        }
+    }
+
+    /// <summary>
+    /// Every committed observation carries one non-null, monotonically non-decreasing UTC stamp used everywhere.
+    /// </summary>
+    [Fact]
+    public async Task ObservationIntake_StampsCommittedObservationsWithNonDecreasingObservedAt()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        TestMind mind = new()
+        {
+            Enabled = false,
+            ObservationImportanceThreshold = 1f,
+        };
+        AddTestNode(sceneTree, mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ObserveForTest(new TestObservation(1f, "first"));
+            mind.ObserveForTest(new TestObservation(1f, "second"));
+
+            IReadOnlyList<AgentObservation>? claimedTimeline = null;
+            mind.ObservationBatchClaimedHookForTesting = _ =>
+            {
+                claimedTimeline = mind.GetTimelineForTest();
+                return Task.CompletedTask;
+            };
+
+            mind.Enabled = true;
+            await WaitUntilAsync(sceneTree, () => claimedTimeline is not null, 120);
+
+            IReadOnlyList<AgentObservation> claimed = claimedTimeline!;
+            Assert.Collection(
+                claimed,
+                item => Assert.Equal("first", Assert.IsType<TestObservation>(item).Value),
+                item => Assert.Equal("second", Assert.IsType<TestObservation>(item).Value));
+            foreach (AgentObservation observation in claimed)
+            {
+                _ = Assert.NotNull(observation.ObservedAt);
+            }
+
+            Assert.True(
+                claimed[0].ObservedAt <= claimed[1].ObservedAt,
+                "ObservedAt stamps must be monotonically non-decreasing.");
+
+            await WaitUntilAsync(sceneTree, () => mind.ProcessedBatches.Count == 1, 120);
+            IReadOnlyList<AgentObservation> processed = mind.ProcessedBatches[0];
+            Assert.Equal(claimed[0].ObservedAt, processed[0].ObservedAt);
+            Assert.Equal(claimed[1].ObservedAt, processed[1].ObservedAt);
         }
         finally
         {
@@ -75,13 +134,20 @@ public sealed partial class MindSchedulingIntegrationTests
         mind.ObserveForTest(second);
         IReadOnlyList<AgentObservation> snapshot = mind.GetTimelineForTest();
 
-        Assert.Equal([first, second], snapshot);
+        Assert.Collection(
+            snapshot,
+            item => Assert.Equal("first", Assert.IsType<TestObservation>(item).Value),
+            item => Assert.Equal("second", Assert.IsType<TestObservation>(item).Value));
         IList mutableView = Assert.IsAssignableFrom<IList>(snapshot);
         _ = Assert.Throws<NotSupportedException>(() => mutableView.Add(later));
 
         mind.ObserveForTest(later);
-        Assert.Equal([first, second], snapshot);
-        Assert.Equal([first, second, later], mind.GetTimelineForTest());
+        Assert.Equal(snapshot, mind.GetTimelineForTest().Take(2));
+        Assert.Collection(
+            mind.GetTimelineForTest(),
+            item => Assert.Equal("first", Assert.IsType<TestObservation>(item).Value),
+            item => Assert.Equal("second", Assert.IsType<TestObservation>(item).Value),
+            item => Assert.Equal("later", Assert.IsType<TestObservation>(item).Value));
         mind.Free();
     }
 

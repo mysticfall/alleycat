@@ -333,6 +333,140 @@ public sealed class TemplatingTests
         Assert.Equal("AAA", result);
     }
 
+    /// <summary>
+    /// The built-in ago tool renders singular relative-time phrases with a deterministic reference timestamp.
+    /// </summary>
+    [Fact]
+    public void BuiltInAgoRendersSingularRelativeTimePhrases()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ago value now 0}}");
+        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("1 second ago", RenderAgo(template, now.AddSeconds(-1), now));
+        Assert.Equal("1 minute ago", RenderAgo(template, now.AddMinutes(-1), now));
+        Assert.Equal("1 hour ago", RenderAgo(template, now.AddHours(-1), now));
+        Assert.Equal("1 day ago", RenderAgo(template, now.AddDays(-1), now));
+        Assert.Equal("1 week ago", RenderAgo(template, now.AddDays(-7), now));
+    }
+
+    /// <summary>
+    /// The built-in ago tool floors to the largest whole unit with correct plural forms and unit boundaries.
+    /// </summary>
+    [Fact]
+    public void BuiltInAgoFloorsToLargestWholeUnitWithPluralForms()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ago value now}}");
+        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("30 seconds ago", RenderAgo(template, now.AddSeconds(-30), now));
+        Assert.Equal("59 seconds ago", RenderAgo(template, now.AddSeconds(-59), now));
+        Assert.Equal("1 minute ago", RenderAgo(template, now.AddSeconds(-60), now));
+        Assert.Equal("2 minutes ago", RenderAgo(template, now.AddMinutes(-2), now));
+        Assert.Equal("23 hours ago", RenderAgo(template, now.AddHours(-23), now));
+        Assert.Equal("1 day ago", RenderAgo(template, now.AddHours(-24), now));
+        Assert.Equal("6 days ago", RenderAgo(template, now.AddDays(-6), now));
+        Assert.Equal("1 week ago", RenderAgo(template, now.AddDays(-7), now));
+        Assert.Equal("1 minute ago", RenderAgo(template, now.AddSeconds(-90), now));
+    }
+
+    /// <summary>
+    /// The built-in ago tool renders just now below the threshold and at the default boundary.
+    /// </summary>
+    [Fact]
+    public void BuiltInAgoUsesJustNowThresholdAndBoundary()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        ITemplate defaultTemplate = compiler.Compile("{{ago value now}}");
+        ITemplate explicitTemplate = compiler.Compile("{{ago value now 10}}");
+        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("just now", RenderAgo(defaultTemplate, now.AddSeconds(-4), now));
+        Assert.Equal("5 seconds ago", RenderAgo(defaultTemplate, now.AddSeconds(-5), now));
+        Assert.Equal("just now", RenderAgo(explicitTemplate, now.AddSeconds(-8), now));
+        Assert.Equal("10 seconds ago", RenderAgo(explicitTemplate, now.AddSeconds(-10), now));
+    }
+
+    /// <summary>
+    /// The built-in ago tool renders just now for future timestamps and empty for null or unparseable input.
+    /// </summary>
+    [Fact]
+    public void BuiltInAgoHandlesFutureNullAndUnparseableInput()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ago value now}}");
+        ITemplate emptyTemplate = compiler.Compile("{{ago}}");
+        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("just now", RenderAgo(template, now.AddSeconds(10), now));
+        Assert.Equal(string.Empty, RenderAgo(template, null, now));
+        Assert.Equal(string.Empty, RenderAgo(template, "not a timestamp", now));
+        Assert.Equal(string.Empty, emptyTemplate.Render(new Dictionary<string, object?>()));
+    }
+
+    /// <summary>
+    /// The built-in ago tool parses ISO-8601 and round-trip string timestamps as UTC.
+    /// </summary>
+    [Fact]
+    public void BuiltInAgoParsesIso8601AndRoundTripStrings()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ago value now}}");
+        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("30 seconds ago", RenderAgo(template, "2026-01-01T11:59:30Z", now));
+        Assert.Equal("30 seconds ago", RenderAgo(template, now.AddSeconds(-30).ToString("O"), now));
+    }
+
+    /// <summary>
+    /// The built-in ago tool treats DateTime values as UTC for Utc and Unspecified kinds.
+    /// </summary>
+    [Fact]
+    public void BuiltInAgoParsesDateTimeValuesAsUtc()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ago value now}}");
+        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(
+            "30 seconds ago",
+            RenderAgo(template, new DateTime(2026, 1, 1, 11, 59, 30, DateTimeKind.Utc), now));
+        Assert.Equal(
+            "30 seconds ago",
+            RenderAgo(template, new DateTime(2026, 1, 1, 11, 59, 30, DateTimeKind.Unspecified), now));
+    }
+
+    /// <summary>
+    /// The built-in ago tool parses round-trip strings under a non-invariant current culture.
+    /// </summary>
+    [Fact]
+    public void BuiltInAgoParsesRoundTripStringsUnderCurrentCulture()
+    {
+        HandlebarsTemplateCompilerEngine compiler = new();
+        CultureInfo previousCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+
+        try
+        {
+            ITemplate template = compiler.Compile("{{ago value now}}");
+            DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+            Assert.Equal("30 seconds ago", RenderAgo(template, now.AddSeconds(-30).ToString("O"), now));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
+    }
+
+    private static string RenderAgo(ITemplate template, object? value, DateTimeOffset now)
+        => template.Render(new Dictionary<string, object?>
+        {
+            ["value"] = value,
+            ["now"] = now,
+        });
+
     private static string CreateTemporaryPartialDirectory()
     {
         string directoryPath = Path.Combine(Path.GetTempPath(), "AlleyCat.Templating", Guid.NewGuid().ToString("N"));

@@ -21,6 +21,7 @@ public static class BuiltInTemplateTools
         new DelegateTemplateTool("eqOrdinal", EqOrdinal),
         new DelegateTemplateTool("nf", NumberFormat),
         new DelegateTemplateTool("repeat", Repeat),
+        new DelegateTemplateTool("ago", Ago),
     ];
 
     private static string Add(IReadOnlyList<object?> arguments)
@@ -97,6 +98,103 @@ public static class BuiltInTemplateTools
         }
 
         return builder.ToString();
+    }
+
+    private static string Ago(IReadOnlyList<object?> arguments)
+    {
+        if (arguments.Count == 0 || !TryParseTimestamp(arguments[0], out DateTimeOffset timestamp))
+        {
+            return string.Empty;
+        }
+
+        DateTimeOffset reference = arguments.Count > 1 && TryParseTimestamp(arguments[1], out DateTimeOffset explicitReference)
+            ? explicitReference
+            : DateTimeOffset.UtcNow;
+
+        int threshold = 5;
+        if (arguments.Count > 2)
+        {
+            threshold = (int)Math.Max(0, ParseInteger(arguments[2]));
+        }
+
+        TimeSpan elapsed = reference - timestamp;
+        if (elapsed <= TimeSpan.Zero || elapsed.TotalSeconds < threshold)
+        {
+            return "just now";
+        }
+
+        long count;
+        string unit;
+        if (elapsed.TotalSeconds < 60)
+        {
+            count = (long)elapsed.TotalSeconds;
+            unit = "second";
+        }
+        else if (elapsed.TotalMinutes < 60)
+        {
+            count = (long)elapsed.TotalMinutes;
+            unit = "minute";
+        }
+        else if (elapsed.TotalHours < 24)
+        {
+            count = (long)elapsed.TotalHours;
+            unit = "hour";
+        }
+        else if (elapsed.TotalDays < 7)
+        {
+            count = (long)elapsed.TotalDays;
+            unit = "day";
+        }
+        else
+        {
+            count = (long)(elapsed.TotalDays / 7);
+            unit = "week";
+        }
+
+        return $"{count} {unit}{(count == 1 ? string.Empty : "s")} ago";
+    }
+
+    private static bool TryParseTimestamp(object? value, out DateTimeOffset timestamp)
+    {
+        if (value is DateTimeOffset offset)
+        {
+            timestamp = offset;
+            return true;
+        }
+
+        if (value is DateTime dateTime)
+        {
+            timestamp = dateTime.Kind == DateTimeKind.Local
+                ? new DateTimeOffset(dateTime)
+                : new DateTimeOffset(dateTime, TimeSpan.Zero);
+            return true;
+        }
+
+        if (value is string text)
+        {
+            return DateTimeOffset.TryParse(
+                    text,
+                    CultureInfo.CurrentCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                    out timestamp)
+                || DateTimeOffset.TryParse(
+                    text,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                    out timestamp);
+        }
+
+        string converted = Convert.ToString(value, CultureInfo.CurrentCulture) ?? string.Empty;
+        return DateTimeOffset.TryParse(
+                converted,
+                CultureInfo.CurrentCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                out timestamp)
+            || DateTimeOffset.TryParse(
+                converted,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                out timestamp);
     }
 
     private static long ParseInteger(object? value)

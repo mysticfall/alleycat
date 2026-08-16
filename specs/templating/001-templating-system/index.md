@@ -25,6 +25,7 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
    behaviour of `eq`.
 5. Developers can add project-specific Handlebars tools without changing the compiler implementation.
 6. Developers can configure the compiler via Godot resources/nodes for partial loading and tool registration.
+7. Content authors can render human-readable relative-time labels for timestamps through a built-in `ago` tool.
 
 ## Technical Requirements
 
@@ -43,6 +44,12 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
     - `nf`: formats a numeric argument as fixed-point text using current culture, default precision `3`, and precision
       clamped to `0..99`.
     - `repeat`: renders the first argument repeated by the integer count in the second argument.
+    - `ago`: renders the first argument, a `DateTimeOffset`, `DateTime`, or ISO-8601/round-trip string timestamp, as a
+      relative-time phrase. The optional second argument is the reference timestamp, defaulting to UTC now at render
+      time; the optional third argument is the just-now threshold in seconds, default `5`. Elapsed below the threshold
+      renders `just now`; otherwise the largest whole unit, floored, renders `N second(s) ago`, `N minute(s) ago`,
+      `N hour(s) ago`, `N day(s) ago`, or `N week(s) ago` with correct singular/plural forms. Future timestamps render
+      `just now`; null or unparseable timestamps render empty.
 6. The implementation must not depend on the archived Language-Ext effect/map style or its Godot `ResourceFactory`
     service construction pattern.
 7. The Handlebars compiler implementation must be available as a Godot-authored `Resource` or `Node` and registered
@@ -59,6 +66,7 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 - Programmatic partial registration.
 - Programmatic custom tool registration.
 - Built-in `add`, `eq`, `eqOrdinal`, `nf`, and `repeat` tools.
+- Built-in `ago` relative-time tool.
 - Unit tests covering the public contracts and built-in behaviours.
 - Godot-authored configuration of the template compiler service (as Resource or Node) for global service registration.
 - Loading partials from a configured Godot path/directory using filenames (without extension) as names.
@@ -87,6 +95,9 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 10. Handlebars compiler registered globally as `ITemplateCompiler` via global service resolution.
 11. Compiler loads partials from configured Godot path using filenames (no extension) as names.
 12. Pluggable tools configurable via Godot resources/nodes retaining plain C# `ITemplateTool` contract.
+13. The built-in `ago` tool renders the defined phrases for representative elapsed durations, including the just-now
+    threshold boundary and singular forms, with a deterministic explicit reference timestamp, and renders empty for
+    null or unparseable input.
 
 ## References
 

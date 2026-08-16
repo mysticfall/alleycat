@@ -180,9 +180,9 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);
         Assert.Equal("AlleyCat.Mind.AI.Prompting.EssentialLorePromptSection", orderedSections[1].GetType().FullName);
-        Assert.Equal("Essential World Lore", GetPropertyValue<string>(orderedSections[1], "Name"));
+        Assert.Equal("Lore", GetPropertyValue<string>(orderedSections[1], "Name"));
         Assert.Equal("AlleyCat.Mind.AI.Prompting.CharacterLorePromptSection", orderedSections[2].GetType().FullName);
-        Assert.Equal("Scene Character Lore", GetPropertyValue<string>(orderedSections[2], "Name"));
+        Assert.Equal("Characters", GetPropertyValue<string>(orderedSections[2], "Name"));
         object historySection = orderedSections[3];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.EventHistoryPromptSection", historySection.GetType().FullName);
         Assert.Equal("Event History", GetPropertyValue<string>(historySection, "Name"));
@@ -192,12 +192,14 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         object speechFragment = Assert.Single(fragments.Cast<object>());
         string speechSource = GetPropertyValue<string>(speechFragment, "Source");
         Assert.Contains("eqOrdinal ActorId @root.character.FullId", speechSource, StringComparison.Ordinal);
-        Assert.Contains("Said aloud: {{Content}}", speechSource, StringComparison.Ordinal);
+        Assert.Contains("I said: {{Content}}", speechSource, StringComparison.Ordinal);
         Assert.Contains("Heard {{ActorId}} say: {{Content}}", speechSource, StringComparison.Ordinal);
         Assert.Contains("Heard an unknown speaker say: {{Content}}", speechSource, StringComparison.Ordinal);
         Assert.DoesNotContain("VoiceId", speechSource, StringComparison.Ordinal);
         string fallbackSource = GetPropertyValue<string>(historySection, "FallbackSource");
-        Assert.Equal("((Received {{TypeKey}} event.))\n", fallbackSource);
+        Assert.Equal(
+            "((Received {{TypeKey}} event.)){{#if ObservedAt}} ({{ago ObservedAt}}){{/if}}\n",
+            fallbackSource);
         Assert.DoesNotContain("VoiceId", fallbackSource, StringComparison.Ordinal);
 
         IEnumerable tools = Assert.IsAssignableFrom<IEnumerable>(GetRequiredPropertyValue(mind, "Tools"));

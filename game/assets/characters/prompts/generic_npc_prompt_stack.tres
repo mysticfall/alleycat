@@ -25,13 +25,13 @@ Name = "Characters"
 [sub_resource type="Resource" id="Resource_fwgwp"]
 script = ExtResource("4_0apto")
 TypeKey = "speech.observed"
-Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.FullId)}}I said: {{Content}}{{else}}Heard {{ActorId}} say: {{Content}}{{/if}}{{else}}Heard an unknown speaker say: {{Content}}{{/if}}
+Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.FullId)}}I said: {{Content}}{{else}}Heard {{ActorId}} say: {{Content}}{{/if}}{{else}}Heard an unknown speaker say: {{Content}}{{/if}}{{#if ObservedAt}} ({{ago ObservedAt}}){{/if}}
 "
 
 [sub_resource type="Resource" id="Resource_ot777"]
 script = ExtResource("5_bwdq6")
 Fragments = [SubResource("Resource_fwgwp")]
-FallbackSource = "((Received {{TypeKey}} event.))
+FallbackSource = "((Received {{TypeKey}} event.)){{#if ObservedAt}} ({{ago ObservedAt}}){{/if}}
 "
 Name = "Event History"
 

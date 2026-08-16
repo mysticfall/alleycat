@@ -49,6 +49,53 @@ public sealed class ObservationTests
         Assert.Equal("private-device", observation.VoiceId);
     }
 
+    /// <summary>
+    /// ObservedAt defaults to null for records created outside Mind ingestion.
+    /// </summary>
+    [Fact]
+    public void ObservedAt_DefaultsToNull()
+    {
+        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello");
+
+        Assert.Null(observation.ObservedAt);
+    }
+
+    /// <summary>
+    /// ObservedAt can be assigned through the object initialiser contract.
+    /// </summary>
+    [Fact]
+    public void ObservedAt_IsSettableThroughObjectInitialiser()
+    {
+        DateTimeOffset stamp = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello")
+        {
+            ObservedAt = stamp
+        };
+
+        Assert.Equal(stamp, observation.ObservedAt);
+    }
+
+    /// <summary>
+    /// ObservedAt survives with-cloning on a derived record.
+    /// </summary>
+    [Fact]
+    public void ObservedAt_IsPreservedThroughWithCloning()
+    {
+        DateTimeOffset stamp = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello")
+        {
+            ObservedAt = stamp
+        };
+
+        ObservedSpeech clone = observation with
+        {
+            Content = "Hi"
+        };
+
+        Assert.Equal("Hi", clone.Content);
+        Assert.Equal(stamp, clone.ObservedAt);
+    }
+
     private sealed class FakeCharacter : ICharacter
     {
         public string Id { get; set; } = string.Empty;
