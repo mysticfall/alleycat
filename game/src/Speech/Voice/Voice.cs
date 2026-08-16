@@ -12,9 +12,11 @@ public abstract partial class Voice : Node3D, IVoice
 {
     private readonly Queue<DeferredGodotAction> _deferredGodotActions = [];
     private readonly Lock _deferredGodotActionsLock = new();
+    private readonly Lock _speakingWindowLock = new();
     private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
     private bool _deferredGodotActionFlushQueued;
     private int _nodeLifetimeEnded;
+    private int _isSpeakingWindowOpen;
 
     /// <summary>
     /// Emitted when speech generation or audio conversion fails.
@@ -42,6 +44,15 @@ public abstract partial class Voice : Node3D, IVoice
 
     /// <inheritdoc />
     public Vector3 Origin => GlobalPosition;
+
+    /// <inheritdoc />
+    public bool IsSpeaking => Volatile.Read(ref _isSpeakingWindowOpen) != 0;
+
+    /// <inheritdoc />
+    public event Action<IVoice>? SpeechStarted;
+
+    /// <inheritdoc />
+    public event Action<IVoice>? SpeechEnded;
 
     /// <summary>
     /// Indicates whether this voice has crossed its irreversible node-lifetime boundary.
@@ -77,9 +88,20 @@ public abstract partial class Voice : Node3D, IVoice
     {
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
-        _ = TryNotifySpeechGeneratedWhenEnabled(acceptedSpeech);
+        OpenSpeakingWindow();
+        if (!TryNotifySpeechGeneratedWhenEnabled(acceptedSpeech))
+        {
+            CloseSpeakingWindow();
+        }
+
         return ValueTask.CompletedTask;
     }
+
+    /// <inheritdoc />
+    public virtual ValueTask SpeakCancellableAsync(
+        string speech,
+        CancellationToken cancellationToken = default)
+        => SpeakAsync(speech, cancellationToken);
 
     /// <inheritdoc />
     public override void _ExitTree()
@@ -88,6 +110,8 @@ public abstract partial class Voice : Node3D, IVoice
         {
             return;
         }
+
+        CloseSpeakingWindow();
 
         _nodeLifetimeCancellation.Cancel();
 
@@ -116,7 +140,8 @@ public abstract partial class Voice : Node3D, IVoice
             : IsNodeLifetimeEnded ? throw new InvalidOperationException("Voice output is unavailable after node teardown.") : speech.Trim();
 
     /// <summary>
-    /// Invokes the post-generation hook when speech is currently enabled.
+    /// Invokes the post-generation hook when speech is currently enabled, closing the speaking window first so the
+    /// turn-taking gate is already open when listeners ingest the speech observation.
     /// </summary>
     protected bool TryNotifySpeechGeneratedWhenEnabled(string speech)
     {
@@ -125,8 +150,78 @@ public abstract partial class Voice : Node3D, IVoice
             return false;
         }
 
+        CloseSpeakingWindow();
         OnSpeechGenerated(speech);
         return true;
+    }
+
+    /// <summary>
+    /// Opens the speaking window, raising <see cref="SpeechStarted"/> exactly once per window.
+    /// </summary>
+    /// <remarks>
+    /// The window is idempotent, so subclasses may call it at every admission while the voice already speaks.
+    /// The window may be opened from the submitting caller's thread.
+    /// </remarks>
+    protected void OpenSpeakingWindow()
+    {
+        bool transitioned;
+        lock (_speakingWindowLock)
+        {
+            transitioned = Volatile.Read(ref _isSpeakingWindowOpen) == 0;
+            if (transitioned)
+            {
+                Volatile.Write(ref _isSpeakingWindowOpen, 1);
+            }
+        }
+
+        if (!transitioned)
+        {
+            return;
+        }
+
+        SpeechStarted?.Invoke(this);
+        OnSpeechStarted();
+    }
+
+    /// <summary>
+    /// Closes the speaking window, raising <see cref="SpeechEnded"/> exactly once per window.
+    /// </summary>
+    /// <remarks>
+    /// The window is idempotent, so subclasses may call it on every settlement boundary without double notification.
+    /// </remarks>
+    protected void CloseSpeakingWindow()
+    {
+        bool transitioned;
+        lock (_speakingWindowLock)
+        {
+            transitioned = Volatile.Read(ref _isSpeakingWindowOpen) != 0;
+            if (transitioned)
+            {
+                Volatile.Write(ref _isSpeakingWindowOpen, 0);
+            }
+        }
+
+        if (!transitioned)
+        {
+            return;
+        }
+
+        SpeechEnded?.Invoke(this);
+        OnSpeechEnded();
+    }
+
+    /// <summary>
+    /// Hook invoked after the speaking window opens and <see cref="SpeechStarted"/> has been raised.
+    /// </summary>
+    protected virtual void OnSpeechStarted()
+    {
+    }
+
+    /// <summary>
+    /// Hook invoked after the speaking window closes and <see cref="SpeechEnded"/> has been raised.
+    /// </summary>
+    protected virtual void OnSpeechEnded()
+    {
     }
 
     /// <summary>

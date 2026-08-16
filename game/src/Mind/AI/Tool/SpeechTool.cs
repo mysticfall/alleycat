@@ -39,7 +39,11 @@ public partial class SpeechTool : AgentTool
 
         string acceptedSpeech = speech.Trim();
         IVoice voice = context.Character.RequireVoice();
-        await voice.SpeakAsync(acceptedSpeech, cancellationToken);
+
+        // Playback hand-off, not admission, is the successful action boundary (AI-002 TR-26): the cancellable
+        // submission completes exactly at hand-off, failure or cancellation before it surfaces here without a result,
+        // and cancellation after it never retracts the committed speech (AI-001 TR-44).
+        await voice.SpeakCancellableAsync(acceptedSpeech, cancellationToken);
         return new AgentToolResult(
             "Spoken through the configured voice.",
             [new ObservedSpeech(ActorId: null, VoiceId: null, Content: acceptedSpeech)]);

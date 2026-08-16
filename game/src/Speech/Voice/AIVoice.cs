@@ -23,9 +23,12 @@ public partial class AIVoice : Voice
     private const string AudioFormatIncompatibleMessage = "Audio format incompatible";
 
     private readonly Lock _submissionLock = new();
-    private readonly Queue<string> _pendingSpeech = [];
+    private Queue<AdmittedSpeech> _pendingSpeech = [];
     private bool _pumpRunning;
     private TaskCompletionSource? _pumpSettlement;
+    private int _outstandingItems;
+    private bool _playbackPending;
+    private LipSyncPlayer? _playbackWatchPlayer;
     private ILogger<AIVoice>? _logger;
 
     /// <summary>
@@ -66,7 +69,121 @@ public partial class AIVoice : Voice
     {
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
+        _ = AdmitSpeech(acceptedSpeech, turnCancellation: null, cancellationToken);
+        return ValueTask.CompletedTask;
+    }
 
+    /// <inheritdoc />
+    public override ValueTask SpeakCancellableAsync(
+        string speech,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string acceptedSpeech = ValidateSubmission(speech);
+        var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        AdmittedSpeech item;
+        try
+        {
+            item = AdmitSpeech(acceptedSpeech, turnCancellation, cancellationToken);
+        }
+        catch
+        {
+            // Admission never committed, so the linked source would otherwise leak its registration on the
+            // caller-supplied token.
+            turnCancellation.Dispose();
+            throw;
+        }
+
+        item.SetCancellationRegistration(cancellationToken.Register(
+            () => HandleTurnCancellationRequested(item),
+            useSynchronizationContext: false));
+        return new ValueTask(item.HandOffCompletion!.Task);
+    }
+
+    /// <inheritdoc />
+    public override void _ExitTree()
+    {
+        base._ExitTree();
+
+        AdmittedSpeech[] queuedItems;
+        lock (_submissionLock)
+        {
+            queuedItems = [.. _pendingSpeech];
+            _pendingSpeech.Clear();
+            _outstandingItems = 0;
+            _playbackPending = false;
+        }
+
+        foreach (AdmittedSpeech item in queuedItems)
+        {
+            item.DisposeCancellationRegistration();
+            _ = item.HandOffCompletion?.TrySetCanceled(NodeLifetimeCancellationToken);
+        }
+
+        if (_playbackWatchPlayer is { } watchedPlayer)
+        {
+            watchedPlayer.PlaybackCompleted -= HandleLipSyncPlaybackCompleted;
+            _playbackWatchPlayer = null;
+        }
+    }
+
+    /// <summary>
+    /// Cuts active playback immediately, halting audio and lip-sync, and settles the speaking window.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the interruption-driven cut (AI-001 TR-44): the lip-sync player's stop does not raise
+    /// <see cref="LipSyncPlayer.PlaybackCompleted" />, so the speaking-window bookkeeping that the notification would
+    /// have performed is settled here exactly once. Queued FIFO submissions are not retracted; the window stays open
+    /// while any remain outstanding. Must be called on the Godot thread.
+    /// </para>
+    /// <para>
+    /// This capability is intentionally a concrete member rather than an <see cref="IVoice" /> default-interface
+    /// member: interface mapping is established on the <see cref="Voice" /> base class, so a derived override would
+    /// never dispatch through an <see cref="IVoice" />-typed reference and a default body would silently swallow the
+    /// cut. Callers type-test for <see cref="AIVoice" /> instead.
+    /// </para>
+    /// </remarks>
+    public void CutSpeech()
+    {
+        bool closeWindow;
+        lock (_submissionLock)
+        {
+            if (IsNodeLifetimeEnded)
+            {
+                return;
+            }
+
+            _playbackPending = false;
+            closeWindow = _outstandingItems == 0;
+        }
+
+        LipSyncPlayer?.Stop();
+
+        if (closeWindow)
+        {
+            CloseSpeakingWindow();
+        }
+    }
+
+    /// <summary>
+    /// Atomically admits a validated speech request as the next FIFO queue item and opens the speaking window.
+    /// </summary>
+    /// <param name="speech">Validated speech text to admit.</param>
+    /// <param name="turnCancellation">Linked cancellation source for explicitly cancellable submissions, or null for
+    /// ordinary admission-only submissions.</param>
+    /// <param name="callerToken">Caller-supplied cancellation observed until admission commits.</param>
+    /// <returns>The admitted queue item.</returns>
+    private AdmittedSpeech AdmitSpeech(
+        string speech,
+        CancellationTokenSource? turnCancellation,
+        CancellationToken callerToken)
+    {
+        AdmittedSpeech item = new(
+            speech,
+            turnCancellation,
+            turnCancellation is null ? null : new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+            callerToken);
         bool startPump;
         lock (_submissionLock)
         {
@@ -81,31 +198,147 @@ public partial class AIVoice : Voice
                     "AI voice requires enabled output with configured speech generator and lip-sync player dependencies.");
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
-            _pendingSpeech.Enqueue(acceptedSpeech);
+            callerToken.ThrowIfCancellationRequested();
+            _pendingSpeech.Enqueue(item);
+            _outstandingItems++;
             startPump = !_pumpRunning;
             _pumpRunning = true;
             if (startPump)
             {
                 _pumpSettlement = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             }
+
+            EnsurePlaybackCompletionSubscriptionLocked();
         }
+
+        OpenSpeakingWindow();
 
         if (startPump)
         {
             _ = DrainSpeechQueueAsync();
         }
 
-        return ValueTask.CompletedTask;
+        return item;
     }
 
-    /// <inheritdoc />
-    public override void _ExitTree()
+    /// <summary>
+    /// Subscribes to the configured lip-sync player's playback-completed notification exactly once per player.
+    /// </summary>
+    /// <remarks>Must be called while holding <see cref="_submissionLock" />.</remarks>
+    private void EnsurePlaybackCompletionSubscriptionLocked()
     {
-        base._ExitTree();
+        LipSyncPlayer? player = LipSyncPlayer;
+        if (player is null || ReferenceEquals(_playbackWatchPlayer, player))
+        {
+            return;
+        }
+
+        _playbackWatchPlayer?.PlaybackCompleted -= HandleLipSyncPlaybackCompleted;
+
+        player.PlaybackCompleted += HandleLipSyncPlaybackCompleted;
+        _playbackWatchPlayer = player;
+    }
+
+    private void HandleLipSyncPlaybackCompleted()
+    {
+        bool closeWindow;
         lock (_submissionLock)
         {
-            _pendingSpeech.Clear();
+            if (IsNodeLifetimeEnded)
+            {
+                return;
+            }
+
+            _playbackPending = false;
+            closeWindow = _outstandingItems == 0;
+        }
+
+        if (closeWindow)
+        {
+            CloseSpeakingWindow();
+        }
+    }
+
+    /// <summary>
+    /// Handles caller cancellation of an explicitly cancellable submission before playback hand-off.
+    /// </summary>
+    /// <param name="item">Admitted item whose caller token was cancelled.</param>
+    private void HandleTurnCancellationRequested(AdmittedSpeech item)
+    {
+        bool removedFromQueue;
+        lock (_submissionLock)
+        {
+            if (IsNodeLifetimeEnded || item.HandOffCommitted || item.Settled)
+            {
+                return;
+            }
+
+            item.CancelRequested = true;
+            removedFromQueue = RemoveQueuedItemLocked(item);
+        }
+
+        item.TurnCancellation?.Cancel();
+
+        if (removedFromQueue)
+        {
+            AbortAdmittedItemSilently(item);
+        }
+
+        // Items already dequeued observe the cancelled turn token at their next pipeline boundary, or the
+        // playback hand-off refusal check aborts them before committing.
+    }
+
+    private bool RemoveQueuedItemLocked(AdmittedSpeech item)
+    {
+        if (!_pendingSpeech.Contains(item))
+        {
+            return false;
+        }
+
+        _pendingSpeech = new Queue<AdmittedSpeech>(_pendingSpeech.Where(pending => !ReferenceEquals(pending, item)));
+        return true;
+    }
+
+    private static bool IsTurnCancellation(AdmittedSpeech item)
+        => item.CancelRequested || item.TurnCancellation is { IsCancellationRequested: true };
+
+    /// <summary>
+    /// Silently aborts an explicitly cancellable submission without failure signalling or listener notification.
+    /// </summary>
+    /// <param name="item">Admitted item to abort.</param>
+    private void AbortAdmittedItemSilently(AdmittedSpeech item)
+    {
+        item.DisposeCancellationRegistration();
+        SettleAdmittedItemWithoutPlayback(item);
+        _ = item.HandOffCompletion?.TrySetCanceled(item.CallerToken);
+    }
+
+    /// <summary>
+    /// Settles an admitted item that will never reach playback, closing the window when no work remains.
+    /// </summary>
+    /// <param name="item">Admitted item to settle.</param>
+    private void SettleAdmittedItemWithoutPlayback(AdmittedSpeech item)
+    {
+        bool closeWindow;
+        lock (_submissionLock)
+        {
+            if (item.Settled)
+            {
+                return;
+            }
+
+            item.Settled = true;
+            if (_outstandingItems > 0)
+            {
+                _outstandingItems--;
+            }
+
+            closeWindow = _outstandingItems == 0 && !_playbackPending;
+        }
+
+        if (closeWindow)
+        {
+            CloseSpeakingWindow();
         }
     }
 
@@ -115,7 +348,7 @@ public partial class AIVoice : Voice
 
         while (true)
         {
-            string speech;
+            AdmittedSpeech item;
             lock (_submissionLock)
             {
                 if (IsNodeLifetimeEnded || _pendingSpeech.Count == 0)
@@ -128,29 +361,33 @@ public partial class AIVoice : Voice
                     return;
                 }
 
-                speech = _pendingSpeech.Dequeue();
+                item = _pendingSpeech.Dequeue();
             }
 
-            await ProcessAdmittedSpeechAsync(speech);
+            await ProcessAdmittedSpeechAsync(item);
         }
     }
 
-    private async Task ProcessAdmittedSpeechAsync(string speech)
+    private async Task ProcessAdmittedSpeechAsync(AdmittedSpeech item)
     {
         Stopwatch totalStopwatch = AIPipelineDebugLog.StartTimer();
+        CancellationTokenSource? pipelineCancellationSource = item.TurnCancellation is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(NodeLifetimeCancellationToken, item.TurnCancellation.Token);
+        CancellationToken pipelineCancellation = pipelineCancellationSource?.Token ?? NodeLifetimeCancellationToken;
 
         try
         {
             NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
             if (AIPipelineDebugLog.IsEnabled)
             {
-                AIPipelineDebugLog.Stage("TTS request received", $"{speech.Length} chars");
+                AIPipelineDebugLog.Stage("TTS request received", $"{item.Text.Length} chars");
             }
 
             Stopwatch generationStopwatch = AIPipelineDebugLog.StartTimer();
-            byte[] generatedAudio = await GenerateSpeechAudioAsync(speech)
-                .WaitAsync(NodeLifetimeCancellationToken);
-            NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
+            byte[] generatedAudio = await GenerateSpeechAudioAsync(item.Text)
+                .WaitAsync(pipelineCancellation);
+            pipelineCancellation.ThrowIfCancellationRequested();
             if (AIPipelineDebugLog.IsEnabled)
             {
                 AIPipelineDebugLog.Latency("TTS audio generated in", generationStopwatch, $"{generatedAudio.Length} bytes");
@@ -166,8 +403,8 @@ public partial class AIVoice : Voice
             Stopwatch lipSyncStopwatch = AIPipelineDebugLog.StartTimer();
             LipSyncPlayer.PreparedPlayback preparedPlayback = await PrepareGeneratedSpeechAsync(
                 speechStream,
-                NodeLifetimeCancellationToken);
-            NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
+                pipelineCancellation);
+            pipelineCancellation.ThrowIfCancellationRequested();
             if (AIPipelineDebugLog.IsEnabled)
             {
                 AIPipelineDebugLog.Latency(
@@ -176,33 +413,112 @@ public partial class AIVoice : Voice
                     $"{preparedPlayback.Frames.Length} frames");
             }
 
-            await DispatchDeferredGodotActionAsync(() =>
-            {
-                NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
-                PlayGeneratedSpeech(preparedPlayback);
-                OnSpeechGenerated(speech);
-            });
+            await DispatchDeferredGodotActionAsync(() => CommitPlaybackHandOff(item, preparedPlayback));
             AIPipelineDebugLog.Latency("TTS playback started after", totalStopwatch);
         }
         catch (OperationCanceledException) when (IsNodeLifetimeEnded
             || NodeLifetimeCancellationToken.IsCancellationRequested
             || LipSyncPlayer is { IsLifetimeEnded: true })
         {
+            item.DisposeCancellationRegistration();
+            _ = item.HandOffCompletion?.TrySetCanceled(NodeLifetimeCancellationToken);
+        }
+        catch (OperationCanceledException) when (IsTurnCancellation(item))
+        {
+            AbortAdmittedItemSilently(item);
         }
         catch (AudioConversionException ex)
         {
             AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
-            await ReportAdmittedFailureAsync(AudioFormatIncompatibleMessage, ex);
+            await ReportAdmittedFailureAsync(item, AudioFormatIncompatibleMessage, ex);
         }
         catch (Exception ex)
         {
             AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
-            await ReportAdmittedFailureAsync(ex.Message, ex);
+            await ReportAdmittedFailureAsync(item, ex.Message, ex);
+        }
+        finally
+        {
+            pipelineCancellationSource?.Dispose();
         }
     }
 
-    private async Task ReportAdmittedFailureAsync(string emittedError, Exception exception)
+    /// <summary>
+    /// Commits an admitted item at the playback hand-off boundary on the Godot thread.
+    /// </summary>
+    /// <param name="item">Admitted item reaching playback hand-off.</param>
+    /// <param name="preparedPlayback">Prepared speech stream and lip-sync inference data.</param>
+    private void CommitPlaybackHandOff(AdmittedSpeech item, LipSyncPlayer.PreparedPlayback preparedPlayback)
     {
+        NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
+
+        bool commit;
+        lock (_submissionLock)
+        {
+            commit = !item.CancelRequested;
+            item.HandOffCommitted = commit;
+        }
+
+        if (!commit)
+        {
+            // The submission was cancelled while this hand-off was queued; abort before playback.
+            throw new OperationCanceledException(item.TurnCancellation?.Token ?? CancellationToken.None);
+        }
+
+        try
+        {
+            PlayGeneratedSpeech(preparedPlayback);
+            EnsurePlaybackStarted();
+        }
+        catch (Exception)
+        {
+            lock (_submissionLock)
+            {
+                item.HandOffCommitted = false;
+            }
+
+            throw;
+        }
+
+        lock (_submissionLock)
+        {
+            if (!item.Settled)
+            {
+                item.Settled = true;
+                if (_outstandingItems > 0)
+                {
+                    _outstandingItems--;
+                }
+            }
+
+            _playbackPending = true;
+        }
+
+        OnSpeechGenerated(item.Text);
+        item.DisposeCancellationRegistration();
+        _ = item.HandOffCompletion?.TrySetResult();
+    }
+
+    /// <summary>
+    /// Verifies the lip-sync player actually started playback for the handed-off prepared speech.
+    /// </summary>
+    private void EnsurePlaybackStarted()
+    {
+        if (LipSyncPlayer is { } player && !string.IsNullOrEmpty(player.PlaybackError))
+        {
+            throw new InvalidOperationException($"AI voice playback hand-off failed: {player.PlaybackError}");
+        }
+    }
+
+    private async Task ReportAdmittedFailureAsync(
+        AdmittedSpeech item,
+        string emittedError,
+        Exception exception)
+    {
+        item.DisposeCancellationRegistration();
+        SettleAdmittedItemWithoutPlayback(item);
+        _ = item.HandOffCompletion?.TrySetException(exception);
+
         if (IsNodeLifetimeEnded)
         {
             return;
@@ -428,4 +744,68 @@ public partial class AIVoice : Voice
     internal sealed record ParsedSpeechData(byte[] PcmData, int SampleRate, bool Stereo, short BitsPerSample);
 
     internal sealed class AudioConversionException(string message) : Exception(message);
+
+    /// <summary>
+    /// One admitted FIFO submission tracked from admission until playback hand-off, abort, failure, or teardown.
+    /// </summary>
+    private sealed class AdmittedSpeech(
+        string text,
+        CancellationTokenSource? turnCancellation,
+        TaskCompletionSource? handOffCompletion,
+        CancellationToken callerToken)
+    {
+        private CancellationTokenRegistration _cancellationRegistration;
+
+        /// <summary>
+        /// Validated speech text submitted for this item.
+        /// </summary>
+        public string Text { get; } = text;
+
+        /// <summary>
+        /// Linked turn-cancellation source for explicitly cancellable submissions; null for ordinary submissions.
+        /// </summary>
+        public CancellationTokenSource? TurnCancellation { get; } = turnCancellation;
+
+        /// <summary>
+        /// Completion source settling when playback hand-off commits; null for ordinary submissions.
+        /// </summary>
+        public TaskCompletionSource? HandOffCompletion { get; } = handOffCompletion;
+
+        /// <summary>
+        /// Caller-supplied token reproduced on silent pre-hand-off cancellation.
+        /// </summary>
+        public CancellationToken CallerToken { get; } = callerToken;
+
+        /// <summary>
+        /// Indicates the playback hand-off boundary has been crossed, after which cancellation cannot retract.
+        /// Guarded by the owning voice's submission lock.
+        /// </summary>
+        public bool HandOffCommitted
+        {
+            get; set;
+        }
+
+        /// <summary>
+        /// Indicates caller cancellation was observed before playback hand-off.
+        /// Guarded by the owning voice's submission lock.
+        /// </summary>
+        public bool CancelRequested
+        {
+            get; set;
+        }
+
+        /// <summary>
+        /// Indicates the item has reached exactly one of its terminal outcomes.
+        /// Guarded by the owning voice's submission lock.
+        /// </summary>
+        public bool Settled
+        {
+            get; set;
+        }
+
+        public void SetCancellationRegistration(CancellationTokenRegistration registration)
+            => _cancellationRegistration = registration;
+
+        public void DisposeCancellationRegistration() => _cancellationRegistration.Dispose();
+    }
 }

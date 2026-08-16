@@ -39,6 +39,10 @@ attention, existing speech history, and existing eye visibility and presentation
      - Mind's sensing and attention-production path may depend on Sense contracts, but not modality or delivery domains.
        AI-007's separately composed post-attention selector may depend only on the `IVision` capability contract to
        assign a target; Vision and other modality or delivery domains must not depend on Mind.
+       Mind's speech turn-taking gate resolves voice activity through current-scene characters' composed `IVoice` via
+       `ICharacter.TryGetVoice()`, mirroring the established `SpeechPerception` attribution precedent (TR-23–TR-26).
+       This exception is acknowledged explicitly rather than presenting strict separation; it adds no dependency beyond
+       the existing precedent.
 2. Scene composition may place a Mind node beneath a Character node without creating a Character-to-Mind source
     dependency.
 3. The refactor must remove `CharacterPerception`, `MindStimulus`, and their bespoke production wiring.
@@ -126,7 +130,9 @@ attention, existing speech history, and existing eye visibility and presentation
 32. Attention is keyed by canonical `FullId` using ordinal comparison. Reinforcement applies
     `current + (maximum - current) * contribution` without exceeding maximum.
 33. Attention decays lazily and linearly with elapsed game time on percept handling, queries, and snapshots. Entries
-    below retention are evicted; every entry at or above the context threshold is eligible for context.
+    below retention are evicted; every entry at or above the context threshold is eligible for context. Retention-level
+    snapshot presence is also the membership criterion for the AI-001 speech turn-taking gate, deliberately decoupled
+    from the context threshold used for foreground eligibility.
 34. Maximum must be finite and positive; decay must be finite and non-negative; thresholds must be finite and satisfy
     `0 <= retention <= context <= maximum`. Settings validation must complete before activation or mutation.
 35. Attention snapshots are immutable identity/value sequences ordered by `FullId` using ordinal comparison. Attention
@@ -156,6 +162,7 @@ attention, existing speech history, and existing eye visibility and presentation
   consumer; not gaze policy or target assignment.
 - Speech interpretation and observation-free visual reinforcement.
 - Sense projection through `Character.Components` and approved dependency direction.
+- Mind speech-gate voice-activity resolution through the established scene-character `IVoice` attribution precedent.
 - Post-commit projection refresh and Mind sense rebinding.
 
 ## Out Of Scope
@@ -195,15 +202,15 @@ attention, existing speech history, and existing eye visibility and presentation
 2. Contract tests verify immutable behaviour-free `IPercept`, synchronous `ISense.Perceived`, deterministic exact-type
    metadata, sense-owned lifecycle, and no active/passive distinction.
 3. Vision tests verify `IVision` has no public `Scan()`, `VisualSurveyPercept` lives in `AlleyCat.Vision`, cadence is
-    finite and validated, at most one survey occurs per frame, there is no catch-up, and each survey has one
-    producer-owned immutable ordered `FullId` snapshot.
+   finite and validated, at most one survey occurs per frame, there is no catch-up, and each survey has one
+   producer-owned immutable ordered `FullId` snapshot.
 4. Visual integration tests verify unchanged subject discovery, cue validation, field of view, distance, and occlusion,
    with no descriptions, observations, gaze selection, `LookTarget` change, saccade change, or blink change.
 5. Hearing tests verify top-level `AlleyCat.Speech` ownership, `IHearing.ReceiveVoice(string, IVoice)` listener
-    lifecycle, rejection of blank transport speech only, and synchronous immutable speech and raw source-ID snapshots
-    without observer-voice or Mind knowledge.
+   lifecycle, rejection of blank transport speech only, and synchronous immutable speech and raw source-ID snapshots
+   without observer-voice or Mind knowledge.
 6. Registry tests verify one exact typed faculty per exact type declared by configured senses and pre-activation failure
-    for every missing, duplicate, incompatible, or undeclared mapping.
+   for every missing, duplicate, incompatible, or undeclared mapping.
 7. Live-composition tests verify a committed Character component refresh revalidates mappings and rebinds Mind exactly
    once against current senses without duplicate delivery, while invalid mappings fail and tree exit removes every
    projection and sense handler.
@@ -225,8 +232,12 @@ attention, existing speech history, and existing eye visibility and presentation
 14. Foreground-context tests verify self inclusion, eligible `FullId` resolution, omission of unresolved or
    non-contextual subjects, no top-N selection, and no second visual survey.
 15. Boundary tests verify sensing, surveys, faculties, and attention mutation never call `IVision.SetLookTarget` or
-    `IVision.ClearLookTarget`; AI-007 alone consumes the published attention snapshot as the separately composed
-    post-attention gaze consumer.
+   `IVision.ClearLookTarget`; AI-007 alone consumes the published attention snapshot as the separately composed
+   post-attention gaze consumer.
+16. Dependency checks verify the Mind speech gate resolves voice activity only through current-scene characters'
+   composed `IVoice` via `ICharacter.TryGetVoice()`, consistent with the established `SpeechPerception` precedent and
+   adding no new dependency, and that gate membership uses retention-threshold snapshot presence rather than the
+   context threshold.
 
 ## References
 

@@ -110,11 +110,13 @@ failures contained without treating assistant text or provider history as charac
     observations must not be exposed to the model or retained as cross-turn protocol.
 25. `SpeechTool` must:
     - reject blank input through the voice contract without producing a result observation;
-    - await successful admission through the configured character-owned `IVoice.SpeakAsync(...)`;
-    - return exactly one actorless `ObservedSpeech` in its `AgentToolResult` after admission; and
+    - await the explicitly cancellable submission (SPCH-005 TR-25) through playback hand-off, passing the turn's
+      cancellation token (AI-001 TR-44) to the configured character-owned `IVoice.SpeakAsync(...)`;
+    - return exactly one actorless `ObservedSpeech` in its `AgentToolResult` at hand-off, not at admission; and
     - optionally return a transient model-facing acknowledgement.
-26. Speech admission, not playback completion, is the successful tool-action boundary. Failure or cancellation before
-    admission must produce no observed speech.
+26. Playback hand-off, not admission, is the successful tool-action boundary. Failure or cancellation before hand-off
+    must produce no observed speech (silent abort, SPCH-005 TR-25); cancellation after hand-off does not retract the
+    committed item.
 27. The configured output voice must remain excluded from external listening so dispatched self-speech is not recorded
     a second time as perceived speech.
 28. Voice is a `SpeechTool` capability and must not be a generic AgenticMind runtime prerequisite.
@@ -183,7 +185,8 @@ failures contained without treating assistant text or provider history as charac
 - Standard `AgentToolResult` validation, projection, and atomic Mind hand-off.
 - Trusted typed `AgentToolContext` binding through `Character` and turn-captured `SceneContext` properties.
 - Shared-dispatcher start of every outbound production tool, with turn- and Mind-lifetime cancellation.
-- Speech admission, transient acknowledgement, and exactly-once observed-speech production.
+- Speech submission through playback hand-off, transient acknowledgement, and exactly-once observed-speech
+  production.
 - Expected interruption and node-lifetime cancellation settlement.
 - Preservation of foreground tool-only protocol boundaries while AI-005 workers run independently.
 - Development-only MEAI diagnostics and non-secret structural transport evidence with explicit gating.
@@ -192,7 +195,7 @@ failures contained without treating assistant text or provider history as charac
 
 - Model repair, automatic retry, or backoff after backend, protocol, action, or bound failures.
 - Additional production action tools beyond speech and the generic action-result contract.
-- Cancelling or reversing world actions already admitted before interruption or a later failure.
+- Cancelling or reversing non-speech world actions already admitted before interruption or a later failure.
 - Speech playback-finished success semantics.
 - Timeline compaction, persistence, and cross-turn provider transcript retention.
 - Voice as a requirement for generic non-speech turn execution.
@@ -241,10 +244,11 @@ failures contained without treating assistant text or provider history as charac
     production delegate starts exactly once through `IMainThreadDispatcher` and make no continuation-affinity claim.
 11. Tests verify Mind stamps tool action actors with the owning character ID, prevents spoofing, and provides no public
     observation recorder, sink, or direct tool-mutation path.
-12. Speech tests verify exactly one Mind actor-stamped, self-relative `ObservedSpeech` after successful voice admission
-    and none for blank, unavailable, unconfigured, failed-before-admission, or cancelled requests.
-13. Speech tests verify admission does not await playback and self-listener exclusion prevents duplicate observed
-    speech.
+12. Speech tests verify exactly one Mind actor-stamped, self-relative `ObservedSpeech` after successful playback
+    hand-off, and none for blank, unavailable, unconfigured, failed-before-hand-off, or cancelled-before-hand-off
+    requests; cancellation after hand-off does not retract the committed item.
+13. Speech tests verify the tool boundary is playback hand-off rather than playback completion, and self-listener
+    exclusion prevents duplicate observed speech.
 14. Interruption tests verify expected cancellation settles requests and tools before one fresh replacement starts,
     committed action observations survive, and no turns overlap.
 15. A capturing client verifies every sequential request is logged at the Microsoft.Extensions.AI abstraction only when

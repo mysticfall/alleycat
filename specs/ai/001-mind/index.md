@@ -42,6 +42,12 @@ responsive and interruption-safe in-world behaviour.
     meets the context threshold, rather than every scene character unconditionally.
 14. NPC speech uses the voice authored on the owning Character; contributors do not author a second output voice on
     Mind.
+15. An NPC must not begin a response while a speaker it attends to, or the NPC itself, is speaking; a response that
+    became due during that speaker's speaking window starts as soon as the window closes and scheduling permits.
+16. When an attended speaker begins speaking during the NPC's active response, the NPC's audible speech is cut off
+    immediately and exactly one fresh response replaces the interrupted one, reflecting the new speech.
+17. Speech from speakers the NPC does not currently attend to, and speech that cannot be attributed to a character,
+    must neither delay nor interrupt the NPC's responses.
 
 ## Technical Requirements
 
@@ -139,8 +145,8 @@ responsive and interruption-safe in-world behaviour.
     remains synchronous through Mind's `IPerception` faculties. Outbound production-tool invocation must start once
     through `AgentTool` and the shared `IMainThreadDispatcher`; cancellation remains linked to turn and Mind lifetime.
     The Game-scoped dispatcher owns accepted-work queueing and settlement, and AgenticMind must not retain local
-    deferred voice or Godot-action machinery. Successful speech admission still produces exactly one actor-stamped
-    self-action observation through ordinary Mind ingestion.
+    deferred voice or Godot-action machinery. The actor-stamped self-action speech observation commits exactly once at
+    playback hand-off (SPCH-005 TR-26), not at admission, through ordinary Mind ingestion.
 38. Mind must not own or export an output-voice reference. Character-owned capabilities required by tools must enter
     through AI-002's typed `AgentToolContext`; Character remains the sole authored voice source under CHAR-002.
 39. AI-007 separately defines the direct Mind-child post-attention consumer that may assign a look target. It consumes
@@ -150,6 +156,34 @@ responsive and interruption-safe in-world behaviour.
     init-only) at ingestion, before the record enters the timeline or pending queue. The identical stamped record must
     be used for the timeline, pending FIFO, and ingestion notification. Observations are otherwise unchanged and remain
     immutable after publication.
+41. Speaking-activity turn-start gate: Mind must not start a new turn while any gating voice reports `IsSpeaking`
+    (SPCH-005 TR-2). A voice gates iff its owning character's canonical `FullId` is present in Mind's current
+    attention snapshot at or above the retention threshold (AI-006 TR-33), regardless of weight or score. The Mind's
+    own character voice gates unconditionally. Voices whose speaker cannot be attributed to a current-scene character
+    (unknown or blank voice `Id`s) must not gate; this is an accepted limitation of the attribution model. Gate
+    membership is deliberately decoupled from the context threshold that governs foreground context eligibility
+    (AI-006 TR-33).
+42. Block-with-wake: when a blocking `SpeechEnded` fires (SPCH-005 TR-2), Mind must immediately re-run its scheduling
+    evaluation rather than poll. A turn whose eligibility was reached while the gate was closed — cumulative
+    importance at or above the threshold, or `MaxObservationWait` expiry — must start right away, still respecting
+    `MinimumTurnIntervalSeconds`. Eligibility reached while the gate is closed remains pending until the gate opens,
+    mirroring eligibility reached during an active turn (TR-6).
+43. Speech-start interruption: when a gating voice raises `SpeechStarted` (SPCH-005 TR-2) while a turn is in flight,
+    Mind must interrupt through the existing interruption machinery (TR-8–TR-11): request expected cancellation of the
+    active invocation, settle the invocation and all tool work, then start exactly one fresh replacement bypassing the
+    minimum interval exactly once; simultaneous arrivals coalesce; turns never overlap. Unlike the high-importance
+    observation trigger (TR-8, disabled by default), this trigger is voice-activity based and enabled by default. The
+    replacement must not start while the gate is closed; it waits behind the gate like any pending turn, ensuring the
+    fresh turn's context includes the new speech.
+44. Interruption must cut in-flight speech output. The interrupted turn's explicitly cancellable speech submission
+    (SPCH-005 TR-25) must be cancelled silently before playback hand-off — no `SpeechFailed`, no `IHearing` broadcast,
+    no listener notification, and the speaking window closes. Speech already at or past playback hand-off must be cut:
+    audio and lip-sync stop through the shared `LipSyncPlayer` stop/cut capability (SPCH-001/SPCH-002). SpeechTool must
+    pass the turn's cancellation token through the cancellable submission path; ordinary non-turn callers retain
+    admission-only semantics (SPCH-005 TR-25).
+45. Own-voice exclusion: the speaking window opened by a turn's own speech submission must not interrupt that turn.
+    Mind must ignore `SpeechStarted` from its own character voice while that turn is in flight. Own-voice activity
+    still gates the start of other turns (TR-41).
 
 ## In Scope
 
@@ -168,6 +202,11 @@ responsive and interruption-safe in-world behaviour.
 - Foreground-only render-context construction and success-only publication of the latest top-level read-only dictionary.
 - Tool-only turn settlement without assistant-text completion or synthetic-marker observations.
 - Irreversible node-lifetime shutdown of scheduling, provider requests, tools, and dispatcher-queued action work.
+- Speaking-activity turn-start gate with immediate wake on `SpeechEnded` and no polling.
+- Default-enabled speech-start interruption reusing the existing settlement and replacement machinery.
+- Silent pre-hand-off cancellation and cut of already-audible speech on interruption.
+- Attention-snapshot membership as the gate filter, including unconditional self-gating and unattributed-voice
+  exclusion.
 
 ## Out Of Scope
 
@@ -181,6 +220,9 @@ responsive and interruption-safe in-world behaviour.
 - Perception- or sensing-driven eye presentation changes, including direct gaze assignment. AI-007 alone is the
   separately composed post-attention consumer that may assign a look target; unchanged Vision presentation remains
   mandatory acceptance scope.
+- Gating on speech that cannot be attributed to a current-scene character; such speakers never gate and remain an
+  accepted limitation of the attribution model.
+- Starvation patience bound for the hard gate.
 
 ## Acceptance Criteria
 
@@ -192,6 +234,12 @@ responsive and interruption-safe in-world behaviour.
    as identity wording or treats it as authenticated provenance.
 3. Acceptance verifies bounded, privacy-safe, non-overlapping behaviour, Character-owned speech, and safe containment
    for missing configuration, backend failure, cancellation, and node exit.
+4. Acceptance verifies an NPC does not begin a response while an attended speaker's voice is active and starts a due
+   response as soon as the speaking window closes and scheduling permits.
+5. Acceptance verifies an attended speaker starting speech during an active response cuts the NPC's audible speech and
+   yields exactly one fresh response that reflects the new speech.
+6. Acceptance verifies speech from unattended or unattributable speakers neither delays nor interrupts the NPC's
+   responses.
 
 ### Technical Requirements
 
@@ -248,13 +296,31 @@ responsive and interruption-safe in-world behaviour.
     state passed to `IContextual.GetContext`.
 23. Tests verify Mind, not AgenticMind, owns synchronous incoming `IPerception` interpretation; every outbound
     production tool starts once through `AgentTool` and `IMainThreadDispatcher`; AgenticMind has no local deferred
-    action machinery; and successful speech admission creates exactly one actor-stamped self-action observation.
+    action machinery; and the actor-stamped self-action speech observation commits exactly once at playback hand-off
+    (SPCH-005 TR-26), not at admission.
 24. Scene and contract tests verify Mind has no exported output-voice reference and SpeechTool receives the owning
     Character through AI-002's typed context to resolve the Character-authored voice.
 25. Contract tests verify that gaze assignment is outside Mind's sensing and perception path and is owned only by the
     separately composed AI-007 post-attention selector.
 26. Tests verify every committed observation carries a non-null, monotonically non-decreasing `ObservedAt` stamped
     exactly once at ingestion, and that records published in snapshots are unchanged afterwards.
+27. Tests verify the speaking-activity gate: no new turn starts while a gating voice reports `IsSpeaking`; a blocking
+    `SpeechEnded` triggers immediate scheduling evaluation without polling; eligibility reached behind the gate stays
+    pending and starts right away on wake, while the minimum interval remains respected.
+28. Tests verify speech-start interruption reuses the interruption machinery: expected cancellation of the active
+    invocation, full settlement of invocation and tool work, exactly one replacement with one minimum-interval bypass,
+    coalescing of simultaneous arrivals, no turn overlap, and the replacement waiting behind the gate so its context
+    includes the new speech.
+29. Tests verify cut playback on interruption: the turn's explicitly cancellable speech submission is cancelled
+    silently before playback hand-off with no `SpeechFailed`, no `IHearing` broadcast, and no listener notification;
+    already-audible speech is cut through the shared `LipSyncPlayer` stop/cut capability (SPCH-001/SPCH-002);
+    SpeechTool passes the turn's cancellation token through the cancellable submission path; ordinary non-turn callers
+    keep admission-only semantics.
+30. Tests verify the attention filter: a voice gates iff its character is present in the attention snapshot at or
+    above the retention threshold regardless of weight; the Mind's own character voice gates unconditionally; a turn's
+    own speech admission never cancels its own turn; unattributable voice Ids never gate.
+31. Acceptance verifies both the user-visible turn-taking, interruption, and cut-speech behaviour and the gating,
+    wake, interruption, cut-playback, and attention-filter contracts.
 
 ## References
 
@@ -279,6 +345,8 @@ responsive and interruption-safe in-world behaviour.
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
+- [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
+- [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [CORE-010: Main-Thread Dispatcher](../../core/010-main-thread-dispatcher/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)

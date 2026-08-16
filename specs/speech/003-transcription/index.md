@@ -34,6 +34,9 @@ can be extended to other STT backends.
    equivalent results for arbitrary phase-misaligned stereo sources.
 10. **UR-10:** Recording finalisation and upload preparation avoid a second recording-sized WAV payload, reducing peak
     production memory use without claiming that ordinary HTTP buffering or transport copies are eliminated.
+11. **UR-11:** Recording start is observable to gameplay consumers such as the player's `Voice` component, so the
+    player's speaking state is accurate from the first moment of capture and other speakers do not talk over the
+    recording.
 
 ## Technical Requirements
 
@@ -98,6 +101,10 @@ can be extended to other STT backends.
 19. **TR-19:** OpenAI .NET 2.10.0 multipart upload must consume `WaveFileStream` directly. Deterministic tests must
     verify the exact logical WAV bytes and prove that one SDK retry sends an identical multipart file body after
     replaying the stream.
+20. **TR-20:** Emit a public parameterless `RecordingStarted` signal on the Godot thread when recording begins (the
+    XR action value exceeds 0.5). It is the public exposure of the existing protected `OnRecordingStarted()` hook
+    and must follow the same signal pattern as `TranscriptionCompleted`/`TranscriptionFailed`. `PlayerVoice`
+    (SPCH-005) subscribes to it to open its speaking window.
 
 ## In Scope
 
@@ -106,6 +113,7 @@ can be extended to other STT backends.
 - Immutable `RecordedAudioData` and `Transcribe(RecordedAudioData)` backend contract.
 - Zero-copy WAV payload composition through a seekable `WaveFileStream` and OpenAI .NET multipart upload.
 - Signal contract for transcription completion and failure.
+- Public `RecordingStarted` signal exposing recording start to gameplay consumers such as `PlayerVoice`.
 - Error handling contract using `ILogger` and the failure signal.
 - Optional transcript notification toggle for diagnostics and debug builds.
 - `OpenAITranscriber` implementation using OpenAI .NET SDK.
@@ -132,6 +140,12 @@ can be extended to other STT backends.
 Recording starts when the XR action value exceeds 0.5 and stops on release
 or timeout. This matches the natural hold-to-speak idiom common in VR voice
 input and avoids extra confirmation steps.
+
+### Recording-Started Signal
+
+The protected `OnRecordingStarted()` hook already marks the moment recording begins. Exposing it as a public
+parameterless `RecordingStarted` signal lets gameplay consumers such as `PlayerVoice` open their speaking window at
+the first moment of capture, so turn-taking gates cover the player's in-progress speech before any transcript exists.
 
 ### Error Diagnostics Pattern
 
@@ -234,15 +248,17 @@ for compatible services.
    node down before flush, and verifies that completion and failure signals and hooks do not run, state remains cleared,
    and the dispatch/worker task settles as lifecycle cancellation, satisfying TR-17.
 9. **AC-9:** Unit tests compare the complete logical WAV with an independently specified exact byte sequence, including
-   its mono PCM16 metadata and unchanged payload. Reads wholly within the header or PCM and across their boundary,
-   varied read sizes, all seek origins, EOF rewind, and exact replay are verified. Production request preparation must
-   prove that `WaveFileStream` retains the existing PCM backing rather than allocating a second full payload. A real
-   OpenAI .NET 2.10.0 multipart request receives one forced retry and verifies that both multipart file bodies are
-   byte-identical to the expected WAV, satisfying UR-10 and TR-18–TR-19.
+    its mono PCM16 metadata and unchanged payload. Reads wholly within the header or PCM and across their boundary,
+    varied read sizes, all seek origins, EOF rewind, and exact replay are verified. Production request preparation must
+    prove that `WaveFileStream` retains the existing PCM backing rather than allocating a second full payload. A real
+    OpenAI .NET 2.10.0 multipart request receives one forced retry and verifies that both multipart file bodies are
+    byte-identical to the expected WAV, satisfying UR-10 and TR-18–TR-19.
+10. **AC-10:** Tests verify `RecordingStarted` is emitted exactly once when recording begins, on the Godot thread, and
+    that `PlayerVoice` opens its speaking window from it, satisfying UR-11 and TR-20 and cross-referencing SPCH-005.
 
 **Traceability Map:** UR-1–UR-7 and TR-1–TR-2, TR-5–TR-11 → AC-1; UR-8 and TR-3, TR-12–TR-13 → AC-2–AC-3;
 UR-9 and TR-4, TR-14 → AC-4; TR-15–TR-16 → AC-5–AC-6; out-of-scope guard → AC-7; TR-17 → AC-8; UR-10 and
-TR-18–TR-19 → AC-9.
+TR-18–TR-19 → AC-9; UR-11 and TR-20 → AC-10.
 
 ## References
 
@@ -264,6 +280,7 @@ TR-18–TR-19 → AC-9.
 
 - [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
 - [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
+- [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)
 - [CORE-006: Microsoft Configuration Integration](../../core/006-microsoft-configuration-integration/index.md)

@@ -135,6 +135,14 @@ public sealed class ICharacterTests
 
         public Vector3 Origin => Vector3.Zero;
 
+        public bool IsSpeaking => false;
+
+#pragma warning disable CS0067
+        public event Action<IVoice>? SpeechStarted;
+
+        public event Action<IVoice>? SpeechEnded;
+#pragma warning restore CS0067
+
         public string? LastSpeech
         {
             get; private set;
@@ -150,6 +158,11 @@ public sealed class ICharacterTests
             Speak(speech);
             return ValueTask.CompletedTask;
         }
+
+        public ValueTask SpeakCancellableAsync(
+            string speech,
+            CancellationToken cancellationToken = default)
+            => SpeakAsync(speech, cancellationToken);
     }
 
     private sealed class FakeHearing : IHearing

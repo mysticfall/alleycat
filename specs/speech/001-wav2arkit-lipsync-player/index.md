@@ -23,6 +23,9 @@ updates) in Godot as a feasibility prototype.
 2. Users can manually trigger playback via `LipSyncPlayer.Play(AudioStreamWav)`.
 3. Calling `Play` while playback is active stops current playback and begins new
    playback immediately.
+4. Callers can cut off active playback, halting both audio and lip-sync facial
+   animation immediately.
+5. Callers can observe when audible playback has finished.
 
 ## Technical Requirements
 
@@ -35,6 +38,12 @@ updates) in Godot as a feasibility prototype.
    current audio and frame application immediately before starting new playback.
    The player is not required to cancel a synchronous inference in progress.
 6. Validation runner verifies initialisation, mapping presence, and frame progression.
+7. `LipSyncPlayer` must raise a playback-completed notification (typed C# event or
+   Godot signal) when audible playback finishes, observed through its existing
+   `IsAudioPlaying` polling in `_Process`.
+8. `LipSyncPlayer` must expose a stop/cut capability that halts both audio playback
+   and lip-sync frame application immediately. Mind interruption uses it to cut
+   audible speech; in-flight synchronous inference need not be cancelled.
 
 ## In Scope
 
@@ -42,6 +51,7 @@ updates) in Godot as a feasibility prototype.
   `LipSyncPlayer`.
 - Mapping inferred ARKit channels to available character mesh blendshape channels.
 - Manual playback invocation via `LipSyncPlayer.Play(AudioStreamWav)`.
+- Shared `LipSyncPlayer` playback-completed notification and stop/cut capability.
 - Prototype validation scene and runner for initialisation, frame advance, and
   observable weight change.
 
@@ -64,7 +74,11 @@ updates) in Godot as a feasibility prototype.
    immediately without cancelling in-progress inference.
 5. Validation workflow provides reproducible checks for initialisation, mapping,
    playback initiation, and playback progression.
-6. Technical requirement coverage: all six requirements map to acceptance criteria.
+6. Technical requirement coverage: all eight requirements map to acceptance criteria.
+7. Playback-completed notification contract is defined: raised when audible playback
+   finishes, detected via `IsAudioPlaying` polling.
+8. Stop/cut contract is defined: halts audio and lip-sync frame application
+   immediately without cancelling in-progress inference.
 
 ## References
 

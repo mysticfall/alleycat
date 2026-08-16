@@ -201,6 +201,73 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
     }
 
     /// <summary>
+    /// Verifies the public recording-started signal fires exactly once per recording session on the Godot thread.
+    /// </summary>
+    [Fact]
+    public async Task XRRecordButton_OnRecordingStart_EmitsRecordingStartedExactlyOncePerRecordingOnGodotThread()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        ExistingGlobalScope existingGlobalScope = await ExistingGlobalScope.CreateAsync(sceneTree);
+        RuntimeSpeechFixture fixture = await CreateRuntimeSpeechFixtureAsync(sceneTree);
+        int godotThreadId = System.Environment.CurrentManagedThreadId;
+
+        try
+        {
+            FakeTranscriber transcriber = Assert.IsType<FakeTranscriber>(fixture.Transcriber);
+            fixture.Transcriber.RecordButton = new StringName("speech_record");
+
+            int startedCount = 0;
+            List<int> signalThreadIds = [];
+            _ = transcriber.Connect(
+                Transcriber.SignalName.RecordingStarted,
+                Callable.From(() =>
+                {
+                    startedCount++;
+                    signalThreadIds.Add(System.Environment.CurrentManagedThreadId);
+                }));
+
+            fixture.LeftController.TriggerActionButtonPressed("speech_record");
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.True(fixture.Transcriber.IsRecording);
+            Assert.Equal(1, startedCount);
+            Assert.Single(signalThreadIds, godotThreadId);
+
+            fixture.LeftController.TriggerActionButtonReleased("speech_record");
+            await WaitUntilAsync(
+                sceneTree,
+                () => !fixture.Transcriber.IsRecording
+                    && !fixture.Transcriber.IsTranscribing
+                    && transcriber.TranscribeCallCount == 1,
+                maxFrames: 60);
+
+            // Stop, finalisation, and transcription must not re-emit the recording-started signal.
+            Assert.Equal(1, startedCount);
+
+            fixture.LeftController.TriggerActionButtonPressed("speech_record");
+            await WaitForNextFrameAsync(sceneTree);
+            Assert.True(fixture.Transcriber.IsRecording);
+            Assert.Equal(2, startedCount);
+
+            fixture.LeftController.TriggerActionButtonReleased("speech_record");
+            await WaitUntilAsync(
+                sceneTree,
+                () => !fixture.Transcriber.IsRecording
+                    && !fixture.Transcriber.IsTranscribing
+                    && transcriber.TranscribeCallCount == 2,
+                maxFrames: 60);
+
+            Assert.Equal(2, startedCount);
+            Assert.All(signalThreadIds, threadId => Assert.Equal(godotThreadId, threadId));
+        }
+        finally
+        {
+            await DestroyRuntimeSpeechFixtureAsync(sceneTree, fixture);
+            await existingGlobalScope.DisposeAsync();
+        }
+    }
+
+    /// <summary>
     /// Verifies the configured XR record button starts recording on press and stops/transcribes on release.
     /// </summary>
     [Fact]

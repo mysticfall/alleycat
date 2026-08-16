@@ -92,6 +92,12 @@ public abstract partial class Transcriber : Node
     public delegate void TranscriptionFailedEventHandler(string error);
 
     /// <summary>
+    /// Emitted when microphone recording begins.
+    /// </summary>
+    [Signal]
+    public delegate void RecordingStartedEventHandler();
+
+    /// <summary>
     /// XR controller hand used for microphone recording.
     /// </summary>
     [Export]
@@ -478,6 +484,7 @@ public abstract partial class Transcriber : Node
         UpdateProcessing();
         _recordingStopwatch = AIPipelineDebugLog.StartTimer();
         AIPipelineDebugLog.Stage("STT recording started");
+        _ = EmitSignal(SignalName.RecordingStarted);
         OnRecordingStarted();
     }
 

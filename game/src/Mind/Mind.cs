@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -9,6 +10,7 @@ using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;
 using AlleyCat.Sense;
+using AlleyCat.Speech.Voice;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -42,8 +44,13 @@ public abstract partial class Mind : Node
     private readonly AttentionPolicy _attention = new(GetTimestamp);
     private readonly Dictionary<Type, IPerception> _perceptions = [];
     private readonly Dictionary<ISense, Action<IPercept>> _senseHandlers = [];
+    private readonly Lock _speechVoiceSubscriptionLock = new();
+    private readonly HashSet<IVoice> _subscribedSpeechVoices = [];
+    private readonly ConcurrentQueue<IVoice> _speechStartNotifications = new();
     private ISense[] _senses = [];
     private IComponentProjectionNotifier? _componentProjectionNotifier;
+    private Func<ISceneContext> _sceneContextLoader = LoadCurrentSceneContext;
+    private bool _speechActivityEvaluationQueued;
     [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Enabled setter controls scheduling.")]
     private bool _enabled = true;
 
@@ -142,6 +149,15 @@ public abstract partial class Mind : Node
     [Export(PropertyHint.Range, "0.01,100,0.01")]
     public float HighImportanceInterruptionThreshold { get; set; } = 1f;
 
+    /// <summary>
+    /// Enables an attended speaker starting speech to pre-empt an active turn and cut its audible speech.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="HighImportanceInterruptionEnabled"/>, this voice-activity trigger is enabled by default.
+    /// </remarks>
+    [Export]
+    public bool SpeechInterruptionEnabled { get; set; } = true;
+
     /// <summary>Maximum value of one attention entry.</summary>
     [ExportGroup("Attention")]
     [Export(PropertyHint.Range, "0.01,100,0.01,or_greater")]
@@ -188,6 +204,7 @@ public abstract partial class Mind : Node
         {
             ActivatePerceptions();
         }
+        RefreshSpeechVoiceSubscriptions();
         _ = EnsureSchedulingTimer();
         if (HasPendingObservations && Enabled)
         {
@@ -211,6 +228,7 @@ public abstract partial class Mind : Node
         StopSchedulingTimer();
         UnsubscribeFromComponentProjectionRefreshes();
         UnsubscribeFromSenses();
+        UnsubscribeFromSpeechVoices();
         _perceptions.Clear();
         if (_schedulingTimer is { } schedulingTimer)
         {
@@ -350,6 +368,7 @@ public abstract partial class Mind : Node
         if (!IsNodeLifetimeEnded)
         {
             ActivatePerceptions();
+            RefreshSpeechVoiceSubscriptions();
         }
     }
 
@@ -390,6 +409,310 @@ public abstract partial class Mind : Node
     }
 
     internal void SetAttentionClockForTesting(Func<double> clock) => _attention.SetClock(clock);
+
+    private static ISceneContext LoadCurrentSceneContext()
+        => Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+
+    internal ISceneContext GetCurrentSceneContext() => _sceneContextLoader();
+
+    internal void SetSceneContextLoaderForTesting(Func<ISceneContext> sceneContextLoader)
+    {
+        ArgumentNullException.ThrowIfNull(sceneContextLoader);
+        _sceneContextLoader = sceneContextLoader;
+    }
+
+    /// <summary>
+    /// Re-aligns speaking-activity subscriptions with the current scene composition.
+    /// </summary>
+    /// <remarks>
+    /// Voice activity resolves through current-scene characters' composed <see cref="IVoice"/> via
+    /// <c>ICharacter.TryGetVoice</c>, mirroring the <c>SpeechPerception</c> attribution precedent (AI-006 TR-1).
+    /// Runs on the Godot thread.
+    /// </remarks>
+    private void RefreshSpeechVoiceSubscriptions()
+    {
+        ISceneContext scene = GetCurrentSceneContext();
+        List<IVoice> currentVoices = [];
+        foreach (ICharacter candidate in scene.Characters)
+        {
+            if (candidate.TryGetVoice(out IVoice? voice) && voice is not null && !currentVoices.Contains(voice))
+            {
+                currentVoices.Add(voice);
+            }
+        }
+
+        lock (_speechVoiceSubscriptionLock)
+        {
+            foreach (IVoice voice in _subscribedSpeechVoices.Where(voice => !currentVoices.Contains(voice)).ToArray())
+            {
+                voice.SpeechStarted -= OnVoiceSpeechStarted;
+                voice.SpeechEnded -= OnVoiceSpeechEnded;
+                _ = _subscribedSpeechVoices.Remove(voice);
+            }
+
+            foreach (IVoice voice in currentVoices.Where(voice => !_subscribedSpeechVoices.Contains(voice)))
+            {
+                voice.SpeechStarted += OnVoiceSpeechStarted;
+                voice.SpeechEnded += OnVoiceSpeechEnded;
+                _ = _subscribedSpeechVoices.Add(voice);
+            }
+        }
+    }
+
+    private void UnsubscribeFromSpeechVoices()
+    {
+        lock (_speechVoiceSubscriptionLock)
+        {
+            foreach (IVoice voice in _subscribedSpeechVoices)
+            {
+                voice.SpeechStarted -= OnVoiceSpeechStarted;
+                voice.SpeechEnded -= OnVoiceSpeechEnded;
+            }
+
+            _subscribedSpeechVoices.Clear();
+        }
+
+        while (_speechStartNotifications.TryDequeue(out _))
+        {
+        }
+
+        lock (_deferredGodotActionsLock)
+        {
+            _speechActivityEvaluationQueued = false;
+        }
+    }
+
+    private void OnVoiceSpeechStarted(IVoice voice)
+    {
+        _speechStartNotifications.Enqueue(voice);
+        QueueSpeechActivityEvaluation();
+    }
+
+    private void OnVoiceSpeechEnded(IVoice voice)
+    {
+        _ = voice;
+
+        // A blocking speaking window just closed: immediately re-run scheduling evaluation without polling
+        // (AI-001 TR-42).
+        QueueSchedulingEvaluation();
+    }
+
+    private void QueueSpeechActivityEvaluation()
+    {
+        if (IsNodeLifetimeEnded || !IsInsideTree())
+        {
+            return;
+        }
+
+        lock (_deferredGodotActionsLock)
+        {
+            if (IsNodeLifetimeEnded || _speechActivityEvaluationQueued)
+            {
+                return;
+            }
+
+            _speechActivityEvaluationQueued = true;
+        }
+
+        _ = CallDeferred(nameof(EvaluateSpeechActivityDeferred));
+    }
+
+    /// <summary>
+    /// Evaluates drained speech-start notifications for the speech-driven interruption trigger on the Godot thread.
+    /// </summary>
+    private void EvaluateSpeechActivityDeferred()
+    {
+        lock (_deferredGodotActionsLock)
+        {
+            _speechActivityEvaluationQueued = false;
+        }
+
+        if (IsNodeLifetimeEnded)
+        {
+            return;
+        }
+
+        List<IVoice> startedVoices = [];
+        while (_speechStartNotifications.TryDequeue(out IVoice? voice))
+        {
+            if (voice is not null && !startedVoices.Contains(voice))
+            {
+                startedVoices.Add(voice);
+            }
+        }
+
+        if (startedVoices.Count == 0)
+        {
+            return;
+        }
+
+        RefreshSpeechVoiceSubscriptions();
+        foreach (IVoice voice in startedVoices)
+        {
+            if (IsSpeechInterruptionTrigger(voice))
+            {
+                RequestSpeechDrivenInterruption();
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Determines whether one speech-start event pre-empts the active turn (AI-001 TR-43, TR-45).
+    /// </summary>
+    private bool IsSpeechInterruptionTrigger(IVoice voice)
+    {
+        if (!SpeechInterruptionEnabled)
+        {
+            return false;
+        }
+
+        ICharacter ownCharacter = ResolveOwningCharacter();
+        if (ownCharacter.TryGetVoice(out IVoice? ownVoice)
+            && (ReferenceEquals(voice, ownVoice)
+                || (ownVoice is not null
+                    && !string.IsNullOrWhiteSpace(ownVoice.Id)
+                    && string.Equals(voice.Id, ownVoice.Id, StringComparison.Ordinal))))
+        {
+            // Own-voice exclusion: the turn's own speech admission never cancels its own turn (TR-45).
+            return false;
+        }
+
+        return IsAttributedAttentionMember(voice, ownCharacter);
+    }
+
+    /// <summary>
+    /// Determines whether a speaking voice belongs to exactly one attention-member current-scene character.
+    /// </summary>
+    /// <remarks>
+    /// Ordinal voice-ID matching mirrors the <c>SpeechPerception</c> attribution precedent; blank and ambiguous IDs
+    /// never gate, and membership uses retention-threshold snapshot presence rather than the context threshold
+    /// (AI-006 TR-33).
+    /// </remarks>
+    private bool IsAttributedAttentionMember(IVoice voice, ICharacter ownCharacter)
+    {
+        if (string.IsNullOrWhiteSpace(voice.Id))
+        {
+            return false;
+        }
+
+        ISceneContext scene = GetCurrentSceneContext();
+        ICharacter? speaker = null;
+        foreach (ICharacter candidate in scene.Characters)
+        {
+            if (!candidate.TryGetVoice(out IVoice? candidateVoice)
+                || candidateVoice is null
+                || string.IsNullOrWhiteSpace(candidateVoice.Id)
+                || !string.Equals(candidateVoice.Id, voice.Id, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (speaker is not null)
+            {
+                // Ambiguous attribution never gates, mirroring SpeechPerception's failure without throwing here.
+                return false;
+            }
+
+            speaker = candidate;
+        }
+
+        return speaker is not null
+            && !ReferenceEquals(speaker, ownCharacter)
+            && GetAttentionSnapshot().Values.ContainsKey(speaker.FullId);
+    }
+
+    /// <summary>
+    /// Requests expected cancellation of the active turn after an attended speaker started speaking, cutting any
+    /// already-audible own speech (AI-001 TR-43, TR-44).
+    /// </summary>
+    private void RequestSpeechDrivenInterruption()
+    {
+        CancellationTokenSource? interruptionCancellation;
+        lock (_observationStateLock)
+        {
+            if (IsNodeLifetimeEnded
+                || !_enabled
+                || !_isProcessingObservations
+                || _interruptionRequested)
+            {
+                return;
+            }
+
+            _interruptionRequested = true;
+            _immediateReplacementPending = true;
+            interruptionCancellation = _activeTurnCancellation;
+        }
+
+        CutOwningVoiceSpeech();
+
+        if (interruptionCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            interruptionCancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Natural completion won the race after pre-emption was committed.
+        }
+    }
+
+    /// <summary>
+    /// Cuts the owning character's already-audible speech so the interrupted turn stops speaking immediately.
+    /// </summary>
+    private void CutOwningVoiceSpeech()
+    {
+        if (ResolveOwningCharacter().TryGetVoice(out IVoice? voice) && voice is AIVoice aiVoice)
+        {
+            // Only AI voices own cuttable playback; other voice kinds keep their own window boundaries.
+            // The cut is typed deliberately: a default-interface member could never dispatch here because
+            // interface mapping is established on the Voice base class (AI-001 TR-44).
+            aiVoice.CutSpeech();
+        }
+    }
+
+    /// <summary>
+    /// Refreshes speaking-activity subscriptions and reports whether the speaking gate blocks turn starts.
+    /// </summary>
+    /// <remarks>
+    /// The own character's voice gates unconditionally; other current-scene character voices gate through
+    /// retention-threshold attention membership regardless of weight; unattributable voices never gate (AI-001
+    /// TR-41).
+    /// </remarks>
+    private bool IsSpeakingGateClosed()
+    {
+        RefreshSpeechVoiceSubscriptions();
+
+        ICharacter ownCharacter = ResolveOwningCharacter();
+        if (ownCharacter.TryGetVoice(out IVoice? ownVoice) && ownVoice is { IsSpeaking: true })
+        {
+            return true;
+        }
+
+        ISceneContext scene = GetCurrentSceneContext();
+        AttentionSnapshot attention = GetAttentionSnapshot();
+        foreach (ICharacter candidate in scene.Characters)
+        {
+            if (ReferenceEquals(candidate, ownCharacter)
+                || !candidate.TryGetVoice(out IVoice? voice)
+                || voice is not { IsSpeaking: true }
+                || string.IsNullOrWhiteSpace(voice.Id))
+            {
+                continue;
+            }
+
+            if (attention.Values.ContainsKey(candidate.FullId))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Appends an observation to the timeline and pending importance queue.
@@ -729,6 +1052,13 @@ public abstract partial class Mind : Node
 
         if (delaySeconds <= 0d)
         {
+            if (IsSpeakingGateClosed())
+            {
+                // Park the eligible turn behind the speaking gate; a blocking SpeechEnded re-queues this
+                // evaluation immediately without polling (AI-001 TR-41, TR-42).
+                return;
+            }
+
             _ = ProcessObservationCycleAsync();
             return;
         }
@@ -787,6 +1117,13 @@ public abstract partial class Mind : Node
             cancellationToken,
             NodeLifetimeCancellationToken);
         CancellationToken processingToken = processingCancellation.Token;
+
+        if (IsSpeakingGateClosed())
+        {
+            // A new turn may not start while a gating voice speaks; eligibility stays pending until the gate opens
+            // (AI-001 TR-41, TR-42).
+            return false;
+        }
 
         lock (_observationStateLock)
         {

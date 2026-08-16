@@ -82,10 +82,21 @@ public sealed class PerceptContractTests
 
         public Godot.Vector3 Origin => Godot.Vector3.Zero;
 
+        public bool IsSpeaking => false;
+
+#pragma warning disable CS0067
+        public event Action<IVoice>? SpeechStarted;
+
+        public event Action<IVoice>? SpeechEnded;
+#pragma warning restore CS0067
+
         public void Speak(string speech)
         {
         }
 
         public ValueTask SpeakAsync(string speech, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask SpeakCancellableAsync(string speech, CancellationToken cancellationToken = default)
+            => SpeakAsync(speech, cancellationToken);
     }
 }

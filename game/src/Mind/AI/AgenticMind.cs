@@ -29,8 +29,6 @@ public partial class AgenticMind : MindBase
     private static readonly IReadOnlyDictionary<string, object?> _emptyRenderContext =
         new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>());
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
-    private Func<ISceneContext> _sceneContextLoader = static ()
-        => Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
     private ContextWorker[] _contextWorkers = [];
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
 
@@ -131,7 +129,7 @@ public partial class AgenticMind : MindBase
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
-        ISceneContext scene = _sceneContextLoader();
+        ISceneContext scene = GetCurrentSceneContext();
         ICharacter character = ResolveOwningCharacter();
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
@@ -380,11 +378,4 @@ public partial class AgenticMind : MindBase
         ArgumentNullException.ThrowIfNull(diagnosticsSettingsLoader);
         _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
-
-    internal void SetSceneContextLoaderForTesting(Func<ISceneContext> sceneContextLoader)
-    {
-        ArgumentNullException.ThrowIfNull(sceneContextLoader);
-        _sceneContextLoader = sceneContextLoader;
-    }
-
 }

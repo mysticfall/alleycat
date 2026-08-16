@@ -137,6 +137,25 @@ public abstract partial class LipSyncPlayer : Node
     }
 
     /// <summary>
+    /// Raised when a playback session ends, observed through the audio-playing polling in <see cref="_Process"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The notification is raised exactly once per playback session: the poll detects the falling edge where audio was
+    /// playing on the previous poll and has now stopped, or the inferred frames reach their natural end.
+    /// </para>
+    /// <para>
+    /// A session that fails inside the polling loop (for example lost audio synchronisation) can never reach natural
+    /// completion, so the failure path raises the notification as well to settle playback watchers.
+    /// </para>
+    /// <para>
+    /// Cutting playback through <see cref="Stop"/> or restarting through <see cref="PlayPrepared"/> halts the
+    /// interrupted session without raising this notification for it.
+    /// </para>
+    /// </remarks>
+    public event Action? PlaybackCompleted;
+
+    /// <summary>
     /// Runtime playback error set when audio-synchronised playback fails.
     /// </summary>
     public string PlaybackError
@@ -156,6 +175,7 @@ public abstract partial class LipSyncPlayer : Node
     private int _lastAppliedFrameIndex = -1;
     private float[] _lastAppliedChannelValues = [];
     private bool _audioWasObservedPlaying;
+    private bool _audioPlayingAtLastPoll;
     private double _audioStartGraceSeconds;
     private bool _hasLoggedUnmappedBlendshapes;
     private ILogger<LipSyncPlayer>? _logger;
@@ -216,22 +236,26 @@ public abstract partial class LipSyncPlayer : Node
         }
 
         bool audioPlaying = AudioPlayer.IsPlaying();
+        bool audioStoppedSinceLastPoll = _audioPlayingAtLastPoll && !audioPlaying;
+        _audioPlayingAtLastPoll = audioPlaying;
         IsAudioPlaying = audioPlaying;
 
-        if (audioPlaying)
+        if (!audioPlaying)
         {
-            _audioWasObservedPlaying = true;
-            _playbackTimeSeconds = AudioPlayer.GetPlaybackPosition() + AudioServer.GetTimeSinceLastMix();
-        }
-        else
-        {
+            if (audioStoppedSinceLastPoll)
+            {
+                // Audible playback was observed playing and has now finished, so playback completed naturally.
+                CompletePlayback();
+                return;
+            }
+
             _audioStartGraceSeconds += delta;
 
             float durationSeconds = _frames.Length / _outputFps;
             bool nearNaturalEnd = _playbackTimeSeconds >= durationSeconds - (1f / _outputFps);
             if (nearNaturalEnd)
             {
-                StopPlayback(resetWeights: false, clearFrames: false);
+                CompletePlayback();
                 return;
             }
 
@@ -245,12 +269,16 @@ public abstract partial class LipSyncPlayer : Node
             return;
         }
 
+        _audioWasObservedPlaying = true;
+        _playbackTimeSeconds = AudioPlayer.GetPlaybackPosition() + AudioServer.GetTimeSinceLastMix();
+
         int targetFrameIndex = Mathf.FloorToInt((float)(_playbackTimeSeconds * _outputFps * PlaybackSpeed));
         if (targetFrameIndex >= _frames.Length)
         {
             if (!LoopPlayback)
             {
-                StopPlayback(resetWeights: false, clearFrames: false);
+                // The inferred frames reached their natural end while audio was still progressing.
+                CompletePlayback();
                 return;
             }
 
@@ -331,6 +359,22 @@ public abstract partial class LipSyncPlayer : Node
         StopPlayback(resetWeights: true, clearFrames: true);
         StartPlayback(playback);
     }
+
+    /// <summary>
+    /// Cuts active playback, halting both audio playback and lip-sync frame application immediately.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Safe to call when playback is inactive. Cutting does not raise <see cref="PlaybackCompleted"/> for the
+    /// interrupted session and does not cancel in-flight backend inference.
+    /// </para>
+    /// </remarks>
+    public void Stop() => StopPlayback(resetWeights: true, clearFrames: true);
+
+    /// <summary>
+    /// Simulates the natural end of the active playback session for deterministic testing.
+    /// </summary>
+    internal void CompletePlaybackForTesting() => CompletePlayback();
 
     /// <summary>
     /// Prepares backend resources required before inference runs.
@@ -537,6 +581,7 @@ public abstract partial class LipSyncPlayer : Node
         _lastAppliedFrameIndex = -1;
         _lastAppliedChannelValues = [];
         _audioWasObservedPlaying = false;
+        _audioPlayingAtLastPoll = false;
         _audioStartGraceSeconds = 0d;
     }
 
@@ -571,6 +616,12 @@ public abstract partial class LipSyncPlayer : Node
         {
             ClearPreparedPlayback();
         }
+    }
+
+    private void CompletePlayback()
+    {
+        StopPlayback(resetWeights: false, clearFrames: false);
+        PlaybackCompleted?.Invoke();
     }
 
     private void BuildMeshBindings(IReadOnlyList<string> blendshapeNames)
@@ -740,6 +791,9 @@ public abstract partial class LipSyncPlayer : Node
     {
         StopPlayback(resetWeights: false, clearFrames: false);
         SetPlaybackError(message);
+        // A failed session can never reach natural completion, so settle playback watchers now. Without this,
+        // a watcher such as a voice's speaking window could stay open indefinitely.
+        PlaybackCompleted?.Invoke();
     }
 
     private void SetPlaybackError(string message)

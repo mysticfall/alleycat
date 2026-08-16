@@ -32,6 +32,9 @@ playback with a repeatable workflow when they opt in to startup probing.
    playback checks with a repeatable workflow.
 6. Playback is triggered manually via `LipSyncPlayer.Play(AudioStreamWav)`
    method.
+7. Callers can cut off active playback, halting both audio and facial animation
+   immediately.
+8. Callers can observe when audible playback has finished.
 
 ## Technical Requirements
 
@@ -57,6 +60,13 @@ playback with a repeatable workflow when they opt in to startup probing.
 11. When `ProbeHealthOnInitialise` is `true`, initialisation performs `/health`
     probing and preserves the existing retry and failure semantics.
 12. Inference endpoint behaviour is unchanged by startup health probing.
+13. The shared `LipSyncPlayer` base must raise a playback-completed notification
+    (typed C# event or Godot signal) when audible playback finishes, observed
+    through its existing `IsAudioPlaying` polling in `_Process`.
+14. The shared `LipSyncPlayer` base must expose a stop/cut capability that halts
+    both audio playback and lip-sync frame application immediately. Mind
+    interruption uses it to cut audible speech; in-flight HTTP requests need not
+    be cancelled.
 
 ## In Scope
 
@@ -67,6 +77,7 @@ playback with a repeatable workflow when they opt in to startup probing.
 - Manual playback trigger via `Play(AudioStreamWav)` method.
 - Audio format validation at initialisation.
 - Interruption handling for active playback.
+- Shared `LipSyncPlayer` playback-completed notification and stop/cut capability.
 
 ## Out Of Scope
 
@@ -101,6 +112,10 @@ playback with a repeatable workflow when they opt in to startup probing.
 10. Startup health-probe configuration does not change `/blendshapes` inference
     endpoint behaviour.
 11. Out Of Scope does not exclude mandatory implementation requirements.
+12. Shared-base playback-completed notification is defined: raised when audible
+    playback finishes via `IsAudioPlaying` polling.
+13. Shared-base stop/cut capability is defined: halts audio and lip-sync frame
+    application immediately without cancelling in-flight HTTP inference.
 
 ## References
 

@@ -764,11 +764,12 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Multiple SpeechTool calls queue in order and each successful admission records one owner-stamped observation.
+    /// Multiple SpeechTool calls queue in order, each committing exactly one owner-stamped observation at playback
+    /// hand-off, while pre-hand-off cancellation commits none.
     /// </summary>
     [Fact]
     [Headless]
-    public async Task SpeechTool_WithAIVoice_QueuesMultipleCallsAndRecordsEachAdmission()
+    public async Task SpeechTool_WithAIVoice_CommitsOneObservationPerPlaybackHandOff()
     {
         SceneTree sceneTree = GetSceneTree();
         TaskCompletionSource<byte[]> generationResult = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -809,25 +810,45 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         try
         {
-            object? accepted = await InvokeSpeechToolAsync(activeFunction, "Accepted request");
-            object? queued = await InvokeSpeechToolAsync(activeFunction, "Queued request");
+            // One submission is cancelled mid-generation, before playback hand-off: it must commit nothing.
+            using CancellationTokenSource cancelledSubmission = new();
+            Task<object?> cancelled = activeFunction.InvokeAsync(
+                new AIFunctionArguments { ["speech"] = "Cancelled request" },
+                cancelledSubmission.Token).AsTask();
+            await WaitUntilAsync(sceneTree, () => speechGenerator.GenerateCallCount == 1, 30);
+            cancelledSubmission.Cancel();
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
+
+            // Two further submissions are admitted while generation is still pending, so neither has reached the
+            // playback hand-off boundary and neither may commit an observation yet.
+            Task<object?> accepted = InvokeSpeechToolAsync(activeFunction, "Accepted request");
+            Task<object?> queued = InvokeSpeechToolAsync(activeFunction, "Queued request");
+            await WaitUntilAsync(sceneTree, () => voice.IsSpeaking, 30);
+            Assert.Empty(acceptedMind.Timeline);
+
             _ = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => InvokeSpeechToolAsync(disabledFunction, "Disabled request"));
 
-            Assert.Equal("Spoken through the configured voice.", accepted);
-            Assert.Equal("Spoken through the configured voice.", queued);
+            _ = generationResult.TrySetResult(
+                CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+            object? acceptedResult = await accepted.WaitAsync(TimeSpan.FromSeconds(5));
+            object? queuedResult = await queued.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal("Spoken through the configured voice.", acceptedResult);
+            Assert.Equal("Spoken through the configured voice.", queuedResult);
             Assert.Equal(
                 ["Accepted request", "Queued request"],
                 acceptedMind.Timeline.Cast<ObservedSpeech>().Select(observation => observation.Content));
             Assert.All(
                 acceptedMind.Timeline.Cast<ObservedSpeech>(),
                 observation => Assert.Equal(((IIdentifiable)acceptedMind.Owner).FullId, observation.ActorId));
+            Assert.All(
+                acceptedMind.Timeline.Cast<ObservedSpeech>(),
+                observation => Assert.Null(observation.VoiceId));
             Assert.Empty(disabledMind.Timeline);
-
-            _ = generationResult.TrySetResult(
-                CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
             await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 2, 30);
-            Assert.Equal(["Accepted request", "Queued request"], speechGenerator.RequestedTexts);
+            // The cancelled item did reach generation before its withdrawal, but never playback hand-off.
+            Assert.Equal(["Cancelled request", "Accepted request", "Queued request"], speechGenerator.RequestedTexts);
         }
         finally
         {
