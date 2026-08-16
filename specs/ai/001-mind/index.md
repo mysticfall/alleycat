@@ -133,7 +133,8 @@ responsive and interruption-safe in-world behaviour.
     configured senses. Missing, duplicate, incompatible, or undeclared mappings must fail clearly.
 36. Mind must validate a complete `PerceptionResult`, including every calculated observation importance, before any
     mutation. It then applies ordered attention effects sequentially and atomically ingests ordered observations through
-    the existing timeline, pending FIFO, scheduling, and interruption path.
+    the existing timeline, pending FIFO, scheduling, and interruption path. This sensing and perception path must not
+    select or assign an IVision look target.
 37. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation
     remains synchronous through Mind's `IPerception` faculties. Outbound production-tool invocation must start once
     through `AgentTool` and the shared `IMainThreadDispatcher`; cancellation remains linked to turn and Mind lifetime.
@@ -142,6 +143,9 @@ responsive and interruption-safe in-world behaviour.
     self-action observation through ordinary Mind ingestion.
 38. Mind must not own or export an output-voice reference. Character-owned capabilities required by tools must enter
     through AI-002's typed `AgentToolContext`; Character remains the sole authored voice source under CHAR-002.
+39. AI-007 separately defines the direct Mind-child post-attention consumer that may assign a look target. It consumes
+    Mind's published attention snapshot after perception has completed; Mind's sensing and attention-mutation contracts
+    remain gaze-neutral.
 
 ## In Scope
 
@@ -151,6 +155,8 @@ responsive and interruption-safe in-world behaviour.
 - Threshold, maximum-wait, minimum-interval, disable, and active-turn interruption behaviour.
 - Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
 - Synchronous percept interpretation, exact faculty dispatch, and Mind-owned attention under AI-006.
+- Published attention snapshots for the separately composed, post-attention AI-007 gaze selector; direct gaze assignment
+  remains outside Mind sensing and perception processing.
 - Attention-filtered foreground contextual-subject selection.
 - AgenticMind orchestration through AI-002 and AI-003.
 - Typed tool-context hand-off of Character-owned capabilities without Mind-owned voice authoring.
@@ -168,7 +174,9 @@ responsive and interruption-safe in-world behaviour.
 - Automatic retry or backoff policy beyond existing failure containment.
 - Multi-agent orchestration and long-term relationship state.
 - Final tuning values for importance thresholds and wait durations.
-- Perception-driven changes to eye presentation; unchanged eye presentation remains mandatory acceptance scope.
+- Perception- or sensing-driven eye presentation changes, including direct gaze assignment. AI-007 alone is the
+  separately composed post-attention consumer that may assign a look target; unchanged Vision presentation remains
+  mandatory acceptance scope.
 
 ## Acceptance Criteria
 
@@ -230,7 +238,7 @@ responsive and interruption-safe in-world behaviour.
     processing.
 21. Tests verify complete `PerceptionResult` and calculated-importance validation occurs before mutation, duplicate
     attention effects apply sequentially in order, and ordered observations use the existing atomic ingestion and
-    scheduling path.
+    scheduling path, without selecting or assigning an IVision look target.
 22. Tests verify foreground context contains self plus all currently resolvable attention-eligible `IContextual`
     subjects, with no unconditional all-scene-character inclusion, second visual scan, hidden subject cache, or Mind
     state passed to `IContextual.GetContext`.
@@ -239,6 +247,8 @@ responsive and interruption-safe in-world behaviour.
     action machinery; and successful speech admission creates exactly one actor-stamped self-action observation.
 24. Scene and contract tests verify Mind has no exported output-voice reference and SpeechTool receives the owning
     Character through AI-002's typed context to resolve the Character-authored voice.
+25. Contract tests verify that gaze assignment is outside Mind's sensing and perception path and is owned only by the
+    separately composed AI-007 post-attention selector.
 
 ## References
 
@@ -257,6 +267,7 @@ responsive and interruption-safe in-world behaviour.
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-005: Context Worker](../005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
+- [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)

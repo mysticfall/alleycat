@@ -33,10 +33,12 @@ attention, existing speech history, and existing eye visibility and presentation
 ### Dependency Direction
 
 1. Production source dependencies must follow these directions:
-    - Sense owns neutral percept contracts and may depend on Core.
-    - Vision, `Speech`, `Speech.Voice`, Interaction, and other modality or delivery domains may depend on Sense and Core
-      as required by their contracts.
-    - Mind may depend on Sense contracts, but Mind and modality or delivery domains must not depend on one another.
+     - Sense owns neutral percept contracts and may depend on Core.
+     - Vision, `Speech`, `Speech.Voice`, Interaction, and other modality or delivery domains may depend on Sense and
+       Core as required by their contracts.
+     - Mind's sensing and attention-production path may depend on Sense contracts, but not modality or delivery domains.
+       AI-007's separately composed post-attention selector may depend only on the `IVision` capability contract to
+       assign a target; Vision and other modality or delivery domains must not depend on Mind.
 2. Scene composition may place a Mind node beneath a Character node without creating a Character-to-Mind source
     dependency.
 3. The refactor must remove `CharacterPerception`, `MindStimulus`, and their bespoke production wiring.
@@ -129,16 +131,20 @@ attention, existing speech history, and existing eye visibility and presentation
     `0 <= retention <= context <= maximum`. Settings validation must complete before activation or mutation.
 35. Attention snapshots are immutable identity/value sequences ordered by `FullId` using ordinal comparison. Attention
     stores no live subject, percept, or observation reference.
+36. Attention contracts, settings, snapshots, policies, and effects live in `AlleyCat.Mind.Attention`.
+    `Mind.GetAttentionSnapshot()` remains the public read API. AI-007 is the separately composed post-attention consumer
+    of that snapshot; this specification remains normative for attention production and mutation.
 
 ### Ownership And Composition
 
-36. Mind owns incoming percept subscription, exact faculty dispatch, result validation, attention mutation, observation
-    ingestion, and existing scheduling.
-37. AgenticMind owns only provider, prompt, render-context, and tool concerns. It must not interpret incoming percepts.
+37. Mind owns incoming percept subscription, exact faculty dispatch, result validation, attention mutation, observation
+    ingestion, and existing scheduling. It must not select or assign an IVision look target from a sense, survey,
+    faculty, or attention effect.
+38. AgenticMind owns only provider, prompt, render-context, and tool concerns. It must not interpret incoming percepts.
     The existing speech output tool and exactly-once self-action observation path remain unchanged.
-38. `Character.Components` deliberately includes configured `ISense` components in deterministic holder order, in
+39. `Character.Components` deliberately includes configured `ISense` components in deterministic holder order, in
     addition to its required embodied components. No `CharacterPerception` component or bespoke wiring remains.
-39. AgenticMind foreground context contains self and each attention-eligible `FullId` that currently resolves through
+40. AgenticMind foreground context contains self and each attention-eligible `FullId` that currently resolves through
     `ISceneContext.Find(FullId)` to an `IContextual` subject. It performs no additional visual survey.
 
 ## In Scope
@@ -146,6 +152,8 @@ attention, existing speech history, and existing eye visibility and presentation
 - Immutable percept and synchronous sense contracts.
 - EyesBehaviour-owned visual survey cadence and Hearing-owned speech acquisition.
 - Mind-owned Resource faculties, exact type registry, attention, and atomic result handling.
+- Attention contract namespace and immutable snapshot publication for AI-007's separately composed post-attention
+  consumer; not gaze policy or target assignment.
 - Speech interpretation and observation-free visual reinforcement.
 - Sense projection through `Character.Components` and approved dependency direction.
 - Post-commit projection refresh and Mind sense rebinding.
@@ -154,7 +162,8 @@ attention, existing speech history, and existing eye visibility and presentation
 
 - Focused visual inspection or additional visual percept types.
 - Visual descriptions or observations.
-- Gaze selection or perception-driven eye presentation.
+- Gaze selection or direct look-target assignment by sensing, surveys, faculties, or attention mutation. AI-007 alone is
+  the separately composed post-attention consumer that may assign a look target.
 - Spatial hearing, acoustics, distance attenuation, or directionality.
 - Non-sensory stimuli.
 - Asynchronous dispatch, queues, Reactive Extensions, or background processing.
@@ -181,7 +190,8 @@ attention, existing speech history, and existing eye visibility and presentation
 ### Technical Requirements
 
 1. Dependency checks verify that Sense remains the neutral percept-contract domain; modality and delivery domains
-   depend on Sense as required; and Mind and modality or delivery domains have no cyclic dependency.
+   depend on Sense as required; Mind sensing and attention production remain modality-neutral; AI-007 alone may consume
+   `IVision`; and no modality or delivery domain depends on Mind.
 2. Contract tests verify immutable behaviour-free `IPercept`, synchronous `ISense.Perceived`, deterministic exact-type
    metadata, sense-owned lifecycle, and no active/passive distinction.
 3. Vision tests verify `IVision` has no public `Scan()`, `VisualSurveyPercept` lives in `AlleyCat.Vision`, cadence is
@@ -213,12 +223,16 @@ attention, existing speech history, and existing eye visibility and presentation
    the speech tool's exactly-once self-action observation path remains, configured senses appear in deterministic
    `Character.Components`, and `CharacterPerception` and `MindStimulus` do not exist.
 14. Foreground-context tests verify self inclusion, eligible `FullId` resolution, omission of unresolved or
-    non-contextual subjects, no top-N selection, and no second visual survey.
+   non-contextual subjects, no top-N selection, and no second visual survey.
+15. Boundary tests verify sensing, surveys, faculties, and attention mutation never call `IVision.SetLookTarget` or
+    `IVision.ClearLookTarget`; AI-007 alone consumes the published attention snapshot as the separately composed
+    post-attention gaze consumer.
 
 ## References
 
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
+- [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
 - [VISION-001: Eyes](../../vision/001-eyes/index.md)
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)

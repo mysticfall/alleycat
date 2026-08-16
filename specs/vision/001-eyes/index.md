@@ -56,9 +56,11 @@ Provide a reusable eye component system that:
    - Accepts an `AnimationTree` reference or inherits from parent.
    - Exposes `LookTarget` as the assigned gaze anchor node.
    - Provides a protected target-resolution method for the world-space look point.
-   - Resolves to the assigned `LookTarget` position when present.
-   - Falls back to a point 1 metre directly in front of the eyes when no target is assigned.
-   - Owns saccade anchor polling and offset state around the resolved look point.
+    - Resolves to the assigned `LookTarget` position when present.
+    - Falls back to a point 1 metre directly in front of the eyes when no target is assigned.
+    - Owns saccade anchor polling and offset state around the resolved look point.
+    - Remains target-policy neutral: it must not select a target or own an attention-gaze hook. AI-007 is the separately
+      composed post-attention consumer that may call `IVision.SetLookTarget` or `IVision.ClearLookTarget`.
 4. Saccades are presentation movement around the active gaze anchor:
    - Poll the protected target-resolution method at a default 1-second interval.
    - Apply bounded offsets around the latest resolved anchor, not independent gaze selection.
@@ -198,8 +200,8 @@ Provide a reusable eye component system that:
 
 ## Out Of Scope
 
-- Attention, Mind interpretation, or independent gaze-selection logic.
-- Visual landmark selection policy beyond a future hook owned by `EyesBehaviour`.
+- Attention, Mind interpretation, or gaze-selection policy. AI-007 alone is the separately composed post-attention
+  consumer that may assign look targets; Vision remains policy-neutral and has no attention-gaze hook.
 - Automatic visual-cue selection or gaze movement towards cues.
 - Emotional-state policy that modifies saccade tuning.
 - Eyebrow movement or expression changes.
@@ -226,8 +228,8 @@ Provide a reusable eye component system that:
 | 7  | User              | Bounded saccades move around the active gaze anchor without changing focus. |
 | 8  | Technical         | Saccades poll the look-point resolver at the default 1-second interval and |
 |    |                   | use default constants or exports for interval, speed, and amplitude. |
-| 9  | Technical         | `EyesBehaviour` owns target-node resolution, fallback, future landmark hook, |
-|    |                   | and saccade anchor/offset state. |
+| 9  | Technical         | `EyesBehaviour` owns target-node resolution, fallback, and saccade |
+|    |                   | anchor/offset state, but no gaze-selection policy or attention-gaze hook. |
 | 10 | Technical         | `EyesController` owns supplied-point to TimeSeek conversion, smoothing, blend |
 |    |                   | enforcement, and blink timing; it does not resolve `Node3D` targets directly. |
 | 11 | User              | Blinking occurs at randomised intervals within configured min/max range. |
@@ -318,6 +320,8 @@ Provide a reusable eye component system that:
 |    |                   | canonical visible-subject `FullId` values, never descriptions or observations. |
 | 50 | Technical         | Tests verify surveys never invoke `VisualCue.Describe`, select gaze, change |
 |    |                   | `LookTarget`, or alter saccades, blink cadence, or other eye presentation. |
+| 51 | Technical         | Tests verify EyesBehaviour remains policy-neutral and has no attention-gaze |
+|    |                   | hook; AI-007 is the separately composed post-attention look-target consumer. |
 
 ## References
 
@@ -330,6 +334,7 @@ Provide a reusable eye component system that:
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
+- [AI-007: Attention-Driven Gaze Target Selection](../../ai/007-attention-gaze-target-selection/index.md)
 - [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/assets/characters/import/eye_animation_library_import.gd`
 - `game/src/Vision/IVision.cs`

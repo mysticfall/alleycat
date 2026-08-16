@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
+using AlleyCat.Mind.Attention;
 
 namespace AlleyCat.Mind.Perception;
-
-/// <summary>One ordered identity-only attention adjustment.</summary>
-public sealed record AttentionEffect(string SubjectFullId, float Contribution);
 
 /// <summary>Immutable ordered output of one perception faculty.</summary>
 public sealed class PerceptionResult

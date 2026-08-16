@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Scene;
 
 namespace AlleyCat.Mind.Perception;

@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 
-namespace AlleyCat.Mind;
+namespace AlleyCat.Mind.Attention;
 
 /// <summary>Immutable, ordinally ordered attention state at one monotonic instant.</summary>
 public sealed class AttentionSnapshot

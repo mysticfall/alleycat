@@ -13,6 +13,7 @@
 [ext_resource type="Script" uid="uid://bfalxt2riwwdb" path="res://src/Navigation/LocomotiveNavigation.cs" id="12_navigation"]
 [ext_resource type="Script" uid="uid://qs2mgtgqvri5" path="res://src/Speech/Hearing.cs" id="13_hearing"]
 [ext_resource type="Script" uid="uid://nb7frvgohlfq" path="res://src/Mind/Perception/SpeechPerception.cs" id="14_speech_perception"]
+[ext_resource type="Script" uid="uid://dudl5uhyyp755" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="attention_gaze_selector_1"]
 [ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
 
 [sub_resource type="Resource" id="Resource_agentic_speech_tool"]
@@ -95,6 +96,10 @@ SystemInstruction = ExtResource("9_e0v3v")
 Tools = Array[ExtResource("10_y1xmj")]([SubResource("Resource_agentic_speech_tool")])
 Perceptions = Array[Resource]([SubResource("Resource_speech_perception"), SubResource("Resource_visual_perception")])
 metadata/_custom_type_script = "uid://hadsjgek6b2p"
+
+[node name="AttentionGazeTargetSelector" type="Node" parent="Mind"]
+script = ExtResource("attention_gaze_selector_1")
+metadata/_custom_type_script = "uid://dudl5uhyyp755"
 
 [node name="Hearing" type="Node" parent="."]
 script = ExtResource("13_hearing")

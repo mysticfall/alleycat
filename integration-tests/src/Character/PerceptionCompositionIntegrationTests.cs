@@ -2,6 +2,7 @@ using AlleyCat.Common;
 using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Rigging.Installation;
@@ -67,10 +68,16 @@ public sealed class PerceptionCompositionIntegrationTests
             npc.RefreshComponents();
             Hearing hearing = Assert.IsType<Hearing>(npc.Hearing!);
             AgenticMind mind = Assert.IsType<AgenticMind>(npc.GetNode("Mind"), exactMatch: false);
+            AttentionGazeTargetSelector femaleSelector = Assert.IsType<AttentionGazeTargetSelector>(
+                mind.GetNode("AttentionGazeTargetSelector"),
+                exactMatch: false);
 
             Assert.Same(npc, hearing.GetParent());
             Assert.Equal([typeof(SpeechPerception), typeof(VisualSurveyPerception)], mind.Perceptions.Select(faculty => faculty.GetType()));
             Assert.Equal(["CharacterLocomotion", "LocomotiveNavigation", "EyesBehaviour", "AIVoice", "Hearing", "HandPoseBehaviour", "HandPoseBehaviour"], npc.Components.Select(component => component.GetType().Name));
+            Assert.Same(mind, femaleSelector.GetParent());
+            Assert.False(femaleSelector is IComponent);
+            Assert.DoesNotContain(npc.Components, component => ReferenceEquals(femaleSelector, component));
             _ = Assert.Single(npc.Components.OfType<Hearing>());
             Assert.Null(typeof(CharacterHub).Assembly.GetType("AlleyCat.Character.CharacterPerception"));
             Assert.Null(typeof(CharacterHub).Assembly.GetType("AlleyCat.Character.MindStimulus"));
@@ -81,10 +88,17 @@ public sealed class PerceptionCompositionIntegrationTests
             IdentityValidator.Validate(npc.Voice, nameof(npc.Voice));
 
             CharacterHub maleNpc = Assert.IsType<CharacterHub>(maleNpcNode, exactMatch: false);
+            AgenticMind maleMind = Assert.IsType<AgenticMind>(maleNpc.GetNode("Mind"), exactMatch: false);
+            AttentionGazeTargetSelector maleSelector = Assert.IsType<AttentionGazeTargetSelector>(
+                maleMind.GetNode("AttentionGazeTargetSelector"),
+                exactMatch: false);
             Assert.Equal("reference_male_npc", maleNpc.Voice!.Id);
             Assert.Equal("voice", maleNpc.Voice.Type);
             Assert.Equal("voice:reference_male_npc", maleNpc.Voice.FullId);
             IdentityValidator.Validate(maleNpc.Voice, nameof(maleNpc.Voice));
+            Assert.Same(maleMind, maleSelector.GetParent());
+            Assert.False(maleSelector is IComponent);
+            Assert.DoesNotContain(maleNpc.Components, component => ReferenceEquals(maleSelector, component));
 
             CharacterHub vadim = Assert.IsType<CharacterHub>(vadimNode, exactMatch: false);
             Assert.Equal("vadim", vadim.Voice!.Id);
@@ -95,6 +109,8 @@ public sealed class PerceptionCompositionIntegrationTests
             CharacterHub player = Assert.IsType<CharacterHub>(playerNode, exactMatch: false);
             Assert.Null(player.Hearing);
             Assert.DoesNotContain(player.GetChildren(), node => node is AgenticMind or Hearing);
+            Assert.DoesNotContain(player.GetChildren(), node => node is AttentionGazeTargetSelector);
+            Assert.DoesNotContain(player.GetChildren().SelectMany(node => node.GetChildren()), node => node is AttentionGazeTargetSelector);
         }
         finally
         {

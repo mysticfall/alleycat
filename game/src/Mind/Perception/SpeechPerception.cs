@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;

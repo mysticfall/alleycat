@@ -2,7 +2,7 @@ using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
-using AlleyCat.Mind;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;

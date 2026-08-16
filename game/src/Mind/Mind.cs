@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;

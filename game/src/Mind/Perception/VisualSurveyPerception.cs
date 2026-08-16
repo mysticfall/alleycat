@@ -1,3 +1,4 @@
+using AlleyCat.Mind.Attention;
 using AlleyCat.Vision;
 using Godot;
 

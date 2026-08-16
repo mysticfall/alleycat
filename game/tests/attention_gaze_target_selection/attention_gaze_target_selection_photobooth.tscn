@@ -1,0 +1,85 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/photobooth.tscn" id="1_nb4pd"]
+[ext_resource type="PackedScene" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="2_r0iph"]
+[ext_resource type="Script" path="res://src/Character/Character.cs" id="3_omtfj"]
+[ext_resource type="Script" path="res://src/Character/CharacterCardContextSource.cs" id="4_r84fc"]
+[ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionPhotoboothMind.cs" id="5_b7eaq"]
+[ext_resource type="Script" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="6_y51pn"]
+[ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionCueSubject.cs" id="7_corx5"]
+[ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionPhotoboothMarker.cs" id="8_u5s5q"]
+[ext_resource type="Script" path="res://src/Vision/StaticVisualCue.cs" id="9_vgjg0"]
+[ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionPhotoboothDriver.cs" id="10_qnn8f"]
+
+[sub_resource type="Resource" id="Resource_pyepr"]
+script = ExtResource("4_r84fc")
+
+[sub_resource type="SphereMesh" id="SphereMesh_oybcf"]
+radius = 0.16
+height = 0.32
+
+[sub_resource type="SphereMesh" id="SphereMesh_54317"]
+radius = 0.16
+height = 0.32
+
+[node name="AttentionGazeTargetSelectionPhotobooth" unique_id=406188165 instance=ExtResource("1_nb4pd")]
+
+[node name="Observer" type="CharacterBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "Voice", "Hearing", "LeftHand", "RightHand") groups=["Actors", "VisualSubjects"] instance=ExtResource("2_r0iph")]
+script = ExtResource("3_omtfj")
+Id = "observer"
+Locomotion = NodePath("Locomotion")
+Navigation = NodePath("Navigation")
+Eyes = NodePath("Eyes")
+Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
+Hearing = NodePath("Hearing")
+LeftHand = NodePath("Hands/LeftHand")
+RightHand = NodePath("Hands/RightHand")
+ContextSources = [SubResource("Resource_pyepr")]
+
+[node name="Mind" type="Node" parent="Subject/Observer" index="11" unique_id=1429938559]
+script = ExtResource("5_b7eaq")
+metadata/_custom_type_script = "uid://k6w6pa15iic8"
+
+[node name="AttentionGazeTargetSelector" type="Node" parent="Subject/Observer/Mind" index="0" unique_id=1885000606]
+script = ExtResource("6_y51pn")
+metadata/_custom_type_script = "uid://dudl5uhyyp755"
+
+[node name="LeftTarget" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="1" unique_id=352400577 node_paths=PackedStringArray("Cue") groups=["AI007CueSubjects"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 1.25, -0.75)
+script = ExtResource("7_corx5")
+Id = "left_target"
+Cue = NodePath("Cue")
+metadata/_custom_type_script = "uid://dburuvfqkj8as"
+
+[node name="LeftTarget Attended Cue" type="MeshInstance3D" parent="Subject/LeftTarget" index="0" unique_id=641964846]
+mesh = SubResource("SphereMesh_oybcf")
+script = ExtResource("8_u5s5q")
+MarkerColor = Color(0.96, 0.18, 0.22, 1)
+metadata/_custom_type_script = "uid://mr0wqtsx5ufy"
+
+[node name="Cue" type="Node3D" parent="Subject/LeftTarget" index="1" unique_id=1954497378]
+script = ExtResource("9_vgjg0")
+ID = "body"
+metadata/_custom_type_script = "uid://tb33120b0yo"
+
+[node name="RightTarget" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="2" unique_id=1223962641 node_paths=PackedStringArray("Cue") groups=["AI007CueSubjects"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 1.25, -0.75)
+script = ExtResource("7_corx5")
+Id = "right_target"
+Cue = NodePath("Cue")
+metadata/_custom_type_script = "uid://dburuvfqkj8as"
+
+[node name="RightTarget Attended Cue" type="MeshInstance3D" parent="Subject/RightTarget" index="0" unique_id=1282615440]
+mesh = SubResource("SphereMesh_54317")
+script = ExtResource("8_u5s5q")
+MarkerColor = Color(0.15, 0.48, 1, 1)
+metadata/_custom_type_script = "uid://mr0wqtsx5ufy"
+
+[node name="Cue" type="Node3D" parent="Subject/RightTarget" index="1" unique_id=1797025002]
+script = ExtResource("9_vgjg0")
+ID = "body"
+metadata/_custom_type_script = "uid://tb33120b0yo"
+
+[node name="AttentionGazeTargetSelectionPhotoboothDriver" type="Node" parent="." index="5" unique_id=2133804610]
+script = ExtResource("10_qnn8f")
+metadata/_custom_type_script = "uid://b08bcthgqrutq"
