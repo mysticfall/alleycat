@@ -68,7 +68,7 @@ internal static class ToolOnlyTurnRunner
                 throw new ToolOnlyTurnException("The tool-only model request failed.");
             }
 
-            FunctionCallContent[] calls = ValidateResponse(response, functions, callIDs);
+            FunctionCallContent[] calls = ValidateResponse(response, functions, callIDs, logger);
             bool completesTurn = string.Equals(calls[^1].Name, EndTurnToolName, StringComparison.Ordinal);
             int productionCallCount = completesTurn ? calls.Length - 1 : calls.Length;
             logger.LogDebug(
@@ -162,7 +162,8 @@ internal static class ToolOnlyTurnRunner
     private static FunctionCallContent[] ValidateResponse(
         ChatResponse response,
         IReadOnlyDictionary<string, AIFunction> functions,
-        ISet<string> callIDs)
+        ISet<string> callIDs,
+        ILogger logger)
     {
         if (response.Messages.Count == 0)
         {
@@ -179,6 +180,16 @@ internal static class ToolOnlyTurnRunner
 
             foreach (AIContent content in message.Contents)
             {
+                if (content is TextReasoningContent reasoning)
+                {
+                    if (logger.IsEnabled(LogLevel.Trace) && !string.IsNullOrWhiteSpace(reasoning.Text))
+                    {
+                        logger.LogTrace("Reasoning: {}", reasoning.Text);
+                    }
+
+                    continue;
+                }
+
                 if (content is not FunctionCallContent call)
                 {
                     throw InvalidResponse();
