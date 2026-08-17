@@ -53,7 +53,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     public async Task ProductionPromptResource_RendersUnifiedActorRelativeChronologicalHistory()
     {
         PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
-        EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[3], exactMatch: false);
+        EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[4], exactMatch: false);
         EventHistoryPromptFragment fragment = Assert.Single(section.Fragments);
         DateTimeOffset now = DateTimeOffset.UtcNow;
         Observation[] observations =
@@ -87,7 +87,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     public async Task ProductionPromptResource_RendersUnstampedObservationsWithoutLabels()
     {
         PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
-        EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[3], exactMatch: false);
+        EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[4], exactMatch: false);
         Observation[] observations =
         [
             new ObservedSpeech("char:test_character", "private-self", "Self line."),

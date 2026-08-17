@@ -107,14 +107,14 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             ToolDescription = "Capture the trusted turn context.";
         }
 
-        public AgentToolContext? CapturedContext
+        public ScenarioContext? CapturedContext
         {
             get; private set;
         }
 
         protected override Delegate CreateDelegate() => Capture;
 
-        private ValueTask<AgentToolResult> Capture(AgentToolContext context)
+        private ValueTask<AgentToolResult> Capture(ScenarioContext context)
         {
             CapturedContext = context;
             return ValueTask.FromResult(new AgentToolResult());

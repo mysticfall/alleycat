@@ -164,7 +164,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
 
         Array sections = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(systemInstruction, "Sections"));
         object[] orderedSections = [.. sections.Cast<object>()];
-        Assert.Equal(4, orderedSections.Length);
+        Assert.Equal(5, orderedSections.Length);
         object instructionSection = orderedSections[0];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
@@ -185,7 +185,11 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("Lore", GetPropertyValue<string>(orderedSections[1], "Name"));
         Assert.Equal("AlleyCat.Mind.AI.Prompting.CharacterLorePromptSection", orderedSections[2].GetType().FullName);
         Assert.Equal("Characters", GetPropertyValue<string>(orderedSections[2], "Name"));
-        object historySection = orderedSections[3];
+        object scenarioSection = orderedSections[3];
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", scenarioSection.GetType().FullName);
+        Assert.Equal("res://prompts/scenario.md", GetPropertyValue<string>(scenarioSection, "FilePath"));
+        Assert.Equal("Scenario", GetPropertyValue<string>(scenarioSection, "Name"));
+        object historySection = orderedSections[4];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.EventHistoryPromptSection", historySection.GetType().FullName);
         Assert.Equal("Event History", GetPropertyValue<string>(historySection, "Name"));
         Array fragments = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(historySection, "Fragments"));

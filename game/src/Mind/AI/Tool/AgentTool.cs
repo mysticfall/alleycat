@@ -28,7 +28,7 @@ public abstract partial class AgentTool : Resource
     /// Creates an AI function bound to the trusted turn context and owning runtime boundary.
     /// </summary>
     public AIFunction CreateFunction(
-        AgentToolContext context,
+        ScenarioContext context,
         MindBase mind,
         IMainThreadDispatcher dispatcher)
     {
@@ -48,7 +48,7 @@ public abstract partial class AgentTool : Resource
     /// </summary>
     public static AIFunction CreateFunction(
         Delegate method,
-        AgentToolContext context,
+        ScenarioContext context,
         MindBase mind,
         IMainThreadDispatcher dispatcher,
         string? name = null,
@@ -66,7 +66,7 @@ public abstract partial class AgentTool : Resource
             Description = description,
             ExcludeResultSchema = true,
             MarshalResult = static (result, _, _) => ValueTask.FromResult(result),
-            ConfigureParameterBinding = parameter => parameter.ParameterType == typeof(AgentToolContext)
+            ConfigureParameterBinding = parameter => parameter.ParameterType == typeof(ScenarioContext)
                 ? new AIFunctionFactoryOptions.ParameterBindingOptions
                 {
                     BindParameter = (_, _) => context,
@@ -96,7 +96,7 @@ public abstract partial class AgentTool : Resource
 
     private sealed class RuntimeBoundFunction(
         AIFunction inner,
-        AgentToolContext context,
+        ScenarioContext context,
         MindBase mind,
         IMainThreadDispatcher dispatcher) : DelegatingAIFunction(inner)
     {

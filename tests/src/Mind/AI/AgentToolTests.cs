@@ -5,6 +5,7 @@ using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
+using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -20,11 +21,11 @@ namespace AlleyCat.Tests.Mind.AI;
 /// </summary>
 public sealed class AgentToolTests
 {
-    /// <summary>The trusted turn context exposes exactly the approved immutable capability pair.</summary>
+    /// <summary>The trusted turn context exposes exactly the approved immutable binding triple.</summary>
     [Fact]
-    public void AgentToolContext_PublicSurface_IsExactlyCharacterAndSceneContext()
+    public void ScenarioContext_PublicSurface_IsExactlyCharacterSceneContextAndScenario()
     {
-        Type contextType = typeof(AgentToolContext);
+        Type contextType = typeof(ScenarioContext);
         PropertyInfo[] declaredProperties = contextType.GetProperties(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
         FieldInfo[] declaredFields = contextType.GetFields(
@@ -40,14 +41,21 @@ public sealed class AgentToolTests
             declaredProperties.OrderBy(property => property.Name, StringComparer.Ordinal),
             property =>
             {
-                Assert.Equal(nameof(AgentToolContext.Character), property.Name);
+                Assert.Equal(nameof(ScenarioContext.Character), property.Name);
                 Assert.Equal(typeof(ICharacter), property.PropertyType);
                 Assert.True(property.CanRead);
                 Assert.False(property.CanWrite);
             },
             property =>
             {
-                Assert.Equal(nameof(AgentToolContext.SceneContext), property.Name);
+                Assert.Equal(nameof(ScenarioContext.Scenario), property.Name);
+                Assert.Equal(typeof(Scenario), property.PropertyType);
+                Assert.True(property.CanRead);
+                Assert.False(property.CanWrite);
+            },
+            property =>
+            {
+                Assert.Equal(nameof(ScenarioContext.SceneContext), property.Name);
                 Assert.Equal(typeof(ISceneContext), property.PropertyType);
                 Assert.True(property.CanRead);
                 Assert.False(property.CanWrite);
@@ -56,15 +64,24 @@ public sealed class AgentToolTests
         Assert.Empty(meaningfulDeclaredMethods);
     }
 
-    /// <summary>The trusted context rejects either missing required capability at construction.</summary>
+    /// <summary>The trusted context rejects either missing required capability and carries the nullable scenario.</summary>
     [Fact]
-    public void AgentToolContext_Constructor_RejectsNullDependencies()
+    public void ScenarioContext_Constructor_RejectsNullDependenciesAndAcceptsNullableScenario()
     {
         var character = new TestCharacter("owner");
         var scene = new TestSceneContext([character]);
+        var scenario = new Scenario("Owner is guarding the market stall.");
 
-        Assert.Equal("character", Assert.Throws<ArgumentNullException>(() => new AgentToolContext(null!, scene)).ParamName);
-        Assert.Equal("sceneContext", Assert.Throws<ArgumentNullException>(() => new AgentToolContext(character, null!)).ParamName);
+        Assert.Equal("character", Assert.Throws<ArgumentNullException>(() => new ScenarioContext(null!, scene)).ParamName);
+        Assert.Equal("sceneContext", Assert.Throws<ArgumentNullException>(() => new ScenarioContext(character, null!)).ParamName);
+
+        var withoutScenario = new ScenarioContext(character, scene);
+        var withScenario = new ScenarioContext(character, scene, scenario);
+
+        Assert.Null(withoutScenario.Scenario);
+        Assert.Same(scenario, withScenario.Scenario);
+        Assert.Same(character, withScenario.Character);
+        Assert.Same(scene, withScenario.SceneContext);
     }
 
     /// <summary>
@@ -151,7 +168,7 @@ public sealed class AgentToolTests
         ToolHost.ResetCapture();
         AIFunction function = fixture.CreateFunction(ToolHost.CaptureContext);
 
-        Assert.DoesNotContain(nameof(AgentToolContext), function.JsonSchema.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(ScenarioContext), function.JsonSchema.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("context", function.JsonSchema.ToString(), StringComparison.OrdinalIgnoreCase);
 
         object? result = await function.InvokeAsync(
@@ -161,6 +178,7 @@ public sealed class AgentToolTests
         Assert.Null(result);
         Assert.Same(fixture.Character, ToolHost.CapturedContext!.Character);
         Assert.Same(fixture.Scene, ToolHost.CapturedContext.SceneContext);
+        Assert.Same(fixture.Scenario, ToolHost.CapturedContext.Scenario);
         Assert.Same(fixture.Character, ToolHost.CapturedContext.SceneContext.Find(((IIdentifiable)fixture.Character).FullId));
     }
 
@@ -173,7 +191,7 @@ public sealed class AgentToolTests
         var other = new TestCharacter("other");
         AIFunction function = AgentTool.CreateFunction(
             ToolHost.ValidResult,
-            new AgentToolContext(other, fixture.Scene),
+            new ScenarioContext(other, fixture.Scene),
             fixture.Mind,
             dispatcher);
 
@@ -246,7 +264,7 @@ public sealed class AgentToolTests
 
         public static Task<string> WrongResult() => Task.FromResult("wrong");
 
-        public static AgentToolContext? CapturedContext
+        public static ScenarioContext? CapturedContext
         {
             get; private set;
         }
@@ -262,7 +280,7 @@ public sealed class AgentToolTests
             CapturedCancellationToken = null;
         }
 
-        public static ValueTask<AgentToolResult> CaptureContext(AgentToolContext context)
+        public static ValueTask<AgentToolResult> CaptureContext(ScenarioContext context)
         {
             CapturedContext = context;
             return ValueTask.FromResult(new AgentToolResult());
@@ -294,6 +312,8 @@ public sealed class AgentToolTests
 
         public TestCharacter Character { get; } = new("owner");
 
+        public Scenario Scenario { get; } = new("The owner is resting by the fountain.");
+
         public TestMind Mind { get; } = (TestMind)RuntimeHelpers.GetUninitializedObject(typeof(TestMind));
 
         public TestSceneContext Scene
@@ -304,7 +324,7 @@ public sealed class AgentToolTests
         public AIFunction CreateFunction(Delegate method, string? name = null, string? description = null)
             => AgentTool.CreateFunction(
                 method,
-                new AgentToolContext(Character, Scene),
+                new ScenarioContext(Character, Scene, Scenario),
                 Mind,
                 _dispatcher,
                 name,

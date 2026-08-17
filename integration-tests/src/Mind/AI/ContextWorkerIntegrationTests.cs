@@ -640,7 +640,7 @@ public sealed partial class ContextWorkerIntegrationTests
             IReadOnlyDictionary<string, object?> foreground = mind.ForegroundContexts[1];
             IReadOnlyDictionary<string, object?> worker = observer.Contexts[1];
             Assert.Same(foreground, worker);
-            Assert.Equal(["character", "characters", "observations", "prior", "self"], foreground.Keys);
+            Assert.Equal(["character", "characters", "observations", "scenario", "prior", "self"], foreground.Keys);
             Assert.Equal("previous", foreground["prior"]);
             Assert.Equal("current", foreground["self"]);
             Assert.Equal(2, ((IReadOnlyCollection<object?>)foreground["observations"]!).Count);

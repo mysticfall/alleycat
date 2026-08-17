@@ -6,6 +6,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -457,7 +458,7 @@ public sealed partial class MindSchedulingIntegrationTests
         {
             Enabled = false
         };
-        AgentToolContext context = CreateToolContext(mind.Owner);
+        ScenarioContext context = CreateToolContext(mind.Owner);
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         ToolHost.Reset();
         AIFunction function = AgentTool.CreateFunction(ToolHost.WaitForResultAsync, context, mind, dispatcher, "test_tool");
@@ -496,7 +497,7 @@ public sealed partial class MindSchedulingIntegrationTests
         {
             Enabled = false
         };
-        AgentToolContext context = CreateToolContext(mind.Owner);
+        ScenarioContext context = CreateToolContext(mind.Owner);
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         AIFunction emptyFunction = AgentTool.CreateFunction(ToolHost.EmptyAsync, context, mind, dispatcher);
         AIFunction invalidBatchFunction = AgentTool.CreateFunction(ToolHost.InvalidBatchAsync, context, mind, dispatcher);
@@ -622,7 +623,7 @@ public sealed partial class MindSchedulingIntegrationTests
         private static double GetTimestamp() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
     }
 
-    private static AgentToolContext CreateToolContext(ICharacter owner)
+    private static ScenarioContext CreateToolContext(ICharacter owner)
         => new(owner, new TestSceneContext([owner]));
 
     private sealed record TestSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext

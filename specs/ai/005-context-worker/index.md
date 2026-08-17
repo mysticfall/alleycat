@@ -49,8 +49,10 @@ execution from constructing context, refreshing the timeline, or feeding project
    coalesces requests received while it runs to at most one fresh follow-up run after the active run settles.
 8. AgenticMind must start with an empty top-level read-only latest render dictionary. Only foreground prompt execution
    may call `CreateRenderContext` to create AgenticMind's own complete top-level read-only dictionary from current
-   character context, deterministic scene-character context, the complete observation timeline, and every authored
-   worker projection.
+   character context, deterministic scene-character context, the complete observation timeline, the current scenario
+   under [AI-008](../008-scenario/index.md), and every authored worker projection. AI-008 is normative for the
+   `scenario` key's value and reservation semantics; workers capture it through ordinary snapshot capture with no
+   worker-specific scenario contract.
 9. The foreground template must render with the dictionary returned by `CreateRenderContext`. Only after rendering
    succeeds may AgenticMind atomically publish that exact dictionary as latest. Context construction or rendering
    failure must retain the previously published snapshot.
@@ -95,7 +97,8 @@ execution from constructing context, refreshing the timeline, or feeding project
 
 ## Out Of Scope
 
-- A scenario model or scenario-specific worker contracts.
+- A scenario model or scenario-specific worker contracts; workers still capture the published `scenario` snapshot key
+  under AI-008 through ordinary snapshot capture.
 - Optional ContextWorker implementations, prompt assets, or scene authoring beyond the required generic and LLM-backed
   contracts.
 - Trigger thresholds, intervals, and filter expressions beyond the required default initial delay and filter
@@ -132,7 +135,7 @@ execution from constructing context, refreshing the timeline, or feeding project
    serialisation.
 6. Tests verify AgenticMind starts with an empty top-level read-only latest render dictionary. Only foreground prompt
    execution calls `CreateRenderContext`, and AgenticMind's returned dictionary contains `character`, deterministic
-   `characters`, complete `observations`, and all authored worker projections.
+   `characters`, complete `observations`, the current `scenario` under AI-008, and all authored worker projections.
 7. Tests verify the foreground template uses the exact dictionary returned by `CreateRenderContext`. AgenticMind
    atomically publishes that exact dictionary only after successful rendering and retains the previous snapshot after
    context-construction or rendering failure.

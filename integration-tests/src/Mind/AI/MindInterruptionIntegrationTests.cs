@@ -4,6 +4,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -391,7 +392,7 @@ public sealed partial class MindInterruptionIntegrationTests
             mind.ObserveForTest(new TestObservation(5f, "high"));
             await firstTurn.CancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-            var context = new AgentToolContext(mind.Owner, new TestSceneContext([mind.Owner]));
+            var context = new ScenarioContext(mind.Owner, new TestSceneContext([mind.Owner]));
             AIFunction function = AgentTool.CreateFunction(
                 ToolHost.CommitActionAsync,
                 context,
@@ -578,7 +579,7 @@ public sealed partial class MindInterruptionIntegrationTests
         {
             _ = observations;
             _ = timelineSnapshot;
-            var context = new AgentToolContext(_owner, new TestSceneContext([_owner]));
+            var context = new ScenarioContext(_owner, new TestSceneContext([_owner]));
             AIFunction function = AgentTool.CreateFunction(
                 toolHost.InvokeAsync,
                 context,

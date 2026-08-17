@@ -5,6 +5,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
@@ -794,11 +795,11 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         SpeechTool tool = new();
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         AIFunction activeFunction = tool.CreateFunction(
-            new AgentToolContext(acceptedMind.Owner, new ToolSceneContext([acceptedMind.Owner])),
+            new ScenarioContext(acceptedMind.Owner, new ToolSceneContext([acceptedMind.Owner])),
             acceptedMind,
             dispatcher);
         AIFunction disabledFunction = tool.CreateFunction(
-            new AgentToolContext(disabledMind.Owner, new ToolSceneContext([disabledMind.Owner])),
+            new ScenarioContext(disabledMind.Owner, new ToolSceneContext([disabledMind.Owner])),
             disabledMind,
             dispatcher);
 
@@ -1184,7 +1185,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         ToolMind mind,
         IMainThreadDispatcher dispatcher)
         => tool.CreateFunction(
-            new AgentToolContext(mind.Owner, new ToolSceneContext([mind.Owner])),
+            new ScenarioContext(mind.Owner, new ToolSceneContext([mind.Owner])),
             mind,
             dispatcher);
 

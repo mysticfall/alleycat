@@ -956,6 +956,20 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
+    /// Indicates whether the active foreground turn was claimed as the immediate replacement of an interrupted turn.
+    /// </summary>
+    /// <remarks>
+    /// Derived minds use this to carry per-turn state across an interruption boundary: a replacement turn replaces
+    /// the interrupted one and may reuse turn-scoped bindings captured before the interruption instead of rebuilding
+    /// them. The flag is captured when the turn claims its batch and cleared when the turn settles.
+    /// </remarks>
+    protected bool IsForegroundTurnImmediateReplacement
+    {
+        get;
+        private set;
+    }
+
+    /// <summary>
     /// Indicates whether queued observations are waiting for processing.
     /// </summary>
     protected bool HasPendingObservations
@@ -1138,6 +1152,7 @@ public abstract partial class Mind : Node
 
             _isProcessingObservations = true;
             _activeTurnCancellation = processingCancellation;
+            IsForegroundTurnImmediateReplacement = _immediateReplacementPending;
             _interruptionRequested = false;
             _immediateReplacementPending = false;
             observations = [.. _pendingObservations.Select(entry => entry.Observation)];
@@ -1176,6 +1191,7 @@ public abstract partial class Mind : Node
             lock (_observationStateLock)
             {
                 _isProcessingObservations = false;
+                IsForegroundTurnImmediateReplacement = false;
                 if (ReferenceEquals(_activeTurnCancellation, processingCancellation))
                 {
                     _activeTurnCancellation = null;

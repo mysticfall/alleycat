@@ -31,6 +31,7 @@ public partial class AgenticMind : MindBase
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
     private ContextWorker[] _contextWorkers = [];
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
+    private ScenarioContext? _currentScenarioContext;
 
     internal CancellationToken LifetimeCancellationToken => NodeLifetimeCancellationToken;
 
@@ -68,6 +69,19 @@ public partial class AgenticMind : MindBase
     [ExportGroup("Backend")]
     [Export]
     public ClientProvider? ClientProvider { get; set; } = new OpenAIClientProvider();
+
+    /// <summary>
+    /// Editor-authored manager resolving the scenario for each foreground turn, or null when the feature is unused.
+    /// </summary>
+    /// <remarks>
+    /// An unconfigured manager behaves exactly like a manager returning null on every turn.
+    /// </remarks>
+    [ExportGroup("Scenario")]
+    [Export]
+    public ScenarioManager? ScenarioManager
+    {
+        get; set;
+    }
 
     /// <summary>
     /// Allows the provider to return several action calls in one response.
@@ -129,8 +143,9 @@ public partial class AgenticMind : MindBase
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
-        ISceneContext scene = GetCurrentSceneContext();
-        ICharacter character = ResolveOwningCharacter();
+        ScenarioContext turnContext = ResolveTurnScenarioContext();
+        ICharacter character = turnContext.Character;
+        ISceneContext scene = turnContext.SceneContext;
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
         IReadOnlyDictionary<string, object?> renderContext = CreateRenderContext(
@@ -138,11 +153,11 @@ public partial class AgenticMind : MindBase
             scene,
             timeline,
             _contextWorkers,
-            GetContextEligibleAttentionIDs());
+            GetContextEligibleAttentionIDs(),
+            turnContext.Scenario);
         string instructions = RenderAndPublishSystemInstruction(template, renderContext);
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
-        AgentToolContext toolContext = new(character, scene);
-        List<AITool> turnTools = CreateTurnTools(toolContext, dispatcher);
+        List<AITool> turnTools = CreateTurnTools(turnContext, dispatcher);
 
         AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
         IChatClient chatClient = AIChatClientDiagnostics.Decorate(
@@ -172,7 +187,31 @@ public partial class AgenticMind : MindBase
         }
     }
 
-    private List<AITool> CreateTurnTools(AgentToolContext context, IMainThreadDispatcher dispatcher)
+    /// <summary>
+    /// Resolves the trusted turn binding for one foreground turn, including its per-turn scenario.
+    /// </summary>
+    /// <remarks>
+    /// A fresh turn captures a new scene snapshot, queries the configured manager with the previous turn's binding —
+    /// lazily created with a null scenario when no previous context exists — and adopts the returned scenario. A
+    /// replacement after interruption reuses the interrupted turn's binding without re-querying the manager, keeping
+    /// its scenario and scene snapshot.
+    /// </remarks>
+    private ScenarioContext ResolveTurnScenarioContext()
+    {
+        ScenarioContext? previousContext = _currentScenarioContext;
+        if (previousContext is not null && IsForegroundTurnImmediateReplacement)
+        {
+            return previousContext;
+        }
+
+        ISceneContext scene = GetCurrentSceneContext();
+        ICharacter character = ResolveOwningCharacter();
+        ScenarioContext previous = previousContext ?? new ScenarioContext(character, scene, null);
+        Scenario? scenario = ScenarioManager?.GetCurrentScenario(previous);
+        return _currentScenarioContext = new ScenarioContext(character, scene, scenario);
+    }
+
+    private List<AITool> CreateTurnTools(ScenarioContext context, IMainThreadDispatcher dispatcher)
     {
         List<AITool> tools = new(Tools.Count);
         foreach (AgentTool? tool in Tools)
@@ -190,7 +229,8 @@ public partial class AgenticMind : MindBase
         ICharacter character,
         ISceneContext scene,
         IReadOnlyList<AgentObservation>? observations = null,
-        IReadOnlyList<string>? attentionEligibleFullIDs = null)
+        IReadOnlyList<string>? attentionEligibleFullIDs = null,
+        Scenario? scenario = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
@@ -205,7 +245,7 @@ public partial class AgenticMind : MindBase
 
         IReadOnlyList<string> eligibleIDs = attentionEligibleFullIDs
             ?? [.. scene.Characters.Select(static subject => subject.FullId)];
-        return CreateRenderContext(character, scene, observations, [], eligibleIDs);
+        return CreateRenderContext(character, scene, observations, [], eligibleIDs, scenario);
     }
 
     /// <summary>Constructs the complete foreground render context for a claimed timeline snapshot.</summary>
@@ -226,7 +266,8 @@ public partial class AgenticMind : MindBase
         ISceneContext scene,
         IReadOnlyList<AgentObservation>? observations,
         IReadOnlyList<ContextWorker> workers,
-        IReadOnlyList<string> attentionEligibleFullIDs)
+        IReadOnlyList<string> attentionEligibleFullIDs,
+        Scenario? scenario = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
@@ -275,6 +316,7 @@ public partial class AgenticMind : MindBase
             ["character"] = owningCharacterContext,
             ["characters"] = new ReadOnlyDictionary<string, object?>(characterContexts),
             [EventHistoryPromptSection.ObservationsContextKey] = observations ?? [],
+            ["scenario"] = scenario,
         };
         foreach (ContextWorker worker in workers)
         {

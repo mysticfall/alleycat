@@ -122,7 +122,8 @@ responsive and interruption-safe in-world behaviour.
 30. AgenticMind must initialise its latest render dictionary to an empty top-level read-only dictionary. Only foreground
     prompt execution may call `CreateRenderContext` to create AgenticMind's own top-level read-only render dictionary
     from current character context, deterministic attention-eligible subject context, the complete timeline snapshot,
-    and authored worker projections. AI-006 normatively defines attention eligibility and scene resolution.
+    the current scenario under [AI-008](../008-scenario/index.md), and authored worker projections. AI-006 normatively
+    defines attention eligibility and scene resolution.
 31. The foreground template must use the exact dictionary returned by `CreateRenderContext`. AgenticMind must atomically
     publish that exact dictionary as the cached latest foreground context only after rendering succeeds. Construction or
     rendering failure must retain the previous published dictionary.
@@ -148,7 +149,7 @@ responsive and interruption-safe in-world behaviour.
     deferred voice or Godot-action machinery. The actor-stamped self-action speech observation commits exactly once at
     playback hand-off (SPCH-005 TR-26), not at admission, through ordinary Mind ingestion.
 38. Mind must not own or export an output-voice reference. Character-owned capabilities required by tools must enter
-    through AI-002's typed `AgentToolContext`; Character remains the sole authored voice source under CHAR-002.
+    through AI-002's typed `ScenarioContext`; Character remains the sole authored voice source under CHAR-002.
 39. AI-007 separately defines the direct Mind-child post-attention consumer that may assign a look target. It consumes
     Mind's published attention snapshot after perception has completed; Mind's sensing and attention-mutation contracts
     remain gaze-neutral.
@@ -184,6 +185,15 @@ responsive and interruption-safe in-world behaviour.
 45. Own-voice exclusion: the speaking window opened by a turn's own speech submission must not interrupt that turn.
     Mind must ignore `SpeechStarted` from its own character voice while that turn is in flight. Own-voice activity
     still gates the start of other turns (TR-41).
+46. Mind must expose `protected bool IsForegroundTurnImmediateReplacement` as the turn-scoped immediate-replacement
+    marker. When a foreground turn claims its observation batch under the observation state lock, Mind must snapshot
+    `_immediateReplacementPending` into that flag and reset the pending mark in the same critical section, transferring
+    the interruption decision (TR-8–TR-11) to the claimed turn exactly once. The flag must be cleared in that turn's
+    settle path under the same lock regardless of success, failure, cancellation, or interruption, and the single-flight
+    turn guard must prevent a later turn from clobbering an active turn's flag. The flag exists for derived minds to
+    carry turn-scoped state across the interruption boundary, reusing bindings captured before the interruption instead
+    of rebuilding them; [AI-008](../008-scenario/index.md) is the current consumer, reusing the just-built
+    `ScenarioContext` on a replacement turn.
 
 ## In Scope
 
@@ -321,6 +331,13 @@ responsive and interruption-safe in-world behaviour.
     own speech admission never cancels its own turn; unattributable voice Ids never gate.
 31. Acceptance verifies both the user-visible turn-taking, interruption, and cut-speech behaviour and the gating,
     wake, interruption, cut-playback, and attention-filter contracts.
+32. Tests verify the published render dictionary contains the turn's `scenario` value under
+    [AI-008](../008-scenario/index.md) and that an authored worker projection colliding with the reserved `scenario`
+    key fails with the existing duplicate-key error.
+33. Tests verify `IsForegroundTurnImmediateReplacement` is true only for the foreground turn that claims its batch
+    after an interruption-triggered pending mark, false for ordinary turns, cleared under the observation state lock
+    when the turn settles regardless of outcome, and never clobbered by a later turn while a turn is active. AI-008's
+    replacement-turn scenario-context reuse exercises the flag end-to-end.
 
 ## References
 
@@ -340,6 +357,7 @@ responsive and interruption-safe in-world behaviour.
 - [AI-005: Context Worker](../005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
+- [AI-008: Scenario](../008-scenario/index.md)
 - [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)

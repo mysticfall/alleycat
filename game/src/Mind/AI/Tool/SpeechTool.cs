@@ -27,7 +27,7 @@ public partial class SpeechTool : AgentTool
     [Description("Speak natural-language output through the configured voice.")]
     private static async ValueTask<AgentToolResult> Speak(
         [Description("Exact words to say aloud.")] string speech,
-        AgentToolContext context,
+        ScenarioContext context,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

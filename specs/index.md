@@ -27,6 +27,7 @@
 - [AI-005: Context Worker](ai/005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](ai/006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](ai/007-attention-gaze-target-selection/index.md)
+- [AI-008: Scenario](ai/008-scenario/index.md)
 
 ## Context
 

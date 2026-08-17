@@ -20,6 +20,11 @@ Name = "Lore"
 script = ExtResource("3_0apto")
 Name = "Characters"
 
+[sub_resource type="Resource" id="Resource_0apto"]
+script = ExtResource("1_2m31c")
+FilePath = "res://prompts/scenario.md"
+Name = "Scenario"
+
 [sub_resource type="Resource" id="Resource_fwgwp"]
 script = ExtResource("4_0apto")
 TypeKey = "speech.observed"
@@ -35,4 +40,4 @@ Name = "Event History"
 
 [resource]
 script = ExtResource("4_bwdq6")
-Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0"), SubResource("Resource_ot777")]
+Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0"), SubResource("Resource_0apto"), SubResource("Resource_ot777")]

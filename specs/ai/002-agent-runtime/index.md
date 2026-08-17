@@ -45,10 +45,11 @@ failures contained without treating assistant text or provider history as charac
 
 1. AgenticMind must create a fresh provider client execution context for every turn. It must not retain an agent,
    provider response identifier, completed assistant/tool transcript, or first-turn prompt snapshot across turns.
-2. At turn start, AgenticMind must resolve the current scene and owning character, compile the configured `PromptStack`,
-   call foreground `CreateRenderContext`, render the template with that exact dictionary, resolve current action tools,
-   and start one explicit tool-only request loop. It must publish that exact dictionary as the latest snapshot only
-   after rendering succeeds. Construction or rendering failure must retain the prior snapshot and enter the containment
+2. At turn start, AgenticMind must resolve the current scene and owning character, query the configured scenario
+   manager as normatively defined by [AI-008](../008-scenario/index.md), compile the configured `PromptStack`, call
+   foreground `CreateRenderContext`, render the template with that exact dictionary, resolve current action tools, and
+   start one explicit tool-only request loop. It must publish that exact dictionary as the latest snapshot only after
+   rendering succeeds. Construction or rendering failure must retain the prior snapshot and enter the containment
    path.
 3. The rendered prompt stack must remain the turn's sole system instruction. Provider-required bootstrap input may be
    sent, but no prior transcript or per-batch observation-summary message may cross turn boundaries.
@@ -100,9 +101,9 @@ failures contained without treating assistant text or provider history as charac
     an incomplete await. The wrapper must ask the owning Mind to atomically ingest the ordered observations, then
     return only `Message` as the tool result.
 21. Mind owns all observation mutation. The common `AgentTool` wrapper must keep Mind and `IMainThreadDispatcher`
-    private. `AgentToolContext` must expose only the typed `Character` and `SceneContext` runtime bindings; concrete
-    action capabilities must come through `Character`. No invocation service bag, public observation recorder, or sink
-    may be exposed.
+    private. `ScenarioContext` ([AI-008](../008-scenario/index.md)) must expose only the typed `Character`,
+    `SceneContext`, and nullable `Scenario` runtime bindings; concrete action capabilities must come through
+    `Character`. No invocation service bag, public observation recorder, or sink may be exposed.
 22. Tools must not mutate Mind directly. Tool-result ingestion must stamp every `ObservedAction` with the owning
     character's exact actor ID before contextual importance is calculated, preventing actor spoofing.
 23. A throwing, cancelled, malformed, wrong-shaped, or otherwise invalid tool result must contribute no observations.
@@ -159,31 +160,33 @@ failures contained without treating assistant text or provider history as charac
 43. The cancellation token supplied to each `AgentTool` dispatcher submission must remain linked to the active turn and
     Mind node lifetime. The shared Game-scoped dispatcher owns queueing and settlement of accepted submissions;
     AgenticMind must not retain local deferred voice or Godot-action queueing or settlement machinery.
-44. Every production tool invocation must receive an `AgentToolContext` containing the exact public properties
-    `ICharacter Character` and `ISceneContext SceneContext`. `SceneContext` must hold the snapshot captured once for the
-    turn and retain SCN-001's fixed-membership and live-reference semantics.
-45. `AgentToolContext` is a trusted runtime binding. It must be excluded from the model-visible tool schema and must not
+44. Every production tool invocation must receive a `ScenarioContext` ([AI-008](../008-scenario/index.md))
+    containing the exact public properties `ICharacter Character`, `ISceneContext SceneContext`, and `Scenario?
+    Scenario`. `SceneContext` must hold the snapshot captured once for the turn and retain SCN-001's fixed-membership
+    and live-reference semantics.
+45. `ScenarioContext` is a trusted runtime binding. It must be excluded from the model-visible tool schema and must not
     be supplied, replaced, or overridden by model arguments.
-46. `AgentToolContext` must not implement or expose `IServiceProvider`, duplicate component query APIs, or act as a
+46. `ScenarioContext` must not implement or expose `IServiceProvider`, duplicate component query APIs, or act as a
     general service bag. Concrete tools decide whether to consume typed Character traits or extensions, or use
     `ICharacter`'s CORE-003 `IServiceProvider` contract.
 47. Mind and `IMainThreadDispatcher` remain private to the common `AgentTool` wrapper and must not be exposed through
-    `AgentToolContext`. Cancellation remains a per-invocation wrapper input and must not become shared context state.
+    `ScenarioContext`. Cancellation remains a per-invocation wrapper input and must not become shared context state.
 48. Before dispatcher submission or any world effect, the wrapper must verify that the context Character is the exact
     Character owned by the Mind boundary. An ownership mismatch must fail closed.
 49. `SpeechTool` must resolve the raw `IVoice` from the context Character's authored component projection. It must not
     depend on an AgenticMind voice property, special case, or duplicate voice binding.
-50. `ISceneContext` may later be replaced by a dedicated turn-context contract without changing the current requirement
-    to pass the turn-captured SCN-001 snapshot.
+50. AI-008's `ScenarioContext` is the dedicated turn-context contract this requirement anticipated: it has superseded
+    `AgentToolContext` as the trusted turn binding for every tool invocation, passing the turn-captured SCN-001 snapshot
+    unchanged through its `SceneContext` property and the current scenario through its `Scenario` property.
 51. Model reasoning content (`TextReasoningContent`) in an assistant message is tolerated and skipped during
-validation. It is never treated as ordinary assistant text, never becomes player-visible chat, and is never
-stored as memory, remaining transient per-turn protocol. Reasoning text may be logged at trace level as a
-development-only diagnostic only when `Diagnostics:AI:EnableReasoningLogging` is enabled and the
-`AlleyCat.Mind.AI.AgenticMind` logger category is enabled at `Trace`. The option is enabled by default and
-acts as an off-switch: setting it to `false` suppresses reasoning logging regardless of the trace level.
-Reasoning logging is governed by its own dedicated control, distinct from the
-`EnableRequestResponseLogging` gate for MEAI `LoggingChatClient` payload logging in requirement 31. It must
-not change NPC behaviour, validation, action execution, completion, or failure semantics.
+    validation. It is never treated as ordinary assistant text, never becomes player-visible chat, and is never
+    stored as memory, remaining transient per-turn protocol. Reasoning text may be logged at trace level as a
+    development-only diagnostic only when `Diagnostics:AI:EnableReasoningLogging` is enabled and the
+    `AlleyCat.Mind.AI.AgenticMind` logger category is enabled at `Trace`. The option is enabled by default and
+    acts as an off-switch: setting it to `false` suppresses reasoning logging regardless of the trace level.
+    Reasoning logging is governed by its own dedicated control, distinct from the
+    `EnableRequestResponseLogging` gate for MEAI `LoggingChatClient` payload logging in requirement 31. It must
+    not change NPC behaviour, validation, action execution, completion, or failure semantics.
 
 ## In Scope
 
@@ -195,7 +198,8 @@ not change NPC behaviour, validation, action execution, completion, or failure s
 - Configurable multiple-call preference and named request and action bounds.
 - Responses-default stateless transport and explicitly selected Chat Completions rollback.
 - Standard `AgentToolResult` validation, projection, and atomic Mind hand-off.
-- Trusted typed `AgentToolContext` binding through `Character` and turn-captured `SceneContext` properties.
+- Trusted typed `ScenarioContext` binding through `Character`, turn-captured `SceneContext`, and current `Scenario`
+  properties.
 - Shared-dispatcher start of every outbound production tool, with turn- and Mind-lifetime cancellation.
 - Speech submission through playback hand-off, transient acknowledgement, and exactly-once observed-speech
   production.
@@ -284,10 +288,10 @@ not change NPC behaviour, validation, action execution, completion, or failure s
 23. Node-exit and interruption tests verify each `AgentTool` submission retains turn- and Mind-lifetime cancellation;
     the shared Game-scoped dispatcher settles accepted work, and AgenticMind has no local deferred action queue or
     settlement path.
-24. Tests verify every tool receives a trusted `AgentToolContext` whose exact public properties are the owning
-    `ICharacter Character` and turn-captured `ISceneContext SceneContext`; the context is absent from model schema and
-    cannot be model supplied or overridden.
-25. Tests verify `AgentToolContext` exposes neither `IServiceProvider` nor duplicate component APIs, while concrete
+24. Tests verify every tool receives a trusted `ScenarioContext` whose exact public properties are the owning
+    `ICharacter Character`, turn-captured `ISceneContext SceneContext`, and nullable current `Scenario` (AI-008); the
+    context is absent from model schema and cannot be model supplied or overridden.
+25. Tests verify `ScenarioContext` exposes neither `IServiceProvider` nor duplicate component APIs, while concrete
     tools may use typed Character capabilities or the Character's inherited CORE-003 provider contract.
 26. Tests verify Mind and `IMainThreadDispatcher` remain wrapper-private, cancellation remains per invocation, and a
     Character ownership mismatch fails before dispatcher submission or world effects.
@@ -323,6 +327,7 @@ not change NPC behaviour, validation, action execution, completion, or failure s
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-003: Prompt API](../003-prompt-api/index.md)
 - [AI-005: Context Worker](../005-context-worker/index.md)
+- [AI-008: Scenario](../008-scenario/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)

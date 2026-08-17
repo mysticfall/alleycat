@@ -66,8 +66,8 @@ roleplay without breaking immersion or performance.
 
 - Parent index for AI character behaviour specifications.
 - Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory
-  Source Compilation, AI-005: Context Worker, AI-006: Percept-Based Sensing And Attention, and AI-007:
-  Attention-Driven Gaze Target Selection.
+  Source Compilation, AI-005: Context Worker, AI-006: Percept-Based Sensing And Attention, AI-007:
+  Attention-Driven Gaze Target Selection, and AI-008: Scenario.
 - CTX-001 as the normative top-level contextual information API used by AI and non-AI consumers.
 - High-level contracts covering the six requirement themes above, with scene membership delegated to SCN-001.
 - Extensibility points for lore, actions, and context providers.
@@ -99,8 +99,8 @@ roleplay without breaking immersion or performance.
    - Parallel workflow expectation stated.
    - Extensibility contracts for external data and pluggable components.
 3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory Source Compilation,
-   AI-005: Context Worker, AI-006: Percept-Based Sensing And Attention, and AI-007: Attention-Driven Gaze Target
-   Selection are identified as current normative child contracts for their respective scopes.
+   AI-005: Context Worker, AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Gaze Target
+   Selection, and AI-008: Scenario are identified as current normative child contracts for their respective scopes.
 4. CTX-001 is discoverable as the normative top-level contextual information API.
 
 ## Specifications
@@ -112,6 +112,7 @@ roleplay without breaking immersion or performance.
 - [AI-005: Context Worker](005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](007-attention-gaze-target-selection/index.md)
+- [AI-008: Scenario](008-scenario/index.md)
 - [CTX-001: Contextual Information API](../context/001-contextual-information-api/index.md)
 - [SCN-001: Scene Context API](../scene/001-scene-context-api/index.md)
 
@@ -124,5 +125,6 @@ roleplay without breaking immersion or performance.
 - AI-005: Context Worker
 - AI-006: Percept-Based Sensing And Attention
 - AI-007: Attention-Driven Gaze Target Selection
+- AI-008: Scenario
 - CTX-001: Contextual Information API
 - SCN-001: Scene Context API

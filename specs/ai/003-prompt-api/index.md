@@ -78,7 +78,7 @@ control over how concrete observation types appear in chronological event histor
 20. AgenticMind must compile the foreground `PromptStack` on every turn, call `CreateRenderContext`, and render the
     template with the exact top-level read-only dictionary returned. The complete context includes current character
     context, deterministic attention-eligible character context under AI-006, the complete unbounded observation
-    timeline, and authored worker projections.
+    timeline, the current scenario under [AI-008](../008-scenario/index.md), and authored worker projections.
 21. AgenticMind must atomically publish that exact dictionary as its latest render snapshot only after template
     rendering succeeds. Context construction or rendering failure must retain the previously published snapshot.
 22. The rendered stack must become the turn's sole system instruction under AI-002. No observation-summary user message
@@ -144,8 +144,8 @@ control over how concrete observation types appear in chronological event histor
    tag names, exact content preservation, and clear invalid-authoring failures.
 4. Every AgenticMind foreground turn compiles its prompt stack, calls `CreateRenderContext`, and renders with its exact
    top-level read-only dictionary: `character`, deterministic attention-eligible `characters`, complete read-only
-   `observations`, and authored worker projections. Publication occurs atomically only after rendering succeeds;
-   construction or rendering failure retains the previous published dictionary.
+   `observations`, the current `scenario` under AI-008, and authored worker projections. Publication occurs atomically
+   only after rendering succeeds; construction or rendering failure retains the previous published dictionary.
 5. Capturing-client tests verify the rendered stack is the sole system instruction and no observation-summary user
    message or prior transcript accompanies it.
 6. Event-history tests cover self speech, recognised-other speech, unknown speech, empty history, chronological
@@ -192,6 +192,7 @@ control over how concrete observation types appear in chronological event histor
 - [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-005: Context Worker](../005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
+- [AI-008: Scenario](../008-scenario/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [AI System](../index.md)
 
