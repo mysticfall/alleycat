@@ -1,6 +1,7 @@
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
@@ -24,7 +25,8 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
     {
         var owner = new TestCharacter("owner", "before");
         var newcomer = new TestCharacter("newcomer", "new");
-        List<ICharacter> liveMembership = [owner];
+        FixturePlayerCharacter player = new();
+        List<ICharacter> liveMembership = [owner, player];
         var sceneProvider = new CountingSceneProvider(liveMembership);
         var section = new MutatingPromptSection(owner, newcomer, liveMembership) { Name = "Turn Context" };
         var tool = new CapturingTool();
@@ -49,10 +51,13 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             Assert.Equal("after", owner.State);
             Assert.Contains("after", clientProvider.Instructions, StringComparison.Ordinal);
 
-            Assert.Collection(capturedScene.Characters, character => Assert.Same(owner, character));
+            Assert.Collection(
+                capturedScene.Characters,
+                character => Assert.Same(owner, character),
+                character => Assert.Same(player, character));
             Assert.Same(owner, capturedScene.Find("char:owner"));
             Assert.Null(capturedScene.Find("char:newcomer"));
-            Assert.Equal([owner, newcomer], liveMembership);
+            Assert.Equal([owner, player, newcomer], liveMembership);
         }
         finally
         {
@@ -60,6 +65,7 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             section.Free();
             tool.Free();
             clientProvider.Free();
+            player.Free();
         }
     }
 

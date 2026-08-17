@@ -10,9 +10,27 @@ namespace AlleyCat.Scene;
 public interface ISceneContext
 {
     /// <summary>
+    /// Global Godot group identifying the player character node.
+    /// </summary>
+    const string PlayerGroupName = "Player";
+
+    /// <summary>
     /// Gets the unordered character membership captured when this context was created.
     /// </summary>
     IReadOnlyCollection<ICharacter> Characters
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Gets the player character of the captured scene membership.
+    /// </summary>
+    /// <remarks>
+    /// Scene authoring guarantees the player is present in production scene snapshots; player-less contexts are
+    /// valid only in narrow test fixtures and fail on access.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The captured membership contains no player character.</exception>
+    ICharacter Player
     {
         get;
     }

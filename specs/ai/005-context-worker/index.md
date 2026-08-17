@@ -49,7 +49,8 @@ execution from constructing context, refreshing the timeline, or feeding project
    coalesces requests received while it runs to at most one fresh follow-up run after the active run settles.
 8. AgenticMind must start with an empty top-level read-only latest render dictionary. Only foreground prompt execution
    may call `CreateRenderContext` to create AgenticMind's own complete top-level read-only dictionary from current
-   character context, deterministic scene-character context, the complete observation timeline, the current scenario
+   character context, deterministic scene-character context, the player character under
+   [SCN-001](../../scene/001-scene-context-api/index.md), the complete observation timeline, the current scenario
    under [AI-008](../008-scenario/index.md), and every authored worker projection. AI-008 is normative for the
    `scenario` key's value and reservation semantics; workers capture it through ordinary snapshot capture with no
    worker-specific scenario contract.
@@ -135,7 +136,8 @@ execution from constructing context, refreshing the timeline, or feeding project
    serialisation.
 6. Tests verify AgenticMind starts with an empty top-level read-only latest render dictionary. Only foreground prompt
    execution calls `CreateRenderContext`, and AgenticMind's returned dictionary contains `character`, deterministic
-   `characters`, complete `observations`, the current `scenario` under AI-008, and all authored worker projections.
+   `characters`, the `player` character under SCN-001, complete `observations`, the current `scenario` under AI-008,
+   and all authored worker projections.
 7. Tests verify the foreground template uses the exact dictionary returned by `CreateRenderContext`. AgenticMind
    atomically publishes that exact dictionary only after successful rendering and retains the previous snapshot after
    context-construction or rendering failure.

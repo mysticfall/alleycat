@@ -337,6 +337,9 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
     private sealed class MutableSceneContext : ISceneContext
     {
+        public ICharacter Player => throw new InvalidOperationException(
+            "Scene context contains no player character. Scene authoring guarantees the player is present.");
+
         private readonly Dictionary<string, IIdentifiable> _entries = new(StringComparer.Ordinal);
 
         public IReadOnlyCollection<ICharacter> Characters => [];

@@ -67,10 +67,10 @@ existing shared prompt stack.
     and no retry or repair is attempted. When no manager is configured, behaviour must be identical to a null-returning
     manager.
 11. The shared foreground render dictionary must gain the top-level key `scenario`, whose value is the current
-    `Scenario` record or null. The key is reserved exactly like `character`, `characters`, and `observations`: an
-    authored ContextWorker projection colliding with `scenario` must fail with the existing duplicate-key error. AI-001
-    TR-30 and AI-003 TR-20 enumerate this key in their composition lists; AI-008 is normative for its value and
-    reservation semantics.
+    `Scenario` record or null. The key is reserved exactly like `character`, `characters`, `player`, and
+    `observations`: an authored ContextWorker projection colliding with `scenario` must fail with the existing
+    duplicate-key error. AI-001 TR-30 and AI-003 TR-20 enumerate this key in their composition lists; AI-008 is
+    normative for its value and reservation semantics.
 12. The scenario must be rendered by a plain `FilePromptSection` in the shared generic NPC prompt stack referencing
     `res://prompts/scenario.md`, authored with a `{{#if scenario}}` guard rendering `{{scenario.Description}}` with
     PascalCase property access matching existing fragment conventions. There is deliberately no new `PromptSection`

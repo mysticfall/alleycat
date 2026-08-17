@@ -226,6 +226,9 @@ public sealed class PerceptSensingIntegrationTests
 
     private sealed class TestSceneContext(IReadOnlyCollection<ICharacter> characters) : ISceneContext
     {
+        public ICharacter Player => throw new InvalidOperationException(
+            "Scene context contains no player character. Scene authoring guarantees the player is present.");
+
         public IReadOnlyCollection<ICharacter> Characters => characters;
 
         public ContentContext Content => ContentContext.Default;

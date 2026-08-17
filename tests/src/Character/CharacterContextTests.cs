@@ -293,6 +293,9 @@ public sealed class CharacterContextTests
 
     private sealed record FakeSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
     {
+        public ICharacter Player => throw new InvalidOperationException(
+            "Scene context contains no player character. Scene authoring guarantees the player is present.");
+
         public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
 
         public IIdentifiable? Find(string fullId)

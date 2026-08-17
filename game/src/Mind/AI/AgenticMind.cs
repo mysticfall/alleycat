@@ -311,10 +311,14 @@ public partial class AgenticMind : MindBase
             }
         }
 
+        ICharacter player = scene.Player;
+        _ = characterContexts.TryGetValue(player.FullId, out object? playerContext);
+
         Dictionary<string, object?> context = new(StringComparer.Ordinal)
         {
             ["character"] = owningCharacterContext,
             ["characters"] = new ReadOnlyDictionary<string, object?>(characterContexts),
+            ["player"] = playerContext,
             [EventHistoryPromptSection.ObservationsContextKey] = observations ?? [],
             ["scenario"] = scenario,
         };

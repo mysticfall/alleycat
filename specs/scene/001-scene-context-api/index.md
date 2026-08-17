@@ -26,6 +26,8 @@ character and Godot node objects remain live.
 6. Scene authors receive a clear failure when character identity would make conversation context ambiguous.
 7. Contributors can author visual subjects in one explicit group without making those subjects actors.
 8. Game systems can find or require a current-scene object by its canonical `FullId` without knowing its scene group.
+9. Contributors can designate exactly one player character per scene by placing that character in the `Player` group,
+   and game systems can read the designated player through scene context.
 
 ## Technical Requirements
 
@@ -68,11 +70,27 @@ character and Godot node objects remain live.
 23. AI-002 may capture one `ISceneContext` at turn start and pass that exact snapshot through its trusted typed tool
     context. This use preserves fixed membership and live referenced objects; it does not add AI-specific members or
     mutable snapshot semantics to `ISceneContext`.
+24. `ISceneContext` must designate the player character through the exact constant `PlayerGroupName = "Player"` and
+    expose a non-nullable `ICharacter Player` member. `SceneContext` must resolve the player exactly once at
+    construction by scanning the captured membership for characters that are Godot `Node`s in the `Player` group; a
+    non-`Node` `ICharacter` implementation is never the player. Resolution is snapshot-pure: no live group query or
+    re-resolution may occur after construction, while the resolved player remains a live object reference like every
+    other captured member.
+25. Scene authoring guarantees exactly one player character; production provider contexts therefore always contain the
+    player. Zero players must not fail construction — narrow player-less contexts remain legal for tests, and `Player`
+    access must then throw `InvalidOperationException` — while multiple `Player`-group characters must fail eagerly at
+    construction as a scene authoring error, in the same class as exact duplicate `FullId` rejection (TR-13).
+26. The reserved top-level `player` key of AgenticMind's foreground render dictionary under
+    [AI-001](../../ai/001-mind/index.md) is the current `Player` consumer, holding the identical reference to the
+    player's entry in `characters` when attention eligibility includes the player and null when it filters the player
+    out. This use preserves fixed membership and live referenced objects; it adds no AI-specific members or mutable
+    snapshot semantics to `ISceneContext`, mirroring the AI-002 tool-context use in TR-23.
 
 ## In Scope
 
 - `ISceneContextProvider` and `ISceneContext` as independent `AlleyCat.Scene` contracts.
 - Current humanoid character membership via `ICharacter`.
+- Player character designation through the `Player` group and the resolved `ISceneContext.Player` member.
 - Current-scene `IIdentifiable` lookup by canonical `FullId`.
 - DI-only provider access through CORE-004 service resolution.
 - Type-to-group discovery mapping, initially `char` to the Godot `Actors` group.
@@ -110,6 +128,8 @@ character and Godot node objects remain live.
 8. A consumer can find a current character by its canonical `FullId`, or require it and receive a clear failure when it
    is absent.
 9. A lookup for a location, item, or other type not mapped into scene context does not make that object a member.
+10. A contributor-designated player resolves through scene context, and designation violations — a missing player on
+    access, or multiple players — fail with clear errors rather than silent misbehaviour.
 
 ### Technical Requirements
 
@@ -138,6 +158,14 @@ character and Godot node objects remain live.
 17. Lookup membership is captured with the context snapshot, while returned object references remain live.
 18. Agent-runtime tests verify a turn-captured `ISceneContext` passed to tools retains fixed membership and live object
     references without changing SCN-001's general contract.
+19. Tests verify player resolution uses the exact `PlayerGroupName` constant, resolves once at construction from the
+    captured membership, qualifies only Godot `Node` characters in the `Player` group, and performs no live group query
+    after construction.
+20. Tests verify a player-less context constructs successfully and throws `InvalidOperationException` on `Player`
+    access, while a captured membership containing two `Player`-group characters fails construction eagerly.
+21. AI-001 render-dictionary tests verify the reserved `player` key holds the identical reference to the player's
+    attention-included `characters` entry, or null when the player is filtered out, without adding AI-specific members
+    to `ISceneContext`.
 
 ## References
 

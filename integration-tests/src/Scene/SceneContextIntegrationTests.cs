@@ -1,6 +1,7 @@
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core.Content;
+using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Godot;
@@ -268,6 +269,108 @@ public sealed class SceneContextIntegrationTests
         finally
         {
             invalidActor.RemoveFromGroup("Actors");
+        }
+    }
+
+    /// <summary>
+    /// Snapshots resolve the player from the single node character in the player group.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Player_ResolvesFromTheSingleNodeCharacterInThePlayerGroup()
+    {
+        var npc = new CharacterHub
+        {
+            Name = "PlayerResolutionNpc",
+            Id = "resolution_npc",
+        };
+        FixturePlayerCharacter player = new()
+        {
+            Name = "PlayerResolutionPlayer"
+        };
+
+        try
+        {
+            SceneContext context = new([npc, player]);
+
+            Assert.Same(player, context.Player);
+            Assert.Contains(npc, context.Characters);
+        }
+        finally
+        {
+            npc.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>
+    /// More than one player-group character in a snapshot is an eager scene authoring error.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void Constructor_WithMultiplePlayerGroupMembers_ThrowsClearAuthoringError()
+    {
+        FixturePlayerCharacter firstPlayer = new()
+        {
+            Name = "FirstPlayer",
+            Id = "first_player"
+        };
+        FixturePlayerCharacter secondPlayer = new()
+        {
+            Name = "SecondPlayer",
+            Id = "second_player"
+        };
+
+        try
+        {
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                () => new SceneContext([firstPlayer, secondPlayer]));
+
+            Assert.Contains(ISceneContext.PlayerGroupName, exception.Message, StringComparison.Ordinal);
+            Assert.Contains(firstPlayer.FullId, exception.Message, StringComparison.Ordinal);
+            Assert.Contains(secondPlayer.FullId, exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            firstPlayer.Free();
+            secondPlayer.Free();
+        }
+    }
+
+    /// <summary>
+    /// The live scene context provider resolves the player from its captured Actors membership.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task GetCurrent_ResolvesThePlayerFromLiveGroupMembership()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node contextRoot = new()
+        {
+            Name = "SceneContextPlayerResolutionRoot",
+        };
+        FixturePlayerCharacter player = new()
+        {
+            Name = "LivePlayer"
+        };
+        contextRoot.AddChild(player);
+        player.AddToGroup("Actors");
+        _ = sceneTree.Root.CallDeferred(Node.MethodName.AddChild, contextRoot);
+        await WaitForFramesAsync(sceneTree, 10);
+
+        try
+        {
+            var provider = new SceneContextProvider(contextRoot);
+
+            ISceneContext context = provider.GetCurrent();
+
+            Assert.Same(player, context.Player);
+        }
+        finally
+        {
+            player.RemoveFromGroup("Actors");
+            contextRoot.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
         }
     }
 }

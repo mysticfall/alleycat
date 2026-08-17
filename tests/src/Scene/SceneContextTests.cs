@@ -84,6 +84,23 @@ public sealed class SceneContextTests
         Assert.Null(context.Find("char:other_ally"));
     }
 
+    /// <summary>
+    /// Snapshots whose members are all non-node characters construct successfully but fail player access clearly.
+    /// </summary>
+    /// <remarks>
+    /// Non-node <see cref="ICharacter"/> implementations never resolve as the player; node-group resolution and
+    /// multiple-player authoring failures are covered by the Godot-running scene context integration tests.
+    /// </remarks>
+    [Fact]
+    public void Player_WhenNoNodeCharacterIsInThePlayerGroup_ThrowsOnAccess()
+    {
+        SceneContext context = new([new FakeCharacter("ally"), new FakeCharacter("friend")]);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => context.Player);
+
+        Assert.Contains("no player", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Lookup membership is fixed while a member's identity remains live.</summary>
     [Fact]
     public void Find_PreservesSnapshotMembershipWithLiveIdentity()

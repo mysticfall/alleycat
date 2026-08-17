@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
+using Godot;
 
 namespace AlleyCat.Scene;
 
@@ -13,6 +15,8 @@ public sealed record SceneContext : ISceneContext
     private readonly ICharacter[] _characters;
     private readonly ReadOnlyCollection<ICharacter> _charactersView;
     private readonly IReadOnlyDictionary<string, IIdentifiable[]> _identifiablesByType;
+    [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Getter throws on player-less snapshots.")]
+    private readonly ICharacter? _player;
 
     /// <summary>
     /// Initializes a new scene context with a fixed membership snapshot.
@@ -56,12 +60,18 @@ public sealed record SceneContext : ISceneContext
             }
         }
 
+        _player = ResolvePlayer(_characters);
         _charactersView = Array.AsReadOnly(_characters);
         Content = content ?? ContentContext.Default;
     }
 
     /// <inheritdoc />
     public IReadOnlyCollection<ICharacter> Characters => _charactersView;
+
+    /// <inheritdoc />
+    public ICharacter Player => _player
+        ?? throw new InvalidOperationException(
+            "Scene context contains no player character. Scene authoring guarantees the player is present.");
 
     /// <inheritdoc />
     public ContentContext Content
@@ -96,6 +106,28 @@ public sealed record SceneContext : ISceneContext
     public IIdentifiable Resolve(string fullId)
         => Find(fullId)
             ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
+
+    private static ICharacter? ResolvePlayer(ICharacter[] characters)
+    {
+        ICharacter? player = null;
+        foreach (ICharacter character in characters)
+        {
+            if (character is not Node node || !node.IsInGroup(ISceneContext.PlayerGroupName))
+            {
+                continue;
+            }
+
+            if (player is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Scene context characters '{player.FullId}' and '{character.FullId}' are both in the '{ISceneContext.PlayerGroupName}' group. Scene authoring requires exactly one player character.");
+            }
+
+            player = character;
+        }
+
+        return player;
+    }
 
     private static IReadOnlyDictionary<string, IIdentifiable[]> CreateCharacterMembership(IEnumerable<ICharacter> characters)
     {

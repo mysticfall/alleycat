@@ -1,3 +1,4 @@
+using AlleyCat.Scene;
 using AlleyCat.XR;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,7 +101,7 @@ public partial class PlayerVRIKStartupBinder : Node
     /// </summary>
     protected virtual PlayerVRIK? ResolvePlayerVRIK()
     {
-        Godot.Collections.Array<Node> players = GetTree().GetNodesInGroup("Player");
+        Godot.Collections.Array<Node> players = GetTree().GetNodesInGroup(ISceneContext.PlayerGroupName);
         foreach (Node playerNode in players)
         {
             PlayerVRIK? vrik = playerNode.GetNodeOrNull<PlayerVRIK>("VRIK");

@@ -7,6 +7,7 @@ using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
@@ -84,7 +85,8 @@ public sealed partial class ScenarioIntegrationTests
     public async Task ForegroundTurn_CapturesFreshSnapshotThenQueriesManagerWithLazilyCreatedPrevious()
     {
         TestCharacter owner = new();
-        List<ICharacter> liveMembership = [owner];
+        FixturePlayerCharacter player = new();
+        List<ICharacter> liveMembership = [owner, player];
         CountingSceneProvider sceneProvider = new(liveMembership);
         ScriptedScenarioManager manager = new()
         {
@@ -122,7 +124,7 @@ public sealed partial class ScenarioIntegrationTests
             Assert.Equal("Scenario one.", manager.ReceivedPrevious[1].Scenario!.Description);
             Assert.Same(sceneProvider.Captured[0], manager.ReceivedPrevious[1].SceneContext);
             Assert.NotSame(tool.CapturedContexts[0], tool.CapturedContexts[1]);
-            Assert.Equal([owner], liveMembership);
+            Assert.Equal([owner, player], liveMembership);
         }
         finally
         {
@@ -130,6 +132,7 @@ public sealed partial class ScenarioIntegrationTests
             manager.Free();
             clientProvider.Free();
             tool.Free();
+            player.Free();
         }
     }
 
@@ -138,7 +141,8 @@ public sealed partial class ScenarioIntegrationTests
     public async Task ForegroundTurn_ManagerReturnValue_BecomesScenarioOfOneBindingForRenderAndTools()
     {
         TestCharacter owner = new();
-        CountingSceneProvider sceneProvider = new([owner]);
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
         ScriptedScenarioManager manager = new();
         manager.Enqueue(new Scenario("Scenario with a record."));
         manager.Enqueue(null);
@@ -171,7 +175,7 @@ public sealed partial class ScenarioIntegrationTests
             IReadOnlyDictionary<string, object?> secondPublished = mind.GetLatestRenderContext();
             Assert.Null(secondPublished["scenario"]);
             Assert.Null(tool.CapturedContexts[1].Scenario);
-            Assert.Equal(["character", "characters", "observations", "scenario"], secondPublished.Keys);
+            Assert.Equal(["character", "characters", "player", "observations", "scenario"], secondPublished.Keys);
         }
         finally
         {
@@ -179,6 +183,7 @@ public sealed partial class ScenarioIntegrationTests
             manager.Free();
             clientProvider.Free();
             tool.Free();
+            player.Free();
         }
     }
 
@@ -188,6 +193,8 @@ public sealed partial class ScenarioIntegrationTests
     {
         TestCharacter configuredOwner = new();
         TestCharacter unconfiguredOwner = new();
+        FixturePlayerCharacter configuredPlayer = new();
+        FixturePlayerCharacter unconfiguredPlayer = new();
         static PromptStack CreateStack()
         {
             return new()
@@ -205,13 +212,13 @@ public sealed partial class ScenarioIntegrationTests
             ClientProvider = configuredProvider,
             ScenarioManager = nullReturningManager,
         };
-        configuredMind.SetSceneContextLoaderForTesting(new CountingSceneProvider([configuredOwner]).GetCurrent);
+        configuredMind.SetSceneContextLoaderForTesting(new CountingSceneProvider([configuredOwner, configuredPlayer]).GetCurrent);
         TestAgenticMind unconfiguredMind = new(unconfiguredOwner)
         {
             SystemInstruction = CreateStack(),
             ClientProvider = unconfiguredProvider,
         };
-        unconfiguredMind.SetSceneContextLoaderForTesting(new CountingSceneProvider([unconfiguredOwner]).GetCurrent);
+        unconfiguredMind.SetSceneContextLoaderForTesting(new CountingSceneProvider([unconfiguredOwner, unconfiguredPlayer]).GetCurrent);
 
         try
         {
@@ -231,6 +238,8 @@ public sealed partial class ScenarioIntegrationTests
             nullReturningManager.Free();
             configuredProvider.Free();
             unconfiguredProvider.Free();
+            configuredPlayer.Free();
+            unconfiguredPlayer.Free();
         }
     }
 
@@ -240,7 +249,8 @@ public sealed partial class ScenarioIntegrationTests
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         TestCharacter owner = new();
-        CountingSceneProvider sceneProvider = new([owner]);
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
         ScriptedScenarioManager manager = new();
         manager.Enqueue(new Scenario("Interrupted scenario."));
         ScriptedClientProvider clientProvider = new()
@@ -293,6 +303,7 @@ public sealed partial class ScenarioIntegrationTests
             manager.Free();
             clientProvider.Free();
             tool.Free();
+            player.Free();
         }
     }
 
@@ -304,7 +315,8 @@ public sealed partial class ScenarioIntegrationTests
         using RecordingLoggerProvider loggerProvider = new();
         Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
         TestCharacter owner = new();
-        CountingSceneProvider sceneProvider = new([owner]);
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
         ScriptedScenarioManager manager = new();
         manager.Enqueue(new Scenario("First scenario."));
         ScriptedClientProvider clientProvider = new();
@@ -354,6 +366,7 @@ public sealed partial class ScenarioIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
             manager.Free();
             clientProvider.Free();
+            player.Free();
         }
     }
 
@@ -365,8 +378,9 @@ public sealed partial class ScenarioIntegrationTests
         using RecordingLoggerProvider loggerProvider = new();
         Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
         TestCharacter owner = new();
-        CountingSceneProvider sceneProvider = new([owner]);
-        CollidingProjectionWorker worker = new();
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
+        CollidingProjectionWorker worker = new("scenario");
         ManualRequestTrigger trigger = new();
         worker.AddChild(trigger);
         ScriptedClientProvider clientProvider = new();
@@ -405,6 +419,7 @@ public sealed partial class ScenarioIntegrationTests
             mind.QueueFree();
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
             clientProvider.Free();
+            player.Free();
         }
     }
 
@@ -414,7 +429,8 @@ public sealed partial class ScenarioIntegrationTests
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         TestCharacter owner = new();
-        CountingSceneProvider sceneProvider = new([owner]);
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
         ScriptedScenarioManager manager = new();
         Scenario scenario = new("Worker visible scenario.");
         manager.Enqueue(scenario);
@@ -459,6 +475,132 @@ public sealed partial class ScenarioIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 2);
             manager.Free();
             clientProvider.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>The reserved player key aliases the player's identical rendered context from the characters dictionary.</summary>
+    [Fact]
+    public async Task ForegroundRender_WithAttendedPlayer_PlayerKeyAliasesPlayersCharactersEntry()
+    {
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
+        ScriptedClientProvider clientProvider = new();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+        };
+        mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
+        mind.ReinforceAttentionForTest(player.FullId);
+
+        try
+        {
+            await mind.RunForegroundTurnForTestAsync();
+
+            IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
+            IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+                published["characters"]);
+
+            Assert.Equal(["char:fixture_player", "char:owner"], characters.Keys);
+            Assert.Same(characters[player.FullId], published["player"]);
+            Assert.Same(player.Context, published["player"]);
+            Assert.Equal(1, player.ContextRequestCount);
+        }
+        finally
+        {
+            mind.Free();
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>A player outside attention eligibility leaves the reserved player key present but null.</summary>
+    [Fact]
+    public async Task ForegroundRender_WhenPlayerIsNotAttentionEligible_PlayerKeyIsNull()
+    {
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
+        ScriptedClientProvider clientProvider = new();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+        };
+        mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
+
+        try
+        {
+            await mind.RunForegroundTurnForTestAsync();
+
+            IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
+            IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+                published["characters"]);
+
+            Assert.Equal(["char:owner"], characters.Keys);
+            Assert.Null(published["player"]);
+            Assert.Equal(0, player.ContextRequestCount);
+        }
+        finally
+        {
+            mind.Free();
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>An authored worker projection colliding with the reserved player key fails the foreground render.</summary>
+    [Fact]
+    public async Task WorkerProjection_CollidingWithPlayerKey_FailsForegroundRenderAndRetainsSnapshot()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        using RecordingLoggerProvider loggerProvider = new();
+        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        CountingSceneProvider sceneProvider = new([owner, player]);
+        CollidingProjectionWorker worker = new("player");
+        ManualRequestTrigger trigger = new();
+        worker.AddChild(trigger);
+        ScriptedClientProvider clientProvider = new();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+            ObservationImportanceThreshold = 1f,
+        };
+        mind.AddChild(worker);
+        mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+        await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            mind.ObserveForTest(new TestObservation(1f, "start"));
+            await WaitUntilAsync(sceneTree, () => mind.GetLatestRenderContext().Count > 0);
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            IReadOnlyDictionary<string, object?> priorSnapshot = mind.GetLatestRenderContext();
+
+            trigger.RequestForTest();
+            await WaitUntilAsync(sceneTree, () => worker.RunCount == 1);
+            mind.ObserveForTest(new TestObservation(1f, "collision"));
+            await WaitUntilAsync(
+                sceneTree,
+                () => loggerProvider.Entries.Any(entry =>
+                    entry.Exception?.Message.Contains("duplicate context key 'player'", StringComparison.Ordinal) == true));
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Same(priorSnapshot, mind.GetLatestRenderContext());
+            Assert.Equal(1, clientProvider.CallCount);
+        }
+        finally
+        {
+            mind.QueueFree();
+            await TestUtils.WaitForFramesAsync(sceneTree, 2);
+            clientProvider.Free();
+            player.Free();
         }
     }
 
@@ -468,6 +610,7 @@ public sealed partial class ScenarioIntegrationTests
     {
         PromptStack stack = LoadSharedStackAndAssertScenarioSection();
         TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
         FixedScenarioManager manager = new()
         {
             Description = "Win the alley cooking contest."
@@ -479,7 +622,7 @@ public sealed partial class ScenarioIntegrationTests
             ClientProvider = clientProvider,
             ScenarioManager = manager,
         };
-        mind.SetSceneContextLoaderForTesting(new CountingSceneProvider([owner]).GetCurrent);
+        mind.SetSceneContextLoaderForTesting(new CountingSceneProvider([owner, player]).GetCurrent);
 
         try
         {
@@ -495,6 +638,7 @@ public sealed partial class ScenarioIntegrationTests
             mind.Free();
             manager.Free();
             clientProvider.Free();
+            player.Free();
         }
     }
 
@@ -504,13 +648,14 @@ public sealed partial class ScenarioIntegrationTests
     {
         PromptStack stack = LoadSharedStackAndAssertScenarioSection();
         TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
         ScriptedClientProvider clientProvider = new();
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = stack,
             ClientProvider = clientProvider,
         };
-        mind.SetSceneContextLoaderForTesting(new CountingSceneProvider([owner]).GetCurrent);
+        mind.SetSceneContextLoaderForTesting(new CountingSceneProvider([owner, player]).GetCurrent);
 
         try
         {
@@ -530,6 +675,7 @@ public sealed partial class ScenarioIntegrationTests
         {
             mind.Free();
             clientProvider.Free();
+            player.Free();
         }
     }
 
@@ -711,7 +857,7 @@ public sealed partial class ScenarioIntegrationTests
         }
     }
 
-    private sealed partial class CollidingProjectionWorker : ContextWorker
+    private sealed partial class CollidingProjectionWorker(string contextKey) : ContextWorker
     {
         public int RunCount
         {
@@ -725,7 +871,7 @@ public sealed partial class ScenarioIntegrationTests
             RunCount++;
             return Task.FromResult<IReadOnlyDictionary<string, object?>>(new Dictionary<string, object?>
             {
-                ["scenario"] = "colliding projection",
+                [contextKey] = "colliding projection",
             });
         }
     }
@@ -761,6 +907,9 @@ public sealed partial class ScenarioIntegrationTests
         public Task RunForegroundTurnForTestAsync() => RunAgentTurnAsync([], CancellationToken.None);
 
         public void ObserveForTest(AgentObservation observation) => _ = Observe(observation);
+
+        public void ReinforceAttentionForTest(string fullId)
+            => ReinforceAttention(fullId, 1f, AttentionSettings.Create(1f, 0f, 0.05f, 0.25f));
 
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
 

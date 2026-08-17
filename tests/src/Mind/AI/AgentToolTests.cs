@@ -368,6 +368,9 @@ public sealed class AgentToolTests
 
     private sealed record TestSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
     {
+        public ICharacter Player => throw new InvalidOperationException(
+            "Scene context contains no player character. Scene authoring guarantees the player is present.");
+
         public ContentContext Content => ContentContext.Default;
 
         public IIdentifiable? Find(string fullId)

@@ -145,7 +145,14 @@ public sealed class AgenticMindTests
         {
             Id = "alpha"
         };
-        SceneContext scene = new([last, owner, first]);
+        FakeCharacter player = new(new Dictionary<string, object?> { ["FullId"] = "char:player" })
+        {
+            Id = "player"
+        };
+        ArbitrarySceneContext scene = new([last, owner, first, player])
+        {
+            PlayerCharacter = player,
+        };
         ObservedSpeech speech = new("char:alpha", "voice-alpha", "Hello");
         AgentObservation[] timeline = [speech];
 
@@ -164,6 +171,7 @@ public sealed class AgenticMindTests
         Assert.Equal("char:owner", Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["character"])["FullId"]);
         Assert.Same(timeline, observations);
         Assert.Same(speech, Assert.Single(observations));
+        Assert.Null(result["player"]);
         _ = Assert.Throws<NotSupportedException>(
             () => ((IDictionary<string, object?>)result).Add("mutation", null));
         Assert.All([first, owner, last], subject =>
@@ -243,7 +251,10 @@ public sealed class AgenticMindTests
         {
             Id = "subject",
         };
-        ArbitrarySceneContext scene = new([subject, owner]);
+        ArbitrarySceneContext scene = new([subject, owner])
+        {
+            PlayerCharacter = subject,
+        };
 
         IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(
             owner,
@@ -254,6 +265,7 @@ public sealed class AgenticMindTests
         Assert.Equal(["char:owner", "char:subject"], characters.Keys);
         Assert.Same(ownerContext, result["character"]);
         Assert.Same(subjectContext, characters["char:subject"]);
+        Assert.Same(subjectContext, result["player"]);
         Assert.Same(owner, subject.ReceivedObserver);
     }
 
@@ -297,7 +309,10 @@ public sealed class AgenticMindTests
                 [alpha.FullId] = alpha,
                 [zulu.FullId] = zulu,
                 [nonContextual.FullId] = nonContextual,
-            });
+            })
+        {
+            PlayerCharacter = alpha,
+        };
         string[] eligibleIDs =
         [
             "char:zulu",
@@ -319,6 +334,7 @@ public sealed class AgenticMindTests
         Assert.Same(result["character"], characters[owner.FullId]);
         Assert.Same(alphaContext, characters[alpha.FullId]);
         Assert.Same(zuluContext, characters[zulu.FullId]);
+        Assert.Same(alphaContext, result["player"]);
         Assert.Equal(new[] { "char:zulu", "char:missing", "object:prop", "char:alpha" }, eligibleIDs);
         Assert.All([owner, alpha, zulu], subject =>
         {
@@ -452,7 +468,16 @@ public sealed class AgenticMindTests
 
     private sealed record ArbitrarySceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
     {
+        public ICharacter? PlayerCharacter
+        {
+            get; init;
+        }
+
         public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
+
+        public ICharacter Player => PlayerCharacter
+            ?? throw new InvalidOperationException(
+                "Scene context contains no player character. Scene authoring guarantees the player is present.");
 
         public IIdentifiable? Find(string fullId)
         {
@@ -468,7 +493,16 @@ public sealed class AgenticMindTests
         IReadOnlyCollection<ICharacter> Characters,
         IReadOnlyDictionary<string, IIdentifiable> Mappings) : ISceneContext
     {
+        public ICharacter? PlayerCharacter
+        {
+            get; init;
+        }
+
         public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
+
+        public ICharacter Player => PlayerCharacter
+            ?? throw new InvalidOperationException(
+                "Scene context contains no player character. Scene authoring guarantees the player is present.");
 
         public IIdentifiable? Find(string fullId)
         {

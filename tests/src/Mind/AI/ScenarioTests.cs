@@ -58,7 +58,7 @@ public sealed class ScenarioTests
         Assert.False(typeof(IServiceProvider).IsAssignableFrom(managerType));
     }
 
-    /// <summary>The reserved scenario key carries the turn's record or null alongside the other reserved keys.</summary>
+    /// <summary>The reserved scenario and player keys carry the turn's record or null alongside the other reserved keys.</summary>
     [Fact]
     public void CreateRenderContext_WithScenario_PublishesRecordOrNullUnderReservedKey()
     {
@@ -66,7 +66,15 @@ public sealed class ScenarioTests
         {
             Id = "owner"
         };
-        SceneContext scene = new([owner]);
+        Dictionary<string, object?> playerContext = new()
+        {
+            ["name"] = "Player"
+        };
+        FakeCharacter player = new(playerContext)
+        {
+            Id = "player"
+        };
+        FakeSceneContext scene = new([owner, player], player);
         var scenario = new Scenario("The owner is browsing the market.");
 
         IReadOnlyDictionary<string, object?> withScenario = AgenticMind.CreateRenderContext(
@@ -78,16 +86,37 @@ public sealed class ScenarioTests
             scene,
             scenario: null);
         IReadOnlyDictionary<string, object?> defaulted = AgenticMind.CreateRenderContext(owner, scene);
+        IReadOnlyDictionary<string, object?> playerFiltered = AgenticMind.CreateRenderContext(
+            owner,
+            scene,
+            attentionEligibleFullIDs: ["char:owner"]);
 
         Assert.Same(scenario, withScenario["scenario"]);
         Assert.Null(withoutScenario["scenario"]);
         Assert.Null(defaulted["scenario"]);
+        Assert.Same(playerContext, withScenario["player"]);
+        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            withScenario["characters"]);
+        Assert.Same(characters[player.FullId], withScenario["player"]);
+        Assert.Null(playerFiltered["player"]);
         Assert.All(
-            [withScenario, withoutScenario],
-            context => Assert.Equal(["character", "characters", "observations", "scenario"], context.Keys));
+            [withScenario, withoutScenario, defaulted],
+            context => Assert.Equal(["character", "characters", "player", "observations", "scenario"], context.Keys));
+        Assert.Equal(["character", "characters", "player", "observations", "scenario"], playerFiltered.Keys);
     }
 
-    private sealed class FakeCharacter : ICharacter
+    private sealed record FakeSceneContext(IReadOnlyCollection<ICharacter> Characters, ICharacter Player) : ISceneContext
+    {
+        public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
+
+        public IIdentifiable? Find(string fullId)
+            => Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
+    }
+
+    private sealed class FakeCharacter(IReadOnlyDictionary<string, object?>? context = null) : ICharacter
     {
         public string Id { get; set; } = "fake-character";
 
@@ -98,6 +127,6 @@ public sealed class ScenarioTests
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
 
         public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
+            => context ?? new Dictionary<string, object?>();
     }
 }
