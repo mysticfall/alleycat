@@ -35,10 +35,10 @@ failures contained without treating assistant text or provider history as charac
 10. Removing an NPC's Mind from the scene must not allow active or queued actions to produce delayed in-world effects.
 11. Every action configured for a turn must remain available while the NPC decides how to complete that turn.
 12. During development, developers can inspect `LoggingChatClient` request and response representations at the
-    Microsoft.Extensions.AI abstraction for every model request when explicitly enabled. These diagnostics do not
-    promise complete HTTP wire bodies.
-13. Sensitive AI request and response detail must remain suppressed unless both dedicated diagnostics controls permit
-    it, without changing NPC behaviour.
+    Microsoft.Extensions.AI abstraction for every model request when the dedicated request/response diagnostics
+    controls permit it. These diagnostics do not promise complete HTTP wire bodies.
+13. Sensitive AI request and response detail must remain suppressed unless both dedicated request/response
+    diagnostics controls permit it, without changing NPC behaviour.
 14. An action must never execute against a character other than the character that owns the active Mind turn.
 
 ## Technical Requirements
@@ -59,11 +59,12 @@ failures contained without treating assistant text or provider history as charac
 6. `end_turn` is protocol control, not an action, action result, or observation. It must accept no arguments, must never
    invoke a production tool delegate, produce a tool result, be ingested by Mind, or count towards `MaxToolActions`.
 7. A response containing `end_turn` is valid only when the marker occurs exactly once as the final call and the response
-   contains no ordinary assistant text or other non-call protocol content. The marker may be the sole call for zero
-   actions or may follow one or more configured production action calls.
+   contains no ordinary assistant text or other non-call protocol content, except model reasoning content, which is
+   tolerated and skipped. The marker may be the sole call for zero actions or may follow one or more configured
+   production action calls.
 8. A response without `end_turn` is valid only when it contains one or more well-formed calls to configured production
    actions and no ordinary assistant text, unknown content, unknown tool, duplicate call identifier, or other malformed
-   item.
+   item, except model reasoning content, which is tolerated and skipped.
 9. Zero actions must be represented by sole `end_turn`. One or more actions may be followed by final `end_turn` in the
    same response when no result-dependent continuation is needed. An action-only response requires result replay and a
    later sequential model request.
@@ -85,10 +86,10 @@ failures contained without treating assistant text or provider history as charac
     `MaxToolActions` counts production action calls but not `end_turn`.
 16. A batch that would exceed `MaxToolActions` must fail before any call in that batch executes. Reaching
     `MaxModelRequests` without a valid `end_turn` must fail once another request would be required.
-17. Empty or malformed output, assistant text, unknown content or tools, invalid arguments, duplicate call identifiers,
-    and a non-final, repeated, or malformed `end_turn` marker must fail before any batch effect. Tool errors and bound
-    exhaustion must also fail closed. The runtime must not ask the model to repair output, retry the failed request or
-    action, or continue the turn.
+17. Empty or malformed output, ordinary assistant text, unknown content or tools, invalid arguments, duplicate call
+    identifiers, and a non-final, repeated, or malformed `end_turn` marker must fail before any batch effect. Tool
+    errors and bound exhaustion must also fail closed. The runtime must not ask the model to repair output, retry the
+    failed request or action, or continue the turn.
 18. Valid sequential requests after successful actions are protocol continuation, not repair or retry. Actions and
     observations committed before a later failure or pre-emption remain committed.
 19. Every `AgentTool` delegate must return the standard `AgentToolResult`, containing an optional model-facing `Message`
@@ -126,8 +127,10 @@ failures contained without treating assistant text or provider history as charac
     to it automatically, and it must preserve the same tool-only validation, ordering, bounds, and failure semantics.
 31. Development-only Microsoft.Extensions.AI request and response diagnostics must require both
     `Diagnostics:AI:EnableRequestResponseLogging` and the dedicated
-    `Microsoft.Extensions.AI.LoggingChatClient` category enabled at `Trace`. Either control being disabled must
-    suppress sensitive payload detail.
+    `Microsoft.Extensions.AI.LoggingChatClient` category enabled at `Trace`. The option is enabled by default
+    and acts as an off-switch: setting it to `false` suppresses sensitive payload detail even when the
+    `Microsoft.Extensions.AI.LoggingChatClient` category is enabled at `Trace`. Either control being disabled
+    must suppress sensitive payload detail.
 32. The runtime must decorate its AI `IChatClient` with Microsoft.Extensions.AI `LoggingChatClient` before the tool-only
     loop. This placement must observe every sequential provider request in a turn.
 33. `LoggingChatClient` diagnostics represent requests and responses at the Microsoft.Extensions.AI abstraction and must
@@ -172,6 +175,15 @@ failures contained without treating assistant text or provider history as charac
     depend on an AgenticMind voice property, special case, or duplicate voice binding.
 50. `ISceneContext` may later be replaced by a dedicated turn-context contract without changing the current requirement
     to pass the turn-captured SCN-001 snapshot.
+51. Model reasoning content (`TextReasoningContent`) in an assistant message is tolerated and skipped during
+validation. It is never treated as ordinary assistant text, never becomes player-visible chat, and is never
+stored as memory, remaining transient per-turn protocol. Reasoning text may be logged at trace level as a
+development-only diagnostic only when `Diagnostics:AI:EnableReasoningLogging` is enabled and the
+`AlleyCat.Mind.AI.AgenticMind` logger category is enabled at `Trace`. The option is enabled by default and
+acts as an off-switch: setting it to `false` suppresses reasoning logging regardless of the trace level.
+Reasoning logging is governed by its own dedicated control, distinct from the
+`EnableRequestResponseLogging` gate for MEAI `LoggingChatClient` payload logging in requirement 31. It must
+not change NPC behaviour, validation, action execution, completion, or failure semantics.
 
 ## In Scope
 
@@ -221,8 +233,10 @@ failures contained without treating assistant text or provider history as charac
 2. Tests verify `end_turn` is reserved, argument-free, accepted at most once and only as the final call, and may be sole
    or follow one or more production actions. It is never invoked, returned as a result, ingested, or counted as an
    action.
-3. Tests reject empty or malformed responses, assistant text, unknown content and tools, duplicate call identifiers,
-   invalid arguments, and non-final, repeated, or malformed `end_turn` before executing any action in the invalid batch.
+3. Tests reject empty or malformed responses, ordinary assistant text, unknown content and tools, duplicate call
+   identifiers, invalid arguments, and non-final, repeated, or malformed `end_turn` before executing any action in the
+   invalid batch. Tests tolerate model reasoning content in assistant messages and verify it is never emitted as
+   player-visible text or stored as memory.
 4. Tests verify `AllowMultipleToolCalls` is configurable and defaults to `false`, while local validation still accepts a
    valid all-action batch and executes it serially.
 5. Tests verify a successful action-only batch replays all calls and results in full on a later model request, including
@@ -232,9 +246,9 @@ failures contained without treating assistant text or provider history as charac
 6. Tests verify `MaxModelRequests` and `MaxToolActions` default to `8`, count requests and production actions
    respectively, reject a batch that would exceed the action bound before execution, and stop when the request bound is
    exhausted without `end_turn`.
-7. Tests verify malformed, unknown, text, invalid-marker, tool-error, backend-error, and bounds failures stop without
-   model repair, request or action retry, or continued execution; earlier actions and observations committed before a
-   later action fails remain committed.
+7. Tests verify malformed, unknown, ordinary assistant text, invalid-marker, tool-error, backend-error, and bounds
+   failures stop without model repair, request or action retry, or continued execution; earlier actions and
+   observations committed before a later action fails remain committed.
 8. Responses transport tests verify it is the default and that every sequential request sets `store: false`, omits
     `previous_response_id`, and replays complete ordered per-turn history.
 9. Configuration and transport tests verify Chat Completions is available only through explicit selection, is never an
@@ -281,6 +295,12 @@ failures contained without treating assistant text or provider history as charac
     AgenticMind output-voice special case or duplicate voice binding.
 28. Scene-context tests verify the supplied snapshot retains SCN-001 fixed-membership and live-reference semantics for
     the complete turn.
+29. Tests verify reasoning text is logged at trace level only when `Diagnostics:AI:EnableReasoningLogging` is enabled
+    (its default) and the `AlleyCat.Mind.AI.AgenticMind` logger category is enabled at `Trace`, and that disabling
+    the option suppresses reasoning logging without altering validation tolerance or NPC behaviour.
+30. Tests verify request and response payload logging is enabled by default and that explicitly setting
+    `Diagnostics:AI:EnableRequestResponseLogging` to `false` suppresses sensitive serialisation even when the
+    `Microsoft.Extensions.AI.LoggingChatClient` category is enabled at `Trace`.
 
 ## References
 

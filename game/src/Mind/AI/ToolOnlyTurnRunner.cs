@@ -32,7 +32,8 @@ internal static class ToolOnlyTurnRunner
         IList<AITool> productionTools,
         bool allowMultipleToolCalls,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool enableReasoningLogging = true)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(instructions);
@@ -68,7 +69,7 @@ internal static class ToolOnlyTurnRunner
                 throw new ToolOnlyTurnException("The tool-only model request failed.");
             }
 
-            FunctionCallContent[] calls = ValidateResponse(response, functions, callIDs, logger);
+            FunctionCallContent[] calls = ValidateResponse(response, functions, callIDs, logger, enableReasoningLogging);
             bool completesTurn = string.Equals(calls[^1].Name, EndTurnToolName, StringComparison.Ordinal);
             int productionCallCount = completesTurn ? calls.Length - 1 : calls.Length;
             logger.LogDebug(
@@ -163,7 +164,8 @@ internal static class ToolOnlyTurnRunner
         ChatResponse response,
         IReadOnlyDictionary<string, AIFunction> functions,
         ISet<string> callIDs,
-        ILogger logger)
+        ILogger logger,
+        bool enableReasoningLogging)
     {
         if (response.Messages.Count == 0)
         {
@@ -182,7 +184,9 @@ internal static class ToolOnlyTurnRunner
             {
                 if (content is TextReasoningContent reasoning)
                 {
-                    if (logger.IsEnabled(LogLevel.Trace) && !string.IsNullOrWhiteSpace(reasoning.Text))
+                    if (enableReasoningLogging
+                        && logger.IsEnabled(LogLevel.Trace)
+                        && !string.IsNullOrWhiteSpace(reasoning.Text))
                     {
                         logger.LogTrace("Reasoning: {}", reasoning.Text);
                     }

@@ -47,20 +47,23 @@ public sealed class AgenticMindTests
     }
 
     /// <summary>
-    /// Missing diagnostics configuration should keep sensitive AI request/response logging disabled by default.
+    /// Missing diagnostics configuration keeps sensitive AI request/response logging enabled by default while
+    /// reasoning logging also stays default-enabled (it only fires at trace level).
     /// </summary>
     [Fact]
-    public void AIDiagnosticsSettings_Load_WhenSectionMissing_DisablesRequestResponseLogging()
+    public void AIDiagnosticsSettings_Load_WhenSectionMissing_EnablesRequestResponseLoggingByDefault()
     {
         IConfiguration configuration = new ConfigurationBuilder().Build();
 
         var settings = AIDiagnosticsSettings.Load(configuration);
 
-        Assert.False(settings.EnableRequestResponseLogging);
+        Assert.True(settings.EnableRequestResponseLogging);
+        Assert.True(settings.EnableReasoningLogging);
     }
 
     /// <summary>
-    /// Diagnostics configuration should opt in to sensitive AI request/response logging explicitly.
+    /// Diagnostics configuration with explicit true keeps sensitive AI request/response logging enabled while
+    /// reasoning logging remains enabled by default.
     /// </summary>
     [Fact]
     public void AIDiagnosticsSettings_Load_WhenEnabledInConfiguration_EnablesRequestResponseLogging()
@@ -74,6 +77,27 @@ public sealed class AgenticMindTests
 
         var settings = AIDiagnosticsSettings.Load(configuration);
 
+        Assert.True(settings.EnableRequestResponseLogging);
+        Assert.True(settings.EnableReasoningLogging);
+    }
+
+    /// <summary>
+    /// Diagnostics configuration should opt out of trace-level reasoning logging explicitly; disabling reasoning
+    /// logging does not affect request/response logging, which remains enabled by default.
+    /// </summary>
+    [Fact]
+    public void AIDiagnosticsSettings_Load_WhenReasoningLoggingDisabledInConfiguration_DisablesReasoningLogging()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Diagnostics:AI:EnableReasoningLogging"] = "false",
+            })
+            .Build();
+
+        var settings = AIDiagnosticsSettings.Load(configuration);
+
+        Assert.False(settings.EnableReasoningLogging);
         Assert.True(settings.EnableRequestResponseLogging);
     }
 

@@ -144,9 +144,10 @@ public partial class AgenticMind : MindBase
         AgentToolContext toolContext = new(character, scene);
         List<AITool> turnTools = CreateTurnTools(toolContext, dispatcher);
 
+        AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
         IChatClient chatClient = AIChatClientDiagnostics.Decorate(
             clientProvider.CreateChatClient(),
-            _diagnosticsSettingsLoader(),
+            diagnosticsSettings,
             GameLoggerResolver.ResolveFactoryRequired);
         ILogger<AgenticMind> logger = GameLoggerResolver.ResolveRequired<AgenticMind>();
         Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
@@ -159,7 +160,8 @@ public partial class AgenticMind : MindBase
                 turnTools,
                 AllowMultipleToolCalls,
                 logger,
-                cancellationToken);
+                cancellationToken,
+                diagnosticsSettings.EnableReasoningLogging);
         }
         finally
         {

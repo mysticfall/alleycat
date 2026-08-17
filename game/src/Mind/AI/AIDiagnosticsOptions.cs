@@ -16,13 +16,22 @@ public sealed class AIDiagnosticsOptions
     {
         get;
         init;
-    }
+    } = true;
+
+    /// <summary>
+    /// Enables trace-level logging of model reasoning content in tool-only responses. Enabled by default.
+    /// </summary>
+    public bool EnableReasoningLogging
+    {
+        get;
+        init;
+    } = true;
 }
 
 /// <summary>
 /// Resolved AI diagnostics settings loaded from AlleyCat configuration.
 /// </summary>
-internal sealed record AIDiagnosticsSettings(bool EnableRequestResponseLogging)
+internal sealed record AIDiagnosticsSettings(bool EnableRequestResponseLogging, bool EnableReasoningLogging = true)
 {
     private const string ConfigSection = "Diagnostics:AI";
     private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
@@ -45,8 +54,9 @@ internal sealed record AIDiagnosticsSettings(bool EnableRequestResponseLogging)
         catch (InvalidOperationException)
         {
             // Sensitive diagnostics are optional development/debug plumbing. Isolated tests and non-Game runtime
-            // contexts may not have the Game service provider, so fail closed without enabling AI payload logging.
-            return new AIDiagnosticsSettings(EnableRequestResponseLogging: false);
+            // contexts may not have the Game service provider. Request/response payload logging fails closed without
+            // configuration, while reasoning logging remains default-enabled because it only fires at trace level.
+            return new AIDiagnosticsSettings(EnableRequestResponseLogging: false, EnableReasoningLogging: true);
         }
     }
 
@@ -67,7 +77,7 @@ internal sealed record AIDiagnosticsSettings(bool EnableRequestResponseLogging)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        return new AIDiagnosticsSettings(options.EnableRequestResponseLogging);
+        return new AIDiagnosticsSettings(options.EnableRequestResponseLogging, options.EnableReasoningLogging);
     }
 
     private static IConfiguration ResolveDefaultConfiguration()

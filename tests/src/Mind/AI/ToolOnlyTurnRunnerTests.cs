@@ -1,5 +1,6 @@
 using AlleyCat.Mind.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -250,6 +251,126 @@ public sealed class ToolOnlyTurnRunnerTests
 
         Assert.Equal(0, invocationCount);
         _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Reasoning content before a valid call and the final marker completes the turn in one request.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithReasoningThenSpeakAndFinalEndTurn_ToleratesReasoningAndCompletesInOneRequest()
+    {
+        var client = new ScriptedChatClient(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new TextReasoningContent("private reasoning"),
+                new FunctionCallContent(
+                    "speak-call",
+                    SpeakToolName,
+                    new Dictionary<string, object?> { ["speech"] = "Hello" }),
+                new FunctionCallContent(
+                    "end-call",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+            ]));
+        List<string> speech = [];
+
+        await ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(speech.Add)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(["Hello"], speech);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Reasoning alone cannot satisfy the protocol because zero actions require the sole end marker.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithOnlyReasoning_RejectsWholeResponseWithoutEffects()
+    {
+        int invocationCount = 0;
+        var client = new ScriptedChatClient(new ChatMessage(
+            ChatRole.Assistant,
+            [new TextReasoningContent("private reasoning")]));
+
+        _ = await Assert.ThrowsAsync<ToolOnlyTurnException>(() => ToolOnlyTurnRunner.RunAsync(
+            client,
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => invocationCount++)],
+            false,
+            NullLogger.Instance,
+            CancellationToken.None));
+
+        Assert.Equal(0, invocationCount);
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Reasoning content is logged at trace level only when trace logging is enabled and the dedicated
+    /// <c>enableReasoningLogging</c> control is on.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithReasoningContent_LogsReasoningAtTraceLevelOnlyWhenEnabled()
+    {
+        const string reasoning = "private reasoning";
+        ChatResponse response = new(new ChatMessage(
+            ChatRole.Assistant,
+            [
+                new TextReasoningContent(reasoning),
+                new FunctionCallContent(
+                    "end-call",
+                    ToolOnlyTurnRunner.EndTurnToolName,
+                    new Dictionary<string, object?>()),
+            ]));
+
+        CapturingLoggerFactory traceFactory = new(LogLevel.Trace);
+        await ToolOnlyTurnRunner.RunAsync(
+            new ScriptedChatClient(response),
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => { })],
+            false,
+            traceFactory.CreateLogger("test"),
+            CancellationToken.None,
+            enableReasoningLogging: true);
+
+        Assert.Contains(traceFactory.Entries, entry =>
+            entry.Level == LogLevel.Trace
+            && entry.Message.Contains($"Reasoning: {reasoning}", StringComparison.Ordinal));
+
+        CapturingLoggerFactory traceDisabledFactory = new(LogLevel.Trace);
+        await ToolOnlyTurnRunner.RunAsync(
+            new ScriptedChatClient(response),
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => { })],
+            false,
+            traceDisabledFactory.CreateLogger("test"),
+            CancellationToken.None,
+            enableReasoningLogging: false);
+
+        Assert.DoesNotContain(traceDisabledFactory.Entries, entry =>
+            entry.Message.Contains("Reasoning:", StringComparison.Ordinal));
+
+        CapturingLoggerFactory infoFactory = new(LogLevel.Information);
+        await ToolOnlyTurnRunner.RunAsync(
+            new ScriptedChatClient(response),
+            Instructions,
+            [],
+            [CreateSpeakFunction(_ => { })],
+            false,
+            infoFactory.CreateLogger("test"),
+            CancellationToken.None,
+            enableReasoningLogging: true);
+
+        Assert.DoesNotContain(infoFactory.Entries, entry =>
+            entry.Message.Contains("Reasoning:", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -641,7 +762,6 @@ public sealed class ToolOnlyTurnRunnerTests
     /// </summary>
     public static TheoryData<AIContent> NonFunctionContents =>
     [
-        new TextReasoningContent("private reasoning"),
         new TextContent(string.Empty),
         new TextContent("   "),
     ];
@@ -707,4 +827,49 @@ public sealed class ToolOnlyTurnRunnerTests
         {
         }
     }
+
+    private sealed class CapturingLoggerFactory(LogLevel minimumLevel) : ILoggerFactory
+    {
+        private readonly List<CapturedLogEntry> _entries = [];
+
+        public IReadOnlyList<CapturedLogEntry> Entries => _entries;
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public ILogger CreateLogger(string categoryName)
+            => new CapturingLogger(categoryName, minimumLevel, _entries);
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class CapturingLogger(
+        string categoryName,
+        LogLevel minimumLevel,
+        List<CapturedLogEntry> entries) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= minimumLevel;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (IsEnabled(logLevel))
+            {
+                entries.Add(new CapturedLogEntry(categoryName, logLevel, formatter(state, exception)));
+            }
+        }
+    }
+
+    private sealed record CapturedLogEntry(string CategoryName, LogLevel Level, string Message);
 }
