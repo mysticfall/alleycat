@@ -31,7 +31,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     public async Task ProductionPromptResource_RendersStrictToolOnlyProtocolGuidance()
     {
         PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
-        TextPromptSection section = Assert.IsType<TextPromptSection>(stack.Sections[0], exactMatch: false);
+        FilePromptSection section = Assert.IsType<FilePromptSection>(stack.Sections[0], exactMatch: false);
         string source = await section.GetContentAsync(CreateBuildContext());
         ITemplate template = new HandlebarsTemplateCompiler().Compile(source);
 

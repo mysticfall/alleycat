@@ -166,9 +166,11 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         object[] orderedSections = [.. sections.Cast<object>()];
         Assert.Equal(4, orderedSections.Length);
         object instructionSection = orderedSections[0];
-        Assert.Equal("AlleyCat.Mind.AI.Prompting.TextPromptSection", instructionSection.GetType().FullName);
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
-        string sectionText = GetPropertyValue<string>(instructionSection, "Text");
+        string sectionFilePath = GetPropertyValue<string>(instructionSection, "FilePath");
+        Assert.Equal("res://prompts/mind.md", sectionFilePath);
+        string sectionText = ReadResourceText(sectionFilePath);
         Assert.Contains("You are {{ character.FullId }}", sectionText, StringComparison.Ordinal);
         Assert.Contains("You may take no action, one action, or several actions", sectionText, StringComparison.Ordinal);
         Assert.Contains("Use `end_turn` exactly once as the final", sectionText, StringComparison.Ordinal);
