@@ -35,6 +35,9 @@ Use this checklist with `reviewer-checklist-markdown` when reviewing lore Markdo
 - [ ] `essential: true` is used only for world lore, and location/character selection is contextual rather than essential.
 - [ ] Perspective entries represent observer beliefs, memories, and available context rather than omniscient canon plus a
   belief overlay.
+- [ ] Changed perspective entries read as the observer's first-person subjective internal monologue (the observer speaks
+  as "I") and convey all observer-available information about the subject so the topic is understandable without the
+  canonical `wiki/` entry; third-person narration of perspective entries is flagged as an issue.
 - [ ] Canon decisions, duplicate handling, ontology additions, and omniscient/system constraints were not delegated to
   `writer` or silently resolved during drafting.
 - [ ] Missing perspective entries are treated as absent prompt-available knowledge, not as a cue for canonical fallback.

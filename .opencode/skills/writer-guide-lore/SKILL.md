@@ -34,24 +34,33 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
    observer id, and intended perspective supplied by the invocation.
 2. Write character perspective entries as observer-available knowledge: beliefs, memories, assumptions, or available
    context, not omniscient canon plus a belief overlay.
-3. Do not use canonical lore as an automatic fallback. A missing perspective entry means no prompt-available contextual
+3. Write perspective entries in the observer character's first-person voice, as an internal monologue on the subject:
+   - the observer speaks as "I" throughout the entry,
+   - the entry conveys all observer-available information about the subject so the topic is understandable without the
+     canonical `wiki/` entry,
+   - the prose is embellished with the observer's personality, attitudes, and judgements rather than being a mechanical
+     pronoun flip of third-person text,
+   - external narrator observations become the observer's own self-perception or rationalisations, with no omniscient
+     asides and no new concrete prompt-usable facts.
+4. Do not use canonical lore as an automatic fallback. A missing perspective entry means no prompt-available contextual
    knowledge for that observer and subject.
-4. Do not invent lore facts, relationships, memories, aliases, tags, links, or concrete prompt-usable facts.
-5. If a concrete detail may affect dialogue or action, either state the supplied value, state that it is unknown,
+5. Do not invent lore facts, relationships, memories, aliases, tags, links, or concrete prompt-usable facts.
+6. If a concrete detail may affect dialogue or action, either state the supplied value, state that it is unknown,
    unavailable, or not prompt-relevant, or omit it.
-6. Use `essential: true` only for world lore. Location and character entries must rely on contextual selection rather
+7. Use `essential: true` only for world lore. Location and character entries must rely on contextual selection rather
    than essential marking.
-7. For perspective-bound entries, mirror the canonical counterpart's authoring structure:
+8. For perspective-bound entries, mirror the canonical counterpart's authoring structure. Mirroring governs structure
+   only; prose voice always follows the first-person monologue rule above:
    - keep the same collection/category and filename stem unless the invoker explicitly approves a remap,
    - keep the same top-level title and Markdown heading outline, including section order and heading levels,
    - preserve structural frontmatter needed to identify the same subject, such as `title`, `type`, and `subject_id`
      where applicable, while using perspective-specific `id` values,
    - keep perspective-specific prose inside the matching canonical sections instead of adding, removing, or reordering
      sections without approval.
-8. Preserve valid frontmatter, aliases, tags, wiki links, typed links, and existing authored wording unless the request
+9. Preserve valid frontmatter, aliases, tags, wiki links, typed links, and existing authored wording unless the request
    explicitly scopes a change.
-9. Keep prose concise and perspective-safe: prefer direct statements the observer can use over meta-commentary about
-   canon, tooling, or compilation.
+10. Keep prose concise and perspective-safe: prefer direct statements the observer can use over meta-commentary about
+    canon, tooling, or compilation.
 
 ## Consistency Checks
 
@@ -61,6 +70,9 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
   frontmatter subject-identity result, title result, heading-outline result, and any approved divergence.
 - Perspective-bound entries were compared with their canonical counterparts for collection/path, frontmatter subject
   identity, title, and Markdown heading outline.
+- Perspective entries read as the observer's first-person internal monologue on the subject and convey all
+  observer-available information so the topic is understandable without the canonical `wiki/` entry, with no omniscient
+  asides or new concrete prompt-usable facts.
 - Prompt-usable concrete facts are stated, scoped as unknown/unavailable/not prompt-relevant, or omitted.
 - The edit does not introduce canonical fallback, omniscient constraints, or unsupported graph/compiler workflow scope.
 

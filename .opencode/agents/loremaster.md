@@ -41,6 +41,13 @@ responsibility for lore context, source-of-truth decisions, sequencing, validati
 ## Perspective Authoring Rules
 
 - Write perspective entries as the observer character's beliefs, assumptions, memories, and available context.
+- Write perspective entries in the observer character's first-person voice, as an internal monologue on the subject;
+  the observer speaks as "I" throughout.
+- Perspective prose must convey all observer-available information about the subject so the topic is understandable
+  without the canonical `wiki/` entry, and should be embellished with the observer's personality, attitudes, and
+  judgements rather than being a mechanical pronoun flip of third-person text.
+- External narrator observations become the observer's own self-perception or rationalisations; no omniscient asides
+  and no new concrete prompt-usable facts.
 - Do not write AgenticMind prompt lore as canonical facts plus separate belief overlays.
 - Treat perspective entries as replacing canonical entries for AgenticMind prompt use by default.
 - Do not supplement character prompt lore with canonical entries unless a future spec adds an omniscient or system

@@ -34,6 +34,12 @@ lore-management workflows in this slice.
 10. Perspective entries do not force prompt consumers to invent unstated facts when they claim the observer knows a
     concrete detail that may affect dialogue or action.
 11. Future dynamic lore retrieval should use the same query abstraction as the first-slice prompt injection path.
+12. Authors write perspective entries in the observer character's first-person subjective voice, as an internal
+    monologue on the subject: the entry conveys all observer-available information about the subject so the topic is
+    understandable without the canonical `wiki/` entry, the prose reflects the observer's personality, attitudes, and
+    judgements rather than a mechanical pronoun flip of third-person text, and external narrator observations become
+    the observer's own self-perception or rationalisations without omniscient asides or new concrete prompt-usable
+    facts.
 
 ## Technical Requirements
 
@@ -118,6 +124,8 @@ lore-management workflows in this slice.
 - Perspective entries as the default replacement for canonical lore in AgenticMind prompt consumption.
 - Missing perspective entries as absent observer knowledge with no automatic canonical fallback.
 - Authoring guidance that prevents perspective entries from implying unstated concrete prompt-usable facts.
+- First-person subjective voice authoring convention for perspective entries as the observer's internal monologue on
+  the subject.
 
 ## Out Of Scope
 
@@ -180,6 +188,9 @@ lore-management workflows in this slice.
     type, and reject bare or differently typed values.
 24. Typed lore values include `char:ally` and `loc:interrogation_room`; the corresponding type-scoped directory layout
     contains no colon.
+25. Perspective entries are written in the observer character's first-person subjective voice and remain
+    information-complete without the canonical `wiki/` entry, conveying all observer-available information about the
+    subject.
 
 ## References
 
