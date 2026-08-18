@@ -41,10 +41,14 @@ lore-management workflows in this slice.
     the observer's own self-perception or rationalisations without omniscient asides or new concrete prompt-usable
     facts.
 13. Subjects in prompt-facing lore are referenced by full ID (`[type]:[id]`, with types `char`, `loc`, and `item`)
-    rather than by name: subject-bound entries carry the subject's full ID as the frontmatter `title` and H1 heading,
-    body prose references subjects by full ID where the name would appear, names are carried as explicit lore facts
-    (a canonical entry states the name once; a perspective entry states a name the observer knows or states that the
-    name is unknown), and natural dialogue or speech uses known names rather than full IDs.
+    rather than by name: subject-bound entries carry the subject's full ID as the frontmatter `title`, which the lore
+    formatter renders as a Markdown heading in prompts, body prose references subjects by full ID where the name would
+    appear, names are carried as explicit lore facts (a canonical entry states the name once; a perspective entry
+    states a name the observer knows or states that the name is unknown), and natural dialogue or speech uses known
+    names rather than full IDs.
+14. Authors write entries without a title heading duplicating the frontmatter `title`: body content starts directly
+    after the frontmatter and authored sections start at `#` at authoring time, with the entry title rendered into
+    the prompt by the lore formatter instead.
 
 ## Technical Requirements
 
@@ -85,9 +89,15 @@ lore-management workflows in this slice.
 19. Lore query state, factories, and resolver methods must not leak into the general `PromptSectionBuildContext` API.
 20. `LoreEntry` must not expose `SourcePath` publicly. The Markdown backend retains source paths privately only for
     diagnostics and the final deterministic sorting tie-breaker.
-21. The current default lore formatter emits pseudo-XML-compatible entry blocks using each entry title as the tag and
-    the trimmed body as the tag content, delegating block formatting to the shared pseudo-XML utility used by the
-    prompt writer.
+21. The default lore formatter (`MarkdownLorePromptFormatter`, the `ILorePromptFormatter` default) renders each entry
+    as Markdown: a `# {title}` heading from the verbatim, unsanitised entry title, one blank line, then the normalised
+    body:
+    - the shallowest body heading is demoted as a block, preserving relative depth and never promoting headings, so
+      body headings start at exactly `##`,
+    - consecutive non-blank prose lines within a paragraph are trimmed and joined with single spaces, removing
+      mid-sentence hard-wrap line breaks,
+    - runs of two or more blank lines collapse to a single blank line,
+    - consecutive entries are separated by exactly one blank line, and fenced code blocks pass through verbatim.
 22. The initial query service may read perspective Markdown source directly behind the query abstraction.
 23. Lore source remains Markdown, and graph/compiler artefacts remain future derived outputs.
 24. AgenticMind prompt lore must treat perspective entries as the active character's beliefs, not canonical facts plus
@@ -110,6 +120,9 @@ lore-management workflows in this slice.
 33. `CharacterLorePromptSection` must fail for invalid or duplicate scene character `FullId` values; it must not
     silently merge their lore.
 34. The shared NPC prompt stack includes essential world lore before character lore, preserving authored section order.
+35. Lore prompt sections keep their pseudo-XML outer wrappers rendered by the shared `PseudoXmlPromptWriter` /
+    `PseudoXmlFormatter` utilities (for example `<Essential Lore> ... </Essential Lore>`), with the formatted
+    Markdown entry batch as the section content.
 
 ## In Scope
 
@@ -131,9 +144,10 @@ lore-management workflows in this slice.
 - Authoring guidance that prevents perspective entries from implying unstated concrete prompt-usable facts.
 - First-person subjective voice authoring convention for perspective entries as the observer's internal monologue on
   the subject.
-- Full-ID subject referencing in prompt-facing lore: `[type]:[id]` titles and H1 headings for subject-bound entries,
-  full-ID subject references in body prose, and names carried as explicit lore facts under the canonical/perspective
-  name rule.
+- Full-ID subject referencing in prompt-facing lore: `[type]:[id]` titles for subject-bound entries, full-ID subject
+  references in body prose, and names carried as explicit lore facts under the canonical/perspective name rule.
+- H1-less entry authoring: body content starts directly after frontmatter and authored sections start at `#`, with
+  entry titles rendered into prompts by the Markdown lore formatter.
 
 ## Out Of Scope
 
@@ -175,8 +189,11 @@ lore-management workflows in this slice.
 12. `LoreEntry` does not expose source path as public result data; the Markdown backend retains it privately for
     diagnostics and the final sorting tie-breaker.
 13. Runtime prompt sections query the lore abstraction, not hardcoded prompt-section paths, and do not write lore data.
-14. The default lore formatter produces deterministic pseudo-XML-compatible prompt blocks using each loaded page title
-    as the tag and body as the content, without wrapper or child title/body/source tags.
+14. The default lore formatter produces deterministic Markdown prompt output: each entry renders an injected
+    `# {title}` heading from the verbatim title, one blank line, and the body with headings demoted to start at `##`
+    or deeper, reflowed prose paragraphs, blank-line runs collapsed to one, and exactly one blank line between
+    entries, with no per-entry XML tags. Lore prompt sections still wrap the entry batch in pseudo-XML (for example
+    `<Essential Lore> ... </Essential Lore>`).
 15. `EssentialLorePromptSection` constructs its essential world query from `buildContext.Character.FullId` and validates
     that lore identity only when used before querying the lore abstraction.
 16. The general prompt build context contains no lore query, factory, or resolver, and lore-free stacks do not require a
@@ -200,9 +217,12 @@ lore-management workflows in this slice.
     information-complete without the canonical `wiki/` entry, conveying all observer-available information about the
     subject.
 26. Subject-bound lore entries, canonical `wiki/` entries and perspective entries alike, use their subject's full ID
-    (`[type]:[id]`) in the frontmatter `title` and H1 heading, reference subjects by full ID in body prose where the
-    name would appear, and handle names per the full-ID rule: canonical entries state the subject's name once as an
-    explicit fact, and perspective entries state a known name or state that the observer does not know it.
+    (`[type]:[id]`) as the frontmatter `title`, which the lore formatter renders as a Markdown heading, reference
+    subjects by full ID in body prose where the name would appear, and handle names per the full-ID rule: canonical
+    entries state the subject's name once as an explicit fact, and perspective entries state a known name or state
+    that the observer does not know it.
+27. Authored lore entries omit a heading that duplicates the frontmatter `title`: body content starts directly after
+    the frontmatter and authored sections start at `#` at authoring time.
 
 ## References
 

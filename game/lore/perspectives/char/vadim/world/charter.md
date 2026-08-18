@@ -5,8 +5,6 @@ type: world
 essential: true
 ---
 
-# The Charter
-
 The Selene Compact is a sovereign city-state governed by an ancient charter. I have never understood it as a set of
 ideals. I read it as the operating logic of a city that works. Centuries ago, Kaelic merchants and guild leaders
 drafted the charter as a compact of mutual obligation. They founded a city on the principle that every person within

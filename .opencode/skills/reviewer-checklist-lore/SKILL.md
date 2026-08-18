@@ -30,7 +30,7 @@ Use this checklist with `reviewer-checklist-markdown` when reviewing lore Markdo
 - [ ] Perspective-bound entries mirror canonical counterpart structure: matching collection/category and filename stem
   unless an approved remap is documented, matching top-level title, compatible `type`, matching subject identity using
   `subject_id` where that field is present or required by local convention, and the same Markdown heading outline with
-  section order and heading levels preserved.
+  section order and heading levels preserved under the H1-less convention (authored sections start at `#`).
 - [ ] World, location, and character entries follow the AI-004 perspective layout and frontmatter rules.
 - [ ] `essential: true` is used only for world lore, and location/character selection is contextual rather than essential.
 - [ ] Perspective entries represent observer beliefs, memories, and available context rather than omniscient canon plus a
@@ -39,10 +39,12 @@ Use this checklist with `reviewer-checklist-markdown` when reviewing lore Markdo
   as "I") and convey all observer-available information about the subject so the topic is understandable without the
   canonical `wiki/` entry; third-person narration of perspective entries is flagged as an issue.
 - [ ] Subject-bound entries, canonical `wiki/` entries and perspective entries alike, use the subject's full ID
-  (`[type]:[id]`) as the frontmatter `title` and H1 heading, reference subjects by full ID in body prose where the
-  name would appear, and handle names per the full-ID rule: canonical entries state the subject's name once as an
-  explicit fact, and perspective entries state a known name or state that the observer does not know it. Name-led
-  titles of subject-bound entries are flagged as an issue.
+  (`[type]:[id]`) as the frontmatter `title`, which the prompt formatter renders as a `# {title}` Markdown heading,
+  reference subjects by full ID in body prose where the name would appear, and handle names per the full-ID rule:
+  canonical entries state the subject's name once as an explicit fact, and perspective entries state a known name or
+  state that the observer does not know it. Name-led titles of subject-bound entries are flagged as an issue.
+- [ ] Entries start body content directly after frontmatter with no title H1; authored sections start at `#`.
+  Authored headings duplicating the frontmatter `title` are flagged as an issue.
 - [ ] Canon decisions, duplicate handling, ontology additions, and omniscient/system constraints were not delegated to
   `writer` or silently resolved during drafting.
 - [ ] Missing perspective entries are treated as absent prompt-available knowledge, not as a cue for canonical fallback.

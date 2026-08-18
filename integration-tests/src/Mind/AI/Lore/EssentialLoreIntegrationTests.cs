@@ -27,7 +27,7 @@ public sealed class EssentialLoreIntegrationTests
         ]);
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ILoreQueryService>(queryService)
-            .AddSingleton<ILorePromptFormatter, PseudoXmlLorePromptFormatter>()
+            .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>()
             .BuildServiceProvider();
         PromptOwnerCharacter owner = new("owner");
         PromptOwnerCharacter zulu = new("zulu");
@@ -53,7 +53,7 @@ public sealed class EssentialLoreIntegrationTests
         CapturingLoreQueryService queryService = new([]);
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ILoreQueryService>(queryService)
-            .AddSingleton<ILorePromptFormatter, PseudoXmlLorePromptFormatter>()
+            .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>()
             .BuildServiceProvider();
         PromptOwnerCharacter owner = new("owner");
         SceneContext scene = new([owner], ContentContext.Default);
@@ -187,11 +187,11 @@ public sealed class EssentialLoreIntegrationTests
     /// EssentialLorePromptSection consumes the associated observer query supplied by the prompt-build seam.
     /// </summary>
     [Fact]
-    public async Task EssentialLorePromptSection_FormatsObserverPerspectiveWithTitleTags()
+    public async Task EssentialLorePromptSection_FormatsObserverPerspectiveWithMarkdownHeadings()
     {
         using ServiceProvider services = new ServiceCollection()
             .AddSingleton<ILoreQueryService, MarkdownLoreQueryService>()
-            .AddSingleton<ILorePromptFormatter, PseudoXmlLorePromptFormatter>()
+            .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>()
             .BuildServiceProvider();
         SceneContext scene = new([], ContentContext.Default);
         EssentialLorePromptSection section = new()
@@ -203,10 +203,8 @@ public sealed class EssentialLoreIntegrationTests
 
         string content = await section.GetContentAsync(buildContext);
 
-        Assert.Contains("<The Charter>\n", content, StringComparison.Ordinal);
+        Assert.StartsWith("# The Charter\n", content, StringComparison.Ordinal);
         Assert.Contains("operating logic", content, StringComparison.Ordinal);
-        Assert.Contains("\n</The Charter>", content, StringComparison.Ordinal);
-        Assert.DoesNotContain("<lore_entry>", content, StringComparison.Ordinal);
         Assert.DoesNotContain("AlleyCat Sanctuary", content, StringComparison.Ordinal);
     }
 
@@ -231,12 +229,12 @@ public sealed class EssentialLoreIntegrationTests
     }
 
     /// <summary>
-    /// The default formatter uses each lore title as the pseudo-XML tag and trims only the body boundary whitespace.
+    /// The default formatter renders each lore title verbatim as a Markdown heading and trims body boundaries.
     /// </summary>
     [Fact]
-    public void PseudoXmlLorePromptFormatter_UsesSanitisedTitleAsTagAndTrimmedBodyContent()
+    public void MarkdownLorePromptFormatter_RendersVerbatimTitleHeadingAndTrimmedBody()
     {
-        PseudoXmlLorePromptFormatter formatter = new();
+        MarkdownLorePromptFormatter formatter = new();
 
         string content = formatter.Format(
         [
@@ -247,9 +245,8 @@ public sealed class EssentialLoreIntegrationTests
         ]);
 
         Assert.Equal(
-            "<Faction_Rank _Elite_>\n" +
-            "Canon includes / slashes.\n" +
-            "</Faction_Rank _Elite_>",
+            "# Faction/Rank <Elite>\n\n" +
+            "Canon includes / slashes.",
             content);
         Assert.DoesNotContain("<lore_entry>", content, StringComparison.Ordinal);
         Assert.DoesNotContain("<title>", content, StringComparison.Ordinal);

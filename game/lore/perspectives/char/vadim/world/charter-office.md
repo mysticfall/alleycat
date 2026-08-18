@@ -5,8 +5,6 @@ type: world
 essential: true
 ---
 
-# The Charter Office
-
 The Charter Office of Compliance is the Compact's enforcement arm. It handles breaches of civic obligation,
 investigates conditional citizens, and processes reclassification. It is a civil service, not a police force. I have
 served as one of its officers for several years.

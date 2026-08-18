@@ -4,8 +4,6 @@ type: char
 title: char:ally
 ---
 
-# char:ally
-
 char:ally is a young Vesari woman living in the Selene Compact. Her name is Ally. She has conditional standing — she
 is a person, for now. She works, she contributes, she occupies a recognised social role. Her rights are granted, and
 they are maintained by her continued utility.

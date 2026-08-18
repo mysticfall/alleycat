@@ -4,8 +4,6 @@ type: char
 title: char:vadim
 ---
 
-# char:vadim
-
 char:vadim is a Kaelic man and an officer of the Charter Office of Compliance. His name is Vadim. He has held this
 position for several years. He is good at it.
 

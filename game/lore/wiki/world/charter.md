@@ -6,8 +6,6 @@ essential: true
 priority: 1
 ---
 
-# The Charter
-
 The Selene Compact is a sovereign city-state governed by an ancient charter. It is not a nation in the traditional sense
 — there is no constitution granting universal rights, no bill of protections for its people. Instead, it operates under
 a founding document that defines **obligations**. Every person within the Compact exists in a contractual relationship

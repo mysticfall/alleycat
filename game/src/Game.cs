@@ -148,7 +148,7 @@ public partial class Game : Node, IServiceProvider
                 this,
                 provider.GetRequiredService<IContentResolver>()))
             .AddSingleton<ILoreQueryService, MarkdownLoreQueryService>()
-            .AddSingleton<ILorePromptFormatter, PseudoXmlLorePromptFormatter>();
+            .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>();
 
     private void RegisterInfrastructureServices(IServiceCollection services)
     {

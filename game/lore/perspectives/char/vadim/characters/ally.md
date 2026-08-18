@@ -5,8 +5,6 @@ type: char
 subject_id: char:ally
 ---
 
-# char:ally
-
 I know char:ally from her file. I have reviewed her registration, her employment history, her civic record. The file
 gives me a name: Ally. She is Vesari — a young woman of the labour and service community, her personhood under the
 Compact's charter conditional on her continued utility. That is not a judgement. It is a legal category. Vesari stand

@@ -6,8 +6,6 @@ essential: true
 priority: 4
 ---
 
-# Reclassification
-
 Reclassification is the administrative process by which a conditional citizen of the Selene Compact loses their standing
 under the charter. It is not a punishment. It is a **determination** — a finding that the individual no longer meets the
 conditions of their recognition.
@@ -17,7 +15,7 @@ maintain employment, breach of civic obligations, involvement in activities deem
 or simply being deemed no longer useful. The threshold is not high. The process is not adversarial. It is
 administrative.
 
-## The Process
+# The Process
 
 When a file is opened on a conditional citizen, the Charter Office of Compliance initiates an investigation. The subject
 is detained for questioning. The officer assigned to the case conducts a series of interviews — standard procedure,
@@ -28,7 +26,7 @@ person. This is routine. The subject's body is, under the terms of the charter, 
 the duration of the investigation. Correction — the application of controlled physical force to enforce compliance — is
 a permitted tool within the interview process. It is not considered excessive. It is considered procedural.
 
-## The Determination
+# The Determination
 
 At the conclusion of the investigation, the officer makes a recommendation. The Office issues a determination. If the
 subject's standing is upheld, they are released. If the determination is adverse, the subject is reclassified.

@@ -45,8 +45,8 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
 4. Reference subjects by full ID, not by name, in prompt-facing lore. Full IDs (`[type]:[id]`, with types `char`,
    `loc`, and `item`) are identity trackers, not names:
    - subject-bound entries, canonical `wiki/` entries and perspective entries alike, use the subject's full ID as the
-     frontmatter `title` and H1 heading (for example `char:vadim`, `loc:interrogation_room`); the prompt formatter
-     renders these titles as tags such as `<char:vadim>`,
+     frontmatter `title` (for example `char:vadim`, `loc:interrogation_room`); the prompt formatter renders these
+     titles as Markdown headings such as `# char:vadim`,
    - body prose references a subject entity by full ID where the name would appear; pronouns and purely descriptive
      references ("the room", "the table") remain natural,
    - a canonical entry states its subject's name once as an explicit fact (for example "His name is Vadim."),
@@ -62,7 +62,8 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
 9. For perspective-bound entries, mirror the canonical counterpart's authoring structure. Mirroring governs structure
    only; prose voice always follows the first-person monologue rule above:
    - keep the same collection/category and filename stem unless the invoker explicitly approves a remap,
-   - keep the same top-level title and Markdown heading outline, including section order and heading levels,
+   - keep the same top-level title and Markdown heading outline, including section order and heading levels, under
+     the H1-less convention where authored sections start at `#`,
    - preserve structural frontmatter needed to identify the same subject, such as `title`, `type`, and `subject_id`
      where applicable, while using perspective-specific `id` values,
    - keep perspective-specific prose inside the matching canonical sections instead of adding, removing, or reordering
@@ -71,6 +72,9 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
     explicitly scopes a change.
 11. Keep prose concise and perspective-safe: prefer direct statements the observer can use over meta-commentary about
     canon, tooling, or compilation.
+12. Start entry body content directly after the frontmatter: do not author a title H1 duplicating the frontmatter
+    `title`, and start authored sections at `#`. Hard-wrapping prose is fine; the prompt formatter reflows
+    paragraphs at render time.
 
 ## Consistency Checks
 
@@ -83,9 +87,12 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
 - Perspective entries read as the observer's first-person internal monologue on the subject and convey all
   observer-available information so the topic is understandable without the canonical `wiki/` entry, with no omniscient
   asides or new concrete prompt-usable facts.
-- Subject-bound entry titles and H1 headings use the subject's full ID, body prose references subjects by full ID
-  where the name would appear, canonical entries state the subject's name once as an explicit fact, and perspective
-  entries state a known name or explicitly state that the observer does not know it.
+- Subject-bound entry titles use the subject's full ID, which the prompt formatter renders as a `# {title}` Markdown
+  heading; body prose references subjects by full ID where the name would appear, canonical entries state the
+  subject's name once as an explicit fact, and perspective entries state a known name or explicitly state that the
+  observer does not know it.
+- Entries start body content directly after frontmatter with no title H1 and authored sections starting at `#`;
+  hard-wrapped prose is acceptable because the prompt formatter reflows paragraphs at render time.
 - Prompt-usable concrete facts are stated, scoped as unknown/unavailable/not prompt-relevant, or omitted.
 - The edit does not introduce canonical fallback, omniscient constraints, or unsupported graph/compiler workflow scope.
 
