@@ -51,9 +51,18 @@ public sealed class ScenarioTests
         Assert.Equal(nameof(IScenarioManager.GetCurrentScenario), query.Name);
         Assert.Equal(typeof(Scenario), query.ReturnType);
         ParameterInfo[] parameters = query.GetParameters();
-        ParameterInfo previous = Assert.Single(parameters);
-        Assert.Equal("previous", previous.Name);
-        Assert.Equal(typeof(ScenarioContext), previous.ParameterType);
+        Assert.Collection(
+            parameters,
+            previous =>
+            {
+                Assert.Equal("previous", previous.Name);
+                Assert.Equal(typeof(ScenarioContext), previous.ParameterType);
+            },
+            coreContext =>
+            {
+                Assert.Equal("coreContext", coreContext.Name);
+                Assert.Equal(typeof(IReadOnlyDictionary<string, object?>), coreContext.ParameterType);
+            });
         Assert.Empty(managerType.GetProperties(BindingFlags.Instance | BindingFlags.Public));
         Assert.False(typeof(IServiceProvider).IsAssignableFrom(managerType));
     }
@@ -98,7 +107,11 @@ public sealed class ScenarioTests
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             withScenario["characters"]);
         Assert.Same(characters[player.FullId], withScenario["player"]);
-        Assert.Null(playerFiltered["player"]);
+        // The player context is unconditional: attention filtering removes the player from 'characters' only.
+        IReadOnlyDictionary<string, object?> filteredCharacters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            playerFiltered["characters"]);
+        Assert.DoesNotContain(player.FullId, filteredCharacters.Keys);
+        Assert.Same(playerContext, playerFiltered["player"]);
         Assert.All(
             [withScenario, withoutScenario, defaulted],
             context => Assert.Equal(["character", "characters", "player", "observations", "scenario"], context.Keys));

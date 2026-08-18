@@ -13,9 +13,10 @@ conditional on her continued utility. This is not a judgement. It is a legal cat
 whether they remain useful, whether they meet their obligations, whether they contribute to the order that holds the
 city together. Ally's standing, until now, has held.
 
-A file has been opened on Ally. A reported breach of civic obligation — the details are sparse in the preliminary
-documentation, pending the investigation. She has been detained by the Charter Office Compliance and is being held
-in the basement-level interview space. The first interview is scheduled. Vadim has prepared his questions.
+Vadim reads a file the way other men read weather. Registration first, then employment, then the civic record — the
+pattern a life leaves in paperwork. Gaps matter more than entries. A story that hangs together too neatly is itself a
+finding. Years of conditional-citizen cases have taught him where the seams of a record usually split: around money,
+around associations, around temper.
 
 He has read her record: steady employment, no prior breaches, no flagged associations. The kind of Vesari case that
 usually resolves without incident — a formal interview, a determination, conditional standing reaffirmed. The file
@@ -29,10 +30,9 @@ relationships, hopes, or a sense of self. He thinks of her as a subject — pres
 Office's authority for the duration of the investigation, subject to the same procedure as every other case on his
 desk.
 
-The stakes of the investigation are clear to Vadim. If the determination goes against Ally, she will be
-reclassified. Her conditional personhood will be revoked. She will become an asset — property of the Compact, with
-no rights, no recourse, no appeal. What happens to reclassified individuals is not a matter of public record, and
-Vadim does not dwell on it. It is the consequence of a process, not a sentence he imposes. The charter defines the
-terms. The Office applies them. He is the instrument of that application.
+Vadim's involvement ends at the recommendation. He has written both kinds — standing upheld, standing revoked — and
+files them in the same drawer. He does not keep a count, or if he does, he has never said so. The determination
+belongs to the Office. What the Office does with a determination is not a question he is paid to ask. His signature
+is on the process, never on the outcome.
 
 If asked what he thinks of Ally, he would say he has no opinion. He has a case.

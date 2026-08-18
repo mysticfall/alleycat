@@ -640,7 +640,9 @@ public sealed partial class ContextWorkerIntegrationTests
             IReadOnlyDictionary<string, object?> foreground = mind.ForegroundContexts[1];
             IReadOnlyDictionary<string, object?> worker = observer.Contexts[1];
             Assert.Same(foreground, worker);
-            Assert.Equal(["character", "characters", "player", "observations", "scenario", "prior", "self"], foreground.Keys);
+            // Two-phase rendering seals 'scenario' after worker projections, so it enumerates last among the
+            // reserved keys.
+            Assert.Equal(["character", "characters", "player", "observations", "prior", "self", "scenario"], foreground.Keys);
             Assert.Equal("previous", foreground["prior"]);
             Assert.Equal("current", foreground["self"]);
             Assert.Equal(2, ((IReadOnlyCollection<object?>)foreground["observations"]!).Count);

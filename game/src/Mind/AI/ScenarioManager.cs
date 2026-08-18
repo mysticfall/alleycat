@@ -14,5 +14,5 @@ namespace AlleyCat.Mind.AI;
 public abstract partial class ScenarioManager : Resource, IScenarioManager
 {
     /// <inheritdoc />
-    public abstract Scenario? GetCurrentScenario(ScenarioContext previous);
+    public abstract Scenario? GetCurrentScenario(ScenarioContext previous, IReadOnlyDictionary<string, object?> coreContext);
 }

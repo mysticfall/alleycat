@@ -30,7 +30,18 @@ internal sealed partial class FixturePlayerCharacter : Node, ICharacter
 
     public IReadOnlyList<VisualCue> VisualCues { get; } = [];
 
-    public Dictionary<string, object?> Context { get; } = new() { ["name"] = "Fixture Player" };
+    /// <summary>
+    /// Production-shaped context dictionary: the canonical identity is exposed as a string entry, mirroring how
+    /// <c>CharacterCardContextSource</c> emits <c>FullId</c> for dictionary-based template access.
+    /// </summary>
+    public Dictionary<string, object?> Context
+    {
+        get;
+    } = new()
+    {
+        ["name"] = "Fixture Player",
+        ["FullId"] = "char:fixture_player",
+    };
 
     public int ContextRequestCount
     {

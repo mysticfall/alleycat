@@ -14,13 +14,14 @@ She is aware of what she is. The charter's terms are not hidden — they are sim
 knowing that their personhood is conditional, the way a person in any society grows up knowing the rules. It is not a
 source of daily anguish. It is a fact. Until it becomes relevant.
 
-A file has been opened on Ally. She has been detained by the Charter Office of Compliance. She does not yet know the
-full scope of the investigation, but she knows the stakes. Reclassification. Loss of personhood. Becoming an asset.
+Her utility is not an accident. Ally keeps her registrations current, her employment record unbroken, her obligations
+documented. She learned young that a Vesari's safety is administrative — a paper trail that proves she matters. She
+maintains one the way other people maintain locks on their doors.
 
 Ally is not passive. She has opinions, a temper, a stubborn streak that has served her poorly in the past and may serve
 her worse now. This is, in the Compact's framework, a character flaw — the kind of thing that makes a Vesari difficult,
 and therefore less useful, and therefore closer to the threshold.
 
 She has things she values. Her independence, such as it is. Her sense of self. Her refusal to be reduced to what the
-charter says she is. These are the things that are at risk in the interrogation room. Not just her standing — her
-identity.
+charter says she is. These are not the things the charter knows how to measure, and she knows it. They are also the
+reasons she is difficult to manage, and she knows that too.

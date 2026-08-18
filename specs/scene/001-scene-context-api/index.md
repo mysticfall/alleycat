@@ -81,10 +81,12 @@ character and Godot node objects remain live.
     access must then throw `InvalidOperationException` — while multiple `Player`-group characters must fail eagerly at
     construction as a scene authoring error, in the same class as exact duplicate `FullId` rejection (TR-13).
 26. The reserved top-level `player` key of AgenticMind's foreground render dictionary under
-    [AI-001](../../ai/001-mind/index.md) is the current `Player` consumer, holding the identical reference to the
-    player's entry in `characters` when attention eligibility includes the player and null when it filters the player
-    out. This use preserves fixed membership and live referenced objects; it adds no AI-specific members or mutable
-    snapshot semantics to `ISceneContext`, mirroring the AI-002 tool-context use in TR-23.
+    [AI-001](../../ai/001-mind/index.md) is the current `Player` consumer. The key is mandatory and unconditional,
+    resolved via the turn-captured `ISceneContext.Player` and never attention-gated; the attention-gated `characters`
+    dictionaries may omit the player. AI-001 TR-30 and [AI-008](../../ai/008-scenario/index.md) are normative for
+    the render-context composition. This use preserves fixed membership and live referenced objects; it adds no
+    AI-specific members or mutable snapshot semantics to `ISceneContext`, mirroring the AI-002 tool-context use in
+    TR-23.
 
 ## In Scope
 
@@ -163,9 +165,9 @@ character and Godot node objects remain live.
     after construction.
 20. Tests verify a player-less context constructs successfully and throws `InvalidOperationException` on `Player`
     access, while a captured membership containing two `Player`-group characters fails construction eagerly.
-21. AI-001 render-dictionary tests verify the reserved `player` key holds the identical reference to the player's
-    attention-included `characters` entry, or null when the player is filtered out, without adding AI-specific members
-    to `ISceneContext`.
+21. AI-001 render-dictionary tests verify the reserved `player` key is mandatory and unconditional, resolved via the
+    turn-captured `ISceneContext.Player` and never attention-gated, while the attention-gated `characters`
+    dictionaries may omit the player, without adding AI-specific members to `ISceneContext`.
 
 ## References
 

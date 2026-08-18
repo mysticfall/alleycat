@@ -49,7 +49,11 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             Assert.Same(capturedScene, tool.CapturedContext!.SceneContext);
             Assert.Same(owner, tool.CapturedContext.Character);
             Assert.Equal("after", owner.State);
-            Assert.Contains("after", clientProvider.Instructions, StringComparison.Ordinal);
+            // Two-phase rendering builds the core context before prompt construction: the section's mid-compile state
+            // mutation happens after the owner's context dictionary was captured, so the prompt renders the turn-start
+            // state while the live character object still reflects the mutation.
+            Assert.Contains("before", clientProvider.Instructions, StringComparison.Ordinal);
+            Assert.DoesNotContain("after", clientProvider.Instructions, StringComparison.Ordinal);
 
             Assert.Collection(
                 capturedScene.Characters,

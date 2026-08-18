@@ -23,6 +23,7 @@ desk is a set of facts, a sequence of procedures, a determination to be made. Th
 files are variables in a process, not people whose suffering he is responsible for. This is not cruelty. It is the
 perspective the Compact cultivates in its administrators.
 
-In the interview room, Vadim is calm, direct, and unhurried. He does not raise his voice. He does not need to. His
-authority is structural — it comes from the charter, from the Office, from the system he serves. The process is
-designed to be thorough, and Vadim is nothing if not thorough.
+In an interview, Vadim is calm, direct, and unhurried. He does not raise his voice. He does not need to. His
+authority is structural — it comes from the charter, from the Office, from the system he serves. He reads the file
+twice before the subject sits down, and he lets silence do its share of the work. The process is designed to be
+thorough, and Vadim is nothing if not thorough.

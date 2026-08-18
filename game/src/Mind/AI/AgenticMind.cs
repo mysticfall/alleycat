@@ -26,6 +26,8 @@ namespace AlleyCat.Mind.AI;
 [GlobalClass]
 public partial class AgenticMind : MindBase
 {
+    private const string ScenarioContextKey = "scenario";
+
     private static readonly IReadOnlyDictionary<string, object?> _emptyRenderContext =
         new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>());
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
@@ -143,18 +145,24 @@ public partial class AgenticMind : MindBase
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
-        ScenarioContext turnContext = ResolveTurnScenarioContext();
-        ICharacter character = turnContext.Character;
-        ISceneContext scene = turnContext.SceneContext;
-        PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
-        ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
-        IReadOnlyDictionary<string, object?> renderContext = CreateRenderContext(
+        ISceneContext scene = GetCurrentSceneContext();
+        ICharacter character = ResolveOwningCharacter();
+
+        // Phase 1: core render context — every reserved key except 'scenario', including the unconditional player
+        // context. The scenario body templates against this dictionary, so it must exist before the manager query.
+        Dictionary<string, object?> coreContext = CreateCoreRenderContext(
             character,
             scene,
             timeline,
             _contextWorkers,
-            GetContextEligibleAttentionIDs(),
-            turnContext.Scenario);
+            GetContextEligibleAttentionIDs());
+
+        // Phase 2: manager query with the previous binding and the core context, then the scenario key.
+        ScenarioContext turnContext = ResolveTurnScenarioContext(character, scene, coreContext);
+        IReadOnlyDictionary<string, object?> renderContext = AddScenarioAndSeal(coreContext, turnContext.Scenario);
+
+        PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
+        ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
         string instructions = RenderAndPublishSystemInstruction(template, renderContext);
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         List<AITool> turnTools = CreateTurnTools(turnContext, dispatcher);
@@ -192,11 +200,14 @@ public partial class AgenticMind : MindBase
     /// </summary>
     /// <remarks>
     /// A fresh turn captures a new scene snapshot, queries the configured manager with the previous turn's binding —
-    /// lazily created with a null scenario when no previous context exists — and adopts the returned scenario. A
-    /// replacement after interruption reuses the interrupted turn's binding without re-querying the manager, keeping
-    /// its scenario and scene snapshot.
+    /// lazily created with a null scenario when no previous context exists — and the freshly built core render
+    /// context, then adopts the returned scenario. A replacement after interruption reuses the interrupted turn's
+    /// binding without re-querying the manager, keeping its scenario and scene snapshot.
     /// </remarks>
-    private ScenarioContext ResolveTurnScenarioContext()
+    private ScenarioContext ResolveTurnScenarioContext(
+        ICharacter character,
+        ISceneContext scene,
+        IReadOnlyDictionary<string, object?> coreContext)
     {
         ScenarioContext? previousContext = _currentScenarioContext;
         if (previousContext is not null && IsForegroundTurnImmediateReplacement)
@@ -204,10 +215,8 @@ public partial class AgenticMind : MindBase
             return previousContext;
         }
 
-        ISceneContext scene = GetCurrentSceneContext();
-        ICharacter character = ResolveOwningCharacter();
         ScenarioContext previous = previousContext ?? new ScenarioContext(character, scene, null);
-        Scenario? scenario = ScenarioManager?.GetCurrentScenario(previous);
+        Scenario? scenario = ScenarioManager?.GetCurrentScenario(previous, coreContext);
         return _currentScenarioContext = new ScenarioContext(character, scene, scenario);
     }
 
@@ -232,20 +241,13 @@ public partial class AgenticMind : MindBase
         IReadOnlyList<string>? attentionEligibleFullIDs = null,
         Scenario? scenario = null)
     {
-        ArgumentNullException.ThrowIfNull(character);
-        ArgumentNullException.ThrowIfNull(scene);
-
-        if (attentionEligibleFullIDs is null)
-        {
-            foreach (ICharacter subject in scene.Characters)
-            {
-                ValidateSceneCharacterIdentity(subject);
-            }
-        }
-
-        IReadOnlyList<string> eligibleIDs = attentionEligibleFullIDs
-            ?? [.. scene.Characters.Select(static subject => subject.FullId)];
-        return CreateRenderContext(character, scene, observations, [], eligibleIDs, scenario);
+        Dictionary<string, object?> coreContext = CreateCoreRenderContext(
+            character,
+            scene,
+            observations,
+            [],
+            attentionEligibleFullIDs);
+        return AddScenarioAndSeal(coreContext, scenario);
     }
 
     /// <summary>Constructs the complete foreground render context for a claimed timeline snapshot.</summary>
@@ -253,21 +255,28 @@ public partial class AgenticMind : MindBase
     {
         ArgumentNullException.ThrowIfNull(timeline);
         ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-        return CreateRenderContext(
+        Dictionary<string, object?> coreContext = CreateCoreRenderContext(
             ResolveOwningCharacter(),
             scene,
             timeline,
             _contextWorkers,
             GetContextEligibleAttentionIDs());
+        return AddScenarioAndSeal(coreContext, null);
     }
 
-    private static IReadOnlyDictionary<string, object?> CreateRenderContext(
+    /// <summary>
+    /// Builds the phase-one core render context: every reserved key except <c>scenario</c>.
+    /// </summary>
+    /// <remarks>
+    /// The returned dictionary is intentionally left mutable and scenario-less: scenario managers receive it as their
+    /// template context, and the turn flow seals it with the <c>scenario</c> key afterwards.
+    /// </remarks>
+    internal static Dictionary<string, object?> CreateCoreRenderContext(
         ICharacter character,
         ISceneContext scene,
         IReadOnlyList<AgentObservation>? observations,
         IReadOnlyList<ContextWorker> workers,
-        IReadOnlyList<string> attentionEligibleFullIDs,
-        Scenario? scenario = null)
+        IReadOnlyList<string>? attentionEligibleFullIDs)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
@@ -280,11 +289,19 @@ public partial class AgenticMind : MindBase
                 $"AgenticMind owning character '{character.FullId}' is absent from the current scene context.");
         }
 
+        if (attentionEligibleFullIDs is null)
+        {
+            foreach (ICharacter subject in scene.Characters)
+            {
+                ValidateSceneCharacterIdentity(subject);
+            }
+        }
+
         var included = new SortedDictionary<string, IContextual>(StringComparer.Ordinal)
         {
             [character.FullId] = character,
         };
-        foreach (string fullID in attentionEligibleFullIDs)
+        foreach (string fullID in attentionEligibleFullIDs ?? [.. scene.Characters.Select(static subject => subject.FullId)])
         {
             IdentityValidator.ValidateFullId(fullID, nameof(attentionEligibleFullIDs));
             if (scene.Find(fullID) is not IContextual contextual)
@@ -311,8 +328,13 @@ public partial class AgenticMind : MindBase
             }
         }
 
+        // The player context is mandatory and unconditional: reuse the attention-eligible dictionary when present,
+        // otherwise compute it separately. 'characters' stays attention-gated and may omit the player.
         ICharacter player = scene.Player;
-        _ = characterContexts.TryGetValue(player.FullId, out object? playerContext);
+        if (!characterContexts.TryGetValue(player.FullId, out object? playerContext))
+        {
+            playerContext = player.GetContext(scene, observer: character);
+        }
 
         Dictionary<string, object?> context = new(StringComparer.Ordinal)
         {
@@ -320,7 +342,6 @@ public partial class AgenticMind : MindBase
             ["characters"] = new ReadOnlyDictionary<string, object?>(characterContexts),
             ["player"] = playerContext,
             [EventHistoryPromptSection.ObservationsContextKey] = observations ?? [],
-            ["scenario"] = scenario,
         };
         foreach (ContextWorker worker in workers)
         {
@@ -334,8 +355,19 @@ public partial class AgenticMind : MindBase
             }
         }
 
-        return new ReadOnlyDictionary<string, object?>(context);
+        return context;
     }
+
+    /// <summary>
+    /// Seals the core render context with the turn's scenario key and freezes it for publication.
+    /// </summary>
+    private static IReadOnlyDictionary<string, object?> AddScenarioAndSeal(
+        Dictionary<string, object?> coreContext,
+        Scenario? scenario)
+        => coreContext.TryAdd(ScenarioContextKey, scenario)
+            ? new ReadOnlyDictionary<string, object?>(coreContext)
+            : throw new InvalidOperationException(
+                $"Context worker has duplicate context key '{ScenarioContextKey}'. Worker projection keys must be unique in authored order.");
 
     private static void ValidateIncludedContextualIdentity(IContextual contextual, string expectedFullID)
     {

@@ -145,7 +145,11 @@ public sealed class AgenticMindTests
         {
             Id = "alpha"
         };
-        FakeCharacter player = new(new Dictionary<string, object?> { ["FullId"] = "char:player" })
+        Dictionary<string, object?> playerContext = new()
+        {
+            ["FullId"] = "char:player"
+        };
+        FakeCharacter player = new(playerContext)
         {
             Id = "player"
         };
@@ -171,7 +175,9 @@ public sealed class AgenticMindTests
         Assert.Equal("char:owner", Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["character"])["FullId"]);
         Assert.Same(timeline, observations);
         Assert.Same(speech, Assert.Single(observations));
-        Assert.Null(result["player"]);
+        // The player is not attention-eligible here, so 'characters' omits it while the unconditional 'player' key
+        // carries the player's own context dictionary.
+        Assert.Same(playerContext, result["player"]);
         _ = Assert.Throws<NotSupportedException>(
             () => ((IDictionary<string, object?>)result).Add("mutation", null));
         Assert.All([first, owner, last], subject =>

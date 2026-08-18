@@ -77,9 +77,10 @@ control over how concrete observation types appear in chronological event histor
     wording.
 20. AgenticMind must compile the foreground `PromptStack` on every turn, call `CreateRenderContext`, and render the
     template with the exact top-level read-only dictionary returned. The complete context includes current character
-    context, deterministic attention-eligible character context under AI-006, the player character under
-    [SCN-001](../../scene/001-scene-context-api/index.md), the complete unbounded observation timeline, the current
-    scenario under [AI-008](../008-scenario/index.md), and authored worker projections.
+    context, the player character's context under [SCN-001](../../scene/001-scene-context-api/index.md) — mandatory
+    and unconditional, resolved via `ISceneContext.Player`, never attention-gated — deterministic attention-eligible
+    character context under AI-006, which may omit the player, the complete unbounded observation timeline, the
+    current scenario under [AI-008](../008-scenario/index.md), and authored worker projections.
 21. AgenticMind must atomically publish that exact dictionary as its latest render snapshot only after template
     rendering succeeds. Context construction or rendering failure must retain the previously published snapshot.
 22. The rendered stack must become the turn's sole system instruction under AI-002. No observation-summary user message
@@ -144,10 +145,10 @@ control over how concrete observation types appear in chronological event histor
 3. Writer tests verify matching pseudo-XML tags, existing lax authored names, replacement of only `<`, `>`, and `/` in
    tag names, exact content preservation, and clear invalid-authoring failures.
 4. Every AgenticMind foreground turn compiles its prompt stack, calls `CreateRenderContext`, and renders with its exact
-   top-level read-only dictionary: `character`, deterministic attention-eligible `characters`, the `player` character
-   under SCN-001, complete read-only `observations`, the current `scenario` under AI-008, and authored worker
-   projections. Publication occurs atomically only after rendering succeeds; construction or rendering failure retains
-   the previous published dictionary.
+   top-level read-only dictionary: `character`, a mandatory unconditional `player` character context under SCN-001,
+   deterministic attention-eligible `characters`, which may omit the player, complete read-only `observations`, the
+   current `scenario` under AI-008, and authored worker projections. Publication occurs atomically only after
+   rendering succeeds; construction or rendering failure retains the previous published dictionary.
 5. Capturing-client tests verify the rendered stack is the sole system instruction and no observation-summary user
    message or prior transcript accompanies it.
 6. Event-history tests cover self speech, recognised-other speech, unknown speech, empty history, chronological

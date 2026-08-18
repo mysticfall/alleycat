@@ -121,11 +121,13 @@ responsive and interruption-safe in-world behaviour.
     and may retain them solely for deterministic projection aggregation during foreground `CreateRenderContext` calls.
 30. AgenticMind must initialise its latest render dictionary to an empty top-level read-only dictionary. Only foreground
     prompt execution may call `CreateRenderContext` to create AgenticMind's own top-level read-only render dictionary
-    from current character context, deterministic attention-eligible subject context, the player character under
-    [SCN-001](../../scene/001-scene-context-api/index.md) — the identical reference to the player's attention-included
-    subject context, or null when attention eligibility filters the player out — the complete timeline snapshot, the
-    current scenario under [AI-008](../008-scenario/index.md), and authored worker projections. AI-006 normatively
-    defines attention eligibility and scene resolution.
+    from current character context, the player character's context under
+    [SCN-001](../../scene/001-scene-context-api/index.md) — a mandatory, unconditional key resolved via
+    `ISceneContext.Player`, never attention-gated — deterministic attention-eligible subject context, which may omit
+    the player, the complete timeline snapshot, the current scenario under [AI-008](../008-scenario/index.md), and
+    authored worker projections. AI-006 normatively defines attention eligibility and scene resolution; AI-008
+    normatively defines the two-phase construction order in which the core context is built first and completed with
+    the `scenario` key after the manager query.
 31. The foreground template must use the exact dictionary returned by `CreateRenderContext`. AgenticMind must atomically
     publish that exact dictionary as the cached latest foreground context only after rendering succeeds. Construction or
     rendering failure must retain the previous published dictionary.
@@ -333,11 +335,11 @@ responsive and interruption-safe in-world behaviour.
     own speech admission never cancels its own turn; unattributable voice Ids never gate.
 31. Acceptance verifies both the user-visible turn-taking, interruption, and cut-speech behaviour and the gating,
     wake, interruption, cut-playback, and attention-filter contracts.
-32. Tests verify the published render dictionary contains the turn's `player` value under
-    [SCN-001](../../scene/001-scene-context-api/index.md) — identical to the player's `characters` entry when
-    attention-included, null when filtered — and the turn's `scenario` value under
-    [AI-008](../008-scenario/index.md), and that an authored worker projection colliding with the reserved `player`
-    or `scenario` key fails with the existing duplicate-key error.
+32. Tests verify the published render dictionary contains a mandatory `player` value under
+    [SCN-001](../../scene/001-scene-context-api/index.md) — resolved unconditionally via `ISceneContext.Player` and
+    never attention-gated, even when the attention-gated `characters` dictionaries omit the player — and the turn's
+    `scenario` value under [AI-008](../008-scenario/index.md), and that an authored worker projection colliding with
+    the reserved `player` or `scenario` key fails with the existing duplicate-key error.
 33. Tests verify `IsForegroundTurnImmediateReplacement` is true only for the foreground turn that claims its batch
     after an interruption-triggered pending mark, false for ordinary turns, cleared under the observation state lock
     when the turn settles regardless of outcome, and never clobbered by a later turn while a turn is active. AI-008's

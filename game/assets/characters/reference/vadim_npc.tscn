@@ -4,6 +4,11 @@
 [ext_resource type="PackedScene" uid="uid://dxao507r2dgb2" path="res://assets/characters/templates/installers/npc_installer.tscn" id="2_0o8g4"]
 [ext_resource type="Resource" uid="uid://bqt323cv54sr3" path="res://assets/characters/reference/male/body_collider_profile.tres" id="3_fv6ct"]
 [ext_resource type="PackedScene" uid="uid://bsfkxbo34s5ch" path="res://assets/characters/reference/male/reference_male.blend" id="3_megh4"]
+[ext_resource type="Script" uid="uid://b73n17xs7spsf" path="res://src/Mind/AI/FixedScenarioManager.cs" id="4_vadsm"]
+
+[sub_resource type="Resource" id="Resource_vadim_scenario"]
+script = ExtResource("4_vadsm")
+DescriptionPath = "res://lore/wiki/scenarios/interrogation.md"
 
 [node name="Vadim" unique_id=504240789 instance=ExtResource("1_0e151")]
 Id = "vadim"
@@ -21,3 +26,6 @@ VoiceOverride = "Ian.wav"
 Template = ExtResource("1_0e151")
 TemplateBaseline = ExtResource("3_megh4")
 ColliderProfile = ExtResource("3_fv6ct")
+
+[node name="Mind" parent="." index="8" unique_id=2028818158]
+ScenarioManager = SubResource("Resource_vadim_scenario")

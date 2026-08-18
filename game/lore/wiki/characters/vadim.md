@@ -22,6 +22,7 @@ He is not a sadist. He does not take pleasure in the process. He is, in his own 
 system that functions. The fact that the system's function depends on the conditional personhood of an entire ethnic
 community is not something he examines. It is not something the Compact encourages its officers to examine.
 
-In the interrogation room, Vadim is calm, direct, and unhurried. He does not raise his voice. He does not need to. His
-authority is structural — it comes from the charter, from the Office, from the system he serves. The process is designed
-to be thorough, and Vadim is nothing if not thorough.
+In an interview, Vadim is calm, direct, and unhurried. He does not raise his voice. He does not need to. His
+authority is structural — it comes from the charter, from the Office, from the system he serves. He reads the file
+twice before the subject sits down. He lets silence do its share of the work. The process is designed to be thorough,
+and Vadim is nothing if not thorough.
