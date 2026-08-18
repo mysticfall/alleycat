@@ -42,14 +42,24 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
      pronoun flip of third-person text,
    - external narrator observations become the observer's own self-perception or rationalisations, with no omniscient
      asides and no new concrete prompt-usable facts.
-4. Do not use canonical lore as an automatic fallback. A missing perspective entry means no prompt-available contextual
+4. Reference subjects by full ID, not by name, in prompt-facing lore. Full IDs (`[type]:[id]`, with types `char`,
+   `loc`, and `item`) are identity trackers, not names:
+   - subject-bound entries, canonical `wiki/` entries and perspective entries alike, use the subject's full ID as the
+     frontmatter `title` and H1 heading (for example `char:vadim`, `loc:interrogation_room`); the prompt formatter
+     renders these titles as tags such as `<char:vadim>`,
+   - body prose references a subject entity by full ID where the name would appear; pronouns and purely descriptive
+     references ("the room", "the table") remain natural,
+   - a canonical entry states its subject's name once as an explicit fact (for example "His name is Vadim."),
+   - a perspective entry either states a name by which the observer knows the subject, or states that the observer
+     does not know the name.
+5. Do not use canonical lore as an automatic fallback. A missing perspective entry means no prompt-available contextual
    knowledge for that observer and subject.
-5. Do not invent lore facts, relationships, memories, aliases, tags, links, or concrete prompt-usable facts.
-6. If a concrete detail may affect dialogue or action, either state the supplied value, state that it is unknown,
+6. Do not invent lore facts, relationships, memories, aliases, tags, links, or concrete prompt-usable facts.
+7. If a concrete detail may affect dialogue or action, either state the supplied value, state that it is unknown,
    unavailable, or not prompt-relevant, or omit it.
-7. Use `essential: true` only for world lore. Location and character entries must rely on contextual selection rather
+8. Use `essential: true` only for world lore. Location and character entries must rely on contextual selection rather
    than essential marking.
-8. For perspective-bound entries, mirror the canonical counterpart's authoring structure. Mirroring governs structure
+9. For perspective-bound entries, mirror the canonical counterpart's authoring structure. Mirroring governs structure
    only; prose voice always follows the first-person monologue rule above:
    - keep the same collection/category and filename stem unless the invoker explicitly approves a remap,
    - keep the same top-level title and Markdown heading outline, including section order and heading levels,
@@ -57,9 +67,9 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
      where applicable, while using perspective-specific `id` values,
    - keep perspective-specific prose inside the matching canonical sections instead of adding, removing, or reordering
      sections without approval.
-9. Preserve valid frontmatter, aliases, tags, wiki links, typed links, and existing authored wording unless the request
-   explicitly scopes a change.
-10. Keep prose concise and perspective-safe: prefer direct statements the observer can use over meta-commentary about
+10. Preserve valid frontmatter, aliases, tags, wiki links, typed links, and existing authored wording unless the request
+    explicitly scopes a change.
+11. Keep prose concise and perspective-safe: prefer direct statements the observer can use over meta-commentary about
     canon, tooling, or compilation.
 
 ## Consistency Checks
@@ -73,6 +83,9 @@ derivable from the target entry path. If it is not, stop and ask the invoker whi
 - Perspective entries read as the observer's first-person internal monologue on the subject and convey all
   observer-available information so the topic is understandable without the canonical `wiki/` entry, with no omniscient
   asides or new concrete prompt-usable facts.
+- Subject-bound entry titles and H1 headings use the subject's full ID, body prose references subjects by full ID
+  where the name would appear, canonical entries state the subject's name once as an explicit fact, and perspective
+  entries state a known name or explicitly state that the observer does not know it.
 - Prompt-usable concrete facts are stated, scoped as unknown/unavailable/not prompt-relevant, or omitted.
 - The edit does not introduce canonical fallback, omniscient constraints, or unsupported graph/compiler workflow scope.
 

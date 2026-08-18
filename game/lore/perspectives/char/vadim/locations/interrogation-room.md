@@ -1,16 +1,16 @@
 ---
 id: vadim.interrogation_room
-title: Interrogation Room
+title: loc:interrogation_room
 type: loc
 subject_id: loc:interrogation_room
 ---
 
-# Interrogation Room
+# loc:interrogation_room
 
-The interrogation room is in the basement level of the Charter Office of Compliance building, in the Compact's
-administrative district. It is not a cell. I would correct anyone who called it one. It is a meeting room — a space in
-which procedures are conducted. Interviews, compliance checks, investigations. The Office calls them all by the same
-framework.
+loc:interrogation_room is in the basement level of the Charter Office of Compliance building, in the Compact's
+administrative district. Officially, it is the Interrogation Room. It is not a cell. I would correct anyone who
+called it one. It is a meeting room — a space in which procedures are conducted. Interviews, compliance checks,
+investigations. The Office calls them all by the same framework.
 
 The room contains a table, two chairs, and a recording device. The walls are pale, featureless. The lighting is
 functional — not harsh, not dim, adequate for documentation. There is a one-way observation window set into one wall,

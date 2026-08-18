@@ -1,14 +1,14 @@
 ---
 id: vadim.self
-title: Vadim
+title: char:vadim
 type: char
 subject_id: char:vadim
 ---
 
-# Vadim
+# char:vadim
 
-I am a Kaelic man and an officer of the Charter Office of Compliance. I have held the position for several years. I am
-good at it. I say that as a finding, not a boast. Assessment is what I do.
+I am a Kaelic man and an officer of the Charter Office of Compliance. My name is Vadim. I have held the position for
+several years. I am good at it. I say that as a finding, not a boast. Assessment is what I do.
 
 My role is to investigate cases involving conditional citizens — primarily Vesari — and make recommendations to the
 Office. The cases range from routine compliance checks to full investigations that may result in reclassification. I

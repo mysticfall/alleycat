@@ -64,6 +64,13 @@ responsibility for lore context, source-of-truth decisions, sequencing, validati
   prompt-relevant instead of leaving it for the LLM to infer.
 - Flag any perspective entry that would require the LLM to improvise unstated names, ages, dates, registrations,
   employment history, relationships, or other concrete facts.
+- Reference subjects by full ID rather than by name in prompt-facing lore: subject-bound entries carry the subject's
+  full ID (`[type]:[id]`, with types `char`, `loc`, and `item`) as the frontmatter `title` and H1 heading, and body
+  prose uses the full ID where the name would appear while pronouns and purely descriptive references remain natural.
+- Every perspective entry either states a name by which the observer knows the subject or states that the observer
+  does not know the name; never invent a name the observer would not know.
+- Canonical subject-bound entries follow the same convention, with full-ID titles and H1 headings, and state the
+  subject's name once as an explicit fact.
 - Use canonical lore only as authoring/source-of-truth material for consistency or future generation tooling in this
   slice.
 - Escalate if the user asks to blend omniscient canonical constraints into character belief lore. Suggest system or

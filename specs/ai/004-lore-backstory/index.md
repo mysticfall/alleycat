@@ -40,6 +40,11 @@ lore-management workflows in this slice.
     judgements rather than a mechanical pronoun flip of third-person text, and external narrator observations become
     the observer's own self-perception or rationalisations without omniscient asides or new concrete prompt-usable
     facts.
+13. Subjects in prompt-facing lore are referenced by full ID (`[type]:[id]`, with types `char`, `loc`, and `item`)
+    rather than by name: subject-bound entries carry the subject's full ID as the frontmatter `title` and H1 heading,
+    body prose references subjects by full ID where the name would appear, names are carried as explicit lore facts
+    (a canonical entry states the name once; a perspective entry states a name the observer knows or states that the
+    name is unknown), and natural dialogue or speech uses known names rather than full IDs.
 
 ## Technical Requirements
 
@@ -126,6 +131,9 @@ lore-management workflows in this slice.
 - Authoring guidance that prevents perspective entries from implying unstated concrete prompt-usable facts.
 - First-person subjective voice authoring convention for perspective entries as the observer's internal monologue on
   the subject.
+- Full-ID subject referencing in prompt-facing lore: `[type]:[id]` titles and H1 headings for subject-bound entries,
+  full-ID subject references in body prose, and names carried as explicit lore facts under the canonical/perspective
+  name rule.
 
 ## Out Of Scope
 
@@ -191,6 +199,10 @@ lore-management workflows in this slice.
 25. Perspective entries are written in the observer character's first-person subjective voice and remain
     information-complete without the canonical `wiki/` entry, conveying all observer-available information about the
     subject.
+26. Subject-bound lore entries, canonical `wiki/` entries and perspective entries alike, use their subject's full ID
+    (`[type]:[id]`) in the frontmatter `title` and H1 heading, reference subjects by full ID in body prose where the
+    name would appear, and handle names per the full-ID rule: canonical entries state the subject's name once as an
+    explicit fact, and perspective entries state a known name or state that the observer does not know it.
 
 ## References
 

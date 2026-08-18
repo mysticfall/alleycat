@@ -38,6 +38,11 @@ Use this checklist with `reviewer-checklist-markdown` when reviewing lore Markdo
 - [ ] Changed perspective entries read as the observer's first-person subjective internal monologue (the observer speaks
   as "I") and convey all observer-available information about the subject so the topic is understandable without the
   canonical `wiki/` entry; third-person narration of perspective entries is flagged as an issue.
+- [ ] Subject-bound entries, canonical `wiki/` entries and perspective entries alike, use the subject's full ID
+  (`[type]:[id]`) as the frontmatter `title` and H1 heading, reference subjects by full ID in body prose where the
+  name would appear, and handle names per the full-ID rule: canonical entries state the subject's name once as an
+  explicit fact, and perspective entries state a known name or state that the observer does not know it. Name-led
+  titles of subject-bound entries are flagged as an issue.
 - [ ] Canon decisions, duplicate handling, ontology additions, and omniscient/system constraints were not delegated to
   `writer` or silently resolved during drafting.
 - [ ] Missing perspective entries are treated as absent prompt-available knowledge, not as a cue for canonical fallback.

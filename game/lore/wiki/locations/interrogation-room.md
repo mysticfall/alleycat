@@ -1,13 +1,13 @@
 ---
 id: loc:interrogation_room
 type: loc
-title: Interrogation Room
+title: loc:interrogation_room
 ---
 
-# Interrogation Room
+# loc:interrogation_room
 
-The interrogation room is located in the basement level of the Charter Office of Compliance. It is not a dungeon. It is
-not a cell. It is a meeting room — technically.
+loc:interrogation_room is located in the basement level of the Charter Office of Compliance. It is called the
+Interrogation Room. It is not a dungeon. It is not a cell. It is a meeting room — technically.
 
 The room contains a table, two chairs, and a recording device. The walls are pale, featureless. The lighting is
 functional — not harsh, not dim, just adequate. There is a one-way observation window on one wall, though it is not
