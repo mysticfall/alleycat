@@ -1,0 +1,188 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/photobooth.tscn" id="1_2ps8d"]
+[ext_resource type="PackedScene" path="res://assets/characters/templates/reference_male/reference_male_npc.tscn" id="2_clps3"]
+[ext_resource type="Script" path="res://src/Character/Character.cs" id="3_wpvrg"]
+[ext_resource type="PackedScene" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="4_bfe71"]
+[ext_resource type="Script" path="res://tests/ai009_head_orientation/Ai009OrientingPhotoboothMarker.cs" id="5_8vvss"]
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/camera_rig.tscn" id="6_mahlv"]
+[ext_resource type="Script" path="res://scripts/photobooth/camera_rig.gd" id="7_g6g5g"]
+[ext_resource type="Script" path="res://tests/ai009_head_orientation/Ai009OrientingPhotoboothDriver.cs" id="8_l1wfp"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_6gi32"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereMesh" id="SphereMesh_sg71x"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereMesh" id="SphereMesh_8pq6l"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereMesh" id="SphereMesh_4f10l"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereMesh" id="SphereMesh_f5thf"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereMesh" id="SphereMesh_fgt8k"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereMesh" id="SphereMesh_ham0v"]
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereMesh" id="SphereMesh_bperr"]
+radius = 0.06
+height = 0.12
+
+[node name="Ai009OrientingPhotobooth" unique_id=406188165 instance=ExtResource("1_2ps8d")]
+
+[node name="TallNpc" type="CharacterBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=504240789 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "Voice", "Hearing", "LeftHand", "RightHand") groups=["Actors", "VisualSubjects"] instance=ExtResource("2_clps3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.7, 0, 0)
+script = ExtResource("3_wpvrg")
+Id = "tall_npc"
+Locomotion = NodePath("Locomotion")
+Navigation = NodePath("Navigation")
+Eyes = NodePath("Eyes")
+Voice = NodePath("Male/GeneralSkeleton/Head/Voice")
+Hearing = NodePath("Hearing")
+LeftHand = NodePath("Hands/LeftHand")
+RightHand = NodePath("Hands/RightHand")
+metadata/_custom_type_script = "uid://bh2t1kkfwpvbf"
+
+[node name="ShortNpc" type="CharacterBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="1" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Navigation", "Eyes", "Voice", "Hearing", "LeftHand", "RightHand") groups=["Actors", "VisualSubjects"] instance=ExtResource("4_bfe71")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.7, 0, 0)
+script = ExtResource("3_wpvrg")
+Id = "short_npc"
+Locomotion = NodePath("Locomotion")
+Navigation = NodePath("Navigation")
+Eyes = NodePath("Eyes")
+Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
+Hearing = NodePath("Hearing")
+LeftHand = NodePath("Hands/LeftHand")
+RightHand = NodePath("Hands/RightHand")
+metadata/_custom_type_script = "uid://bh2t1kkfwpvbf"
+
+[node name="TallStraightAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="2" unique_id=1297843270]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.671, 1.676, -1.4)
+
+[node name="TallStraightAnchor Marker" type="MeshInstance3D" parent="Subject/TallStraightAnchor" index="0" unique_id=1485383311]
+mesh = SubResource("SphereMesh_6gi32")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(0.6, 0.6, 1, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="TallLowAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="3" unique_id=400275165]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.671, 1.222, -1.046)
+
+[node name="TallLowAnchor Marker" type="MeshInstance3D" parent="Subject/TallLowAnchor" index="0" unique_id=98699308]
+mesh = SubResource("SphereMesh_sg71x")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(0.96, 0.18, 0.22, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="ShortHighAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="4" unique_id=1365932173]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.732, 1.939, -0.834)
+
+[node name="ShortHighAnchor Marker" type="MeshInstance3D" parent="Subject/ShortHighAnchor" index="0" unique_id=665292154]
+mesh = SubResource("SphereMesh_8pq6l")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(0.15, 0.8, 1, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="ShortConversationAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="5" unique_id=1798732129]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.975, 1.552, -1.344)
+
+[node name="ShortConversationAnchor Marker" type="MeshInstance3D" parent="Subject/ShortConversationAnchor" index="0" unique_id=783915330]
+mesh = SubResource("SphereMesh_4f10l")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(0.3, 0.9, 0.3, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="ShortStraightAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="6" unique_id=461500984]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.732, 1.552, -1.365)
+
+[node name="ShortStraightAnchor Marker" type="MeshInstance3D" parent="Subject/ShortStraightAnchor" index="0" unique_id=1027685875]
+mesh = SubResource("SphereMesh_f5thf")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(0.9, 0.9, 0.9, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="ShortGlanceAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="7" unique_id=363764089]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.357, 1.552, -1.048)
+
+[node name="ShortGlanceAnchor Marker" type="MeshInstance3D" parent="Subject/ShortGlanceAnchor" index="0" unique_id=2026071589]
+mesh = SubResource("SphereMesh_fgt8k")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(0.9, 0.3, 0.9, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="ShortGlanceInConeAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="8" unique_id=1789013266]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.002, 1.552, -1.237)
+
+[node name="ShortGlanceInConeAnchor Marker" type="MeshInstance3D" parent="Subject/ShortGlanceInConeAnchor" index="0" unique_id=521175816]
+mesh = SubResource("SphereMesh_ham0v")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(1, 0.9, 0.2, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="ShortFarAnchor" type="Node3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="9" unique_id=1073547928]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.878, 1.552, -0.065)
+
+[node name="ShortFarAnchor Marker" type="MeshInstance3D" parent="Subject/ShortFarAnchor" index="0" unique_id=1425752839]
+mesh = SubResource("SphereMesh_bperr")
+script = ExtResource("5_8vvss")
+MarkerColor = Color(1, 0.6, 0.1, 1)
+metadata/_custom_type_script = "uid://bkm134qym08c7"
+
+[node name="TallSideProfile" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("6_mahlv")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 4.6, 1, 0)
+script = ExtResource("7_g6g5g")
+image_size = Vector2(512, 768)
+orthogonal_scale = 2.4
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="TallThreeQuarter" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=1836602912 instance=ExtResource("6_mahlv")]
+transform = Transform3D(-0.7249995, -0.09883499, 0.6816212, 0, 0.9896505, 0.1434992, -0.68874943, 0.104036845, -0.71749604, 3.6, 1.6, -2)
+script = ExtResource("7_g6g5g")
+image_size = Vector2(512, 768)
+orthogonal_scale = 2.6
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="TallFace" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="2" unique_id=1530096080 instance=ExtResource("6_mahlv")]
+transform = Transform3D(-1, 0, 0, 0, 0.9999446, -0.010525723, 0, -0.010525723, -0.9999446, 1.671, 1.63, -0.95)
+script = ExtResource("7_g6g5g")
+projection = 0
+fov = 34.0
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="ShortSideProfile" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="3" unique_id=29854383 instance=ExtResource("6_mahlv")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 1.1, 0.95, 0)
+script = ExtResource("7_g6g5g")
+image_size = Vector2(512, 768)
+orthogonal_scale = 2.4
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="ShortThreeQuarter" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="4" unique_id=1181613739 instance=ExtResource("6_mahlv")]
+transform = Transform3D(-0.8, -0.083188705, 0.594205, 0, 0.9903417, 0.13864785, -0.59999996, 0.11091828, -0.7922734, -0.2, 1.5, -2)
+script = ExtResource("7_g6g5g")
+image_size = Vector2(512, 768)
+orthogonal_scale = 2.6
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="ShortFace" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="5" unique_id=2045483578 instance=ExtResource("6_mahlv")]
+transform = Transform3D(-1, 0, 0, 0, 0.99979395, -0.020300364, 0, -0.020300364, -0.99979395, -1.732, 1.5, -0.95)
+script = ExtResource("7_g6g5g")
+projection = 0
+fov = 34.0
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="Ai009OrientingPhotoboothDriver" type="Node" parent="." index="5" unique_id=2074633904]
+script = ExtResource("8_l1wfp")
+metadata/_custom_type_script = "uid://5lgryvxqthp2"

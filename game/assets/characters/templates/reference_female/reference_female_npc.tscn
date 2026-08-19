@@ -14,6 +14,7 @@
 [ext_resource type="Script" uid="uid://qs2mgtgqvri5" path="res://src/Speech/Hearing.cs" id="13_hearing"]
 [ext_resource type="Script" uid="uid://nb7frvgohlfq" path="res://src/Mind/Perception/SpeechPerception.cs" id="14_speech_perception"]
 [ext_resource type="Script" uid="uid://dudl5uhyyp755" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="attention_gaze_selector_1"]
+[ext_resource type="Script" uid="uid://r0roprsf0efd" path="res://src/Mind/Attention/OrientingController.cs" id="orienting_controller_1"]
 [ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
 
 [sub_resource type="Resource" id="Resource_agentic_speech_tool"]
@@ -62,7 +63,7 @@ metadata/_custom_type_script = "uid://cjjllyn8qs4nk"
 
 [node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Female/GeneralSkeleton/Head/Voice" index="2" unique_id=1163782006]
 
-[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
+[node name="CharacterIK" type="Node3D" parent="." index="1" unique_id=1619175056 node_paths=PackedStringArray("Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadTargetIntentProvider", "RightHandIKTargetIntentProvider", "LeftHandIKTargetIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup")]
 script = ExtResource("2_charik")
 Viewpoint = NodePath("../Female/GeneralSkeleton/Head/Viewpoint")
 HeadIKTarget = NodePath("../IKTargets/Head")
@@ -72,6 +73,7 @@ LeftHandIKTarget = NodePath("../IKTargets/LeftHand")
 RightFootIKTarget = NodePath("../IKTargets/RightFoot")
 LeftFootIKTarget = NodePath("../IKTargets/LeftFoot")
 PhysicalRig = NodePath("../Female/GeneralSkeleton/DynamicPhysicalRig")
+HeadTargetIntentProvider = NodePath("../Mind/OrientingController")
 RightHandIKTargetIntentProvider = NodePath("RightHandGrabProvider")
 LeftHandIKTargetIntentProvider = NodePath("LeftHandGrabProvider")
 HeadModifierGroup = [NodePath("../Female/GeneralSkeleton/NeckSpineIK"), NodePath("../Female/GeneralSkeleton/HeadCopyRotation"), NodePath("../Female/GeneralSkeleton/NeckTwistDisperser")]
@@ -99,6 +101,11 @@ metadata/_custom_type_script = "uid://hadsjgek6b2p"
 [node name="AttentionGazeTargetSelector" type="Node" parent="Mind"]
 script = ExtResource("attention_gaze_selector_1")
 metadata/_custom_type_script = "uid://dudl5uhyyp755"
+
+[node name="OrientingController" type="Node" parent="Mind" node_paths=PackedStringArray("Viewpoint")]
+script = ExtResource("orienting_controller_1")
+Viewpoint = NodePath("../../Female/GeneralSkeleton/Head/Viewpoint")
+metadata/_custom_type_script = "uid://r0roprsf0efd"
 
 [node name="Hearing" type="Node" parent="."]
 script = ExtResource("13_hearing")

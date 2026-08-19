@@ -28,6 +28,7 @@
 - [AI-006: Percept-Based Sensing And Attention](ai/006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](ai/007-attention-gaze-target-selection/index.md)
 - [AI-008: Scenario](ai/008-scenario/index.md)
+- [AI-009: Attention-Driven Head Orientation](ai/009-attention-head-orientation/index.md)
 
 ## Context
 
