@@ -22,10 +22,11 @@ public abstract record Observation
     }
 
     /// <summary>
-    /// UTC timestamp stamped exactly once by the owning Mind at ingestion, or null when the record was not
-    /// ingested through a Mind. Used for authored relative-time labels such as "(30 seconds ago)".
+    /// Game-time timestamp in seconds elapsed since the game began, stamped exactly once by the owning Mind at
+    /// ingestion, or null when the record was not ingested through a Mind. Used for authored time labels such as
+    /// "(at 30.5s game time)".
     /// </summary>
-    public DateTimeOffset? ObservedAt
+    public double? ObservedAt
     {
         get;
         init;

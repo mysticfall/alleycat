@@ -3,7 +3,6 @@ using AlleyCat.Common;
 using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Mind.Attention;
-using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
 using Godot;
@@ -56,13 +55,6 @@ public sealed partial class AttentionGazeTargetSelectionPhotoboothMind : MindBas
             contextThreshold: 0.01f);
         ReinforceAttention(dominantSubjectFullId, dominantAttention, settings);
     }
-
-    /// <inheritdoc />
-    protected override Task ProcessObservationsAsync(
-        IReadOnlyList<Observation> observations,
-        IReadOnlyList<Observation> timelineSnapshot,
-        CancellationToken cancellationToken)
-        => Task.CompletedTask;
 
     private ISceneContext CreateSceneContext()
     {

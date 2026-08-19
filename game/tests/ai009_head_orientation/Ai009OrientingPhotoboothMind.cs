@@ -1,4 +1,3 @@
-using AlleyCat.Mind.Observation;
 using Godot;
 using MindBase = AlleyCat.Mind.Mind;
 
@@ -29,11 +28,4 @@ public sealed partial class Ai009OrientingPhotoboothMind : MindBase
     public override void _ExitTree()
     {
     }
-
-    /// <inheritdoc />
-    protected override Task ProcessObservationsAsync(
-        IReadOnlyList<Observation> observations,
-        IReadOnlyList<Observation> timelineSnapshot,
-        CancellationToken cancellationToken)
-        => Task.CompletedTask;
 }

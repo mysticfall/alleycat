@@ -13,24 +13,24 @@ using Xunit;
 
 namespace AlleyCat.IntegrationTests.Mind.AI;
 
-/// <summary>Production-turn coverage for the single captured scene-context boundary.</summary>
+/// <summary>Session coverage for the single captured scene-context boundary.</summary>
 public sealed partial class AgenticMindTurnContextIntegrationTests
 {
     /// <summary>
-    /// A foreground turn captures one fixed-membership snapshot and shares it through prompt construction,
-    /// rendering, and trusted tool binding while retaining live references to its characters.
+    /// A session captures one fixed-membership snapshot at session start and shares it through prompt
+    /// construction, rendering, and trusted tool binding while retaining live references to its characters.
     /// </summary>
     [Fact]
-    public async Task ForegroundTurn_CapturesOneSceneSnapshotAndSharesExactReferenceAcrossConsumers()
+    public async Task Session_CapturesOneSceneSnapshotAndSharesExactReferenceAcrossConsumers()
     {
         var owner = new TestCharacter("owner", "before");
         var newcomer = new TestCharacter("newcomer", "new");
         FixturePlayerCharacter player = new();
         List<ICharacter> liveMembership = [owner, player];
         var sceneProvider = new CountingSceneProvider(liveMembership);
-        var section = new MutatingPromptSection(owner, newcomer, liveMembership) { Name = "Turn Context" };
+        var section = new MutatingPromptSection(owner, newcomer, liveMembership) { Name = "Session Context" };
         var tool = new CapturingTool();
-        var clientProvider = new CapturingClientProvider();
+        var clientProvider = new CancellingClientProvider();
         var mind = new TestAgenticMind(owner)
         {
             SystemInstruction = new PromptStack { Sections = [section] },
@@ -41,7 +41,7 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
+            await mind.RunSessionForTestAsync(clientProvider.SessionCancellation.Token);
 
             SceneContext capturedScene = Assert.IsType<SceneContext>(section.CapturedScene);
             Assert.Equal(1, sceneProvider.CaptureCount);
@@ -50,8 +50,8 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             Assert.Same(owner, tool.CapturedContext.Character);
             Assert.Equal("after", owner.State);
             // Two-phase rendering builds the core context before prompt construction: the section's mid-compile state
-            // mutation happens after the owner's context dictionary was captured, so the prompt renders the turn-start
-            // state while the live character object still reflects the mutation.
+            // mutation happens after the owner's context dictionary was captured, so the prompt renders the
+            // session-start state while the live character object still reflects the mutation.
             Assert.Contains("before", clientProvider.Instructions, StringComparison.Ordinal);
             Assert.DoesNotContain("after", clientProvider.Instructions, StringComparison.Ordinal);
 
@@ -114,7 +114,7 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
         public CapturingTool()
         {
             ToolName = "capture_context";
-            ToolDescription = "Capture the trusted turn context.";
+            ToolDescription = "Capture the trusted session context.";
         }
 
         public ScenarioContext? CapturedContext
@@ -133,13 +133,17 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
 
     private sealed partial class TestAgenticMind(ICharacter owner) : AgenticMind
     {
-        public Task RunForegroundTurnForTestAsync()
-            => RunAgentTurnAsync([], CancellationToken.None);
+        /// <summary>Runs the complete session through the production prepare and execute paths.</summary>
+        public async Task RunSessionForTestAsync(CancellationToken cancellationToken)
+        {
+            AgentSession session = await PrepareSessionAsync(CancellationToken.None);
+            await ExecuteSessionAsync(session, cancellationToken);
+        }
 
         protected override ICharacter ResolveOwningCharacter() => owner;
     }
 
-    private sealed partial class TestCharacter(string id, string state) : ICharacter
+    private sealed class TestCharacter(string id, string state) : ICharacter
     {
         public string Id { get; set; } = id;
 
@@ -161,13 +165,20 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
         }
     }
 
-    private sealed partial class CapturingClientProvider : ClientProvider
+    private sealed partial class CancellingClientProvider : ClientProvider
     {
+        public CancellationTokenSource SessionCancellation { get; } = new();
+
         public string Instructions { get; private set; } = string.Empty;
+
+        public int CallCount
+        {
+            get; private set;
+        }
 
         public override IChatClient CreateChatClient() => new CapturingClient(this);
 
-        private sealed class CapturingClient(CapturingClientProvider owner) : IChatClient
+        private sealed class CapturingClient(CancellingClientProvider owner) : IChatClient
         {
             public Task<ChatResponse> GetResponseAsync(
                 IEnumerable<ChatMessage> messages,
@@ -178,13 +189,20 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
                 cancellationToken.ThrowIfCancellationRequested();
                 owner.Instructions = options!.Instructions!;
                 AIFunction productionTool = Assert.Single(options.Tools!.OfType<AIFunction>(),
-                    function => !string.Equals(function.Name, "end_turn", StringComparison.Ordinal));
+                    function => string.Equals(function.Name, "capture_context", StringComparison.Ordinal));
+                owner.CallCount++;
+                if (owner.CallCount > 1)
+                {
+                    // The session is long-running: once the capturing tool ran and its result was replayed, ending
+                    // the scripted session lets the test observe the one captured binding.
+                    owner.SessionCancellation.Cancel();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    throw new OperationCanceledException(cancellationToken);
+                }
+
                 ChatMessage response = new(
                     ChatRole.Assistant,
-                    [
-                        new FunctionCallContent("capture-call", productionTool.Name, new Dictionary<string, object?>()),
-                        new FunctionCallContent("end-call", "end_turn", new Dictionary<string, object?>()),
-                    ]);
+                    [new FunctionCallContent("capture-call", productionTool.Name, new Dictionary<string, object?>())]);
                 return Task.FromResult(new ChatResponse(response));
             }
 

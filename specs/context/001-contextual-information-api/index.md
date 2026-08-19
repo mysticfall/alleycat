@@ -25,8 +25,8 @@ consumer APIs, while providing the narrow character-card source and scene-charac
    assembly details.
 5. Names, aliases, and display labels are contextual data when sources provide them, not fixed character properties.
 6. Character identity shown in generated conversation context must use the canonical authored character `FullId`.
-7. An NPC's foreground character context contains itself and every currently resolvable contextual character that meets
-   its attention threshold, rather than all scene characters unconditionally.
+7. An NPC's session prompt character context contains itself and every currently resolvable contextual character that
+   meets its attention threshold, rather than all scene characters unconditionally.
 
 ## Technical Requirements
 
@@ -64,10 +64,10 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 18. `CharacterCardContextSource` is the concrete narrow character source for this slice and returns exactly
     `{ FullId: subject.FullId }`.
 19. Names, aliases, and display labels must not be added as fixed properties on `ICharacter` for this slice.
-20. `CreateRenderContext` is AgenticMind's foreground-only aggregation operation. It must create AgenticMind's own
-    complete top-level read-only render dictionary containing `character` for the owner, deterministically ordered
-    `characters` for the owner and every resolved attention-eligible `IContextual` character, the read-only
-    `observations` snapshot, and all authored ContextWorker projections.
+20. `CreateRenderContext` is AgenticMind's session-start aggregation operation. It must create AgenticMind's own
+      complete top-level read-only render dictionary containing `character` for the owner, the mandatory unconditional
+      `player` dictionary under SCN-001, and deterministically ordered `characters`
+      for the owner and every resolved attention-eligible `IContextual` character. It defines no `observations` key.
 21. `CreateRenderContext` must call every included subject with `observer` set to the owning character.
 22. The owner must appear in both `character` and `characters[owner.FullId]`, and both entries must reference the exact
     same context dictionary instance.
@@ -77,21 +77,15 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 25. When supplied, an `IIdentifiable` observer is passed unchanged to each source; when omitted, sources receive `null`.
     A source may require or pattern-match a narrower direct capability.
 26. `IContextual` neither defines visual-observer capability nor participates in visual-cue description. VISION-001 owns
-    visual inspection through `IHasVision` and `IVisualSubject`.
-27. A ContextWorker run under AI-005 returns `IReadOnlyDictionary<string, object?>` directly. No public
-    `ContextualSnapshot`, worker-specific `IContextual` wrapper, `ContextWorkerState`, or alternative worker-state
-    boundary is introduced.
-28. ContextWorker atomically stores and returns the exact `IReadOnlyDictionary<string, object?>` returned by a worker.
-    Post-publication mutation of that dictionary or its nested values violates the producer contract, and resulting
-    behaviour may be undefined or stale.
-29. `IReadOnlyDictionary` alone does not prove deep immutability. Aggregation and publication require no recursive
-    defensive copying or freezing, cycle detection, scalar allowlist, reflection observation projection, or rejection
-    of live Godot objects. This convention changes no scenario-model, neutral API, observer, scene, or eyes boundary.
-30. AI-006 normatively defines attention eligibility. AgenticMind must resolve each eligible canonical `FullId` through
-    `ISceneContext.Find(FullId)` and omit absent, unmapped, or non-`IContextual` results. It must not perform another
-    visual survey or use a hidden subject cache.
-31. Mind or attention state must not be added to `IContextual.GetContext` or `IContextSource` inputs. SCN-001's initial
-    scene lookup mapping remains `char` only.
+     visual inspection through `IHasVision` and `IVisualSubject`.
+27. `IReadOnlyDictionary` alone does not prove deep immutability. Aggregation and publication require no recursive
+     defensive copying or freezing, cycle detection, scalar allowlist, reflection observation projection, or rejection
+     of live Godot objects. This convention changes no neutral API, observer, scene, or eyes boundary.
+28. AI-006 normatively defines attention eligibility. AgenticMind must resolve each eligible canonical `FullId` through
+     `ISceneContext.Find(FullId)` and omit absent, unmapped, or non-`IContextual` results. It must not perform another
+     visual survey or use a hidden subject cache.
+29. Mind or attention state must not be added to `IContextual.GetContext` or `IContextSource` inputs. SCN-001's initial
+     scene lookup mapping remains `char` only.
 
 ## In Scope
 
@@ -104,10 +98,8 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - Optional observer-relative source context via `IIdentifiable? observer`.
 - Completed-context composition and internal source aggregation by contextual subjects or owning systems.
 - `CharacterCardContextSource` as the narrow identity source returning only the subject's canonical `FullId`.
-- Deterministic, attention-filtered, foreground-only `CreateRenderContext` assembly for prompt rendering and later
-  snapshot publication.
+- Deterministic, attention-filtered, session-start `CreateRenderContext` assembly for session prompt rendering.
 - Names, aliases, and display labels as possible context entries when future sources provide them.
-- Convention-based direct ContextWorker dictionary publication without a public wrapper or scenario-model requirement.
 
 ## Out Of Scope
 
@@ -117,7 +109,7 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 - Direct dependencies from `AlleyCat.Context` to AI retrieval, prompt, or templating APIs.
 - Budgeting, ranking, summarisation, omission policy, context-content diagnostics, and evaluation metadata.
 - AI retrieval, memory, perception implementation, lore, relationship, inventory, planner, or other backend
-  architectures beyond AI-006's normative foreground-selection integration.
+  architectures beyond AI-006's normative attention-filtered selection integration.
 - Non-character contextual subjects such as items, scenes, memories, or lore records.
 - Requiring `IIdentifiable : IContextual`.
 - Adding `ContextData`, titled-fragment result objects, `ContextRequest`, `ContextRequestKind`, typed request filters,
@@ -134,8 +126,8 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 4. No player-facing behaviour exposes source aggregation, Godot export details, or data assembly details.
 5. Generated character context identifies the owner and scene characters by their exact authored `FullId` values.
 6. Source context remains observer-relative when an identifiable observer is supplied and remains available without one.
-7. Foreground character context contains self plus all currently resolvable attention-eligible contextual characters,
-   while absent, unmapped, non-contextual, and below-threshold subjects are omitted.
+7. Session prompt character context contains self plus all currently resolvable attention-eligible contextual
+   characters, while absent, unmapped, non-contextual, and below-threshold subjects are omitted.
 
 ### Technical Requirements
 
@@ -155,10 +147,11 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 11. No `ContextRequest`, `ContextRequestKind`, fixed character label property, AI retrieval backend, memory backend,
     lore backend, or perception backend is required by this slice.
 12. `CharacterCardContextSource` returns exactly one `FullId` entry whose value is `subject.FullId`.
-13. Foreground-only `CreateRenderContext` returns AgenticMind's complete top-level read-only dictionary containing
-    `character`, ordinally inserted `characters[exact Character.FullId]` for self and every resolved attention-eligible
-    contextual character, read-only `observations`, and all authored ContextWorker projections. Every included subject
-    is queried using the owning character as observer.
+13. Session-start `CreateRenderContext` returns AgenticMind's complete top-level read-only dictionary containing
+      `character`, the mandatory `player` dictionary, and ordinally inserted `characters[exact Character.FullId]`
+      for self and every resolved attention-eligible contextual character, with no `observations` key. Every included
+      subject is queried using the owning character as
+      observer.
 14. The owner appears in both locations using the same dictionary instance.
 15. Invalid included identity, exact duplicate included-character `FullId` values, and owner absence fail context
     assembly clearly.
@@ -166,27 +159,20 @@ consumer APIs, while providing the narrow character-card source and scene-charac
 17. Sources accept optional `IIdentifiable` observers and preserve supplied-observer and omitted-observer semantics.
     Sources use direct, narrow capabilities when needed.
 18. Each composer owns source aggregation, and each source owns its local template root. `AlleyCat.Context` has no
-     dependency on `AlleyCat.Vision` or `AlleyCat.Character`.
-19. A ContextWorker run returns `IReadOnlyDictionary<string, object?>` directly, with no public `ContextualSnapshot`,
-    worker-specific `IContextual` wrapper, `ContextWorkerState`, or alternative worker-state boundary.
-20. Tests verify a ContextWorker atomically stores and returns the exact dictionary returned by the worker. Producer
-    fixtures treat that dictionary and its nested values as immutable after return; contract tests identify later
-    mutation as a producer violation with potentially undefined or stale behaviour.
-21. The specification and API do not claim `IReadOnlyDictionary` proves deep immutability. Tests require no recursive
-    copying or freezing, cycle detection, scalar allowlist, reflection observation projection, or live Godot-object
-    rejection at aggregation or publication. The convention changes no scenario-model, scene, observer, or eyes
-    contract.
-22. Tests verify AI-006 foreground selection resolves each attention-eligible `FullId` through `ISceneContext.Find`,
-    omits absent, unmapped, and non-`IContextual` results, and performs no second survey or hidden-cache lookup.
-23. Tests verify context calls retain the existing scene and owning-character observer inputs without receiving Mind or
-    attention state, and that initial scene lookup remains character-only.
+      dependency on `AlleyCat.Vision` or `AlleyCat.Character`.
+19. The specification and API do not claim `IReadOnlyDictionary` proves deep immutability. Tests require no recursive
+     copying or freezing, cycle detection, scalar allowlist, reflection observation projection, or live Godot-object
+     rejection at aggregation or publication. The convention changes no scene, observer, or eyes contract.
+20. Tests verify AI-006 selection resolves each attention-eligible `FullId` through `ISceneContext.Find`,
+     omits absent, unmapped, and non-`IContextual` results, and performs no second survey or hidden-cache lookup.
+21. Tests verify context calls retain the existing scene and owning-character observer inputs without receiving Mind or
+     attention state, and that initial scene lookup remains character-only.
 
 ## References
 
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [VISION-001: Eyes](../../vision/001-eyes/index.md)
-- [AI-005: Context Worker](../../ai/005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../../ai/006-character-perception-and-attention/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - `game/src/Context/`

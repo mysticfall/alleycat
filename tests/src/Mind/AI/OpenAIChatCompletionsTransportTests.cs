@@ -12,22 +12,27 @@ using Xunit;
 namespace AlleyCat.Tests.Mind.AI;
 
 /// <summary>
-/// Verifies wire-level OpenAI chat-completions request composition without a live backend.
+/// Verifies wire-level OpenAI chat-completions request composition for the agent session without a live backend.
 /// </summary>
 public sealed class OpenAIChatCompletionsTransportTests
 {
     private const string Instructions = "Test the tool-only protocol.";
 
     /// <summary>
-    /// The tool-only route accepts one speak call through the production function, then requires end_turn.
+    /// The rollback transport carries the session bootstrap input and replays the complete ordered transcript with
+    /// strict tool-only requests.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ProviderChatCompletionsRollback_MapsMultipleToolCallsAndPreservesStrictToolOnlyRequests(
+    public async Task SessionChatCompletions_WithTwoSpeakCalls_ReplaysTranscriptWithStrictToolOnlyRequests(
         bool allowMultipleToolCalls)
     {
-        var handler = new CapturingHandler(CreateToolCallResponse(/*lang=json,strict*/ "{\"speech\":\"Hello\"}"), CreateEndTurnCallResponse());
+        CancellationTokenSource sessionCancellation = new();
+        var handler = new CancellingHandler(
+            sessionCancellation,
+            CreateToolCallResponse("chatcmpl-tool", "call-1", /*lang=json,strict*/ "{\"speech\":\"Hello\"}"),
+            CreateToolCallResponse("chatcmpl-second", "call-2", /*lang=json,strict*/ "{\"speech\":\"Again\"}"));
         using var httpClient = new HttpClient(handler);
         using IChatClient client = CreateClient(httpClient);
         List<string> admittedSpeech = [];
@@ -40,68 +45,37 @@ public sealed class OpenAIChatCompletionsTransportTests
             "speak",
             "Speak aloud.");
 
-        await ToolOnlyTurnRunner.RunAsync(
-            client,
-            Instructions,
-            [],
-            [speak],
-            allowMultipleToolCalls,
-            NullLogger.Instance,
-            CancellationToken.None);
+        await RunSessionAsync(client, speak, allowMultipleToolCalls, sessionCancellation);
 
-        Assert.Equal(["Hello"], admittedSpeech);
-        Assert.Equal(2, handler.RequestBodies.Count);
+        Assert.Equal(["Hello", "Again"], admittedSpeech);
+        // Two scripted responses served, plus the third request whose cancellation ends the session.
+        Assert.Equal(3, handler.RequestBodies.Count);
         Assert.All(handler.Paths, path => Assert.Equal("/v1/chat/completions", path));
         using var firstRequest = JsonDocument.Parse(handler.RequestBodies[0]);
         JsonElement[] firstMessages = [.. firstRequest.RootElement.GetProperty("messages").EnumerateArray()];
-        Assert.Equal("system", Assert.Single(firstMessages).GetProperty("role").GetString());
-        Assert.Equal(Instructions, Assert.Single(firstMessages).GetProperty("content").GetString());
+        Assert.Equal(["system", "user"], firstMessages.Select(message => message.GetProperty("role").GetString()));
+        Assert.Equal(Instructions, firstMessages[0].GetProperty("content").GetString());
+        // Both chat-client kinds carry the session-owner bootstrap input message (AI-002 TR-7).
+        Assert.Equal(AgenticMind.SessionBootstrapInput, firstMessages[1].GetProperty("content").GetString());
         AssertStrictToolOnlyRequest(firstRequest.RootElement, allowMultipleToolCalls);
         using var secondRequest = JsonDocument.Parse(handler.RequestBodies[1]);
         JsonElement[] messages = [.. secondRequest.RootElement.GetProperty("messages").EnumerateArray()];
-        Assert.Equal(["system", "assistant", "tool"], messages.Select(message => message.GetProperty("role").GetString()));
-        Assert.Equal("call-1", messages[2].GetProperty("tool_call_id").GetString());
+        Assert.Equal(
+            ["system", "user", "assistant", "tool"],
+            messages.Select(message => message.GetProperty("role").GetString()));
+        Assert.Equal("call-1", messages[3].GetProperty("tool_call_id").GetString());
         AssertStrictToolOnlyRequest(secondRequest.RootElement, allowMultipleToolCalls);
-    }
-
-    /// <summary>
-    /// Chat Completions maps an action and final marker from one wire payload and completes without replay.
-    /// </summary>
-    [Fact]
-    public async Task ProviderChatCompletionsRollback_WithSpeakAndFinalMarker_CompletesAfterOneWireRequest()
-    {
-        var handler = new CapturingHandler(CreateCombinedToolCallResponse());
-        using var httpClient = new HttpClient(handler);
-        using IChatClient client = CreateClient(httpClient);
-        List<string> admittedSpeech = [];
-        AIFunction speak = AIFunctionFactory.Create(
-            (string speech) => admittedSpeech.Add(speech),
-            "speak",
-            "Speak aloud.");
-
-        await ToolOnlyTurnRunner.RunAsync(
-            client,
-            Instructions,
-            [],
-            [speak],
-            true,
-            NullLogger.Instance,
-            CancellationToken.None);
-
-        Assert.Equal(["Hello"], admittedSpeech);
-        string requestBody = Assert.Single(handler.RequestBodies);
-        using var payload = JsonDocument.Parse(requestBody);
-        AssertStrictToolOnlyRequest(payload.RootElement, true);
     }
 
     /// <summary>
     /// Additional speak arguments are rejected before the production function can be invoked or retried.
     /// </summary>
     [Fact]
-    public async Task ToolOnlyRoute_WithAdditionalSpeakArgument_RejectsWithoutInvokingFunction()
+    public async Task SessionChatCompletions_WithAdditionalSpeakArgument_EndsSessionWithoutInvokingFunction()
     {
-        var handler = new CapturingHandler(
-            CreateToolCallResponse(/*lang=json,strict*/ "{\"speech\":\"Hello\",\"unexpected\":true}"));
+        var handler = new CancellingHandler(
+            CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None),
+            CreateToolCallResponse("chatcmpl-tool", "call-1", /*lang=json,strict*/ "{\"speech\":\"Hello\",\"unexpected\":true}"));
         using var httpClient = new HttpClient(handler);
         using IChatClient client = CreateClient(httpClient);
         int invocationCount = 0;
@@ -113,17 +87,30 @@ public sealed class OpenAIChatCompletionsTransportTests
             },
             "speak");
 
-        _ = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ToolOnlyTurnRunner.RunAsync(
+        _ = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => RunSessionAsync(
             client,
-            Instructions,
-            [],
-            [speak],
-            false,
-            NullLogger.Instance,
-            CancellationToken.None));
+            speak,
+            allowMultipleToolCalls: false,
+            CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None)));
 
         Assert.Equal(0, invocationCount);
         _ = Assert.Single(handler.RequestBodies);
+    }
+
+    private static async Task RunSessionAsync(
+        IChatClient client,
+        AIFunction speak,
+        bool allowMultipleToolCalls,
+        CancellationTokenSource sessionCancellation)
+    {
+        AgentSessionRunner runner = new(
+            client,
+            Instructions,
+            [new ChatMessage(ChatRole.User, AgenticMind.SessionBootstrapInput)],
+            [speak],
+            allowMultipleToolCalls,
+            NullLogger.Instance);
+        await runner.RunAsync(sessionCancellation.Token);
     }
 
     private static IChatClient CreateClient(HttpClient httpClient)
@@ -150,28 +137,15 @@ public sealed class OpenAIChatCompletionsTransportTests
         Assert.Equal(allowMultipleToolCalls, root.GetProperty("parallel_tool_calls").GetBoolean());
         Assert.False(root.TryGetProperty("response_format", out _));
         Assert.Equal(
-            ["speak", ToolOnlyTurnRunner.EndTurnToolName],
+            ["speak"],
             root.GetProperty("tools").EnumerateArray()
                 .Select(tool => tool.GetProperty("function").GetProperty("name").GetString()));
-
-        JsonElement endTurn = Assert.Single(
-            root.GetProperty("tools").EnumerateArray(),
-            tool => tool.GetProperty("function").GetProperty("name").GetString()
-                == ToolOnlyTurnRunner.EndTurnToolName).GetProperty("function");
-        Assert.True(endTurn.GetProperty("strict").GetBoolean());
-        Assert.Contains("final position", endTurn.GetProperty("description").GetString(), StringComparison.Ordinal);
-        Assert.Contains("waiting for action results", endTurn.GetProperty("description").GetString(), StringComparison.Ordinal);
-        JsonElement parameters = endTurn.GetProperty("parameters");
-        Assert.Equal("object", parameters.GetProperty("type").GetString());
-        Assert.Empty(parameters.GetProperty("properties").EnumerateObject());
-        Assert.Empty(parameters.GetProperty("required").EnumerateArray());
-        Assert.False(parameters.GetProperty("additionalProperties").GetBoolean());
     }
 
-    private static string CreateToolCallResponse(string arguments)
+    private static string CreateToolCallResponse(string responseId, string callId, string arguments)
         => $$"""
             {
-              "id": "chatcmpl-tool",
+              "id": "{{responseId}}",
               "object": "chat.completion",
               "created": 1,
               "model": "test-model",
@@ -181,7 +155,7 @@ public sealed class OpenAIChatCompletionsTransportTests
                   "role": "assistant",
                   "content": null,
                   "tool_calls": [{
-                    "id": "call-1",
+                    "id": "{{callId}}",
                     "type": "function",
                     "function": { "name": "speak", "arguments": {{JsonSerializer.Serialize(arguments)}} }
                   }]
@@ -192,62 +166,13 @@ public sealed class OpenAIChatCompletionsTransportTests
             }
             """;
 
-    private static string CreateEndTurnCallResponse()
-        => /*lang=json,strict*/ """
-            {
-              "id": "chatcmpl-end",
-              "object": "chat.completion",
-              "created": 1,
-              "model": "test-model",
-              "choices": [{
-                "index": 0,
-                "message": {
-                  "role": "assistant",
-                  "content": null,
-                  "tool_calls": [{
-                    "id": "end-call",
-                    "type": "function",
-                    "function": { "name": "end_turn", "arguments": "{}" }
-                  }]
-                },
-                "finish_reason": "tool_calls"
-              }],
-              "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
-            }
-            """;
-
-    private static string CreateCombinedToolCallResponse()
-        => /*lang=json,strict*/ """
-            {
-              "id": "chatcmpl-combined",
-              "object": "chat.completion",
-              "created": 1,
-              "model": "test-model",
-              "choices": [{
-                "index": 0,
-                "message": {
-                  "role": "assistant",
-                  "content": null,
-                  "tool_calls": [
-                    {
-                      "id": "call-1",
-                      "type": "function",
-                      "function": { "name": "speak", "arguments": "{\"speech\":\"Hello\"}" }
-                    },
-                    {
-                      "id": "end-call",
-                      "type": "function",
-                      "function": { "name": "end_turn", "arguments": "{}" }
-                    }
-                  ]
-                },
-                "finish_reason": "tool_calls"
-              }],
-              "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
-            }
-            """;
-
-    private sealed class CapturingHandler(params string[] responses) : HttpMessageHandler
+    /// <summary>
+    /// Captures every wire request and ends the long-running session by cancelling its token once the scripted
+    /// responses are exhausted.
+    /// </summary>
+    private sealed class CancellingHandler(
+        CancellationTokenSource sessionCancellation,
+        params string[] responses) : HttpMessageHandler
     {
         private readonly Queue<string> _responses = new(responses);
 
@@ -263,6 +188,13 @@ public sealed class OpenAIChatCompletionsTransportTests
             Assert.NotNull(request.RequestUri);
             Paths.Add(request.RequestUri.AbsolutePath);
             RequestBodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
+
+            if (_responses.Count == 0)
+            {
+                sessionCancellation.Cancel();
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new OperationCanceledException(cancellationToken);
+            }
 
             string response = _responses.Dequeue();
             return new HttpResponseMessage(HttpStatusCode.OK)

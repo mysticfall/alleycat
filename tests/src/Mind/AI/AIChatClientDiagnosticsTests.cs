@@ -79,13 +79,14 @@ public sealed class AIChatClientDiagnosticsTests
     }
 
     /// <summary>
-    /// The production tool-only loop is logged at every model boundary.
+    /// The agent session loop is logged at every model request boundary.
     /// </summary>
     [Fact]
-    public async Task Decorate_WhenToolOnlyLoopRuns_LogsEveryRequestAndResponse()
+    public async Task Decorate_WhenAgentSessionRuns_LogsEveryRequestAndResponse()
     {
         CapturingLoggerFactory loggerFactory = new(LogLevel.Trace);
-        ScriptedToolLoopChatClient innerClient = new();
+        CancellationTokenSource sessionCancellation = new();
+        ScriptedToolLoopChatClient innerClient = new(sessionCancellation);
         IChatClient client = AIChatClientDiagnostics.Decorate(
             innerClient,
             new AIDiagnosticsSettings(EnableRequestResponseLogging: true),
@@ -98,14 +99,14 @@ public sealed class AIChatClientDiagnosticsTests
                 return $"tool result: {value}";
             },
             "diagnostic_tool");
-        await ToolOnlyTurnRunner.RunAsync(
+        AgentSessionRunner runner = new(
             client,
-            "Complete the scripted diagnostic turn.",
+            "Complete the scripted diagnostic session.",
             [],
             [tool],
             false,
-            loggerFactory.CreateLogger("test"),
-            CancellationToken.None);
+            loggerFactory.CreateLogger("test"));
+        await runner.RunAsync(sessionCancellation.Token);
 
         Assert.Equal(3, innerClient.InvocationCount);
         Assert.Equal(["initial", "intermediate"], toolInvocations);
@@ -129,10 +130,9 @@ public sealed class AIChatClientDiagnosticsTests
                 entry.Level == LogLevel.Trace && entry.Message.Contains(" completed:", StringComparison.Ordinal)),
         ];
         Assert.Equal(3, requestEntries.Length);
-        Assert.Equal(3, responseEntries.Length);
+        Assert.Equal(2, responseEntries.Length);
         Assert.Contains("initial-call", responseEntries[0].Message, StringComparison.Ordinal);
         Assert.Contains("intermediate-call", responseEntries[1].Message, StringComparison.Ordinal);
-        Assert.Contains(ToolOnlyTurnRunner.EndTurnToolName, responseEntries[2].Message, StringComparison.Ordinal);
         Assert.Contains("tool result: initial", requestEntries[1].Message, StringComparison.Ordinal);
         Assert.Contains("tool result: intermediate", requestEntries[2].Message, StringComparison.Ordinal);
         Assert.All(
@@ -233,7 +233,7 @@ public sealed class AIChatClientDiagnosticsTests
         }
     }
 
-    private sealed class ScriptedToolLoopChatClient : IChatClient
+    private sealed class ScriptedToolLoopChatClient(CancellationTokenSource sessionCancellation) : IChatClient
     {
         private readonly List<IReadOnlyList<ChatMessage>> _requests = [];
 
@@ -247,7 +247,7 @@ public sealed class AIChatClientDiagnosticsTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Assert.Equal(2, options?.Tools?.Count);
+            Assert.Equal(1, options?.Tools?.Count);
             Assert.Null(options?.ResponseFormat);
             _ = Assert.IsType<RequiredChatToolMode>(options?.ToolMode);
             _requests.Add([.. messages.Select(message => message.Clone())]);
@@ -256,13 +256,7 @@ public sealed class AIChatClientDiagnosticsTests
             {
                 1 => CreateToolCall("initial-call", "initial"),
                 2 => CreateToolCall("intermediate-call", "intermediate"),
-                3 => new ChatMessage(
-                    ChatRole.Assistant,
-                    [new FunctionCallContent(
-                        "end-call",
-                        ToolOnlyTurnRunner.EndTurnToolName,
-                        new Dictionary<string, object?>())]),
-                _ => throw new InvalidOperationException("The tool-only loop made an unexpected model invocation."),
+                _ => CancelSession(cancellationToken),
             };
             return Task.FromResult(new ChatResponse(response));
         }
@@ -283,6 +277,13 @@ public sealed class AIChatClientDiagnosticsTests
 
         public void Dispose()
         {
+        }
+
+        private ChatMessage CancelSession(CancellationToken cancellationToken)
+        {
+            sessionCancellation.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new OperationCanceledException(cancellationToken);
         }
 
         private static ChatMessage CreateToolCall(string callId, string value)

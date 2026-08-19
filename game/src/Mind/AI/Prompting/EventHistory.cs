@@ -4,12 +4,15 @@ using Godot;
 namespace AlleyCat.Mind.AI.Prompting;
 
 /// <summary>
-/// Builds template-scoped exact dispatch for an ordered observation history.
+/// Standalone authoring resource for exact-dispatch event-history rendering (AI-003 TR-12): it is not a prompt
+/// section and never enters the session-start prompt stack. Its fragments and fallback feed the on-demand
+/// <see cref="ObservationHistoryRenderer" /> for AI-002 wait results, timeline history tool results, and
+/// interruption injections.
 /// </summary>
 [GlobalClass]
-public sealed partial class EventHistoryPromptSection : PromptSection
+public sealed partial class EventHistory : Resource
 {
-    /// <summary>Stable top-level render-context key containing the observation history.</summary>
+    /// <summary>Top-level render-context key carrying one ordered observation batch to the event-history template.</summary>
     public const string ObservationsContextKey = "observations";
 
     /// <summary>Ordered authored fragments dispatched by exact semantic key.</summary>
@@ -20,16 +23,18 @@ public sealed partial class EventHistoryPromptSection : PromptSection
     [Export(PropertyHint.MultilineText)]
     public string FallbackSource { get; set; } = "((Received {{TypeKey}} event.))";
 
-    /// <inheritdoc />
-    public override Task<string> GetContentAsync(
-        PromptSectionBuildContext buildContext,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Builds the exact-dispatch Handlebars source for an ordered observation history, validated against the
+    /// authoring contract.
+    /// </summary>
+    /// <param name="fragments">Ordered authored fragments dispatched by exact semantic key.</param>
+    /// <param name="fallbackSource">Handlebars source used when no exact fragment key matches.</param>
+    /// <returns>Template source iterating the <c>observations</c> key with exact keyed dispatch.</returns>
+    internal static string BuildEventHistorySource(
+        IReadOnlyList<EventHistoryPromptFragment> fragments,
+        string? fallbackSource)
     {
-        ArgumentNullException.ThrowIfNull(buildContext);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        EventHistoryPromptFragment[] fragments = Fragments ?? [];
-        ValidateAuthoring(fragments, FallbackSource);
+        ValidateAuthoring(fragments, fallbackSource);
 
         StringBuilder source = new("{{#each observations}}");
         foreach (EventHistoryPromptFragment fragment in fragments)
@@ -41,14 +46,14 @@ public sealed partial class EventHistoryPromptSection : PromptSection
                 .Append("{{else}}");
         }
 
-        _ = source.Append(FallbackSource);
-        for (int index = 0; index < fragments.Length; index++)
+        _ = source.Append(fallbackSource);
+        for (int index = 0; index < fragments.Count; index++)
         {
             _ = source.Append("{{/if}}");
         }
 
         _ = source.Append("{{/each}}");
-        return Task.FromResult(source.ToString());
+        return source.ToString();
     }
 
     private static void ValidateAuthoring(

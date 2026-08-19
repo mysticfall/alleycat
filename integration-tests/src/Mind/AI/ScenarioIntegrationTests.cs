@@ -21,7 +21,7 @@ using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.IntegrationTests.Mind.AI;
 
-/// <summary>Godot-runtime coverage for the scenario feature across turns, tools, workers, and prompt assets.</summary>
+/// <summary>Godot-runtime coverage for the scenario feature across session start, tools, and prompt assets.</summary>
 [Headless]
 public sealed partial class ScenarioIntegrationTests
 {
@@ -32,11 +32,9 @@ public sealed partial class ScenarioIntegrationTests
         Assert.True(typeof(Resource).IsAssignableFrom(typeof(FixedScenarioManager)));
         Assert.NotNull(typeof(FixedScenarioManager).GetCustomAttribute<GlobalClassAttribute>());
         Assert.True(typeof(ScenarioManager).IsAssignableFrom(typeof(FixedScenarioManager)));
-
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
         SceneContext scene = new([owner, player]);
-        ScenarioContext previous = new(owner, scene);
         FixedScenarioManager manager = new()
         {
             DescriptionPath = "res://assets/testing/prompts/test_scenario_fixed.md",
@@ -45,8 +43,8 @@ public sealed partial class ScenarioIntegrationTests
         try
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
-            Scenario first = manager.GetCurrentScenario(previous, coreContext)!;
-            Scenario second = manager.GetCurrentScenario(previous, coreContext)!;
+            Scenario first = manager.GetCurrentScenario(coreContext)!;
+            Scenario second = manager.GetCurrentScenario(coreContext)!;
 
             Assert.Equal("File-backed fixed scenario description for AI-008.\n", first.Description);
             Assert.Equal(first.Description, second.Description);
@@ -66,7 +64,6 @@ public sealed partial class ScenarioIntegrationTests
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
         SceneContext scene = new([owner, player]);
-        ScenarioContext previous = new(owner, scene);
         FixedScenarioManager manager = new()
         {
             DescriptionPath = "res://assets/testing/prompts/test_scenario_with_frontmatter.md",
@@ -75,8 +72,8 @@ public sealed partial class ScenarioIntegrationTests
         try
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
-            Scenario first = manager.GetCurrentScenario(previous, coreContext)!;
-            Scenario second = manager.GetCurrentScenario(previous, coreContext)!;
+            Scenario first = manager.GetCurrentScenario(coreContext)!;
+            Scenario second = manager.GetCurrentScenario(coreContext)!;
 
             Assert.Equal("File-backed fixed scenario body after front matter for AI-008.\n", first.Description);
             Assert.Equal(first.Description, second.Description);
@@ -98,7 +95,6 @@ public sealed partial class ScenarioIntegrationTests
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
         SceneContext scene = new([owner, player]);
-        ScenarioContext previous = new(owner, scene);
         FixedScenarioManager manager = new()
         {
             DescriptionPath = "res://assets/testing/prompts/test_scenario_token.md",
@@ -107,7 +103,7 @@ public sealed partial class ScenarioIntegrationTests
         try
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
-            Scenario scenario = manager.GetCurrentScenario(previous, coreContext)!;
+            Scenario scenario = manager.GetCurrentScenario(coreContext)!;
 
             Assert.Equal(
                 "The interrogator char:owner must extract the pass phrase from the detainee char:fixture_player before the shift changes.\n",
@@ -121,7 +117,7 @@ public sealed partial class ScenarioIntegrationTests
         }
     }
 
-    /// <summary>The fixed manager rejects a missing path, missing file, blank content, and a null previous binding.</summary>
+    /// <summary>The fixed manager rejects a missing path, missing file, and blank content.</summary>
     [Fact]
     public void FixedScenarioManager_WithBlankMissingOrEmptyAuthoring_FailsClearly()
     {
@@ -133,29 +129,25 @@ public sealed partial class ScenarioIntegrationTests
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateMinimalCoreContext();
 
-            Assert.Equal(
-                "previous",
-                Assert.Throws<ArgumentNullException>(() => manager.GetCurrentScenario(null!, coreContext)).ParamName);
-
             InvalidOperationException missingPath = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(new ScenarioContext(owner, scene), coreContext));
+                () => manager.GetCurrentScenario(coreContext));
             Assert.Contains("non-empty Godot resource path", missingPath.Message, StringComparison.Ordinal);
 
             manager.DescriptionPath = "res://assets/testing/prompts/missing_scenario_fixed.md";
             InvalidOperationException missingFile = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(new ScenarioContext(owner, scene), coreContext));
+                () => manager.GetCurrentScenario(coreContext));
             Assert.Contains("res://assets/testing/prompts/missing_scenario_fixed.md", missingFile.Message, StringComparison.Ordinal);
             Assert.Contains("could not read scenario description file", missingFile.Message, StringComparison.Ordinal);
 
             manager.DescriptionPath = "res://assets/testing/prompts/test_scenario_blank.md";
             InvalidOperationException blankContent = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(new ScenarioContext(owner, scene), coreContext));
+                () => manager.GetCurrentScenario(coreContext));
             Assert.Contains("res://assets/testing/prompts/test_scenario_blank.md", blankContent.Message, StringComparison.Ordinal);
             Assert.Contains("non-empty scenario description", blankContent.Message, StringComparison.Ordinal);
 
             manager.DescriptionPath = "res://assets/testing/prompts/test_scenario_frontmatter_only.md";
             InvalidOperationException blankAfterStrip = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(new ScenarioContext(owner, scene), coreContext));
+                () => manager.GetCurrentScenario(coreContext));
             Assert.Contains(
                 "res://assets/testing/prompts/test_scenario_frontmatter_only.md",
                 blankAfterStrip.Message,
@@ -175,7 +167,6 @@ public sealed partial class ScenarioIntegrationTests
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
         SceneContext scene = new([owner, player]);
-        ScenarioContext previous = new(owner, scene);
         FixedScenarioManager manager = new()
         {
             DescriptionPath = "res://assets/testing/prompts/test_scenario_broken_template.md",
@@ -185,7 +176,7 @@ public sealed partial class ScenarioIntegrationTests
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
             InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(previous, coreContext));
+                () => manager.GetCurrentScenario(coreContext));
 
             Assert.Contains(
                 "failed to compile or render the scenario description template",
@@ -204,82 +195,61 @@ public sealed partial class ScenarioIntegrationTests
         }
     }
 
-    /// <summary>Each fresh turn captures a new scene snapshot before the manager query and hands over the previous binding.</summary>
+    /// <summary>Session start captures a fresh scene snapshot before querying the manager exactly once.</summary>
     [Fact]
-    public async Task ForegroundTurn_CapturesFreshSnapshotThenQueriesManagerWithLazilyCreatedPrevious()
+    public async Task SessionStart_CapturesFreshSnapshotThenQueriesManagerOnceWithCoreContext()
     {
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
-        List<ICharacter> liveMembership = [owner, player];
-        CountingSceneProvider sceneProvider = new(liveMembership);
+        CountingSceneProvider sceneProvider = new([owner, player]);
         ScriptedScenarioManager manager = new()
         {
             SceneCaptureCountProbe = () => sceneProvider.CaptureCount,
         };
         manager.Enqueue(new Scenario("Scenario one."));
         ScriptedClientProvider clientProvider = new();
-        clientProvider.ScriptCall(1, "capture_context", "end_turn");
-        clientProvider.ScriptCall(2, "capture_context", "end_turn");
-        CapturingTool tool = new();
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             ClientProvider = clientProvider,
             ScenarioManager = manager,
-            Tools = [tool],
         };
         mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
-            await mind.RunForegroundTurnForTestAsync();
+            _ = await mind.RunSessionStartForTestAsync();
 
-            Assert.Equal(2, sceneProvider.CaptureCount);
-            Assert.Equal([1, 2], manager.SceneCaptureCountsAtQuery);
+            Assert.Equal(1, sceneProvider.CaptureCount);
+            Assert.Equal([1], manager.SceneCaptureCountsAtQuery);
 
-            // The core context handed to the manager excludes the scenario key on every turn; keys were captured at
-            // call time because the same mutable dictionary is sealed with the scenario key afterwards.
+            // The core context handed to the manager excludes the scenario key; keys were captured at call time
+            // because the same mutable dictionary is sealed with the scenario key afterwards.
             Assert.All(
                 manager.ReceivedCoreContextKeys,
                 keys => Assert.DoesNotContain("scenario", keys));
-            Assert.Equal(2, manager.ReceivedCoreContextKeys.Count);
-
-            ScenarioContext firstPrevious = manager.ReceivedPrevious[0];
-            Assert.Null(firstPrevious.Scenario);
-            Assert.Same(owner, firstPrevious.Character);
-            Assert.Same(sceneProvider.Captured[0], firstPrevious.SceneContext);
-
-            Assert.Equal(2, manager.ReceivedPrevious.Count);
-            Assert.Same(tool.CapturedContexts[0], manager.ReceivedPrevious[1]);
-            Assert.Equal("Scenario one.", manager.ReceivedPrevious[1].Scenario!.Description);
-            Assert.Same(sceneProvider.Captured[0], manager.ReceivedPrevious[1].SceneContext);
-            Assert.NotSame(tool.CapturedContexts[0], tool.CapturedContexts[1]);
-            Assert.Equal([owner, player], liveMembership);
+            _ = Assert.Single(manager.ReceivedCoreContextKeys);
         }
         finally
         {
             mind.Free();
             manager.Free();
             clientProvider.Free();
-            tool.Free();
             player.Free();
         }
     }
 
     /// <summary>The manager's returned record or null becomes the scenario of the one binding shared by render and tools.</summary>
     [Fact]
-    public async Task ForegroundTurn_ManagerReturnValue_BecomesScenarioOfOneBindingForRenderAndTools()
+    public async Task Session_ManagerReturnValue_BecomesScenarioOfOneBindingForRenderAndTools()
     {
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
         CountingSceneProvider sceneProvider = new([owner, player]);
         ScriptedScenarioManager manager = new();
         manager.Enqueue(new Scenario("Scenario with a record."));
-        manager.Enqueue(null);
         ScriptedClientProvider clientProvider = new();
-        clientProvider.ScriptCall(1, "capture_context", "end_turn");
-        clientProvider.ScriptCall(2, "capture_context", "end_turn");
+        clientProvider.ScriptCall(1, "capture_context");
         CapturingTool tool = new();
         TestAgenticMind mind = new(owner)
         {
@@ -292,21 +262,16 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
+            await mind.RunSessionForTestAsync(clientProvider.SessionCancellation.Token);
 
-            IReadOnlyDictionary<string, object?> firstPublished = mind.GetLatestRenderContext();
-            Scenario firstScenario = Assert.IsType<Scenario>(firstPublished["scenario"]);
-            Assert.Equal("Scenario with a record.", firstScenario.Description);
-            Assert.Same(firstScenario, tool.CapturedContexts.Single().Scenario);
-            Assert.Same(sceneProvider.Captured[0], tool.CapturedContexts.Single().SceneContext);
-            Assert.Same(owner, tool.CapturedContexts.Single().Character);
-
-            await mind.RunForegroundTurnForTestAsync();
-
-            IReadOnlyDictionary<string, object?> secondPublished = mind.GetLatestRenderContext();
-            Assert.Null(secondPublished["scenario"]);
-            Assert.Null(tool.CapturedContexts[1].Scenario);
-            Assert.Equal(["character", "characters", "player", "observations", "scenario"], secondPublished.Keys);
+            IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
+            Scenario publishedScenario = Assert.IsType<Scenario>(published["scenario"]);
+            Assert.Equal("Scenario with a record.", publishedScenario.Description);
+            ScenarioContext captured = tool.CapturedContexts.Single();
+            Assert.Same(publishedScenario, captured.Scenario);
+            Assert.Same(sceneProvider.Captured[0], captured.SceneContext);
+            Assert.Same(owner, captured.Character);
+            _ = Assert.Single(manager.ReceivedCoreContextKeys);
         }
         finally
         {
@@ -353,14 +318,14 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await configuredMind.RunForegroundTurnForTestAsync();
-            await unconfiguredMind.RunForegroundTurnForTestAsync();
+            AgenticMind.AgentSession configuredSession = await configuredMind.RunSessionStartForTestAsync();
+            AgenticMind.AgentSession unconfiguredSession = await unconfiguredMind.RunSessionStartForTestAsync();
 
             Assert.Null(configuredMind.GetLatestRenderContext()["scenario"]);
             Assert.Null(unconfiguredMind.GetLatestRenderContext()["scenario"]);
-            Assert.Equal(unconfiguredProvider.Instructions.Single(), configuredProvider.Instructions.Single());
-            Assert.Contains("<Scenario>", configuredProvider.Instructions.Single(), StringComparison.Ordinal);
-            Assert.Contains("</Scenario>", configuredProvider.Instructions.Single(), StringComparison.Ordinal);
+            Assert.Equal(unconfiguredSession.Instructions, configuredSession.Instructions);
+            Assert.Contains("<Scenario>", configuredSession.Instructions, StringComparison.Ordinal);
+            Assert.Contains("</Scenario>", configuredSession.Instructions, StringComparison.Ordinal);
         }
         finally
         {
@@ -374,73 +339,9 @@ public sealed partial class ScenarioIntegrationTests
         }
     }
 
-    /// <summary>A replacement turn after interruption reuses the just-built binding without re-querying the manager.</summary>
+    /// <summary>Manager failure is contained: the session never starts, the failure is logged, and the timeline is unaffected.</summary>
     [Fact]
-    public async Task ReplacementTurnAfterInterruption_ReusesScenarioContextWithoutRequery()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        TestCharacter owner = new();
-        FixturePlayerCharacter player = new();
-        CountingSceneProvider sceneProvider = new([owner, player]);
-        ScriptedScenarioManager manager = new();
-        manager.Enqueue(new Scenario("Interrupted scenario."));
-        ScriptedClientProvider clientProvider = new()
-        {
-            GateAtCall = 2
-        };
-        clientProvider.ScriptCall(1, "capture_context");
-        clientProvider.ScriptCall(3, "capture_context", "end_turn");
-        CapturingTool tool = new();
-        TestAgenticMind mind = new(owner)
-        {
-            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ClientProvider = clientProvider,
-            ScenarioManager = manager,
-            Tools = [tool],
-            HighImportanceInterruptionEnabled = true,
-            HighImportanceInterruptionThreshold = 5f,
-            ObservationImportanceThreshold = 1f,
-        };
-        mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
-        await TestUtils.WaitForFramesAsync(sceneTree, 2);
-
-        try
-        {
-            mind.ObserveForTest(new TestObservation(1f, "initial"));
-            await WaitUntilAsync(
-                sceneTree,
-                () => clientProvider.CallCount == 2 && tool.CapturedContexts.Count == 1);
-
-            mind.ObserveForTest(new TestObservation(5f, "high"));
-            await clientProvider.GateCancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(2));
-            await WaitUntilAsync(sceneTree, () => clientProvider.CallCount == 3);
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-
-            _ = Assert.Single(manager.ReceivedPrevious);
-            Assert.Equal(2, tool.CapturedContexts.Count);
-            Assert.Same(tool.CapturedContexts[0], tool.CapturedContexts[1]);
-            Assert.Equal("Interrupted scenario.", tool.CapturedContexts[1].Scenario!.Description);
-            Assert.Same(
-                tool.CapturedContexts[1].SceneContext,
-                tool.CapturedContexts[0].SceneContext);
-            IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
-            Assert.Equal("Interrupted scenario.", Assert.IsType<Scenario>(published["scenario"]).Description);
-        }
-        finally
-        {
-            mind.QueueFree();
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            manager.Free();
-            clientProvider.Free();
-            tool.Free();
-            player.Free();
-        }
-    }
-
-    /// <summary>Manager failure is contained: the prior published snapshot is retained without retry or repair.</summary>
-    [Fact]
-    public async Task ManagerFailure_IsContainedRetainingPriorSnapshotWithoutRetry()
+    public async Task ManagerFailure_IsContainedWithoutSessionStartOrTimelineCorruption()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         using RecordingLoggerProvider loggerProvider = new();
@@ -449,7 +350,7 @@ public sealed partial class ScenarioIntegrationTests
         FixturePlayerCharacter player = new();
         CountingSceneProvider sceneProvider = new([owner, player]);
         ScriptedScenarioManager manager = new();
-        manager.Enqueue(new Scenario("First scenario."));
+        manager.EnqueueFailure(new InvalidOperationException("scenario resolution exploded"));
         ScriptedClientProvider clientProvider = new();
         TestAgenticMind mind = new(owner)
         {
@@ -460,19 +361,11 @@ public sealed partial class ScenarioIntegrationTests
         };
         mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
-        int successfulTurns = 0;
-        mind.ForegroundTurnSucceeded += () => successfulTurns++;
         await TestUtils.WaitForFramesAsync(sceneTree, 2);
 
         try
         {
             mind.ObserveForTest(new TestObservation(1f, "first"));
-            await WaitUntilAsync(sceneTree, () => mind.GetLatestRenderContext().Count > 0);
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            IReadOnlyDictionary<string, object?> priorSnapshot = mind.GetLatestRenderContext();
-
-            manager.EnqueueFailure(new InvalidOperationException("scenario resolution exploded"));
-            mind.ObserveForTest(new TestObservation(1f, "second"));
             await WaitUntilAsync(
                 sceneTree,
                 () => loggerProvider.Entries.Any(entry =>
@@ -481,124 +374,12 @@ public sealed partial class ScenarioIntegrationTests
                         && entry.Exception.Message.Contains("scenario resolution exploded", StringComparison.Ordinal)));
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
-            Assert.Same(priorSnapshot, mind.GetLatestRenderContext());
-            Assert.Equal("First scenario.", Assert.IsType<Scenario>(priorSnapshot["scenario"]).Description);
-            Assert.Equal(2, manager.ReceivedPrevious.Count);
-            Assert.Equal(1, clientProvider.CallCount);
-            Assert.Equal(1, successfulTurns);
-            Assert.False(mind.HasPendingForTest);
+            Assert.Empty(mind.GetLatestRenderContext());
+            Assert.Empty(clientProvider.Instructions);
+            _ = Assert.Single(manager.ReceivedCoreContextKeys);
             Assert.Equal(
-                ["first", "second"],
+                ["first"],
                 mind.GetTimelineForTest().Cast<TestObservation>().Select(observation => observation.Value));
-        }
-        finally
-        {
-            mind.QueueFree();
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            manager.Free();
-            clientProvider.Free();
-            player.Free();
-        }
-    }
-
-    /// <summary>An authored worker projection colliding with the reserved scenario key fails the foreground render.</summary>
-    [Fact]
-    public async Task WorkerProjection_CollidingWithScenarioKey_FailsForegroundRenderAndRetainsSnapshot()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        using RecordingLoggerProvider loggerProvider = new();
-        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
-        TestCharacter owner = new();
-        FixturePlayerCharacter player = new();
-        CountingSceneProvider sceneProvider = new([owner, player]);
-        CollidingProjectionWorker worker = new("scenario");
-        ManualRequestTrigger trigger = new();
-        worker.AddChild(trigger);
-        ScriptedClientProvider clientProvider = new();
-        TestAgenticMind mind = new(owner)
-        {
-            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
-        };
-        mind.AddChild(worker);
-        mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
-        await TestUtils.WaitForFramesAsync(sceneTree, 2);
-
-        try
-        {
-            mind.ObserveForTest(new TestObservation(1f, "start"));
-            await WaitUntilAsync(sceneTree, () => mind.GetLatestRenderContext().Count > 0);
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            IReadOnlyDictionary<string, object?> priorSnapshot = mind.GetLatestRenderContext();
-
-            trigger.RequestForTest();
-            await WaitUntilAsync(sceneTree, () => worker.RunCount == 1);
-            mind.ObserveForTest(new TestObservation(1f, "collision"));
-            await WaitUntilAsync(
-                sceneTree,
-                () => loggerProvider.Entries.Any(entry =>
-                    entry.Exception?.Message.Contains("duplicate context key 'scenario'", StringComparison.Ordinal) == true));
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-
-            Assert.Same(priorSnapshot, mind.GetLatestRenderContext());
-            Assert.Equal(1, clientProvider.CallCount);
-        }
-        finally
-        {
-            mind.QueueFree();
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            clientProvider.Free();
-            player.Free();
-        }
-    }
-
-    /// <summary>Context workers capture the scenario key through ordinary published-snapshot capture.</summary>
-    [Fact]
-    public async Task ContextWorkers_CaptureScenarioKeyThroughOrdinarySnapshotCapture()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        TestCharacter owner = new();
-        FixturePlayerCharacter player = new();
-        CountingSceneProvider sceneProvider = new([owner, player]);
-        ScriptedScenarioManager manager = new();
-        Scenario scenario = new("Worker visible scenario.");
-        manager.Enqueue(scenario);
-        RecordingWorker worker = new();
-        ManualRequestTrigger trigger = new();
-        worker.AddChild(trigger);
-        ScriptedClientProvider clientProvider = new();
-        TestAgenticMind mind = new(owner)
-        {
-            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ClientProvider = clientProvider,
-            ScenarioManager = manager,
-            ObservationImportanceThreshold = 1f,
-        };
-        mind.AddChild(worker);
-        mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
-        await TestUtils.WaitForFramesAsync(sceneTree, 2);
-
-        try
-        {
-            mind.ObserveForTest(new TestObservation(1f, "start"));
-            IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
-            await WaitUntilAsync(
-                sceneTree,
-                () =>
-                {
-                    published = mind.GetLatestRenderContext();
-                    return published.Count > 0 && ReferenceEquals(published["scenario"], scenario);
-                });
-
-            trigger.RequestForTest();
-            await WaitUntilAsync(sceneTree, () => worker.RunCount == 1);
-
-            IReadOnlyDictionary<string, object?> captured = worker.Contexts.Single();
-            Assert.Same(published, captured);
-            Assert.Same(scenario, captured["scenario"]);
         }
         finally
         {
@@ -612,7 +393,7 @@ public sealed partial class ScenarioIntegrationTests
 
     /// <summary>The reserved player key aliases the player's identical rendered context from the characters dictionary.</summary>
     [Fact]
-    public async Task ForegroundRender_WithAttendedPlayer_PlayerKeyAliasesPlayersCharactersEntry()
+    public async Task SessionRender_WithAttendedPlayer_PlayerKeyAliasesPlayersCharactersEntry()
     {
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
@@ -628,7 +409,7 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
+            _ = await mind.RunSessionStartForTestAsync();
 
             IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
             IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
@@ -656,7 +437,7 @@ public sealed partial class ScenarioIntegrationTests
     /// interface <c>FullId</c> member to Handlebars, so the player must arrive as its rendered context dictionary.
     /// </remarks>
     [Fact]
-    public async Task ForegroundRender_WhenPlayerIsNotAttentionEligible_PlayerFullIdTokenStillRenders()
+    public async Task SessionRender_WhenPlayerIsNotAttentionEligible_PlayerFullIdTokenStillRenders()
     {
         PromptStack stack = LoadSharedStackAndAssertScenarioSection();
         TestCharacter owner = new();
@@ -677,9 +458,7 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
-
-            string instructions = clientProvider.Instructions.Single();
+            string instructions = (await mind.RunSessionStartForTestAsync()).Instructions;
             Assert.Contains("char:owner", instructions, StringComparison.Ordinal);
             Assert.Contains("char:fixture_player", instructions, StringComparison.Ordinal);
             int openingIndex = instructions.IndexOf("<Scenario>", StringComparison.Ordinal);
@@ -703,7 +482,7 @@ public sealed partial class ScenarioIntegrationTests
 
     /// <summary>Attention gating omits the player from characters while the player key stays populated.</summary>
     [Fact]
-    public async Task ForegroundRender_WhenPlayerIsNotAttentionEligible_CharactersOmitPlayerWhilePlayerKeyIsPopulated()
+    public async Task SessionRender_WhenPlayerIsNotAttentionEligible_CharactersOmitPlayerWhilePlayerKeyIsPopulated()
     {
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
@@ -718,7 +497,7 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
+            _ = await mind.RunSessionStartForTestAsync();
 
             IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
             IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
@@ -731,59 +510,6 @@ public sealed partial class ScenarioIntegrationTests
         finally
         {
             mind.Free();
-            clientProvider.Free();
-            player.Free();
-        }
-    }
-
-    /// <summary>An authored worker projection colliding with the reserved player key fails the foreground render.</summary>
-    [Fact]
-    public async Task WorkerProjection_CollidingWithPlayerKey_FailsForegroundRenderAndRetainsSnapshot()
-    {
-        SceneTree sceneTree = TestUtils.GetSceneTree();
-        using RecordingLoggerProvider loggerProvider = new();
-        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
-        TestCharacter owner = new();
-        FixturePlayerCharacter player = new();
-        CountingSceneProvider sceneProvider = new([owner, player]);
-        CollidingProjectionWorker worker = new("player");
-        ManualRequestTrigger trigger = new();
-        worker.AddChild(trigger);
-        ScriptedClientProvider clientProvider = new();
-        TestAgenticMind mind = new(owner)
-        {
-            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            ClientProvider = clientProvider,
-            ObservationImportanceThreshold = 1f,
-        };
-        mind.AddChild(worker);
-        mind.SetSceneContextLoaderForTesting(sceneProvider.GetCurrent);
-        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
-        await TestUtils.WaitForFramesAsync(sceneTree, 2);
-
-        try
-        {
-            mind.ObserveForTest(new TestObservation(1f, "start"));
-            await WaitUntilAsync(sceneTree, () => mind.GetLatestRenderContext().Count > 0);
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-            IReadOnlyDictionary<string, object?> priorSnapshot = mind.GetLatestRenderContext();
-
-            trigger.RequestForTest();
-            await WaitUntilAsync(sceneTree, () => worker.RunCount == 1);
-            mind.ObserveForTest(new TestObservation(1f, "collision"));
-            await WaitUntilAsync(
-                sceneTree,
-                () => loggerProvider.Entries.Any(entry =>
-                    entry.Exception?.Message.Contains("duplicate context key 'player'", StringComparison.Ordinal) == true));
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
-
-            Assert.Same(priorSnapshot, mind.GetLatestRenderContext());
-            Assert.Equal(1, clientProvider.CallCount);
-        }
-        finally
-        {
-            mind.QueueFree();
-            await TestUtils.WaitForFramesAsync(sceneTree, 2);
             clientProvider.Free();
             player.Free();
         }
@@ -811,9 +537,7 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
-
-            string instructions = clientProvider.Instructions.Single();
+            string instructions = (await mind.RunSessionStartForTestAsync()).Instructions;
             Assert.Contains("<Scenario>", instructions, StringComparison.Ordinal);
             Assert.Contains("File-backed fixed scenario description for AI-008.", instructions, StringComparison.Ordinal);
             Assert.Contains("</Scenario>", instructions, StringComparison.Ordinal);
@@ -849,9 +573,7 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
-
-            string instructions = clientProvider.Instructions.Single();
+            string instructions = (await mind.RunSessionStartForTestAsync()).Instructions;
             Assert.Contains("char:owner", instructions, StringComparison.Ordinal);
             Assert.Contains("char:fixture_player", instructions, StringComparison.Ordinal);
             int openingIndex = instructions.IndexOf("<Scenario>", StringComparison.Ordinal);
@@ -887,9 +609,7 @@ public sealed partial class ScenarioIntegrationTests
 
         try
         {
-            await mind.RunForegroundTurnForTestAsync();
-
-            string instructions = clientProvider.Instructions.Single();
+            string instructions = (await mind.RunSessionStartForTestAsync()).Instructions;
             int openingIndex = instructions.IndexOf("<Scenario>", StringComparison.Ordinal);
             int closingIndex = instructions.IndexOf("</Scenario>", StringComparison.Ordinal);
             Assert.True(openingIndex >= 0, "Expected the empty Scenario tag pair quirk in the rendered prompt.");
@@ -913,12 +633,18 @@ public sealed partial class ScenarioIntegrationTests
             "res://assets/characters/prompts/generic_npc_prompt_stack.tres");
         Assert.NotNull(stack);
 
+        // The shared generic NPC prompt stack carries exactly the mind.md file section, essential lore, character
+        // lore, and the scenario section — no event-history section (AI-003 TR-23/24).
+        Assert.Equal(
+            ["Instructions", "Lore", "Characters", "Scenario"],
+            stack.Sections.Select(section => section.Name));
+        Assert.DoesNotContain(
+            stack.Sections,
+            section => section.GetType().Name.Contains("EventHistory", StringComparison.Ordinal));
         PromptSection scenarioSection = Assert.IsType<FilePromptSection>(stack.Sections[3]);
         var fileSection = (FilePromptSection)scenarioSection;
         Assert.Equal("res://prompts/scenario.md", fileSection.FilePath);
         Assert.Equal("Scenario", fileSection.Name);
-        Assert.Equal("Instructions", stack.Sections[0].Name);
-        Assert.Equal("Event History", stack.Sections[4].Name);
 
         using var scenarioFile = Godot.FileAccess.Open(
             "res://prompts/scenario.md",
@@ -935,7 +661,7 @@ public sealed partial class ScenarioIntegrationTests
 
     /// <summary>Builds a production-shaped core render context through the real AgenticMind core path.</summary>
     private static IReadOnlyDictionary<string, object?> CreateCoreContextForManager(ICharacter owner, SceneContext scene)
-        => AgenticMind.CreateCoreRenderContext(owner, scene, [], [], attentionEligibleFullIDs: null);
+        => AgenticMind.CreateCoreRenderContext(owner, scene, attentionEligibleFullIDs: null);
 
     /// <summary>Minimal realistic core dictionary for failure-path calls that never read the context.</summary>
     private static IReadOnlyDictionary<string, object?> CreateMinimalCoreContext()
@@ -975,13 +701,11 @@ public sealed partial class ScenarioIntegrationTests
     {
         private readonly Queue<object?> _script = new();
 
-        public List<ScenarioContext> ReceivedPrevious { get; } = [];
-
         public List<IReadOnlyDictionary<string, object?>> ReceivedCoreContexts { get; } = [];
 
         /// <summary>
         /// Core-context keys captured at call time. The core dictionary is later sealed with the scenario key in
-        /// place, so post-turn reads of the aliased instances would otherwise see the added key.
+        /// place, so post-session reads of the aliased instances would otherwise see the added key.
         /// </summary>
         public List<string[]> ReceivedCoreContextKeys { get; } = [];
 
@@ -993,13 +717,9 @@ public sealed partial class ScenarioIntegrationTests
 
         public void EnqueueFailure(Exception exception) => _script.Enqueue(exception);
 
-        public override Scenario? GetCurrentScenario(
-            ScenarioContext previous,
-            IReadOnlyDictionary<string, object?> coreContext)
+        public override Scenario? GetCurrentScenario(IReadOnlyDictionary<string, object?> coreContext)
         {
-            ArgumentNullException.ThrowIfNull(previous);
             ArgumentNullException.ThrowIfNull(coreContext);
-            ReceivedPrevious.Add(previous);
             ReceivedCoreContexts.Add(coreContext);
             ReceivedCoreContextKeys.Add([.. coreContext.Keys]);
             SceneCaptureCountsAtQuery.Add(SceneCaptureCountProbe());
@@ -1018,7 +738,7 @@ public sealed partial class ScenarioIntegrationTests
         public CapturingTool()
         {
             ToolName = "capture_context";
-            ToolDescription = "Capture the trusted turn context.";
+            ToolDescription = "Capture the trusted session context.";
         }
 
         public List<ScenarioContext> CapturedContexts { get; } = [];
@@ -1034,21 +754,11 @@ public sealed partial class ScenarioIntegrationTests
 
     private sealed partial class ScriptedClientProvider : ClientProvider
     {
-        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Dictionary<int, string[]> _scriptedCalls = [];
 
         public List<string> Instructions { get; } = [];
 
-        public TaskCompletionSource GateCancellationObserved
-        {
-            get;
-        } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public int GateAtCall
-        {
-            get; init;
-        }
+        public CancellationTokenSource SessionCancellation { get; } = new();
 
         public int CallCount => Instructions.Count;
 
@@ -1058,7 +768,7 @@ public sealed partial class ScenarioIntegrationTests
 
         private sealed class ScriptedClient(ScriptedClientProvider owner) : IChatClient
         {
-            public async Task<ChatResponse> GetResponseAsync(
+            public Task<ChatResponse> GetResponseAsync(
                 IEnumerable<ChatMessage> messages,
                 ChatOptions? options = null,
                 CancellationToken cancellationToken = default)
@@ -1066,28 +776,23 @@ public sealed partial class ScenarioIntegrationTests
                 _ = messages;
                 int call = owner.Instructions.Count + 1;
                 owner.Instructions.Add(options!.Instructions!);
-                if (call == owner.GateAtCall)
+                if (!owner._scriptedCalls.ContainsKey(call))
                 {
-                    try
-                    {
-                        await owner._gate.Task.WaitAsync(cancellationToken);
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        _ = owner.GateCancellationObserved.TrySetResult();
-                        throw;
-                    }
+                    // The session is long-running: once the script is exhausted, node-lifetime-style cancellation
+                    // ends it quietly.
+                    owner.SessionCancellation.Cancel();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    throw new OperationCanceledException(cancellationToken);
                 }
 
-                string[] toolNames = owner._scriptedCalls.GetValueOrDefault(call, ["end_turn"]);
                 FunctionCallContent[] calls =
                 [
-                    .. toolNames.Select((name, index) => new FunctionCallContent(
+                    .. owner._scriptedCalls[call].Select((name, index) => new FunctionCallContent(
                         $"call-{call}-{index}",
                         name,
                         new Dictionary<string, object?>())),
                 ];
-                return new ChatResponse(new ChatMessage(ChatRole.Assistant, calls));
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)));
             }
 
             public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -1110,61 +815,25 @@ public sealed partial class ScenarioIntegrationTests
         }
     }
 
-    private sealed partial class CollidingProjectionWorker(string contextKey) : ContextWorker
-    {
-        public int RunCount
-        {
-            get; private set;
-        }
-
-        protected override Task<IReadOnlyDictionary<string, object?>> RunAsync(
-            IReadOnlyDictionary<string, object?> context,
-            CancellationToken cancellationToken)
-        {
-            RunCount++;
-            return Task.FromResult<IReadOnlyDictionary<string, object?>>(new Dictionary<string, object?>
-            {
-                [contextKey] = "colliding projection",
-            });
-        }
-    }
-
-    private sealed partial class RecordingWorker : ContextWorker
-    {
-        public List<IReadOnlyDictionary<string, object?>> Contexts { get; } = [];
-
-        public int RunCount
-        {
-            get; private set;
-        }
-
-        protected override Task<IReadOnlyDictionary<string, object?>> RunAsync(
-            IReadOnlyDictionary<string, object?> context,
-            CancellationToken cancellationToken)
-        {
-            RunCount++;
-            Contexts.Add(context);
-            return Task.FromResult<IReadOnlyDictionary<string, object?>>(new Dictionary<string, object?>());
-        }
-    }
-
-    private sealed partial class ManualRequestTrigger : ContextWorkerTrigger
-    {
-        public void RequestForTest() => RequestRun();
-    }
-
     private sealed partial class TestAgenticMind(ICharacter owner) : AgenticMind
     {
-        public bool HasPendingForTest => HasPendingObservations;
-
-        public Task RunForegroundTurnForTestAsync() => RunAgentTurnAsync([], CancellationToken.None);
-
-        public void ObserveForTest(AgentObservation observation) => _ = Observe(observation);
+        public void ObserveForTest(AgentObservation observation) => Observe(observation);
 
         public void ReinforceAttentionForTest(string fullId)
             => ReinforceAttention(fullId, 1f, AttentionSettings.Create(1f, 0f, 0.05f, 0.25f));
 
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
+
+        /// <summary>Runs only the session-start sequence: render context, manager query, prompt render, publication.</summary>
+        public Task<AgentSession> RunSessionStartForTestAsync()
+            => PrepareSessionAsync(CancellationToken.None);
+
+        /// <summary>Runs the complete session through the production prepare and execute paths.</summary>
+        public async Task RunSessionForTestAsync(CancellationToken cancellationToken)
+        {
+            AgentSession session = await PrepareSessionAsync(CancellationToken.None);
+            await ExecuteSessionAsync(session, cancellationToken);
+        }
 
         protected override ICharacter ResolveOwningCharacter() => owner;
     }

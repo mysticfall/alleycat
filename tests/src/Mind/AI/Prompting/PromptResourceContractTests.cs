@@ -22,7 +22,7 @@ public sealed class PromptResourceContractTests
         AssertResourceContract<EssentialLorePromptSection>();
         AssertResourceContract<CharacterLorePromptSection>();
         AssertResourceContract<EventHistoryPromptFragment>();
-        AssertResourceContract<EventHistoryPromptSection>();
+        AssertResourceContract<EventHistory>();
         AssertResourceContract<PseudoXmlPromptWriter>(expectTool: true);
     }
 

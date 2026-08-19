@@ -19,8 +19,8 @@ attention, existing speech history, and existing eye visibility and presentation
 
 1. NPCs notice non-self speech, including speech from an unknown speaker.
 2. NPCs periodically notice visible subjects and retain relevant subjects in attention as that relevance decays.
-3. Recognised speakers and visible subjects can enter foreground context when their attention reaches the configured
-   threshold.
+3. Recognised speakers and visible subjects can enter session prompt context when their attention reaches the
+   configured threshold.
 4. Non-self speech becomes exactly one durable recognised or unknown speech memory; routine visual surveys create no
    memories.
 5. Sensing must not redirect gaze, alter eye presentation, or delay normal gameplay with asynchronous processing.
@@ -39,8 +39,9 @@ attention, existing speech history, and existing eye visibility and presentation
      - Mind's sensing and attention-production path may depend on Sense contracts, but not modality or delivery domains.
        AI-007's separately composed post-attention selector may depend only on the `IVision` capability contract to
        assign a target; Vision and other modality or delivery domains must not depend on Mind.
-       Mind's speech turn-taking gate resolves voice activity through current-scene characters' composed `IVoice` via
-       `ICharacter.TryGetVoice()`, mirroring the established `SpeechPerception` attribution precedent (TR-23–TR-26).
+        Mind's attended-speaker resolution — which voices block `speak` and wake `wait` — resolves voice activity
+        through current-scene characters' composed `IVoice` via `ICharacter.TryGetVoice()`, mirroring the established
+        `SpeechPerception` attribution precedent (TR-23–TR-26).
        This exception is acknowledged explicitly rather than presenting strict separation; it adds no dependency beyond
        the existing precedent.
 2. Scene composition may place a Mind node beneath a Character node without creating a Character-to-Mind source
@@ -110,7 +111,7 @@ attention, existing speech history, and existing eye visibility and presentation
     the source voice `Id`. Blank configured candidate IDs do not match.
 25. Other values follow ordinary attribution handling: zero matches produce exactly one unknown `ObservedSpeech`; one
     match reinforces that character's canonical `FullId` and produces exactly one recognised `ObservedSpeech` with that
-    `ActorId`; and multiple matches fail without attention, timeline, pending-scheduling, or other effects.
+     `ActorId`; and multiple matches fail without attention, timeline, notable-accumulation, or other effects.
 26. Recognised and unknown observations retain the speech and raw local source voice `Id`. That ID remains operational
     attribution, not authenticated provenance.
 27. `VisualSurveyPerception` returns one attention reinforcement for every subject `FullId` in percept order and no
@@ -121,18 +122,18 @@ attention, existing speech history, and existing eye visibility and presentation
 28. `PerceptionResult` contains an ordered sequence of attention effects and an ordered sequence of zero or more
     `Observation` records. Both sequences are immutable after return.
 29. Before any mutation, Mind validates the complete result, every attention effect, every observation, and every
-    calculated observation importance. Any failure leaves attention, timeline, pending scheduling, and scheduling state
+    calculated observation importance. Any failure leaves attention, timeline, and notable-accumulation state
     unchanged.
 30. After successful validation, Mind applies attention effects sequentially in declared order. Duplicate subject
     effects are valid and compound in that order.
-31. Mind then atomically ingests all observations in result order through AI-001's existing timeline, pending FIFO, and
-    scheduling path. Existing scheduling and interruption behaviour remains unchanged.
+31. Mind then atomically ingests all observations in result order through AI-001's existing timeline and
+    notable-observation accumulation path. Existing wake and interruption signalling behaviour remains unchanged.
 32. Attention is keyed by canonical `FullId` using ordinal comparison. Reinforcement applies
     `current + (maximum - current) * contribution` without exceeding maximum.
 33. Attention decays lazily and linearly with elapsed game time on percept handling, queries, and snapshots. Entries
     below retention are evicted; every entry at or above the context threshold is eligible for context. Retention-level
-    snapshot presence is also the membership criterion for the AI-001 speech turn-taking gate, deliberately decoupled
-    from the context threshold used for foreground eligibility.
+    snapshot presence is also the membership criterion for AI-002's attended-speaker determination — `speak` blocking
+    and `wait` waking — deliberately decoupled from the context threshold used for prompt-context eligibility.
 34. Maximum must be finite and positive; decay must be finite and non-negative; thresholds must be finite and satisfy
     `0 <= retention <= context <= maximum`. Settings validation must complete before activation or mutation.
 35. Attention snapshots are immutable identity/value sequences ordered by `FullId` using ordinal comparison. Attention
@@ -144,14 +145,14 @@ attention, existing speech history, and existing eye visibility and presentation
 ### Ownership And Composition
 
 37. Mind owns incoming percept subscription, exact faculty dispatch, result validation, attention mutation, observation
-    ingestion, and existing scheduling. It must not select or assign an IVision look target from a sense, survey,
-    faculty, or attention effect.
+    ingestion, and notable-observation accumulation. It must not select or assign an IVision look target from a sense,
+    survey, faculty, or attention effect.
 38. AgenticMind owns only provider, prompt, render-context, and tool concerns. It must not interpret incoming percepts.
     The existing speech output tool and exactly-once self-action observation path remain unchanged.
 39. `Character.Components` deliberately includes configured `ISense` components in deterministic holder order, in
     addition to its required embodied components. No `CharacterPerception` component or bespoke wiring remains.
-40. AgenticMind foreground context contains self and each attention-eligible `FullId` that currently resolves through
-    `ISceneContext.Find(FullId)` to an `IContextual` subject. It performs no additional visual survey.
+40. AgenticMind session prompt context contains self and each attention-eligible `FullId` that currently resolves
+    through `ISceneContext.Find(FullId)` to an `IContextual` subject. It performs no additional visual survey.
 
 ## In Scope
 
@@ -162,7 +163,8 @@ attention, existing speech history, and existing eye visibility and presentation
   consumer; not gaze policy or target assignment.
 - Speech interpretation and observation-free visual reinforcement.
 - Sense projection through `Character.Components` and approved dependency direction.
-- Mind speech-gate voice-activity resolution through the established scene-character `IVoice` attribution precedent.
+- Mind attended-speaker voice-activity resolution through the established scene-character `IVoice` attribution
+  precedent.
 - Post-commit projection refresh and Mind sense rebinding.
 
 ## Out Of Scope
@@ -187,7 +189,7 @@ attention, existing speech history, and existing eye visibility and presentation
 1. NPCs record exactly one recognised or unknown speech memory for each accepted non-self speech publication and none
    for self speech.
 2. Periodic visual surveys reinforce every visible subject in survey order without producing visual memories.
-3. Foreground context contains self and every currently resolvable attention-eligible contextual subject.
+3. Session prompt context contains self and every currently resolvable attention-eligible contextual subject.
 4. Visual sensing preserves all existing visibility and eye presentation behaviour, including gaze, saccades, and
    blinking.
 5. Invalid sense, faculty, cadence, or attention authoring fails before sensing activates.
@@ -222,8 +224,8 @@ attention, existing speech history, and existing eye visibility and presentation
 10. Settings tests verify generic settings contain only maximum, decay, retention, and context thresholds, while each
    concrete faculty supplies its fixed valid semantic contribution.
 11. Atomicity tests verify complete result and calculated-importance validation precedes mutation; failure changes no
-   attention, timeline, pending, or scheduling state; valid duplicate effects compound sequentially in order; and all
-   observations ingest atomically in result order.
+    attention, timeline, or notable-accumulation state; valid duplicate effects compound sequentially in order; and all
+    observations ingest atomically in result order.
 12. Attention tests verify ordinal canonical identity, the reinforcement formula, lazy decay, retention, context
    eligibility, immutable ordered snapshots, and absence of live object references.
 13. Composition tests verify Mind owns interpretation, AgenticMind retains only provider/prompt/render/tool concerns,
@@ -234,10 +236,10 @@ attention, existing speech history, and existing eye visibility and presentation
 15. Boundary tests verify sensing, surveys, faculties, and attention mutation never call `IVision.SetLookTarget` or
    `IVision.ClearLookTarget`; AI-007 alone consumes the published attention snapshot as the separately composed
    post-attention gaze consumer.
-16. Dependency checks verify the Mind speech gate resolves voice activity only through current-scene characters'
-   composed `IVoice` via `ICharacter.TryGetVoice()`, consistent with the established `SpeechPerception` precedent and
-   adding no new dependency, and that gate membership uses retention-threshold snapshot presence rather than the
-   context threshold.
+16. Dependency checks verify Mind's attended-speaker resolution uses only current-scene characters' composed `IVoice`
+    via `ICharacter.TryGetVoice()`, consistent with the established `SpeechPerception` precedent and adding no new
+    dependency, and that attendance membership uses retention-threshold snapshot presence rather than the context
+    threshold.
 
 ## References
 

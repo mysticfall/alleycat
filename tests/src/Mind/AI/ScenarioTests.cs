@@ -40,7 +40,7 @@ public sealed class ScenarioTests
             Assert.Throws<ArgumentNullException>(() => new Scenario(null!)).ParamName);
     }
 
-    /// <summary>The manager contract exposes exactly the single turn-query member.</summary>
+    /// <summary>The manager contract exposes exactly the single session-query member.</summary>
     [Fact]
     public void IScenarioManager_DefinesExactlyTheGetCurrentScenarioMember()
     {
@@ -50,19 +50,9 @@ public sealed class ScenarioTests
         MethodInfo query = Assert.Single(members);
         Assert.Equal(nameof(IScenarioManager.GetCurrentScenario), query.Name);
         Assert.Equal(typeof(Scenario), query.ReturnType);
-        ParameterInfo[] parameters = query.GetParameters();
-        Assert.Collection(
-            parameters,
-            previous =>
-            {
-                Assert.Equal("previous", previous.Name);
-                Assert.Equal(typeof(ScenarioContext), previous.ParameterType);
-            },
-            coreContext =>
-            {
-                Assert.Equal("coreContext", coreContext.Name);
-                Assert.Equal(typeof(IReadOnlyDictionary<string, object?>), coreContext.ParameterType);
-            });
+        ParameterInfo parameter = Assert.Single(query.GetParameters());
+        Assert.Equal("coreContext", parameter.Name);
+        Assert.Equal(typeof(IReadOnlyDictionary<string, object?>), parameter.ParameterType);
         Assert.Empty(managerType.GetProperties(BindingFlags.Instance | BindingFlags.Public));
         Assert.False(typeof(IServiceProvider).IsAssignableFrom(managerType));
     }
@@ -114,8 +104,8 @@ public sealed class ScenarioTests
         Assert.Same(playerContext, playerFiltered["player"]);
         Assert.All(
             [withScenario, withoutScenario, defaulted],
-            context => Assert.Equal(["character", "characters", "player", "observations", "scenario"], context.Keys));
-        Assert.Equal(["character", "characters", "player", "observations", "scenario"], playerFiltered.Keys);
+            context => Assert.Equal(["character", "characters", "player", "scenario"], context.Keys));
+        Assert.Equal(["character", "characters", "player", "scenario"], playerFiltered.Keys);
     }
 
     private sealed record FakeSceneContext(IReadOnlyCollection<ICharacter> Characters, ICharacter Player) : ISceneContext

@@ -112,7 +112,6 @@ public sealed class PerceptionMindIntegrationTests
 
             AttentionSnapshot attentionBeforeFailure = mind.GetAttentionSnapshot();
             IReadOnlyList<AgentObservation> timelineBeforeFailure = mind.Timeline;
-            Assert.True(mind.HasPendingObservationsForTest);
 
             timestamp = 5d;
             faculty.Result = new PerceptionResult(
@@ -129,7 +128,6 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Equal(attentionBeforeFailure.Values, attentionAfterFailure.Values);
             Assert.Equal(1f, mind.GetAttention("char:existing"));
             Assert.Equal(timelineBeforeFailure, mind.Timeline);
-            Assert.True(mind.HasPendingObservationsForTest);
             _ = Assert.Single(mind.Ingested);
 
             faculty.Result = new PerceptionResult(
@@ -253,9 +251,7 @@ public sealed class PerceptionMindIntegrationTests
     {
         public List<AgentObservation> Ingested { get; } = [];
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
-        public bool HasPendingObservationsForTest => HasPendingObservations;
         protected override ICharacter ResolveOwningCharacter() => owner;
-        protected override Task ProcessObservationsAsync(IReadOnlyList<AgentObservation> observations, IReadOnlyList<AgentObservation> timelineSnapshot, CancellationToken cancellationToken) => Task.CompletedTask;
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
     }
 

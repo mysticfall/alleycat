@@ -16,7 +16,7 @@ dispatch for generated voice events.
 
 Enable reliable character and player speech whose requests are admitted without waiting for playback, while preserving
 serial generation, spatial attribution, lip-sync, safe node-lifetime behaviour, and speaking-activity state that
-gates Mind turn-taking under AI-001's gating scope.
+supports Mind turn-taking and speech-ended wake cues under AI-002's session contracts.
 
 ## User Requirements
 
@@ -34,16 +34,16 @@ gates Mind turn-taking under AI-001's gating scope.
 9. Completed nonblank player transcription must trigger player voice output; blank transcription must be ignored.
 10. Removing a voice from the scene must prevent queued or active work from accessing freed Godot nodes.
 11. A manual test scene must allow testers to enter arbitrary speech and observe character speech output.
-12. Minds must observe which voices are currently speaking and must not begin a response while a gating voice's
-    speaking window is open. Gating scope — which voices gate a given Mind, including whether the player's own
-    record-and-playback window gates — is defined by AI-001 TR-41 and is not re-specified in this spec.
+12. Minds must observe which voices are currently speaking: `speak` blocks and `wait` wakes based on speaking windows.
+    Which voices a given Mind attends to — including whether the player's record-and-playback window counts — is
+    defined by AI-002's speak and wait contracts and is not re-specified in this spec.
 13. A voice's speaking state must remain active from the moment its window opens (submission admission or recording
     start) until its speaking window closes at the implementation's window boundary (TR-24), so no turn-taking gap
     exists between request and that boundary.
 14. Withdrawing an explicitly cancellable submission before playback hand-off must be silent: no error messaging, no
     partial speech output, and no disruption to other speakers. Speech that has reached playback hand-off is never
     retracted or cut by the submission's cancellation; interruption-driven cutting of already-audible speech is a
-    separate mechanism (AI-001 TR-44).
+    separate mechanism (AI-002).
 
 ## Technical Requirements
 
@@ -72,9 +72,9 @@ gates Mind turn-taking under AI-001's gating scope.
    identity comparisons use ordinal `Id` or `FullId` values as appropriate, never object-reference equality.
 9. `Voice` must define a protected virtual post-generation hook. The hook must query `IHearing.GroupName`, filter
     `IHearing` implementations, and invoke `ReceiveVoice(string, IVoice)` with the speech and source `IVoice`.
-    Where the speaking window closes in the same synchronous chain as the hook's broadcast, the hook must clear
-    `IsSpeaking` and raise `SpeechEnded` before invoking the broadcast, so Minds ingesting the speech observation in
-    that chain observe the turn-taking gate already open.
+     Where the speaking window closes in the same synchronous chain as the hook's broadcast, the hook must clear
+     `IsSpeaking` and raise `SpeechEnded` before invoking the broadcast, so Minds ingesting the speech observation in
+     that chain observe the speaking window already closed.
 10. `IHearing.GroupName` must remain the global Godot group constant `"voice_listeners"`.
 11. Runtime control state such as `Enabled` must remain on `Voice`, not on the `IVoice` capability contract.
 12. `IHasVoice` must follow the component-holder trait pattern and expose `TryGetVoice(out IVoice? voice)` and
@@ -124,8 +124,8 @@ gates Mind turn-taking under AI-001's gating scope.
     `SpeechFailed`, no `IHearing` broadcast, and no listener notification, and the speaking window closes.
     Post-hand-off cancellation must not retract the committed item. Ordinary callers retain admission-only
     semantics with unchanged default behaviour.
-26. The actor-stamped self-action observation ("I said X") must commit at playback hand-off, not at admission.
-    AI-001 AC-23 is amended in a parallel delta; SPCH-005 depends on that amendment.
+26. The actor-stamped self-action observation ("I said X") must commit at playback hand-off, not at admission, through
+    AI-001's ordinary ingestion path.
 27. `PlayerVoice` must subscribe to the transcriber's public `RecordingStarted` signal (SPCH-003) in `_Ready()` and
     unsubscribe in `_ExitTree()`, using it to open its speaking window.
 
@@ -242,8 +242,8 @@ gates Mind turn-taking under AI-001's gating scope.
     Godot signals), with all state and event plumbing owned by the `Voice` base and subclasses declaring only window
     boundaries.
 17. Tests verify end-of-speech ordering: `IsSpeaking` clears and `SpeechEnded` raises before the `IHearing` broadcast
-    when both occur in the same synchronous chain, so Minds ingesting the speech observation observe the gate already
-    open.
+    when both occur in the same synchronous chain, so Minds ingesting the speech observation observe the speaking
+    window already closed.
 18. Tests verify window boundaries: the sync path opens at admission and closes at the post-generation broadcast;
     `AIVoice` opens at first admission, stays open across queued items, and closes at last-item playback completion,
     on failure, on effective cancellation, and at teardown; `PlayerVoice` opens at `RecordingStarted` and closes at
@@ -254,7 +254,7 @@ gates Mind turn-taking under AI-001's gating scope.
 20. Tests verify `PlayerVoice` subscribes to `Transcriber.RecordingStarted` (SPCH-003) once in `_Ready()`,
     unsubscribes in `_ExitTree()`, and opens and closes its speaking window accordingly.
 21. Tests verify the actor-stamped self-action observation commits at playback hand-off rather than at admission,
-    consistent with the parallel AI-001 AC-23 amendment.
+    consistent with AI-001's ingestion contract.
 22. Acceptance verifies both user-visible activity and turn-taking behaviour and the technical activity, ordering,
     window-boundary, cancellation, and observation-timing contracts.
 

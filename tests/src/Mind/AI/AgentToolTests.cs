@@ -342,12 +342,6 @@ public sealed class AgentToolTests
         }
 
         protected override ICharacter ResolveOwningCharacter() => _owner;
-
-        protected override Task ProcessObservationsAsync(
-            IReadOnlyList<AgentObservation> observations,
-            IReadOnlyList<AgentObservation> timelineSnapshot,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 
     private sealed class ImmediateDispatcher : IMainThreadDispatcher

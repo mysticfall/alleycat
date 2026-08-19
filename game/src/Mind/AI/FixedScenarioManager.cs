@@ -8,12 +8,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AlleyCat.Mind.AI;
 
 /// <summary>
-/// Scenario manager that returns one fixed description authored in a text file on every turn.
+/// Scenario manager that returns one fixed description authored in a text file for each session.
 /// </summary>
 /// <remarks>
 /// The authored body may reference core render-context keys such as <c>{{player.FullId}}</c> and
-/// <c>{{character.FullId}}</c>; the manager renders the body through the game's template compiler against the turn's
-/// core render context before creating the <see cref="Scenario" />.
+/// <c>{{character.FullId}}</c>; the manager renders the body through the game's template compiler against the
+/// session's core render context before creating the <see cref="Scenario" />.
 /// </remarks>
 [GlobalClass]
 public partial class FixedScenarioManager : ScenarioManager
@@ -30,9 +30,8 @@ public partial class FixedScenarioManager : ScenarioManager
     public string DescriptionPath { get; set; } = string.Empty;
 
     /// <inheritdoc />
-    public override Scenario? GetCurrentScenario(ScenarioContext previous, IReadOnlyDictionary<string, object?> coreContext)
+    public override Scenario? GetCurrentScenario(IReadOnlyDictionary<string, object?> coreContext)
     {
-        ArgumentNullException.ThrowIfNull(previous);
         ArgumentNullException.ThrowIfNull(coreContext);
 
         if (string.IsNullOrWhiteSpace(DescriptionPath))

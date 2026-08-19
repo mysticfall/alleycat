@@ -555,11 +555,6 @@ public sealed class OrientingControllerIntegrationTests
     {
         protected override ICharacter ResolveOwningCharacter() => owner;
 
-        protected override Task ProcessObservationsAsync(
-            IReadOnlyList<AlleyCat.Mind.Observation.Observation> observations,
-            IReadOnlyList<AlleyCat.Mind.Observation.Observation> timelineSnapshot,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 
     private sealed class TestCharacter(bool hasComponentProjection, params IComponent[] components)

@@ -67,9 +67,9 @@ character and Godot node objects remain live.
     other identifiable types.
 22. A type without a scene-group mapping has no current-scene match: `Find` returns `null` and `Resolve` throws. The
     implementation must not scan arbitrary groups or infer membership for an unmapped type.
-23. AI-002 may capture one `ISceneContext` at turn start and pass that exact snapshot through its trusted typed tool
-    context. This use preserves fixed membership and live referenced objects; it does not add AI-specific members or
-    mutable snapshot semantics to `ISceneContext`.
+23. AI-002 may capture one `ISceneContext` at session start and pass that exact snapshot through its trusted typed tool
+     context for the complete session. This use preserves fixed membership and live referenced objects; it does not add
+     AI-specific members or mutable snapshot semantics to `ISceneContext`.
 24. `ISceneContext` must designate the player character through the exact constant `PlayerGroupName = "Player"` and
     expose a non-nullable `ICharacter Player` member. `SceneContext` must resolve the player exactly once at
     construction by scanning the captured membership for characters that are Godot `Node`s in the `Player` group; a
@@ -80,13 +80,13 @@ character and Godot node objects remain live.
     player. Zero players must not fail construction — narrow player-less contexts remain legal for tests, and `Player`
     access must then throw `InvalidOperationException` — while multiple `Player`-group characters must fail eagerly at
     construction as a scene authoring error, in the same class as exact duplicate `FullId` rejection (TR-13).
-26. The reserved top-level `player` key of AgenticMind's foreground render dictionary under
+26. The reserved top-level `player` key of AgenticMind's session render dictionary under
     [AI-001](../../ai/001-mind/index.md) is the current `Player` consumer. The key is mandatory and unconditional,
-    resolved via the turn-captured `ISceneContext.Player` and never attention-gated; the attention-gated `characters`
-    dictionaries may omit the player. AI-001 TR-30 and [AI-008](../../ai/008-scenario/index.md) are normative for
-    the render-context composition. This use preserves fixed membership and live referenced objects; it adds no
-    AI-specific members or mutable snapshot semantics to `ISceneContext`, mirroring the AI-002 tool-context use in
-    TR-23.
+    resolved via the session-captured `ISceneContext.Player` and never attention-gated; the attention-gated
+    `characters` dictionaries may omit the player. AI-001 TR-25 and [AI-008](../../ai/008-scenario/index.md) are
+    normative for the render-context composition. This use preserves fixed membership and live referenced objects; it
+    adds no AI-specific members or mutable snapshot semantics to `ISceneContext`, mirroring the AI-002 tool-context
+    use in TR-23.
 
 ## In Scope
 
@@ -158,16 +158,16 @@ character and Godot node objects remain live.
 16. The internal type-to-group mapping initially contains only `char` to `Actors`. It neither scans arbitrary groups
     nor includes locations, items, visual subjects, or other identifiable types in current-scene membership.
 17. Lookup membership is captured with the context snapshot, while returned object references remain live.
-18. Agent-runtime tests verify a turn-captured `ISceneContext` passed to tools retains fixed membership and live object
-    references without changing SCN-001's general contract.
+18. Agent-runtime tests verify a session-captured `ISceneContext` passed to tools retains fixed membership and live
+     object references without changing SCN-001's general contract.
 19. Tests verify player resolution uses the exact `PlayerGroupName` constant, resolves once at construction from the
     captured membership, qualifies only Godot `Node` characters in the `Player` group, and performs no live group query
     after construction.
 20. Tests verify a player-less context constructs successfully and throws `InvalidOperationException` on `Player`
     access, while a captured membership containing two `Player`-group characters fails construction eagerly.
 21. AI-001 render-dictionary tests verify the reserved `player` key is mandatory and unconditional, resolved via the
-    turn-captured `ISceneContext.Player` and never attention-gated, while the attention-gated `characters`
-    dictionaries may omit the player, without adding AI-specific members to `ISceneContext`.
+     session-captured `ISceneContext.Player` and never attention-gated, while the attention-gated `characters`
+     dictionaries may omit the player, without adding AI-specific members to `ISceneContext`.
 
 ## References
 

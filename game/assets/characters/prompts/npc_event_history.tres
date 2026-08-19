@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EventHistory" format=3 uid="uid://dv8k4pqrmxe1n"]
+
+[ext_resource type="Script" uid="uid://cafmu04bp678h" path="res://src/Mind/AI/Prompting/EventHistory.cs" id="1_history"]
+[ext_resource type="Script" uid="uid://ymq5mrb46tea" path="res://src/Mind/AI/Prompting/EventHistoryPromptFragment.cs" id="2_fragment"]
+
+[sub_resource type="Resource" id="Resource_fwgwp"]
+script = ExtResource("2_fragment")
+TypeKey = "speech.observed"
+Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.FullId)}}I said: {{Content}}{{else}}Heard {{ActorId}} say: {{Content}}{{/if}}{{else}}Heard an unknown speaker say: {{Content}}{{/if}}{{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}
+"
+
+[resource]
+script = ExtResource("1_history")
+Fragments = [SubResource("Resource_fwgwp")]
+FallbackSource = "((Received {{TypeKey}} event.)){{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}
+"

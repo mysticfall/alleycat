@@ -3,9 +3,7 @@
 [ext_resource type="Script" uid="uid://bkdyco5nf5xyp" path="res://src/Mind/AI/Prompting/FilePromptSection.cs" id="1_2m31c"]
 [ext_resource type="Script" uid="uid://b5evrsqr6axkt" path="res://src/Mind/AI/Prompting/EssentialLorePromptSection.cs" id="2_bsmxt"]
 [ext_resource type="Script" uid="uid://ma8scv62385o" path="res://src/Mind/AI/Prompting/CharacterLorePromptSection.cs" id="3_0apto"]
-[ext_resource type="Script" uid="uid://ymq5mrb46tea" path="res://src/Mind/AI/Prompting/EventHistoryPromptFragment.cs" id="4_0apto"]
 [ext_resource type="Script" uid="uid://bcokws68yoalk" path="res://src/Mind/AI/Prompting/PromptStack.cs" id="4_bwdq6"]
-[ext_resource type="Script" uid="uid://cafmu04bp678h" path="res://src/Mind/AI/Prompting/EventHistoryPromptSection.cs" id="5_bwdq6"]
 
 [sub_resource type="Resource" id="Resource_fqak1"]
 script = ExtResource("1_2m31c")
@@ -25,19 +23,6 @@ script = ExtResource("1_2m31c")
 FilePath = "res://prompts/scenario.md"
 Name = "Scenario"
 
-[sub_resource type="Resource" id="Resource_fwgwp"]
-script = ExtResource("4_0apto")
-TypeKey = "speech.observed"
-Source = "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.FullId)}}I said: {{Content}}{{else}}Heard {{ActorId}} say: {{Content}}{{/if}}{{else}}Heard an unknown speaker say: {{Content}}{{/if}}{{#if ObservedAt}} ({{ago ObservedAt}}){{/if}}
-"
-
-[sub_resource type="Resource" id="Resource_ot777"]
-script = ExtResource("5_bwdq6")
-Fragments = [SubResource("Resource_fwgwp")]
-FallbackSource = "((Received {{TypeKey}} event.)){{#if ObservedAt}} ({{ago ObservedAt}}){{/if}}
-"
-Name = "Event History"
-
 [resource]
 script = ExtResource("4_bwdq6")
-Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0"), SubResource("Resource_0apto"), SubResource("Resource_ot777")]
+Sections = [SubResource("Resource_fqak1"), SubResource("Resource_yofkv"), SubResource("Resource_ln7n0"), SubResource("Resource_0apto")]

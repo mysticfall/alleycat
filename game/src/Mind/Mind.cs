@@ -1,10 +1,9 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using AlleyCat.Character;
 using AlleyCat.Core;
-using AlleyCat.Core.Logging;
+using AlleyCat.Core.Time;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
@@ -13,55 +12,89 @@ using AlleyCat.Sense;
 using AlleyCat.Speech.Voice;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.Mind;
 
 /// <summary>
-/// Abstract base for NPC mind-like components that synchronously interpret stimuli and schedule durable observations.
+/// Abstract base for NPC mind-like components that synchronously interpret stimuli into an ordered observation
+/// timeline and accumulate notable observations for delivery to the NPC's agent session.
 /// </summary>
 [GlobalClass]
 public abstract partial class Mind : Node
 {
+    /// <summary>
+    /// Registered active wait woken by threshold crossings or attended-speaker-finished cues.
+    /// </summary>
+    private sealed class ActiveWait
+    {
+        public ActiveWait()
+        {
+            Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public TaskCompletionSource<bool> Completion
+        {
+            get;
+        }
+
+        public bool Settled
+        {
+            get; private set;
+        }
+
+        public bool TryWake(bool attendedSpeakerFinished)
+        {
+            lock (this)
+            {
+                if (Settled)
+                {
+                    return false;
+                }
+
+                Settled = true;
+            }
+
+            return Completion.TrySetResult(attendedSpeakerFinished);
+        }
+    }
+
     private static readonly TimeSpan _defaultMaxObservationWait = TimeSpan.FromSeconds(10);
 
     private readonly Lock _observationStateLock = new();
     private readonly Lock _deferredGodotActionsLock = new();
+    private readonly Lock _speechVoiceSubscriptionLock = new();
     private readonly List<AgentObservation> _observationTimeline = [];
-    private readonly Queue<PendingObservation> _pendingObservations = [];
+    private readonly List<PendingObservation> _notableAccumulation = [];
     private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
-    private Godot.Timer? _schedulingTimer;
-    private float _cumulativeObservationImportance;
-    private double? _firstPendingObservationTimestamp;
-    private double? _lastTurnCompletionTimestamp;
-    private CancellationTokenSource? _activeTurnCancellation;
-    private bool _schedulingEvaluationQueued;
-    private bool _isProcessingObservations;
-    private bool _interruptionRequested;
-    private bool _immediateReplacementPending;
-    private int _nodeLifetimeEnded;
-    private readonly AttentionPolicy _attention = new(GetTimestamp);
+    private readonly AttentionPolicy _attention = new(GetStopwatchSeconds);
     private readonly Dictionary<Type, IPerception> _perceptions = [];
     private readonly Dictionary<ISense, Action<IPercept>> _senseHandlers = [];
-    private readonly Lock _speechVoiceSubscriptionLock = new();
     private readonly HashSet<IVoice> _subscribedSpeechVoices = [];
+    private readonly Dictionary<IVoice, ICharacter?> _speechVoiceOwners = [];
     private readonly ConcurrentQueue<IVoice> _speechStartNotifications = new();
     private ISense[] _senses = [];
     private IComponentProjectionNotifier? _componentProjectionNotifier;
     private Func<ISceneContext> _sceneContextLoader = LoadCurrentSceneContext;
-    private bool _speechActivityEvaluationQueued;
-    [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Enabled setter controls scheduling.")]
+    private Func<IGameClock> _gameClockLoader = LoadDefaultGameClock;
+    private ActiveWait? _activeWait;
+    private TaskCompletionSource _attendedSpeakerPulse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private ICharacter? _cachedOwningCharacter;
+    private float _cumulativeNotableImportance;
+    private bool _notablePending;
+    private bool _speechSubscriptionEvaluationQueued;
+    private int _nodeLifetimeEnded;
+    [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Enabled setter controls delivery.")]
     private bool _enabled = true;
 
-    internal Func<CancellationToken, Task>? ObservationBatchClaimedHookForTesting
-    {
-        get;
-        set;
-    }
+    /// <summary>
+    /// Occurs when accumulated observations become notable while no wait is active, signalling the agent session
+    /// runtime to interrupt as defined by AI-002 (AI-001 TR-6, TR-35).
+    /// </summary>
+    internal event Action? NotableObservationsSignalled;
 
     /// <summary>
-    /// Enables stimulus intake and observation processing.
+    /// Enables stimulus intake, timeline ingestion, and notable-observation delivery.
     /// </summary>
     [ExportGroup("Settings")]
     [Export]
@@ -81,82 +114,36 @@ public abstract partial class Mind : Node
                 return;
             }
 
-            bool hasPendingObservations;
             lock (_observationStateLock)
             {
-                if (IsNodeLifetimeEnded)
-                {
-                    return;
-                }
-
-                if (_enabled == value)
+                if (IsNodeLifetimeEnded || _enabled == value)
                 {
                     return;
                 }
 
                 _enabled = value;
-                hasPendingObservations = _pendingObservations.Count > 0;
-            }
-
-            if (!value)
-            {
-                StopSchedulingTimer();
-                return;
-            }
-
-            if (hasPendingObservations)
-            {
-                QueueSchedulingEvaluation();
+                if (value && _notablePending)
+                {
+                    // Delivery resumes for the preserved accumulation: a held notable window wakes an active wait
+                    // (AI-001 TR-5). When no wait is active the window stays held for the next wait call.
+                    _ = _activeWait?.TryWake(attendedSpeakerFinished: false);
+                }
             }
         }
     }
 
     /// <summary>
-    /// Maximum time queued observations can wait before processing when their cumulative importance stays below threshold.
+    /// Maximum time a single <c>wait</c> call can stay below the importance threshold before quiet expiry.
     /// </summary>
     [ExportGroup("Runtime")]
     [Export(PropertyHint.Range, "0.05,120,0.05")]
     public float MaxObservationWaitSeconds { get; set; } = (float)_defaultMaxObservationWait.TotalSeconds;
 
     /// <summary>
-    /// Cumulative observation importance that triggers immediate processing.
+    /// Cumulative observation importance that makes the accumulation window notable.
     /// </summary>
     [Export(PropertyHint.Range, "0.01,100,0.01")]
     public float ObservationImportanceThreshold { get; set; } = 1f;
-
-    /// <summary>
-    /// Minimum delay after one turn completes before the next queued turn may start.
-    /// </summary>
-    [Export(PropertyHint.Range, "0,5,0.05")]
-    public float MinimumTurnIntervalSeconds
-    {
-        get; set;
-    }
-
-    /// <summary>
-    /// Enables individual high-importance observations to pre-empt an active turn.
-    /// </summary>
-    [ExportGroup("Interruption")]
-    [Export]
-    public bool HighImportanceInterruptionEnabled
-    {
-        get; set;
-    }
-
-    /// <summary>
-    /// Individual observation importance required to pre-empt an active turn.
-    /// </summary>
-    [Export(PropertyHint.Range, "0.01,100,0.01")]
-    public float HighImportanceInterruptionThreshold { get; set; } = 1f;
-
-    /// <summary>
-    /// Enables an attended speaker starting speech to pre-empt an active turn and cut its audible speech.
-    /// </summary>
-    /// <remarks>
-    /// Unlike <see cref="HighImportanceInterruptionEnabled"/>, this voice-activity trigger is enabled by default.
-    /// </remarks>
-    [Export]
-    public bool SpeechInterruptionEnabled { get; set; } = true;
 
     /// <summary>Maximum value of one attention entry.</summary>
     [ExportGroup("Attention")]
@@ -188,6 +175,7 @@ public abstract partial class Mind : Node
             return;
         }
 
+        Volatile.Write(ref _cachedOwningCharacter, ResolveOwningCharacter());
         SubscribeToComponentProjectionRefreshes();
     }
 
@@ -199,17 +187,13 @@ public abstract partial class Mind : Node
             return;
         }
 
+        Volatile.Write(ref _cachedOwningCharacter, ResolveOwningCharacter());
         SubscribeToComponentProjectionRefreshes();
         if (_componentProjectionNotifier is null || _componentProjectionNotifier.HasComponentProjection)
         {
             ActivatePerceptions();
         }
         RefreshSpeechVoiceSubscriptions();
-        _ = EnsureSchedulingTimer();
-        if (HasPendingObservations && Enabled)
-        {
-            QueueSchedulingEvaluation();
-        }
     }
 
     /// <inheritdoc />
@@ -225,16 +209,13 @@ public abstract partial class Mind : Node
             _enabled = false;
         }
 
-        StopSchedulingTimer();
         UnsubscribeFromComponentProjectionRefreshes();
         UnsubscribeFromSenses();
         UnsubscribeFromSpeechVoices();
         _perceptions.Clear();
-        if (_schedulingTimer is { } schedulingTimer)
-        {
-            schedulingTimer.Timeout -= OnSchedulingTimerTimeout;
-        }
 
+        // One irreversible lifetime boundary: cancels active waits, session activity, and cue subscriptions so no
+        // deferred callback accesses Mind services after exit (AI-001 TR-18).
         _nodeLifetimeCancellation.Cancel();
         OnNodeLifetimeEnding();
     }
@@ -252,6 +233,11 @@ public abstract partial class Mind : Node
     protected bool IsNodeLifetimeEnded => Volatile.Read(ref _nodeLifetimeEnded) != 0;
 
     /// <summary>
+    /// Indicates whether this mind has begun its irreversible exit from the scene tree.
+    /// </summary>
+    internal bool HasNodeLifetimeEnded => IsNodeLifetimeEnded;
+
+    /// <summary>
     /// Cancellation token bounded by this node's scene-tree lifetime.
     /// </summary>
     protected CancellationToken NodeLifetimeCancellationToken => _nodeLifetimeCancellation.Token;
@@ -267,7 +253,7 @@ public abstract partial class Mind : Node
         AttentionSettings attentionSettings = CreateAttentionSettings();
         IPerception perception = _perceptions.GetValueOrDefault(percept.GetType())
             ?? throw new InvalidOperationException($"Mind '{GetPath()}' received undeclared percept type '{percept.GetType().FullName}'.");
-        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
+        ISceneContext scene = _sceneContextLoader();
         PerceptionResult result = perception.Perceive(percept, new PerceptionContext(ResolveOwningCharacter(), scene, attentionSettings));
         ApplyPerceptionResult(result, attentionSettings);
     }
@@ -413,6 +399,8 @@ public abstract partial class Mind : Node
     private static ISceneContext LoadCurrentSceneContext()
         => Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
 
+    private static IGameClock LoadDefaultGameClock() => Game.Instance.GetRequiredService<IGameClock>();
+
     internal ISceneContext GetCurrentSceneContext() => _sceneContextLoader();
 
     internal void SetSceneContextLoaderForTesting(Func<ISceneContext> sceneContextLoader)
@@ -421,40 +409,64 @@ public abstract partial class Mind : Node
         _sceneContextLoader = sceneContextLoader;
     }
 
+    internal IGameClock GameClock => _gameClockLoader();
+
+    internal void SetGameClockLoaderForTesting(Func<IGameClock> gameClockLoader)
+    {
+        ArgumentNullException.ThrowIfNull(gameClockLoader);
+        _gameClockLoader = gameClockLoader;
+    }
+
     /// <summary>
     /// Re-aligns speaking-activity subscriptions with the current scene composition.
     /// </summary>
     /// <remarks>
     /// Voice activity resolves through current-scene characters' composed <see cref="IVoice"/> via
     /// <c>ICharacter.TryGetVoice</c>, mirroring the <c>SpeechPerception</c> attribution precedent (AI-006 TR-1).
-    /// Runs on the Godot thread.
+    /// Each subscribed voice keeps its resolved owning character — or null when ambiguous — so the attended-speaker
+    /// state never queries the Godot scene tree from continuations. Runs on the Godot thread.
     /// </remarks>
     private void RefreshSpeechVoiceSubscriptions()
     {
         ISceneContext scene = GetCurrentSceneContext();
-        List<IVoice> currentVoices = [];
+        var currentOwners = new Dictionary<IVoice, ICharacter?>();
         foreach (ICharacter candidate in scene.Characters)
         {
-            if (candidate.TryGetVoice(out IVoice? voice) && voice is not null && !currentVoices.Contains(voice))
+            if (!candidate.TryGetVoice(out IVoice? voice) || voice is null)
             {
-                currentVoices.Add(voice);
+                continue;
             }
+
+            if (currentOwners.TryGetValue(voice, out ICharacter? existingOwner)
+                && !ReferenceEquals(existingOwner, candidate))
+            {
+                // Ambiguous composition never attributes: the voice can never cue or block (AI-001 TR-34).
+                currentOwners[voice] = null;
+                continue;
+            }
+
+            currentOwners[voice] = candidate;
         }
 
         lock (_speechVoiceSubscriptionLock)
         {
-            foreach (IVoice voice in _subscribedSpeechVoices.Where(voice => !currentVoices.Contains(voice)).ToArray())
+            foreach (IVoice voice in _subscribedSpeechVoices.Where(voice => !currentOwners.ContainsKey(voice)).ToArray())
             {
                 voice.SpeechStarted -= OnVoiceSpeechStarted;
                 voice.SpeechEnded -= OnVoiceSpeechEnded;
                 _ = _subscribedSpeechVoices.Remove(voice);
+                _ = _speechVoiceOwners.Remove(voice);
             }
 
-            foreach (IVoice voice in currentVoices.Where(voice => !_subscribedSpeechVoices.Contains(voice)))
+            foreach (KeyValuePair<IVoice, ICharacter?> entry in currentOwners)
             {
-                voice.SpeechStarted += OnVoiceSpeechStarted;
-                voice.SpeechEnded += OnVoiceSpeechEnded;
-                _ = _subscribedSpeechVoices.Add(voice);
+                if (_subscribedSpeechVoices.Add(entry.Key))
+                {
+                    entry.Key.SpeechStarted += OnVoiceSpeechStarted;
+                    entry.Key.SpeechEnded += OnVoiceSpeechEnded;
+                }
+
+                _speechVoiceOwners[entry.Key] = entry.Value;
             }
         }
     }
@@ -470,6 +482,7 @@ public abstract partial class Mind : Node
             }
 
             _subscribedSpeechVoices.Clear();
+            _speechVoiceOwners.Clear();
         }
 
         while (_speechStartNotifications.TryDequeue(out _))
@@ -478,26 +491,19 @@ public abstract partial class Mind : Node
 
         lock (_deferredGodotActionsLock)
         {
-            _speechActivityEvaluationQueued = false;
+            _speechSubscriptionEvaluationQueued = false;
         }
     }
 
     private void OnVoiceSpeechStarted(IVoice voice)
     {
+        // A newly speaking voice may belong to a character that entered the scene after the last subscription
+        // refresh; subscriptions re-align on the Godot thread without polling.
         _speechStartNotifications.Enqueue(voice);
-        QueueSpeechActivityEvaluation();
+        QueueSpeechSubscriptionEvaluation();
     }
 
-    private void OnVoiceSpeechEnded(IVoice voice)
-    {
-        _ = voice;
-
-        // A blocking speaking window just closed: immediately re-run scheduling evaluation without polling
-        // (AI-001 TR-42).
-        QueueSchedulingEvaluation();
-    }
-
-    private void QueueSpeechActivityEvaluation()
+    private void QueueSpeechSubscriptionEvaluation()
     {
         if (IsNodeLifetimeEnded || !IsInsideTree())
         {
@@ -506,25 +512,25 @@ public abstract partial class Mind : Node
 
         lock (_deferredGodotActionsLock)
         {
-            if (IsNodeLifetimeEnded || _speechActivityEvaluationQueued)
+            if (IsNodeLifetimeEnded || _speechSubscriptionEvaluationQueued)
             {
                 return;
             }
 
-            _speechActivityEvaluationQueued = true;
+            _speechSubscriptionEvaluationQueued = true;
         }
 
-        _ = CallDeferred(nameof(EvaluateSpeechActivityDeferred));
+        _ = CallDeferred(nameof(EvaluateSpeechSubscriptionsDeferred));
     }
 
     /// <summary>
-    /// Evaluates drained speech-start notifications for the speech-driven interruption trigger on the Godot thread.
+    /// Drains speech-start notifications and refreshes speaking-activity subscriptions on the Godot thread.
     /// </summary>
-    private void EvaluateSpeechActivityDeferred()
+    private void EvaluateSpeechSubscriptionsDeferred()
     {
         lock (_deferredGodotActionsLock)
         {
-            _speechActivityEvaluationQueued = false;
+            _speechSubscriptionEvaluationQueued = false;
         }
 
         if (IsNodeLifetimeEnded)
@@ -532,181 +538,96 @@ public abstract partial class Mind : Node
             return;
         }
 
-        List<IVoice> startedVoices = [];
-        while (_speechStartNotifications.TryDequeue(out IVoice? voice))
+        while (_speechStartNotifications.TryDequeue(out _))
         {
-            if (voice is not null && !startedVoices.Contains(voice))
-            {
-                startedVoices.Add(voice);
-            }
         }
 
-        if (startedVoices.Count == 0)
+        RefreshSpeechVoiceSubscriptions();
+    }
+
+    private void OnVoiceSpeechEnded(IVoice voice)
+    {
+        if (IsNodeLifetimeEnded || !Enabled || !TryResolveAttendedSpeaker(voice))
         {
             return;
         }
 
-        RefreshSpeechVoiceSubscriptions();
-        foreach (IVoice voice in startedVoices)
+        // Attended-speaker-finished cue (AI-001 TR-34): wake an active wait and unblock a blocked speak. The wait
+        // itself decides whether anything notable is returned; sub-threshold observations are never promoted.
+        lock (_observationStateLock)
         {
-            if (IsSpeechInterruptionTrigger(voice))
-            {
-                RequestSpeechDrivenInterruption();
-                break;
-            }
+            _ = _activeWait?.TryWake(attendedSpeakerFinished: true);
         }
+
+        PulseAttendedSpeakerFinished();
     }
 
-    /// <summary>
-    /// Determines whether one speech-start event pre-empts the active turn (AI-001 TR-43, TR-45).
-    /// </summary>
-    private bool IsSpeechInterruptionTrigger(IVoice voice)
+    private void PulseAttendedSpeakerFinished()
     {
-        if (!SpeechInterruptionEnabled)
-        {
-            return false;
-        }
-
-        ICharacter ownCharacter = ResolveOwningCharacter();
-        if (ownCharacter.TryGetVoice(out IVoice? ownVoice)
-            && (ReferenceEquals(voice, ownVoice)
-                || (ownVoice is not null
-                    && !string.IsNullOrWhiteSpace(ownVoice.Id)
-                    && string.Equals(voice.Id, ownVoice.Id, StringComparison.Ordinal))))
-        {
-            // Own-voice exclusion: the turn's own speech admission never cancels its own turn (TR-45).
-            return false;
-        }
-
-        return IsAttributedAttentionMember(voice, ownCharacter);
+        TaskCompletionSource pulse = Interlocked.Exchange(
+            ref _attendedSpeakerPulse,
+            new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        _ = pulse.TrySetResult();
     }
 
     /// <summary>
-    /// Determines whether a speaking voice belongs to exactly one attention-member current-scene character.
+    /// Determines whether a subscribed voice is an attended speaker's voice: composed on exactly one current-scene
+    /// character other than the owning character whose canonical <c>ICharacter.FullId</c> is present in the
+    /// current attention snapshot at or above the retention threshold.
     /// </summary>
     /// <remarks>
-    /// Ordinal voice-ID matching mirrors the <c>SpeechPerception</c> attribution precedent; blank and ambiguous IDs
-    /// never gate, and membership uses retention-threshold snapshot presence rather than the context threshold
-    /// (AI-006 TR-33).
+    /// Blank voice IDs never attend, mirroring the <c>SpeechPerception</c> attribution precedent; unattributable and
+    /// ambiguous voices never cue or block (AI-001 TR-34, AI-002 TR-25).
     /// </remarks>
-    private bool IsAttributedAttentionMember(IVoice voice, ICharacter ownCharacter)
+    private bool TryResolveAttendedSpeaker(IVoice voice)
     {
         if (string.IsNullOrWhiteSpace(voice.Id))
         {
             return false;
         }
 
-        ISceneContext scene = GetCurrentSceneContext();
-        ICharacter? speaker = null;
-        foreach (ICharacter candidate in scene.Characters)
+        ICharacter ownCharacter = ResolveOwningCharacterForCues();
+        ICharacter? owner;
+        lock (_speechVoiceSubscriptionLock)
         {
-            if (!candidate.TryGetVoice(out IVoice? candidateVoice)
-                || candidateVoice is null
-                || string.IsNullOrWhiteSpace(candidateVoice.Id)
-                || !string.Equals(candidateVoice.Id, voice.Id, StringComparison.Ordinal))
+            if (!_speechVoiceOwners.TryGetValue(voice, out owner))
             {
-                continue;
-            }
-
-            if (speaker is not null)
-            {
-                // Ambiguous attribution never gates, mirroring SpeechPerception's failure without throwing here.
                 return false;
             }
-
-            speaker = candidate;
         }
 
-        return speaker is not null
-            && !ReferenceEquals(speaker, ownCharacter)
-            && GetAttentionSnapshot().Values.ContainsKey(speaker.FullId);
+        return owner is not null
+            && !ReferenceEquals(owner, ownCharacter)
+            && GetAttentionSnapshot().Values.ContainsKey(owner.FullId);
     }
 
     /// <summary>
-    /// Requests expected cancellation of the active turn after an attended speaker started speaking, cutting any
-    /// already-audible own speech (AI-001 TR-43, TR-44).
-    /// </summary>
-    private void RequestSpeechDrivenInterruption()
-    {
-        CancellationTokenSource? interruptionCancellation;
-        lock (_observationStateLock)
-        {
-            if (IsNodeLifetimeEnded
-                || !_enabled
-                || !_isProcessingObservations
-                || _interruptionRequested)
-            {
-                return;
-            }
-
-            _interruptionRequested = true;
-            _immediateReplacementPending = true;
-            interruptionCancellation = _activeTurnCancellation;
-        }
-
-        CutOwningVoiceSpeech();
-
-        if (interruptionCancellation is null)
-        {
-            return;
-        }
-
-        try
-        {
-            interruptionCancellation.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Natural completion won the race after pre-emption was committed.
-        }
-    }
-
-    /// <summary>
-    /// Cuts the owning character's already-audible speech so the interrupted turn stops speaking immediately.
-    /// </summary>
-    private void CutOwningVoiceSpeech()
-    {
-        if (ResolveOwningCharacter().TryGetVoice(out IVoice? voice) && voice is AIVoice aiVoice)
-        {
-            // Only AI voices own cuttable playback; other voice kinds keep their own window boundaries.
-            // The cut is typed deliberately: a default-interface member could never dispatch here because
-            // interface mapping is established on the Voice base class (AI-001 TR-44).
-            aiVoice.CutSpeech();
-        }
-    }
-
-    /// <summary>
-    /// Refreshes speaking-activity subscriptions and reports whether the speaking gate blocks turn starts.
+    /// Reports whether a speaker this mind attends to is currently speaking.
     /// </summary>
     /// <remarks>
-    /// The own character's voice gates unconditionally; other current-scene character voices gate through
-    /// retention-threshold attention membership regardless of weight; unattributable voices never gate (AI-001
-    /// TR-41).
+    /// A voice attends iff it is composed on exactly one current-scene character other than the owning character
+    /// whose canonical <c>ICharacter.FullId</c> is present in the current attention snapshot at or above the
+    /// retention threshold, regardless of weight or score. The owning character's own voice never blocks, and
+    /// unattributable voices never block (AI-002 TR-25). Safe from continuations: it reads only subscription state
+    /// refreshed on the Godot thread, the lock-guarded attention snapshot, and the volatile speaking flag.
     /// </remarks>
-    private bool IsSpeakingGateClosed()
+    internal bool IsAttendedSpeakerSpeaking()
     {
-        RefreshSpeechVoiceSubscriptions();
-
-        ICharacter ownCharacter = ResolveOwningCharacter();
-        if (ownCharacter.TryGetVoice(out IVoice? ownVoice) && ownVoice is { IsSpeaking: true })
-        {
-            return true;
-        }
-
-        ISceneContext scene = GetCurrentSceneContext();
+        ICharacter ownCharacter = ResolveOwningCharacterForCues();
         AttentionSnapshot attention = GetAttentionSnapshot();
-        foreach (ICharacter candidate in scene.Characters)
+        lock (_speechVoiceSubscriptionLock)
         {
-            if (ReferenceEquals(candidate, ownCharacter)
-                || !candidate.TryGetVoice(out IVoice? voice)
-                || voice is not { IsSpeaking: true }
-                || string.IsNullOrWhiteSpace(voice.Id))
+            foreach (KeyValuePair<IVoice, ICharacter?> entry in _speechVoiceOwners)
             {
-                continue;
-            }
+                if (entry.Value is not { } candidate
+                    || ReferenceEquals(candidate, ownCharacter)
+                    || string.IsNullOrWhiteSpace(entry.Key.Id)
+                    || !entry.Key.IsSpeaking
+                    || !attention.Values.ContainsKey(candidate.FullId))
+                {
+                    continue;
+                }
 
-            if (attention.Values.ContainsKey(candidate.FullId))
-            {
                 return true;
             }
         }
@@ -715,21 +636,52 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Appends an observation to the timeline and pending importance queue.
+    /// Resolves the cached owning character without Godot scene-tree traversal so cue checks stay safe from
+    /// continuations.
     /// </summary>
-    protected MindScheduleDecision Observe(AgentObservation observation)
+    private ICharacter ResolveOwningCharacterForCues()
+        => Volatile.Read(ref _cachedOwningCharacter) ?? ResolveOwningCharacter();
+
+    /// <summary>
+    /// Waits until no attended speaker is speaking, unblocked by the attended-speaker-finished cue.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation that abandons the turn-taking guard.</param>
+    internal async Task WaitUntilAttendedSpeakerIdleAsync(CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsNodeLifetimeEnded)
+            {
+                throw new OperationCanceledException(NodeLifetimeCancellationToken);
+            }
+
+            TaskCompletionSource pulse = Volatile.Read(ref _attendedSpeakerPulse);
+            if (!IsAttendedSpeakerSpeaking())
+            {
+                return;
+            }
+
+            await pulse.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Appends an observation to the timeline and the notable-observation accumulation.
+    /// </summary>
+    protected void Observe(AgentObservation observation)
     {
         ArgumentNullException.ThrowIfNull(observation);
         if (IsNodeLifetimeEnded)
         {
-            return new MindScheduleDecision(false, false);
+            return;
         }
 
         ICharacter character = ResolveOwningCharacter();
         var context = new ObservationContext(character);
         float importance = CalculateAndValidateImportance(observation, context);
 
-        return CommitObservations([new PendingObservation(observation, importance)]);
+        CommitObservations([new PendingObservation(observation, importance)]);
     }
 
     private void ApplyPerceptionResult(PerceptionResult result, AttentionSettings attentionSettings)
@@ -762,7 +714,7 @@ public abstract partial class Mind : Node
 
         if (pending.Length > 0)
         {
-            _ = CommitObservations(pending);
+            CommitObservations(pending);
         }
     }
 
@@ -822,92 +774,50 @@ public abstract partial class Mind : Node
         }
 
         NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
-        _ = CommitObservations(pending, throwWhenLifetimeEnded: true);
+        CommitObservations(pending, throwWhenLifetimeEnded: true);
     }
 
-    private MindScheduleDecision CommitObservations(
+    private void CommitObservations(
         IReadOnlyList<PendingObservation> observations,
         bool throwWhenLifetimeEnded = false)
     {
-        bool shouldEvaluateScheduling;
-        bool shouldProcessImmediately;
-        CancellationTokenSource? interruptionCancellation = null;
+        bool becameNotable;
         var stampedObservations = new List<AgentObservation>();
 
         lock (_observationStateLock)
         {
             if (IsNodeLifetimeEnded)
             {
-                return throwWhenLifetimeEnded
-                    ? throw new OperationCanceledException(NodeLifetimeCancellationToken)
-                    : new MindScheduleDecision(false, false);
+                if (throwWhenLifetimeEnded)
+                {
+                    throw new OperationCanceledException(NodeLifetimeCancellationToken);
+                }
+
+                return;
             }
 
-            bool wasPendingQueueEmpty = _pendingObservations.Count == 0;
-            bool wasBelowThreshold = _cumulativeObservationImportance < EffectiveObservationImportanceThreshold;
-            DateTimeOffset stamp = DateTimeOffset.UtcNow;
+            becameNotable = false;
+            double stamp = GameClock.NowSeconds;
             foreach (PendingObservation pendingObservation in observations)
             {
                 AgentObservation stampedObservation = pendingObservation.Observation with
                 {
                     ObservedAt = stamp
                 };
-                PendingObservation stampedPending = pendingObservation with
+                _observationTimeline.Add(stampedObservation);
+                _notableAccumulation.Add(pendingObservation with
                 {
                     Observation = stampedObservation
-                };
-                _observationTimeline.Add(stampedObservation);
-                _pendingObservations.Enqueue(stampedPending);
-                _cumulativeObservationImportance += stampedPending.Importance;
-
-                if (_enabled
-                    && HighImportanceInterruptionEnabled
-                    && _isProcessingObservations
-                    && !_interruptionRequested
-                    && stampedPending.Importance >= EffectiveHighImportanceInterruptionThreshold)
-                {
-                    _interruptionRequested = true;
-                    _immediateReplacementPending = true;
-                    interruptionCancellation = _activeTurnCancellation;
-                }
-
+                });
+                _cumulativeNotableImportance += pendingObservation.Importance;
                 stampedObservations.Add(stampedObservation);
-            }
 
-            if (wasPendingQueueEmpty && observations.Count > 0)
-            {
-                _firstPendingObservationTimestamp = GetTimestamp();
+                if (!_notablePending && _cumulativeNotableImportance >= EffectiveObservationImportanceThreshold)
+                {
+                    _notablePending = true;
+                    becameNotable = true;
+                }
             }
-
-            if (!_enabled)
-            {
-                shouldEvaluateScheduling = false;
-                shouldProcessImmediately = false;
-            }
-            else
-            {
-                bool thresholdReached = _cumulativeObservationImportance >= EffectiveObservationImportanceThreshold;
-                shouldEvaluateScheduling = !_isProcessingObservations
-                    && (wasPendingQueueEmpty || (wasBelowThreshold && thresholdReached));
-                shouldProcessImmediately = shouldEvaluateScheduling && IsEligibleAt(GetTimestamp());
-            }
-        }
-
-        if (interruptionCancellation is not null)
-        {
-            try
-            {
-                interruptionCancellation.Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-                // Natural completion won the race after pre-emption was committed.
-            }
-        }
-
-        if (shouldEvaluateScheduling)
-        {
-            QueueSchedulingEvaluation();
         }
 
         foreach (AgentObservation observation in stampedObservations)
@@ -915,11 +825,61 @@ public abstract partial class Mind : Node
             OnObservationIngested(observation);
         }
 
-        return new MindScheduleDecision(shouldProcessImmediately, shouldEvaluateScheduling && !shouldProcessImmediately);
+        if (becameNotable)
+        {
+            SignalNotableAccumulation();
+        }
     }
 
     /// <summary>
-    /// Notifies derived minds after a successfully committed observation without affecting foreground scheduling.
+    /// Delivers one notable accumulation after its committing batch has settled (AI-001 TR-35): an active wait
+    /// completes early with it; otherwise, while delivery is enabled, the agent session runtime is signalled to
+    /// interrupt (AI-001 TR-6, AI-002 TR-41).
+    /// </summary>
+    private void SignalNotableAccumulation()
+    {
+        bool wakeWait;
+        lock (_observationStateLock)
+        {
+            if (IsNodeLifetimeEnded || !_enabled)
+            {
+                return;
+            }
+
+            wakeWait = _activeWait is not null;
+            if (wakeWait)
+            {
+                _ = _activeWait!.TryWake(attendedSpeakerFinished: false);
+            }
+        }
+
+        if (!wakeWait)
+        {
+            NotableObservationsSignalled?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Takes the pending notable accumulation for injected delivery when no wait is active, resetting the window.
+    /// </summary>
+    /// <returns>The notable observations in FIFO ingestion order, or null when nothing is currently notable.</returns>
+    internal IReadOnlyList<AgentObservation>? TryTakePendingNotableWindow()
+    {
+        lock (_observationStateLock)
+        {
+            if (IsNodeLifetimeEnded || !_notablePending || _activeWait is not null)
+            {
+                return null;
+            }
+
+            List<AgentObservation> window = [.. _notableAccumulation.Select(static entry => entry.Observation)];
+            ResetNotableAccumulationLocked();
+            return window;
+        }
+    }
+
+    /// <summary>
+    /// Notifies derived minds after a successfully committed observation.
     /// </summary>
     protected virtual void OnObservationIngested(AgentObservation observation)
     {
@@ -929,7 +889,7 @@ public abstract partial class Mind : Node
     /// Gets an atomic, top-level read-only copy of the complete node-lifetime observation timeline membership and order.
     /// Observation records are passed directly under the producer immutability convention.
     /// </summary>
-    protected IReadOnlyList<AgentObservation> GetObservationTimelineSnapshot()
+    internal IReadOnlyList<AgentObservation> GetObservationTimelineSnapshot()
     {
         lock (_observationStateLock)
         {
@@ -938,49 +898,87 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Processes a non-empty batch of queued observations.
+    /// Waits for the notable-observation accumulation, completing early when accumulated importance reaches the
+    /// configured threshold or when an attended speaker finishes speaking, and otherwise after
+    /// <paramref name="maxWait"/> (AI-001 TR-6/7, AI-002 TR-31–33).
     /// </summary>
-    protected abstract Task ProcessObservationsAsync(
-        IReadOnlyList<AgentObservation> observations,
-        IReadOnlyList<AgentObservation> timelineSnapshot,
-        CancellationToken cancellationToken);
-
-    /// <summary>Processes a foreground batch and reports whether it genuinely completed successfully.</summary>
-    protected virtual async Task<bool> ProcessForegroundObservationsAsync(
-        IReadOnlyList<AgentObservation> observations,
-        IReadOnlyList<AgentObservation> timelineSnapshot,
-        CancellationToken cancellationToken)
+    /// <param name="maxWait">Maximum duration of one wait before quiet expiry.</param>
+    /// <param name="cancellationToken">Cancellation that abandons the wait.</param>
+    /// <returns>
+    /// The notable observations accumulated since the previous wait completion — normally nothing on quiet expiry —
+    /// and whether an attended speaker's finished cue woke the wait. Sub-threshold observations are never promoted;
+    /// they remain recorded in the timeline and reachable through the history tool.
+    /// </returns>
+    internal async Task<WaitOutcome> WaitForNotableObservationsAsync(TimeSpan maxWait, CancellationToken cancellationToken)
     {
-        await ProcessObservationsAsync(observations, timelineSnapshot, cancellationToken);
-        return true;
-    }
+        TimeSpan boundedWait = maxWait >= TimeSpan.Zero ? maxWait : MaxObservationWait;
+        using var waitCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            NodeLifetimeCancellationToken);
+        CancellationToken waitToken = waitCancellation.Token;
 
-    /// <summary>
-    /// Indicates whether the active foreground turn was claimed as the immediate replacement of an interrupted turn.
-    /// </summary>
-    /// <remarks>
-    /// Derived minds use this to carry per-turn state across an interruption boundary: a replacement turn replaces
-    /// the interrupted one and may reuse turn-scoped bindings captured before the interruption instead of rebuilding
-    /// them. The flag is captured when the turn claims its batch and cleared when the turn settles.
-    /// </remarks>
-    protected bool IsForegroundTurnImmediateReplacement
-    {
-        get;
-        private set;
-    }
+        ActiveWait wait;
+        lock (_observationStateLock)
+        {
+            if (IsNodeLifetimeEnded)
+            {
+                throw new OperationCanceledException(NodeLifetimeCancellationToken);
+            }
 
-    /// <summary>
-    /// Indicates whether queued observations are waiting for processing.
-    /// </summary>
-    protected bool HasPendingObservations
-    {
-        get
+            if (_activeWait is not null)
+            {
+                throw new InvalidOperationException($"Mind '{GetPath()}' supports exactly one active observation wait.");
+            }
+
+            if (_notablePending)
+            {
+                List<AgentObservation> window = [.. _notableAccumulation.Select(static entry => entry.Observation)];
+                ResetNotableAccumulationLocked();
+                return new WaitOutcome(window, AttendedSpeakerFinished: false);
+            }
+
+            wait = _activeWait = new ActiveWait();
+        }
+
+        bool speakerFinished = false;
+        List<AgentObservation> notable = [];
+        try
+        {
+            Task wakeOrExpiry = await Task.WhenAny(
+                wait.Completion.Task,
+                Task.Delay(boundedWait, waitToken)).ConfigureAwait(false);
+            if (ReferenceEquals(wakeOrExpiry, wait.Completion.Task))
+            {
+                speakerFinished = await wait.Completion.Task.ConfigureAwait(false);
+            }
+        }
+        finally
         {
             lock (_observationStateLock)
             {
-                return _pendingObservations.Count > 0;
+                if (ReferenceEquals(_activeWait, wait))
+                {
+                    _activeWait = null;
+                }
+
+                // The accumulation covers observations since the previous wait completion (AI-001 TR-6): any wait
+                // completion, early or quiet, starts a fresh accumulation window. Quiet expiry returns whatever is
+                // already notable — normally nothing — and never promotes sub-threshold observations.
+                notable = _notablePending
+                    ? [.. _notableAccumulation.Select(static entry => entry.Observation)]
+                    : [];
+                ResetNotableAccumulationLocked();
             }
         }
+
+        return new WaitOutcome(notable, speakerFinished);
+    }
+
+    private void ResetNotableAccumulationLocked()
+    {
+        _notableAccumulation.Clear();
+        _cumulativeNotableImportance = 0f;
+        _notablePending = false;
     }
 
     private TimeSpan MaxObservationWait
@@ -989,266 +987,11 @@ public abstract partial class Mind : Node
     private float EffectiveObservationImportanceThreshold
         => Math.Max(ObservationImportanceThreshold, 0.01f);
 
-    private float EffectiveHighImportanceInterruptionThreshold
-        => Math.Max(HighImportanceInterruptionThreshold, 0.01f);
-
-    private TimeSpan MinimumTurnInterval
-        => TimeSpan.FromSeconds(Math.Max(MinimumTurnIntervalSeconds, 0f));
-
-    private Godot.Timer EnsureSchedulingTimer()
-    {
-        if (_schedulingTimer is not null)
-        {
-            return _schedulingTimer;
-        }
-
-        Godot.Timer timer = new()
-        {
-            Name = "MindSchedulingTimer",
-            OneShot = true,
-            Autostart = false,
-            WaitTime = MaxObservationWait.TotalSeconds,
-        };
-
-        timer.Timeout += OnSchedulingTimerTimeout;
-        AddChild(timer);
-        _schedulingTimer = timer;
-
-        return timer;
-    }
-
-    private void QueueSchedulingEvaluation()
-    {
-        if (IsNodeLifetimeEnded || !IsInsideTree())
-        {
-            return;
-        }
-
-        lock (_deferredGodotActionsLock)
-        {
-            if (IsNodeLifetimeEnded || _schedulingEvaluationQueued)
-            {
-                return;
-            }
-
-            _schedulingEvaluationQueued = true;
-        }
-
-        _ = CallDeferred(nameof(EvaluateSchedulingDeferred));
-    }
-
-    private void EvaluateSchedulingDeferred()
-    {
-        if (IsNodeLifetimeEnded)
-        {
-            return;
-        }
-
-        lock (_deferredGodotActionsLock)
-        {
-            _schedulingEvaluationQueued = false;
-        }
-
-        double delaySeconds;
-        lock (_observationStateLock)
-        {
-            if (!_enabled || _isProcessingObservations || _pendingObservations.Count == 0)
-            {
-                _schedulingTimer?.Stop();
-                return;
-            }
-
-            delaySeconds = GetEligibleTimestamp() - GetTimestamp();
-        }
-
-        Godot.Timer timer = EnsureSchedulingTimer();
-        timer.Stop();
-
-        if (delaySeconds <= 0d)
-        {
-            if (IsSpeakingGateClosed())
-            {
-                // Park the eligible turn behind the speaking gate; a blocking SpeechEnded re-queues this
-                // evaluation immediately without polling (AI-001 TR-41, TR-42).
-                return;
-            }
-
-            _ = ProcessObservationCycleAsync();
-            return;
-        }
-
-        timer.WaitTime = Math.Max(delaySeconds, 0.001d);
-        timer.Start();
-    }
-
-    private void StopSchedulingTimer()
-    {
-        lock (_deferredGodotActionsLock)
-        {
-            _schedulingEvaluationQueued = false;
-        }
-
-        _schedulingTimer?.Stop();
-    }
-
     private void RejectEndedLifetimeReentry()
     {
         if (IsNodeLifetimeEnded && GetParent() is { } parent)
         {
             parent.RemoveChild(this);
-        }
-    }
-
-    private void OnSchedulingTimerTimeout() => _ = ProcessObservationCycleAsync();
-
-    private async Task ProcessObservationCycleAsync()
-    {
-        try
-        {
-            _ = await ProcessPendingObservationsAsync();
-        }
-        catch (OperationCanceledException) when (IsNodeLifetimeEnded)
-        {
-        }
-        catch (Exception ex)
-        {
-            if (GameLoggerResolver.TryResolve(out ILogger<Mind>? logger) && logger is not null)
-            {
-                logger.LogError(ex, "Mind observation processing failed.");
-            }
-        }
-        finally
-        {
-            QueueSchedulingEvaluation();
-        }
-    }
-
-    private async Task<bool> ProcessPendingObservationsAsync(CancellationToken cancellationToken = default)
-    {
-        AgentObservation[] observations;
-        IReadOnlyList<AgentObservation> timelineSnapshot;
-        using var processingCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            NodeLifetimeCancellationToken);
-        CancellationToken processingToken = processingCancellation.Token;
-
-        if (IsSpeakingGateClosed())
-        {
-            // A new turn may not start while a gating voice speaks; eligibility stays pending until the gate opens
-            // (AI-001 TR-41, TR-42).
-            return false;
-        }
-
-        lock (_observationStateLock)
-        {
-            if (IsNodeLifetimeEnded
-                || !_enabled
-                || _isProcessingObservations
-                || _pendingObservations.Count == 0
-                || !IsEligibleAt(GetTimestamp()))
-            {
-                return false;
-            }
-
-            _isProcessingObservations = true;
-            _activeTurnCancellation = processingCancellation;
-            IsForegroundTurnImmediateReplacement = _immediateReplacementPending;
-            _interruptionRequested = false;
-            _immediateReplacementPending = false;
-            observations = [.. _pendingObservations.Select(entry => entry.Observation)];
-            timelineSnapshot = new ReadOnlyCollection<AgentObservation>([.. _observationTimeline]);
-            _pendingObservations.Clear();
-            _cumulativeObservationImportance = 0f;
-            _firstPendingObservationTimestamp = null;
-        }
-
-        try
-        {
-            if (ObservationBatchClaimedHookForTesting is { } batchClaimedHook)
-            {
-                await batchClaimedHook(processingToken);
-            }
-
-            try
-            {
-                bool completedSuccessfully = await ProcessForegroundObservationsAsync(
-                    observations,
-                    timelineSnapshot,
-                    processingToken);
-                if (completedSuccessfully && !processingToken.IsCancellationRequested && !IsNodeLifetimeEnded)
-                {
-                    OnForegroundTurnSettled();
-                }
-            }
-            catch (OperationCanceledException) when (IsExpectedInterruption(processingCancellation, cancellationToken))
-            {
-            }
-
-            return true;
-        }
-        finally
-        {
-            lock (_observationStateLock)
-            {
-                _isProcessingObservations = false;
-                IsForegroundTurnImmediateReplacement = false;
-                if (ReferenceEquals(_activeTurnCancellation, processingCancellation))
-                {
-                    _activeTurnCancellation = null;
-                }
-
-                _interruptionRequested = false;
-                if (!IsNodeLifetimeEnded)
-                {
-                    _lastTurnCompletionTimestamp = GetTimestamp();
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Notifies derived minds after a foreground processing cycle settles successfully.
-    /// </summary>
-    protected virtual void OnForegroundTurnSettled()
-    {
-    }
-
-    private bool IsEligibleAt(double timestamp) => timestamp >= GetEligibleTimestamp();
-
-    private double GetEligibleTimestamp()
-    {
-        if (_immediateReplacementPending)
-        {
-            return double.NegativeInfinity;
-        }
-
-        double intervalEligibleTimestamp = _lastTurnCompletionTimestamp is { } completionTimestamp
-            ? completionTimestamp + MinimumTurnInterval.TotalSeconds
-            : double.NegativeInfinity;
-
-        if (_cumulativeObservationImportance >= EffectiveObservationImportanceThreshold)
-        {
-            return intervalEligibleTimestamp;
-        }
-
-        double waitEligibleTimestamp = (_firstPendingObservationTimestamp ?? GetTimestamp())
-            + MaxObservationWait.TotalSeconds;
-        return Math.Max(waitEligibleTimestamp, intervalEligibleTimestamp);
-    }
-
-    private static double GetTimestamp() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
-
-    private bool IsExpectedInterruption(
-        CancellationTokenSource processingCancellation,
-        CancellationToken callerCancellation)
-    {
-        lock (_observationStateLock)
-        {
-            return _interruptionRequested
-                && ReferenceEquals(_activeTurnCancellation, processingCancellation)
-                && !IsNodeLifetimeEnded
-                && !NodeLifetimeCancellationToken.IsCancellationRequested
-                && !callerCancellation.IsCancellationRequested;
         }
     }
 
@@ -1263,12 +1006,15 @@ public abstract partial class Mind : Node
             : importance;
     }
 
+    private static double GetStopwatchSeconds() => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+
     private readonly record struct PendingObservation(AgentObservation Observation, float Importance);
 
     /// <summary>
-    /// Result of queueing an observation into the base Mind processing cycle.
+    /// Outcome of one observation wait: the notable observations delivered and whether the attended-speaker-finished
+    /// cue completed the wait early.
     /// </summary>
-    protected readonly record struct MindScheduleDecision(
-        bool ShouldProcessImmediately,
-        bool ShouldEnsureIntervalScheduled);
+    /// <param name="Notable">Notable observations in FIFO ingestion order; empty on quiet expiry.</param>
+    /// <param name="AttendedSpeakerFinished">Whether an attended speaker finishing speech woke the wait early.</param>
+    internal readonly record struct WaitOutcome(IReadOnlyList<AgentObservation> Notable, bool AttendedSpeakerFinished);
 }

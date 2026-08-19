@@ -279,12 +279,6 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
     {
         protected override ICharacter ResolveOwningCharacter() => owner;
 
-        protected override Task ProcessObservationsAsync(
-            IReadOnlyList<AlleyCat.Mind.Observation.Observation> observations,
-            IReadOnlyList<AlleyCat.Mind.Observation.Observation> timelineSnapshot,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
         public void ReinforceAttention(string fullId, float contribution)
             => ReinforceAttention(
                 fullId,

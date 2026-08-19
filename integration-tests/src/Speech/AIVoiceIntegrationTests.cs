@@ -811,14 +811,17 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         try
         {
-            // One submission is cancelled mid-generation, before playback hand-off: it must commit nothing.
+            // One submission is cancelled mid-generation, before playback hand-off: it commits nothing and reports
+            // the non-throwing cut-short result (AI-002 TR-27).
             using CancellationTokenSource cancelledSubmission = new();
             Task<object?> cancelled = activeFunction.InvokeAsync(
                 new AIFunctionArguments { ["speech"] = "Cancelled request" },
                 cancelledSubmission.Token).AsTask();
             await WaitUntilAsync(sceneTree, () => speechGenerator.GenerateCallCount == 1, 30);
             cancelledSubmission.Cancel();
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
+            string? cancelledResult = await cancelled as string;
+            Assert.NotNull(cancelledResult);
+            Assert.Contains("cut short", Assert.IsType<string>(cancelledResult), StringComparison.Ordinal);
 
             // Two further submissions are admitted while generation is still pending, so neither has reached the
             // playback hand-off boundary and neither may commit an observation yet.
@@ -1392,12 +1395,6 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         public IReadOnlyList<Observation> Timeline => GetObservationTimelineSnapshot();
 
         protected override ICharacter ResolveOwningCharacter() => Owner;
-
-        protected override Task ProcessObservationsAsync(
-            IReadOnlyList<Observation> observations,
-            IReadOnlyList<Observation> timelineSnapshot,
-            CancellationToken cancellationToken)
-            => Task.CompletedTask;
     }
 
     private sealed class ToolCharacter(IReadOnlyList<IComponent> components) : ICharacter

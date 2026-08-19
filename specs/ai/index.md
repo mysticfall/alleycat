@@ -66,8 +66,8 @@ roleplay without breaking immersion or performance.
 
 - Parent index for AI character behaviour specifications.
 - Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory
-  Source Compilation, AI-005: Context Worker, AI-006: Percept-Based Sensing And Attention, AI-007:
-  Attention-Driven Gaze Target Selection, AI-008: Scenario, and AI-009: Attention-Driven Head Orientation.
+  Source Compilation, AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven
+  Gaze Target Selection, AI-008: Scenario, and AI-009: Attention-Driven Head Orientation.
 - CTX-001 as the normative top-level contextual information API used by AI and non-AI consumers.
 - High-level contracts covering the six requirement themes above, with scene membership delegated to SCN-001.
 - Extensibility points for lore, actions, and context providers.
@@ -99,7 +99,7 @@ roleplay without breaking immersion or performance.
    - Parallel workflow expectation stated.
    - Extensibility contracts for external data and pluggable components.
 3. AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory Source Compilation,
-   AI-005: Context Worker, AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Gaze Target
+   AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Head Target
    Selection, AI-008: Scenario, and AI-009: Attention-Driven Head Orientation are identified as current normative
    child contracts for their respective scopes.
 4. CTX-001 is discoverable as the normative top-level contextual information API.
@@ -110,7 +110,6 @@ roleplay without breaking immersion or performance.
 - [AI-002: Agent Runtime](002-agent-runtime/index.md)
 - [AI-003: Prompt API](003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](004-lore-backstory/index.md)
-- [AI-005: Context Worker](005-context-worker/index.md)
 - [AI-006: Percept-Based Sensing And Attention](006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](007-attention-gaze-target-selection/index.md)
 - [AI-008: Scenario](008-scenario/index.md)
@@ -124,7 +123,6 @@ roleplay without breaking immersion or performance.
 - AI-002: Agent Runtime
 - AI-003: Prompt API
 - AI-004: Lore And Backstory Source Compilation
-- AI-005: Context Worker
 - AI-006: Percept-Based Sensing And Attention
 - AI-007: Attention-Driven Gaze Target Selection
 - AI-008: Scenario

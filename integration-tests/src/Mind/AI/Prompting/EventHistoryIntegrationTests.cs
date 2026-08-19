@@ -1,5 +1,7 @@
+using System.Globalization;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
@@ -11,26 +13,36 @@ using Xunit;
 namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 
 /// <summary>
-/// Godot-runtime coverage for exact, template-scoped event-history dispatch.
+/// Godot-runtime coverage for the standalone <see cref="EventHistory" /> authoring resource and its exact,
+/// template-scoped dispatch through the on-demand observation-history renderer.
 /// </summary>
 [Headless]
-public sealed class EventHistoryPromptSectionIntegrationTests
+public sealed class EventHistoryIntegrationTests
 {
     private const string GenericPromptPath = "res://assets/characters/prompts/generic_npc_prompt_stack.tres";
-    private const string StrictToolOnlyGuidance =
-        "Use `end_turn` exactly once as the final argument-free non-action marker. "
-        + "Call it alone for zero actions, or after one or more actions when you can finish without inspecting their results. "
-        + "Omit `end_turn` from an action-only response when you need action results before deciding whether to continue or finish. "
-        + "Action tools such as `speak` are optional and do not end the turn. "
-        + "Ordinary text is invalid.";
+    private const string NpcEventHistoryPath = "res://assets/characters/prompts/npc_event_history.tres";
 
     /// <summary>
-    /// The shared prompt renders exact strict tool-only protocol guidance without legacy terminal-result wording.
+    /// The shared generic NPC prompt stack contains no event-history section, and its <c>mind.md</c> guidance stays
+    /// cross-cutting: the tool-call-only frame, game-time literacy, and subject references carry no per-tool
+    /// mechanics or tool names (AI-003 TR-23/25).
     /// </summary>
     [Fact]
-    public async Task ProductionPromptResource_RendersStrictToolOnlyProtocolGuidance()
+    public async Task SharedPromptStack_ContainsNoEventHistorySectionAndCrossCuttingGuidanceOnly()
     {
         PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
+        Assert.Equal(
+            ["Instructions", "Lore", "Characters", "Scenario"],
+            stack.Sections.Select(section => section.Name));
+        Assert.Equal(
+            [
+                "AlleyCat.Mind.AI.Prompting.FilePromptSection",
+                "AlleyCat.Mind.AI.Prompting.EssentialLorePromptSection",
+                "AlleyCat.Mind.AI.Prompting.CharacterLorePromptSection",
+                "AlleyCat.Mind.AI.Prompting.FilePromptSection",
+            ],
+            stack.Sections.Select(section => section.GetType().FullName));
+
         FilePromptSection section = Assert.IsType<FilePromptSection>(stack.Sections[0], exactMatch: false);
         string source = await section.GetContentAsync(CreateBuildContext());
         ITemplate template = new HandlebarsTemplateCompiler().Compile(source);
@@ -40,76 +52,105 @@ public sealed class EventHistoryPromptSectionIntegrationTests
             ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:test_character" },
         });
 
-        Assert.Contains(StrictToolOnlyGuidance, output, StringComparison.Ordinal);
-        Assert.DoesNotContain("required end-of-turn result", output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("You are char:test_character", output, StringComparison.Ordinal);
+        Assert.Contains("every response you give is a tool call", output, StringComparison.Ordinal);
+        Assert.Contains("seconds of in-game time since the game began", output, StringComparison.Ordinal);
+        // Per-tool mechanics and etiquette live solely in the tool descriptions, never in the session prompt.
+        Assert.DoesNotContain("`wait`", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("`speak`", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("`history`", output, StringComparison.Ordinal);
         Assert.DoesNotContain("terminal result", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("terminal response", output, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// The production prompt asset owns exactly one unified speech fragment with safe actor-relative output.
+    /// Tool descriptions are the sole carriers of per-tool mechanics and etiquette: <c>wait</c> frames observation
+    /// rather than passing time with question-then-wait etiquette, and <c>speak</c> is optional and repeatable
+    /// (AI-002 TR-35, AI-003 TR-25).
     /// </summary>
     [Fact]
-    public async Task ProductionPromptResource_RendersUnifiedActorRelativeChronologicalHistory()
+    public void ProductionToolDescriptions_CarryPerToolMechanicsAndEtiquette()
     {
-        PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
-        EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[4], exactMatch: false);
-        EventHistoryPromptFragment fragment = Assert.Single(section.Fragments);
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        Observation[] observations =
-        [
-            new ObservedSpeech("char:test_character", "private-self", "Self line.") { ObservedAt = now.AddSeconds(-30) },
-            new TestObservation("world.changed", "door opened") { ObservedAt = now.AddMinutes(-5) },
-            new ObservedSpeech("char:rin", "private-known", "Known line.") { ObservedAt = now.AddHours(-2) },
-            new ObservedSpeech(null, "private-unknown", "Unknown line.") { ObservedAt = now.AddDays(-3) },
-            new ObservedSpeech("CHAR:TEST_CHARACTER", "private-case", "Case-distinct line.") { ObservedAt = now.AddDays(-10) },
-        ];
+        using WaitTool waitTool = new();
+        using SpeechTool speechTool = new();
 
-        string output = await CompileAndRenderAsync(section, observations);
-
-        Assert.Equal("speech.observed", fragment.TypeKey);
-        Assert.Equal(
-            "I said: Self line. (30 seconds ago)\n"
-                + "((Received world.changed event.)) (5 minutes ago)\n"
-                + "Heard char:rin say: Known line. (2 hours ago)\n"
-                + "Heard an unknown speaker say: Unknown line. (3 days ago)\n"
-                + "Heard CHAR:TEST_CHARACTER say: Case-distinct line. (1 week ago)\n",
-            output);
-        Assert.DoesNotContain("private-", output, StringComparison.Ordinal);
-        Assert.DoesNotContain("VoiceId", fragment.Source, StringComparison.Ordinal);
-        Assert.DoesNotContain("VoiceId", section.FallbackSource, StringComparison.Ordinal);
+        Assert.Contains("without waiting, nothing new reaches you", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("observation, not idling", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("before assuming refusal", waitTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("only the spoken words", speechTool.ToolDescription, StringComparison.Ordinal);
+        Assert.Contains("optional and repeatable", speechTool.ToolDescription, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Unstamped observations render without any relative-time label for both fragment and fallback entries.
+    /// The standalone NPC event-history resource owns exactly one unified speech fragment with safe actor-relative
+    /// output, rendered chronologically through the on-demand renderer.
     /// </summary>
     [Fact]
-    public async Task ProductionPromptResource_RendersUnstampedObservationsWithoutLabels()
+    public void StandaloneEventHistory_RendersUnifiedActorRelativeChronologicalHistory()
     {
-        PromptStack stack = Assert.IsType<PromptStack>(ResourceLoader.Load(GenericPromptPath), exactMatch: false);
-        EventHistoryPromptSection section = Assert.IsType<EventHistoryPromptSection>(stack.Sections[4], exactMatch: false);
+        EventHistory eventHistory = Assert.IsType<EventHistory>(
+            ResourceLoader.Load(NpcEventHistoryPath),
+            exactMatch: false);
+        EventHistoryPromptFragment fragment = Assert.Single(eventHistory.Fragments);
+        Observation[] observations =
+        [
+            new ObservedSpeech("char:test_character", "private-self", "Self line.") { ObservedAt = 100.2d },
+            new TestObservation("world.changed", "door opened") { ObservedAt = 300.55d },
+            new ObservedSpeech("char:rin", "private-known", "Known line.") { ObservedAt = 7200d },
+            new ObservedSpeech(null, "private-unknown", "Unknown line.") { ObservedAt = 259200.4d },
+            new ObservedSpeech("CHAR:TEST_CHARACTER", "private-case", "Case-distinct line.") { ObservedAt = 864000d },
+        ];
+
+        string output = CreateRenderer(eventHistory).Render(observations);
+
+        Assert.Equal("speech.observed", fragment.TypeKey);
+        Assert.Equal(
+            "I said: Self line. (at " + Label(100.2d) + "s game time)\n"
+                + "((Received world.changed event.)) (at " + Label(300.55d) + "s game time)\n"
+                + "Heard char:rin say: Known line. (at " + Label(7200d) + "s game time)\n"
+                + "Heard an unknown speaker say: Unknown line. (at " + Label(259200.4d) + "s game time)\n"
+                + "Heard CHAR:TEST_CHARACTER say: Case-distinct line. (at " + Label(864000d) + "s game time)\n",
+            output);
+        Assert.DoesNotContain("private-", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("VoiceId", fragment.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("VoiceId", eventHistory.FallbackSource, StringComparison.Ordinal);
+    }
+
+    /// <summary>Formats one game-time label exactly as the template's number-format tool renders it.</summary>
+    private static string Label(double gameSeconds)
+        => gameSeconds.ToString("F1", CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// Unstamped observations render without any game-time label for both fragment and fallback entries.
+    /// </summary>
+    [Fact]
+    public void StandaloneEventHistory_RendersUnstampedObservationsWithoutLabels()
+    {
+        EventHistory eventHistory = Assert.IsType<EventHistory>(
+            ResourceLoader.Load(NpcEventHistoryPath),
+            exactMatch: false);
         Observation[] observations =
         [
             new ObservedSpeech("char:test_character", "private-self", "Self line."),
             new TestObservation("world.changed", "door opened"),
         ];
 
-        string output = await CompileAndRenderAsync(section, observations);
+        string output = CreateRenderer(eventHistory).Render(observations);
 
         Assert.Equal(
             "I said: Self line.\n((Received world.changed event.))\n",
             output);
-        Assert.DoesNotContain("ago", output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("VoiceId", section.FallbackSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("game time", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("VoiceId", eventHistory.FallbackSource, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// One authored fragment renders self, recognised, case-distinct, and unknown speech without voice provenance.
     /// </summary>
     [Fact]
-    public async Task Render_RecognisedUnknownAndSelfSpeech_UsesPrivacySafeAuthoredWording()
+    public void Render_RecognisedUnknownAndSelfSpeech_UsesPrivacySafeAuthoredWording()
     {
-        EventHistoryPromptSection section = CreateSpeechSection();
+        EventHistory eventHistory = CreateSpeechEventHistory();
         Observation[] observations =
         [
             new ObservedSpeech("char:rin", "raw-known-device", "Hello"),
@@ -118,7 +159,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
             new ObservedSpeech("CHAR:TEST_CHARACTER", "case-sensitive-device", "Not myself."),
         ];
 
-        string output = await CompileAndRenderAsync(section, observations);
+        string output = CreateRenderer(eventHistory).Render(observations);
 
         Assert.Equal(
             "Heard char:rin: Hello\nHeard an unknown speaker: Who is there?\nSaid: Welcome.\nHeard CHAR:TEST_CHARACTER: Not myself.\n",
@@ -132,9 +173,9 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     /// Unknown keys and case mismatches use the authored fallback with each concrete record as context.
     /// </summary>
     [Fact]
-    public async Task Render_UnknownAndCaseMismatchedKeys_UsesFallbackWithConcreteContext()
+    public void Render_UnknownAndCaseMismatchedKeys_UsesFallbackWithConcreteContext()
     {
-        EventHistoryPromptSection section = new()
+        EventHistory eventHistory = new()
         {
             Fragments =
             [
@@ -152,7 +193,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
             new TestObservation("world.changed", "door opened"),
         ];
 
-        string output = await CompileAndRenderAsync(section, observations);
+        string output = CreateRenderer(eventHistory).Render(observations);
 
         Assert.Equal(
             "fallback Speech.Heard: case mismatch\nfallback world.changed: door opened\n",
@@ -163,9 +204,9 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     /// Rendering preserves timeline order and authored multiline output, including an empty history.
     /// </summary>
     [Fact]
-    public async Task Render_PreservesOrderingMultilineOutputAndEmptyHistory()
+    public void Render_PreservesOrderingMultilineOutputAndEmptyHistory()
     {
-        EventHistoryPromptSection section = new()
+        EventHistory eventHistory = new()
         {
             Fragments =
             [
@@ -178,10 +219,9 @@ public sealed class EventHistoryPromptSectionIntegrationTests
             FallbackSource = "fallback",
         };
 
-        string populated = await CompileAndRenderAsync(
-            section,
+        string populated = CreateRenderer(eventHistory).Render(
             [new TestObservation("test.event", "first"), new TestObservation("test.event", "second")]);
-        string empty = await CompileAndRenderAsync(section, []);
+        string empty = CreateRenderer(eventHistory).Render([]);
 
         Assert.Equal("line one: first\nline two\nline one: second\nline two\n", populated);
         Assert.Equal(string.Empty, empty);
@@ -191,9 +231,9 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     /// Speech and fallback observations retain chronological interleaving and concrete observation context safely.
     /// </summary>
     [Fact]
-    public async Task Render_InterleavesSpeechAndFallbackWithoutLeakingVoiceProvenance()
+    public void Render_InterleavesSpeechAndFallbackWithoutLeakingVoiceProvenance()
     {
-        EventHistoryPromptSection section = CreateSpeechSection();
+        EventHistory eventHistory = CreateSpeechEventHistory();
         Observation[] observations =
         [
             new ObservedSpeech(null, "private-first", "first"),
@@ -201,7 +241,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
             new ObservedSpeech("char:test_character", "private-self", "third"),
         ];
 
-        string output = await CompileAndRenderAsync(section, observations);
+        string output = CreateRenderer(eventHistory).Render(observations);
 
         Assert.Equal(
             "Heard an unknown speaker: first\n((Received world.changed event.))\nSaid: third\n",
@@ -211,12 +251,13 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     }
 
     /// <summary>
-    /// Section construction emits reusable source without consuming observations; rendering supplies ordinary context later.
+    /// Source construction emits reusable source without consuming observations; rendering supplies the ordinary
+    /// context later.
     /// </summary>
     [Fact]
-    public async Task GetContent_SeparatesCompilationFromOrdinaryContextRendering()
+    public void BuildEventHistorySource_SeparatesCompilationFromOrdinaryContextRendering()
     {
-        EventHistoryPromptSection section = new()
+        EventHistory eventHistory = new()
         {
             Fragments =
             [
@@ -229,7 +270,7 @@ public sealed class EventHistoryPromptSectionIntegrationTests
             FallbackSource = "{{TypeKey}}",
         };
 
-        string source = await section.GetContentAsync(CreateBuildContext());
+        string source = EventHistory.BuildEventHistorySource(eventHistory.Fragments, eventHistory.FallbackSource);
         ITemplate template = new HandlebarsTemplateCompiler().Compile(source);
 
         Assert.DoesNotContain("first runtime value", source, StringComparison.Ordinal);
@@ -241,13 +282,13 @@ public sealed class EventHistoryPromptSectionIntegrationTests
     /// Blank keys, duplicate exact keys, and blank fallbacks fail as clear authoring errors.
     /// </summary>
     [Fact]
-    public async Task GetContent_InvalidAuthoring_ThrowsClearErrors()
+    public void BuildEventHistorySource_InvalidAuthoring_ThrowsClearErrors()
     {
-        EventHistoryPromptSection blankKey = new()
+        EventHistory blankKey = new()
         {
             Fragments = [new EventHistoryPromptFragment { TypeKey = "  ", Source = "unused" }],
         };
-        EventHistoryPromptSection duplicateKey = new()
+        EventHistory duplicateKey = new()
         {
             Fragments =
             [
@@ -255,24 +296,24 @@ public sealed class EventHistoryPromptSectionIntegrationTests
                 new EventHistoryPromptFragment { TypeKey = "same", Source = "second" },
             ],
         };
-        EventHistoryPromptSection blankFallback = new()
+        EventHistory blankFallback = new()
         {
             FallbackSource = "\t",
         };
 
-        InvalidOperationException blankKeyError = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => blankKey.GetContentAsync(CreateBuildContext()));
-        InvalidOperationException duplicateError = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => duplicateKey.GetContentAsync(CreateBuildContext()));
-        InvalidOperationException fallbackError = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => blankFallback.GetContentAsync(CreateBuildContext()));
+        InvalidOperationException blankKeyError = Assert.Throws<InvalidOperationException>(
+            () => EventHistory.BuildEventHistorySource(blankKey.Fragments, blankKey.FallbackSource));
+        InvalidOperationException duplicateError = Assert.Throws<InvalidOperationException>(
+            () => EventHistory.BuildEventHistorySource(duplicateKey.Fragments, duplicateKey.FallbackSource));
+        InvalidOperationException fallbackError = Assert.Throws<InvalidOperationException>(
+            () => EventHistory.BuildEventHistorySource(blankFallback.Fragments, blankFallback.FallbackSource));
 
         Assert.Contains("nonblank TypeKey", blankKeyError.Message, StringComparison.Ordinal);
         Assert.Contains("duplicate exact TypeKey 'same'", duplicateError.Message, StringComparison.Ordinal);
         Assert.Contains("nonblank fallback", fallbackError.Message, StringComparison.Ordinal);
     }
 
-    private static EventHistoryPromptSection CreateSpeechSection()
+    private static EventHistory CreateSpeechEventHistory()
         => new()
         {
             Fragments =
@@ -286,20 +327,17 @@ public sealed class EventHistoryPromptSectionIntegrationTests
             FallbackSource = "((Received {{TypeKey}} event.))\n",
         };
 
-    private static async Task<string> CompileAndRenderAsync(
-        EventHistoryPromptSection section,
-        IReadOnlyList<Observation> observations)
-    {
-        string source = await section.GetContentAsync(CreateBuildContext());
-        ITemplate template = new HandlebarsTemplateCompiler().Compile(source);
-        return Render(template, observations);
-    }
+    private static ObservationHistoryRenderer CreateRenderer(EventHistory eventHistory)
+        => ObservationHistoryRenderer.Create(
+            eventHistory,
+            new HandlebarsTemplateCompiler(),
+            new Dictionary<string, object?> { ["FullId"] = "char:test_character" });
 
     private static string Render(ITemplate template, IReadOnlyList<Observation> observations)
         => template.Render(new Dictionary<string, object?>
         {
             ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:test_character" },
-            [EventHistoryPromptSection.ObservationsContextKey] = observations,
+            [EventHistory.ObservationsContextKey] = observations,
         });
 
     private static PromptSectionBuildContext CreateBuildContext()

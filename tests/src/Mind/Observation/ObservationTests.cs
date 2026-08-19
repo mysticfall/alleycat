@@ -61,12 +61,12 @@ public sealed class ObservationTests
     }
 
     /// <summary>
-    /// ObservedAt can be assigned through the object initialiser contract.
+    /// ObservedAt can be assigned through the object initialiser contract in game-time seconds.
     /// </summary>
     [Fact]
     public void ObservedAt_IsSettableThroughObjectInitialiser()
     {
-        DateTimeOffset stamp = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        const double stamp = 128.5d;
         var observation = new ObservedSpeech("char:character", "raw-voice", "Hello")
         {
             ObservedAt = stamp
@@ -81,7 +81,7 @@ public sealed class ObservationTests
     [Fact]
     public void ObservedAt_IsPreservedThroughWithCloning()
     {
-        DateTimeOffset stamp = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        const double stamp = 128.5d;
         var observation = new ObservedSpeech("char:character", "raw-voice", "Hello")
         {
             ObservedAt = stamp

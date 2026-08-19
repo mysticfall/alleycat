@@ -8,19 +8,13 @@
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_db11o"]
 [ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="7_xyj0a"]
 [ext_resource type="Resource" uid="uid://dvw63im28183y" path="res://assets/characters/prompts/generic_npc_prompt_stack.tres" id="9_beijb"]
-[ext_resource type="Script" uid="uid://ch2vv4iae3oka" path="res://src/Mind/AI/Tool/AgentTool.cs" id="10_v2tt5"]
-[ext_resource type="Script" uid="uid://d0put3qinfuxa" path="res://src/Mind/AI/Tool/SpeechTool.cs" id="11_u8xcn"]
+[ext_resource type="Resource" uid="uid://dv8k4pqrmxe1n" path="res://assets/characters/prompts/npc_event_history.tres" id="10_history"]
 [ext_resource type="Script" uid="uid://bfalxt2riwwdb" path="res://src/Navigation/LocomotiveNavigation.cs" id="12_navigation"]
 [ext_resource type="Script" uid="uid://qs2mgtgqvri5" path="res://src/Speech/Hearing.cs" id="13_hearing"]
 [ext_resource type="Script" uid="uid://nb7frvgohlfq" path="res://src/Mind/Perception/SpeechPerception.cs" id="14_speech_perception"]
 [ext_resource type="Script" uid="uid://dudl5uhyyp755" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="attention_gaze_selector_1"]
 [ext_resource type="Script" uid="uid://r0roprsf0efd" path="res://src/Mind/Attention/OrientingController.cs" id="orienting_controller_1"]
 [ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
-
-[sub_resource type="Resource" id="Resource_agentic_speech_tool"]
-script = ExtResource("11_u8xcn")
-ToolName = "speak"
-ToolDescription = "Speak the supplied text aloud through the configured voice."
 
 [sub_resource type="Resource" id="Resource_speech_perception"]
 script = ExtResource("14_speech_perception")
@@ -94,7 +88,7 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 [node name="Mind" type="Node" parent="." index="9" unique_id=917502219]
 script = ExtResource("7_xyj0a")
 SystemInstruction = ExtResource("9_beijb")
-Tools = Array[ExtResource("10_v2tt5")]([SubResource("Resource_agentic_speech_tool")])
+EventHistory = ExtResource("10_history")
 Perceptions = Array[Resource]([SubResource("Resource_speech_perception"), SubResource("Resource_visual_perception")])
 metadata/_custom_type_script = "uid://hadsjgek6b2p"
 

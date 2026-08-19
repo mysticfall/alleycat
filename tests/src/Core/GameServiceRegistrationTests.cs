@@ -44,6 +44,18 @@ public sealed class GameServiceRegistrationTests
         Assert.True(buildProviderIndex > registerSceneIndex, "All registrars must run before the provider is built.");
     }
 
+    /// <summary>
+    /// Game registers the game clock as a startup instance so its origin is pinned to game start.
+    /// </summary>
+    [Fact]
+    public void GameRegistersGameClockAsStartupSingleton()
+    {
+        string source = ReadGameSource();
+
+        Assert.Contains("using AlleyCat.Core.Time;", source, StringComparison.Ordinal);
+        Assert.Contains("AddSingleton<IGameClock>(new GameClock())", source, StringComparison.Ordinal);
+    }
+
     private static string ReadGameSource() =>
         File.ReadAllText(RepositoryPath.Get("game", "src", "Game.cs"));
 }

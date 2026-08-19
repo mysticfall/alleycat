@@ -1,4 +1,3 @@
-using System.Reflection;
 using AlleyCat.Character;
 using AlleyCat.Context;
 using AlleyCat.Core;
@@ -11,7 +10,6 @@ using AlleyCat.Vision;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.Tests.Mind.AI;
 
@@ -157,24 +155,21 @@ public sealed class AgenticMindTests
         {
             PlayerCharacter = player,
         };
-        ObservedSpeech speech = new("char:alpha", "voice-alpha", "Hello");
-        AgentObservation[] timeline = [speech];
 
         IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(
             owner,
             scene,
-            timeline,
             ["char:zulu", "char:alpha"]);
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
-        IReadOnlyList<AgentObservation> observations = Assert.IsAssignableFrom<IReadOnlyList<AgentObservation>>(result["observations"]);
 
         Assert.Equal(["char:alpha", "char:owner", "char:zulu"], characters.Keys);
         Assert.Same(ownerContext, result["character"]);
         Assert.Same(firstContext, characters["char:alpha"]);
         Assert.Same(characters["char:owner"], result["character"]);
         Assert.Equal("char:owner", Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["character"])["FullId"]);
-        Assert.Same(timeline, observations);
-        Assert.Same(speech, Assert.Single(observations));
+        // Observations never enter the render dictionary (AI-001 TR-25): they reach the model exclusively through
+        // AI-002 tool results and interruption injections.
+        Assert.False(result.ContainsKey("observations"));
         // The player is not attention-eligible here, so 'characters' omits it while the unconditional 'player' key
         // carries the player's own context dictionary.
         Assert.Same(playerContext, result["player"]);
@@ -330,7 +325,6 @@ public sealed class AgenticMindTests
         IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(
             owner,
             scene,
-            observations: [],
             attentionEligibleFullIDs: eligibleIDs);
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             result["characters"]);
@@ -371,47 +365,6 @@ public sealed class AgenticMindTests
         _ = Assert.Throws<ArgumentNullException>(() => new PromptSectionBuildContext(services, scene, null!));
     }
 
-    /// <summary>Context workers expose dictionary runs without legacy state wrappers or trigger back-references.</summary>
-    [Fact]
-    public void ContextWorker_UsesConventionBasedDictionaryPublicationWithoutMutualTriggerReference()
-    {
-        Type workerType = typeof(ContextWorker);
-        Assembly assembly = workerType.Assembly;
-
-        Assert.False(typeof(IContextual).IsAssignableFrom(workerType));
-        Assert.Null(workerType.GetMethod("GetContext", BindingFlags.Instance | BindingFlags.Public));
-        Assert.Equal(
-            typeof(IReadOnlyDictionary<string, object?>),
-            workerType.GetMethod("GetProjection", BindingFlags.Instance | BindingFlags.NonPublic)!.ReturnType);
-        Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextWorkerState"));
-        Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextWorkerRunInput"));
-        Assert.Null(assembly.GetType("AlleyCat.Mind.AI.ContextualSnapshot"));
-        Assert.Equal(
-            typeof(Task<IReadOnlyDictionary<string, object?>>),
-            workerType.GetMethod("RunAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.ReturnType);
-        Assert.DoesNotContain(
-            typeof(ContextWorkerTrigger).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
-            field => typeof(ContextWorker).IsAssignableFrom(field.FieldType));
-        Assert.NotNull(typeof(ContextWorkerTrigger).GetEvent(nameof(ContextWorkerTrigger.RunRequested)));
-        Assert.DoesNotContain(
-            workerType.GetProperties(),
-            property => property.PropertyType == typeof(object));
-    }
-
-    /// <summary>Observation trigger policies are abstract and must supply a concrete predicate.</summary>
-    [Fact]
-    public void ObservationContextWorkerTrigger_RequiresConcretePredicateImplementation()
-    {
-        Type triggerType = typeof(ObservationContextWorkerTrigger);
-        MethodInfo predicate = triggerType.GetMethod(
-            "ShouldRequestFor",
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-        Assert.True(triggerType.IsAbstract);
-        Assert.True(predicate.IsAbstract);
-        Assert.False(typeof(ConcreteObservationTrigger).IsAbstract);
-    }
-
     private sealed class CapturingTemplate : ITemplate
     {
         public IReadOnlyDictionary<string, object?>? ReceivedContext
@@ -424,11 +377,6 @@ public sealed class AgenticMindTests
             ReceivedContext = context;
             return $"Hello {context["displayName"]}";
         }
-    }
-
-    private sealed partial class ConcreteObservationTrigger : ObservationContextWorkerTrigger
-    {
-        protected override bool ShouldRequestFor(AgentObservation observation) => true;
     }
 
     private sealed class FakeCharacter(IReadOnlyDictionary<string, object?> context) : ICharacter

@@ -4,6 +4,7 @@ using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Threading;
+using AlleyCat.Core.Time;
 using AlleyCat.Mind.AI.Lore;
 using AlleyCat.Scene;
 using AlleyCat.Testing;
@@ -147,6 +148,7 @@ public partial class Game : Node, IServiceProvider
             .AddSingleton<ISceneContextProvider>(provider => new SceneContextProvider(
                 this,
                 provider.GetRequiredService<IContentResolver>()))
+            .AddSingleton<IGameClock>(new GameClock())
             .AddSingleton<ILoreQueryService, MarkdownLoreQueryService>()
             .AddSingleton<ILorePromptFormatter, MarkdownLorePromptFormatter>();
 

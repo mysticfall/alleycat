@@ -1,4 +1,6 @@
 using AlleyCat.Core.Threading;
+using AlleyCat.Core.Time;
+using AlleyCat.Mind.AI.Prompting;
 using Godot;
 using Microsoft.Extensions.AI;
 using MindBase = AlleyCat.Mind.Mind;
@@ -6,7 +8,22 @@ using MindBase = AlleyCat.Mind.Mind;
 namespace AlleyCat.Mind.AI.Tool;
 
 /// <summary>
-/// Godot-authored action resource that creates AI functions for an AgenticMind turn.
+/// Session-scoped services bound to an <see cref="AgentTool"/> when it is attached to an agent session.
+/// </summary>
+/// <param name="Context">Trusted session binding captured once at session start.</param>
+/// <param name="Mind">Mind boundary owning the session's timeline, waits, and attended-speaker cues.</param>
+/// <param name="HistoryRenderer">
+/// Event-history renderer for on-demand observation rendering under the AI-003 contract, or null when unavailable.
+/// </param>
+/// <param name="Clock">Game clock backing every time-sensitive tool result, or null when unavailable.</param>
+internal sealed record AgentToolSession(
+    ScenarioContext Context,
+    MindBase Mind,
+    ObservationHistoryRenderer? HistoryRenderer,
+    IGameClock? Clock);
+
+/// <summary>
+/// Godot-authored action tool that creates AI functions for an AgenticMind session.
 /// </summary>
 [Tool]
 [GlobalClass]
@@ -25,18 +42,55 @@ public abstract partial class AgentTool : Resource
     public string ToolDescription { get; set; } = string.Empty;
 
     /// <summary>
-    /// Creates an AI function bound to the trusted turn context and owning runtime boundary.
+    /// Session binding available to derived tools between
+    /// <see cref="CreateFunction(ScenarioContext, MindBase, IMainThreadDispatcher)" /> and invocation.
+    /// </summary>
+    /// <remarks>
+    /// Mind and the dispatcher remain private to the common wrapper: this binding is internal to the game assembly
+    /// and its friend test assemblies, never model-visible, and never part of <see cref="ScenarioContext"/>.
+    /// </remarks>
+    internal AgentToolSession? Session
+    {
+        get;
+        private set;
+    }
+
+    /// <summary>
+    /// Creates an AI function bound to the trusted session context and owning runtime boundary.
     /// </summary>
     public AIFunction CreateFunction(
         ScenarioContext context,
         MindBase mind,
         IMainThreadDispatcher dispatcher)
     {
-        Delegate method = CreateDelegate();
-        ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(mind);
         ArgumentNullException.ThrowIfNull(dispatcher);
+
+        return CreateFunction(context, mind, dispatcher, sessionServices: null);
+    }
+
+    /// <summary>
+    /// Creates an AI function bound to the trusted session context, owning runtime boundary, and session services.
+    /// </summary>
+    internal AIFunction CreateFunction(
+        ScenarioContext context,
+        MindBase mind,
+        IMainThreadDispatcher dispatcher,
+        AgentToolSession? sessionServices)
+    {
+        Delegate method;
+        Session = sessionServices ?? new AgentToolSession(context, mind, HistoryRenderer: null, Clock: null);
+        try
+        {
+            method = CreateDelegate();
+            ArgumentNullException.ThrowIfNull(method);
+        }
+        catch
+        {
+            Session = null;
+            throw;
+        }
 
         string? name = string.IsNullOrWhiteSpace(ToolName) ? null : ToolName.Trim();
         string? description = string.IsNullOrWhiteSpace(ToolDescription) ? null : ToolDescription.Trim();

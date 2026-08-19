@@ -97,9 +97,22 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Contains("uid=\"uid://hadsjgek6b2p\" path=\"res://src/Mind/AI/AgenticMind.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", maleSceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://d0put3qinfuxa\" path=\"res://src/Mind/AI/Tool/SpeechTool.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("SystemInstruction = ExtResource(\"9_beijb\")", sceneText, StringComparison.Ordinal);
-        Assert.Contains("Tools = Array[ExtResource(\"10_v2tt5\")]([SubResource(\"Resource_agentic_speech_tool\")])", sceneText, StringComparison.Ordinal);
+        Assert.Contains(
+            "uid=\"uid://dv8k4pqrmxe1n\" path=\"res://assets/characters/prompts/npc_event_history.tres\"",
+            sceneText,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "uid=\"uid://dv8k4pqrmxe1n\" path=\"res://assets/characters/prompts/npc_event_history.tres\"",
+            maleSceneText,
+            StringComparison.Ordinal);
+        Assert.Contains("EventHistory = ExtResource(\"10_history\")", sceneText, StringComparison.Ordinal);
+        Assert.Contains("EventHistory = ExtResource(\"10_history\")", maleSceneText, StringComparison.Ordinal);
+        // The production tool inventory is created internally by AgenticMind without scene authoring (AI-002
+        // TR-16): neither template authors tool resources.
+        Assert.DoesNotContain("SpeechTool.cs", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tools = ", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("SpeechTool.cs", maleSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("You are Alley", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("../../../Female/Female/GeneralSkeleton", sceneText, StringComparison.Ordinal);
@@ -149,6 +162,9 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Same(
                 GetRequiredPropertyValue(mind, "SystemInstruction"),
                 GetRequiredPropertyValue(maleMind, "SystemInstruction"));
+            Assert.Same(
+                GetRequiredPropertyValue(mind, "EventHistory"),
+                GetRequiredPropertyValue(maleMind, "EventHistory"));
         }
         finally
         {
@@ -164,7 +180,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
 
         Array sections = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(systemInstruction, "Sections"));
         object[] orderedSections = [.. sections.Cast<object>()];
-        Assert.Equal(5, orderedSections.Length);
+        Assert.Equal(4, orderedSections.Length);
         object instructionSection = orderedSections[0];
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", instructionSection.GetType().FullName);
         Assert.Equal("Instructions", GetPropertyValue<string>(instructionSection, "Name"));
@@ -172,13 +188,8 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("res://prompts/mind.md", sectionFilePath);
         string sectionText = ReadResourceText(sectionFilePath);
         Assert.Contains("You are {{ character.FullId }}", sectionText, StringComparison.Ordinal);
-        Assert.Contains("You may take no action, one action, or several actions", sectionText, StringComparison.Ordinal);
-        Assert.Contains("Use `end_turn` exactly once as the final", sectionText, StringComparison.Ordinal);
-        Assert.Contains("Call it alone for zero actions", sectionText, StringComparison.Ordinal);
-        Assert.Contains(
-            "Omit `end_turn` from an action-only response when you need action results",
-            sectionText,
-            StringComparison.Ordinal);
+        Assert.Contains("every response you give is a tool call", sectionText, StringComparison.Ordinal);
+        Assert.Contains("seconds of in-game time since the game began", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Alley", sectionText, StringComparison.Ordinal);
         Assert.DoesNotContain("Vadim", sectionText, StringComparison.Ordinal);
         Assert.Equal("AlleyCat.Mind.AI.Prompting.EssentialLorePromptSection", orderedSections[1].GetType().FullName);
@@ -189,10 +200,15 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", scenarioSection.GetType().FullName);
         Assert.Equal("res://prompts/scenario.md", GetPropertyValue<string>(scenarioSection, "FilePath"));
         Assert.Equal("Scenario", GetPropertyValue<string>(scenarioSection, "Name"));
-        object historySection = orderedSections[4];
-        Assert.Equal("AlleyCat.Mind.AI.Prompting.EventHistoryPromptSection", historySection.GetType().FullName);
-        Assert.Equal("Event History", GetPropertyValue<string>(historySection, "Name"));
-        Array fragments = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(historySection, "Fragments"));
+        // The shared generic NPC prompt stack contains no event-history section (AI-003 TR-23).
+        Assert.DoesNotContain(
+            orderedSections,
+            section => section.GetType().FullName == "AlleyCat.Mind.AI.Prompting.EventHistory");
+
+        // Event history is authored as the standalone EventHistory resource exported by AgenticMind (AI-003 TR-12).
+        object eventHistory = GetRequiredPropertyValue(mind, "EventHistory");
+        Assert.Equal("AlleyCat.Mind.AI.Prompting.EventHistory", eventHistory.GetType().FullName);
+        Array fragments = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(eventHistory, "Fragments"));
         Assert.Equal(["speech.observed"], fragments.Cast<object>()
             .Select(fragment => GetPropertyValue<string>(fragment, "TypeKey")));
         object speechFragment = Assert.Single(fragments.Cast<object>());
@@ -202,17 +218,16 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Contains("Heard {{ActorId}} say: {{Content}}", speechSource, StringComparison.Ordinal);
         Assert.Contains("Heard an unknown speaker say: {{Content}}", speechSource, StringComparison.Ordinal);
         Assert.DoesNotContain("VoiceId", speechSource, StringComparison.Ordinal);
-        string fallbackSource = GetPropertyValue<string>(historySection, "FallbackSource");
+        string fallbackSource = GetPropertyValue<string>(eventHistory, "FallbackSource");
         Assert.Equal(
-            "((Received {{TypeKey}} event.)){{#if ObservedAt}} ({{ago ObservedAt}}){{/if}}\n",
+            "((Received {{TypeKey}} event.)){{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n",
             fallbackSource);
         Assert.DoesNotContain("VoiceId", fallbackSource, StringComparison.Ordinal);
 
+        // The production tool inventory (speak, wait, history) is created internally without scene authoring
+        // (AI-002 TR-16): authored tools remain an extension point and are empty in the shared templates.
         IEnumerable tools = Assert.IsAssignableFrom<IEnumerable>(GetRequiredPropertyValue(mind, "Tools"));
-        object tool = Assert.Single(tools.Cast<object>());
-        Assert.Equal("AlleyCat.Mind.AI.Tool.SpeechTool", tool.GetType().FullName);
-        Assert.Equal("speak", GetPropertyValue<string>(tool, "ToolName"));
-        Assert.Equal("Speak the supplied text aloud through the configured voice.", GetPropertyValue<string>(tool, "ToolDescription"));
+        Assert.Empty(tools.Cast<object>());
     }
 
     private static Node RequireScriptedNode(Node root, string path, string expectedTypeName)

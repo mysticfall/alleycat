@@ -5,6 +5,7 @@ using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Threading;
+using AlleyCat.Core.Time;
 using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
@@ -21,41 +22,33 @@ using MindBase = AlleyCat.Mind.Mind;
 namespace AlleyCat.Mind.AI;
 
 /// <summary>
-/// NPC mind that reconstructs every agent turn from its complete subjective timeline.
+/// NPC mind that sustains one long-running agent session over its complete subjective timeline.
 /// </summary>
 [GlobalClass]
 public partial class AgenticMind : MindBase
 {
     private const string ScenarioContextKey = "scenario";
 
+    /// <summary>
+    /// Bootstrap input message the session owner sends with the first request for both chat-client kinds
+    /// (AI-002 TR-7).
+    /// </summary>
+    internal const string SessionBootstrapInput = "Begin. Participate in the scene using the available tools.";
+
     private static readonly IReadOnlyDictionary<string, object?> _emptyRenderContext =
         new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>());
-    private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
-    private ContextWorker[] _contextWorkers = [];
-    private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
-    private ScenarioContext? _currentScenarioContext;
 
-    internal CancellationToken LifetimeCancellationToken => NodeLifetimeCancellationToken;
+    private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
+    private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
+    private volatile AgentSessionRunner? _activeRunner;
+    private volatile ObservationHistoryRenderer? _activeHistoryRenderer;
+    private volatile bool _sessionStarted;
 
     /// <summary>Occurs after an observation has been committed to this Mind's timeline.</summary>
     public event Action<AgentObservation>? ObservationCommitted;
 
-    /// <summary>Occurs after foreground processing has genuinely completed successfully.</summary>
-    public event Action? ForegroundTurnSucceeded;
-
-    /// <inheritdoc />
-    public override void _Ready()
-    {
-        base._Ready();
-        _contextWorkers = [.. GetChildren().OfType<ContextWorker>()];
-        foreach (ContextWorker worker in _contextWorkers)
-        {
-            worker.Attach(this);
-        }
-    }
-
     /// <summary>
-    /// Editor-authored system prompt stack compiled and rendered afresh for every turn.
+    /// Editor-authored system prompt stack compiled and rendered exactly once per session.
     /// </summary>
     [ExportGroup("Prompt")]
     [Export]
@@ -66,17 +59,28 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Backend factory used to create a fresh chat client for each turn.
+    /// Editor-authored event-history resource feeding the on-demand observation-history renderer for wait results,
+    /// history results, and interruption injections, or null when the default fallback-only contract applies.
+    /// </summary>
+    [Export]
+    public EventHistory? EventHistory
+    {
+        get;
+        set;
+    }
+
+    /// <summary>
+    /// Backend factory used to create the session's chat client.
     /// </summary>
     [ExportGroup("Backend")]
     [Export]
     public ClientProvider? ClientProvider { get; set; } = new OpenAIClientProvider();
 
     /// <summary>
-    /// Editor-authored manager resolving the scenario for each foreground turn, or null when the feature is unused.
+    /// Editor-authored manager resolving the scenario once at session start, or null when the feature is unused.
     /// </summary>
     /// <remarks>
-    /// An unconfigured manager behaves exactly like a manager returning null on every turn.
+    /// An unconfigured manager behaves exactly like a manager returning null.
     /// </remarks>
     [ExportGroup("Scenario")]
     [Export]
@@ -95,173 +99,225 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Editor-authored action tools resolved for each turn.
+    /// Editor-authored extra tools bound to the session in addition to the production inventory.
     /// </summary>
     [ExportGroup("Tools")]
     [Export]
     public Godot.Collections.Array<AgentTool> Tools { get; set; } = [];
 
     /// <inheritdoc />
-    protected override async Task ProcessObservationsAsync(
-        IReadOnlyList<AgentObservation> observations,
-        IReadOnlyList<AgentObservation> timelineSnapshot,
-        CancellationToken cancellationToken)
-        => await RunAgentTurnAsync(timelineSnapshot, cancellationToken);
-
-    /// <inheritdoc />
-    protected override async Task<bool> ProcessForegroundObservationsAsync(
-        IReadOnlyList<AgentObservation> observations,
-        IReadOnlyList<AgentObservation> timelineSnapshot,
-        CancellationToken cancellationToken)
+    public override void _Ready()
     {
-        if (observations.Count == 0)
+        base._Ready();
+        StartSession();
+    }
+
+    /// <summary>
+    /// Starts the one session for this Mind's node lifetime — fire-and-forget with full containment: the session
+    /// never crashes the scene, and failures are logged like any contained response failure (AI-002 TR-1/2).
+    /// </summary>
+    private void StartSession()
+    {
+        if (IsNodeLifetimeEnded || _sessionStarted)
         {
-            return true;
+            return;
         }
 
+        _sessionStarted = true;
+        _ = RunSessionUntilNodeExitAsync();
+    }
+
+    private async Task RunSessionUntilNodeExitAsync()
+    {
+        CancellationToken lifetimeToken = NodeLifetimeCancellationToken;
+        NotableObservationsSignalled += HandleNotableObservationsSignalled;
         try
         {
-            await ProcessObservationsAsync(observations, timelineSnapshot, cancellationToken);
-            return true;
+            using var sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+            Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
+            try
+            {
+                AgentSession session = await PrepareSessionAsync(sessionCancellation.Token);
+                await ExecuteSessionAsync(session, sessionCancellation.Token);
+            }
+            finally
+            {
+                if (AIPipelineDebugLog.IsEnabled)
+                {
+                    AIPipelineDebugLog.Latency("Agent session ended after", runStopwatch);
+                }
+            }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
         {
-            throw;
+            // Expected node-lifetime end of the session (AI-002 TR-44): quiet, never a backend failure.
         }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (ex is not OperationCanceledException || !lifetimeToken.IsCancellationRequested)
         {
-            LogOptionalResponseFailure(ex);
-            return false;
+            LogSessionFailure(ex);
+        }
+        finally
+        {
+            NotableObservationsSignalled -= HandleNotableObservationsSignalled;
         }
     }
 
-    /// <summary>Runs the foreground tool-only turn after its observation batch has been claimed.</summary>
-    protected virtual async Task RunAgentTurnAsync(
-        IReadOnlyList<AgentObservation> timeline,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Prepares the session start sequence (AI-002 TR-5/6, AI-008 TR-7): assembles the render context on demand,
+    /// resolves the scenario once with the freshly built core context, seals and renders the PromptStack exactly
+    /// once, and creates the session's tools and chat client.
+    /// </summary>
+    internal async Task<AgentSession> PrepareSessionAsync(CancellationToken cancellationToken)
     {
         ClientProvider clientProvider = ClientProvider
             ?? throw new InvalidOperationException("AgenticMind requires a configured ClientProvider.");
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
 
+        cancellationToken.ThrowIfCancellationRequested();
         ISceneContext scene = GetCurrentSceneContext();
         ICharacter character = ResolveOwningCharacter();
 
         // Phase 1: core render context — every reserved key except 'scenario', including the unconditional player
-        // context. The scenario body templates against this dictionary, so it must exist before the manager query.
+        // context (AI-001 TR-25). Observations never enter the dictionary: they reach the model exclusively
+        // through tool results and interruption injections.
         Dictionary<string, object?> coreContext = CreateCoreRenderContext(
             character,
             scene,
-            timeline,
-            _contextWorkers,
             GetContextEligibleAttentionIDs());
 
-        // Phase 2: manager query with the previous binding and the core context, then the scenario key.
-        ScenarioContext turnContext = ResolveTurnScenarioContext(character, scene, coreContext);
-        IReadOnlyDictionary<string, object?> renderContext = AddScenarioAndSeal(coreContext, turnContext.Scenario);
+        // Phase 2: one manager query with the freshly assembled core context, then the scenario key (AI-008 TR-7).
+        Scenario? scenario = ScenarioManager?.GetCurrentScenario(coreContext);
+        ScenarioContext sessionContext = new(character, scene, scenario);
+        IReadOnlyDictionary<string, object?> renderContext = AddScenarioAndSeal(coreContext, scenario);
 
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
         string instructions = RenderAndPublishSystemInstruction(template, renderContext);
+
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
-        List<AITool> turnTools = CreateTurnTools(turnContext, dispatcher);
+        IGameClock clock = GameClock;
+        var historyRenderer = ObservationHistoryRenderer.Create(
+            EventHistory,
+            Game.Instance.GetRequiredService<ITemplateCompiler>(),
+            ResolveCharacterContext(renderContext));
+        _activeHistoryRenderer = historyRenderer;
+        List<AITool> tools = CreateSessionTools(sessionContext, dispatcher, historyRenderer, clock);
 
         AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
         IChatClient chatClient = AIChatClientDiagnostics.Decorate(
             clientProvider.CreateChatClient(),
             diagnosticsSettings,
             GameLoggerResolver.ResolveFactoryRequired);
-        ILogger<AgenticMind> logger = GameLoggerResolver.ResolveRequired<AgenticMind>();
-        Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
+
+        return new AgentSession(
+            sessionContext,
+            instructions,
+            [new ChatMessage(ChatRole.User, SessionBootstrapInput)],
+            chatClient,
+            tools,
+            diagnosticsSettings.EnableReasoningLogging);
+    }
+
+    /// <summary>
+    /// Executes the prepared session through the transcript-execution runner until node exit or contained failure.
+    /// </summary>
+    internal async Task ExecuteSessionAsync(AgentSession session, CancellationToken cancellationToken)
+    {
+        AgentSessionRunner runner = new(
+            session.ChatClient,
+            session.Instructions,
+            session.RunMessages,
+            session.Tools,
+            AllowMultipleToolCalls,
+            GameLoggerResolver.ResolveRequired<AgenticMind>(),
+            session.EnableReasoningLogging);
+        _activeRunner = runner;
         try
         {
-            await ToolOnlyTurnRunner.RunAsync(
-                chatClient,
-                instructions,
-                clientProvider.CreateRunMessages(),
-                turnTools,
-                AllowMultipleToolCalls,
-                logger,
-                cancellationToken,
-                diagnosticsSettings.EnableReasoningLogging);
+            await runner.RunAsync(cancellationToken);
         }
         finally
         {
-            if (AIPipelineDebugLog.IsEnabled)
-            {
-                AIPipelineDebugLog.Latency("LLM turn returned in", runStopwatch, $"{timeline.Count} observation(s)");
-            }
+            _activeRunner = null;
         }
     }
 
     /// <summary>
-    /// Resolves the trusted turn binding for one foreground turn, including its per-turn scenario.
+    /// Bridges Mind's notable-observation signal into a session interruption (AI-001 TR-6, AI-002 TR-41): the
+    /// pending notable window is taken atomically and appended as an injected user message.
     /// </summary>
-    /// <remarks>
-    /// A fresh turn captures a new scene snapshot, queries the configured manager with the previous turn's binding —
-    /// lazily created with a null scenario when no previous context exists — and the freshly built core render
-    /// context, then adopts the returned scenario. A replacement after interruption reuses the interrupted turn's
-    /// binding without re-querying the manager, keeping its scenario and scene snapshot.
-    /// </remarks>
-    private ScenarioContext ResolveTurnScenarioContext(
-        ICharacter character,
-        ISceneContext scene,
-        IReadOnlyDictionary<string, object?> coreContext)
+    private void HandleNotableObservationsSignalled()
     {
-        ScenarioContext? previousContext = _currentScenarioContext;
-        if (previousContext is not null && IsForegroundTurnImmediateReplacement)
+        AgentSessionRunner? runner = _activeRunner;
+        if (runner is null || IsNodeLifetimeEnded)
         {
-            return previousContext;
+            return;
         }
 
-        ScenarioContext previous = previousContext ?? new ScenarioContext(character, scene, null);
-        Scenario? scenario = ScenarioManager?.GetCurrentScenario(previous, coreContext);
-        return _currentScenarioContext = new ScenarioContext(character, scene, scenario);
+        IReadOnlyList<AgentObservation>? notable = TryTakePendingNotableWindow();
+        if (notable is not { Count: > 0 })
+        {
+            return;
+        }
+
+        string rendered = RenderNotableSummary(notable);
+        runner.SignalInterruption(rendered);
     }
 
-    private List<AITool> CreateTurnTools(ScenarioContext context, IMainThreadDispatcher dispatcher)
+    /// <summary>Renders one injected notable-observation summary through the event-history contract.</summary>
+    private string RenderNotableSummary(IReadOnlyList<AgentObservation> notable)
     {
-        List<AITool> tools = new(Tools.Count);
-        foreach (AgentTool? tool in Tools)
+        return _activeHistoryRenderer is { } renderer
+            ? $"Important scene events require your attention:\n{renderer.Render(notable)}"
+            : $"Important scene events require your attention: {notable.Count} notable observation(s).";
+    }
+
+    private static IReadOnlyDictionary<string, object?> ResolveCharacterContext(
+        IReadOnlyDictionary<string, object?> renderContext)
+        => renderContext["character"] is IReadOnlyDictionary<string, object?> characterContext
+            ? characterContext
+            : throw new InvalidOperationException(
+                "The session render context is missing the owning character context dictionary.");
+
+    private List<AITool> CreateSessionTools(
+        ScenarioContext context,
+        IMainThreadDispatcher dispatcher,
+        ObservationHistoryRenderer historyRenderer,
+        IGameClock clock)
+    {
+        // The production tool inventory is available without scene-authored configuration (AI-002 TR-16); authored
+        // entries add extra or test tools alongside it.
+        List<AgentTool> tools = [new SpeechTool(), new WaitTool(), new HistoryTool()];
+        foreach (AgentTool? extra in Tools)
         {
-            if (tool is not null)
+            if (extra is not null)
             {
-                tools.Add(tool.CreateFunction(context, this, dispatcher));
+                tools.Add(extra);
             }
         }
 
-        return tools;
+        AgentToolSession sessionServices = new(context, this, historyRenderer, clock);
+        List<AITool> functions = new(tools.Count);
+        foreach (AgentTool tool in tools)
+        {
+            functions.Add(tool.CreateFunction(context, this, dispatcher, sessionServices));
+        }
+
+        return functions;
     }
 
     internal static IReadOnlyDictionary<string, object?> CreateRenderContext(
         ICharacter character,
         ISceneContext scene,
-        IReadOnlyList<AgentObservation>? observations = null,
         IReadOnlyList<string>? attentionEligibleFullIDs = null,
         Scenario? scenario = null)
     {
         Dictionary<string, object?> coreContext = CreateCoreRenderContext(
             character,
             scene,
-            observations,
-            [],
             attentionEligibleFullIDs);
         return AddScenarioAndSeal(coreContext, scenario);
-    }
-
-    /// <summary>Constructs the complete foreground render context for a claimed timeline snapshot.</summary>
-    protected IReadOnlyDictionary<string, object?> CreateRenderContext(IReadOnlyList<AgentObservation> timeline)
-    {
-        ArgumentNullException.ThrowIfNull(timeline);
-        ISceneContext scene = Game.Instance.GetRequiredService<ISceneContextProvider>().GetCurrent();
-        Dictionary<string, object?> coreContext = CreateCoreRenderContext(
-            ResolveOwningCharacter(),
-            scene,
-            timeline,
-            _contextWorkers,
-            GetContextEligibleAttentionIDs());
-        return AddScenarioAndSeal(coreContext, null);
     }
 
     /// <summary>
@@ -269,18 +325,17 @@ public partial class AgenticMind : MindBase
     /// </summary>
     /// <remarks>
     /// The returned dictionary is intentionally left mutable and scenario-less: scenario managers receive it as their
-    /// template context, and the turn flow seals it with the <c>scenario</c> key afterwards.
+    /// template context, and the session flow seals it with the <c>scenario</c> key afterwards. Observations are
+    /// never placed in the dictionary (AI-001 TR-25): they reach the model exclusively through AI-002 tool results
+    /// and interruption injections.
     /// </remarks>
     internal static Dictionary<string, object?> CreateCoreRenderContext(
         ICharacter character,
         ISceneContext scene,
-        IReadOnlyList<AgentObservation>? observations,
-        IReadOnlyList<ContextWorker> workers,
         IReadOnlyList<string>? attentionEligibleFullIDs)
     {
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(scene);
-        ArgumentNullException.ThrowIfNull(workers);
 
         ValidateSceneCharacterIdentity(character);
         if (!ReferenceEquals(scene.Find(character.FullId), character))
@@ -341,25 +396,13 @@ public partial class AgenticMind : MindBase
             ["character"] = owningCharacterContext,
             ["characters"] = new ReadOnlyDictionary<string, object?>(characterContexts),
             ["player"] = playerContext,
-            [EventHistoryPromptSection.ObservationsContextKey] = observations ?? [],
         };
-        foreach (ContextWorker worker in workers)
-        {
-            foreach (KeyValuePair<string, object?> entry in worker.GetProjection())
-            {
-                if (!context.TryAdd(entry.Key, entry.Value))
-                {
-                    throw new InvalidOperationException(
-                        $"Context worker has duplicate context key '{entry.Key}'. Worker projection keys must be unique in authored order.");
-                }
-            }
-        }
 
         return context;
     }
 
     /// <summary>
-    /// Seals the core render context with the turn's scenario key and freezes it for publication.
+    /// Seals the core render context with the session's scenario key and freezes it for publication.
     /// </summary>
     private static IReadOnlyDictionary<string, object?> AddScenarioAndSeal(
         Dictionary<string, object?> coreContext,
@@ -367,7 +410,7 @@ public partial class AgenticMind : MindBase
         => coreContext.TryAdd(ScenarioContextKey, scenario)
             ? new ReadOnlyDictionary<string, object?>(coreContext)
             : throw new InvalidOperationException(
-                $"Context worker has duplicate context key '{ScenarioContextKey}'. Worker projection keys must be unique in authored order.");
+                $"Core render context already contains the reserved '{ScenarioContextKey}' key.");
 
     private static void ValidateIncludedContextualIdentity(IContextual contextual, string expectedFullID)
     {
@@ -438,18 +481,11 @@ public partial class AgenticMind : MindBase
         ObservationCommitted?.Invoke(observation);
     }
 
-    /// <inheritdoc />
-    protected override void OnForegroundTurnSettled()
-    {
-        base.OnForegroundTurnSettled();
-        ForegroundTurnSucceeded?.Invoke();
-    }
-
-    private static void LogOptionalResponseFailure(Exception exception)
+    private static void LogSessionFailure(Exception exception)
     {
         if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
         {
-            logger.LogError(exception, "AgenticMind response failed.");
+            logger.LogError(exception, "AgenticMind agent session failed.");
         }
     }
 
@@ -458,4 +494,17 @@ public partial class AgenticMind : MindBase
         ArgumentNullException.ThrowIfNull(diagnosticsSettingsLoader);
         _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
+
+    /// <summary>
+    /// Prepared session state captured once at session start (AI-002 TR-5/6): the trusted binding, the rendered
+    /// system instruction, the session-owner bootstrap input message, the decorated chat client, and the bound
+    /// tools.
+    /// </summary>
+    internal sealed record AgentSession(
+        ScenarioContext Context,
+        string Instructions,
+        IReadOnlyList<ChatMessage> RunMessages,
+        IChatClient ChatClient,
+        IList<AITool> Tools,
+        bool EnableReasoningLogging);
 }

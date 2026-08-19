@@ -28,7 +28,7 @@ public enum OpenAIChatClientKind
 }
 
 /// <summary>
-/// OpenAI-compatible chat-client provider for tool-only turn execution.
+/// OpenAI-compatible chat-client provider for agent sessions.
 /// </summary>
 [GlobalClass]
 public partial class OpenAIClientProvider : ClientProvider
@@ -37,7 +37,6 @@ public partial class OpenAIClientProvider : ClientProvider
     private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
     private const string DefaultModel = "gpt-4o-mini";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
-    private const string ResponsesRunInput = "Process the observations in your instructions. Use available actions as needed. Call end_turn exactly once in final position, after the actions when their results are not needed, or alone for zero actions. Omit end_turn when waiting for action results.";
 
     internal const OpenAIChatClientKind DefaultChatClientKind = OpenAIChatClientKind.Responses;
 
@@ -54,10 +53,6 @@ public partial class OpenAIClientProvider : ClientProvider
     /// </summary>
     [Export]
     public OpenAIChatClientKind ChatClientKind { get; set; } = DefaultChatClientKind;
-
-    /// <inheritdoc />
-    public override IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> CreateRunMessages()
-        => CreateRunMessages(ChatClientKind);
 
     /// <inheritdoc />
     public override IChatClient CreateChatClient()
@@ -79,16 +74,6 @@ public partial class OpenAIClientProvider : ClientProvider
             _ => throw new InvalidOperationException($"Unsupported OpenAI chat client kind '{chatClientKind}'."),
         };
     }
-
-    internal static IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> CreateRunMessages(
-        OpenAIChatClientKind chatClientKind)
-        => chatClientKind switch
-        {
-            OpenAIChatClientKind.ChatCompletions => [],
-            OpenAIChatClientKind.Responses =>
-                [new Microsoft.Extensions.AI.ChatMessage(ChatRole.User, ResponsesRunInput)],
-            _ => throw new InvalidOperationException($"Unsupported OpenAI chat client kind '{chatClientKind}'."),
-        };
 
 #pragma warning disable OPENAI001 // The OpenAI Responses APIs are experimental in the SDK.
     private static IChatClient CreateResponsesChatClient(
