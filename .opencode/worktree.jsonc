@@ -14,6 +14,7 @@
     // Directories to symlink (saves disk space)
     // Example: ["node_modules"]
     "symlinkDirs": [
+      "graft",
       "game/addons/Mirror3D"
     ],
     // Patterns to exclude from copying

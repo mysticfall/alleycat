@@ -35,6 +35,14 @@
         "blender-mcp"
       ],
       "enabled": false
+    },
+    "graft": {
+      "type": "local",
+      "command": [
+        "graft",
+        "mcp"
+      ],
+      "enabled": true
     }
   }
 }
