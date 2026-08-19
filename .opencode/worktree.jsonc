@@ -15,7 +15,9 @@
     // Example: ["node_modules"]
     "symlinkDirs": [
       "graft",
-      "game/addons/Mirror3D"
+      "game/addons/Mirror3D",
+      "game/addons/HumanShaders",
+      "game/content"
     ],
     // Patterns to exclude from copying
     "exclude": []
