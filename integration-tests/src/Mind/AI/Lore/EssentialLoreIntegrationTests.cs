@@ -5,6 +5,7 @@ using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace AlleyCat.IntegrationTests.Mind.AI.Lore;
@@ -158,29 +159,126 @@ public sealed class EssentialLoreIntegrationTests
     }
 
     /// <summary>
-    /// Missing optional IDs use title and source path after entries with stable IDs at the same priority.
+    /// Read-time triage keeps authoring-time pages out of runtime queries while nested subdirectory pages join the
+    /// collection at any depth (AI-004 requirement 36).
     /// </summary>
     [Fact]
-    public async Task QueryAsync_WhenEntryIDIsMissing_UsesDeterministicFallbackOrdering()
+    public async Task QueryAsync_SkipsAuthoringTimePagesAndIncludesNestedSubdirectoryPages()
     {
         MarkdownLoreQueryService service = new();
         ContentContext content = new("lore-query-fixture", "res://tests/lore-query-fixture");
 
         IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("char:test"));
 
-        Assert.Collection(
+        Assert.Equal(
+            ["test.authoring_material", "test.nested_note", "test.stable"],
+            entries.Select(entry => entry.ID));
+        Assert.All(entries, entry => Assert.NotNull(entry.ID));
+        Assert.All(entries, entry => Assert.Equal(LoreSubjectKind.World, entry.Kind));
+        Assert.Contains("Kept prose from a nested subdirectory page.", entries[1].Body, StringComparison.Ordinal);
+        Assert.DoesNotContain(
             entries,
-            entry => Assert.Equal("test.stable", entry.ID),
-            entry =>
-            {
-                Assert.Null(entry.ID);
-                Assert.Equal("First source-path fallback entry.", entry.Body);
-            },
-            entry =>
-            {
-                Assert.Null(entry.ID);
-                Assert.Equal("Second source-path fallback entry.", entry.Body);
-            });
+            entry => entry.Body.Contains("First source-path fallback entry.", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            entries,
+            entry => entry.Body.Contains("Second source-path fallback entry.", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            entries,
+            entry => entry.Body.Contains("no frontmatter block at all", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            entries,
+            entry => entry.Body.Contains("never closes it", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            entries,
+            entry => entry.Body.Contains("authoring-time scratch", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Parse-time body cleaning removes authoring-time material from entry bodies while fenced code blocks pass
+    /// through verbatim (AI-004 requirements 37 to 40).
+    /// </summary>
+    [Fact]
+    public async Task QueryAsync_CleansAuthoringTimeMaterialFromEntryBodies()
+    {
+        MarkdownLoreQueryService service = new();
+        ContentContext content = new("lore-query-fixture", "res://tests/lore-query-fixture");
+
+        IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("char:test"));
+
+        LoreEntry material = Assert.Single(entries, entry => entry.ID == "test.authoring_material");
+        string body = material.Body;
+
+        // No entry body carries inline link syntax, and only the verbatim fence carries comment syntax.
+        Assert.All(entries, entry => Assert.DoesNotContain("](", entry.Body, StringComparison.Ordinal));
+        Assert.All(
+            entries.Where(entry => entry.ID != "test.authoring_material"),
+            entry => Assert.DoesNotContain("<!--", entry.Body, StringComparison.Ordinal));
+
+        // Reduced links keep their label text, and autolinks keep their URL text.
+        Assert.Contains("the night market", body, StringComparison.Ordinal);
+        Assert.Contains("the old vault", body, StringComparison.Ordinal);
+        Assert.Contains("https://example.com/lore-notes", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("loc:night_market", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("<https://example.com/lore-notes>", body, StringComparison.Ordinal);
+
+        // Non-link bracket forms are left untouched.
+        Assert.Contains("[bracket label]", body, StringComparison.Ordinal);
+        Assert.Contains("[[wiki link]]", body, StringComparison.Ordinal);
+
+        // Ignored sections and bare comments never reach the entry body.
+        Assert.DoesNotContain("Scratch planning", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hidden doubt", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("lore:ignore", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("author note", body, StringComparison.Ordinal);
+
+        // The fenced authoring example passes through verbatim, including link syntax and comments.
+        Assert.Contains("```markdown", body, StringComparison.Ordinal);
+        Assert.Contains(
+            "See [the vault draft][vault] or <https://example.com/fence-example> for the draft.",
+            body,
+            StringComparison.Ordinal);
+        Assert.Contains("<!-- fence comment: must survive verbatim -->", body, StringComparison.Ordinal);
+        Assert.Contains("[vault]: loc:old_vault", body, StringComparison.Ordinal);
+
+        // Prose outside the verbatim fence carries no comment syntax or dropped reference definitions.
+        int fenceStart = body.IndexOf("```markdown", StringComparison.Ordinal);
+        Assert.True(fenceStart > 0, "The cleaned body must retain the fenced authoring example.");
+        string prose = body[..fenceStart];
+        Assert.DoesNotContain("<!--", prose, StringComparison.Ordinal);
+        Assert.DoesNotContain("[vault]:", prose, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Co-located authoring files never break runtime queries: warned skips surface through the service logger
+    /// while silent triage stays silent (AI-004 requirements 36 and 41).
+    /// </summary>
+    [Fact]
+    public async Task QueryAsync_WarnsOnlyForUnterminatedFrontmatterAndEmptyCleanedBodies()
+    {
+        CapturingLoreLogger logger = new();
+        MarkdownLoreQueryService service = new(logger);
+        ContentContext content = new("lore-query-fixture", "res://tests/lore-query-fixture");
+
+        IReadOnlyList<LoreEntry> entries = await service.QueryAsync(content, LoreQuery.Essential("char:test"));
+
+        Assert.Equal(3, entries.Count);
+        Assert.Contains(
+            logger.Messages,
+            message => message.Contains("unterminated-frontmatter.md", StringComparison.Ordinal)
+                && message.Contains("never closes", StringComparison.Ordinal));
+        Assert.Contains(
+            logger.Messages,
+            message => message.Contains("with-id-empty-after-clean.md", StringComparison.Ordinal)
+                && message.Contains("empty after parse-time cleaning", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            logger.Messages,
+            message => message.Contains("no-frontmatter.md", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            logger.Messages,
+            message => message.Contains("without-id-a.md", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            logger.Messages,
+            message => message.Contains("without-id-b.md", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -269,5 +367,26 @@ public sealed class EssentialLoreIntegrationTests
             Query = query;
             return Task.FromResult(entries);
         }
+    }
+
+    private sealed class CapturingLoreLogger : ILogger<MarkdownLoreQueryService>
+    {
+        public List<string> Messages
+        {
+            get;
+        } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Messages.Add(formatter(state, exception));
     }
 }

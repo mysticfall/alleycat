@@ -49,6 +49,8 @@ lore-management workflows in this slice.
 14. Authors write entries without a title heading duplicating the frontmatter `title`: body content starts directly
     after the frontmatter and authored sections start at `#` at authoring time, with the entry title rendered into
     the prompt by the lore formatter instead.
+15. Authors can co-locate authoring-time material with runtime lore — scratch pages, note sections, HTML comments, and
+    source link syntax — without it reaching prompts or breaking runtime queries.
 
 ## Technical Requirements
 
@@ -57,9 +59,10 @@ lore-management workflows in this slice.
 3. Optional content packs use lore root `res://content/<content-id>/lore`, committed under
    `game/content/<content-id>/lore/` when present.
 4. Perspective lore for the default content root uses this layout:
-    - `game/lore/perspectives/<observer-type>/<observer-id>/world/*.md`
-    - `game/lore/perspectives/<observer-type>/<observer-id>/locations/*.md`
-    - `game/lore/perspectives/<observer-type>/<observer-id>/characters/*.md`
+    - `game/lore/perspectives/<observer-type>/<observer-id>/world/**/*.md`
+    - `game/lore/perspectives/<observer-type>/<observer-id>/locations/**/*.md`
+    - `game/lore/perspectives/<observer-type>/<observer-id>/characters/**/*.md`
+    - Subdirectories under each collection are included at any depth; nested pages are part of the read contract.
     - Observer identity remains canonical `FullId` (for example `char:vadim`), while type-scoped directories avoid
       colons (for example `perspectives/char/vadim/`).
 5. Perspective lore for content packs uses the same layout under
@@ -70,15 +73,17 @@ lore-management workflows in this slice.
    and query intent.
 8. AgenticMind lore prompt consumption must query lore for its associated character perspective and remain read-only.
 9. Wiki pages may include frontmatter fields such as `id`, `title`, `aliases`, `tags`, `essential`, `priority`, and
-    typed `links`.
+   typed `links`. The `id` field is the runtime-inclusion discriminator: a page without a frontmatter `id` (including
+   a page with no frontmatter block at all) is authoring-time only and is excluded from runtime queries.
 10. A top-level frontmatter field `essential: true` marks only world lore for baseline prompt injection.
-11. `essential`, when present, must be parsed and validated as a boolean.
+11. `essential`, when present on an `id`-bearing page, must be parsed and validated as a boolean.
 12. Location and character entries are selected by contextual relevance, not by `essential`.
-13. `priority`, when present, must be parsed as an ordering value used by the lore API to sort retrieved entries before
-    formatting. Fixture/sample content should either set explicit priorities consistently where order is meaningful or
-    test without relying on source-file ordering.
-14. Sorting must be deterministic: sort by priority first, then by stable entry id when present, then title, then the
-    backend's source path as the final tie-breaker.
+13. `priority`, when present on an `id`-bearing page, must be parsed as an ordering value used by the lore API to sort
+    retrieved entries before formatting. Fixture/sample content should either set explicit priorities consistently
+    where order is meaningful or test without relying on source-file ordering.
+14. Sorting must be deterministic: sort by priority first, then entry `id`, then title, then the backend's source path
+    as the final tie-breaker. Runtime entries always carry an `id` because pages without one are skipped at read time
+    (requirement 36); the Markdown backend retains title and source path as deterministic tie-breakers.
 15. Lore prompt injection must keep selection separate from presentation by querying lore through the lore query
     abstraction and delegating output shape to a lore formatter.
 16. `EssentialLorePromptSection` must be runtime-backed through the `PromptSection` async build contract in AI-003.
@@ -123,12 +128,35 @@ lore-management workflows in this slice.
 35. Lore prompt sections keep their pseudo-XML outer wrappers rendered by the shared `PseudoXmlPromptWriter` /
     `PseudoXmlFormatter` utilities (for example `<Essential Lore> ... </Essential Lore>`), with the formatted
     Markdown entry batch as the section content.
+36. Read-time page triage in the Markdown lore backend is normative:
+    - A file with no frontmatter block is authoring-time only and is skipped silently.
+    - A file whose frontmatter parses but carries no `id` is authoring-time only and is skipped silently.
+    - A file whose frontmatter block never closes after its opening `---` is skipped with a logged warning: a stray
+      `---` in a scratch file must not break runtime, but dropping a possibly `id`-bearing entry deserves a signal.
+    - Frontmatter field validation (`title`, `subject_id`, `essential`, `priority`) applies only to `id`-bearing pages;
+      invalid values on an `id`-bearing page must throw, keeping the existing fail-hard contract.
+37. Body cleaning happens at parse time in the Markdown lore backend, before entries are constructed, and never inside
+    fenced code blocks, which pass through verbatim. The lore formatter's output contract (requirement 21) is
+    unchanged.
+38. A block from a line that is exactly `<!-- lore:ignore -->` to the next line that is exactly
+    `<!-- /lore:ignore -->` (both marker lines inclusive) is removed from the body. Markers must sit on their own
+    lines.
+39. All remaining bare HTML comments are stripped from bodies everywhere outside fenced code blocks.
+40. Link syntax is reduced to its label text at parse time, outside fenced code blocks:
+    - Inline links: `[label](target)` becomes `label`.
+    - Reference links: `[label][ref]` becomes `label`, and `[ref]: …` definition lines are dropped.
+    - Collapsed references: `[label][]` becomes `label`.
+    - Autolinks: `<url>` becomes `url`.
+    - Bare `[label]` with no following `(` or `[`, image syntax, and `[[…]]` wiki links are left untouched.
+41. An `id`-bearing page whose body is empty after parse-time cleaning is excluded from query results with a logged
+    warning, not an error.
 
 ## In Scope
 
 - Content-scoped lore repositories rooted at `game/lore/` for `default` and `game/content/<content-id>/lore/` for packs.
 - Perspective Markdown wiki authoring conventions under `perspectives/<observer-type>/<observer-id>/`.
-- `world/`, `locations/`, and `characters/` perspective lore collections.
+- `world/`, `locations/`, and `characters/` perspective lore collections, including nested subdirectories at any
+  depth.
 - Top-level `essential: true` frontmatter for baseline world-lore prompt injection.
 - Contextual retrieval for location and character lore needed by the current prompt context.
 - Optional `priority` frontmatter and deterministic ordering for retrieved entries.
@@ -148,6 +176,8 @@ lore-management workflows in this slice.
   references in body prose, and names carried as explicit lore facts under the canonical/perspective name rule.
 - H1-less entry authoring: body content starts directly after frontmatter and authored sections start at `#`, with
   entry titles rendered into prompts by the Markdown lore formatter.
+- Read-time page triage and parse-time body cleaning in the Markdown lore backend: `id`-based inclusion,
+  `lore:ignore` omission, bare HTML comment stripping, and link-label reduction before entry construction.
 
 ## Out Of Scope
 
@@ -170,8 +200,9 @@ lore-management workflows in this slice.
 1. Runtime loading resolves `default` to `game/lore` / `res://lore` and optional content id `<id>` to
    `game/content/<id>/lore` / `res://content/<id>/lore`.
 2. Runtime loading reads perspective lore from `perspectives/<observer-type>/<observer-id>/world/`, `locations/`,
-   and `characters/` collections through the asynchronous query service using canonical observer and subject `FullId`
-   values; `char:vadim` resolves to `perspectives/char/vadim/` without a colon in the path.
+   and `characters/` collections, including nested subdirectories at any depth, through the asynchronous query
+   service using canonical observer and subject `FullId` values; `char:vadim` resolves to
+   `perspectives/char/vadim/` without a colon in the path.
 3. AgenticMind prompt consumption requests lore for its associated character observer `FullId` and does not consume
    canonical facts as a substitute for that perspective.
 4. AgenticMind prompt lore presents perspective entries as the character's beliefs, not as canonical facts plus
@@ -182,10 +213,10 @@ lore-management workflows in this slice.
    system/developer rules or a future narrator/game-master channel.
 8. World entries with `essential: true` are included in baseline prompt lore for the active perspective.
 9. Location and character entries are included only when contextually relevant, not because they are marked essential.
-10. Any present `essential` value is validated as a boolean, and any present `priority` value participates in
-   deterministic API ordering.
-11. Entries with equal priority are ordered deterministically by stable entry id when present, then title, then the
-    backend-internal source path. Fixture/sample tests exercise this tie-break order when priorities are used.
+10. Any present `essential` value on an `id`-bearing page is validated as a boolean, and any present `priority` value
+    participates in deterministic API ordering.
+11. Entries with equal priority are ordered deterministically by entry `id`, then title, then the backend-internal
+    source path. Fixture/sample tests exercise this tie-break order when priorities are used.
 12. `LoreEntry` does not expose source path as public result data; the Markdown backend retains it privately for
     diagnostics and the final sorting tie-breaker.
 13. Runtime prompt sections query the lore abstraction, not hardcoded prompt-section paths, and do not write lore data.
@@ -223,6 +254,20 @@ lore-management workflows in this slice.
     that the observer does not know it.
 27. Authored lore entries omit a heading that duplicates the frontmatter `title`: body content starts directly after
     the frontmatter and authored sections start at `#` at authoring time.
+28. Authoring-time content never reaches prompts: pages without a frontmatter `id` (including files with no frontmatter
+    block), `lore:ignore` blocks, bare HTML comments, and original link syntax are absent from formatted prompt lore,
+    and reduced links appear as their label text.
+29. Co-located authoring files cannot break runtime queries: files with no frontmatter block, frontmatter without an
+    `id`, and unterminated frontmatter blocks never cause query failures, and the unterminated and empty-body cases
+    log warnings.
+30. Unit or integration tests exercise every read-time triage outcome and every parse-time cleaning form: silent
+    skips, warned skips, `lore:ignore` omission, bare-comment stripping, inline, reference, collapsed, and autolink
+    reduction, the untouched forms (bare `[label]`, image syntax, `[[…]]` wiki links), fenced-code-block
+    pass-through, and the empty-body exclusion.
+31. Frontmatter validation on `id`-bearing pages remains fail-hard: invalid `title`, `subject_id`, `essential`, or
+    `priority` values throw rather than skip.
+32. The default lore formatter's output contract is unchanged by parse-time cleaning: the requirement 21 formatting
+    behaviour and its tests hold without modification.
 
 ## References
 
