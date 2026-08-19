@@ -18,13 +18,13 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="GodotSharp" Version="4.7.1" />
-        <PackageReference Include="Microsoft.Agents.AI" Version="1.15.0" />
-        <PackageReference Include="Microsoft.Testing.Platform" Version="2.3.2" />
-        <PackageReference Include="Microsoft.Testing.Platform.MSBuild" Version="2.3.2" />
+        <PackageReference Include="GodotSharp" Version="4.7.2" />
+        <PackageReference Include="Microsoft.Agents.AI" Version="1.18.0" />
+        <PackageReference Include="Microsoft.Testing.Platform" Version="2.3.3" />
+        <PackageReference Include="Microsoft.Testing.Platform.MSBuild" Version="2.3.3" />
         <PackageReference Include="xunit.assert" Version="2.9.3"/>
         <PackageReference Include="xunit.extensibility.core" Version="2.9.3"/>
-        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.302" />
+        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.400" />
     </ItemGroup>
 
     <ItemGroup>

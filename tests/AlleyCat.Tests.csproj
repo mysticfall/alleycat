@@ -19,19 +19,19 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="Handlebars.Net" Version="2.1.6" />
-        <PackageReference Include="Microsoft.Agents.AI" Version="1.15.0" />
-        <PackageReference Include="Microsoft.Extensions.AI" Version="10.8.1" />
-        <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+        <PackageReference Include="Handlebars.Net" Version="2.4.3" />
+        <PackageReference Include="Microsoft.Agents.AI" Version="1.18.0" />
+        <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
         <PackageReference Include="OpenAI" Version="2.12.0" />
         <PackageReference Include="xunit" Version="2.9.3"/>
-        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+        <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.302" />
+        <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.400" />
     </ItemGroup>
 
     <ItemGroup>
