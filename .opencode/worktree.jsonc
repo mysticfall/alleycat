@@ -10,11 +10,12 @@
   "sync": {
     // Files to copy from main worktree to new worktrees
     // Example: [".env", ".env.local", "dev.sqlite"]
-    "copyFiles": [],
+    "copyFiles": [
+      "graft"
+    ],
     // Directories to symlink (saves disk space)
     // Example: ["node_modules"]
     "symlinkDirs": [
-      "graft",
       "game/addons/Mirror3D",
       "game/addons/HumanShaders",
       "game/content"
