@@ -25,4 +25,20 @@ public sealed class ContentResolverIntegrationTests
 
         Assert.Equal("res://assets/scenes/empty.tscn", result);
     }
+
+    /// <summary>
+    /// Ensures a resolver running inside an integration-test process resolves the built-in content context
+    /// instead of the manifest default pack, and caches it for subsequent calls.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_ReturnsBuiltInContext_AndCachesIt_WhenIntegrationTest()
+    {
+        ContentResolver resolver = new();
+
+        ContentContext first = resolver.GetCurrentContentContext();
+        ContentContext second = resolver.GetCurrentContentContext();
+
+        Assert.Equal(ContentContext.Default, first);
+        Assert.Same(first, second);
+    }
 }

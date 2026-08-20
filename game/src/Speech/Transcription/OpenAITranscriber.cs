@@ -2,7 +2,6 @@ using System.ClientModel;
 using System.Diagnostics;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
-using AlleyCat.Diagnostics;
 using Godot;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,7 +41,7 @@ public partial class OpenAITranscriber : Transcriber
     {
         base._Ready();
         _logger = GameLoggerResolver.ResolveRequired<OpenAITranscriber>();
-        _pipelineDebugLoggingEnabled = AIPipelineDebugLog.IsEnabled;
+        _pipelineDebugLoggingEnabled = PipelineDebugLog.IsEnabled;
 
         try
         {
@@ -61,21 +60,26 @@ public partial class OpenAITranscriber : Transcriber
         OpenAITranscriberSettings settings = _settings
             ?? throw new InvalidOperationException("OpenAI transcription settings were not initialised on the Godot thread.");
 
-        Stopwatch preparationStopwatch = AIPipelineDebugLog.StartTimer();
+        Stopwatch preparationStopwatch = PipelineDebugLog.StartTimer();
         using PreparedTranscriptionRequest request = PrepareTranscriptionRequest(recording, settings);
         if (_pipelineDebugLoggingEnabled)
         {
-            await LogLatencyOnGodotThreadAsync("STT request prepared in", preparationStopwatch, $"model {settings.Model}")
+            await LogOnlyLatencyOnGodotThreadAsync("STT request prepared in", preparationStopwatch, $"model {settings.Model}")
                 .ConfigureAwait(false);
         }
 
-        Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
+        Stopwatch backendStopwatch = PipelineDebugLog.StartTimer();
         AudioTranscription response = await request.Client
             .TranscribeAudioAsync(request.WavStream, "alleycat-recording.wav", request.Options)
             .ConfigureAwait(false);
         if (_pipelineDebugLoggingEnabled)
         {
-            await LogLatencyOnGodotThreadAsync("STT backend returned in", backendStopwatch, $"model {settings.Model}")
+            // The console line keeps the model detail; the toast omits it to stay short.
+            await LogLatencyOnGodotThreadAsync(
+                "STT backend returned in",
+                backendStopwatch,
+                $"model {settings.Model}",
+                notificationDetail: string.Empty)
                 .ConfigureAwait(false);
         }
 
@@ -147,8 +151,15 @@ public partial class OpenAITranscriber : Transcriber
         }
     }
 
-    private Task LogLatencyOnGodotThreadAsync(string stage, Stopwatch stopwatch, string detail)
-        => DispatchDeferredGodotActionAsync(() => AIPipelineDebugLog.Latency(stage, stopwatch, detail));
+    private Task LogLatencyOnGodotThreadAsync(
+        string stage,
+        Stopwatch stopwatch,
+        string detail,
+        string? notificationDetail = null)
+        => DispatchDeferredGodotActionAsync(() => PipelineDebugLog.Latency(stage, stopwatch, detail, notificationDetail));
+
+    private Task LogOnlyLatencyOnGodotThreadAsync(string stage, Stopwatch stopwatch, string detail)
+        => DispatchDeferredGodotActionAsync(() => PipelineDebugLog.LogOnlyLatency(stage, stopwatch, detail));
 
     internal sealed record OpenAITranscriberSettings(
         string Host,

@@ -28,6 +28,8 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 7. Speech-generation consumers must be able to observe streamed audio chunks as
    soon as the backend provides them, reducing perceived TTS latency where a
    consumer can play or buffer partial audio safely.
+8. Developers can observe backend generation latency as opt-in pipeline
+   diagnostics without affecting generation behaviour.
 
 ## Technical Requirements
 
@@ -62,6 +64,9 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
     (optional API key), and additional API-supported properties.
 15. Implementation must be under game/src/Speech/Generation/.
 16. Integration tests must be under integration-tests/src/.
+17. Backend latency must be recorded through the shared pipeline diagnostic log (CORE-007) as log-only Trace latency
+    entries for backend return and stream completion under the `AlleyCat.Pipeline` category — opt-in console
+    diagnostics without notification eligibility. These diagnostics must not change generation behaviour.
 
 ## In Scope
 
@@ -73,6 +78,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 - OpenAISpeechGenerator using OpenAI .NET SDK.
 - Subsystem-owned configuration from CORE-006 `IConfiguration` or explicit custom-path JSON loading.
 - Audio resampling via TargetSampleRate property.
+- Backend latency diagnostics through the shared pipeline diagnostic log (CORE-007).
 
 ## Out Of Scope
 
@@ -101,7 +107,9 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 9. Streamed chunk delivery is covered as a raw backend-chunk contract, and final
    completion audio remains TargetSampleRate-normalised.
 10. OpenAISpeechGenerator dispatch uses the OpenAI-compatible streaming speech API
-   while preserving Enabled and single in-flight behaviour.
+    while preserving Enabled and single in-flight behaviour.
+11. Tests verify backend latency diagnostics route through the shared pipeline diagnostic log as log-only Trace
+    entries without notification eligibility and without changing generation behaviour.
 
 ## References
 

@@ -15,14 +15,14 @@ namespace AlleyCat.IntegrationTests.Speech;
 /// </summary>
 public sealed partial class TranscriberIntegrationTests : IDisposable
 {
-    private readonly AIPipelineDebugLogFixture _debugLogFixture = new();
+    private readonly PipelineDebugLogFixture _debugLogFixture = new();
 
     private static readonly MethodInfo _invokeTranscriptionAsyncMethod = typeof(Transcriber)
         .GetMethod("InvokeTranscriptionAsync", BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new InvalidOperationException("Expected Transcriber.InvokeTranscriptionAsync for runtime speech tests.");
 
     /// <summary>
-    /// Clears the isolated AI pipeline logger override after each test.
+    /// Clears the isolated pipeline logger override after each test.
     /// </summary>
     public void Dispose() => _debugLogFixture.Dispose();
 

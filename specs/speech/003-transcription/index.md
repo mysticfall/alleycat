@@ -8,8 +8,9 @@ title: Transcriber Component
 ## Requirement
 
 Provide an abstract `Transcriber` component that captures microphone audio via Godot's XR input system, triggers async
-transcription, emits completion and failure signals, and can optionally surface transcript text as a debug-oriented UI
-notification. Deliver one concrete `OpenAITranscriber` implementation using the OpenAI .NET SDK.
+transcription, emits completion and failure signals, records STT pipeline latency diagnostics through the shared
+pipeline diagnostic log (CORE-007), and can optionally surface transcript text as a debug-oriented UI notification.
+Deliver one concrete `OpenAITranscriber` implementation using the OpenAI .NET SDK.
 
 ## Goal
 
@@ -116,6 +117,7 @@ can be extended to other STT backends.
 - Public `RecordingStarted` signal exposing recording start to gameplay consumers such as `PlayerVoice`.
 - Error handling contract using `ILogger` and the failure signal.
 - Optional transcript notification toggle for diagnostics and debug builds.
+- STT pipeline stage and latency diagnostics through the shared pipeline diagnostic log (CORE-007).
 - `OpenAITranscriber` implementation using OpenAI .NET SDK.
 - Subsystem-owned configuration contract using CORE-006 `IConfiguration` or explicit custom-path JSON loading.
 - Capture overflow, empty-audio, repeated-session, disable, and teardown behaviour.
@@ -159,6 +161,15 @@ transcriber-specific logger category suppression.
 Successful transcript notifications are debug-oriented and opt-in through `TranscriptNotificationEnabled`. When enabled,
 the transcript notification is posted before completion signal listeners run so slow downstream AI processing cannot
 delay visible diagnostic feedback.
+
+### STT Latency Diagnostics
+
+STT stages and latencies are recorded through the shared pipeline diagnostic log (CORE-007) under the
+`AlleyCat.Pipeline` category. Only the backend return stage is notification-eligible, surfacing as an opt-in toast
+when that category's log level is enabled; recording stop, request preparation, and transcription completion stay
+log-only alongside STT failure and micro-stage latency measurements, keeping their console coverage without toasts.
+The backend return console detail keeps its model name while the toast omits the detail suffix (CORE-007). The
+`Transcriber` hosts no latency-notification control of its own — CORE-007's category log level is the only switch.
 
 ### Transcription Worker Boundary
 

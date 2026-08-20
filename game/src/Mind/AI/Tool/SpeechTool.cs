@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using AlleyCat.Core.Logging;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Speech.Voice;
 using Godot;
@@ -48,6 +49,10 @@ public partial class SpeechTool : AgentTool
         string acceptedSpeech = speech.Trim();
         MindBase mind = Session!.Mind;
         IVoice voice = context.Character.RequireVoice();
+
+        // Marks the reasoning-to-speech boundary before the turn-taking wait so the inferred reasoning gap is
+        // not polluted by time spent waiting for another speaker.
+        PipelineDebugLog.Marker("Speak tool invoked", $"{acceptedSpeech.Length} chars");
 
         // Turn-taking guard (AI-002 TR-25): block while an attended speaker's window is open. The owning
         // character's own voice never blocks, and unattributable voices never block.

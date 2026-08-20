@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using AlleyCat.Core.Logging;
-using AlleyCat.Diagnostics;
 using AlleyCat.Rigging;
 using AlleyCat.UI;
 using AlleyCat.XR;
@@ -482,8 +481,8 @@ public abstract partial class Transcriber : Node
         maxDurationTimer.Start();
         SetLifecycleState(TranscriberLifecycleState.Recording, true);
         UpdateProcessing();
-        _recordingStopwatch = AIPipelineDebugLog.StartTimer();
-        AIPipelineDebugLog.Stage("STT recording started");
+        _recordingStopwatch = PipelineDebugLog.StartTimer();
+        PipelineDebugLog.Stage("STT recording started");
         _ = EmitSignal(SignalName.RecordingStarted);
         OnRecordingStarted();
     }
@@ -531,7 +530,7 @@ public abstract partial class Transcriber : Node
         {
             if (recordingStopwatch is not null)
             {
-                AIPipelineDebugLog.Latency("STT recording stopped after", recordingStopwatch);
+                PipelineDebugLog.LogOnlyLatency("STT recording stopped after", recordingStopwatch);
             }
 
             OnRecordingStopped();
@@ -617,9 +616,9 @@ public abstract partial class Transcriber : Node
         RecordedAudioData recording = audioAccumulator.Complete(sampleRate);
         _audioAccumulator = null;
         audioCapture.Clear();
-        if (AIPipelineDebugLog.IsEnabled)
+        if (PipelineDebugLog.IsEnabled)
         {
-            AIPipelineDebugLog.Stage("STT managed recording completed", $"{recording.PCMData.Length} bytes");
+            PipelineDebugLog.Stage("STT managed recording completed", $"{recording.PCMData.Length} bytes");
         }
 
         await InvokeTranscriptionAsync(recording);
@@ -632,7 +631,7 @@ public abstract partial class Transcriber : Node
             return;
         }
 
-        Stopwatch stopwatch = AIPipelineDebugLog.StartTimer();
+        Stopwatch stopwatch = PipelineDebugLog.StartTimer();
 
         try
         {
@@ -649,9 +648,9 @@ public abstract partial class Transcriber : Node
             var completionDispatchStopwatch = Stopwatch.StartNew();
             await DispatchGodotActionAsync(() =>
             {
-                if (AIPipelineDebugLog.IsEnabled)
+                if (PipelineDebugLog.IsEnabled)
                 {
-                    AIPipelineDebugLog.Latency("STT completed in", stopwatch, $"{text.Length} chars");
+                    PipelineDebugLog.LogOnlyLatency("STT completed in", stopwatch, $"{text.Length} chars");
                 }
 
                 SetLifecycleState(TranscriberLifecycleState.Transcribing, false);
@@ -676,7 +675,7 @@ public abstract partial class Transcriber : Node
 
             await DispatchGodotActionAsync(() =>
             {
-                AIPipelineDebugLog.Latency("STT failed after", stopwatch);
+                PipelineDebugLog.LogOnlyLatency("STT failed after", stopwatch);
                 SetLifecycleState(TranscriberLifecycleState.Transcribing, false);
                 UpdateProcessing();
                 HandleTranscriptionFailure(ex);
@@ -778,7 +777,7 @@ public abstract partial class Transcriber : Node
     {
         stopwatch.Stop();
         PipelineStageMeasuredForTesting?.Invoke(stage, stopwatch.Elapsed);
-        AIPipelineDebugLog.Latency(diagnosticName, stopwatch);
+        PipelineDebugLog.LogOnlyLatency(diagnosticName, stopwatch);
     }
 
     private void OnMaxDurationTimeout() => RequestRecordingStop();

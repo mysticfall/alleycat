@@ -1,13 +1,15 @@
 namespace AlleyCat.Core.Threading;
 
 /// <summary>
-/// Queues main-thread work through the Godot host's deferred event dispatch.
+/// Runs main-thread work, either inline when the caller is already on the main thread or through the Godot host's
+/// deferred event dispatch.
 /// </summary>
 public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
 {
     private readonly Action<Action> _scheduleDeferred;
     private readonly Action? _beforeWorkItemStart;
     private readonly Action<Action>? _onSynchronousWorkItemAccepted;
+    private readonly Func<bool>? _isMainThread;
     private readonly Lock _lock = new();
     private readonly Lock _startCloseLock = new();
     private readonly Queue<DispatcherWorkItem> _queue = [];
@@ -40,10 +42,26 @@ public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
         Action<Action> scheduleDeferred,
         Action? beforeWorkItemStart,
         Action<Action>? onSynchronousWorkItemAccepted)
+        : this(scheduleDeferred, beforeWorkItemStart, onSynchronousWorkItemAccepted, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a dispatcher with an optional main-thread detection seam. When the seam reports that the caller is
+    /// already on the main thread, accepted work runs inline with submission instead of being queued through the
+    /// deferred scheduling boundary. Admission checks, cancellation, hooks, and shutdown semantics are identical on
+    /// both paths. When the seam is <c>null</c>, every submission is queued as deferred work.
+    /// </summary>
+    internal GodotMainThreadDispatcher(
+        Action<Action> scheduleDeferred,
+        Action? beforeWorkItemStart,
+        Action<Action>? onSynchronousWorkItemAccepted,
+        Func<bool>? isMainThread)
     {
         _scheduleDeferred = scheduleDeferred ?? throw new ArgumentNullException(nameof(scheduleDeferred));
         _beforeWorkItemStart = beforeWorkItemStart;
         _onSynchronousWorkItemAccepted = onSynchronousWorkItemAccepted;
+        _isMainThread = isMainThread;
     }
 
     /// <inheritdoc />
@@ -101,6 +119,7 @@ public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
             return workItem.Completion;
         }
 
+        bool runInline = false;
         bool scheduleFlush = false;
         bool rejectedAfterShutdown;
         lock (_lock)
@@ -109,16 +128,24 @@ public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
             if (!rejectedAfterShutdown && !workItem.IsSettled)
             {
                 _ = _acceptedOperations.Add(workItem);
-                _queue.Enqueue(workItem);
-                if (synchronousAction is not null)
-                {
-                    _onSynchronousWorkItemAccepted?.Invoke(synchronousAction);
-                }
 
-                if (!_flushScheduled)
+                if (_isMainThread?.Invoke() == true)
                 {
-                    _flushScheduled = true;
-                    scheduleFlush = true;
+                    runInline = true;
+                }
+                else
+                {
+                    _queue.Enqueue(workItem);
+                    if (synchronousAction is not null)
+                    {
+                        _onSynchronousWorkItemAccepted?.Invoke(synchronousAction);
+                    }
+
+                    if (!_flushScheduled)
+                    {
+                        _flushScheduled = true;
+                        scheduleFlush = true;
+                    }
                 }
             }
         }
@@ -126,6 +153,14 @@ public sealed class GodotMainThreadDispatcher : IMainThreadDispatcher
         if (rejectedAfterShutdown)
         {
             workItem.CancelBeforeStart(_lifetime.Token);
+        }
+        else if (runInline)
+        {
+            // Mirrors the deferred flush: observation first, then the start hand-off that re-checks admission
+            // under the close lock. The work item is already tracked, so shutdown races settle it exactly as
+            // they would for queued work.
+            _beforeWorkItemStart?.Invoke();
+            StartWorkItem(workItem);
         }
         else if (scheduleFlush)
         {

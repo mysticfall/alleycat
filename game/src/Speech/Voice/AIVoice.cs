@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
 using AlleyCat.Core.Logging;
-using AlleyCat.Diagnostics;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using Godot;
@@ -370,7 +369,7 @@ public partial class AIVoice : Voice
 
     private async Task ProcessAdmittedSpeechAsync(AdmittedSpeech item)
     {
-        Stopwatch totalStopwatch = AIPipelineDebugLog.StartTimer();
+        Stopwatch totalStopwatch = PipelineDebugLog.StartTimer();
         CancellationTokenSource? pipelineCancellationSource = item.TurnCancellation is null
             ? null
             : CancellationTokenSource.CreateLinkedTokenSource(NodeLifetimeCancellationToken, item.TurnCancellation.Token);
@@ -379,42 +378,61 @@ public partial class AIVoice : Voice
         try
         {
             NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
-            if (AIPipelineDebugLog.IsEnabled)
+            if (PipelineDebugLog.IsEnabled)
             {
-                AIPipelineDebugLog.Stage("TTS request received", $"{item.Text.Length} chars");
+                PipelineDebugLog.Stage("TTS request received", $"{item.Text.Length} chars");
             }
 
-            Stopwatch generationStopwatch = AIPipelineDebugLog.StartTimer();
+            Stopwatch generationStopwatch = PipelineDebugLog.StartTimer();
             byte[] generatedAudio = await GenerateSpeechAudioAsync(item.Text)
                 .WaitAsync(pipelineCancellation);
             pipelineCancellation.ThrowIfCancellationRequested();
-            if (AIPipelineDebugLog.IsEnabled)
+            if (PipelineDebugLog.IsEnabled)
             {
-                AIPipelineDebugLog.Latency("TTS audio generated in", generationStopwatch, $"{generatedAudio.Length} bytes");
+                PipelineDebugLog.Latency("TTS audio generated in", generationStopwatch, $"{generatedAudio.Length} bytes");
             }
 
-            Stopwatch parseStopwatch = AIPipelineDebugLog.StartTimer();
+            Stopwatch parseStopwatch = PipelineDebugLog.StartTimer();
             AudioStreamWav speechStream = CreatePlayableSpeech(generatedAudio);
-            if (AIPipelineDebugLog.IsEnabled)
+            if (PipelineDebugLog.IsEnabled)
             {
-                AIPipelineDebugLog.Latency("TTS audio parsed in", parseStopwatch, $"{speechStream.Data.Length} PCM bytes");
+                PipelineDebugLog.LogOnlyLatency("TTS audio parsed in", parseStopwatch, $"{speechStream.Data.Length} PCM bytes");
             }
 
-            Stopwatch lipSyncStopwatch = AIPipelineDebugLog.StartTimer();
+            Stopwatch lipSyncStopwatch = PipelineDebugLog.StartTimer();
             LipSyncPlayer.PreparedPlayback preparedPlayback = await PrepareGeneratedSpeechAsync(
                 speechStream,
                 pipelineCancellation);
             pipelineCancellation.ThrowIfCancellationRequested();
-            if (AIPipelineDebugLog.IsEnabled)
+
+            // The mapped mesh count only exists once playback hand-off binds the prepared frames to the character
+            // meshes, so the stage is emitted after the hand-off dispatch using the elapsed snapshot taken at the
+            // preparation boundary. The count is seeded with the last-known mapping so a refused hand-off still
+            // reports it (zero on the first utterance). The console detail stays on one line, while the toast keeps
+            // only the frame count to stay short.
+            TimeSpan lipSyncElapsed = lipSyncStopwatch.Elapsed;
+            int mappedMeshCount = LipSyncPlayer?.MappedMeshCount ?? 0;
+            try
             {
-                AIPipelineDebugLog.Latency(
-                    "TTS lip-sync prepared in",
-                    lipSyncStopwatch,
-                    $"{preparedPlayback.Frames.Length} frames");
+                await DispatchDeferredGodotActionAsync(() =>
+                {
+                    CommitPlaybackHandOff(item, preparedPlayback);
+                    mappedMeshCount = LipSyncPlayer?.MappedMeshCount ?? 0;
+                });
+            }
+            finally
+            {
+                if (PipelineDebugLog.IsEnabled)
+                {
+                    PipelineDebugLog.Latency(
+                        "TTS lip-sync prepared in",
+                        lipSyncElapsed,
+                        $"{preparedPlayback.Frames.Length} frames, {mappedMeshCount} mesh(es)",
+                        $"{preparedPlayback.Frames.Length} frames");
+                }
             }
 
-            await DispatchDeferredGodotActionAsync(() => CommitPlaybackHandOff(item, preparedPlayback));
-            AIPipelineDebugLog.Latency("TTS playback started after", totalStopwatch);
+            PipelineDebugLog.LogOnlyLatency("TTS playback started after", totalStopwatch);
         }
         catch (OperationCanceledException) when (IsNodeLifetimeEnded
             || NodeLifetimeCancellationToken.IsCancellationRequested
@@ -429,12 +447,12 @@ public partial class AIVoice : Voice
         }
         catch (AudioConversionException ex)
         {
-            AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
+            PipelineDebugLog.LogOnlyLatency("TTS failed after", totalStopwatch);
             await ReportAdmittedFailureAsync(item, AudioFormatIncompatibleMessage, ex);
         }
         catch (Exception ex)
         {
-            AIPipelineDebugLog.Latency("TTS failed after", totalStopwatch);
+            PipelineDebugLog.LogOnlyLatency("TTS failed after", totalStopwatch);
             await ReportAdmittedFailureAsync(item, ex.Message, ex);
         }
         finally

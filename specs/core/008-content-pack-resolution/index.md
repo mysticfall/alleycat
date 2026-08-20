@@ -33,6 +33,8 @@ requested pack cannot start.
    arguments, keeping test fixtures deterministic.
 7. Game systems can identify the active content set and load resources relative to its root without knowing whether the
    content is built in or supplied by an optional pack.
+8. Gameplay that reads the current content context every frame or per percept stays responsive without repeated
+   resolution work, and opted-in debug logging reports content resolution once rather than on every read.
 
 ## Technical Requirements
 
@@ -65,6 +67,13 @@ requested pack cannot start.
 13. Argument parsing must accept both `--content-pack <id>` and `--content-pack=<id>` forms.
 14. CORE APIs must not expose lore-specific roots such as `lore`; lore and other consumers derive their own relative
     paths from the generic content root.
+15. `GetCurrentContentContext` must resolve the current-content context once per resolver instance and cache it behind
+    lock-guarded lazy initialisation, because its inputs are fixed for the process lifetime: the command-line pack
+    request, the manifest default pack read at construction, and the integration-test flag set before the Godot
+    process spawns. The DI singleton makes the cache process-wide during gameplay. A resolution failure must throw
+    without caching so the next call retries, and the integration-test bypass is unchanged. The resolution and
+    start-scene debug logs must be guarded with `IsEnabled(LogLevel.Debug)` per CORE-007, keeping their templated
+    messages and rendering unchanged.
 
 ## In Scope
 
@@ -76,6 +85,7 @@ requested pack cannot start.
 - Missing manifest handling before Godot resource loading.
 - Command-line argument handling for `--content-pack`.
 - `Game` node wiring of the resolver against its `FallbackStartScene` export.
+- Once-per-instance current-content resolution caching and level-guarded resolution debug logging.
 
 ## Out Of Scope
 
@@ -107,6 +117,9 @@ requested pack cannot start.
    and 10).
 10. Both `--content-pack <id>` and `--content-pack=<id>` are accepted and produce the equivalent requested pack
     (Technical Requirement 13).
+11. Tests verify the current-content context resolves once per resolver instance and is reused on later calls, that a
+    resolution failure is not cached and is retried on the next call, and that resolution debug logging is skipped when
+    Debug is filtered (User Requirement 8, Technical Requirement 15).
 
 ## References
 

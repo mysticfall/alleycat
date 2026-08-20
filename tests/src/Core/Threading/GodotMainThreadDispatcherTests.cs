@@ -136,4 +136,193 @@ public sealed class GodotMainThreadDispatcherTests
         await Task.WhenAll(invocations);
         Assert.Equal(acceptedOrder, invocationOrder);
     }
+
+    /// <summary>
+    /// Verifies a main-thread caller runs synchronously inline without touching the deferred scheduling boundary.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_OnMainThread_RunsInlineWithoutDeferredScheduling()
+    {
+        bool schedulerCalled = false;
+        GodotMainThreadDispatcher dispatcher = new(
+            _ => schedulerCalled = true,
+            null,
+            null,
+            () => true);
+
+        bool invoked = false;
+        ValueTask invocation = dispatcher.InvokeAsync(() => invoked = true);
+
+        Assert.True(invoked);
+        Assert.True(invocation.IsCompletedSuccessfully);
+        await invocation;
+        Assert.False(schedulerCalled);
+    }
+
+    /// <summary>
+    /// Verifies a non-main-thread caller still queues through the deferred scheduling boundary.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_OffMainThread_StillDefersThroughScheduler()
+    {
+        Action? deferredFlush = null;
+        GodotMainThreadDispatcher dispatcher = new(
+            action => deferredFlush = action,
+            null,
+            null,
+            () => false);
+
+        bool invoked = false;
+        ValueTask invocation = dispatcher.InvokeAsync(() => invoked = true);
+
+        Assert.False(invocation.IsCompleted);
+        Assert.False(invoked);
+        Assert.NotNull(deferredFlush);
+
+        deferredFlush!();
+        await invocation;
+        Assert.True(invoked);
+    }
+
+    /// <summary>
+    /// Verifies a pre-cancelled submission on the main thread never invokes its delegate, mirroring the queued path.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_OnMainThread_WithPreCancelledToken_DoesNotRunInline()
+    {
+        GodotMainThreadDispatcher dispatcher = new(
+            _ => { },
+            null,
+            null,
+            () => true);
+        using CancellationTokenSource cancelledSource = new();
+        cancelledSource.Cancel();
+
+        bool invoked = false;
+        Task invocation = dispatcher
+            .InvokeAsync(() => invoked = true, cancelledSource.Token)
+            .AsTask();
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => invocation);
+        Assert.True(invocation.IsCanceled);
+        Assert.False(invoked);
+    }
+
+    /// <summary>
+    /// Verifies a closed dispatcher refuses main-thread submissions with the same cancelled outcome as the queued path.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_OnMainThread_AfterClose_IsRejectedAsCancelled()
+    {
+        GodotMainThreadDispatcher dispatcher = new(
+            _ => { },
+            null,
+            null,
+            () => true);
+        dispatcher.Close();
+
+        bool invoked = false;
+        Task invocation = dispatcher.InvokeAsync(() => invoked = true).AsTask();
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => invocation);
+        Assert.True(invocation.IsCanceled);
+        Assert.False(invoked);
+    }
+
+    /// <summary>
+    /// Verifies the before-work-item-start hook fires immediately before an inline invocation.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_OnMainThread_FiresBeforeWorkItemStartBeforeInlineInvocation()
+    {
+        List<string> events = [];
+        GodotMainThreadDispatcher dispatcher = new(
+            _ => { },
+            () => events.Add("before"),
+            null,
+            () => true);
+
+        await dispatcher.InvokeAsync(() => events.Add("invoked"));
+
+        Assert.Equal(["before", "invoked"], events);
+    }
+
+    /// <summary>
+    /// Verifies inline synchronous failures surface through the returned awaitable rather than throwing on submission.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_OnMainThread_PropagatesInlineFaultsThroughAwaitable()
+    {
+        GodotMainThreadDispatcher dispatcher = new(
+            _ => { },
+            null,
+            null,
+            () => true);
+
+        Task invocation = dispatcher
+            .InvokeAsync(() => throw new InvalidOperationException("inline failure"))
+            .AsTask();
+
+        InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => invocation);
+        Assert.Equal("inline failure", exception.Message);
+        Assert.True(invocation.IsFaulted);
+    }
+
+    /// <summary>
+    /// Verifies an inline asynchronous invocation starts synchronously and completes its awaitable only when the
+    /// delegate completes.
+    /// </summary>
+    [Fact]
+    public async Task InvokeAsync_AsynchronousDelegate_OnMainThread_AwaitsInlineInvocationCompletion()
+    {
+        GodotMainThreadDispatcher dispatcher = new(
+            _ => { },
+            null,
+            null,
+            () => true);
+        TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        bool started = false;
+        Task invocation = dispatcher
+            .InvokeAsync(async _ =>
+            {
+                started = true;
+                await completion.Task;
+            })
+            .AsTask();
+
+        Assert.True(started);
+        Assert.False(invocation.IsCompleted);
+
+        completion.SetResult();
+        await invocation;
+    }
+
+    /// <summary>
+    /// Verifies shutdown cancels an inline-started asynchronous item, keeping accepted-operation bookkeeping coherent.
+    /// </summary>
+    [Fact]
+    public async Task Close_WhileInlineAsynchronousItemIsRunning_CancelsIt()
+    {
+        GodotMainThreadDispatcher dispatcher = new(
+            _ => { },
+            null,
+            null,
+            () => true);
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task invocation = dispatcher
+            .InvokeAsync(async cancellationToken =>
+            {
+                started.SetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            })
+            .AsTask();
+
+        await started.Task;
+        dispatcher.Close();
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => invocation);
+        Assert.True(invocation.IsCanceled);
+    }
 }

@@ -29,12 +29,16 @@ public partial class Game : Node, IServiceProvider
     /// <inheritdoc/>
     public Game()
     {
-        MainThreadDispatcher = new GodotMainThreadDispatcher(ScheduleDeferred);
+        MainThreadDispatcher = new GodotMainThreadDispatcher(ScheduleDeferred, null, null, IsOnGodotMainThread);
     }
 
     internal Game(Action? beforeWorkItemStart)
     {
-        MainThreadDispatcher = new GodotMainThreadDispatcher(ScheduleDeferred, beforeWorkItemStart);
+        MainThreadDispatcher = new GodotMainThreadDispatcher(
+            ScheduleDeferred,
+            beforeWorkItemStart,
+            null,
+            IsOnGodotMainThread);
     }
 
     internal GodotMainThreadDispatcher MainThreadDispatcher
@@ -43,6 +47,12 @@ public partial class Game : Node, IServiceProvider
     }
 
     private void ScheduleDeferred(Action action) => Callable.From(action).CallDeferred();
+
+    /// <summary>
+    /// The sole production boundary that queries Godot for main-thread identity, wired into the owned dispatcher so
+    /// main-thread submissions can run inline without a deferred queue hop.
+    /// </summary>
+    private static bool IsOnGodotMainThread() => GodotThread.IsMainThread();
 
     /// <summary>
     /// Fallback start scene used when no content pack resolves.
@@ -154,7 +164,9 @@ public partial class Game : Node, IServiceProvider
 
     private void RegisterInfrastructureServices(IServiceCollection services)
     {
-        ILogNotificationSink notificationSink = new GodotUINotificationSink(this);
+        // The sink shares the registered main-thread dispatcher so notification posts from background
+        // continuations marshal onto the Godot thread before touching UI nodes.
+        ILogNotificationSink notificationSink = new GodotUINotificationSink(this, MainThreadDispatcher);
         _ = services.AddGameConfiguration(notificationSink: notificationSink);
     }
 

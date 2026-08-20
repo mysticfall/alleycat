@@ -79,25 +79,46 @@ public sealed partial class MainThreadDispatcherIntegrationTests
     }
 
     /// <summary>
-    /// Verifies main-thread submissions never run inline and accepted work starts in FIFO order.
+    /// Verifies main-thread submissions execute inline with their results available immediately, while queued
+    /// worker submissions still start in FIFO order.
     /// </summary>
     [Fact]
-    public async Task InvokeAsync_OnMainThread_IsAlwaysDeferredAndFIFO()
+    public async Task InvokeAsync_OnMainThread_RunsInlineWhileQueuedSubmissionsKeepFIFOOrder()
     {
         SceneTree sceneTree = GetSceneTree();
         DispatcherFixture fixture = await CreateFixtureAsync(sceneTree);
 
         try
         {
-            List<int> invocationOrder = [];
-            ValueTask first = fixture.Dispatcher.InvokeAsync(() => invocationOrder.Add(1));
-            ValueTask second = fixture.Dispatcher.InvokeAsync(() => invocationOrder.Add(2));
-            ValueTask third = fixture.Dispatcher.InvokeAsync(() => invocationOrder.Add(3));
+            List<int> inlineOrder = [];
+            ValueTask first = fixture.Dispatcher.InvokeAsync(() => inlineOrder.Add(1));
+            ValueTask second = fixture.Dispatcher.InvokeAsync(() => inlineOrder.Add(2));
+            ValueTask third = fixture.Dispatcher.InvokeAsync(() => inlineOrder.Add(3));
 
-            Assert.Empty(invocationOrder);
+            // No frame has advanced while the submissions ran, so completed work here proves execution happened
+            // inline rather than through Godot's deferred scheduling.
+            Assert.Equal([1, 2, 3], inlineOrder);
+            Assert.True(first.IsCompletedSuccessfully);
+            Assert.True(second.IsCompletedSuccessfully);
+            Assert.True(third.IsCompletedSuccessfully);
 
             await Task.WhenAll(first.AsTask(), second.AsTask(), third.AsTask());
-            Assert.Equal([1, 2, 3], invocationOrder);
+
+            List<int> queuedOrder = [];
+            Task queuedCompletion = await Task.Factory.StartNew(
+                () =>
+                {
+                    Task one = fixture.Dispatcher.InvokeAsync(() => queuedOrder.Add(1)).AsTask();
+                    Task two = fixture.Dispatcher.InvokeAsync(() => queuedOrder.Add(2)).AsTask();
+                    Task three = fixture.Dispatcher.InvokeAsync(() => queuedOrder.Add(3)).AsTask();
+                    return Task.WhenAll(one, two, three);
+                },
+                CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach,
+                TaskScheduler.Default);
+
+            await queuedCompletion;
+            Assert.Equal([1, 2, 3], queuedOrder);
         }
         finally
         {
@@ -106,10 +127,12 @@ public sealed partial class MainThreadDispatcherIntegrationTests
     }
 
     /// <summary>
-    /// Verifies work submitted during a flush is placed behind an intervening deferred callback.
+    /// Verifies a main-thread submission during a running invocation executes inline within the submitting
+    /// callback, while a worker submission made during the same invocation still waits behind an intervening
+    /// deferred callback.
     /// </summary>
     [Fact]
-    public async Task InvokeAsync_DuringFlush_RunsInLaterDeferredCallback()
+    public async Task InvokeAsync_DuringInvocation_RunsMainThreadNestedWorkInlineAndDefersWorkerWork()
     {
         SceneTree sceneTree = GetSceneTree();
         DispatcherFixture fixture = await CreateFixtureAsync(sceneTree);
@@ -117,21 +140,28 @@ public sealed partial class MainThreadDispatcherIntegrationTests
         try
         {
             List<string> events = [];
-            Task? nestedInvocation = null;
-
             ValueTask first = fixture.Dispatcher.InvokeAsync(() =>
             {
                 events.Add("first");
                 Callable.From(() => events.Add("sentinel")).CallDeferred();
-                nestedInvocation = fixture.Dispatcher.InvokeAsync(() => events.Add("nested")).AsTask();
+                ValueTask nested = fixture.Dispatcher.InvokeAsync(() => events.Add("nested"));
+                Assert.True(nested.IsCompletedSuccessfully);
             });
             ValueTask second = fixture.Dispatcher.InvokeAsync(() => events.Add("second"));
 
             await Task.WhenAll(first.AsTask(), second.AsTask());
-            Assert.NotNull(nestedInvocation);
-            await nestedInvocation;
+            Assert.Equal(["first", "nested", "second"], events);
 
-            Assert.Equal(["first", "second", "sentinel", "nested"], events);
+            Task<Task> workerSubmission = Task.Factory.StartNew(
+                () => fixture.Dispatcher.InvokeAsync(() => events.Add("worker")).AsTask(),
+                CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach,
+                TaskScheduler.Default);
+
+            await await workerSubmission;
+            await WaitForNextFrameAsync(sceneTree);
+
+            Assert.Equal(["first", "nested", "second", "sentinel", "worker"], events);
         }
         finally
         {
@@ -182,10 +212,11 @@ public sealed partial class MainThreadDispatcherIntegrationTests
     }
 
     /// <summary>
-    /// Verifies dispatcher completion does not run an eligible awaiter continuation inline on the Godot thread.
+    /// Verifies an inline-completed invocation continues an eligible awaiter synchronously on the calling thread,
+    /// while a queued invocation completed by a flush still keeps its continuation off the main thread.
     /// </summary>
     [Fact]
-    public async Task InvokeAsync_Completion_SchedulesContinuationAsynchronously()
+    public async Task InvokeAsync_Completion_InlineContinuesOnCallerWhileQueuedStaysOffMainThread()
     {
         SceneTree sceneTree = GetSceneTree();
         DispatcherFixture fixture = await CreateFixtureAsync(sceneTree);
@@ -201,7 +232,21 @@ public sealed partial class MainThreadDispatcherIntegrationTests
 
             ulong continuationThreadID = await continuation;
 
-            Assert.NotEqual(OS.GetMainThreadId(), continuationThreadID);
+            Assert.Equal(OS.GetMainThreadId(), continuationThreadID);
+
+            Task<ulong> queuedContinuation = await Task.Factory.StartNew(
+                () => fixture.Dispatcher.InvokeAsync(() => { }).AsTask().ContinueWith(
+                    _ => OS.GetThreadCallerId(),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default),
+                CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach,
+                TaskScheduler.Default);
+
+            ulong queuedContinuationThreadID = await queuedContinuation;
+
+            Assert.NotEqual(OS.GetMainThreadId(), queuedContinuationThreadID);
         }
         finally
         {
@@ -210,7 +255,8 @@ public sealed partial class MainThreadDispatcherIntegrationTests
     }
 
     /// <summary>
-    /// Verifies pre-cancelled and queued-cancelled submissions never invoke their delegates.
+    /// Verifies pre-cancelled inline submissions and queued submissions cancelled before their flush never invoke
+    /// their delegates.
     /// </summary>
     [Fact]
     public async Task InvokeAsync_WhenCancelledBeforeStart_SettlesCancelledWithoutInvocation()
@@ -220,28 +266,42 @@ public sealed partial class MainThreadDispatcherIntegrationTests
 
         try
         {
-            bool preCancelledInvoked = false;
+            bool inlineCancelledInvoked = false;
             bool queuedCancelledInvoked = false;
-            using CancellationTokenSource preCancelledSource = new();
+            using CancellationTokenSource inlineCancellationSource = new();
             using CancellationTokenSource queuedCancellationSource = new();
-            preCancelledSource.Cancel();
+            inlineCancellationSource.Cancel();
 
-            Task preCancelled = fixture.Dispatcher.InvokeAsync(
-                () => preCancelledInvoked = true,
-                preCancelledSource.Token).AsTask();
-            Task queuedCancelled = fixture.Dispatcher.InvokeAsync(
-                () => queuedCancelledInvoked = true,
-                queuedCancellationSource.Token).AsTask();
+            Task inlineCancelled = fixture.Dispatcher.InvokeAsync(
+                () => inlineCancelledInvoked = true,
+                inlineCancellationSource.Token).AsTask();
+
+            // Blocks until the worker has submitted, so the cancellation that follows cannot race the deferred
+            // flush that would otherwise start the queued item.
+            using ManualResetEventSlim queuedSubmitted = new();
+            Task? queuedCancelled = null;
+            _ = Task.Factory.StartNew(
+                () =>
+                {
+                    queuedCancelled = fixture.Dispatcher.InvokeAsync(
+                        () => queuedCancelledInvoked = true,
+                        queuedCancellationSource.Token).AsTask();
+                    queuedSubmitted.Set();
+                },
+                CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach,
+                TaskScheduler.Default);
+            Assert.True(queuedSubmitted.Wait(TimeSpan.FromSeconds(2)));
             queuedCancellationSource.Cancel();
 
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => preCancelled);
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queuedCancelled);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => inlineCancelled);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queuedCancelled!);
             await WaitForNextFrameAsync(sceneTree);
 
-            Assert.False(preCancelledInvoked);
+            Assert.False(inlineCancelledInvoked);
             Assert.False(queuedCancelledInvoked);
-            Assert.True(preCancelled.IsCanceled);
-            Assert.True(queuedCancelled.IsCanceled);
+            Assert.True(inlineCancelled.IsCanceled);
+            Assert.True(queuedCancelled!.IsCanceled);
         }
         finally
         {
@@ -284,7 +344,7 @@ public sealed partial class MainThreadDispatcherIntegrationTests
     }
 
     /// <summary>
-    /// Verifies shutdown cancels queued and active asynchronous work and rejects later submissions.
+    /// Verifies shutdown cancels inline-started and queued work and rejects later submissions on both paths.
     /// </summary>
     [Fact]
     public async Task ExitTree_CancelsAcceptedWorkAndRejectsSubsequentWorkWithoutEffects()
@@ -312,19 +372,33 @@ public sealed partial class MainThreadDispatcherIntegrationTests
         }).AsTask();
 
         await activeStarted.Task;
-        Task queued = fixture.Dispatcher.InvokeAsync(() => queuedInvoked = true).AsTask();
+
+        // Blocks until the worker has submitted, so the queued item is still pending when shutdown runs and no
+        // frame advance can flush it first.
+        using ManualResetEventSlim queuedSubmitted = new();
+        Task? queued = null;
+        _ = Task.Factory.StartNew(
+            () =>
+            {
+                queued = fixture.Dispatcher.InvokeAsync(() => queuedInvoked = true).AsTask();
+                queuedSubmitted.Set();
+            },
+            CancellationToken.None,
+            TaskCreationOptions.DenyChildAttach,
+            TaskScheduler.Default);
+        Assert.True(queuedSubmitted.Wait(TimeSpan.FromSeconds(2)));
 
         fixture.Game._ExitTree();
 
         Task postShutdown = fixture.Dispatcher.InvokeAsync(() => postShutdownInvoked = true).AsTask();
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => active);
-        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued);
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued!);
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => postShutdown);
         await activeStopped.Task.WaitAsync(TimeSpan.FromSeconds(2));
         await WaitForNextFrameAsync(sceneTree);
 
         Assert.True(active.IsCanceled);
-        Assert.True(queued.IsCanceled);
+        Assert.True(queued!.IsCanceled);
         Assert.True(postShutdown.IsCanceled);
         Assert.True(activeToken.IsCancellationRequested);
         Assert.False(queuedInvoked);

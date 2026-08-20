@@ -8,6 +8,10 @@ public interface IContentResolver
     /// <summary>
     /// Resolves the current active content identity and root path.
     /// </summary>
+    /// <remarks>
+    /// Content inputs are fixed for the process lifetime, so implementations cache the resolved context per
+    /// instance and reuse it on subsequent calls.
+    /// </remarks>
     ContentContext GetCurrentContentContext();
 
     /// <summary>

@@ -1,12 +1,12 @@
-using AlleyCat.Diagnostics;
+using AlleyCat.Core.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.IntegrationTests.Support;
 
 /// <summary>
-/// Installs explicit AI pipeline logging support for isolated integration tests that do not run under the Game scene.
+/// Installs explicit pipeline logging support for isolated integration tests that do not run under the Game scene.
 /// </summary>
-internal sealed class AIPipelineDebugLogFixture : IDisposable
+internal sealed class PipelineDebugLogFixture : IDisposable
 {
     private readonly ILoggerFactory _loggerFactory = new TestLoggerFactory();
     private bool _disposed;
@@ -14,9 +14,9 @@ internal sealed class AIPipelineDebugLogFixture : IDisposable
     /// <summary>
     /// Installs the test logger override.
     /// </summary>
-    public AIPipelineDebugLogFixture()
+    public PipelineDebugLogFixture()
     {
-        AIPipelineDebugLog.SetLoggerFactoryForTesting(_loggerFactory);
+        PipelineDebugLog.SetLoggerFactoryForTesting(_loggerFactory);
     }
 
     /// <summary>
@@ -29,7 +29,7 @@ internal sealed class AIPipelineDebugLogFixture : IDisposable
             return;
         }
 
-        AIPipelineDebugLog.SetLoggerFactoryForTesting(null);
+        PipelineDebugLog.SetLoggerFactoryForTesting(null);
         _loggerFactory.Dispose();
         _disposed = true;
     }

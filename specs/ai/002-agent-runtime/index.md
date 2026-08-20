@@ -53,6 +53,8 @@ title: Agent Runtime
 15. Sensitive AI request and response detail must remain suppressed unless both dedicated request/response diagnostics
     controls permit it, without changing NPC behaviour.
 16. An action must never execute against a character other than the character that owns the Mind.
+17. During development, developers can observe speech-pipeline latency diagnostics through CORE-007 logging — with the
+    speak-tool invocation marker surfaced as an opt-in notification — without changing NPC behaviour.
 
 ## Technical Requirements
 
@@ -276,6 +278,11 @@ title: Agent Runtime
     control, distinct from the `EnableRequestResponseLogging`
     gate for MEAI `LoggingChatClient`
     payload logging in TR-47. It must not change NPC behaviour, validation, action execution, or failure semantics.
+54. `SpeechTool` must record a pipeline marker through the shared pipeline diagnostic log (CORE-007) once the final
+    speech text is accepted and before the turn-taking wait begins, so latency measured from the preceding model
+    response to the speak invocation is not polluted by time spent waiting for another speaker. The marker is
+    diagnostics-only and must not change tool behaviour. Session-end latency measurements must remain log-only and
+    never become notifications.
 
 ## In Scope
 
@@ -300,6 +307,8 @@ title: Agent Runtime
 - Responses-default stateless transport and explicitly selected Chat Completions rollback.
 - Adoption of `Microsoft.Agents.AI` within the stated deviation boundary.
 - Development-only MEAI diagnostics and non-secret structural transport evidence with explicit gating.
+- Speech-pipeline latency diagnostics through the shared pipeline diagnostic log: the speak-boundary marker before the
+  turn-taking wait and log-only session-end latency (CORE-007 is normative for routing).
 
 ## Out Of Scope
 
@@ -342,6 +351,8 @@ title: Agent Runtime
 8. Acceptance verifies containment and safety: missing configuration, backend failure, retry exhaustion, cancellation,
    and node exit never crash the scene and never produce delayed in-world effects, and an ownership mismatch produces
    no world effect.
+9. Diagnostics coverage verifies speech-pipeline latency diagnostics remain opt-in through the `AlleyCat.Pipeline`
+   category's log level (CORE-007) and change no NPC behaviour.
 
 ### Technical Requirements
 
@@ -405,6 +416,8 @@ title: Agent Runtime
 18. Tests verify the runtime builds on `Microsoft.Agents.AI`
     where it fits and retains custom tool-only validation and wait wake semantics where the framework does not provide
     them, with no legacy generic terminal-result route selectable.
+19. Diagnostics tests verify the speak-boundary pipeline marker fires after final speech acceptance and before the
+    turn-taking wait, changes no tool behaviour, and that session-end latency remains log-only.
 
 ## References
 

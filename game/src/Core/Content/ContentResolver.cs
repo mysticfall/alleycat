@@ -12,38 +12,53 @@ namespace AlleyCat.Core.Content;
 public partial class ContentResolver : IContentResolver
 {
     private readonly ILogger<ContentResolver> _logger;
-    private readonly ContentManifest? _manifest;
+    private readonly string? _defaultPackId;
+    private readonly Lock _contentContextGate = new();
+    private ContentContext? _cachedContentContext;
 
     /// <summary>
     /// Initialises a new <see cref="ContentResolver"/>, loading the content manifest if present.
     /// </summary>
     /// <param name="logger">Optional logger; defaults to a no-op logger.</param>
     public ContentResolver(ILogger<ContentResolver>? logger = null)
+        : this(logger, LoadManifestIfPresent(logger ?? NullLogger<ContentResolver>.Instance)?.DefaultPackId)
+    {
+    }
+
+    /// <summary>
+    /// Initialises a new <see cref="ContentResolver"/> with an explicit default pack identifier, bypassing
+    /// manifest discovery. Internal seam for Godot-free unit coverage of the instance resolution path.
+    /// </summary>
+    /// <param name="logger">Optional logger; defaults to a no-op logger.</param>
+    /// <param name="defaultPackId">Manifest default pack identifier, or null when no manifest default applies.</param>
+    internal ContentResolver(ILogger<ContentResolver>? logger, string? defaultPackId)
     {
         _logger = logger ?? NullLogger<ContentResolver>.Instance;
-        _manifest = LoadManifestIfPresent(_logger);
+        _defaultPackId = defaultPackId;
     }
 
     /// <inheritdoc />
     public string ResolveStartScenePath(string fallbackStartScenePath)
     {
-        bool isIntegrationTest = RuntimeContext.IsIntegrationTest();
-        string? requestedPackId = ReadRequestedPackId();
-        string? defaultPackId = _manifest?.DefaultPackId;
+        (bool isIntegrationTest, string? requestedPackId, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
+        string? defaultPackId = _defaultPackId;
 
         string resolved = SelectStartScenePath(
             requestedPackId,
             defaultPackId,
             isIntegrationTest,
-            p => ResourceLoader.Exists(p),
+            sceneExists,
             fallbackStartScenePath);
 
-        _logger.LogDebug(
-            "Resolved start scene {ResolvedPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}).",
-            resolved,
-            requestedPackId,
-            defaultPackId,
-            isIntegrationTest);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Resolved start scene {ResolvedPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}).",
+                resolved,
+                requestedPackId,
+                defaultPackId,
+                isIntegrationTest);
+        }
 
         return resolved;
     }
@@ -51,26 +66,58 @@ public partial class ContentResolver : IContentResolver
     /// <inheritdoc />
     public ContentContext GetCurrentContentContext()
     {
-        bool isIntegrationTest = RuntimeContext.IsIntegrationTest();
-        string? requestedPackId = ReadRequestedPackId();
-        string? defaultPackId = _manifest?.DefaultPackId;
+        if (_cachedContentContext is { } cachedContext)
+        {
+            return cachedContext;
+        }
+
+        lock (_contentContextGate)
+        {
+            return _cachedContentContext ??= ResolveContentContext();
+        }
+    }
+
+    /// <summary>
+    /// Resolves the active content context from the current runtime inputs.
+    /// </summary>
+    /// <remarks>
+    /// Content inputs (command-line pack request, manifest default pack, integration-test mode) are fixed for the
+    /// process lifetime, so <see cref="GetCurrentContentContext"/> caches the resolved context instead of
+    /// re-resolving it on every call. Initialisation is guarded because first access can race between the
+    /// per-frame attention loop and perception handling.
+    /// </remarks>
+    private ContentContext ResolveContentContext()
+    {
+        (bool isIntegrationTest, string? requestedPackId, Func<string, bool> sceneExists) = ReadRuntimeContentInputs();
+        string? defaultPackId = _defaultPackId;
 
         ContentContext context = SelectCurrentContentContext(
             requestedPackId,
             defaultPackId,
             isIntegrationTest,
-            p => ResourceLoader.Exists(p));
+            sceneExists);
 
-        _logger.LogDebug(
-            "Resolved content context {ContentID} at {RootPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}).",
-            context.ContentID,
-            context.RootPath,
-            requestedPackId,
-            defaultPackId,
-            isIntegrationTest);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Resolved content context {ContentID} at {RootPath} (requested={RequestedPack}, default={DefaultPack}, integrationTest={IntegrationTest}).",
+                context.ContentID,
+                context.RootPath,
+                requestedPackId,
+                defaultPackId,
+                isIntegrationTest);
+        }
 
         return context;
     }
+
+    /// <summary>
+    /// Reads the process-level inputs used for content resolution. Internal virtual seam so Godot-free unit
+    /// coverage can substitute the runtime reads and count resolution attempts.
+    /// </summary>
+    /// <returns>Integration-test flag, optional requested pack identifier, and start-scene existence probe.</returns>
+    internal virtual (bool IsIntegrationTest, string? RequestedPackId, Func<string, bool> SceneExists) ReadRuntimeContentInputs()
+        => (RuntimeContext.IsIntegrationTest(), ReadRequestedPackId(), static path => ResourceLoader.Exists(path));
 
     /// <summary>
     /// Pure, Godot-free selection logic used to pick the start scene path.

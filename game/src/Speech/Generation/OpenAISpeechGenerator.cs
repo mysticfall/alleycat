@@ -6,7 +6,6 @@ using System.Globalization;
 using System.Text.Json;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
-using AlleyCat.Diagnostics;
 using AlleyCat.UI;
 using Godot;
 using Microsoft.Extensions.Configuration;
@@ -79,13 +78,13 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
         OpenAISpeechGeneratorSettings settings = _settings ?? OpenAISpeechGeneratorSettings.Load(ConfigPath);
         AudioClient client = settings.CreateAudioClient();
         SpeechGenerationOptions options = CreateSpeechGenerationOptions(settings, instruction);
-        Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
+        Stopwatch backendStopwatch = PipelineDebugLog.StartTimer();
         try
         {
             BinaryData audio = await client.GenerateSpeechAsync(text, settings.GetVoice(VoiceOverride), options);
-            if (AIPipelineDebugLog.IsEnabled)
+            if (PipelineDebugLog.IsEnabled)
             {
-                AIPipelineDebugLog.Latency("TTS backend returned in", backendStopwatch, $"model {settings.Model}");
+                PipelineDebugLog.LogOnlyLatency("TTS backend returned in", backendStopwatch, $"model {settings.Model}");
             }
 
             return audio.ToArray();
@@ -105,7 +104,7 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
         OpenAISpeechGeneratorSettings settings = _settings ?? OpenAISpeechGeneratorSettings.Load(ConfigPath);
         AudioClient client = settings.CreateAudioClient();
         SpeechGenerationOptions options = CreateSpeechGenerationOptions(settings, instruction);
-        Stopwatch backendStopwatch = AIPipelineDebugLog.StartTimer();
+        Stopwatch backendStopwatch = PipelineDebugLog.StartTimer();
 
         using MemoryStream audioStream = new();
         try
@@ -123,9 +122,12 @@ public partial class OpenAISpeechGenerator : SpeechGenerator
                 }
             }
 
-            if (AIPipelineDebugLog.IsEnabled)
+            if (PipelineDebugLog.IsEnabled)
             {
-                AIPipelineDebugLog.Latency("TTS backend stream completed in", backendStopwatch, $"model {settings.Model}");
+                PipelineDebugLog.LogOnlyLatency(
+                    "TTS backend stream completed in",
+                    backendStopwatch,
+                    $"model {settings.Model}");
             }
 
             return audioStream.ToArray();

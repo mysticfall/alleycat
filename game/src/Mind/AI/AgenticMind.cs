@@ -6,7 +6,6 @@ using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
-using AlleyCat.Diagnostics;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
@@ -134,7 +133,7 @@ public partial class AgenticMind : MindBase
         try
         {
             using var sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
-            Stopwatch runStopwatch = AIPipelineDebugLog.StartTimer();
+            Stopwatch runStopwatch = PipelineDebugLog.StartTimer();
             try
             {
                 AgentSession session = await PrepareSessionAsync(sessionCancellation.Token);
@@ -142,9 +141,9 @@ public partial class AgenticMind : MindBase
             }
             finally
             {
-                if (AIPipelineDebugLog.IsEnabled)
+                if (PipelineDebugLog.IsEnabled)
                 {
-                    AIPipelineDebugLog.Latency("Agent session ended after", runStopwatch);
+                    PipelineDebugLog.LogOnlyLatency("Agent session ended after", runStopwatch);
                 }
             }
         }

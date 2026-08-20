@@ -1,4 +1,5 @@
 using AlleyCat.Core.Content;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace AlleyCat.Tests.Core;
@@ -152,5 +153,155 @@ public sealed class ContentResolverTests
             contentRoot: ContentRoot);
 
         Assert.Equal(Fallback, result);
+    }
+
+    /// <summary>
+    /// The current content context must be resolved once and then reused from the instance cache.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_ResolvesOnce_AndReturnsSameCachedInstance()
+    {
+        StubContentResolver resolver = new(requestedPackId: "req", sceneExists: _ => true);
+
+        ContentContext first = resolver.GetCurrentContentContext();
+        ContentContext second = resolver.GetCurrentContentContext();
+        ContentContext third = resolver.GetCurrentContentContext();
+
+        Assert.Equal(1, resolver.RuntimeInputReadCount);
+        Assert.Same(first, second);
+        Assert.Same(first, third);
+        Assert.Equal("req", first.ContentID);
+    }
+
+    /// <summary>
+    /// A resolver running in integration-test mode must resolve the built-in context, ignoring packs.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_ReturnsBuiltInContext_WhenIntegrationTestMode()
+    {
+        StubContentResolver resolver = new(
+            isIntegrationTest: true,
+            requestedPackId: "req",
+            defaultPackId: "def",
+            sceneExists: _ => throw new InvalidOperationException("Integration-test bypass should not probe content."));
+
+        ContentContext first = resolver.GetCurrentContentContext();
+        ContentContext second = resolver.GetCurrentContentContext();
+
+        Assert.Equal(ContentContext.Default, first);
+        Assert.Same(first, second);
+        Assert.Equal(1, resolver.RuntimeInputReadCount);
+    }
+
+    /// <summary>
+    /// A failed resolution must not poison the cache; the next call retries the resolution.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_RetriesResolution_WhenRequestedPackSceneIsMissing()
+    {
+        int probeCallCount = 0;
+        StubContentResolver resolver = new(requestedPackId: "req", sceneExists: _ => ++probeCallCount > 1);
+
+        _ = Assert.Throws<InvalidOperationException>(resolver.GetCurrentContentContext);
+
+        ContentContext context = resolver.GetCurrentContentContext();
+
+        Assert.Equal(2, resolver.RuntimeInputReadCount);
+        Assert.Equal("req", context.ContentID);
+    }
+
+    /// <summary>
+    /// The resolution log must fire once, with the unchanged templated message including null-pack rendering.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_LogsResolutionOnce_WithUnchangedMessage()
+    {
+        CapturingLogger logger = new();
+        StubContentResolver resolver = new(
+            requestedPackId: null,
+            defaultPackId: "def",
+            sceneExists: p => p == "res://content/def/start.tscn",
+            logger: logger);
+
+        _ = resolver.GetCurrentContentContext();
+        _ = resolver.GetCurrentContentContext();
+
+        (LogLevel Level, string Message) = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Debug, Level);
+        Assert.Equal(
+            "Resolved content context def at res://content/def/ (requested=(null), default=def, integrationTest=False).",
+            Message);
+    }
+
+    /// <summary>
+    /// The debug log must be skipped entirely, without formatting, when debug level is filtered out.
+    /// </summary>
+    [Fact]
+    public void GetCurrentContentContext_SkipsDebugLog_WhenDebugDisabled()
+    {
+        CapturingLogger logger = new()
+        {
+            DebugEnabled = false
+        };
+        StubContentResolver resolver = new(
+            requestedPackId: null,
+            defaultPackId: "def",
+            sceneExists: _ => true,
+            logger: logger);
+
+        _ = resolver.GetCurrentContentContext();
+        _ = resolver.GetCurrentContentContext();
+
+        Assert.Empty(logger.Entries);
+        Assert.Equal(0, logger.FormatCount);
+    }
+
+    private sealed class StubContentResolver(
+        bool isIntegrationTest = false,
+        string? requestedPackId = null,
+        string? defaultPackId = null,
+        Func<string, bool>? sceneExists = null,
+        ILogger<ContentResolver>? logger = null) : ContentResolver(logger, defaultPackId)
+    {
+        public int RuntimeInputReadCount
+        {
+            get; private set;
+        }
+
+        internal override (bool IsIntegrationTest, string? RequestedPackId, Func<string, bool> SceneExists) ReadRuntimeContentInputs()
+        {
+            RuntimeInputReadCount++;
+            return (isIntegrationTest, requestedPackId, sceneExists ?? (static _ => false));
+        }
+    }
+
+    private sealed class CapturingLogger : ILogger<ContentResolver>
+    {
+        private readonly List<(LogLevel Level, string Message)> _entries = [];
+
+        public bool DebugEnabled { get; set; } = true;
+
+        public int FormatCount
+        {
+            get; private set;
+        }
+
+        public IReadOnlyList<(LogLevel Level, string Message)> Entries => _entries;
+
+        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
+
+        bool ILogger.IsEnabled(LogLevel logLevel)
+            => logLevel is not LogLevel.None && (DebugEnabled || logLevel > LogLevel.Debug);
+
+        void ILogger.Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            FormatCount++;
+            _entries.Add((logLevel, formatter(state, exception)));
+        }
     }
 }

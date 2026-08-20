@@ -30,10 +30,10 @@ namespace AlleyCat.IntegrationTests.Speech;
 /// </summary>
 public sealed partial class AIVoiceIntegrationTests : IDisposable
 {
-    private readonly AIPipelineDebugLogFixture _debugLogFixture = new();
+    private readonly PipelineDebugLogFixture _debugLogFixture = new();
 
     /// <summary>
-    /// Clears the isolated AI pipeline logger override after each test.
+    /// Clears the isolated pipeline logger override after each test.
     /// </summary>
     public void Dispose() => _debugLogFixture.Dispose();
 
@@ -599,6 +599,88 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     }
 
     /// <summary>
+    /// A refused playback hand-off must still emit the lip-sync preparation entry with the last-known mapped mesh
+    /// count rather than zero, because the mapping from the previous utterance persists (SPCH-005 TR-29).
+    /// </summary>
+    [Fact]
+    public async Task SpeakCancellableAsync_WhenHandOffRefused_LipSyncEntryReportsLastKnownMeshCount()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        NotificationLoggingFixture loggingFixture = await NotificationLoggingFixture.CreateAsync(sceneTree);
+        Node3D fixtureRoot = new()
+        {
+            Name = "AIVoiceRefusedHandOffTestRoot",
+        };
+
+        try
+        {
+            AudioStreamPlayer3D audioPlayer = new();
+            Skeleton3D skeleton = new();
+            skeleton.AddChild(CreateJawOpenMeshInstance());
+            FakeSpeechGenerator speechGenerator = new()
+            {
+                NextResult = CreateWaveFileBytes(
+                    new byte[16000],
+                    sampleRate: 16000,
+                    channelCount: 1,
+                    bitsPerSample: 16),
+            };
+            FakeLipSyncPlayer lipSyncPlayer = new()
+            {
+                AudioPlayer = audioPlayer,
+                Skeleton = skeleton,
+            };
+            RefusedHandOffTestAIVoice voice = new()
+            {
+                SpeechGenerator = speechGenerator,
+                LipSyncPlayer = lipSyncPlayer,
+            };
+
+            fixtureRoot.AddChild(audioPlayer);
+            fixtureRoot.AddChild(skeleton);
+            fixtureRoot.AddChild(lipSyncPlayer);
+            fixtureRoot.AddChild(speechGenerator);
+            fixtureRoot.AddChild(voice);
+            AddTestNode(sceneTree, fixtureRoot);
+            await WaitForFramesAsync(sceneTree, 2);
+
+            // The first utterance commits its hand-off and binds one mesh, so its mapping persists as last-known.
+            await voice.SpeakAsync("first utterance");
+            await WaitUntilAsync(
+                sceneTree,
+                () => voice.PlayGeneratedSpeechCallCount == 1 && lipSyncPlayer.MappedMeshCount == 1,
+                30);
+            await WaitUntilAsync(sceneTree, () => LipSyncPreparedEntries(loggingFixture).Count == 1, 30);
+            int lastKnownMeshCount = lipSyncPlayer.MappedMeshCount;
+            Assert.True(lastKnownMeshCount > 0, "The fixture must map at least one mesh for the first utterance.");
+
+            // The second utterance is cancelled right before its deferred hand-off dispatch, so preparation has
+            // completed but the commit is refused through the real cancellation path.
+            using CancellationTokenSource cancellation = new();
+            voice.ArmCancellationBeforeNextDispatch(cancellation);
+            ValueTask submission = voice.SpeakCancellableAsync("second utterance", cancellation.Token);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(submission.AsTask);
+            await WaitUntilAsync(sceneTree, () => LipSyncPreparedEntries(loggingFixture).Count == 2, 30);
+
+            // The refused hand-off must not bind playback or notify listeners, and the mapping stays last-known.
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(1, voice.SpeechGeneratedCallCount);
+            Assert.Equal(lastKnownMeshCount, lipSyncPlayer.MappedMeshCount);
+
+            // Both the committed and the refused hand-off entries must report the same mapped mesh count.
+            IReadOnlyList<string> entries = LipSyncPreparedEntries(loggingFixture);
+            Assert.Equal(2, entries.Count);
+            Assert.All(entries, entry => Assert.Contains($"{lastKnownMeshCount} mesh(es)", entry));
+            Assert.DoesNotContain(entries, entry => entry.Contains("0 mesh(es)", StringComparison.Ordinal));
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, fixtureRoot);
+            await loggingFixture.DestroyAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Compatibility Speak observes both synchronous validation and asynchronous production failures.
     /// </summary>
     [Fact]
@@ -1120,6 +1202,26 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         }
     }
 
+    private static IReadOnlyList<string> LipSyncPreparedEntries(NotificationLoggingFixture loggingFixture)
+        =>
+        [
+            .. loggingFixture
+                .GetPipelineLogMessages()
+                .Where(message => message.Contains("TTS lip-sync prepared in", StringComparison.Ordinal)),
+        ];
+
+    private static MeshInstance3D CreateJawOpenMeshInstance()
+    {
+        ArrayMesh mesh = new();
+        mesh.AddBlendShape("JawOpen");
+
+        return new MeshInstance3D
+        {
+            Name = "GeneratedFace",
+            Mesh = mesh,
+        };
+    }
+
     private static byte[] CreateWaveFileBytes(byte[] data, int sampleRate, short channelCount, short bitsPerSample)
     {
         using MemoryStream stream = new();
@@ -1220,6 +1322,50 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     private sealed class TestVoiceHolder(params IVoice[] voices) : IHasVoice
     {
         public IReadOnlyList<IComponent> Components { get; } = voices;
+    }
+
+    /// <summary>
+    /// Test voice that runs the real production pipeline but can cancel a cancellable submission right before its
+    /// deferred playback hand-off dispatch, deterministically landing in the refusal window between completed
+    /// preparation and the hand-off commit.
+    /// </summary>
+    private sealed partial class RefusedHandOffTestAIVoice : AIVoice
+    {
+        private CancellationTokenSource? _armedCancellation;
+
+        public int PlayGeneratedSpeechCallCount
+        {
+            get;
+            private set;
+        }
+
+        public int SpeechGeneratedCallCount
+        {
+            get;
+            private set;
+        }
+
+        public void ArmCancellationBeforeNextDispatch(CancellationTokenSource cancellation)
+            => _armedCancellation = cancellation;
+
+        protected override Task DispatchDeferredGodotActionAsync(Action action)
+        {
+            CancellationTokenSource? armed = Interlocked.Exchange(ref _armedCancellation, null);
+            armed?.Cancel();
+            return base.DispatchDeferredGodotActionAsync(action);
+        }
+
+        protected override void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
+        {
+            PlayGeneratedSpeechCallCount++;
+            base.PlayGeneratedSpeech(preparedPlayback);
+        }
+
+        protected override void OnSpeechGenerated(string speech)
+        {
+            base.OnSpeechGenerated(speech);
+            SpeechGeneratedCallCount++;
+        }
     }
 
     private sealed partial class TestAIVoice : AIVoice

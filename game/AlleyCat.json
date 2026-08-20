@@ -27,7 +27,9 @@
   },
   "Logging": {
     "LogLevel": {
-      "Default": "Information",
+      "Default": "Warning",
+      "AlleyCat": "Information",
+      "AlleyCat.Pipeline": "Debug",
       "Microsoft": "Warning",
       "Microsoft.Extensions.AI.LoggingChatClient": "Trace",
       "System.ClientModel.Primitives.MessageLoggingPolicy": "Warning",
