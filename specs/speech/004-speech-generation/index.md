@@ -60,7 +60,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 13. Enabled and single in-flight generation behaviour must apply to the streaming
    dispatch path as well as the full-response path.
 14. Configuration must bind/read subsystem-owned TTS options from CORE-006 `IConfiguration`, or build a local
-    custom-path JSON configuration when an explicit path is supplied. Options include Host (full endpoint URL), ApiKey
+    custom-path YAML configuration when an explicit path is supplied. Options include Host (full endpoint URL), ApiKey
     (optional API key), and additional API-supported properties.
 15. Implementation must be under game/src/Speech/Generation/.
 16. Integration tests must be under integration-tests/src/.
@@ -76,7 +76,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 - Streaming chunk API and signal contract.
 - Error handling using `ILogger`.
 - OpenAISpeechGenerator using OpenAI .NET SDK.
-- Subsystem-owned configuration from CORE-006 `IConfiguration` or explicit custom-path JSON loading.
+- Subsystem-owned configuration from CORE-006 `IConfiguration` or explicit custom-path YAML loading.
 - Audio resampling via TargetSampleRate property.
 - Backend latency diagnostics through the shared pipeline diagnostic log (CORE-007).
 
@@ -117,7 +117,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 
 - game/src/Speech/Generation/SpeechGenerator.cs
 - game/src/Speech/Generation/OpenAISpeechGenerator.cs
-- game/AlleyCat.json
+- game/AlleyCat.yaml
 
 ### Related Specs
 

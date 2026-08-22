@@ -16,7 +16,8 @@ Make configuration predictable and shared across subsystems without making core 
 
 ## User Requirements
 
-1. Developers can configure STT, TTS, and AI backends from a shipped default JSON file.
+1. Developers can configure STT, TTS, and AI backends from a shipped default YAML file that is commented to document
+   its own settings.
 2. Users can override selected settings from their user data directory without editing shipped defaults.
 3. Missing user overrides do not prevent the game from starting with default settings.
 4. Subsystems can bind their own typed configuration without changing player-visible behaviour.
@@ -24,14 +25,14 @@ Make configuration predictable and shared across subsystems without making core 
 ## Technical Requirements
 
 1. `Game` registers `IConfiguration` before building the global service provider.
-2. The default configuration source is `res://AlleyCat.json`.
-3. The optional user override source is `user://AlleyCat.json`.
+2. The default configuration source is `res://AlleyCat.yaml`.
+3. The optional user override source is `user://AlleyCat.yaml`.
 4. User override values take precedence over shipped defaults using standard Microsoft configuration merge semantics.
 5. `Game` registers core configuration and logging infrastructure before dependent services are built.
 6. Core registration must not bind or reference subsystem option models such as `AIOptions`, `STTOptions`, or
    `TTSOptions`.
 7. Subsystems bind/read their own option sections from core-provided `IConfiguration`.
-8. Subsystems that need explicit custom JSON paths build a local Microsoft JSON configuration source.
+8. Subsystems that need explicit custom YAML paths build a local YAML configuration source.
 9. Configuration integration lives in `AlleyCat.Core.Configuration` and is resolved through the DI container.
 10. Configuration registration must happen before services that consume configuration are registered or resolved.
 11. The shared configuration helper is `GameConfiguration`; `AlleyCatConfiguration` is not a supported name.
@@ -39,9 +40,9 @@ Make configuration predictable and shared across subsystems without making core 
 ## In Scope
 
 - `Microsoft.Extensions.Configuration` registration and source ordering.
-- Shipped JSON defaults and optional user JSON overrides.
+- Shipped YAML defaults and optional user YAML overrides.
 - Core/subsystem dependency direction for option ownership and binding.
-- Subsystem-owned explicit custom-path JSON loading.
+- Subsystem-owned explicit custom-path YAML loading.
 - DI availability for gameplay systems and tests.
 
 ## Out Of Scope
@@ -55,16 +56,17 @@ Make configuration predictable and shared across subsystems without making core 
 
 ## Acceptance Criteria
 
-1. With only `res://AlleyCat.json`, the game starts and `IConfiguration` exposes shipped defaults.
-2. With `user://AlleyCat.json` present, matching values override shipped defaults while unspecified defaults remain.
+1. With only `res://AlleyCat.yaml`, the game starts and `IConfiguration` exposes shipped defaults, and the shipped file
+   documents its settings and the `user://AlleyCat.yaml` override mechanism through comments.
+2. With `user://AlleyCat.yaml` present, matching values override shipped defaults while unspecified defaults remain.
 3. `Game` registers `IConfiguration` and logging infrastructure before building the service provider.
 4. Core registration does not reference `AIOptions`, `STTOptions`, `TTSOptions`, or subsystem binding APIs.
-5. Subsystems bind/read their own option sections from `IConfiguration` or build local custom-path JSON configuration.
+5. Subsystems bind/read their own option sections from `IConfiguration` or build local custom-path YAML configuration.
 6. `Out Of Scope` defers only optional extensions and does not exclude startup registration or ownership boundaries.
 7. Core configuration helper references use `GameConfiguration`, not `AlleyCatConfiguration`.
 
-**Traceability Map:** User Requirements 1-4 -> AC-1, AC-2, AC-5; Technical Requirements 1-11 -> AC-3, AC-4, AC-6,
-AC-7.
+**Traceability Map:** User Requirements 1-4 -> AC-1, AC-2, AC-5, with AC-1 verifying UR-1's shipped defaults and
+its commented, self-documenting file; Technical Requirements 1-11 -> AC-3, AC-4, AC-6, AC-7.
 
 ## References
 
@@ -72,7 +74,7 @@ AC-7.
 
 - `@game/src/Core/Configuration/`
 - `@game/src/Game.cs`
-- `@game/AlleyCat.json`
+- `@game/AlleyCat.yaml`
 
 ### Related Specs
 

@@ -1,0 +1,46 @@
+# Shipped default configuration for AlleyCat.
+#
+# Users can override any value below by creating an AlleyCat.yaml file in their
+# user data directory (user://AlleyCat.yaml). Override values are merged over
+# these shipped defaults, so a user file only needs to contain the values that
+# should change.
+
+# Speech-to-text backend settings.
+STT:
+    Host: "http://localhost:9000/v1"
+    Model: whisper-1
+    Language: en
+    Prompt: "Transcribe the player's speech clearly."
+    Temperature: 0.0
+    Timeout: 30
+
+# Text-to-speech backend settings.
+TTS:
+    Host: "http://localhost:8004/v1"
+    Model: tts-1
+    Voice: alloy
+    Format: wav
+    SpeedRatio: 1.0
+    Timeout: 30
+
+# Conversational AI backend settings.
+AI:
+    Host: "https://openrouter.ai/api/v1"
+    Model: google/gemma-4-31b-it
+    Timeout: 30
+
+# Diagnostics toggles for AI request and response logging.
+Diagnostics:
+    AI:
+        EnableRequestResponseLogging: true
+
+# Logging levels per category.
+Logging:
+    LogLevel:
+        Default: Warning
+        AlleyCat: Information
+        AlleyCat.Pipeline: Debug
+        Microsoft: Warning
+        Microsoft.Extensions.AI.LoggingChatClient: Trace
+        System.ClientModel.Primitives.MessageLoggingPolicy: Warning
+        System.ClientModel.Primitives.PipelineTransport: Warning

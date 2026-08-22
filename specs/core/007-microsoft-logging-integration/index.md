@@ -62,7 +62,7 @@ and can be extended without changing gameplay consumers.
     category's configured level is the single universal switch for console logs and notification toasts alike. The
     logging framework's level filter runs before providers, so an entry-carrying diagnostic reaching the notification
     provider has already been opted in by configuration — for example
-    `"Logging": { "LogLevel": { "AlleyCat.Pipeline": "Trace" } }` through a per-user `user://AlleyCat.json` override
+    `Logging:LogLevel:AlleyCat.Pipeline: Trace` through a per-user `user://AlleyCat.yaml` override
     enables both, while the shipped `Information` default filters such entries before any provider sees them, keeping
     both off. No separate notification switch may supplement the level.
 16. The shared pipeline diagnostic log must log under the `AlleyCat.Pipeline` category: latency and marker entries as

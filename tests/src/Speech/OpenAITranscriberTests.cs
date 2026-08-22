@@ -204,7 +204,7 @@ public sealed class OpenAITranscriberTests
     [Fact]
     public void Load_CustomConfigPath_UsesDirectConfigRoutingWithoutImplicitMerge()
     {
-        const string customConfigPath = "res://custom-stt.json";
+        const string customConfigPath = "res://custom-stt.yaml";
         Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
         {
             ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)

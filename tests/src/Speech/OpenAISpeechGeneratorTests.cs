@@ -301,7 +301,7 @@ public sealed class OpenAISpeechGeneratorTests
     [Fact]
     public void Load_CustomConfigPath_UsesDirectConfigRoutingWithoutImplicitMerge()
     {
-        const string customConfigPath = "res://custom-tts.json";
+        const string customConfigPath = "res://custom-tts.yaml";
         Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
         {
             ["TTS"] = new Dictionary<string, string>(StringComparer.Ordinal)

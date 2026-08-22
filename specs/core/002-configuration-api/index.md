@@ -20,7 +20,7 @@ their own option sections.
 
 1. Developers have one supported runtime configuration path through CORE-006.
 2. Removed legacy configuration APIs do not create a second source of truth.
-3. Subsystems can still support explicit custom JSON paths when they own that loading behaviour locally.
+3. Subsystems can still support explicit custom YAML paths when they own that loading behaviour locally.
 
 ## Technical Requirements
 
@@ -29,7 +29,7 @@ their own option sections.
 3. Core configuration code must not bind or reference concrete subsystem option APIs such as `AIOptions`, `STTOptions`,
    or `TTSOptions`.
 4. Subsystems that need typed settings must bind/read their own option sections from core-provided `IConfiguration`.
-5. Subsystems that need a single explicit custom JSON path must build that Microsoft configuration source locally.
+5. Subsystems that need a single explicit custom YAML path must build that Microsoft configuration source locally.
 6. The shared configuration helper is `GameConfiguration`; the old `AlleyCatConfiguration` name must not be used.
 
 ## In Scope
@@ -37,7 +37,7 @@ their own option sections.
 - Removal of normative `ConfigProvider` compatibility requirements.
 - CORE-006 as the only core-owned runtime configuration integration.
 - Subsystem-owned option binding from `IConfiguration`.
-- Subsystem-owned explicit custom JSON path loading when a subsystem requires it.
+- Subsystem-owned explicit custom YAML path loading when a subsystem requires it.
 
 ## Out Of Scope
 
@@ -56,10 +56,10 @@ CORE-006 defines the normative default runtime files:
 
 | File | Purpose | Access |
 |------|---------|-------|
-| `res://AlleyCat.json` | Project defaults (shipped with game) | Read-only |
-| `user://AlleyCat.json` | User overrides (persisted in user data directory) | Read-write |
+| `res://AlleyCat.yaml` | Project defaults (shipped with game) | Read-only |
+| `user://AlleyCat.yaml` | User overrides (persisted in user data directory) | Read-write |
 
-The repository source for `res://AlleyCat.json` is `@game/AlleyCat.json`.
+The repository source for `res://AlleyCat.yaml` is `@game/AlleyCat.yaml`.
 
 ### Ownership Boundary
 
@@ -73,7 +73,7 @@ Subsystems own:
 
 - Option models and section binding for their own settings.
 - Validation and missing-value behaviour for subsystem-specific required settings.
-- Any explicit custom-path JSON configuration loading required by editor or test scenarios.
+- Any explicit custom-path YAML configuration loading required by editor or test scenarios.
 
 Core must not reference concrete subsystem option classes.
 
@@ -101,5 +101,5 @@ Core must not reference concrete subsystem option classes.
 
 ### Configuration Files
 
-- `res://AlleyCat.json` (`@game/AlleyCat.json`) - Project defaults for CORE-006 runtime configuration
-- `user://AlleyCat.json` - User override configuration for CORE-006 runtime configuration
+- `res://AlleyCat.yaml` (`@game/AlleyCat.yaml`) - Project defaults for CORE-006 runtime configuration
+- `user://AlleyCat.yaml` - User override configuration for CORE-006 runtime configuration

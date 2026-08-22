@@ -1,4 +1,3 @@
-using System.Text.Json;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
 using Microsoft.Extensions.Configuration;
@@ -24,31 +23,25 @@ public sealed class ConfigurationInfrastructureTests : IDisposable
     }
 
     /// <summary>
-    /// User JSON settings override matching shipped defaults while preserving untouched values.
+    /// User YAML settings override matching shipped defaults while preserving untouched values.
     /// </summary>
     [Fact]
     public void Build_UserOverridePresent_OverridesShippedDefaults()
     {
-        string basePath = WriteJson(
-            "base.json",
-            new
-            {
-                STT = new
-                {
-                    Host = "https://base.example/v1",
-                    Model = "base-model",
-                    Timeout = 30,
-                },
-            });
-        string overridePath = WriteJson(
-            "override.json",
-            new
-            {
-                STT = new
-                {
-                    Host = "https://override.example/v1",
-                },
-            });
+        string basePath = WriteYaml(
+            "base.yaml",
+            """
+            STT:
+                Host: "https://base.example/v1"
+                Model: base-model
+                Timeout: 30
+            """);
+        string overridePath = WriteYaml(
+            "override.yaml",
+            """
+            STT:
+                Host: "https://override.example/v1"
+            """);
 
         IConfiguration configuration = GameConfiguration.Build(
             new FixedPathResolver(),
@@ -61,22 +54,19 @@ public sealed class ConfigurationInfrastructureTests : IDisposable
     }
 
     /// <summary>
-    /// Missing user JSON settings remain optional.
+    /// Missing user YAML settings remain optional.
     /// </summary>
     [Fact]
     public void Build_UserOverrideMissing_UsesShippedDefaults()
     {
-        string basePath = WriteJson(
-            "base.json",
-            new
-            {
-                TTS = new
-                {
-                    Host = "https://tts.example/v1",
-                    Voice = "alloy",
-                },
-            });
-        string overridePath = Path.Combine(_temporaryDirectory, "missing.json");
+        string basePath = WriteYaml(
+            "base.yaml",
+            """
+            TTS:
+                Host: "https://tts.example/v1"
+                Voice: alloy
+            """);
+        string overridePath = Path.Combine(_temporaryDirectory, "missing.yaml");
 
         IConfiguration configuration = GameConfiguration.Build(
             new FixedPathResolver(),
@@ -93,25 +83,20 @@ public sealed class ConfigurationInfrastructureTests : IDisposable
     [Fact]
     public void AddGameConfiguration_RegistersConfigurationAndLoggingInfrastructure()
     {
-        string basePath = WriteJson(
-            "base.json",
-            new
-            {
-                Logging = new
-                {
-                    LogLevel = new
-                    {
-                        Default = "Debug",
-                    },
-                },
-            });
+        string basePath = WriteYaml(
+            "base.yaml",
+            """
+            Logging:
+                LogLevel:
+                    Default: Debug
+            """);
 
         ServiceCollection services = [];
         _ = services.AddGameConfiguration(
             pathResolver: new FixedPathResolver(),
             notificationSink: new CapturingNotificationSink(),
             baseConfigPath: basePath,
-            overrideConfigPath: Path.Combine(_temporaryDirectory, "missing.json"));
+            overrideConfigPath: Path.Combine(_temporaryDirectory, "missing.yaml"));
 
         using ServiceProvider provider = services.BuildServiceProvider();
 
@@ -131,10 +116,9 @@ public sealed class ConfigurationInfrastructureTests : IDisposable
         }
     }
 
-    private string WriteJson<TValue>(string fileName, TValue value)
+    private string WriteYaml(string fileName, string content)
     {
         string path = Path.Combine(_temporaryDirectory, fileName);
-        string content = JsonSerializer.Serialize(value);
         File.WriteAllText(path, content);
         return path;
     }

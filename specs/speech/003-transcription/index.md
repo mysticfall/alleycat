@@ -59,7 +59,7 @@ can be extended to other STT backends.
    without posting a transcriber-pipeline UI notification directly through `NotificationUIExtensions` or
    `PostNotification`.
 7. **TR-7:** Implement `OpenAITranscriber` using the official OpenAI .NET SDK.
-8. **TR-8:** Bind or read subsystem-owned STT options from CORE-006 `IConfiguration`, or build local custom-path JSON
+8. **TR-8:** Bind or read subsystem-owned STT options from CORE-006 `IConfiguration`, or build local custom-path YAML
    configuration when an explicit path is supplied. Options include `Host`, optional `ApiKey`, and additional model or
    timeout settings.
 9. **TR-9:** Provide runtime integration for XR binding, microphone and audio-bus prerequisites, configuration, signals,
@@ -119,7 +119,7 @@ can be extended to other STT backends.
 - Optional transcript notification toggle for diagnostics and debug builds.
 - STT pipeline stage and latency diagnostics through the shared pipeline diagnostic log (CORE-007).
 - `OpenAITranscriber` implementation using OpenAI .NET SDK.
-- Subsystem-owned configuration contract using CORE-006 `IConfiguration` or explicit custom-path JSON loading.
+- Subsystem-owned configuration contract using CORE-006 `IConfiguration` or explicit custom-path YAML loading.
 - Capture overflow, empty-audio, repeated-session, disable, and teardown behaviour.
 - Lifecycle-aware deferred dispatch with deterministic cancellation of stale work.
 - Implementation under `@game/src/Speech/Transcription/`.

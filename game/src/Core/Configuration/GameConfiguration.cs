@@ -10,15 +10,15 @@ public static class GameConfiguration
     /// <summary>
     /// Default project configuration path bundled with the game.
     /// </summary>
-    public const string DefaultBaseConfigPath = "res://AlleyCat.json";
+    public const string DefaultBaseConfigPath = "res://AlleyCat.yaml";
 
     /// <summary>
     /// Default per-user override configuration path.
     /// </summary>
-    public const string DefaultOverrideConfigPath = "user://AlleyCat.json";
+    public const string DefaultOverrideConfigPath = "user://AlleyCat.yaml";
 
     /// <summary>
-    /// Builds configuration using the standard .NET JSON configuration provider.
+    /// Builds configuration using the NetEscapades YAML configuration provider.
     /// </summary>
     public static IConfigurationRoot Build(
         IConfigurationPathResolver pathResolver,
@@ -31,13 +31,13 @@ public static class GameConfiguration
         string physicalOverridePath = pathResolver.ToPhysicalPath(overrideConfigPath);
 
         return new ConfigurationBuilder()
-            .AddJsonFile(physicalBasePath, optional: false, reloadOnChange: false)
-            .AddJsonFile(physicalOverridePath, optional: true, reloadOnChange: false)
+            .AddYamlFile(physicalBasePath, optional: false, reloadOnChange: false)
+            .AddYamlFile(physicalOverridePath, optional: true, reloadOnChange: false)
             .Build();
     }
 
     /// <summary>
-    /// Builds configuration from one explicit JSON file without applying default/user merging.
+    /// Builds configuration from one explicit YAML file without applying default/user merging.
     /// </summary>
     public static IConfigurationRoot BuildFile(IConfigurationPathResolver pathResolver, string configPath)
     {
@@ -45,7 +45,7 @@ public static class GameConfiguration
         ArgumentException.ThrowIfNullOrWhiteSpace(configPath);
 
         return new ConfigurationBuilder()
-            .AddJsonFile(pathResolver.ToPhysicalPath(configPath), optional: false, reloadOnChange: false)
+            .AddYamlFile(pathResolver.ToPhysicalPath(configPath), optional: false, reloadOnChange: false)
             .Build();
     }
 }
