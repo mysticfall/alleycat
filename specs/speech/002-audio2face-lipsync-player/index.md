@@ -38,8 +38,8 @@ playback with a repeatable workflow when they opt in to startup probing.
 
 ## Technical Requirements
 
-1. Player converts supported `AudioStreamWav` PCM input (16-bit, 16 kHz, mono)
-   to the Audio2Face API payload format.
+1. Player converts the base-normalised inference input — PCM 16-bit, mono at the
+   backend sample rate — to the float32 PCM Audio2Face API payload format.
 2. Inference uses the `/blendshapes` HTTP endpoint with configurable server URI.
 3. Returned frames are mapped into the `LipSyncPlayer` base class with audio
    synchronisation.
@@ -51,8 +51,11 @@ playback with a repeatable workflow when they opt in to startup probing.
    directional mapping, and clamp rules.
 7. Model/mode compatibility and health probing behaviour are explicitly
    defined.
-8. Audio format contract (16-bit PCM, 16 kHz, mono) is enforced at
-   initialisation.
+8. Format enforcement is the shared `LipSyncPlayer` base's job: the base
+   validates PCM 16-bit, mono input and normalises it to the backend's declared
+   `BackendSampleRate` = 16000 in the preparation path. This backend adds no
+   format checks of its own and receives inference input at that rate by
+   contract.
 9. `ProbeHealthOnInitialise` is an exported setting and defaults to `false`.
 10. When `ProbeHealthOnInitialise` is `false`, initialisation must not call
     `/health`, block on backend availability, or log a connection-refused error
@@ -75,7 +78,7 @@ playback with a repeatable workflow when they opt in to startup probing.
 - Configurable server URI for inference and optional health probing.
 - Optional `/health` probing at initialisation, disabled by default.
 - Manual playback trigger via `Play(AudioStreamWav)` method.
-- Audio format validation at initialisation.
+- Shared-base audio format validation and inference-input normalisation.
 - Interruption handling for active playback.
 - Shared `LipSyncPlayer` playback-completed notification and stop/cut capability.
 

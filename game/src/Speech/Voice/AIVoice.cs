@@ -18,7 +18,6 @@ public partial class AIVoice : Voice
     private const int ExpectedWaveFormatCode = 1;
     private const short ExpectedChannelCount = 1;
     private const short ExpectedBitsPerSample = 16;
-    private const int ExpectedSampleRate = 16000;
     private const string AudioFormatIncompatibleMessage = "Audio format incompatible";
 
     private readonly Lock _submissionLock = new();
@@ -581,7 +580,7 @@ public partial class AIVoice : Voice
     internal static ParsedSpeechData ParsePlayableSpeechData(byte[] generatedAudio)
     {
         WaveFileData waveFile = ParseWaveFile(generatedAudio);
-        return new ParsedSpeechData(waveFile.PcmData, ExpectedSampleRate, Stereo: false, BitsPerSample: ExpectedBitsPerSample);
+        return new ParsedSpeechData(waveFile.PcmData, waveFile.SampleRate, Stereo: false, BitsPerSample: ExpectedBitsPerSample);
     }
 
     private static WaveFileData ParseWaveFile(byte[] audioBytes)
@@ -643,7 +642,7 @@ public partial class AIVoice : Voice
         }
 
         ValidateCompatibility(fmtChunk);
-        return new WaveFileData(pcmData);
+        return new WaveFileData(pcmData, fmtChunk.SampleRate);
     }
 
     private static FmtChunkData ParseFmtChunk(ReadOnlySpan<byte> chunkData)
@@ -665,11 +664,6 @@ public partial class AIVoice : Voice
         if (fmtChunk.ChannelCount != ExpectedChannelCount)
         {
             throw new AudioConversionException($"Expected mono WAV audio, got {fmtChunk.ChannelCount} channels.");
-        }
-
-        if (fmtChunk.SampleRate != ExpectedSampleRate)
-        {
-            throw new AudioConversionException($"Expected 16000 Hz WAV audio, got {fmtChunk.SampleRate} Hz.");
         }
 
         if (fmtChunk.BitsPerSample != ExpectedBitsPerSample)
@@ -755,7 +749,7 @@ public partial class AIVoice : Voice
     /// <param name="error">Failure message payload.</param>
     protected override void EmitSpeechFailedSignal(string error) => base.EmitSpeechFailedSignal(error);
 
-    private sealed record WaveFileData(byte[] PcmData);
+    private sealed record WaveFileData(byte[] PcmData, int SampleRate);
 
     private sealed record FmtChunkData(short FormatCode, short ChannelCount, int SampleRate, short BitsPerSample);
 

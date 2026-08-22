@@ -43,7 +43,6 @@ metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
 [node name="SpeechGenerator" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="0" unique_id=1308210533]
 script = ExtResource("3_04drg")
 VoiceOverride = "Elena.wav"
-TargetSampleRate = 16000
 metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
 
 [node name="LipSyncPlayer" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="1" unique_id=440077666 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]

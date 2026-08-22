@@ -377,6 +377,14 @@ public abstract partial class LipSyncPlayer : Node
     internal void CompletePlaybackForTesting() => CompletePlayback();
 
     /// <summary>
+    /// Sample rate the inference backend requires; the base class normalises inference input to this rate.
+    /// </summary>
+    protected abstract int BackendSampleRate
+    {
+        get;
+    }
+
+    /// <summary>
     /// Prepares backend resources required before inference runs.
     /// </summary>
     protected abstract void InitialiseBackend();
@@ -497,7 +505,10 @@ public abstract partial class LipSyncPlayer : Node
             throw new InvalidOperationException("LipSyncPlayer: cannot prepare playback before initialisation succeeds.");
         }
 
-        LipSyncInferenceResult inferenceResult = RunBackendInference(speech, cancellationToken);
+        // Inference consumes a stream normalised to the backend sample rate; playback keeps the original stream so
+        // the game hears the generator's original-quality audio.
+        AudioStreamWav inferenceSpeech = CreateBackendInferenceStream(speech);
+        LipSyncInferenceResult inferenceResult = RunBackendInference(inferenceSpeech, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         ValidateInferenceResult(inferenceResult);
 
@@ -506,6 +517,34 @@ public abstract partial class LipSyncPlayer : Node
             inferenceResult.Frames,
             inferenceResult.BlendshapeNames,
             inferenceResult.OutputFps);
+    }
+
+    private AudioStreamWav CreateBackendInferenceStream(AudioStreamWav speech)
+    {
+        if (speech.Format != AudioStreamWav.FormatEnum.Format16Bits)
+        {
+            throw new InvalidOperationException(
+                $"LipSyncPlayer: expected AudioStreamWav format {AudioStreamWav.FormatEnum.Format16Bits}, got {speech.Format}.");
+        }
+
+        if (speech.Stereo)
+        {
+            throw new InvalidOperationException("LipSyncPlayer: expected mono audio stream, but stream is stereo.");
+        }
+
+        if (speech.MixRate == BackendSampleRate)
+        {
+            return speech;
+        }
+
+        byte[] resampledData = Pcm16Resampler.ResampleMonoPcm16(speech.Data, speech.MixRate, BackendSampleRate);
+        return new AudioStreamWav
+        {
+            Data = resampledData,
+            Format = AudioStreamWav.FormatEnum.Format16Bits,
+            MixRate = BackendSampleRate,
+            Stereo = false,
+        };
     }
 
     private void CompletePreparation()

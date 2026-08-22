@@ -23,12 +23,10 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 3. Failures must be logged and handled gracefully without crashing.
 4. The system must support OpenAI-compatible API endpoints.
 5. An Enabled property must allow TTS to be toggled at runtime.
-6. A TargetSampleRate property must allow output sample rate configuration for
-   downstream consumers such as lip-sync compatibility.
-7. Speech-generation consumers must be able to observe streamed audio chunks as
+6. Speech-generation consumers must be able to observe streamed audio chunks as
    soon as the backend provides them, reducing perceived TTS latency where a
    consumer can play or buffer partial audio safely.
-8. Developers can observe backend generation latency as opt-in pipeline
+7. Developers can observe backend generation latency as opt-in pipeline
    diagnostics without affecting generation behaviour.
 
 ## Technical Requirements
@@ -43,28 +41,24 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 5. A Godot signal SpeechGenerationChunkReceived(byte[] audioChunk) must be
    emitted for backend-provided audio chunks when the dispatch path uses a
    streaming-capable backend.
-6. Streamed chunks may be raw backend chunks before generator-level whole-file
-   normalisation. Consumers requiring TargetSampleRate-normalised WAV output
-   must wait for SpeechGenerationCompleted.
+6. Generated audio must be raw backend output on both delivery paths: streamed
+   chunks and the `SpeechGenerationCompleted` payload. The generator must not
+   parse, resample, or otherwise normalise audio; consumers requiring normalised
+   input (for example lip-sync inference, SPCH-001/SPCH-002) own that conversion.
 7. An exported Enabled property must control whether generation is permitted.
-8. An exported TargetSampleRate property must allow configuration of output sample
-   rate. When greater than 0, audio must be resampled before emission. Default: 0
-   (no resampling). Recommended: 16000.
-9. On generation failure, errors must be logged via `ILogger` and a failure signal emitted.
-10. On resampling failure, errors must be logged and the failure signal emitted
-   instead of completion.
-11. The concrete OpenAISpeechGenerator implementation must use the official OpenAI
+8. On generation failure, errors must be logged via `ILogger` and a failure signal emitted.
+9. The concrete OpenAISpeechGenerator implementation must use the official OpenAI
    .NET SDK and its streaming speech API when dispatching speech generation.
-12. Godot signals and hooks for streamed chunks, completion, and failure must be
-   dispatched on the Godot thread through the deferred action pattern.
-13. Enabled and single in-flight generation behaviour must apply to the streaming
-   dispatch path as well as the full-response path.
-14. Configuration must bind/read subsystem-owned TTS options from CORE-006 `IConfiguration`, or build a local
+10. Godot signals and hooks for streamed chunks, completion, and failure must be
+    dispatched on the Godot thread through the deferred action pattern.
+11. Enabled and single in-flight generation behaviour must apply to the streaming
+    dispatch path as well as the full-response path.
+12. Configuration must bind/read subsystem-owned TTS options from CORE-006 `IConfiguration`, or build a local
     custom-path YAML configuration when an explicit path is supplied. Options include Host (full endpoint URL), ApiKey
     (optional API key), and additional API-supported properties.
-15. Implementation must be under game/src/Speech/Generation/.
-16. Integration tests must be under integration-tests/src/.
-17. Backend latency must be recorded through the shared pipeline diagnostic log (CORE-007) as log-only Trace latency
+13. Implementation must be under game/src/Speech/Generation/.
+14. Integration tests must be under integration-tests/src/.
+15. Backend latency must be recorded through the shared pipeline diagnostic log (CORE-007) as log-only Trace latency
     entries for backend return and stream completion under the `AlleyCat.Pipeline` category — opt-in console
     diagnostics without notification eligibility. These diagnostics must not change generation behaviour.
 
@@ -77,7 +71,7 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 - Error handling using `ILogger`.
 - OpenAISpeechGenerator using OpenAI .NET SDK.
 - Subsystem-owned configuration from CORE-006 `IConfiguration` or explicit custom-path YAML loading.
-- Audio resampling via TargetSampleRate property.
+- Raw backend audio output contract for streamed chunks and completion.
 - Backend latency diagnostics through the shared pipeline diagnostic log (CORE-007).
 
 ## Out Of Scope
@@ -102,14 +96,13 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
    defined.
 6. Implementation path and test path are specified.
 7. The spec does not exclude mandatory delivery contracts through Out Of Scope.
-8. The resample feature is defined with TargetSampleRate, resampling applies before
-   completion signal, and failure handling is distinct.
-9. Streamed chunk delivery is covered as a raw backend-chunk contract, and final
-   completion audio remains TargetSampleRate-normalised.
-10. OpenAISpeechGenerator dispatch uses the OpenAI-compatible streaming speech API
-    while preserving Enabled and single in-flight behaviour.
-11. Tests verify backend latency diagnostics route through the shared pipeline diagnostic log as log-only Trace
-    entries without notification eligibility and without changing generation behaviour.
+8. Streamed chunk delivery and completion audio are covered as a raw
+   backend-output contract, with no generator-side parsing, resampling, or
+   sample-rate normalisation.
+9. OpenAISpeechGenerator dispatch uses the OpenAI-compatible streaming speech API
+   while preserving Enabled and single in-flight behaviour.
+10. Tests verify backend latency diagnostics route through the shared pipeline diagnostic log as log-only Trace
+     entries without notification eligibility and without changing generation behaviour.
 
 ## References
 

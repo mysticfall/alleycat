@@ -38,6 +38,9 @@ public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
     private Wav2ArkitConfig _config = Wav2ArkitConfig.CreateDefault();
 
     /// <inheritdoc />
+    protected override int BackendSampleRate => _config.Preprocessing.SampleRate;
+
+    /// <inheritdoc />
     protected override void InitialiseBackend()
     {
         _config = LoadConfig(ConfigPath);
@@ -151,22 +154,6 @@ public partial class Wav2ArkitLipSyncPlayer : LipSyncPlayer
 
     private static float[] LoadAudioWaveform(AudioStreamWav audioStream, int targetSampleRate)
     {
-        if (audioStream.Format != AudioStreamWav.FormatEnum.Format16Bits)
-        {
-            throw new InvalidOperationException(
-                $"LipSyncPlayer: expected AudioStreamWav format {AudioStreamWav.FormatEnum.Format16Bits}, got {audioStream.Format}.");
-        }
-
-        if (audioStream.MixRate != 16000)
-        {
-            throw new InvalidOperationException($"LipSyncPlayer: expected 16000 Hz audio, got {audioStream.MixRate} Hz.");
-        }
-
-        if (audioStream.Stereo)
-        {
-            throw new InvalidOperationException("LipSyncPlayer: expected mono audio stream, but stream is stereo.");
-        }
-
         if (targetSampleRate != 16000)
         {
             throw new InvalidOperationException(

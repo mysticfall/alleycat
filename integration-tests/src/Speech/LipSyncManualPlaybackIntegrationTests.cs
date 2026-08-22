@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using AlleyCat.Speech.LipSync;
 using AlleyCat.TestFramework;
 using Godot;
@@ -345,6 +346,250 @@ public sealed partial class LipSyncManualPlaybackIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Verifies a non-backend-rate stream is resampled for inference while playback keeps the original stream.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task LipSyncPlayer_Play_WithNonBackendRateStream_ResamplesOnlyTheInferenceCopy()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "LipSyncInferenceResampleTestRoot",
+        };
+
+        AudioStreamPlayer3D audioPlayer = new()
+        {
+            Name = "AudioStreamPlayer3D",
+        };
+        Skeleton3D skeleton = new()
+        {
+            Name = "Skeleton3D",
+        };
+        FakeLipSyncPlayer player = new()
+        {
+            Name = "LipSyncPlayer",
+            AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
+        };
+
+        // Four samples at 8000 Hz: inference must receive eight resampled samples at 16000 Hz.
+        AudioStreamWav speech = CreateMonoPcm16Stream([0, 16, 32, 48], mixRate: 8000);
+
+        root.AddChild(audioPlayer);
+        root.AddChild(skeleton);
+        root.AddChild(player);
+        sceneTree.Root.AddChild(root);
+        player._Ready();
+        await WaitForFramesAsync(sceneTree, 5);
+
+        try
+        {
+            Assert.True(player.IsInitialised, player.InitialisationError);
+
+            player.Play(speech);
+
+            Assert.True(string.IsNullOrWhiteSpace(player.PlaybackError), player.PlaybackError);
+            Assert.Equal(1, player.InferenceCallCount);
+
+            AudioStreamWav inferenceStream = player.LastInferenceStream!;
+            Assert.NotSame(speech, inferenceStream);
+            Assert.Equal(16000, inferenceStream.MixRate);
+            Assert.Equal(AudioStreamWav.FormatEnum.Format16Bits, inferenceStream.Format);
+            Assert.False(inferenceStream.Stereo);
+            Assert.Equal(16, inferenceStream.Data.Length);
+
+            // Playback must keep the original 8000 Hz stream untouched.
+            Assert.Same(speech, audioPlayer.Stream);
+            Assert.Equal(8, speech.Data.Length);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 5);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a stream already at the backend sample rate reaches inference as the same instance without a copy.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task LipSyncPlayer_Play_WithBackendRateStream_PassesSameStreamInstanceToInference()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "LipSyncInferenceIdentityTestRoot",
+        };
+
+        AudioStreamPlayer3D audioPlayer = new()
+        {
+            Name = "AudioStreamPlayer3D",
+        };
+        Skeleton3D skeleton = new()
+        {
+            Name = "Skeleton3D",
+        };
+        FakeLipSyncPlayer player = new()
+        {
+            Name = "LipSyncPlayer",
+            AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
+        };
+
+        AudioStreamWav speech = CreateMonoPcm16Stream([0, 16, 32, 48], mixRate: 16000);
+
+        root.AddChild(audioPlayer);
+        root.AddChild(skeleton);
+        root.AddChild(player);
+        sceneTree.Root.AddChild(root);
+        player._Ready();
+        await WaitForFramesAsync(sceneTree, 5);
+
+        try
+        {
+            Assert.True(player.IsInitialised, player.InitialisationError);
+
+            player.Play(speech);
+
+            Assert.True(string.IsNullOrWhiteSpace(player.PlaybackError), player.PlaybackError);
+            Assert.Equal(1, player.InferenceCallCount);
+            Assert.Same(speech, player.LastInferenceStream);
+            Assert.Same(speech, audioPlayer.Stream);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 5);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a non-PCM16 stream fails playback before inference runs, surfacing the format mismatch.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task LipSyncPlayer_Play_WithNonPcm16Stream_FailsPlaybackWithoutRunningInference()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "LipSyncFormatRejectTestRoot",
+        };
+
+        AudioStreamPlayer3D audioPlayer = new()
+        {
+            Name = "AudioStreamPlayer3D",
+        };
+        Skeleton3D skeleton = new()
+        {
+            Name = "Skeleton3D",
+        };
+        FakeLipSyncPlayer player = new()
+        {
+            Name = "LipSyncPlayer",
+            AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
+        };
+
+        AudioStreamWav speech = new()
+        {
+            Data = [0x01, 0x02, 0x03, 0x04],
+            Format = AudioStreamWav.FormatEnum.Format8Bits,
+            MixRate = 16000,
+            Stereo = false,
+        };
+
+        root.AddChild(audioPlayer);
+        root.AddChild(skeleton);
+        root.AddChild(player);
+        sceneTree.Root.AddChild(root);
+        player._Ready();
+        await WaitForFramesAsync(sceneTree, 5);
+
+        try
+        {
+            Assert.True(player.IsInitialised, player.InitialisationError);
+
+            player.Play(speech);
+
+            Assert.False(string.IsNullOrWhiteSpace(player.PlaybackError));
+            Assert.Contains("expected AudioStreamWav format", player.PlaybackError, StringComparison.Ordinal);
+            Assert.Equal(0, player.InferenceCallCount);
+            Assert.Null(player.LastInferenceStream);
+            Assert.Null(audioPlayer.Stream);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 5);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a stereo stream fails playback before inference runs, surfacing the mono-only contract.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task LipSyncPlayer_Play_WithStereoStream_FailsPlaybackWithoutRunningInference()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node3D root = new()
+        {
+            Name = "LipSyncStereoRejectTestRoot",
+        };
+
+        AudioStreamPlayer3D audioPlayer = new()
+        {
+            Name = "AudioStreamPlayer3D",
+        };
+        Skeleton3D skeleton = new()
+        {
+            Name = "Skeleton3D",
+        };
+        FakeLipSyncPlayer player = new()
+        {
+            Name = "LipSyncPlayer",
+            AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
+        };
+
+        AudioStreamWav speech = new()
+        {
+            Data = [0x01, 0x02, 0x03, 0x04],
+            Format = AudioStreamWav.FormatEnum.Format16Bits,
+            MixRate = 16000,
+            Stereo = true,
+        };
+
+        root.AddChild(audioPlayer);
+        root.AddChild(skeleton);
+        root.AddChild(player);
+        sceneTree.Root.AddChild(root);
+        player._Ready();
+        await WaitForFramesAsync(sceneTree, 5);
+
+        try
+        {
+            Assert.True(player.IsInitialised, player.InitialisationError);
+
+            player.Play(speech);
+
+            Assert.False(string.IsNullOrWhiteSpace(player.PlaybackError));
+            Assert.Contains("stereo", player.PlaybackError, StringComparison.Ordinal);
+            Assert.Equal(0, player.InferenceCallCount);
+            Assert.Null(player.LastInferenceStream);
+            Assert.Null(audioPlayer.Stream);
+        }
+        finally
+        {
+            root.QueueFree();
+            await WaitForFramesAsync(sceneTree, 5);
+        }
+    }
+
     private static AudioStreamWav CreateSilenceStream(double seconds)
     {
         int sampleCount = (int)(16000d * seconds);
@@ -353,6 +598,25 @@ public sealed partial class LipSyncManualPlaybackIntegrationTests
             Data = new byte[sampleCount * 2],
             Format = AudioStreamWav.FormatEnum.Format16Bits,
             MixRate = 16000,
+            Stereo = false,
+        };
+    }
+
+    private static AudioStreamWav CreateMonoPcm16Stream(short[] samples, int mixRate)
+    {
+        byte[] data = new byte[samples.Length * sizeof(short)];
+        for (int sampleIndex = 0; sampleIndex < samples.Length; sampleIndex++)
+        {
+            BinaryPrimitives.WriteInt16LittleEndian(
+                data.AsSpan(sampleIndex * sizeof(short)),
+                samples[sampleIndex]);
+        }
+
+        return new AudioStreamWav
+        {
+            Data = data,
+            Format = AudioStreamWav.FormatEnum.Format16Bits,
+            MixRate = mixRate,
             Stereo = false,
         };
     }
@@ -406,6 +670,14 @@ internal sealed partial class FakeLipSyncPlayer : LipSyncPlayer
         private set;
     }
 
+    public AudioStreamWav? LastInferenceStream
+    {
+        get;
+        private set;
+    }
+
+    protected override int BackendSampleRate => 16000;
+
     protected override void InitialiseBackend()
     {
     }
@@ -418,6 +690,7 @@ internal sealed partial class FakeLipSyncPlayer : LipSyncPlayer
     {
         cancellationToken.ThrowIfCancellationRequested();
         InferenceCallCount++;
+        LastInferenceStream = speech;
 
         return new LipSyncInferenceResult(
             [
@@ -438,6 +711,8 @@ internal sealed partial class FakeLipSyncPlayer : LipSyncPlayer
 internal sealed partial class ConfigurableFrameLipSyncPlayer(int frameCount) : LipSyncPlayer
 {
     public override void _Ready() => base._Ready();
+
+    protected override int BackendSampleRate => 16000;
 
     protected override void InitialiseBackend()
     {

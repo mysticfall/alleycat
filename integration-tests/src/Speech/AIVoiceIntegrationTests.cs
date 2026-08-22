@@ -988,16 +988,15 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Voice playback must succeed when the generator normalises a non-16000 Hz WAV before the voice consumes it.
+    /// Voice playback must keep the generator's original sample rate instead of normalising it away.
     /// </summary>
     [Fact]
     [Headless]
-    public async Task Speak_WithGeneratorNormalisingWaveSampleRate_PlaysNormalisedSpeech()
+    public async Task Speak_WithNon16000HzWave_PlaysOriginalSampleRateSpeech()
     {
         SceneTree sceneTree = GetSceneTree();
         FakeSpeechGenerator speechGenerator = new()
         {
-            TargetSampleRate = 16000,
             NextResult = CreateWaveFileBytes([0x00, 0x00, 0x10, 0x00, 0x20, 0x00, 0x30, 0x00], sampleRate: 8000, channelCount: 1, bitsPerSample: 16),
         };
         StubLipSyncPlayer lipSyncPlayer = new();
@@ -1021,14 +1020,93 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
             Assert.Equal(1, voice.SpeechGeneratedCallCount);
             AudioStreamWav playedSpeech = Assert.IsType<AudioStreamWav>(voice.LastPlayedSpeech);
-            Assert.Equal(16000, playedSpeech.MixRate);
-            Assert.Equal(16, playedSpeech.Data.Length);
+            Assert.Equal(8000, playedSpeech.MixRate);
+            Assert.Equal(8, playedSpeech.Data.Length);
             Assert.Empty(voice.FailureErrors);
         }
         finally
         {
             await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer);
         }
+    }
+
+    /// <summary>
+    /// Real lip-sync preparation must consume a 16 kHz-normalised inference copy while playback keeps the original rate.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task Speak_WithNon16000HzWave_NormalisesOnlyTheLipSyncInferenceStream()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node root = new()
+        {
+            Name = "AIVoiceInferenceNormalisationTestRoot",
+        };
+        FakeSpeechGenerator speechGenerator = new()
+        {
+            // Four 8000 Hz samples: inference must receive eight resampled samples at 16000 Hz.
+            NextResult = CreateWaveFileBytes([0x00, 0x00, 0x10, 0x00, 0x20, 0x00, 0x30, 0x00], sampleRate: 8000, channelCount: 1, bitsPerSample: 16),
+        };
+        AudioStreamPlayer3D audioPlayer = new();
+        Skeleton3D skeleton = new();
+        StubLipSyncPlayer lipSyncPlayer = new()
+        {
+            AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
+        };
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+            UseRealLipSyncPreparation = true,
+        };
+
+        root.AddChild(speechGenerator);
+        root.AddChild(audioPlayer);
+        root.AddChild(skeleton);
+        root.AddChild(lipSyncPlayer);
+        root.AddChild(voice);
+        await AttachToRootAfterBootSettleAsync(sceneTree, root);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            Assert.True(lipSyncPlayer.IsInitialised, lipSyncPlayer.InitialisationError);
+
+            voice.Speak("Hello alley cat");
+            await WaitUntilAsync(sceneTree, () => voice.LastPlayedSpeech is not null || voice.FailureErrors.Count > 0, 30);
+
+            Assert.Empty(voice.FailureErrors);
+            Assert.Equal(1, speechGenerator.GenerateCallCount);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+
+            AudioStreamWav playedSpeech = Assert.IsType<AudioStreamWav>(voice.LastPlayedSpeech);
+            Assert.Equal(8000, playedSpeech.MixRate);
+            Assert.Equal(8, playedSpeech.Data.Length);
+
+            Assert.Equal(1, lipSyncPlayer.InferenceCallCount);
+            AudioStreamWav inferenceStream = lipSyncPlayer.LastInferenceStream!;
+            Assert.NotSame(playedSpeech, inferenceStream);
+            Assert.Equal(16000, inferenceStream.MixRate);
+            Assert.Equal(16, inferenceStream.Data.Length);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer, audioPlayer, skeleton);
+        }
+    }
+
+    /// <summary>
+    /// Attaches a fixture root to the root window only after the boot frame has completed: adding children to the
+    /// root window from the autoload ready phase (frame 0) silently drops them, leaving the fixture orphaned.
+    /// </summary>
+    private static async Task AttachToRootAfterBootSettleAsync(SceneTree sceneTree, Node root)
+    {
+        await WaitForFramesAsync(sceneTree, 2);
+        Assert.True(root.GetParent() is null, "The fixture root must not already be attached.");
+        sceneTree.Root.AddChild(root);
+        await WaitForNextFrameAsync(sceneTree);
+        Assert.True(root.IsInsideTree(), "The fixture root failed to attach to the scene tree root.");
     }
 
     /// <summary>
@@ -1403,6 +1481,16 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
         public List<string> FailureErrors { get; } = [];
 
+        /// <summary>
+        /// Routes preparation through the real lip-sync player instead of a fabricated result, for tests that
+        /// exercise the player's inference-input normalisation.
+        /// </summary>
+        public bool UseRealLipSyncPreparation
+        {
+            get;
+            set;
+        }
+
         public int MaximumConcurrentPipelines
         {
             get; private set;
@@ -1426,6 +1514,11 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             AudioStreamWav speechStream,
             CancellationToken cancellationToken)
         {
+            if (UseRealLipSyncPreparation)
+            {
+                return base.PrepareGeneratedSpeechAsync(speechStream, cancellationToken);
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
             PrepareGeneratedSpeechCallCount++;
             EnterPipelineOperation();
@@ -1645,6 +1738,20 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
     private sealed partial class StubLipSyncPlayer : LipSyncPlayer
     {
+        public int InferenceCallCount
+        {
+            get;
+            private set;
+        }
+
+        public AudioStreamWav? LastInferenceStream
+        {
+            get;
+            private set;
+        }
+
+        protected override int BackendSampleRate => 16000;
+
         protected override void InitialiseBackend()
         {
         }
@@ -1654,7 +1761,8 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _ = speech;
+            InferenceCallCount++;
+            LastInferenceStream = speech;
             return new LipSyncInferenceResult([[0f]], ["jawOpen"], 30f);
         }
 
@@ -1666,6 +1774,8 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     private sealed partial class BlockingPreparationLipSyncPlayer : LipSyncPlayer
     {
         public PreparationLifecycleProbe Probe { get; set; } = null!;
+
+        protected override int BackendSampleRate => 16000;
 
         protected override void InitialiseBackend()
         {

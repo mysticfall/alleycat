@@ -146,7 +146,6 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             _ = Assert.Single(femaleNpc.GetChildren(), child => child.GetType().FullName == _hearingTypeName);
             _ = Assert.Single(maleNpc.GetChildren(), child => child.GetType().FullName == _hearingTypeName);
             Assert.Equal("Elena.wav", GetPropertyValue<string>(speechGenerator, "VoiceOverride"));
-            Assert.Equal(16000, GetPropertyValue<int>(speechGenerator, "TargetSampleRate"));
             Assert.Equal(0.6f, GetPropertyValue<float>(lipSyncPlayer, "InputStrength"), 4);
             Assert.True(GetPropertyValue<bool>(lipSyncPlayer, "ConstantNoise"));
             Assert.Equal(0.15f, GetPropertyValue<float>(lipSyncPlayer, "EyeRotationToBlendshapeScale"), 4);

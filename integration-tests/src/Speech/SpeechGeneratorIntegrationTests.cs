@@ -176,60 +176,16 @@ public sealed partial class SpeechGeneratorIntegrationTests
     }
 
     /// <summary>
-    /// The signal-driven generator path must emit audio after base-level normalisation when a target rate is configured.
+    /// Streamed speech chunks and the final completion audio must both be raw backend output.
     /// </summary>
     [Fact]
     [Headless]
-    public async Task InvokeGenerationAsync_WithTargetSampleRate_EmitsNormalisedCompletionAudio()
-    {
-        SceneTree sceneTree = GetSceneTree();
-        FakeSpeechGenerator speechGenerator = new()
-        {
-            TargetSampleRate = 16000,
-            NextResultFactory = static (_, _) => Task.FromResult(CreateWaveFileBytes(
-                [0x00, 0x00, 0x10, 0x00, 0x20, 0x00, 0x30, 0x00],
-                sampleRate: 8000,
-                channelCount: 1,
-                bitsPerSample: 16)),
-        };
-
-        sceneTree.Root.AddChild(speechGenerator);
-        await WaitForFramesAsync(sceneTree, 2);
-
-        byte[]? generatedAudio = null;
-        _ = speechGenerator.Connect(
-            SpeechGenerator.SignalName.SpeechGenerationCompleted,
-            Callable.From<byte[]>(audio => generatedAudio = audio));
-
-        try
-        {
-            await InvokeGenerationAsync(speechGenerator, "Hello alley cat", instruction: null);
-            await WaitForNextFrameAsync(sceneTree);
-
-            Assert.Equal(1, speechGenerator.GenerateCallCount);
-            byte[] audio = Assert.IsType<byte[]>(generatedAudio);
-            Assert.Equal(16000, ReadWaveSampleRate(audio));
-            Assert.Equal(16, ReadWaveDataLength(audio));
-        }
-        finally
-        {
-            speechGenerator.QueueFree();
-            await WaitForFramesAsync(sceneTree, 2);
-        }
-    }
-
-    /// <summary>
-    /// Streamed speech chunks must be emitted before the final completion audio is whole-file normalised.
-    /// </summary>
-    [Fact]
-    [Headless]
-    public async Task InvokeGenerationAsync_WithStreamingChunks_EmitsRawChunks_AndNormalisedCompletionAudio()
+    public async Task InvokeGenerationAsync_WithStreamingChunks_EmitsRawChunks_AndRawCompletionAudio()
     {
         SceneTree sceneTree = GetSceneTree();
         byte[] rawChunk = [0xAA, 0xBB, 0xCC];
         FakeSpeechGenerator speechGenerator = new()
         {
-            TargetSampleRate = 16000,
             NextStreamingResultFactory = async (_, _, audioChunkHandler) =>
             {
                 await audioChunkHandler(rawChunk);
@@ -263,57 +219,8 @@ public sealed partial class SpeechGeneratorIntegrationTests
             Assert.Equal(rawChunk, streamedChunk);
 
             byte[] audio = Assert.IsType<byte[]>(generatedAudio);
-            Assert.Equal(16000, ReadWaveSampleRate(audio));
-            Assert.Equal(16, ReadWaveDataLength(audio));
-        }
-        finally
-        {
-            speechGenerator.QueueFree();
-            await WaitForFramesAsync(sceneTree, 2);
-        }
-    }
-
-    /// <summary>
-    /// Resampling requests for unsupported input must fail through the existing failure path instead of emitting corrupted audio.
-    /// </summary>
-    [Fact]
-    [Headless]
-    public async Task InvokeGenerationAsync_WhenResamplingUnsupportedAudio_EmitsFailureSignal_AndSkipsCompletionSignal()
-    {
-        SceneTree sceneTree = GetSceneTree();
-        FakeSpeechGenerator speechGenerator = new()
-        {
-            TargetSampleRate = 16000,
-            NextResultFactory = static (_, _) => Task.FromResult<byte[]>([0x01, 0x02, 0x03]),
-        };
-
-        sceneTree.Root.AddChild(speechGenerator);
-        await WaitForFramesAsync(sceneTree, 2);
-
-        string? failureText = null;
-        int completedCount = 0;
-        int failedCount = 0;
-        _ = speechGenerator.Connect(
-            SpeechGenerator.SignalName.SpeechGenerationCompleted,
-            Callable.From<byte[]>(_ => completedCount++));
-        _ = speechGenerator.Connect(
-            SpeechGenerator.SignalName.SpeechGenerationFailed,
-            Callable.From<string>(error =>
-            {
-                failedCount++;
-                failureText = error;
-            }));
-
-        try
-        {
-            await InvokeGenerationAsync(speechGenerator, "Hello alley cat", instruction: null);
-            await WaitForNextFrameAsync(sceneTree);
-
-            Assert.Equal(1, speechGenerator.GenerateCallCount);
-            Assert.False(speechGenerator.IsGenerating);
-            Assert.Equal(0, completedCount);
-            Assert.Equal(1, failedCount);
-            Assert.Contains("Audio resampling failed", failureText, StringComparison.Ordinal);
+            Assert.Equal(8000, ReadWaveSampleRate(audio));
+            Assert.Equal(8, ReadWaveDataLength(audio));
         }
         finally
         {

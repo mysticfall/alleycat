@@ -31,7 +31,15 @@ updates) in Godot as a feasibility prototype.
 
 1. Run local Wav2Arkit ONNX inference and map output channels to ARKit-compatible
    blendshape names.
-2. Input contract: `AudioStreamWav` must be PCM 16-bit, 16 kHz, mono.
+2. Input contract: input must be PCM 16-bit, mono `AudioStreamWav`, at any sample
+   rate. The shared `LipSyncPlayer` base validates the format in the preparation
+   path (`PreparePlaybackAsync`, off the audible latency path) and normalises a
+   resampled inference copy to the backend's declared `BackendSampleRate` — for
+   this backend, config `Preprocessing.SampleRate` under the strict 16000 Hz
+   prototype guard — while the original stream is what plays audibly. A format
+   or rate problem therefore fails lip-sync only (surfaced as `PlaybackError`);
+   generation succeeds and the audible stream keeps the generator's original
+   quality.
 3. Expose `Play(AudioStreamWav speech)` for manual playback initiation.
 4. Synchronise playback via `AudioStreamPlayer3D` and apply frame updates over time.
 5. **Interruption contract**: If `Play` is called while playback is active, stop

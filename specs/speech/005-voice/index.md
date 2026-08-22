@@ -91,8 +91,10 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
     - await `LipSyncPlayer.PreparePlaybackAsync(...)`;
     - invoke `LipSyncPlayer.PlayPrepared(...)` as the playback initiation boundary; and
     - invoke the post-generation hook only after successful playback hand-off.
-16. Generated audio must be PCM 16-bit, 16 kHz, mono WAV before lip-sync preparation. `SpeechGenerator` owns sample-rate
-    normalisation; `AIVoice` must not resample.
+16. `AIVoice` must accept generated PCM 16-bit mono WAV at any sample rate, keep the source sample rate in the playable
+    `AudioStreamWav.MixRate`, and perform no resampling; stereo and non-PCM-16 audio remain incompatible with no
+    downmix support. Sample-rate normalisation for lip-sync inference is `LipSyncPlayer`'s responsibility
+    (SPCH-001/SPCH-002), so a rate the lip-sync side cannot handle fails lip-sync only, not generation or conversion.
 17. Failure of an admitted item's generation, conversion, preparation, or hand-off must be logged and emit
     `SpeechFailed`. It must not notify listeners and must not prevent later FIFO items from running.
 18. Voice or node teardown must settle active and queued submissions safely and prevent later callbacks from accessing
@@ -153,7 +155,7 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
 - `PlayerVoice` consumption of the transcriber's `RecordingStarted` signal.
 - Failure isolation and safe active and queued work settlement on teardown.
 - `PlayerVoice` transcription integration.
-- PCM 16-bit, 16 kHz, mono WAV compatibility and lip-sync synchronisation.
+- PCM 16-bit mono WAV compatibility at any sample rate and lip-sync synchronisation.
 - TTS production pipeline latency diagnostics through the shared pipeline diagnostic log (CORE-007).
 - Character-owned voice ID installation and spatial voice origins.
 - Manual voice test scene and automated unit and integration coverage.
@@ -241,7 +243,9 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
    diagnostics.
 10. Tests verify `IHearing.ReceiveVoice(string, IVoice)` notification occurs only after successful playback hand-off and
     ignores grouped non-hearing nodes.
-11. Tests verify audio supplied to lip-sync is PCM 16-bit, 16 kHz, mono WAV and `AIVoice` does not resample it.
+11. Tests verify `AIVoice` accepts PCM 16-bit mono WAV at any sample rate, keeps the source sample rate in the playable
+    stream without resampling, rejects stereo or non-PCM-16 audio, and delegates lip-sync input normalisation to
+    `LipSyncPlayer`.
 12. Tests verify `PlayerVoice` forwards one nonblank transcription, ignores blank transcription, honours `Enabled`, and
     disconnects on exit.
 13. Generic installation replaces each valid lower-`snake_case` character-owned voice placeholder ID with the final

@@ -25,7 +25,6 @@ metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
 [node name="SpeechGenerator" type="Node" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1805541475]
 script = ExtResource("2_0iva6")
 VoiceOverride = "Emma"
-TargetSampleRate = 16000
 metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
 [node name="LipSyncPlayer" type="Node" parent="Character/Female/GeneralSkeleton/Head/AIVoice" unique_id=1952690197 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
 script = ExtResource("3_q155j")

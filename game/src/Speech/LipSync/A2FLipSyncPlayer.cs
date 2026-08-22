@@ -314,6 +314,11 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     private bool _hasWarnedMissingEyeBlendshapeChannels;
     private static readonly IReadOnlySet<string> _eyesControlledBlendshapeNames = CreateEyesControlledBlendshapeNames();
 
+    /// <summary>
+    /// Sample rate the Audio2Face API requires for uploaded waveforms.
+    /// </summary>
+    protected override int BackendSampleRate => 16000;
+
     /// <inheritdoc />
     protected override void InitialiseBackend()
     {
@@ -911,22 +916,6 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
 
     private static float[] LoadAudioWaveform(AudioStreamWav audioStream)
     {
-        if (audioStream.Format != AudioStreamWav.FormatEnum.Format16Bits)
-        {
-            throw new InvalidOperationException(
-                $"LipSyncPlayer: expected AudioStreamWav format {AudioStreamWav.FormatEnum.Format16Bits}, got {audioStream.Format}.");
-        }
-
-        if (audioStream.MixRate != 16000)
-        {
-            throw new InvalidOperationException($"LipSyncPlayer: expected 16000 Hz audio, got {audioStream.MixRate} Hz.");
-        }
-
-        if (audioStream.Stereo)
-        {
-            throw new InvalidOperationException("LipSyncPlayer: expected mono audio stream, but stream is stereo.");
-        }
-
         byte[] data = audioStream.Data.Length == 0
             ? throw new InvalidOperationException("LipSyncPlayer: AudioStreamWav contains no PCM data.")
             : audioStream.Data;
