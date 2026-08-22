@@ -440,16 +440,20 @@ public sealed class AgentSessionRunnerTests
     public async Task SignalInterruption_QueuedDuringOneGeneration_DrainsInOrderBeforeFreshRequest()
     {
         TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancellationObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseCancelledRequest = new(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationTokenSource lifetime = new();
         ScriptedSessionClient client = new(
-            HoldUntilCancelledStep(requestStarted),
+            HoldUntilCancelledStep(requestStarted, cancellationObserved, releaseCancelledRequest.Task),
             EndQuietly(lifetime));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await requestStarted.Task;
         runner.SignalInterruption("first notice");
+        await cancellationObserved.Task;
         runner.SignalInterruption("second notice");
+        _ = releaseCancelledRequest.TrySetResult();
         await runTask;
 
         Assert.Equal(2, client.Requests.Count);
@@ -861,11 +865,27 @@ public sealed class AgentSessionRunnerTests
         };
 
     private static Func<CancellationToken, Task<ChatResponse>> HoldUntilCancelledStep(
-        TaskCompletionSource requestStarted)
+        TaskCompletionSource requestStarted,
+        TaskCompletionSource? cancellationObserved = null,
+        Task? releaseCancelledRequest = null)
         => async cancellationToken =>
         {
             _ = requestStarted.TrySetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _ = cancellationObserved?.TrySetResult();
+                if (releaseCancelledRequest is not null)
+                {
+                    await releaseCancelledRequest;
+                }
+
+                throw;
+            }
+
             return new ChatResponse();
         };
 
