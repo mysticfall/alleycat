@@ -18,7 +18,11 @@
     "symlinkDirs": [
       "game/addons/Mirror3D",
       "game/addons/HumanShaders",
-      "game/content"
+      "game/content",
+      "game/models/supertonic-3/onnx",
+      "game/models/supertonic-3/voice_styles",
+      "game/models/wav2arkit_cpu/wav2arkit_cpu.onnx",
+      "game/models/wav2arkit_cpu/wav2arkit_cpu.onnx.data"
     ],
     // Patterns to exclude from copying
     "exclude": []

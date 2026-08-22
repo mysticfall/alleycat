@@ -2,7 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://baxl54fq0rpj3" path="res://assets/characters/templates/reference_male/reference_male_base.tscn" id="1_p3faa"]
 [ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Speech/Voice/AIVoice.cs" id="2_3qwye"]
-[ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="3_rnwpi"]
+[ext_resource type="Script" uid="uid://cs50pi5oc7ofn" path="res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs" id="3_rnwpi"]
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_jj16n"]
 [ext_resource type="Script" uid="uid://bxb7ysth4n1du" path="res://src/IK/CharacterIK.cs" id="5_7cm3m"]
 [ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="6_dvj2u"]
@@ -43,8 +43,8 @@ metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
 
 [node name="SpeechGenerator" type="Node" parent="Male/GeneralSkeleton/Head/Voice" index="0" unique_id=1402629371]
 script = ExtResource("3_rnwpi")
-VoiceOverride = "Elena.wav"
-metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
+Voice = "M1"
+metadata/_custom_type_script = "uid://cs50pi5oc7ofn"
 
 [node name="LipSyncPlayer" type="Node" parent="Male/GeneralSkeleton/Head/Voice" index="1" unique_id=1264275691 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
 script = ExtResource("4_jj16n")

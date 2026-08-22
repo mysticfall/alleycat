@@ -25,6 +25,7 @@
         <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
         <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
         <PackageReference Include="OpenAI" Version="2.12.0" />
         <PackageReference Include="xunit" Version="2.9.3"/>

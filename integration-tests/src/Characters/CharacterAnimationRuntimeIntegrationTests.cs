@@ -166,7 +166,7 @@ public sealed partial class CharacterAnimationRuntimeIntegrationTests
         Node root = LoadPackedScene(VadimScenePath).Instantiate();
         CharacterHub character = Assert.IsType<CharacterHub>(root);
         Voice voice = root.GetNode<Voice>("Male/GeneralSkeleton/Head/Voice");
-        OpenAISpeechGenerator speechGenerator = root.GetNode<OpenAISpeechGenerator>("Male/GeneralSkeleton/Head/Voice/SpeechGenerator");
+        SupertonicSpeechGenerator speechGenerator = root.GetNode<SupertonicSpeechGenerator>("Male/GeneralSkeleton/Head/Voice/SpeechGenerator");
 
         Assert.Equal("vadim", character.Id);
         Assert.Equal("char", ((IIdentifiable)character).Type);

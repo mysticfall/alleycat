@@ -1,34 +1,4 @@
 services:
-  chatterbox-tts-server:
-    image: chatterbox-tts-server:cu130
-    container_name: alleycat-chatterbox-api
-    build:
-      context: ./Chatterbox-TTS-Server
-      dockerfile: ./Chatterbox-TTS-Server/Dockerfile.cu130
-      args:
-        RUNTIME: nvidia
-    ports:
-      - "8004:8004"
-    volumes:
-      - ./Chatterbox-TTS-Server/reference_audio:/app/reference_audio
-      - ./Chatterbox-TTS-Server/outputs:/app/outputs
-      - ./Chatterbox-TTS-Server/voices:/app/voices
-      - ./Chatterbox-TTS-Server/logs:/app/logs
-      - ./Chatterbox-TTS-Server/config.yaml:/app/config.yaml
-      - ./Chatterbox-TTS-Server/model_cache:/app/model_cache
-      - ~/.cache/huggingface:/app/hf_cache
-    env_file: ./Chatterbox-TTS-Server/.env
-    environment:
-      - HF_TOKEN=${HF_TOKEN}
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
   whisper-api:
     image: hwdsl2/whisper-server:cuda
     container_name: alleycat-whisper-api

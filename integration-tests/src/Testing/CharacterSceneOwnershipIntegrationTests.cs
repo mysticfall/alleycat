@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Reflection;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Speech;
 using AlleyCat.TestFramework;
@@ -20,7 +21,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private const string AgenticMindTypeName = "AlleyCat.Mind.AI.AgenticMind";
     private const string AIVoiceTypeName = "AlleyCat.Speech.Voice.AIVoice";
     private const string A2FLipSyncPlayerTypeName = "AlleyCat.Speech.LipSync.A2FLipSyncPlayer";
-    private const string OpenAISpeechGeneratorTypeName = "AlleyCat.Speech.Generation.OpenAISpeechGenerator";
+    private const string SupertonicSpeechGeneratorTypeName = "AlleyCat.Speech.Generation.SupertonicSpeechGenerator";
     private const string OpenAITranscriberTypeName = "AlleyCat.Speech.Transcription.OpenAITranscriber";
     private const string PlayerVoiceTypeName = "AlleyCat.Speech.Voice.PlayerVoice";
     private static readonly string _hearingTypeName = typeof(Hearing).FullName!;
@@ -92,7 +93,10 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         string maleSceneText = ReadResourceText("res://assets/characters/templates/reference_male/reference_male_npc.tscn");
 
         Assert.Contains("uid=\"uid://cwfjtq7oif2yk\" path=\"res://src/Speech/Voice/AIVoice.cs\"", sceneText, StringComparison.Ordinal);
-        Assert.Contains("uid=\"uid://rqxjkfgkwfpc\" path=\"res://src/Speech/Generation/OpenAISpeechGenerator.cs\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("uid=\"uid://cs50pi5oc7ofn\" path=\"res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("uid=\"uid://cs50pi5oc7ofn\" path=\"res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs\"", maleSceneText, StringComparison.Ordinal);
+        Assert.Contains("metadata/_custom_type_script = \"uid://cs50pi5oc7ofn\"", sceneText, StringComparison.Ordinal);
+        Assert.Contains("metadata/_custom_type_script = \"uid://cs50pi5oc7ofn\"", maleSceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://cjjllyn8qs4nk\" path=\"res://src/Speech/LipSync/A2FLipSyncPlayer.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://hadsjgek6b2p\" path=\"res://src/Mind/AI/AgenticMind.cs\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", sceneText, StringComparison.Ordinal);
@@ -132,7 +136,8 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Node maleMind = RequireScriptedNode(maleNpc, "Mind", AgenticMindTypeName);
             Node femaleHearing = RequireScriptedNode(femaleNpc, "Hearing", _hearingTypeName);
             Node maleHearing = RequireScriptedNode(maleNpc, "Hearing", _hearingTypeName);
-            Node speechGenerator = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice/SpeechGenerator", OpenAISpeechGeneratorTypeName);
+            Node speechGenerator = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice/SpeechGenerator", SupertonicSpeechGeneratorTypeName);
+            Node maleSpeechGenerator = RequireScriptedNode(maleNpc, "Male/GeneralSkeleton/Head/Voice/SpeechGenerator", SupertonicSpeechGeneratorTypeName);
             Node lipSyncPlayer = RequireScriptedNode(femaleNpc, "Female/GeneralSkeleton/Head/Voice/LipSyncPlayer", A2FLipSyncPlayerTypeName);
             AudioStreamPlayer3D audioPlayer = Assert.IsType<AudioStreamPlayer3D>(
                 femaleNpc.GetNodeOrNull("Female/GeneralSkeleton/Head/Voice/AudioStreamPlayer3D"),
@@ -145,10 +150,14 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Same(maleNpc, maleHearing.GetParent());
             _ = Assert.Single(femaleNpc.GetChildren(), child => child.GetType().FullName == _hearingTypeName);
             _ = Assert.Single(maleNpc.GetChildren(), child => child.GetType().FullName == _hearingTypeName);
-            Assert.Equal("Elena.wav", GetPropertyValue<string>(speechGenerator, "VoiceOverride"));
+            Assert.Equal("F1", GetPropertyValue<string>(speechGenerator, "Voice"));
+            Assert.Equal("M1", GetPropertyValue<string>(maleSpeechGenerator, "Voice"));
+            Assert.Equal(string.Empty, GetPropertyValue<string>(speechGenerator, "VoiceOverride"));
+            Assert.Equal(string.Empty, GetPropertyValue<string>(maleSpeechGenerator, "VoiceOverride"));
             Assert.Equal(0.6f, GetPropertyValue<float>(lipSyncPlayer, "InputStrength"), 4);
             Assert.True(GetPropertyValue<bool>(lipSyncPlayer, "ConstantNoise"));
             Assert.Equal(0.15f, GetPropertyValue<float>(lipSyncPlayer, "EyeRotationToBlendshapeScale"), 4);
+            Assert.Equal(16000, GetNonPublicPropertyValue<int>(lipSyncPlayer, "BackendSampleRate"));
             Assert.Same(femaleNpc.GetNode<Skeleton3D>("Female/GeneralSkeleton"), GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton"));
             Assert.Same(audioPlayer, GetPropertyValue<AudioStreamPlayer3D>(lipSyncPlayer, "AudioPlayer"));
             Assert.Equal(new NodePath("../../.."), lipSyncPlayer.GetPathTo(GetPropertyValue<Skeleton3D>(lipSyncPlayer, "Skeleton")));
@@ -241,6 +250,20 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     {
         object value = GetRequiredPropertyValue(source, propertyName);
         return Assert.IsAssignableFrom<T>(value);
+    }
+
+    private static T GetNonPublicPropertyValue<T>(object source, string propertyName)
+    {
+        PropertyInfo property = source.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new Xunit.Sdk.XunitException(
+                $"Expected non-public property '{propertyName}' on '{source.GetType().FullName}' to be present.");
+        object? value = property.GetValue(source);
+        return value is not null
+            ? Assert.IsAssignableFrom<T>(value)
+            : throw new Xunit.Sdk.XunitException(
+                $"Expected non-public property '{propertyName}' on '{source.GetType().FullName}' to be non-null.");
     }
 
     private static object GetRequiredPropertyValue(object source, string propertyName)

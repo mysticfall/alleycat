@@ -119,6 +119,7 @@
 - [SPCH-004: Speech Generator Component](speech/004-speech-generation/index.md)
 - [SPCH-005: Voice Component](speech/005-voice/index.md)
 - [SPCH-006: Hearing Component](speech/006-hearing/index.md)
+- [SPCH-007: Supertonic Speech Generator Component](speech/007-supertonic-speech-generator/index.md)
 
 ## Testing
 

@@ -16,7 +16,6 @@ Clone the required repositories into the current directory:
 
 ```sh
 git clone https://github.com/mysticfall/audio2face-api-server.git
-git clone https://github.com/devnen/Chatterbox-TTS-Server.git
 ```
 
 Start the services:

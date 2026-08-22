@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_vf6rf"]
 [ext_resource type="Script" uid="uid://cwfjtq7oif2yk" path="res://src/Speech/Voice/AIVoice.cs" id="2_c3wu4"]
 [ext_resource type="Script" uid="uid://bxb7ysth4n1du" path="res://src/IK/CharacterIK.cs" id="2_charik"]
-[ext_resource type="Script" uid="uid://rqxjkfgkwfpc" path="res://src/Speech/Generation/OpenAISpeechGenerator.cs" id="3_04drg"]
+[ext_resource type="Script" uid="uid://cs50pi5oc7ofn" path="res://src/Speech/Generation/Supertonic/SupertonicSpeechGenerator.cs" id="3_04drg"]
 [ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="3_mgn5w"]
 [ext_resource type="Script" uid="uid://cjjllyn8qs4nk" path="res://src/Speech/LipSync/A2FLipSyncPlayer.cs" id="4_db11o"]
 [ext_resource type="Script" uid="uid://hadsjgek6b2p" path="res://src/Mind/AI/AgenticMind.cs" id="7_xyj0a"]
@@ -42,8 +42,8 @@ metadata/_custom_type_script = "uid://cwfjtq7oif2yk"
 
 [node name="SpeechGenerator" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="0" unique_id=1308210533]
 script = ExtResource("3_04drg")
-VoiceOverride = "Elena.wav"
-metadata/_custom_type_script = "uid://rqxjkfgkwfpc"
+Voice = "F1"
+metadata/_custom_type_script = "uid://cs50pi5oc7ofn"
 
 [node name="LipSyncPlayer" type="Node" parent="Female/GeneralSkeleton/Head/Voice" index="1" unique_id=440077666 node_paths=PackedStringArray("Skeleton", "AudioPlayer")]
 script = ExtResource("4_db11o")
