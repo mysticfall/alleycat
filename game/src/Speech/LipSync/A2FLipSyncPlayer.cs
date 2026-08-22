@@ -3,8 +3,9 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using AlleyCat.Vision;
+using AlleyCat.Core.Logging;
 using Godot;
+using Microsoft.Extensions.Logging;
 using HttpClient = System.Net.Http.HttpClient;
 
 namespace AlleyCat.Speech.LipSync;
@@ -85,6 +86,18 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         get;
         set;
     } = 30;
+
+    /// <summary>
+    /// Maximum time to wait between streaming inference records before the stream is considered
+    /// stalled and fails, so a hung download cannot stall playback indefinitely. Only used by the
+    /// streaming inference path.
+    /// </summary>
+    [Export(PropertyHint.Range, "1,120,1")]
+    public int StreamingIdleTimeoutSeconds
+    {
+        get;
+        set;
+    } = 10;
 
     /// <summary>
     /// When enabled, validates connectivity against GET /health during initialisation.
@@ -309,10 +322,10 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
 
     private HttpClient? _httpClient;
     private Uri? _blendshapeEndpointUri;
+    private ILogger<A2FLipSyncPlayer>? _logger;
     private bool _hasWarnedModeAutoAdjust;
     private bool _hasWarnedMissingEyeRotationFrames;
     private bool _hasWarnedMissingEyeBlendshapeChannels;
-    private static readonly IReadOnlySet<string> _eyesControlledBlendshapeNames = CreateEyesControlledBlendshapeNames();
 
     /// <summary>
     /// Sample rate the Audio2Face API requires for uploaded waveforms.
@@ -320,8 +333,32 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     protected override int BackendSampleRate => 16000;
 
     /// <inheritdoc />
+    protected override bool SupportsStreamingInference => IsRegressionMode();
+
+    /// <summary>
+    /// Indicates whether the resolved inference mode is regression, the only mode the streaming
+    /// endpoint supports. Diffusion (including when auto-adjusted for v3 models) uses the batch
+    /// endpoint.
+    /// </summary>
+    private bool IsRegressionMode()
+    {
+        string resolvedMode = ResolveEffectiveMode(ResolveModelId(), ResolveInferenceMode());
+        return string.Equals(resolvedMode, "regression", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Logger for streaming inference diagnostics; resolved on the main thread during initialisation so
+    /// the background read loop never touches the Godot service provider.
+    /// </summary>
+    private ILogger Logger => _logger
+        ?? throw new InvalidOperationException("LipSyncPlayer: logger was not initialised.");
+
+    /// <inheritdoc />
     protected override void InitialiseBackend()
     {
+        // Resolve on the main thread so the background streaming read loop can log without touching the
+        // Godot service provider off-thread.
+        _logger = GameLoggerResolver.ResolveRequired<A2FLipSyncPlayer>();
         _blendshapeEndpointUri = BuildBlendshapeEndpointUri(EndpointUrl);
         _hasWarnedModeAutoAdjust = false;
         _hasWarnedMissingEyeRotationFrames = false;
@@ -397,11 +434,102 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     }
 
     /// <inheritdoc />
+    internal override async Task RunBackendStreamingInferenceAsync(
+        AudioStreamWav speech,
+        StreamingFrameBuffer frameBuffer,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        HttpClient httpClient = _httpClient
+            ?? throw new InvalidOperationException("LipSyncPlayer: HTTP client was not initialised.");
+        Uri endpointUri = _blendshapeEndpointUri
+            ?? throw new InvalidOperationException("LipSyncPlayer: endpoint URI was not initialised.");
+
+        Uri requestUri = BuildStreamingInferenceUri(endpointUri);
+        float[] monoWaveform = LoadAudioWaveform(speech);
+
+        // RequestTimeoutSeconds stays the overall deadline for the whole download, including record
+        // reading; the inter-record idle timeout below only catches stalled streams faster.
+        using var deadlineCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadlineCancellation.CancelAfter(TimeSpan.FromSeconds(RequestTimeoutSeconds));
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+            {
+                Content = new ByteArrayContent(FloatsToBytesLittleEndian(monoWaveform)),
+            };
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+            using HttpResponseMessage response = await httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                deadlineCancellation.Token);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorPayload = await response.Content.ReadAsStringAsync(deadlineCancellation.Token);
+                string errorMessage = TryParseApiError(errorPayload) ?? errorPayload;
+                throw new InvalidOperationException(
+                    $"LipSyncPlayer: Audio2Face streaming API request failed ({(int)response.StatusCode} {response.StatusCode}): {errorMessage}");
+            }
+
+            ValidateStreamingContentType(response);
+
+            await using Stream responseStream = await response.Content.ReadAsStreamAsync(deadlineCancellation.Token);
+            var recordReader = new A2fStreamingRecordReader(
+                TimeSpan.FromSeconds(Mathf.Max(1, StreamingIdleTimeoutSeconds)),
+                A2fEyeTranslationSettings.FromPlayer(this),
+                Logger);
+            await recordReader.ReadAsync(responseStream, frameBuffer, deadlineCancellation.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The overall deadline elapsed (or the HTTP client timed out) without the session being cut.
+            throw new TimeoutException(
+                $"LipSyncPlayer: Audio2Face streaming inference exceeded the request timeout of {RequestTimeoutSeconds} s.");
+        }
+    }
+
+    private static void ValidateStreamingContentType(HttpResponseMessage response)
+    {
+        string? mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (!string.Equals(mediaType, "application/x-ndjson", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"LipSyncPlayer: Audio2Face streaming endpoint returned content type '{mediaType ?? "none"}', expected 'application/x-ndjson'.");
+        }
+    }
+
+    /// <summary>
+    /// Builds the streaming inference request URI: the same query parameters as the batch endpoint,
+    /// applied to the /blendshapes/stream path.
+    /// </summary>
+    private Uri BuildStreamingInferenceUri(Uri baseEndpointUri)
+    {
+        Uri inferenceUri = BuildInferenceUri(baseEndpointUri);
+
+        var builder = new UriBuilder(inferenceUri)
+        {
+            Fragment = string.Empty
+        };
+
+        string path = builder.Path.TrimEnd('/');
+        if (!path.EndsWith("/blendshapes/stream", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.Path = $"{path}/stream";
+        }
+
+        return builder.Uri;
+    }
+
+    /// <inheritdoc />
     protected override void DisposeBackend()
     {
         _httpClient?.Dispose();
         _httpClient = null;
         _blendshapeEndpointUri = null;
+        _logger = null;
         _hasWarnedModeAutoAdjust = false;
         _hasWarnedMissingEyeRotationFrames = false;
         _hasWarnedMissingEyeBlendshapeChannels = false;
@@ -588,35 +716,37 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
 
     private string ResolveEffectiveMode(string modelId, string requestedMode)
     {
-        if (!AutoAdjustModeForKnownModel)
-        {
-            return requestedMode;
-        }
+        string resolvedMode = ResolveEffectiveModeForModel(modelId, requestedMode, AutoAdjustModeForKnownModel);
 
-        KnownModelFamily? family = DetectKnownModelFamily(modelId);
-        if (!family.HasValue)
-        {
-            return requestedMode;
-        }
-
-        string requiredMode = family.Value == KnownModelFamily.Diffusion
-            ? "diffusion"
-            : "regression";
-
-        if (string.Equals(requestedMode, requiredMode, StringComparison.OrdinalIgnoreCase))
-        {
-            return requestedMode;
-        }
-
-        if (WarnOnModeAutoAdjust && !_hasWarnedModeAutoAdjust)
+        if (!string.Equals(requestedMode, resolvedMode, StringComparison.OrdinalIgnoreCase)
+            && WarnOnModeAutoAdjust
+            && !_hasWarnedModeAutoAdjust)
         {
             GD.PushWarning(
-                $"A2FLipSyncPlayer: auto-adjusted mode from '{requestedMode}' to '{requiredMode}' for model '{modelId}'.");
+                $"A2FLipSyncPlayer: auto-adjusted mode from '{requestedMode}' to '{resolvedMode}' for model '{modelId}'.");
             _hasWarnedModeAutoAdjust = true;
         }
 
-        return requiredMode;
+        return resolvedMode;
     }
+
+    /// <summary>
+    /// Resolves the effective inference mode for a model, auto-adjusting known model families to their
+    /// supported mode: Mark, Claire, and James are regression-only, while v3 is diffusion-only.
+    /// </summary>
+    /// <remarks>
+    /// Pure decision helper extracted so mode routing — which selects between the streaming and batch
+    /// endpoints — is unit-testable without a Godot runtime or live HTTP server.
+    /// </remarks>
+    internal static string ResolveEffectiveModeForModel(
+        string modelId,
+        string requestedMode,
+        bool autoAdjustForKnownModel)
+        => !autoAdjustForKnownModel || DetectKnownModelFamily(modelId) is not { } family
+            ? requestedMode
+            : family == KnownModelFamily.Diffusion
+                ? "diffusion"
+                : "regression";
 
     private static KnownModelFamily? DetectKnownModelFamily(string modelId)
     {
@@ -693,7 +823,9 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
             _ = nameToIndex.TryAdd(normalized, i);
         }
 
-        if (!TryGetEyeBlendshapeIndices(nameToIndex, out EyeBlendshapeIndices indices))
+        if (!A2fEyeBlendshapeMapping.TryGetEyeBlendshapeIndices(
+                nameToIndex,
+                out A2fEyeBlendshapeMapping.EyeBlendshapeIndices indices))
         {
             if (!_hasWarnedMissingEyeBlendshapeChannels)
             {
@@ -744,10 +876,10 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
                 leftV = -leftV;
             }
 
-            WriteDirectionalPair(frame, indices.RightOut, indices.RightIn, rightH, scale);
-            WriteDirectionalPair(frame, indices.LeftIn, indices.LeftOut, leftH, scale);
-            WriteDirectionalPair(frame, indices.RightUp, indices.RightDown, rightV, scale);
-            WriteDirectionalPair(frame, indices.LeftUp, indices.LeftDown, leftV, scale);
+            A2fEyeBlendshapeMapping.WriteDirectionalPair(frame, indices.RightOut, indices.RightIn, rightH, scale);
+            A2fEyeBlendshapeMapping.WriteDirectionalPair(frame, indices.LeftIn, indices.LeftOut, leftH, scale);
+            A2fEyeBlendshapeMapping.WriteDirectionalPair(frame, indices.RightUp, indices.RightDown, rightV, scale);
+            A2fEyeBlendshapeMapping.WriteDirectionalPair(frame, indices.LeftUp, indices.LeftDown, leftV, scale);
         }
     }
 
@@ -787,50 +919,6 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         return sums;
     }
 
-    private static void WriteDirectionalPair(
-        float[] frame,
-        int positiveIndex,
-        int negativeIndex,
-        float value,
-        float scale
-    )
-    {
-        float scaled = value * scale;
-        frame[positiveIndex] = Mathf.Clamp(scaled, 0f, 1f);
-        frame[negativeIndex] = Mathf.Clamp(-scaled, 0f, 1f);
-    }
-
-    private static bool TryGetEyeBlendshapeIndices(
-        Dictionary<string, int> nameToIndex,
-        out EyeBlendshapeIndices indices
-    )
-    {
-        if (!nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookInLeftBlendShapeName), out int leftIn)
-            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookOutLeftBlendShapeName), out int leftOut)
-            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookUpLeftBlendShapeName), out int leftUp)
-            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookDownLeftBlendShapeName), out int leftDown)
-            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookInRightBlendShapeName), out int rightIn)
-            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookOutRightBlendShapeName), out int rightOut)
-            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookUpRightBlendShapeName), out int rightUp)
-            || !nameToIndex.TryGetValue(NormalizeBlendshapeName(EyesAnimationTreePaths.EyeLookDownRightBlendShapeName), out int rightDown))
-        {
-            indices = default;
-            return false;
-        }
-
-        indices = new EyeBlendshapeIndices(
-            leftIn,
-            leftOut,
-            leftUp,
-            leftDown,
-            rightIn,
-            rightOut,
-            rightUp,
-            rightDown
-        );
-        return true;
-    }
-
     private static LipSyncInferenceResult RemoveEyesControlledBlendshapes(
         float[][] frames,
         IReadOnlyList<string> blendshapeNames,
@@ -841,7 +929,7 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         var retainedNames = new List<string>(blendshapeNames.Count);
         for (int index = 0; index < blendshapeNames.Count; index++)
         {
-            if (IsEyesControlledBlendshapeName(blendshapeNames[index]))
+            if (A2fEyeBlendshapeMapping.IsEyesControlledBlendshapeName(blendshapeNames[index]))
             {
                 continue;
             }
@@ -870,31 +958,6 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
 
         return new LipSyncInferenceResult(retainedFrames, retainedNames, fps);
     }
-
-    private static bool IsEyesControlledBlendshapeName(string blendshapeName)
-        => _eyesControlledBlendshapeNames.Contains(NormalizeBlendshapeName(blendshapeName));
-
-    private static IReadOnlySet<string> CreateEyesControlledBlendshapeNames()
-    {
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (string blendshapeName in EyesAnimationTreePaths.EyeBlendShapeNames)
-        {
-            _ = names.Add(NormalizeBlendshapeName(blendshapeName));
-        }
-
-        return names;
-    }
-
-    private readonly record struct EyeBlendshapeIndices(
-        int LeftIn,
-        int LeftOut,
-        int LeftUp,
-        int LeftDown,
-        int RightIn,
-        int RightOut,
-        int RightUp,
-        int RightDown
-    );
 
     private static string? TryParseApiError(string jsonPayload)
     {

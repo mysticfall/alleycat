@@ -426,8 +426,8 @@ public partial class AIVoice : Voice
                     PipelineDebugLog.Latency(
                         "TTS lip-sync prepared in",
                         lipSyncElapsed,
-                        $"{preparedPlayback.Frames.Length} frames, {mappedMeshCount} mesh(es)",
-                        $"{preparedPlayback.Frames.Length} frames");
+                        $"{preparedPlayback.PreparedFrameCount} frames, {mappedMeshCount} mesh(es)",
+                        $"{preparedPlayback.PreparedFrameCount} frames");
                 }
             }
 
