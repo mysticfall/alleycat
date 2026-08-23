@@ -48,6 +48,11 @@ workflow when they opt in to startup probing.
     or stall playback: the face holds its last pose while audio continues, and
     playback resumes when frames catch up. Diffusion-mode playback is
     unaffected by the streaming changes.
+12. Starting new speech during streamed playback cuts the predecessor's audio
+    and facial animation immediately. The replacement starts only after the
+    predecessor stream has settled; if it cannot settle within the bounded
+    admission window, the new speech fails visibly and is not retried
+    automatically.
 
 ## Technical Requirements
 
@@ -60,11 +65,15 @@ workflow when they opt in to startup probing.
 3. Returned frames are mapped into the `LipSyncPlayer` base class with audio
    synchronisation.
 4. Player exposes `Play(AudioStreamWav speech)` for manual playback initiation.
-5. Interruption contract: If `Play` is called during active playback, stop
-   current playback and begin new playback immediately. In-flight streaming
-   inference downloads must be cancelled, with rapid re-play cancelling the
-   previous session's read loop before a new session starts; ordinary
-   non-streaming `/blendshapes` requests need not be cancelled.
+5. Interruption and replacement-admission contract: If `Play` is called during
+   active playback, cut current audio and facial-frame application immediately,
+   then cancel its streaming download. Replacement admission is ordered and
+   bounded: the client invariant is **prior `ReadLoop` settled before
+   replacement request admission**. It waits only for a finite, configured
+   settlement window; if the predecessor cannot settle, the replacement sets
+   `PlaybackError`, fails through the visible caller/item failure path, makes no
+   replacement request, and receives no automatic retry. Ordinary non-streaming
+   `/blendshapes` requests need not be cancelled.
 6. Optional eye-rotation translation defines baseline subtraction, smoothing,
    directional mapping, and clamp rules.
 7. Model/mode compatibility and health probing behaviour are explicitly
@@ -142,6 +151,30 @@ workflow when they opt in to startup probing.
     behaviour unchanged. `PreparedPlayback.PreparedFrameCount` reports the
     full frame count for batch data or the frames buffered so far under
     streaming, which AIVoice latency diagnostics consume.
+23. Streaming-server recovery integration contract: the standalone
+    `~/workspace/audio2face-api-server` service repository is the normative
+    implementation and verification owner for this contract. Its server request
+    intake and NDJSON output use bounded I/O; it detects client disconnects
+    during I/O and at stage boundaries, then emits diagnostics identifying the
+    stage (request intake, inference, or response output) and disconnect
+    outcome. An SDK `ComputeFrame` already executing is not pre-emptible;
+    detection may therefore occur only after that call returns, when the server
+    must avoid further response work for the disconnected client.
+24. Warm-service responsiveness target: the standalone service owns delivery
+    and measurement of this target. For the flagged live-container smoke
+    workflow, the first NDJSON record should arrive in under 10 seconds from a
+    warm Audio2Face service. This is a feasibility target, not a production
+    latency guarantee.
+25. Cross-repository integration boundary: AlleyCat owns the client behaviour
+    in this specification, including request consumption, record reading,
+    immediate cut, cancellation, and the invariant **prior `ReadLoop` settled
+    before replacement request admission**. The standalone service owns HTTP and
+    NDJSON response production in requirement 16 and the service conditions in
+    requirements 23–24. The client must rely on, but must not reimplement, those
+    mandatory service conditions. The service repository's implementation and
+    verification are a normative dependency of this client integration; the
+    obsolete `~/workspace/Audio2Face-3D-SDK/audio2face-api-server` checkout is
+    not a source of truth.
 
 ## In Scope
 
@@ -155,20 +188,25 @@ workflow when they opt in to startup probing.
 - Shared-base audio format validation and inference-input normalisation.
 - Interruption handling for active playback.
 - Streaming playback gate, starvation hold, stream cancellation on stop, and
-  timeout contracts.
+  timeout and bounded ordered replacement-admission contracts.
 - Per-session streaming playback diagnostics.
+- Bounded server I/O, disconnect detection, and stage diagnostics for streamed
+  requests.
+- Cross-repository integration and verification with the standalone
+  `audio2face-api-server` service.
 - Shared `LipSyncPlayer` playback-completed notification and stop/cut capability.
 
 ## Out Of Scope
 
-- Production runtime guarantees (latency budgets, error recovery). Live-smoke
-  timing assertions are generous feasibility bounds, not latency budgets.
+- Production-grade latency budgets or recovery policies beyond the required
+  bounded replacement-failure and disconnect-handling contracts. Live-smoke
+  timing assertions are feasibility bounds, not latency budgets.
 - Live microphone capture or real-time audio input pipelines.
 - Dialogue system integration or runtime model switching.
 - Animation polish and expressive-quality acceptance criteria.
 - Docker container lifecycle management.
-- Automated regression beyond mock-backed integration tests and the flagged,
-  soft-skipping live-container smoke test.
+- Automated regression beyond the required mock-backed recovery tests and the
+  flagged, soft-skipping live-container smoke test.
 
 ## Acceptance Criteria
 
@@ -180,9 +218,10 @@ workflow when they opt in to startup probing.
    (batch and streaming) are explicitly defined.
 4. Manual playback contract: Playback triggers via `Play(AudioStreamWav)`, not
    auto-started in `_Ready()`.
-5. Interruption contract: Calling `Play` during active playback stops current
-   playback and begins new playback immediately. In-flight streaming downloads
-   are cancelled; ordinary non-streaming `/blendshapes` requests are not.
+5. User interruption outcome: Calling `Play` during active streamed playback
+   cuts current audio and facial animation immediately. The replacement begins
+   only after bounded, ordered admission; if the predecessor cannot settle, the
+   new speech fails visibly without an automatic retry.
 6. Eye-rotation translation behaviour and fallback handling are defined.
 7. Default startup succeeds without blocking or logging a connection-refused
    initialisation error when the Audio2Face backend is not running.
@@ -207,10 +246,14 @@ workflow when they opt in to startup probing.
     applied frame (applied count and mesh values unchanged while starved),
     warns through the rate limiter, resumes when frames catch up, and completes
     cleanly with the starvation window counted as one episode.
-16. Interruption during streaming: tests verify `Stop()` cancels the in-flight
-    download — the read loop settles, the server observes the client abort, no
-    `PlaybackCompleted` fires for the cut session, the buffer never reports
-    complete, and a fresh streaming session replays cleanly.
+16. Streaming interruption and replacement admission: tests verify `Stop()`
+    cancels the in-flight download; the read loop settles; the server observes
+    the client abort; no `PlaybackCompleted` fires for the cut session; and the
+    buffer never reports complete. Tests also verify rapid `Play()` calls cut
+    the predecessor immediately, admit a replacement request only after the
+    prior `ReadLoop` settles, and replay cleanly. When settlement exceeds the
+    bounded admission window, tests verify a visible new-speech failure, no
+    automatic retry, and no replacement request.
 17. Mid-playback stream failure: tests verify a stream that closes without the
     complete record sets `PlaybackError` with a clear message, raises
     `PlaybackCompleted` once, and stops playback without hanging.
@@ -229,11 +272,29 @@ workflow when they opt in to startup probing.
     producer fails before the gate, and consistent under parallel append/read).
 21. Live smoke against the real local container (flagged, soft-skipped when
     unreachable) verifies the gate opens well before the full download time and
-    the stream completes with the declared count of finite, consistently sized
-    frames.
+    the first NDJSON record arrives in under 10 seconds from a warm service.
+    It also verifies the stream completes with the declared count of finite,
+    consistently sized frames.
 22. Acceptance verifies both layers: user-visible early audio, interruption,
     and starvation behaviour, and the endpoint, gate, mode-routing, timeout,
-    failure, and opt-in contracts.
+    failure, opt-in, replacement-admission, server-disconnect, and warm-service
+    contracts.
+23. Standalone-service validation in `~/workspace/audio2face-api-server`
+    verifies its HTTP/NDJSON transport, bounded request and response I/O,
+    disconnect detection, and diagnostics identifying request-intake, inference,
+    or response-output stages. It verifies that disconnects observed after an
+    executing SDK `ComputeFrame` produce no further response work, without
+    requiring pre-emption of that call. Debug and Release transport CTest
+    coverage is required, and service sources compile with
+    `-DA2X_ROOT=/home/mysticfall/workspace/Audio2Face-3D-SDK`; unavailable
+    TensorRT libraries may block executable final linking only as an explicitly
+    recorded environment limitation.
+24. AlleyCat validation verifies its client boundary independently: unit and
+    integration tests prove immediate cut and the ordered-admission invariant,
+    including no replacement request after failed predecessor settlement. The
+    flagged live-container smoke test consumes the standalone service and
+    verifies the warm-service first-record target; it does not substitute for
+    the standalone service's Debug/Release transport CTest coverage.
 
 ## References
 
@@ -244,3 +305,5 @@ workflow when they opt in to startup probing.
 - `@game/src/Speech/LipSync/A2fEyeBlendshapeMapping.cs`
 - `@game/tests/speech/a2f_lipsync_player_test.tscn`
 - `@integration-tests/src/Speech/A2FStreamingLipSyncIntegrationTests.cs`
+- Normative standalone service repository: `~/workspace/audio2face-api-server`
+  (not `~/workspace/Audio2Face-3D-SDK/audio2face-api-server`).

@@ -64,6 +64,18 @@ public abstract partial class LipSyncPlayer : Node
     } = 0.1f;
 
     /// <summary>
+    /// Maximum time a replacement streaming preparation waits for the preceding stream's read loop to
+    /// settle after it is cancelled. This is deliberately shorter than ten seconds so an unavailable
+    /// backend is surfaced promptly rather than admitting overlapping streaming requests.
+    /// </summary>
+    [Export(PropertyHint.Range, "0.1,9.9,0.1")]
+    public float StreamingReplacementSettlementTimeoutSeconds
+    {
+        get;
+        set;
+    } = 5f;
+
+    /// <summary>
     /// Indicates whether initialisation completed successfully.
     /// </summary>
     public bool IsInitialised
@@ -196,10 +208,12 @@ public abstract partial class LipSyncPlayer : Node
     private ILogger<LipSyncPlayer>? _logger;
     private readonly Lock _preparationLifetimeLock = new();
     private readonly CancellationTokenSource _preparationLifetimeCancellation = new();
+    private readonly SemaphoreSlim _streamingPreparationLock = new(1, 1);
     private int _activePreparationCount;
     private bool _preparationLifetimeEnded;
     private bool _backendDisposalPending;
     private StreamingPlaybackSession? _activeStreamingSession;
+    private StreamingPlaybackSession? _lastStreamingSession;
     private int _streamingFramesBufferedAtStart;
     private int _streamingMaxStarvedFrameGap;
     private bool _streamingStarving;
@@ -359,9 +373,16 @@ public abstract partial class LipSyncPlayer : Node
     {
         try
         {
-            PlayPrepared(SupportsStreamingInference
-                ? PrepareStreamingPlaybackBlocking(speech)
-                : PreparePlayback(speech, CancellationToken.None));
+            if (SupportsStreamingInference)
+            {
+                // Direct streaming replacement is a cut-first path: do not leave the prior audio or facial
+                // session active while its reader is settling before this request may be admitted.
+                StopPlayback(resetWeights: true, clearFrames: true);
+                PlayPrepared(PrepareStreamingPlaybackBlocking(speech));
+                return;
+            }
+
+            PlayPrepared(PreparePlayback(speech, CancellationToken.None));
         }
         catch (Exception ex)
         {
@@ -691,25 +712,47 @@ public abstract partial class LipSyncPlayer : Node
     {
         preparationToken.ThrowIfCancellationRequested();
 
+        await _streamingPreparationLock.WaitAsync(preparationToken);
+        try
+        {
+            // This lock covers admission, rather than the later PlayPrepared hand-off: a replacement must
+            // never send an HTTP request until the prior stream's reader has stopped owning its connection.
+            return await Task.Run(
+                () => PrepareStreamingPlaybackAfterPredecessorSettlementAsync(
+                    speech,
+                    preparationToken,
+                    callerCancellation),
+                preparationToken);
+        }
+        finally
+        {
+            _ = _streamingPreparationLock.Release();
+        }
+    }
+
+    private async Task<PreparedPlayback> PrepareStreamingPlaybackAfterPredecessorSettlementAsync(
+        AudioStreamWav speech,
+        CancellationToken preparationToken,
+        CancellationToken callerCancellation)
+    {
         // Run on a worker thread like the batch path so resampling and payload preparation never land on
         // the caller's context. The session is linked to the caller's token directly (not the preparation
         // source, which is disposed once preparation returns) so post-preparation caller cancellation
         // still cuts the background download.
-        return await Task.Run(async () =>
+        StreamingPlaybackSession? session = null;
+        try
         {
-            StreamingPlaybackSession? session = null;
-            try
-            {
-                session = StartStreamingInferenceSession(speech, callerCancellation);
-                await session.Buffer.StartupBufferReady.WaitAsync(preparationToken);
-                return CreateStreamingPreparedPlayback(speech, session);
-            }
-            catch
-            {
-                await TeardownStreamingSessionAsync(session);
-                throw;
-            }
-        }, preparationToken);
+            await SettlePredecessorStreamingSessionAsync(preparationToken);
+            session = StartStreamingInferenceSession(speech, callerCancellation);
+            _lastStreamingSession = session;
+            await session.Buffer.StartupBufferReady.WaitAsync(preparationToken);
+            return CreateStreamingPreparedPlayback(speech, session);
+        }
+        catch
+        {
+            await TeardownStreamingSessionAsync(session);
+            throw;
+        }
     }
 
     /// <summary>
@@ -718,17 +761,31 @@ public abstract partial class LipSyncPlayer : Node
     /// </summary>
     private PreparedPlayback PrepareStreamingPlaybackBlocking(AudioStreamWav speech)
     {
+        _streamingPreparationLock.Wait();
+        try
+        {
+            return PrepareStreamingPlaybackBlockingAfterPredecessorSettlement(speech);
+        }
+        finally
+        {
+            _ = _streamingPreparationLock.Release();
+        }
+    }
+
+    private PreparedPlayback PrepareStreamingPlaybackBlockingAfterPredecessorSettlement(AudioStreamWav speech)
+    {
         StreamingPlaybackSession? session = null;
         try
         {
+            SettlePredecessorStreamingSessionAsync(CancellationToken.None).GetAwaiter().GetResult();
             session = StartStreamingInferenceSession(speech, externalCancellation: null);
+            _lastStreamingSession = session;
             session.Buffer.StartupBufferReady.Wait();
             return CreateStreamingPreparedPlayback(speech, session);
         }
         catch
         {
-            session?.Cancel();
-            session?.ReadLoop.Wait();
+            TeardownStreamingSessionAsync(session).GetAwaiter().GetResult();
             throw;
         }
     }
@@ -780,6 +837,67 @@ public abstract partial class LipSyncPlayer : Node
         return new StreamingPlaybackSession(frameBuffer, sessionCancellation, readLoop);
     }
 
+    private async Task SettlePredecessorStreamingSessionAsync(CancellationToken cancellationToken)
+    {
+        StreamingPlaybackSession? predecessor = _lastStreamingSession;
+        if (predecessor is null)
+        {
+            return;
+        }
+
+        if (!predecessor.ReadLoop.IsCompleted)
+        {
+            GetLogger().LogInformation(
+                "LipSyncPlayer cancelling predecessor streaming session before admitting a replacement request.");
+            predecessor.Cancel();
+        }
+
+        var settlementTimeout = TimeSpan.FromSeconds(Mathf.Clamp(
+            StreamingReplacementSettlementTimeoutSeconds,
+            0.1f,
+            9.9f));
+        try
+        {
+            await predecessor.ReadLoop.WaitAsync(settlementTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            GetLogger().LogError(
+                ex,
+                "LipSyncPlayer refused replacement streaming request because predecessor settlement exceeded {SettlementTimeoutSeconds:0.###} s.",
+                settlementTimeout.TotalSeconds);
+            const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session did not settle before the replacement deadline.";
+            QueuePlaybackError(message);
+            throw new TimeoutException(message, ex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            GetLogger().LogError(
+                ex,
+                "LipSyncPlayer refused replacement streaming request because predecessor settlement failed unexpectedly.");
+            const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session failed while settling.";
+            QueuePlaybackError(message);
+            throw new InvalidOperationException(message, ex);
+        }
+
+        if (predecessor.Buffer.IsFaulted)
+        {
+            Exception? predecessorError = predecessor.Buffer.Error;
+            GetLogger().LogError(
+                predecessorError,
+                "LipSyncPlayer refused replacement streaming request because predecessor settlement completed with an inference failure.");
+            const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session failed while settling.";
+            QueuePlaybackError(message);
+            throw new InvalidOperationException(message, predecessorError);
+        }
+
+        GetLogger().LogDebug(
+            "LipSyncPlayer predecessor streaming session settled before replacement request admission.");
+    }
+
+    private void QueuePlaybackError(string message)
+        => _ = CallDeferred(nameof(SetPlaybackError), message);
+
     private async Task RunStreamingReadLoopAsync(
         AudioStreamWav inferenceSpeech,
         StreamingFrameBuffer frameBuffer,
@@ -789,10 +907,11 @@ public abstract partial class LipSyncPlayer : Node
         {
             await RunBackendStreamingInferenceAsync(inferenceSpeech, frameBuffer, sessionCancellation.Token);
         }
-        catch (OperationCanceledException) when (sessionCancellation.IsCancellationRequested)
+        catch (Exception ex) when (sessionCancellation.IsCancellationRequested)
         {
-            // The session was cut (stop, node teardown, or preparation cancellation); expected outcome.
-            GetLogger().LogDebug("LipSyncPlayer streaming inference read loop was cancelled.");
+            // The session was cut (stop, node teardown, or preparation cancellation); a transport abort may
+            // surface as either cancellation or I/O failure, and neither makes the cut session faulted.
+            GetLogger().LogDebug(ex, "LipSyncPlayer streaming inference read loop was cancelled.");
         }
         catch (Exception ex)
         {
@@ -828,7 +947,7 @@ public abstract partial class LipSyncPlayer : Node
         }
 
         session.Cancel();
-        await session.ReadLoop;
+        await session.ReadLoop.ConfigureAwait(false);
     }
 
     private PreparedPlayback PreparePlayback(

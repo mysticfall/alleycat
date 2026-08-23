@@ -82,7 +82,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
 
             Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
             Assert.True(server.HasEvent("complete-sent"));
-            LipSyncPlayer.StreamingPlaybackSession session = prepared.StreamingSession!;
+            LipSyncPlayer.StreamingPlaybackSession session = prepared.StreamingSession;
             Assert.True(session.Buffer.IsCompleted, "The background download must finish after playback started.");
             Assert.Equal(frameCount, session.Buffer.FrameCount);
             Assert.Equal(frameCount, session.Buffer.DeclaredFrameCount);
@@ -184,13 +184,13 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
     [Headless]
     public async Task A2FStreaming_StopDuringActiveStream_CancelsDownloadAndAllowsReplay()
     {
-        int requestCount = 0;
+        LipSyncPlayer.StreamingPlaybackSession? firstSession = null;
+        int secondRequestAdmittedBeforeFirstReadLoopSettled = 0;
         ScriptedA2FServer server = new(async session =>
         {
             await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
-            int requestIndex = Interlocked.Increment(ref requestCount);
 
-            if (requestIndex == 1)
+            if (session.RequestIndex == 1)
             {
                 int frameIndex = 0;
                 while (true)
@@ -199,6 +199,11 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
                     await session.SendFrameAsync(frameIndex++, 0.5f);
                     await Task.Delay(40);
                 }
+            }
+
+            if (firstSession is { } observedFirstSession && !observedFirstSession.ReadLoop.IsCompleted)
+            {
+                _ = Interlocked.Exchange(ref secondRequestAdmittedBeforeFirstReadLoopSettled, 1);
             }
 
             for (int frameIndex = 0; frameIndex < 45; frameIndex++)
@@ -222,7 +227,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Task finishedFirst = await Task.WhenAny(firstPreparation, Task.Delay(4000));
             Assert.Same(firstPreparation, finishedFirst);
             LipSyncPlayer.PreparedPlayback firstPlayback = await firstPreparation;
-            LipSyncPlayer.StreamingPlaybackSession firstSession = firstPlayback.StreamingSession!;
+            firstSession = firstPlayback.StreamingSession!;
 
             int completedCount = 0;
             fixture.Player.PlaybackCompleted += () => completedCount++;
@@ -236,6 +241,13 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Assert.False(fixture.Player.HasActiveStreamingSession);
             int appliedCountAtCut = fixture.Player.AppliedFrameCount;
 
+            // Begin the replacement immediately. Its HTTP request may only be admitted after the cut
+            // session's reader has fully settled; this is intentionally not a PlayPrepared hand-off check.
+            Task<LipSyncPlayer.PreparedPlayback> secondPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 1.5));
+            Task finishedSecond = await Task.WhenAny(secondPreparation, Task.Delay(4000));
+            Assert.Same(secondPreparation, finishedSecond);
+
             // The background read loop settles promptly once the session is cut.
             await WaitUntilAsync(sceneTree, () => firstSession.ReadLoop.IsCompleted, maxFrames: 3000);
             Assert.False(firstSession.Buffer.IsCompleted, "A cut stream must never look complete.");
@@ -246,21 +258,251 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             await WaitForFramesAsync(sceneTree, 10);
             Assert.Equal(appliedCountAtCut, fixture.Player.AppliedFrameCount);
 
-            // A fresh streaming session replays cleanly after the cut.
-            Task<LipSyncPlayer.PreparedPlayback> secondPreparation = fixture.Player.PreparePlaybackAsync(
-                CreateSilenceStream(seconds: 1.5));
-            Task finishedSecond = await Task.WhenAny(secondPreparation, Task.Delay(4000));
-            Assert.Same(secondPreparation, finishedSecond);
+            // A fresh streaming session replays cleanly after the cut, with no overlapping request admission.
             fixture.Player.PlayPrepared(await secondPreparation);
 
             await WaitUntilAsync(sceneTree, () => completedCount == 1, maxFrames: 3000);
 
             Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
             Assert.Equal(2, server.Requests.Count);
+            Assert.Equal(0, Volatile.Read(ref secondRequestAdmittedBeforeFirstReadLoopSettled));
             Assert.True((await secondPreparation).StreamingSession!.Buffer.IsCompleted);
         }
         finally
         {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A direct streaming <see cref="LipSyncPlayer.Play"/> replacement cuts the active playback before it
+    /// waits for the predecessor reader, and its replacement request is not transport-accepted until that
+    /// reader has settled.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_PlayReplacement_CutsBeforePredecessorSettlementAndRequestAdmission()
+    {
+        LipSyncPlayer.StreamingPlaybackSession? firstSession = null;
+        int replacementAcceptedBeforePredecessorSettled = 0;
+        ScriptedA2FServer server = new(
+            async session =>
+            {
+                await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+                if (session.RequestIndex == 1)
+                {
+                    for (int frameIndex = 0; frameIndex < 4; frameIndex++)
+                    {
+                        await session.SendFrameAsync(frameIndex, 0.5f);
+                    }
+
+                    // Force the local HTTP transport to observe the client abort before the replacement
+                    // request needs a connection; small writes can remain buffered after cancellation.
+                    await Task.Delay(250);
+                    while (true)
+                    {
+                        await session.SendPaddingAsync(1024 * 1024);
+                        await Task.Delay(40);
+                    }
+                }
+
+                for (int frameIndex = 0; frameIndex < 45; frameIndex++)
+                {
+                    await session.SendFrameAsync(frameIndex, frameIndex / 45f);
+                }
+
+                await session.SendCompleteAsync(45);
+            },
+            requestIndex =>
+            {
+                if (requestIndex != 2)
+                {
+                    return;
+                }
+
+                if (firstSession is null || !firstSession.ReadLoop.IsCompleted)
+                {
+                    _ = Interlocked.Exchange(ref replacementAcceptedBeforePredecessorSettled, 1);
+                }
+
+            });
+
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl);
+        try
+        {
+            Task<LipSyncPlayer.PreparedPlayback> firstPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 5.0));
+            Task firstFinished = await Task.WhenAny(firstPreparation, Task.Delay(4000));
+            Assert.Same(firstPreparation, firstFinished);
+            LipSyncPlayer.PreparedPlayback firstPlayback = await firstPreparation;
+            firstSession = firstPlayback.StreamingSession!;
+            fixture.Player.PlayPrepared(firstPlayback);
+            await WaitUntilAsync(GetSceneTree(), () => fixture.Player.AppliedFrameCount > 0, maxFrames: 3000);
+
+            fixture.Player.Play(CreateSilenceStream(seconds: 1.5));
+
+            Assert.True(firstSession.ReadLoop.IsCompleted);
+            Assert.False(firstSession.Buffer.IsCompleted, "The cut predecessor stream must not complete.");
+            Assert.True(server.HasEvent("request-2-transport-accepted"));
+            Assert.Equal(0, Volatile.Read(ref replacementAcceptedBeforePredecessorSettled));
+            Assert.True(fixture.Player.IsAudioPlaying);
+            Assert.True(fixture.Player.HasActiveStreamingSession);
+            Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A cancelled predecessor that does not settle by the exported replacement deadline must prevent the
+    /// next streaming request from reaching the backend and expose a backend-unavailable preparation error.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_WhenPredecessorWillNotSettle_RefusesReplacementWithoutSendingRequest()
+    {
+        ScriptedA2FServer server = new(async session =>
+        {
+            await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+            if (session.RequestIndex == 1)
+            {
+                int frameIndex = 0;
+                while (true)
+                {
+                    await session.SendFrameAsync(frameIndex++, 0.5f);
+                    await Task.Delay(40);
+                }
+            }
+
+            for (int frameIndex = 0; frameIndex < 45; frameIndex++)
+            {
+                await session.SendFrameAsync(frameIndex, frameIndex / 45f);
+            }
+
+            await session.SendCompleteAsync(45);
+        });
+
+        NonSettlingA2FLipSyncPlayer player = new();
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl,
+            configuredPlayer => configuredPlayer.StreamingReplacementSettlementTimeoutSeconds = 0.1f,
+            player);
+
+        try
+        {
+            Task<LipSyncPlayer.PreparedPlayback> firstPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 5.0));
+            Task firstFinished = await Task.WhenAny(firstPreparation, Task.Delay(4000));
+            Assert.Same(firstPreparation, firstFinished);
+            LipSyncPlayer.PreparedPlayback firstPlayback = await firstPreparation;
+            LipSyncPlayer.StreamingPlaybackSession firstSession = firstPlayback.StreamingSession!;
+            fixture.Player.PlayPrepared(firstPlayback);
+
+            await WaitUntilAsync(GetSceneTree(), () => fixture.Player.AppliedFrameCount > 0, maxFrames: 3000);
+            int appliedFrameCountAtCut = fixture.Player.AppliedFrameCount;
+
+            // The direct public replacement must cut synchronously before it waits for bounded settlement.
+            fixture.Player.Play(CreateSilenceStream(seconds: 1.5));
+
+            Assert.False(fixture.Player.IsAudioPlaying);
+            Assert.False(fixture.Player.HasActiveStreamingSession);
+            Assert.Equal(appliedFrameCountAtCut, fixture.Player.AppliedFrameCount);
+            Assert.Equal(0f, fixture.Mesh.GetBlendShapeValue(0));
+            Assert.False(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError));
+            Assert.Contains("Audio2Face backend unavailable", fixture.Player.PlaybackError, StringComparison.Ordinal);
+            Assert.Contains("predecessor streaming session", fixture.Player.PlaybackError, StringComparison.Ordinal);
+            _ = Assert.Single(server.Requests);
+            _ = Assert.Single(server.TransportAcceptedRequestIndexes);
+            Assert.False(firstSession.ReadLoop.IsCompleted);
+
+            Task cancellationObserved = player.FirstCancellationObserved.Task;
+            Assert.True(cancellationObserved.IsCompleted);
+            player.ReleaseFirstReadLoop();
+            Task firstReadLoopFinished = await Task.WhenAny(firstSession.ReadLoop, Task.Delay(4000));
+            Assert.Same(firstSession.ReadLoop, firstReadLoopFinished);
+            await WaitForFramesAsync(GetSceneTree(), 10);
+            _ = Assert.Single(server.TransportAcceptedRequestIndexes);
+        }
+        finally
+        {
+            player.ReleaseFirstReadLoop();
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The asynchronous preparation path retains its item-level failure while deferring the visible
+    /// predecessor-settlement error onto the Godot thread.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_WhenPredecessorSettlementExpires_PreparationFaultAlsoSetsPlaybackError()
+    {
+        ScriptedA2FServer server = new(async session =>
+        {
+            await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+            if (session.RequestIndex == 1)
+            {
+                int frameIndex = 0;
+                while (true)
+                {
+                    await session.SendFrameAsync(frameIndex++, 0.5f);
+                    await Task.Delay(40);
+                }
+            }
+
+            await session.SendCompleteAsync(0);
+        });
+
+        NonSettlingA2FLipSyncPlayer player = new();
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl,
+            configuredPlayer => configuredPlayer.StreamingReplacementSettlementTimeoutSeconds = 0.1f,
+            player);
+
+        try
+        {
+            Task<LipSyncPlayer.PreparedPlayback> firstPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 5.0));
+            Task firstFinished = await Task.WhenAny(firstPreparation, Task.Delay(4000));
+            Assert.Same(firstPreparation, firstFinished);
+            LipSyncPlayer.PreparedPlayback firstPlayback = await firstPreparation;
+            LipSyncPlayer.StreamingPlaybackSession firstSession = firstPlayback.StreamingSession!;
+            fixture.Player.PlayPrepared(firstPlayback);
+            await WaitUntilAsync(GetSceneTree(), () => fixture.Player.AppliedFrameCount > 0, maxFrames: 3000);
+
+            fixture.Player.Stop();
+            Task cancellationObserved = player.FirstCancellationObserved.Task;
+            Task cancellationFinished = await Task.WhenAny(cancellationObserved, Task.Delay(4000));
+            Assert.Same(cancellationObserved, cancellationFinished);
+
+            Task<LipSyncPlayer.PreparedPlayback> replacement = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 1.5));
+            TimeoutException error = await Assert.ThrowsAsync<TimeoutException>(() => replacement);
+
+            Assert.Contains("Audio2Face backend unavailable", error.Message, StringComparison.Ordinal);
+            await WaitForFramesAsync(GetSceneTree(), 2);
+            Assert.False(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError));
+            Assert.Contains("Audio2Face backend unavailable", fixture.Player.PlaybackError, StringComparison.Ordinal);
+            _ = Assert.Single(server.TransportAcceptedRequestIndexes);
+            Assert.False(firstSession.ReadLoop.IsCompleted);
+
+            player.ReleaseFirstReadLoop();
+            Task firstReadLoopFinished = await Task.WhenAny(firstSession.ReadLoop, Task.Delay(4000));
+            Assert.Same(firstSession.ReadLoop, firstReadLoopFinished);
+        }
+        finally
+        {
+            player.ReleaseFirstReadLoop();
             await fixture.DisposeAsync();
             server.Dispose();
         }
@@ -565,7 +807,8 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         public static async Task<StreamingPlaybackFixture> CreateAsync(
             SceneTree sceneTree,
             string endpointUrl,
-            Action<A2FLipSyncPlayer>? configurePlayer = null)
+            Action<A2FLipSyncPlayer>? configurePlayer = null,
+            A2FLipSyncPlayer? player = null)
         {
             Node3D root = new()
             {
@@ -582,15 +825,13 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             MeshInstance3D mesh = CreateMeshInstance("GeneratedFace", "jawOpen");
             skeleton.AddChild(mesh);
 
-            A2FLipSyncPlayer player = new()
-            {
-                Name = "A2FLipSyncPlayer",
-                AudioPlayer = audioPlayer,
-                Skeleton = skeleton,
-                EndpointUrl = endpointUrl,
-                RequestTimeoutSeconds = 20,
-                TranslateEyeRotationsToBlendshapes = false,
-            };
+            player ??= new A2FLipSyncPlayer();
+            player.Name = "A2FLipSyncPlayer";
+            player.AudioPlayer = audioPlayer;
+            player.Skeleton = skeleton;
+            player.EndpointUrl = endpointUrl;
+            player.RequestTimeoutSeconds = 20;
+            player.TranslateEyeRotationsToBlendshapes = false;
             configurePlayer?.Invoke(player);
 
             root.AddChild(audioPlayer);
@@ -634,6 +875,38 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
     }
 
     /// <summary>
+    /// Uses the production HTTP streaming implementation, but deliberately delays the first cancelled
+    /// read-loop's final settlement so replacement-deadline handling can be exercised deterministically.
+    /// </summary>
+    private sealed partial class NonSettlingA2FLipSyncPlayer : A2FLipSyncPlayer
+    {
+        private readonly TaskCompletionSource _releaseFirstReadLoop = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _streamingCallCount;
+
+        public TaskCompletionSource FirstCancellationObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal override async Task RunBackendStreamingInferenceAsync(
+            AudioStreamWav speech,
+            StreamingFrameBuffer frameBuffer,
+            CancellationToken cancellationToken)
+        {
+            int callIndex = Interlocked.Increment(ref _streamingCallCount);
+            try
+            {
+                await base.RunBackendStreamingInferenceAsync(speech, frameBuffer, cancellationToken);
+            }
+            catch (OperationCanceledException) when (callIndex == 1 && cancellationToken.IsCancellationRequested)
+            {
+                _ = FirstCancellationObserved.TrySetResult();
+                await _releaseFirstReadLoop.Task;
+                throw;
+            }
+        }
+
+        public void ReleaseFirstReadLoop() => _ = _releaseFirstReadLoop.TrySetResult();
+    }
+
+    /// <summary>
     /// Local scripted Audio2Face server: records observed requests, emits NDJSON (or batch JSON)
     /// responses under script control with arbitrary delays, and observes client connection aborts.
     /// </summary>
@@ -641,15 +914,20 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
     {
         private readonly HttpListener _listener;
         private readonly Func<ServerSession, Task> _script;
+        private readonly Action<int>? _onTransportAccepted;
         private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
         private readonly ConcurrentQueue<ServerEvent> _events = [];
         private readonly int _port;
+        private int _requestCount;
         private volatile bool _disposed;
         private volatile bool _clientAborted;
 
-        public ScriptedA2FServer(Func<ServerSession, Task> script)
+        public ScriptedA2FServer(
+            Func<ServerSession, Task> script,
+            Action<int>? onTransportAccepted = null)
         {
             _script = script;
+            _onTransportAccepted = onTransportAccepted;
             _port = FindFreePort();
             _listener = new HttpListener();
             _listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
@@ -657,13 +935,15 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             _ = Task.Run(AcceptLoopAsync);
         }
 
-        public sealed record ObservedRequest(string PathAndQuery, byte[] Body);
+        public sealed record ObservedRequest(int RequestIndex, string PathAndQuery, byte[] Body);
 
         public sealed record ServerEvent(string Name, long ElapsedMilliseconds);
 
         public string BlendshapesUrl => $"http://127.0.0.1:{_port}/blendshapes";
 
         public ConcurrentQueue<ObservedRequest> Requests { get; } = [];
+
+        public ConcurrentQueue<int> TransportAcceptedRequestIndexes { get; } = [];
 
         public bool ClientAborted => _clientAborted;
 
@@ -717,21 +997,30 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
                     break;
                 }
 
-                _ = Task.Run(() => HandleContextAsync(context));
+                int requestIndex = Interlocked.Increment(ref _requestCount);
+                TransportAcceptedRequestIndexes.Enqueue(requestIndex);
+                _events.Enqueue(new ServerEvent(
+                    $"request-{requestIndex}-transport-accepted",
+                    _stopwatch.ElapsedMilliseconds));
+                _onTransportAccepted?.Invoke(requestIndex);
+                _ = Task.Run(() => HandleContextAsync(context, requestIndex));
             }
         }
 
-        private async Task HandleContextAsync(HttpListenerContext context)
+        private async Task HandleContextAsync(HttpListenerContext context, int requestIndex)
         {
             byte[] body = await ReadRequestBodyAsync(context.Request);
-            Requests.Enqueue(new ObservedRequest(context.Request.Url?.PathAndQuery ?? string.Empty, body));
+            Requests.Enqueue(new ObservedRequest(requestIndex, context.Request.Url?.PathAndQuery ?? string.Empty, body));
 
             HttpListenerResponse response = context.Response;
             response.SendChunked = true;
 
             try
             {
-                await _script(new ServerSession(response, name => _events.Enqueue(new ServerEvent(name, _stopwatch.ElapsedMilliseconds))));
+                await _script(new ServerSession(
+                    response,
+                    requestIndex,
+                    name => _events.Enqueue(new ServerEvent(name, _stopwatch.ElapsedMilliseconds))));
                 response.Close();
             }
             catch (Exception ex) when (IsClientAbort(ex))
@@ -785,9 +1074,14 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         /// Script-facing handle for one server response: NDJSON record writers, a batch JSON writer, and
         /// milestone markers with server-side timestamps.
         /// </summary>
-        internal sealed class ServerSession(HttpListenerResponse response, Action<string> markEvent)
+        internal sealed class ServerSession(
+            HttpListenerResponse response,
+            int requestIndex,
+            Action<string> markEvent)
         {
             private bool _contentTypeApplied;
+
+            public int RequestIndex => requestIndex;
 
             public async Task SendMetadataAsync(float fps, IReadOnlyList<string> blendshapeNames)
             {
@@ -809,6 +1103,17 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             {
                 await SendLineAsync(
                     "{\"type\":\"complete\",\"frame_count\":" + frameCount.ToString(CultureInfo.InvariantCulture) + "}");
+            }
+
+            public async Task SendPaddingAsync(int byteCount)
+            {
+                ApplyContentType("application/x-ndjson");
+
+                byte[] bytes = new byte[byteCount + 1];
+                Array.Fill(bytes, (byte)' ');
+                bytes[^1] = (byte)'\n';
+                await response.OutputStream.WriteAsync(bytes);
+                await response.OutputStream.FlushAsync();
             }
 
             public async Task SendBatchResponseAsync(int frameCount, float fps, IReadOnlyList<string> blendshapeNames)
