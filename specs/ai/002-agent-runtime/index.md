@@ -41,8 +41,10 @@ title: Agent Runtime
 9. Failed, cancelled, malformed, or invalid actions must not be remembered as successful events.
 10. The NPC decides how to handle failed actions: tool errors are returned as tool results, and the NPC chooses
     whether, when, and how to retry.
-11. Temporary provider or network problems must not disturb the NPC: the runtime retries them transparently, and only
-    retry exhaustion ends the session through the contained failure path.
+11. Temporary provider or network problems must not disturb the NPC: the runtime retries transport failures
+    transparently, and discards and recovers from a transient invalid provider response with a fresh request so the NPC
+    conversation continues. Only exhaustion of the applicable bounded recovery budget ends the session through the
+    contained failure path.
 12. All time-sensitive tool results report time in one consistent format: seconds of in-game time elapsed since the
     game began.
 13. Removing an NPC's Mind from the scene must not allow active or queued actions to produce delayed in-world effects.
@@ -102,8 +104,9 @@ title: Agent Runtime
 11. The runtime must validate the complete response batch — every call, identifier, argument, and content item —
     before invoking any tool in that batch. Valid tool calls must execute serially in provider order.
 12. Empty or malformed output, ordinary assistant text, unknown content or tools, invalid arguments, and duplicate
-    call identifiers must fail before any batch effect, without a model repair attempt or automatic request retry.
-    Model reasoning content in an assistant message is tolerated and skipped during validation.
+    call identifiers must fail validation before any batch effect. Invalid-response recovery is governed by TR-43;
+    no model repair attempt or invalid-output feedback message may be added. Model reasoning content in an assistant
+    message is tolerated and skipped during validation.
 13. `AllowMultipleToolCalls`
     must be a configurable runtime or provider preference and must default to `false`. It may guide provider
     generation but must not make an otherwise valid multi-call batch fail local validation.
@@ -233,9 +236,19 @@ title: Agent Runtime
 
 42. Tool errors must be reported through the tool result so the agent decides whether, when, and how to retry.
 43. Transport-level failures — network errors, rate limits such as 429, and timeouts — must be handled transparently
-    by the runtime with bounded retry. They must not be surfaced to the agent as tool results or transcript entries.
-    Retry exhaustion must end the session through the contained failure path: logged and contained without crashing
-    the scene, with no model repair attempt and no automatic session restart.
+    by a bounded transport-retry policy. This policy is separate from invalid-response recovery and applies only to
+    transport-level failures; transport failures must not be surfaced to the agent as tool results or transcript
+    entries. Transport-retry exhaustion must end the session through the contained failure path: logged and contained
+    without crashing the scene, with no model repair attempt and no automatic session restart.
+
+    Invalid-response recovery must use its own configurable bounded consecutive-invalid-response budget and backoff,
+    independent of the transport-retry policy. On each invalid response, the runtime must discard the complete
+    response, issue a fresh request that replays only the last valid transcript, and produce no assistant transcript
+    entry, tool invocation, tool result, observation, or other in-world effect from that response. The consecutive
+    invalid-response failure streak resets only after an entire response batch validates. Only exhaustion of this
+    budget may end the session through the contained failure path. Node-lifetime cancellation and observation-driven
+    generation interruption take precedence over this recovery: they must not consume its budget or cause an
+    additional recovery request, and TR-40's injected-message resumption semantics remain unchanged.
 44. Node-lifetime cancellation from AI-001 must propagate through active requests and tool work. Expected interruption
     and lifetime cancellation must not trigger retry, further unintended session activity, or misleading failure
     diagnostics.
@@ -286,8 +299,8 @@ title: Agent Runtime
 
 ## In Scope
 
-- One long-running agent session per AgenticMind: append-only transcript, bounded stateless requests, no restart
-  mechanism.
+- One long-running agent session per AgenticMind: append-only transcript, bounded stateless requests, and no session
+  restart mechanism.
 - Once-per-session prompt compilation and rendering with on-demand render-context assembly and one session-captured
   scene snapshot.
 - Tool-only validation without completion markers or request and action bounds; full-transcript replay on every request.
@@ -301,7 +314,8 @@ title: Agent Runtime
 - Read-only timeline recall through the `history` tool.
 - The game-time convention for all time-sensitive tool results and the game-scoped game clock.
 - Interruption semantics for tool invocations and model generation, including injected-message resumption.
-- Tool errors as tool results, transparent bounded transport retry, and contained session-ending failure.
+- Tool errors as tool results, separate bounded transport retry and invalid-response recovery, and contained
+  session-ending failure after the applicable budget is exhausted.
 - Trusted typed `ScenarioContext`
   binding, ownership verification, shared-dispatcher tool start, actor stamping, and atomic Mind hand-off.
 - Responses-default stateless transport and explicitly selected Chat Completions rollback.
@@ -315,7 +329,8 @@ title: Agent Runtime
 - Context exhaustion handling and transcript compaction; explicitly deferred — short testing sessions only for now.
 - Session restart, re-anchoring, or mid-session re-prompting.
 - Additional production tools beyond `speak`, `wait`, and the timeline history tool.
-- Model repair or automatic retry of invalid model output.
+- Provider-directed model repair or feedback for invalid output. Invalid-response recovery instead replays the last
+  valid transcript through a fresh request.
 - Cancelling or reversing non-speech world actions already admitted before interruption or a later failure.
 - Speech playback-finished success semantics.
 - Timeline summarisation, compaction, token budgeting, persistence, and provider transcript retention beyond the
@@ -330,8 +345,8 @@ title: Agent Runtime
 ### User Requirements
 
 1. Session-continuity coverage verifies an NPC sustains exactly one session from activation to scene removal or
-   unrecoverable failure, with no restart or re-anchoring, and later behaviour reflects earlier observations, speech,
-   and actions of the same session.
+   unrecoverable failure, with no session restart or re-anchoring, and later behaviour reflects earlier observations,
+   speech, and actions of the same session.
 2. Wait-delivery coverage verifies notable observations accumulated since the previous wait are returned together with
    the elapsed duration and a game timestamp, that important arrivals and an attended speaker finishing speech finish
    the wait early, and that quiet expiry returns no sub-threshold observations.
@@ -344,29 +359,31 @@ title: Agent Runtime
 5. Speech and action coverage verifies character-owned in-world voice, exactly-once own observed speech, no false
    memory of failed or cancelled actions, and voice availability constraining speech only.
 6. Failure coverage verifies tool errors surface as tool results for the NPC to act on, while transport failures are
-   invisible to the NPC until bounded retry exhaustion ends the session through containment without crashing the
-   scene.
+    invisible to the NPC until bounded transport-retry exhaustion ends the session through containment without
+    crashing the scene. It also verifies that a transient invalid provider response is discarded and the NPC
+    conversation continues after recovery, while exhaustion of the separate invalid-response budget is contained.
 7. Timestamp coverage verifies all time-sensitive tool results report seconds of in-game time elapsed since the game
    began, with no timezones or date-times.
-8. Acceptance verifies containment and safety: missing configuration, backend failure, retry exhaustion, cancellation,
-   and node exit never crash the scene and never produce delayed in-world effects, and an ownership mismatch produces
-   no world effect.
+8. Acceptance verifies containment and safety: missing configuration, backend failure, transport-retry or
+   invalid-response-budget exhaustion, cancellation, and node exit never crash the scene or produce delayed in-world
+   effects, and an ownership mismatch produces no world effect.
 9. Diagnostics coverage verifies speech-pipeline latency diagnostics remain opt-in through the `AlleyCat.Pipeline`
    category's log level (CORE-007) and change no NPC behaviour.
 
 ### Technical Requirements
 
 1. Session-lifecycle tests verify one session per AgenticMind, started after `_Ready()`
-   once perceptions are subscribed, ended on node exit or fatal unrecoverable failure, with no restart, re-anchoring,
-   or re-prompting route.
+   once perceptions are subscribed, ended on node exit or fatal unrecoverable failure, with no session restart,
+   re-anchoring, or re-prompting route.
 2. Transport tests verify OpenAI Responses is the default and every request sets `store: false`, omits
    `previous_response_id`, and replays the complete ordered transcript; Chat Completions is available only through
    explicit selection, is never an automatic fallback, and preserves the tool-only semantics.
 3. Protocol tests verify no `end_turn` marker, no `MaxModelRequests` or `MaxToolActions`
    bounds, and no provider response format exist, and that every request requires at least one tool call.
 4. Validation tests reject empty or malformed responses, ordinary assistant text, unknown content and tools, invalid
-   arguments, and duplicate call identifiers before executing any tool in an invalid batch, tolerate model reasoning
-   content, and verify no model repair or automatic request retry occurs.
+    arguments, and duplicate call identifiers before executing any tool in an invalid batch, tolerate model reasoning
+    content, and verify that invalid output produces no assistant transcript entry, tool result, observation, or
+    in-world effect before its fresh recovery request, with no model repair or invalid-output feedback.
 5. Prompt tests verify the stack is compiled and rendered exactly once per session with the render context assembled
    on demand at that point; the transcript contains only the system instruction, the optional bootstrap input message,
    assistant tool calls, tool-result messages, and injected messages; and the transcript is discarded at session end
@@ -402,9 +419,12 @@ title: Agent Runtime
     cancelled with partial assistant output discarded and the new information appended as an injected message before a
     fresh full-transcript request, committed actions and observations survive, and expected interruption produces no
     backend-failure diagnostics or retry.
-15. Failure tests verify tool errors are returned through tool results, transport failures are retried transparently
-    with bounded retry and never surfaced to the agent, and retry exhaustion ends the session through the contained
-    failure path.
+15. Failure tests verify tool errors are returned through tool results; transport failures use only the bounded
+    transport-retry policy and are never surfaced to the agent; and invalid responses use only a separate bounded
+    consecutive-invalid-response recovery policy. They verify a fresh request replays the last valid transcript after
+    each invalid response, the invalid-response streak resets only after complete response validation, and contained
+    failure occurs only when the applicable budget is exhausted. They also verify cancellation and observation-driven
+    generation interruption neither consume the invalid-response budget nor issue an additional recovery request.
 16. Diagnostics tests verify the dual `LoggingChatClient`
     request/response gate with deferred serialisation and either-control suppression, decoration before session
     execution, unchanged behaviour with diagnostics enabled or disabled, isolation from STT and TTS traffic and shared

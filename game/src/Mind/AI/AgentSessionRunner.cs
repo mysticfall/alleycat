@@ -43,6 +43,7 @@ internal sealed class AgentSessionRunner
     private readonly bool _enableReasoningLogging;
     private readonly TimeSpan[] _retryDelays;
     private readonly int _maxTransportRetries;
+    private readonly IInvalidResponseRecoveryPolicy _invalidResponseRecoveryPolicy;
     private readonly ConcurrentQueue<string> _pendingInjections = new();
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
     private CancellationTokenSource? _phaseCancellation;
@@ -56,7 +57,8 @@ internal sealed class AgentSessionRunner
         bool allowMultipleToolCalls,
         ILogger logger,
         bool enableReasoningLogging = true,
-        IReadOnlyList<TimeSpan>? retryDelays = null)
+        IReadOnlyList<TimeSpan>? retryDelays = null,
+        IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _runInputMessages = runInputMessages ?? throw new ArgumentNullException(nameof(runInputMessages));
@@ -64,6 +66,9 @@ internal sealed class AgentSessionRunner
         _enableReasoningLogging = enableReasoningLogging;
         _retryDelays = [.. retryDelays ?? _defaultRetryDelays];
         _maxTransportRetries = _retryDelays.Length;
+        _invalidResponseRecoveryPolicy = invalidResponseRecoveryPolicy ?? new InvalidResponseRecoveryPolicy(
+            InvalidResponseRecoveryPolicy.DefaultConsecutiveFailureBudget,
+            InvalidResponseRecoveryPolicy.DefaultBackoffDelays);
         _functions = ResolveFunctions(productionTools);
         _chatOptions = new ChatOptions
         {
@@ -110,6 +115,7 @@ internal sealed class AgentSessionRunner
         // Session-scoped transient protocol state, discarded at session end (AI-002 TR-15).
         List<ChatMessage> transcript = [.. _runInputMessages];
         int requestCount = 0;
+        int consecutiveInvalidResponseCount = 0;
         _logger.LogInformation("Agent session starting with {ToolCount} tool(s).", _functions.Count);
         try
         {
@@ -126,7 +132,29 @@ internal sealed class AgentSessionRunner
                     continue;
                 }
 
-                FunctionCallContent[] calls = ValidateResponse(response, requestCount);
+                FunctionCallContent[] calls;
+                try
+                {
+                    calls = ValidateResponse(response, requestCount);
+                }
+                catch (AgentSessionException)
+                {
+                    int nextInvalidResponseCount = consecutiveInvalidResponseCount + 1;
+                    bool recoveryCompleted = await TryBackoffInvalidResponseRecoveryAsync(
+                        requestCount,
+                        nextInvalidResponseCount,
+                        lifetimeToken);
+                    if (!recoveryCompleted)
+                    {
+                        continue;
+                    }
+
+                    consecutiveInvalidResponseCount = nextInvalidResponseCount;
+                    continue;
+                }
+
+                // A response only resets the recovery streak after every shape, call-ID, and argument check passed.
+                consecutiveInvalidResponseCount = 0;
                 transcript.AddRange(response.Messages);
                 List<AIContent> results = new(calls.Length);
                 foreach (FunctionCallContent call in calls)
@@ -151,6 +179,58 @@ internal sealed class AgentSessionRunner
         }
     }
 
+    private async Task<bool> TryBackoffInvalidResponseRecoveryAsync(
+        int requestCount,
+        int nextInvalidResponseCount,
+        CancellationToken lifetimeToken)
+    {
+        var recoveryCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+        Volatile.Write(ref _phaseCancellation, recoveryCancellation);
+        try
+        {
+            lifetimeToken.ThrowIfCancellationRequested();
+            if (recoveryCancellation.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            if (nextInvalidResponseCount >= _invalidResponseRecoveryPolicy.ConsecutiveFailureBudget)
+            {
+                throw InvalidResponseRecoveryExhausted(requestCount, nextInvalidResponseCount);
+            }
+
+            _logger.LogWarning(
+                "Agent session request {RequestCount} returned an invalid response shape; discarding it and "
+                + "requesting a fresh response after configured backoff ({InvalidResponseCount}/{InvalidResponseLimit}).",
+                requestCount,
+                nextInvalidResponseCount,
+                _invalidResponseRecoveryPolicy.ConsecutiveFailureBudget);
+            await _invalidResponseRecoveryPolicy.BackoffAsync(nextInvalidResponseCount, recoveryCancellation.Token);
+            lifetimeToken.ThrowIfCancellationRequested();
+            return !recoveryCancellation.IsCancellationRequested;
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (recoveryCancellation.IsCancellationRequested)
+        {
+            _logger.LogDebug(
+                "Agent session request {RequestCount} invalid-response recovery interrupted.",
+                requestCount);
+            return false;
+        }
+        finally
+        {
+            if (ReferenceEquals(Volatile.Read(ref _phaseCancellation), recoveryCancellation))
+            {
+                Volatile.Write(ref _phaseCancellation, null);
+            }
+
+            recoveryCancellation.Dispose();
+        }
+    }
+
     private async Task<ChatResponse?> RequestWithTransportRetryAsync(
         List<ChatMessage> transcript,
         int requestCount,
@@ -164,7 +244,15 @@ internal sealed class AgentSessionRunner
             try
             {
                 _logger.LogDebug("Agent session request {RequestCount} starting.", requestCount);
-                return await _chatClient.GetResponseAsync(transcript, _chatOptions, phase.Token);
+                ChatResponse response = await _chatClient.GetResponseAsync(transcript, _chatOptions, phase.Token);
+                lifetimeToken.ThrowIfCancellationRequested();
+                if (phase.IsCancellationRequested)
+                {
+                    _logger.LogDebug("Agent session request {RequestCount} interrupted.", requestCount);
+                    return null;
+                }
+
+                return response;
             }
             catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
             {
@@ -296,6 +384,7 @@ internal sealed class AgentSessionRunner
         }
 
         List<FunctionCallContent> calls = [];
+        HashSet<string> batchCallIds = new(StringComparer.Ordinal);
         foreach (ChatMessage message in response.Messages)
         {
             if (message.Role != ChatRole.Assistant)
@@ -325,7 +414,8 @@ internal sealed class AgentSessionRunner
                 if (call.Exception is not null
                     || call.InformationalOnly
                     || string.IsNullOrWhiteSpace(call.CallId)
-                    || !_callIds.Add(call.CallId)
+                    || _callIds.Contains(call.CallId)
+                    || !batchCallIds.Add(call.CallId)
                     || !_functions.ContainsKey(call.Name))
                 {
                     throw InvalidResponse(requestCount);
@@ -344,6 +434,8 @@ internal sealed class AgentSessionRunner
         {
             ValidateArguments(call, requestCount);
         }
+
+        _callIds.UnionWith(batchCallIds);
 
         return [.. calls];
     }
@@ -486,6 +578,11 @@ internal sealed class AgentSessionRunner
 
     private static AgentSessionException InvalidResponse(int requestCount)
         => new($"The agent session received an invalid response shape at request {requestCount}.");
+
+    private static AgentSessionException InvalidResponseRecoveryExhausted(int requestCount, int invalidResponseCount)
+        => new(
+            $"The agent session exhausted its invalid response recovery budget after "
+            + $"{invalidResponseCount} consecutive invalid response shapes at request {requestCount}.");
 }
 
 /// <summary>

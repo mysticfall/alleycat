@@ -236,6 +236,61 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         }
     }
 
+    /// <summary>
+    /// The Mind forwards its configured invalid-response recovery budget to the active runner. Invalid provider
+    /// output is discarded without tool effects, and exhaustion remains contained by <see cref="AgenticMind" />.
+    /// </summary>
+    [Fact]
+    public async Task Session_InvalidResponseRecoveryBudget_IsForwardedToContainedLifecycleFailure()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        using RecordingLoggerProvider loggerProvider = new();
+        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        CapturingTool tool = new();
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueInvalidResponse();
+        clientProvider.EnqueueInvalidResponse();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+            Tools = [tool],
+            ObservationImportanceThreshold = 1f,
+            InvalidResponseRecoveryBudget = 2,
+            InvalidResponseRecoveryBackoffSeconds = [0f],
+        };
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+        try
+        {
+            await WaitUntilAsync(
+                sceneTree,
+                () => loggerProvider.Entries.Any(entry =>
+                    entry.Level == LogLevel.Error
+                    && entry.Exception is AgentSessionException
+                    && entry.Exception.Message.Contains("invalid response recovery budget", StringComparison.Ordinal)));
+
+            Assert.Equal(2, clientProvider.Requests.Count);
+            Assert.Empty(tool.CapturedContexts);
+            Assert.All(
+                clientProvider.Requests,
+                request => Assert.Equal([ChatRole.User], request.Select(message => message.Role)));
+            _ = Assert.Single(
+                loggerProvider.Entries,
+                entry => entry.Level == LogLevel.Error && entry.Exception is AgentSessionException);
+        }
+        finally
+        {
+            mind.Free();
+            tool.Free();
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
     private static IReadOnlyList<string> TimelineValues(TestAgenticMind mind)
         => [.. mind.GetTimelineForTest().Cast<TestObservation>().Select(static observation => observation.Value)];
 
@@ -342,6 +397,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 new ChatMessage(
                     ChatRole.Assistant,
                     [new FunctionCallContent($"call-{Requests.Count + 1}", toolName, new Dictionary<string, object?>())]))));
+
+        public void EnqueueInvalidResponse()
+            => _steps.Enqueue(cancellationToken => Task.FromResult(new ChatResponse(
+                new ChatMessage(ChatRole.Assistant, "invalid ordinary assistant text"))));
 
         public bool EndedByCancellation()
             => Volatile.Read(ref _endedByCancellation) != 0;

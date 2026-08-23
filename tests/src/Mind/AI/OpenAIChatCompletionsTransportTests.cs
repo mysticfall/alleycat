@@ -73,8 +73,9 @@ public sealed class OpenAIChatCompletionsTransportTests
     [Fact]
     public async Task SessionChatCompletions_WithAdditionalSpeakArgument_EndsSessionWithoutInvokingFunction()
     {
+        using CancellationTokenSource sessionCancellation = new();
         var handler = new CancellingHandler(
-            CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None),
+            sessionCancellation,
             CreateToolCallResponse("chatcmpl-tool", "call-1", /*lang=json,strict*/ "{\"speech\":\"Hello\",\"unexpected\":true}"));
         using var httpClient = new HttpClient(handler);
         using IChatClient client = CreateClient(httpClient);
@@ -87,21 +88,24 @@ public sealed class OpenAIChatCompletionsTransportTests
             },
             "speak");
 
-        _ = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => RunSessionAsync(
+        await RunSessionAsync(
             client,
             speak,
             allowMultipleToolCalls: false,
-            CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None)));
+            sessionCancellation,
+            new InvalidResponseRecoveryPolicy(2, [TimeSpan.Zero]));
 
         Assert.Equal(0, invocationCount);
-        _ = Assert.Single(handler.RequestBodies);
+        // The malformed response is discarded, then the one bounded recovery request is cancelled by this session.
+        Assert.Equal(2, handler.RequestBodies.Count);
     }
 
     private static async Task RunSessionAsync(
         IChatClient client,
         AIFunction speak,
         bool allowMultipleToolCalls,
-        CancellationTokenSource sessionCancellation)
+        CancellationTokenSource sessionCancellation,
+        IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null)
     {
         AgentSessionRunner runner = new(
             client,
@@ -109,7 +113,8 @@ public sealed class OpenAIChatCompletionsTransportTests
             [new ChatMessage(ChatRole.User, AgenticMind.SessionBootstrapInput)],
             [speak],
             allowMultipleToolCalls,
-            NullLogger.Instance);
+            NullLogger.Instance,
+            invalidResponseRecoveryPolicy: invalidResponseRecoveryPolicy);
         await runner.RunAsync(sessionCancellation.Token);
     }
 

@@ -25,6 +25,9 @@ public sealed class AgentSessionRunnerTests
         TimeSpan.FromMilliseconds(1),
     ];
 
+    private static readonly IInvalidResponseRecoveryPolicy _immediateInvalidResponseRecoveryPolicy =
+        new InvalidResponseRecoveryPolicy(InvalidResponseRecoveryPolicy.DefaultConsecutiveFailureBudget, [TimeSpan.Zero]);
+
     /// <summary>
     /// Every request replays the complete ordered transcript and carries the strict tool-only options: required
     /// tool mode without a named function, no response format, and exactly the production tool inventory.
@@ -141,23 +144,147 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// Invalid output is rejected as a whole before any valid-looking call can cause effects, without a model
-    /// repair attempt or automatic request retry (AI-002 TR-11/12).
+    /// Invalid output is rejected as a whole before any valid-looking call can cause effects. Consecutive invalid
+    /// responses exhaust the bounded recovery budget without appending model-visible protocol entries.
     /// </summary>
     [Theory]
     [MemberData(nameof(InvalidResponses))]
-    public async Task RunAsync_WithInvalidResponse_RejectsWholeBatchWithoutEffectsOrRetry(ChatResponse response)
+    public async Task RunAsync_WithInvalidResponse_ExhaustsRecoveryWithoutEffects(ChatResponse response)
     {
         int invocationCount = 0;
-        ScriptedSessionClient client = new(Respond(response));
+        ScriptedSessionClient client = new(Respond(response), Respond(response), Respond(response));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => invocationCount++)], []);
 
         AgentSessionException error = await Assert.ThrowsAsync<AgentSessionException>(
             () => runner.RunAsync(CancellationToken.None));
 
-        Assert.Contains("invalid response shape", error.Message, StringComparison.Ordinal);
+        Assert.Contains("invalid response recovery budget", error.Message, StringComparison.Ordinal);
         Assert.Equal(0, invocationCount);
-        _ = Assert.Single(client.Requests);
+        Assert.Equal(3, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// A malformed response is discarded and a later valid response resumes the same session without replaying any
+    /// assistant content or tool effects from the rejected batch.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithInvalidThenValidResponse_ContinuesWithoutInvalidBatchEffects()
+    {
+        List<string> speech = [];
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text"))),
+            Respond(CreateCall("valid-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(speech.Add)],
+            [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(["Hello"], speech);
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Single(client.Requests[1], client.Requests[0][0]);
+        Assert.Equal(
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+            client.Requests[2].Select(message => message.Role));
+    }
+
+    /// <summary>
+    /// A fully valid response resets the consecutive-invalid streak, so separated malformed batches do not combine
+    /// into an exhausted recovery budget.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithValidResponseBetweenInvalidBatches_ResetsRecoveryStreak()
+    {
+        List<string> speech = [];
+        CancellationTokenSource lifetime = new();
+        ChatResponse invalid = new(new ChatMessage(ChatRole.Assistant, "ordinary text"));
+        ScriptedSessionClient client = new(
+            Respond(invalid),
+            Respond(invalid),
+            Respond(CreateCall("first-valid", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "First" })),
+            Respond(invalid),
+            Respond(invalid),
+            Respond(CreateCall("second-valid", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Second" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(speech.Add)], []);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(["First", "Second"], speech);
+        Assert.Equal(7, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// A bounded run of malformed batches ends through the contained session failure after the established three
+    /// consecutive invalid-response limit.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithConsecutiveInvalidResponses_ExhaustsRecoveryBudget()
+    {
+        ChatResponse invalid = new(new ChatMessage(ChatRole.Assistant, "ordinary text"));
+        ScriptedSessionClient client = new(Respond(invalid), Respond(invalid), Respond(invalid));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+
+        AgentSessionException error = await Assert.ThrowsAsync<AgentSessionException>(
+            () => runner.RunAsync(CancellationToken.None));
+
+        Assert.Contains("3 consecutive invalid response shapes", error.Message, StringComparison.Ordinal);
+        Assert.Equal(3, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// The malformed-response budget is supplied by its own policy, rather than inheriting the transport retry
+    /// count or its delays.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithConfiguredInvalidResponseRecoveryPolicy_UsesIndependentBudget()
+    {
+        ChatResponse invalid = new(new ChatMessage(ChatRole.Assistant, "ordinary text"));
+        ScriptedSessionClient client = new(Respond(invalid), Respond(invalid));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [],
+            retryDelays: _immediateRetryDelays,
+            invalidResponseRecoveryPolicy: new InvalidResponseRecoveryPolicy(2, [TimeSpan.Zero]));
+
+        AgentSessionException error = await Assert.ThrowsAsync<AgentSessionException>(
+            () => runner.RunAsync(CancellationToken.None));
+
+        Assert.Contains("2 consecutive invalid response shapes", error.Message, StringComparison.Ordinal);
+        Assert.Equal(2, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// Call-ID validation is transactional: a duplicate ID in a rejected batch does not reserve either ID for the
+    /// valid response that follows it.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WithInvalidDuplicateCallIDs_DoesNotConsumeBatchIDs()
+    {
+        List<string> speech = [];
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(new ChatResponse(new ChatMessage(
+                ChatRole.Assistant,
+                [
+                    ValidSpeakCall("reusable-call", "Must not run"),
+                    ValidSpeakCall("reusable-call", "Also must not run"),
+                ]))),
+            Respond(CreateCall(
+                "reusable-call",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Runs once" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(speech.Add)], []);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(["Runs once"], speech);
+        Assert.Equal(3, client.Requests.Count);
     }
 
     /// <summary>
@@ -170,13 +297,14 @@ public sealed class AgentSessionRunnerTests
         IDictionary<string, object?> arguments)
     {
         int invocationCount = 0;
-        ScriptedSessionClient client = new(Respond(CreateCall("schema-call", SpeakToolName, arguments)));
+        ChatMessage response = CreateCall("schema-call", SpeakToolName, arguments);
+        ScriptedSessionClient client = new(Respond(response), Respond(response), Respond(response));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => invocationCount++)], []);
 
         _ = await Assert.ThrowsAsync<AgentSessionException>(() => runner.RunAsync(CancellationToken.None));
 
         Assert.Equal(0, invocationCount);
-        _ = Assert.Single(client.Requests);
+        Assert.Equal(3, client.Requests.Count);
     }
 
     /// <summary>
@@ -317,13 +445,20 @@ public sealed class AgentSessionRunnerTests
                 "repeated-call",
                 SpeakToolName,
                 new Dictionary<string, object?> { ["speech"] = "Second" })),
-            EndQuietly(lifetime));
+            Respond(CreateCall(
+                "repeated-call",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Second" })),
+            Respond(CreateCall(
+                "repeated-call",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Second" })));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(speech.Add)], []);
 
         _ = await Assert.ThrowsAsync<AgentSessionException>(() => runner.RunAsync(lifetime.Token));
 
         Assert.Equal(["First"], speech);
-        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(4, client.Requests.Count);
     }
 
     /// <summary>
@@ -395,6 +530,42 @@ public sealed class AgentSessionRunnerTests
         Assert.Equal(
             [ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
             client.Requests[2].Select(message => message.Role));
+    }
+
+    /// <summary>
+    /// A provider which returns malformed output despite a notable-observation phase cancellation cannot convert the
+    /// interrupted generation into an invalid-response recovery request.
+    /// </summary>
+    [Fact]
+    public async Task SignalInterruption_WhenCancelledGenerationReturnsInvalidResponse_DiscardsItBeforeRecovery()
+    {
+        const string injected = "Important scene events require your attention: something happened.";
+        List<string> speech = [];
+        CancellationTokenSource lifetime = new();
+        AgentSessionRunner? runner = null;
+        ScriptedSessionClient client = new(
+            _ =>
+            {
+                runner!.SignalInterruption(injected);
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text")));
+            },
+            Respond(CreateCall(
+                "speak-call",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(speech.Add)],
+            [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(["Hello"], speech);
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Equal(
+            ["Run input.", injected],
+            client.Requests[1].Select(message => message.Text));
     }
 
     /// <summary>
@@ -694,6 +865,26 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
+    /// Lifetime cancellation that arrives with an invalid provider payload wins over response recovery, so no fresh
+    /// request is made after the session lifetime ends.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WhenLifetimeCancelsWithInvalidResponse_EndsQuietlyWithoutRecoveryRequest()
+    {
+        using CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(_ =>
+        {
+            lifetime.Cancel();
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text")));
+        });
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+
+        await runner.RunAsync(lifetime.Token);
+
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
     /// Node-lifetime cancellation during a retry delay ends the session quietly instead of retrying.
     /// </summary>
     [Fact]
@@ -713,6 +904,65 @@ public sealed class AgentSessionRunnerTests
         await runTask;
 
         _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// Lifetime cancellation aborts invalid-response recovery backoff before a fresh request can be issued.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_WhenLifetimeCancelsDuringInvalidResponseRecoveryBackoff_EndsQuietlyWithoutRecoveryRequest()
+    {
+        ChatResponse invalid = new(new ChatMessage(ChatRole.Assistant, "ordinary text"));
+        ScriptedSessionClient client = new(Respond(invalid));
+        using CancellationTokenSource lifetime = new();
+        var recoveryPolicy = new ObservingInvalidResponseRecoveryPolicy();
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [],
+            invalidResponseRecoveryPolicy: recoveryPolicy);
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await recoveryPolicy.Started.Task;
+        lifetime.Cancel();
+
+        await runTask;
+
+        await recoveryPolicy.CancellationObserved.Task;
+        _ = Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// An observation interruption cancels malformed-response backoff, preserving injected-message resumption rather
+    /// than issuing an unprompted recovery request.
+    /// </summary>
+    [Fact]
+    public async Task SignalInterruption_DuringInvalidResponseRecoveryBackoff_ResumesWithInjectedMessageWithoutEffects()
+    {
+        const string injected = "Important scene events require your attention: something happened.";
+        var recoveryPolicy = new ObservingInvalidResponseRecoveryPolicy();
+        List<string> speech = [];
+        using CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text"))),
+            Respond(CreateCall("valid-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(speech.Add)],
+            [new ChatMessage(ChatRole.User, "Run input.")],
+            invalidResponseRecoveryPolicy: recoveryPolicy);
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await recoveryPolicy.Started.Task;
+        runner.SignalInterruption(injected);
+
+        await runTask;
+
+        Assert.Equal(1, recoveryPolicy.BackoffCallCount);
+        Assert.Equal(["Hello"], speech);
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Equal(
+            ["Run input.", injected],
+            client.Requests[1].Select(message => message.Text));
     }
 
     /// <summary>
@@ -896,7 +1146,8 @@ public sealed class AgentSessionRunnerTests
         bool allowMultipleToolCalls = false,
         ILogger? logger = null,
         bool enableReasoningLogging = true,
-        IReadOnlyList<TimeSpan>? retryDelays = null)
+        IReadOnlyList<TimeSpan>? retryDelays = null,
+        IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null)
         => new(
             client,
             Instructions,
@@ -905,7 +1156,8 @@ public sealed class AgentSessionRunnerTests
             allowMultipleToolCalls,
             logger ?? NullLogger.Instance,
             enableReasoningLogging,
-            retryDelays);
+            retryDelays,
+            invalidResponseRecoveryPolicy ?? _immediateInvalidResponseRecoveryPolicy);
 
     private static async Task WaitForAttemptsAsync(ScriptedSessionClient client, int attemptCount)
     {
@@ -975,6 +1227,37 @@ public sealed class AgentSessionRunnerTests
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             Completed = true;
             return "controlled result";
+        }
+    }
+
+    private sealed class ObservingInvalidResponseRecoveryPolicy : IInvalidResponseRecoveryPolicy
+    {
+        private readonly InvalidResponseRecoveryPolicy _inner = new(3, [Timeout.InfiniteTimeSpan]);
+
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource CancellationObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int BackoffCallCount
+        {
+            get; private set;
+        }
+
+        public int ConsecutiveFailureBudget => _inner.ConsecutiveFailureBudget;
+
+        public async Task BackoffAsync(int consecutiveFailureCount, CancellationToken cancellationToken)
+        {
+            BackoffCallCount++;
+            _ = Started.TrySetResult();
+            try
+            {
+                await _inner.BackoffAsync(consecutiveFailureCount, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _ = CancellationObserved.TrySetResult();
+                throw;
+            }
         }
     }
 

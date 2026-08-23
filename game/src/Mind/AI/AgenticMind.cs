@@ -98,6 +98,20 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
+    /// Consecutive malformed model responses permitted before the session ends through its contained failure path.
+    /// </summary>
+    [ExportGroup("Recovery")]
+    [Export(PropertyHint.Range, "1,100,1")]
+    public int InvalidResponseRecoveryBudget { get; set; } = InvalidResponseRecoveryPolicy.DefaultConsecutiveFailureBudget;
+
+    /// <summary>
+    /// Delay in seconds before each fresh request after a malformed model response. The final value is reused when
+    /// the configured recovery budget exceeds the number of delays.
+    /// </summary>
+    [Export]
+    public float[] InvalidResponseRecoveryBackoffSeconds { get; set; } = [1f, 2f, 4f];
+
+    /// <summary>
     /// Editor-authored extra tools bound to the session in addition to the production inventory.
     /// </summary>
     [ExportGroup("Tools")]
@@ -202,6 +216,9 @@ public partial class AgenticMind : MindBase
             ResolveCharacterContext(renderContext));
         _activeHistoryRenderer = historyRenderer;
         List<AITool> tools = CreateSessionTools(sessionContext, dispatcher, historyRenderer, clock);
+        var invalidResponseRecoveryPolicy = new InvalidResponseRecoveryPolicy(
+            InvalidResponseRecoveryBudget,
+            [.. InvalidResponseRecoveryBackoffSeconds.Select(static seconds => TimeSpan.FromSeconds(seconds))]);
 
         AIDiagnosticsSettings diagnosticsSettings = _diagnosticsSettingsLoader();
         IChatClient chatClient = AIChatClientDiagnostics.Decorate(
@@ -215,7 +232,8 @@ public partial class AgenticMind : MindBase
             [new ChatMessage(ChatRole.User, SessionBootstrapInput)],
             chatClient,
             tools,
-            diagnosticsSettings.EnableReasoningLogging);
+            diagnosticsSettings.EnableReasoningLogging,
+            invalidResponseRecoveryPolicy);
     }
 
     /// <summary>
@@ -230,7 +248,8 @@ public partial class AgenticMind : MindBase
             session.Tools,
             AllowMultipleToolCalls,
             GameLoggerResolver.ResolveRequired<AgenticMind>(),
-            session.EnableReasoningLogging);
+            session.EnableReasoningLogging,
+            invalidResponseRecoveryPolicy: session.InvalidResponseRecoveryPolicy);
         _activeRunner = runner;
         try
         {
@@ -505,5 +524,6 @@ public partial class AgenticMind : MindBase
         IReadOnlyList<ChatMessage> RunMessages,
         IChatClient ChatClient,
         IList<AITool> Tools,
-        bool EnableReasoningLogging);
+        bool EnableReasoningLogging,
+        IInvalidResponseRecoveryPolicy InvalidResponseRecoveryPolicy);
 }
