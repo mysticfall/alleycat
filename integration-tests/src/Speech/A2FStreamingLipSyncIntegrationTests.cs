@@ -7,6 +7,7 @@ using System.Text;
 using AlleyCat.Speech.LipSync;
 using AlleyCat.TestFramework;
 using Godot;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
 using HttpClient = System.Net.Http.HttpClient;
@@ -33,7 +34,15 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         ScriptedA2FServer server = new(async session =>
         {
             await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
-            for (int frameIndex = 0; frameIndex < 6; frameIndex++)
+            for (int frameIndex = 0; frameIndex < 2; frameIndex++)
+            {
+                await session.SendFrameAsync(frameIndex, frameIndex / 90f);
+            }
+
+            session.MarkEvent("two-frames-sent");
+            await Task.Delay(250);
+
+            for (int frameIndex = 2; frameIndex < 6; frameIndex++)
             {
                 await session.SendFrameAsync(frameIndex, frameIndex / 90f);
             }
@@ -61,6 +70,9 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Task<LipSyncPlayer.PreparedPlayback> preparation = fixture.Player.PreparePlaybackAsync(
                 CreateSilenceStream(seconds: 3.0));
 
+            await WaitUntilAsync(GetSceneTree(), () => server.HasEvent("two-frames-sent"), maxFrames: 300);
+            Assert.False(preparation.IsCompleted, "A 30 fps stream must retain its duration-scaled startup gate.");
+
             Task finishedFirst = await Task.WhenAny(preparation, Task.Delay(4000));
             Assert.Same(preparation, finishedFirst);
 
@@ -69,7 +81,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
 
             LipSyncPlayer.PreparedPlayback prepared = await preparation;
             Assert.NotNull(prepared.StreamingSession);
-            Assert.True(prepared.PreparedFrameCount >= 3, "The startup buffer must have filled before preparation completed.");
+            Assert.True(prepared.PreparedFrameCount >= 6, "The duration-scaled startup buffer must have filled before preparation completed.");
 
             int completedCount = 0;
             fixture.Player.PlaybackCompleted += () => completedCount++;
@@ -96,6 +108,75 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
     }
 
     /// <summary>
+    /// One complete 357-frame stream emits correlated lifecycle diagnostics once at each transition and
+    /// presents the opaque identifier to the HTTP endpoint without exposing request content.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_Complete357FrameStream_EmitsCorrelatedLifecycleDiagnostics()
+    {
+        const int frameCount = 357;
+        ScriptedA2FServer server = new(async session =>
+        {
+            await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+            for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
+            {
+                await session.SendFrameAsync(frameIndex, frameIndex / (float)frameCount);
+            }
+
+            await session.SendCompleteAsync(frameCount);
+        });
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
+
+        try
+        {
+            Task<LipSyncPlayer.PreparedPlayback> preparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 0.3));
+            LipSyncPlayer.PreparedPlayback prepared = await preparation.WaitAsync(TimeSpan.FromSeconds(4));
+            LipSyncPlayer.StreamingPlaybackSession session = prepared.StreamingSession!;
+
+            fixture.Player.PlayPrepared(prepared);
+            await WaitUntilAsync(GetSceneTree(), () => !fixture.Player.HasActiveStreamingSession, maxFrames: 3000);
+
+            ScriptedA2FServer.ObservedRequest request = Assert.Single(server.Requests);
+            Assert.Equal(session.StreamID, request.StreamID);
+            Assert.Matches("^[0-9a-f]{32}$", request.StreamID!);
+            Assert.Equal(1, logger.Count("streaming request dispatched", LogLevel.Debug));
+            Assert.Equal(1, logger.Count("streaming response received", LogLevel.Debug));
+            Assert.Equal(1, logger.Count("streaming startup gate opened", LogLevel.Information));
+            Assert.Equal(1, logger.Count("streaming reader terminal Completed", LogLevel.Debug));
+            Assert.Equal(1, logger.Count("streaming playback ended", LogLevel.Information));
+            string[] prohibitedDiagnosticContent =
+            [
+                "?model=",
+                "mode=regression",
+                "AudioStreamWav",
+                "waveform",
+                "weights",
+                "GeneratedFace",
+                "Skeleton3D",
+                "AudioStreamPlayer3D",
+            ];
+            Assert.All(
+                logger.Entries,
+                entry => Assert.All(
+                    prohibitedDiagnosticContent,
+                    prohibited => Assert.DoesNotContain(prohibited, entry.Message, StringComparison.OrdinalIgnoreCase)));
+            Assert.Contains(logger.Entries, entry => entry.Message.Contains("357 frame(s)", StringComparison.Ordinal));
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Policy 2: when the playback cursor outruns frame arrival, playback holds the last applied frame,
     /// emits a rate-limited warning, and resumes applying frames once the download catches up.
     /// </summary>
@@ -107,7 +188,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         ScriptedA2FServer server = new(async session =>
         {
             await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
-            for (int frameIndex = 0; frameIndex < 5; frameIndex++)
+            for (int frameIndex = 0; frameIndex < 6; frameIndex++)
             {
                 await session.SendFrameAsync(frameIndex, frameIndex / 90f);
             }
@@ -115,7 +196,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             // Starvation window: the audio clock consumes frames while the download stalls.
             await Task.Delay(1300);
 
-            for (int frameIndex = 5; frameIndex < frameCount; frameIndex++)
+            for (int frameIndex = 6; frameIndex < frameCount; frameIndex++)
             {
                 await session.SendFrameAsync(frameIndex, frameIndex / 90f);
             }
@@ -126,6 +207,9 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
             GetSceneTree(),
             server.BlendshapesUrl);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
 
         try
         {
@@ -147,7 +231,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             // blendshape value may change while frames are unavailable.
             int appliedCountAtHold = fixture.Player.AppliedFrameCount;
             float meshValueAtHold = fixture.Mesh.GetBlendShapeValue(0);
-            Assert.InRange(meshValueAtHold, 0f, 5f / 90f);
+            Assert.InRange(meshValueAtHold, 0f, 6f / 90f);
 
             await WaitForFramesAsync(sceneTree, 15);
             Assert.Equal(appliedCountAtHold, fixture.Player.AppliedFrameCount);
@@ -168,6 +252,9 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Assert.True(session.Buffer.IsCompleted);
             Assert.Equal(frameCount, session.Buffer.FrameCount);
             Assert.Equal(1, fixture.Player.StreamingStarvationEpisodeCount);
+            Assert.Equal(1, fixture.Player.StreamingStarvationWarningCount);
+            Assert.Equal(1, logger.Count("streaming playback starvation started", LogLevel.Warning));
+            Assert.Equal(1, logger.Count("streaming playback starvation recovered", LogLevel.Information));
         }
         finally
         {
@@ -217,6 +304,9 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
             GetSceneTree(),
             server.BlendshapesUrl);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
 
         try
         {
@@ -265,6 +355,13 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
 
             Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
             Assert.Equal(2, server.Requests.Count);
+            ScriptedA2FServer.ObservedRequest[] requests = [.. server.Requests];
+            Assert.NotEqual(requests[0].StreamID, requests[1].StreamID);
+            Assert.Equal(1, logger.Count("cancellation origin ExplicitStop", LogLevel.Information));
+            Assert.Contains(
+                logger.Entries,
+                entry => entry.Message.Contains("streaming reader terminal Cancelled", StringComparison.Ordinal)
+                    && entry.Message.Contains("frame(s)", StringComparison.Ordinal));
             Assert.Equal(0, Volatile.Read(ref secondRequestAdmittedBeforeFirstReadLoopSettled));
             Assert.True((await secondPreparation).StreamingSession!.Buffer.IsCompleted);
         }
@@ -292,7 +389,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
                 await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
                 if (session.RequestIndex == 1)
                 {
-                    for (int frameIndex = 0; frameIndex < 4; frameIndex++)
+                    for (int frameIndex = 0; frameIndex < 8; frameIndex++)
                     {
                         await session.SendFrameAsync(frameIndex, 0.5f);
                     }
@@ -331,6 +428,9 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
             GetSceneTree(),
             server.BlendshapesUrl);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
         try
         {
             Task<LipSyncPlayer.PreparedPlayback> firstPreparation = fixture.Player.PreparePlaybackAsync(
@@ -351,6 +451,10 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Assert.True(fixture.Player.IsAudioPlaying);
             Assert.True(fixture.Player.HasActiveStreamingSession);
             Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
+            Assert.Equal(1, logger.Count("cancellation origin DirectPlaybackReplacement", LogLevel.Information));
+            ScriptedA2FServer.ObservedRequest[] requests = [.. server.Requests];
+            Assert.Equal(2, requests.Length);
+            Assert.NotEqual(requests[0].StreamID, requests[1].StreamID);
         }
         finally
         {
@@ -531,6 +635,9 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
             GetSceneTree(),
             server.BlendshapesUrl);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
 
         try
         {
@@ -549,6 +656,171 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Assert.False(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError));
             Assert.Contains("ended without a complete record", fixture.Player.PlaybackError, StringComparison.Ordinal);
             Assert.False(fixture.Player.IsAudioPlaying);
+            Assert.Contains(
+                logger.Entries,
+                entry => entry.Message.Contains("streaming reader terminal Faulted", StringComparison.Ordinal)
+                    && entry.Message.Contains("9 frame(s)", StringComparison.Ordinal)
+                    && entry.Message.Contains("faulted True", StringComparison.Ordinal));
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A regression stream must replace every case-insensitive, URL-decoded endpoint fps parameter with
+    /// one configured output frame rate, while preserving unrelated endpoint parameters.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_RegressionRequest_UsesSingleCanonicalFpsQueryParameter()
+    {
+        ScriptedA2FServer server = new(async session =>
+        {
+            await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+            await session.SendFrameAsync(0, 0.5f);
+            await session.SendCompleteAsync(1);
+        });
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl + "?keep=present&FPS=24&f%70%73=12",
+            player =>
+            {
+                player.StreamingOutputFps = 30;
+                player.StreamingStartupBufferSeconds = 0f;
+            });
+
+        try
+        {
+            LipSyncPlayer.PreparedPlayback prepared = await fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 1.0));
+
+            ScriptedA2FServer.ObservedRequest request = Assert.Single(server.Requests);
+            string[] queryParts = request.PathAndQuery.Split('?', 2)[1].Split('&');
+            string[] fpsParameters = [.. queryParts.Where(IsFpsQueryParameter)];
+            Assert.Equal(["fps=30"], fpsParameters);
+            Assert.Contains("keep=present", queryParts);
+            Assert.Equal(StreamFps, prepared.OutputFps);
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// When a below-60 fps stream cannot keep up with the audio clock, ending audio closes the consumer
+    /// before cancellation so any late producer record cannot apply a pose or fault the stream.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_WhenAudioEndsBeforeSlowStream_ClosesConsumerWithoutLateFrameFault()
+    {
+        ScriptedA2FServer server = new(async session =>
+        {
+            await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+            for (int frameIndex = 0; frameIndex < 4; frameIndex++)
+            {
+                await session.SendFrameAsync(frameIndex, frameIndex / 3f);
+            }
+
+            await Task.Delay(500);
+            session.MarkEvent("late-frame-attempted");
+            await session.SendFrameAsync(4, 1f);
+        });
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl);
+
+        try
+        {
+            Task<LipSyncPlayer.PreparedPlayback> preparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 0.25));
+            LipSyncPlayer.PreparedPlayback prepared = await preparation.WaitAsync(TimeSpan.FromSeconds(4));
+            LipSyncPlayer.StreamingPlaybackSession session = prepared.StreamingSession!;
+            int completedCount = 0;
+            fixture.Player.PlaybackCompleted += () => completedCount++;
+
+            fixture.Player.PlayPrepared(prepared);
+            await WaitUntilAsync(GetSceneTree(), () => completedCount == 1, maxFrames: 3000);
+
+            int appliedFrameCountAtAudioEnd = fixture.Player.AppliedFrameCount;
+            float meshValueAtAudioEnd = fixture.Mesh.GetBlendShapeValue(0);
+            await WaitUntilAsync(GetSceneTree(), () => session.ReadLoop.IsCompleted, maxFrames: 3000);
+            await WaitUntilAsync(GetSceneTree(), () => server.HasEvent("late-frame-attempted"), maxFrames: 3000);
+            await WaitForFramesAsync(GetSceneTree(), 10);
+
+            Assert.Equal(StreamingCancellationOrigin.AudioCompletedBeforeStream, session.CancellationOrigin);
+            Assert.True(session.Buffer.IsConsumerClosed);
+            Assert.False(session.Buffer.IsCompleted);
+            Assert.False(session.Buffer.IsFaulted);
+            Assert.Equal(4, session.Buffer.FrameCount);
+            Assert.Equal(appliedFrameCountAtAudioEnd, fixture.Player.AppliedFrameCount);
+            Assert.Equal(meshValueAtAudioEnd, fixture.Mesh.GetBlendShapeValue(0));
+            Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A completed stream shorter than the audible speech holds its final pose until audio naturally ends
+    /// and reports the terminal coverage gap as one Warning summary.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_WhenCompletedStreamIsShort_HoldsFinalPoseUntilAudioEndsAndWarns()
+    {
+        ScriptedA2FServer server = new(async session =>
+        {
+            await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+            await session.SendFrameAsync(0, 0.1f);
+            await session.SendFrameAsync(1, 0.5f);
+            await session.SendFrameAsync(2, 0.9f);
+            await session.SendCompleteAsync(3);
+        });
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
+
+        try
+        {
+            LipSyncPlayer.PreparedPlayback prepared = await fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 0.6));
+            int completedCount = 0;
+            fixture.Player.PlaybackCompleted += () => completedCount++;
+
+            fixture.Player.PlayPrepared(prepared);
+            await WaitUntilAsync(GetSceneTree(), () => fixture.Mesh.GetBlendShapeValue(0) >= 0.89f, maxFrames: 3000);
+
+            float finalPose = fixture.Mesh.GetBlendShapeValue(0);
+            await WaitForFramesAsync(GetSceneTree(), 5);
+            Assert.Equal(0.9f, finalPose);
+            Assert.Equal(finalPose, fixture.Mesh.GetBlendShapeValue(0));
+            Assert.True(fixture.Player.IsAudioPlaying);
+            Assert.Equal(0, completedCount);
+
+            await WaitUntilAsync(GetSceneTree(), () => completedCount == 1, maxFrames: 3000);
+
+            const string incompleteSummary = "streaming playback ended with incomplete buffer at audio end";
+            Assert.Equal(1, logger.Count(incompleteSummary, LogLevel.Warning));
+            RecordingDiagnosticsLogger.LogEntry completionSummary = Assert.Single(
+                logger.Entries,
+                entry => entry.Level == LogLevel.Information
+                    && entry.Message.Contains("streaming playback ended for stream", StringComparison.Ordinal));
+            Assert.Contains("frame(s) at playback start", completionSummary.Message, StringComparison.Ordinal);
+            Assert.Contains("starvation episode(s)", completionSummary.Message, StringComparison.Ordinal);
+            Assert.Contains("largest starved gap", completionSummary.Message, StringComparison.Ordinal);
+            Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
         }
         finally
         {
@@ -571,7 +843,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
 
         await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
             GetSceneTree(),
-            server.BlendshapesUrl,
+            server.BlendshapesUrl + "?Fps=17&keep=present",
             player => player.ModelId = A2FLipSyncPlayer.ModelIdOption.V3);
 
         try
@@ -592,6 +864,8 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             Assert.DoesNotContain("/stream", request.PathAndQuery, StringComparison.Ordinal);
             Assert.Contains("mode=diffusion", request.PathAndQuery, StringComparison.Ordinal);
             Assert.Contains("model=v3", request.PathAndQuery, StringComparison.Ordinal);
+            Assert.Contains("Fps=17", request.PathAndQuery, StringComparison.Ordinal);
+            Assert.DoesNotContain("fps=30", request.PathAndQuery, StringComparison.Ordinal);
 
             // The uploaded inference payload must be float32 16 kHz mono PCM: 1.5 s × 16000 samples × 4 bytes.
             Assert.Equal(24000 * sizeof(float), request.Body.Length);
@@ -617,7 +891,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         ScriptedA2FServer server = new(async session =>
         {
             await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
-            for (int frameIndex = 0; frameIndex < 5; frameIndex++)
+            for (int frameIndex = 0; frameIndex < 6; frameIndex++)
             {
                 await session.SendFrameAsync(frameIndex, frameIndex / 5f);
             }
@@ -763,6 +1037,13 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         };
     }
 
+    private static bool IsFpsQueryParameter(string queryPart)
+    {
+        int separatorIndex = queryPart.IndexOf('=');
+        string encodedKey = separatorIndex >= 0 ? queryPart[..separatorIndex] : queryPart;
+        return string.Equals(Uri.UnescapeDataString(encodedKey), "fps", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames)
     {
         for (int frame = 0; frame < maxFrames; frame++)
@@ -888,12 +1169,13 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         internal override async Task RunBackendStreamingInferenceAsync(
             AudioStreamWav speech,
             StreamingFrameBuffer frameBuffer,
+            string streamID,
             CancellationToken cancellationToken)
         {
             int callIndex = Interlocked.Increment(ref _streamingCallCount);
             try
             {
-                await base.RunBackendStreamingInferenceAsync(speech, frameBuffer, cancellationToken);
+                await base.RunBackendStreamingInferenceAsync(speech, frameBuffer, streamID, cancellationToken);
             }
             catch (OperationCanceledException) when (callIndex == 1 && cancellationToken.IsCancellationRequested)
             {
@@ -904,6 +1186,60 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         }
 
         public void ReleaseFirstReadLoop() => _ = _releaseFirstReadLoop.TrySetResult();
+    }
+
+    /// <summary>
+    /// Narrow ILogger capture for asserting diagnostic transition cardinality without involving the
+    /// project's console provider.
+    /// </summary>
+    private sealed class RecordingDiagnosticsLogger :
+        ILogger<LipSyncPlayer>,
+        ILogger<A2FLipSyncPlayer>,
+        IDisposable
+    {
+        private readonly Lock _lock = new();
+        private readonly List<LogEntry> _entries = [];
+
+        public IReadOnlyList<LogEntry> Entries
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return [.. _entries];
+                }
+            }
+        }
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public int Count(string messageFragment, LogLevel level)
+            => Entries.Count(entry => entry.Level == level
+                && entry.Message.Contains(messageFragment, StringComparison.Ordinal));
+
+        public void Dispose()
+        {
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel is not LogLevel.None;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            _ = eventId;
+            lock (_lock)
+            {
+                _entries.Add(new LogEntry(logLevel, formatter(state, exception)));
+            }
+        }
+
+        public sealed record LogEntry(LogLevel Level, string Message);
     }
 
     /// <summary>
@@ -935,7 +1271,7 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
             _ = Task.Run(AcceptLoopAsync);
         }
 
-        public sealed record ObservedRequest(int RequestIndex, string PathAndQuery, byte[] Body);
+        public sealed record ObservedRequest(int RequestIndex, string PathAndQuery, byte[] Body, string? StreamID);
 
         public sealed record ServerEvent(string Name, long ElapsedMilliseconds);
 
@@ -1010,7 +1346,11 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
         private async Task HandleContextAsync(HttpListenerContext context, int requestIndex)
         {
             byte[] body = await ReadRequestBodyAsync(context.Request);
-            Requests.Enqueue(new ObservedRequest(requestIndex, context.Request.Url?.PathAndQuery ?? string.Empty, body));
+            Requests.Enqueue(new ObservedRequest(
+                requestIndex,
+                context.Request.Url?.PathAndQuery ?? string.Empty,
+                body,
+                context.Request.Headers["X-Client-Stream-Id"]));
 
             HttpListenerResponse response = context.Response;
             response.SendChunked = true;

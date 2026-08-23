@@ -144,6 +144,31 @@ public sealed class StreamingFrameBufferTests
     }
 
     /// <summary>
+    /// Lifecycle diagnostics must obtain all producer fields from one locked buffer view, including the
+    /// final append timing, rather than combining independently-read values.
+    /// </summary>
+    [Fact]
+    public void CaptureDiagnosticSnapshot_AfterComplete_ContainsConsistentTerminalState()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0.1f);
+        buffer.SetMetadata(60f, ["jawOpen"]);
+        buffer.Append([0.25f]);
+        buffer.Append([0.75f]);
+        buffer.MarkComplete(2);
+
+        StreamingFrameBufferDiagnosticSnapshot snapshot = buffer.CaptureDiagnosticSnapshot();
+
+        Assert.Equal(2, snapshot.FrameCount);
+        Assert.Equal(60f, snapshot.OutputFps);
+        Assert.Equal(2, snapshot.DeclaredFrameCount);
+        Assert.True(snapshot.IsCompleted);
+        Assert.False(snapshot.IsFaulted);
+        _ = Assert.NotNull(snapshot.LastAppendTimestampUtc);
+        _ = Assert.NotNull(snapshot.LastAppendAge);
+        Assert.True(snapshot.LastAppendAge >= TimeSpan.Zero);
+    }
+
+    /// <summary>
     /// The startup gate must open exactly when ceil(startup seconds × fps) frames have arrived: 0.1 s
     /// at 60 fps requires six frames.
     /// </summary>
@@ -168,12 +193,116 @@ public sealed class StreamingFrameBufferTests
     }
 
     /// <summary>
+    /// A canonical 30 fps stream adds the conservative duration allowance even for a short speech clip.
+    /// </summary>
+    [Fact]
+    public void StartupBufferReady_WithThirtyFpsAndShortDuration_OpensAtFourFrames()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0.1f, playableDurationSeconds: 0.1d);
+        buffer.SetMetadata(30f, ["jawOpen"]);
+
+        buffer.Append([0.1f]);
+        buffer.Append([0.2f]);
+        buffer.Append([0.3f]);
+        Assert.False(buffer.StartupBufferReady.IsCompleted);
+
+        buffer.Append([0.4f]);
+
+        Assert.True(buffer.StartupBufferReady.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    /// A canonical 30 fps stream scales its nonzero gate for a longer prepared speech clip.
+    /// </summary>
+    [Fact]
+    public void StartupBufferReady_WithThirtyFpsAndLongDuration_OpensAtSixFrames()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0.1f, playableDurationSeconds: 3d);
+        buffer.SetMetadata(30f, ["jawOpen"]);
+
+        for (int frameIndex = 0; frameIndex < 5; frameIndex++)
+        {
+            buffer.Append([0.5f]);
+        }
+
+        Assert.False(buffer.StartupBufferReady.IsCompleted);
+
+        buffer.Append([0.5f]);
+
+        Assert.True(buffer.StartupBufferReady.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    /// At 60 fps the duration allowance remains active rather than falling back to only the configured
+    /// startup buffer.
+    /// </summary>
+    [Fact]
+    public void StartupBufferReady_WithSixtyFpsAndDuration_OpensAtNineFrames()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0.1f, playableDurationSeconds: 0.1d);
+        buffer.SetMetadata(60f, ["jawOpen"]);
+
+        for (int frameIndex = 0; frameIndex < 8; frameIndex++)
+        {
+            buffer.Append([0.5f]);
+        }
+
+        Assert.False(buffer.StartupBufferReady.IsCompleted);
+
+        buffer.Append([0.5f]);
+
+        Assert.True(buffer.StartupBufferReady.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    /// Producers above 35 fps add a duration-scaled deficit allowance to the configured startup buffer.
+    /// </summary>
+    [Fact]
+    public void StartupBufferReady_WithAboveThresholdFps_AddsDurationScaledAllowance()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0.1f, playableDurationSeconds: 2d);
+        buffer.SetMetadata(40f, ["jawOpen"]);
+
+        for (int frameIndex = 0; frameIndex < 13; frameIndex++)
+        {
+            buffer.Append([0.5f]);
+        }
+
+        Assert.False(buffer.StartupBufferReady.IsCompleted);
+
+        buffer.Append([0.5f]);
+
+        Assert.True(buffer.StartupBufferReady.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    /// Duration-scaled buffering is capped at five seconds of the actual metadata frame rate.
+    /// </summary>
+    [Fact]
+    public void StartupBufferReady_WithLargeDuration_CapsAtFiveSeconds()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 5f, playableDurationSeconds: 120d);
+        buffer.SetMetadata(60f, ["jawOpen"]);
+
+        for (int frameIndex = 0; frameIndex < 299; frameIndex++)
+        {
+            buffer.Append([0.5f]);
+        }
+
+        Assert.False(buffer.StartupBufferReady.IsCompleted);
+
+        buffer.Append([0.5f]);
+
+        Assert.True(buffer.StartupBufferReady.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
     /// A zero-second startup buffer still requires at least one frame so playback never starts empty.
     /// </summary>
     [Fact]
     public async Task StartupBufferReady_WithZeroSeconds_OpensAtFirstFrame()
     {
-        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0f);
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0f, playableDurationSeconds: 120d);
         buffer.SetMetadata(30f, ["jawOpen"]);
 
         Assert.False(buffer.StartupBufferReady.IsCompleted);
@@ -182,6 +311,42 @@ public sealed class StreamingFrameBufferTests
 
         await buffer.StartupBufferReady.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(buffer.StartupBufferReady.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    /// A 60 fps metadata record alone must not open a zero-buffer gate; exactly the first valid frame
+    /// opens it, independent of the metadata rate.
+    /// </summary>
+    [Fact]
+    public void StartupBufferReady_WithZeroSecondsAndSixtyFps_OpensExactlyAtFirstFrame()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0f, playableDurationSeconds: 120d);
+        buffer.SetMetadata(60f, ["jawOpen"]);
+
+        Assert.False(buffer.StartupBufferReady.IsCompleted);
+
+        buffer.Append([0.5f]);
+
+        Assert.True(buffer.StartupBufferReady.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    /// Closing the consumer is idempotent and safely discards late producer frames without faulting.
+    /// </summary>
+    [Fact]
+    public void CloseConsumer_WhenLateFramesArrive_DiscardsThemWithoutFault()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0.1f);
+        buffer.SetMetadata(30f, ["jawOpen"]);
+        buffer.Append([0.1f]);
+
+        buffer.CloseConsumer();
+        buffer.CloseConsumer();
+
+        buffer.Append([0.9f]);
+        Assert.True(buffer.IsConsumerClosed);
+        Assert.False(buffer.IsFaulted);
+        Assert.Equal(1, buffer.FrameCount);
     }
 
     /// <summary>

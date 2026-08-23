@@ -6,6 +6,21 @@ using Microsoft.Extensions.Logging;
 namespace AlleyCat.Speech.LipSync;
 
 /// <summary>
+/// The first lifecycle actor that cancelled a streaming session.
+/// </summary>
+internal enum StreamingCancellationOrigin
+{
+    ExplicitStop,
+    DirectPlaybackReplacement,
+    ReplacementAdmission,
+    PreparationAbandoned,
+    NodeTeardown,
+    AudioCompletedBeforeStream,
+    LinkedCallerCancellation,
+    Unknown,
+}
+
+/// <summary>
 /// Loads an audio clip through a concrete backend and plays ARKit blendshape values onto character meshes.
 /// </summary>
 public abstract partial class LipSyncPlayer : Node
@@ -192,7 +207,6 @@ public abstract partial class LipSyncPlayer : Node
 
     private const float DefaultOutputFps = 30f;
     private const float BlendshapeChangeEpsilon = 1e-4f;
-    private const long StreamingStarvationWarningIntervalMs = 2000;
 
     private float[][] _frames = [];
     private readonly List<MeshBinding> _meshBindings = [];
@@ -217,7 +231,6 @@ public abstract partial class LipSyncPlayer : Node
     private int _streamingFramesBufferedAtStart;
     private int _streamingMaxStarvedFrameGap;
     private bool _streamingStarving;
-    private long _lastStreamingStarvationWarningMs;
 
     internal bool IsLifetimeEnded
     {
@@ -253,8 +266,9 @@ public abstract partial class LipSyncPlayer : Node
             disposeBackend = !_backendDisposalPending;
         }
 
+        _lastStreamingSession?.Cancel(StreamingCancellationOrigin.NodeTeardown);
         _preparationLifetimeCancellation.Cancel();
-        StopPlayback(resetWeights: true, clearFrames: true);
+        StopPlayback(resetWeights: true, clearFrames: true, StreamingCancellationOrigin.NodeTeardown);
         if (disposeBackend)
         {
             DisposeBackend();
@@ -324,11 +338,25 @@ public abstract partial class LipSyncPlayer : Node
         int targetFrameIndex = Mathf.FloorToInt((float)(_playbackTimeSeconds * _outputFps * PlaybackSpeed));
         if (targetFrameIndex >= availableFrames)
         {
+            if (streamingBuffer is not null && streamingBuffer.IsCompleted)
+            {
+                // A terminal short stream has no more poses to apply. Keep its final pose while the
+                // audio clock continues; natural audio completion owns the session's finalisation.
+                int finalFrameIndex = availableFrames - 1;
+                if (_lastAppliedFrameIndex < finalFrameIndex)
+                {
+                    ApplyFrame(finalFrameIndex);
+                    _lastAppliedFrameIndex = finalFrameIndex;
+                }
+
+                return;
+            }
+
             if (streamingBuffer is not null && !streamingBuffer.IsCompleted)
             {
                 // The playback cursor outran the streaming download; hold the last applied frame until more
                 // frames arrive (starvation hold) while audio continues.
-                HandleStreamingStarvation(targetFrameIndex, availableFrames);
+                HandleStreamingStarvation(streamingBuffer, targetFrameIndex, availableFrames);
                 return;
             }
 
@@ -356,6 +384,7 @@ public abstract partial class LipSyncPlayer : Node
             return;
         }
 
+        LogStreamingStarvationRecovery(streamingBuffer);
         _streamingStarving = false;
         ApplyFrame(targetFrameIndex);
         _lastAppliedFrameIndex = targetFrameIndex;
@@ -377,7 +406,10 @@ public abstract partial class LipSyncPlayer : Node
             {
                 // Direct streaming replacement is a cut-first path: do not leave the prior audio or facial
                 // session active while its reader is settling before this request may be admitted.
-                StopPlayback(resetWeights: true, clearFrames: true);
+                StopPlayback(
+                    resetWeights: true,
+                    clearFrames: true,
+                    StreamingCancellationOrigin.DirectPlaybackReplacement);
                 PlayPrepared(PrepareStreamingPlaybackBlocking(speech));
                 return;
             }
@@ -428,7 +460,7 @@ public abstract partial class LipSyncPlayer : Node
             return;
         }
 
-        StopPlayback(resetWeights: true, clearFrames: true);
+        StopPlayback(resetWeights: true, clearFrames: true, StreamingCancellationOrigin.ReplacementAdmission);
         StartPlayback(playback);
     }
 
@@ -443,7 +475,7 @@ public abstract partial class LipSyncPlayer : Node
     /// running to completion.
     /// </para>
     /// </remarks>
-    public void Stop() => StopPlayback(resetWeights: true, clearFrames: true);
+    public void Stop() => StopPlayback(resetWeights: true, clearFrames: true, StreamingCancellationOrigin.ExplicitStop);
 
     /// <summary>
     /// Simulates the natural end of the active playback session for deterministic testing.
@@ -476,6 +508,17 @@ public abstract partial class LipSyncPlayer : Node
     /// for tests: <see cref="Stop"/> detaches the session, so this also proves stream cut-off.
     /// </summary>
     internal bool HasActiveStreamingSession => _activeStreamingSession is not null;
+
+    /// <summary>
+    /// Replaces the node logger for focused runtime diagnostics tests.
+    /// </summary>
+    internal IDisposable OverrideLoggerForTesting(ILogger<LipSyncPlayer> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ILogger<LipSyncPlayer>? previousLogger = _logger;
+        _logger = logger;
+        return new LoggerOverride(this, previousLogger);
+    }
 
     /// <summary>
     /// Sample rate the inference backend requires; the base class normalises inference input to this rate.
@@ -523,6 +566,7 @@ public abstract partial class LipSyncPlayer : Node
     internal virtual Task RunBackendStreamingInferenceAsync(
         AudioStreamWav speech,
         StreamingFrameBuffer frameBuffer,
+        string streamID,
         CancellationToken cancellationToken)
         => Task.FromException(new NotSupportedException(
             "LipSyncPlayer: this backend does not support streaming inference."));
@@ -572,9 +616,12 @@ public abstract partial class LipSyncPlayer : Node
     internal sealed class StreamingPlaybackSession(
         StreamingFrameBuffer buffer,
         CancellationTokenSource cancellation,
-        Task readLoop)
+        double playableDurationSeconds,
+        string streamID,
+        ILogger logger)
     {
-        private int _cancelled;
+        private int _cancellationOrigin = -1;
+        private CancellationTokenRegistration _linkedCallerCancellationRegistration;
 
         /// <summary>
         /// Frame buffer shared between the background reader thread and main-thread playback.
@@ -582,30 +629,67 @@ public abstract partial class LipSyncPlayer : Node
         public StreamingFrameBuffer Buffer => buffer;
 
         /// <summary>
+        /// Opaque identifier correlating the client-side lifecycle diagnostics with one streaming request.
+        /// </summary>
+        public string StreamID => streamID;
+
+        /// <summary>
         /// Cancellation source observed by the read loop; disposed when the loop settles.
         /// </summary>
         public CancellationTokenSource Cancellation => cancellation;
 
         /// <summary>
+        /// Duration of the original audio handed to the audible player, retained for terminal coverage
+        /// diagnostics without consulting Godot audio APIs off the main thread.
+        /// </summary>
+        public double PlayableDurationSeconds => playableDurationSeconds;
+
+        /// <summary>
         /// Read-loop task; settles when the stream completes, fails, or is cancelled.
         /// </summary>
-        public Task ReadLoop => readLoop;
+        public Task ReadLoop
+        {
+            get;
+            private set;
+        } = Task.CompletedTask;
 
         /// <summary>
         /// Indicates the session was explicitly cut through <see cref="Cancel"/>.
         /// </summary>
-        public bool IsCancelled => Volatile.Read(ref _cancelled) == 1;
+        public bool IsCancelled => Volatile.Read(ref _cancellationOrigin) >= 0;
+
+        /// <summary>
+        /// The first cancellation origin recorded for this session, if any.
+        /// </summary>
+        public StreamingCancellationOrigin? CancellationOrigin => Volatile.Read(ref _cancellationOrigin) is int value and >= 0
+            ? (StreamingCancellationOrigin)value
+            : null;
+
+        public void SetReadLoop(Task readLoop) => ReadLoop = readLoop;
+
+        public void RegisterLinkedCallerCancellation(CancellationToken callerCancellation)
+        {
+            if (!callerCancellation.CanBeCanceled)
+            {
+                return;
+            }
+
+            _linkedCallerCancellationRegistration = callerCancellation.Register(
+                static state => ((StreamingPlaybackSession)state!).RecordCancellationOrigin(
+                    StreamingCancellationOrigin.LinkedCallerCancellation),
+                this);
+        }
+
+        public void DisposeLinkedCallerCancellationRegistration()
+            => _linkedCallerCancellationRegistration.Dispose();
 
         /// <summary>
         /// Cuts the session, aborting the in-flight stream download. Safe to call after the read loop has
         /// already settled.
         /// </summary>
-        public void Cancel()
+        public void Cancel(StreamingCancellationOrigin origin)
         {
-            if (Interlocked.Exchange(ref _cancelled, 1) != 0)
-            {
-                return;
-            }
+            RecordCancellationOrigin(origin);
 
             try
             {
@@ -615,6 +699,26 @@ public abstract partial class LipSyncPlayer : Node
             {
                 // The read loop already settled and disposed the source; there is nothing to cancel.
             }
+        }
+
+        public void RecordCancellationOrigin(StreamingCancellationOrigin origin)
+        {
+            if (Interlocked.CompareExchange(ref _cancellationOrigin, (int)origin, -1) != -1)
+            {
+                return;
+            }
+
+            StreamingFrameBufferDiagnosticSnapshot snapshot = buffer.CaptureDiagnosticSnapshot();
+            logger.LogInformation(
+                "LipSyncPlayer recorded first cancellation origin {CancellationOrigin} for stream {StreamID}: {FrameCount} frame(s), {OutputFps:0.###} fps, declared {DeclaredFrameCount}, complete {IsCompleted}, faulted {IsFaulted}, last append age {LastAppendAgeMilliseconds} ms.",
+                origin,
+                streamID,
+                snapshot.FrameCount,
+                snapshot.OutputFps,
+                snapshot.DeclaredFrameCount,
+                snapshot.IsCompleted,
+                snapshot.IsFaulted,
+                snapshot.LastAppendAge?.TotalMilliseconds);
         }
     }
 
@@ -746,11 +850,12 @@ public abstract partial class LipSyncPlayer : Node
             session = StartStreamingInferenceSession(speech, callerCancellation);
             _lastStreamingSession = session;
             await session.Buffer.StartupBufferReady.WaitAsync(preparationToken);
+            LogStreamingStartupGate(session);
             return CreateStreamingPreparedPlayback(speech, session);
         }
         catch
         {
-            await TeardownStreamingSessionAsync(session);
+            await TeardownStreamingSessionAsync(session, StreamingCancellationOrigin.PreparationAbandoned);
             throw;
         }
     }
@@ -781,11 +886,12 @@ public abstract partial class LipSyncPlayer : Node
             session = StartStreamingInferenceSession(speech, externalCancellation: null);
             _lastStreamingSession = session;
             session.Buffer.StartupBufferReady.Wait();
+            LogStreamingStartupGate(session);
             return CreateStreamingPreparedPlayback(speech, session);
         }
         catch
         {
-            TeardownStreamingSessionAsync(session).GetAwaiter().GetResult();
+            TeardownStreamingSessionAsync(session, StreamingCancellationOrigin.PreparationAbandoned).GetAwaiter().GetResult();
             throw;
         }
     }
@@ -812,7 +918,10 @@ public abstract partial class LipSyncPlayer : Node
         // Inference consumes a stream normalised to the backend sample rate; playback keeps the original
         // stream so the game hears the generator's original-quality audio.
         AudioStreamWav inferenceSpeech = CreateBackendInferenceStream(speech);
-        StreamingFrameBuffer frameBuffer = new(Mathf.Max(0f, StreamingStartupBufferSeconds));
+        double playableDurationSeconds = GetPlayableDurationSeconds(speech);
+        StreamingFrameBuffer frameBuffer = new(
+            Mathf.Max(0f, StreamingStartupBufferSeconds),
+            playableDurationSeconds);
 
         CancellationTokenSource sessionCancellation;
         lock (_preparationLifetimeLock)
@@ -832,9 +941,16 @@ public abstract partial class LipSyncPlayer : Node
                 : CancellationTokenSource.CreateLinkedTokenSource(_preparationLifetimeCancellation.Token);
         }
 
-        var readLoop = Task.Run(() => RunStreamingReadLoopAsync(inferenceSpeech, frameBuffer, sessionCancellation));
-
-        return new StreamingPlaybackSession(frameBuffer, sessionCancellation, readLoop);
+        StreamingPlaybackSession session = new(
+            frameBuffer,
+            sessionCancellation,
+            playableDurationSeconds,
+            Guid.NewGuid().ToString("N"),
+            GetLogger());
+        session.RegisterLinkedCallerCancellation(externalCancellation ?? CancellationToken.None);
+        var readLoop = Task.Run(() => RunStreamingReadLoopAsync(inferenceSpeech, session));
+        session.SetReadLoop(readLoop);
+        return session;
     }
 
     private async Task SettlePredecessorStreamingSessionAsync(CancellationToken cancellationToken)
@@ -849,7 +965,7 @@ public abstract partial class LipSyncPlayer : Node
         {
             GetLogger().LogInformation(
                 "LipSyncPlayer cancelling predecessor streaming session before admitting a replacement request.");
-            predecessor.Cancel();
+            predecessor.Cancel(StreamingCancellationOrigin.ReplacementAdmission);
         }
 
         var settlementTimeout = TimeSpan.FromSeconds(Mathf.Clamp(
@@ -863,7 +979,6 @@ public abstract partial class LipSyncPlayer : Node
         catch (TimeoutException ex)
         {
             GetLogger().LogError(
-                ex,
                 "LipSyncPlayer refused replacement streaming request because predecessor settlement exceeded {SettlementTimeoutSeconds:0.###} s.",
                 settlementTimeout.TotalSeconds);
             const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session did not settle before the replacement deadline.";
@@ -873,8 +988,8 @@ public abstract partial class LipSyncPlayer : Node
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             GetLogger().LogError(
-                ex,
-                "LipSyncPlayer refused replacement streaming request because predecessor settlement failed unexpectedly.");
+                "LipSyncPlayer refused replacement streaming request because predecessor settlement failed unexpectedly with {FailureType}.",
+                ex.GetType().Name);
             const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session failed while settling.";
             QueuePlaybackError(message);
             throw new InvalidOperationException(message, ex);
@@ -884,8 +999,8 @@ public abstract partial class LipSyncPlayer : Node
         {
             Exception? predecessorError = predecessor.Buffer.Error;
             GetLogger().LogError(
-                predecessorError,
-                "LipSyncPlayer refused replacement streaming request because predecessor settlement completed with an inference failure.");
+                "LipSyncPlayer refused replacement streaming request because predecessor settlement completed with an inference failure of type {FailureType}.",
+                predecessorError?.GetType().Name ?? "Unknown");
             const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session failed while settling.";
             QueuePlaybackError(message);
             throw new InvalidOperationException(message, predecessorError);
@@ -900,27 +1015,34 @@ public abstract partial class LipSyncPlayer : Node
 
     private async Task RunStreamingReadLoopAsync(
         AudioStreamWav inferenceSpeech,
-        StreamingFrameBuffer frameBuffer,
-        CancellationTokenSource sessionCancellation)
+        StreamingPlaybackSession session)
     {
         try
         {
-            await RunBackendStreamingInferenceAsync(inferenceSpeech, frameBuffer, sessionCancellation.Token);
+            await RunBackendStreamingInferenceAsync(
+                inferenceSpeech,
+                session.Buffer,
+                session.StreamID,
+                session.Cancellation.Token);
         }
-        catch (Exception ex) when (sessionCancellation.IsCancellationRequested)
+        catch (Exception) when (session.Cancellation.IsCancellationRequested)
         {
             // The session was cut (stop, node teardown, or preparation cancellation); a transport abort may
             // surface as either cancellation or I/O failure, and neither makes the cut session faulted.
-            GetLogger().LogDebug(ex, "LipSyncPlayer streaming inference read loop was cancelled.");
+            session.RecordCancellationOrigin(StreamingCancellationOrigin.Unknown);
         }
         catch (Exception ex)
         {
-            frameBuffer.MarkFailed(ex);
-            GetLogger().LogError(ex, "LipSyncPlayer streaming inference read loop failed.");
+            session.Buffer.MarkFailed(ex);
+            GetLogger().LogError(
+                "LipSyncPlayer streaming inference read loop failed for stream {StreamID} with {FailureType}.",
+                session.StreamID,
+                ex.GetType().Name);
         }
         finally
         {
-            sessionCancellation.Dispose();
+            session.DisposeLinkedCallerCancellationRegistration();
+            session.Cancellation.Dispose();
             CompletePreparation();
         }
     }
@@ -939,14 +1061,16 @@ public abstract partial class LipSyncPlayer : Node
         };
     }
 
-    private static async Task TeardownStreamingSessionAsync(StreamingPlaybackSession? session)
+    private static async Task TeardownStreamingSessionAsync(
+        StreamingPlaybackSession? session,
+        StreamingCancellationOrigin cancellationOrigin)
     {
         if (session is null)
         {
             return;
         }
 
-        session.Cancel();
+        session.Cancel(cancellationOrigin);
         await session.ReadLoop.ConfigureAwait(false);
     }
 
@@ -999,6 +1123,13 @@ public abstract partial class LipSyncPlayer : Node
         };
     }
 
+    private static double GetPlayableDurationSeconds(AudioStreamWav speech)
+    {
+        int channelCount = speech.Stereo ? 2 : 1;
+        int bytesPerSecond = checked(speech.MixRate * channelCount * sizeof(short));
+        return bytesPerSecond > 0 ? speech.Data.Length / (double)bytesPerSecond : 0d;
+    }
+
     private void CompletePreparation()
     {
         bool disposeBackend;
@@ -1048,7 +1179,6 @@ public abstract partial class LipSyncPlayer : Node
             StreamingStarvationEpisodeCount = 0;
             StreamingStarvationWarningCount = 0;
             _streamingMaxStarvedFrameGap = 0;
-            _lastStreamingStarvationWarningMs = 0;
         }
         else
         {
@@ -1064,10 +1194,10 @@ public abstract partial class LipSyncPlayer : Node
         if (streamingSession is not null)
         {
             GetLogger().LogInformation(
-                "LipSyncPlayer started streaming playback with {BufferedFrameCount} buffered frame(s) at {OutputFps:0.###} fps, mapped {MappedMeshCount} mesh(es).",
+                "LipSyncPlayer started streaming playback for stream {StreamID} with {BufferedFrameCount} buffered frame(s) at {OutputFps:0.###} fps.",
+                streamingSession.StreamID,
                 _streamingFramesBufferedAtStart,
-                _outputFps,
-                _meshBindings.Count);
+                _outputFps);
         }
         else
         {
@@ -1125,14 +1255,25 @@ public abstract partial class LipSyncPlayer : Node
         MappedChannelCount = 0;
     }
 
-    private void StopPlayback(bool resetWeights, bool clearFrames)
+    private void StopPlayback(
+        bool resetWeights,
+        bool clearFrames,
+        StreamingCancellationOrigin? cancellationOrigin = StreamingCancellationOrigin.Unknown,
+        bool audioCompleted = false)
     {
         // Detach and cut the active streaming session so the background download cannot outlive its
         // playback session; rapid re-play cancels the previous session's read loop before the new one is
         // adopted.
         StreamingPlaybackSession? session = _activeStreamingSession;
         _activeStreamingSession = null;
-        session?.Cancel();
+        if (session is not null)
+        {
+            LogStreamingSessionSummary(session, audioCompleted);
+            if (cancellationOrigin is { } origin)
+            {
+                session.Cancel(origin);
+            }
+        }
 
         bool hadPreparedBindings = _meshBindings.Count > 0;
 
@@ -1158,68 +1299,120 @@ public abstract partial class LipSyncPlayer : Node
 
     private void CompletePlayback()
     {
-        if (_activeStreamingSession is { } session)
+        StreamingCancellationOrigin? cancellationOrigin = null;
+        if (_activeStreamingSession is { } session && !session.Buffer.IsCompleted)
         {
-            LogStreamingSessionSummary(session);
+            // Stop accepting producer frames before cancelling the request. A frame already in transport
+            // must not be applied after the audio-clock playback session has ended.
+            session.Buffer.CloseConsumer();
+            cancellationOrigin = StreamingCancellationOrigin.AudioCompletedBeforeStream;
         }
 
-        StopPlayback(resetWeights: false, clearFrames: false);
+        StopPlayback(
+            resetWeights: false,
+            clearFrames: false,
+            cancellationOrigin: cancellationOrigin,
+            audioCompleted: true);
         PlaybackCompleted?.Invoke();
     }
 
     /// <summary>
     /// Handles the playback cursor outrunning the buffered streaming frames: holds the last applied frame
-    /// and emits a rate-limited warning while collecting per-session diagnostics.
+    /// and records one warning for the starvation episode.
     /// </summary>
-    private void HandleStreamingStarvation(int targetFrameIndex, int availableFrames)
+    private void HandleStreamingStarvation(
+        StreamingFrameBuffer buffer,
+        int targetFrameIndex,
+        int availableFrames)
     {
         if (!_streamingStarving)
         {
             _streamingStarving = true;
             StreamingStarvationEpisodeCount++;
+            StreamingStarvationWarningCount++;
+            StreamingFrameBufferDiagnosticSnapshot snapshot = buffer.CaptureDiagnosticSnapshot();
+            GetLogger().LogWarning(
+                "LipSyncPlayer streaming playback starvation started for stream {StreamID} at frame {TargetFrameIndex}: {FrameCount} frame(s), {OutputFps:0.###} fps, declared {DeclaredFrameCount}, complete {IsCompleted}, faulted {IsFaulted}, last append age {LastAppendAgeMilliseconds} ms.",
+                _activeStreamingSession?.StreamID,
+                targetFrameIndex,
+                snapshot.FrameCount,
+                snapshot.OutputFps,
+                snapshot.DeclaredFrameCount,
+                snapshot.IsCompleted,
+                snapshot.IsFaulted,
+                snapshot.LastAppendAge?.TotalMilliseconds);
         }
 
         _streamingMaxStarvedFrameGap = Math.Max(
             _streamingMaxStarvedFrameGap,
             targetFrameIndex - Math.Max(0, availableFrames - 1));
 
-        long nowMs = System.Environment.TickCount64;
-        if (nowMs - _lastStreamingStarvationWarningMs >= StreamingStarvationWarningIntervalMs)
-        {
-            _lastStreamingStarvationWarningMs = nowMs;
-            StreamingStarvationWarningCount++;
-            GetLogger().LogWarning(
-                "LipSyncPlayer streaming playback starved at frame {TargetFrameIndex} with only {BufferedFrameCount} frame(s) buffered; holding the last applied frame.",
-                targetFrameIndex,
-                availableFrames);
-        }
     }
 
-    private void LogStreamingSessionSummary(StreamingPlaybackSession session)
+    private void LogStreamingSessionSummary(StreamingPlaybackSession session, bool audioCompleted)
     {
-        StreamingFrameBuffer buffer = session.Buffer;
-        int bufferedFrameCount = buffer.FrameCount;
-        int? declaredFrameCount = buffer.DeclaredFrameCount;
-
-        if (buffer.IsCompleted)
-        {
-            GetLogger().LogInformation(
-                "LipSyncPlayer streaming playback completed: {FramesBufferedAtStart} frame(s) buffered at playback start, {BufferedFrameCount} frame(s) total, {StarvationEpisodeCount} starvation episode(s), largest starved gap {MaxStarvedFrameGap} frame(s).",
-                _streamingFramesBufferedAtStart,
-                bufferedFrameCount,
-                StreamingStarvationEpisodeCount,
-                _streamingMaxStarvedFrameGap);
-        }
-        else
+        StreamingFrameBufferDiagnosticSnapshot snapshot = session.Buffer.CaptureDiagnosticSnapshot();
+        bool isIncompleteAtAudioEnd = audioCompleted
+            && snapshot.OutputFps > 0f
+            && snapshot.FrameCount / snapshot.OutputFps < session.PlayableDurationSeconds;
+        if (isIncompleteAtAudioEnd)
         {
             GetLogger().LogWarning(
-                "LipSyncPlayer streaming playback ended before the inference stream completed: {BufferedFrameCount} of {DeclaredFrameCount} frame(s) buffered, {FramesBufferedAtStart} frame(s) buffered at playback start, {StarvationEpisodeCount} starvation episode(s), largest starved gap {MaxStarvedFrameGap} frame(s).",
-                bufferedFrameCount,
-                declaredFrameCount?.ToString() ?? "unknown",
-                _streamingFramesBufferedAtStart,
-                StreamingStarvationEpisodeCount,
-                _streamingMaxStarvedFrameGap);
+                "LipSyncPlayer streaming playback ended with incomplete buffer at audio end for stream {StreamID}: {FrameCount} frame(s), {OutputFps:0.###} fps, declared {DeclaredFrameCount}, complete {IsCompleted}, faulted {IsFaulted}, playable duration {PlayableDurationSeconds:0.###} s.",
+                session.StreamID,
+                snapshot.FrameCount,
+                snapshot.OutputFps,
+                snapshot.DeclaredFrameCount,
+                snapshot.IsCompleted,
+                snapshot.IsFaulted,
+                session.PlayableDurationSeconds);
         }
+
+        GetLogger().LogInformation(
+            "LipSyncPlayer streaming playback ended for stream {StreamID}: {FrameCount} frame(s), {OutputFps:0.###} fps, declared {DeclaredFrameCount}, complete {IsCompleted}, faulted {IsFaulted}, last append age {LastAppendAgeMilliseconds} ms, {FramesBufferedAtStart} frame(s) at playback start, {StarvationEpisodeCount} starvation episode(s), largest starved gap {MaxStarvedFrameGap} frame(s).",
+            session.StreamID,
+            snapshot.FrameCount,
+            snapshot.OutputFps,
+            snapshot.DeclaredFrameCount,
+            snapshot.IsCompleted,
+            snapshot.IsFaulted,
+            snapshot.LastAppendAge?.TotalMilliseconds,
+            _streamingFramesBufferedAtStart,
+            StreamingStarvationEpisodeCount,
+            _streamingMaxStarvedFrameGap);
+    }
+
+    private void LogStreamingStartupGate(StreamingPlaybackSession session)
+    {
+        StreamingFrameBufferDiagnosticSnapshot snapshot = session.Buffer.CaptureDiagnosticSnapshot();
+        GetLogger().LogInformation(
+            "LipSyncPlayer streaming startup gate opened for stream {StreamID}: {FrameCount} frame(s), {OutputFps:0.###} fps, declared {DeclaredFrameCount}, complete {IsCompleted}, faulted {IsFaulted}, last append age {LastAppendAgeMilliseconds} ms.",
+            session.StreamID,
+            snapshot.FrameCount,
+            snapshot.OutputFps,
+            snapshot.DeclaredFrameCount,
+            snapshot.IsCompleted,
+            snapshot.IsFaulted,
+            snapshot.LastAppendAge?.TotalMilliseconds);
+    }
+
+    private void LogStreamingStarvationRecovery(StreamingFrameBuffer? buffer)
+    {
+        if (!_streamingStarving || buffer is null)
+        {
+            return;
+        }
+
+        StreamingFrameBufferDiagnosticSnapshot snapshot = buffer.CaptureDiagnosticSnapshot();
+        GetLogger().LogInformation(
+            "LipSyncPlayer streaming playback starvation recovered for stream {StreamID}: {FrameCount} frame(s), {OutputFps:0.###} fps, declared {DeclaredFrameCount}, complete {IsCompleted}, faulted {IsFaulted}, last append age {LastAppendAgeMilliseconds} ms.",
+            _activeStreamingSession?.StreamID,
+            snapshot.FrameCount,
+            snapshot.OutputFps,
+            snapshot.DeclaredFrameCount,
+            snapshot.IsCompleted,
+            snapshot.IsFaulted,
+            snapshot.LastAppendAge?.TotalMilliseconds);
     }
 
     private void BuildMeshBindings(IReadOnlyList<string> blendshapeNames)
@@ -1299,6 +1492,24 @@ public abstract partial class LipSyncPlayer : Node
 
     private ILogger<LipSyncPlayer> GetLogger()
         => _logger ??= GameLoggerResolver.ResolveRequired<LipSyncPlayer>();
+
+    private sealed class LoggerOverride(
+        LipSyncPlayer player,
+        ILogger<LipSyncPlayer>? previousLogger) : IDisposable
+    {
+        private LipSyncPlayer? _player = player;
+
+        public void Dispose()
+        {
+            if (_player is not { } player)
+            {
+                return;
+            }
+
+            player._logger = previousLogger;
+            _player = null;
+        }
+    }
 
     private Skeleton3D GetConfiguredSkeleton()
     {

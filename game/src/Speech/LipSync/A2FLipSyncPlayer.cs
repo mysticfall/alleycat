@@ -100,6 +100,17 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     } = 10;
 
     /// <summary>
+    /// Requested output frame rate for regression streaming inference. The server reports the actual
+    /// frame rate in streaming metadata, which remains authoritative for playback and buffering.
+    /// </summary>
+    [Export(PropertyHint.Range, "1,240,1,or_greater")]
+    public int StreamingOutputFps
+    {
+        get;
+        set;
+    } = 30;
+
+    /// <summary>
     /// When enabled, validates connectivity against GET /health during initialisation.
     /// </summary>
     [Export]
@@ -353,6 +364,17 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     private ILogger Logger => _logger
         ?? throw new InvalidOperationException("LipSyncPlayer: logger was not initialised.");
 
+    /// <summary>
+    /// Replaces the streaming logger for focused runtime diagnostics tests.
+    /// </summary>
+    internal IDisposable OverrideStreamingLoggerForTesting(ILogger<A2FLipSyncPlayer> logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        ILogger<A2FLipSyncPlayer>? previousLogger = _logger;
+        _logger = logger;
+        return new StreamingLoggerOverride(this, previousLogger);
+    }
+
     /// <inheritdoc />
     protected override void InitialiseBackend()
     {
@@ -437,6 +459,7 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
     internal override async Task RunBackendStreamingInferenceAsync(
         AudioStreamWav speech,
         StreamingFrameBuffer frameBuffer,
+        string streamID,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -460,11 +483,25 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
                 Content = new ByteArrayContent(FloatsToBytesLittleEndian(monoWaveform)),
             };
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            request.Headers.Add("X-Client-Stream-Id", streamID);
+
+            if (Logger.IsEnabled(LogLevel.Debug))
+            {
+                Logger.LogDebug("A2FLipSyncPlayer streaming request dispatched for stream {StreamID}.", streamID);
+            }
 
             using HttpResponseMessage response = await httpClient.SendAsync(
                 request,
                 HttpCompletionOption.ResponseHeadersRead,
                 deadlineCancellation.Token);
+
+            if (Logger.IsEnabled(LogLevel.Debug))
+            {
+                Logger.LogDebug(
+                    "A2FLipSyncPlayer streaming response received for stream {StreamID} with status {StatusCode}.",
+                    streamID,
+                    (int)response.StatusCode);
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -480,7 +517,8 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
             var recordReader = new A2fStreamingRecordReader(
                 TimeSpan.FromSeconds(Mathf.Max(1, StreamingIdleTimeoutSeconds)),
                 A2fEyeTranslationSettings.FromPlayer(this),
-                Logger);
+                Logger,
+                streamID);
             await recordReader.ReadAsync(responseStream, frameBuffer, deadlineCancellation.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -519,6 +557,8 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         {
             builder.Path = $"{path}/stream";
         }
+
+        builder.Query = ReplaceStreamingFpsQueryParameter(builder.Query, Math.Max(1, StreamingOutputFps));
 
         return builder.Uri;
     }
@@ -685,6 +725,32 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         }
 
         queryParts.Add($"{Uri.EscapeDataString(key)}={Uri.EscapeDataString(value)}");
+    }
+
+    /// <summary>
+    /// Replaces any endpoint-configured <c>fps</c> query parameters with the one canonical streaming
+    /// request value. The batch URI deliberately does not call this helper.
+    /// </summary>
+    private static string ReplaceStreamingFpsQueryParameter(string query, int outputFps)
+    {
+        string rawQuery = query.TrimStart('?');
+        var queryParts = new List<string>();
+        if (!string.IsNullOrEmpty(rawQuery))
+        {
+            foreach (string queryPart in rawQuery.Split('&', StringSplitOptions.None))
+            {
+                int separatorIndex = queryPart.IndexOf('=');
+                string encodedKey = separatorIndex >= 0 ? queryPart[..separatorIndex] : queryPart;
+                string decodedKey = Uri.UnescapeDataString(encodedKey);
+                if (!string.Equals(decodedKey, "fps", StringComparison.OrdinalIgnoreCase))
+                {
+                    queryParts.Add(queryPart);
+                }
+            }
+        }
+
+        queryParts.Add($"fps={outputFps.ToString(CultureInfo.InvariantCulture)}");
+        return string.Join("&", queryParts);
     }
 
     private string ResolveModelId() => ModelId switch
@@ -1072,6 +1138,24 @@ public partial class A2FLipSyncPlayer : LipSyncPlayer
         {
             get;
             init;
+        }
+    }
+
+    private sealed class StreamingLoggerOverride(
+        A2FLipSyncPlayer player,
+        ILogger<A2FLipSyncPlayer>? previousLogger) : IDisposable
+    {
+        private A2FLipSyncPlayer? _player = player;
+
+        public void Dispose()
+        {
+            if (_player is not { } player)
+            {
+                return;
+            }
+
+            player._logger = previousLogger;
+            _player = null;
         }
     }
 

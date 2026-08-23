@@ -39,20 +39,22 @@ workflow when they opt in to startup probing.
 7. Callers can cut off active playback, halting both audio and facial animation
    immediately.
 8. Callers can observe when audible playback has finished.
-9. Speech becomes audible as soon as enough streamed blendshape data has
-   arrived — after a startup buffer, not after full inference — under
-   regression-mode streaming playback.
+9. Resolved regression-mode streaming makes speech audible after enough
+    blendshape data has arrived to balance stable facial motion against a
+    bounded startup delay, rather than after full inference.
 10. Stopping speech promptly abandons the ongoing stream download instead of
     letting it run on in the background.
-11. Temporary blendshape starvation during streaming playback must not distort
-    or stall playback: the face holds its last pose while audio continues, and
-    playback resumes when frames catch up. Diffusion-mode playback is
-    unaffected by the streaming changes.
+11. Temporary or residual blendshape starvation during streaming playback must
+    not distort or stall playback: the face holds its last pose while audio
+    continues, and playback resumes when frames catch up. Diffusion-mode
+    playback is unaffected by the streaming changes.
 12. Starting new speech during streamed playback cuts the predecessor's audio
     and facial animation immediately. The replacement starts only after the
     predecessor stream has settled; if it cannot settle within the bounded
     admission window, the new speech fails visibly and is not retried
     automatically.
+13. Streaming diagnostics support contributor investigation without changing
+    player-visible playback behaviour or exposing speech or player data.
 
 ## Technical Requirements
 
@@ -101,8 +103,10 @@ workflow when they opt in to startup probing.
     requests keep running to completion.
 15. Mode routing is decided client-side before the request is sent: resolved
     regression mode (including auto-adjusted Mark, Claire, and James models)
-    uses `/blendshapes/stream`; resolved diffusion mode (including v3
-    auto-adjusted) falls back to the batch `/blendshapes` endpoint.
+    uses `/blendshapes/stream` and requests the canonical `fps` rate, intended
+    to default to 30 fps. This requested rate applies to Audio2Face regression
+    streaming only; resolved diffusion mode (including v3 auto-adjusted) falls
+    back to the batch `/blendshapes` endpoint.
 16. Streaming wire contract: `POST /blendshapes/stream` responds with chunked
     `application/x-ndjson` — one metadata record (`fps`, `blendshape_names`)
     first, then frame records carrying a sequential zero-based `index`,
@@ -113,68 +117,87 @@ workflow when they opt in to startup probing.
     fail with clear errors; unknown record types are skipped with one warning
     per type. The server receives the whole request body before inference
     begins, so the endpoint output-streams only.
-17. First-frame playback gate: on the streaming path, `PreparePlaybackAsync`
-    and manual `Play` complete once the metadata record and a startup buffer of
-    frames have arrived (`StreamingStartupBufferSeconds`, default 0.1 s —
-    about 6 frames at 60 fps; zero opens at the first frame). The HTTP read
-    loop continues in the background, owned by the playback session, until the
-    stream completes, fails, or is cancelled.
-18. Starvation policy: when the playback cursor outpaces frame arrival, hold
-    the last applied frame while audio continues and emit a rate-limited
-    warning (2 s interval); resume applying frames once the download catches
-    up. Audio completion still ends the session through the existing
-    `IsAudioPlaying` polling; frames exhausted early clamp to the last frame;
-    audio ending with an incomplete buffer logs a Warning summary. Each
+17. Streaming metadata `fps` is the actual output rate. The player must use it,
+    not the requested rate, to calculate the gate's frame count and synchronise
+    frame consumption with audio.
+18. First-frame playback gate: on the streaming path, `PreparePlaybackAsync`
+    and manual `Play` complete only after metadata and the applicable frame gate
+    have arrived. For a nonzero buffer setting, derive a conservative gate
+    duration proportional to prepared speech duration, cap it at 5 seconds, and
+    round the threshold up using the actual metadata fps to require at least one
+    frame. A zero buffer setting opens only at the first valid frame after
+    metadata. A completed short stream may open early with its available frames,
+    but a zero-frame stream must not hand off playback. The HTTP read loop
+    continues in the background, owned by the playback session, until the stream
+    completes, fails, or is cancelled.
+19. Starvation policy: when the playback cursor outpaces frame arrival, hold
+    the last applied frame while audio continues, including residual starvation,
+    and emit one correlated first-starvation diagnostic per episode. Resume
+    applying frames once the download catches up and emit one correlated recovery
+    diagnostic per episode. Audio completion still ends the session through the
+    existing `IsAudioPlaying` polling; frames exhausted early clamp to the last
+    frame; audio ending with an incomplete buffer logs a Warning summary. Each
     session logs Information diagnostics at completion — frames buffered at
-    start, starvation episode count, and largest starved gap — so typical lag
-    can be measured to tune the startup buffer.
-19. Streaming failure semantics: failures before the gate opens (or between
+    start, starvation episode count, and largest starved gap — so typical lag can
+    be measured to tune the startup buffer.
+20. After audio completion finalises a streaming session, later producer output
+    is discarded. It must not create an artificial playback fault or change the
+    completed outcome.
+21. Streaming failure semantics: failures before the gate opens (or between
     gate and hand-off) flow through the existing preparation error paths and
     surface as item-level failures in `AIVoice`; a mid-playback stream failure
     (for example truncation without a complete record) sets `PlaybackError`,
     raises `PlaybackCompleted` so AIVoice speaking windows cannot hang, and
     stops playback. Neither case crashes or hangs.
-20. Timeout model: `RequestTimeoutSeconds` remains the overall deadline for
+22. Timeout model: `RequestTimeoutSeconds` remains the overall deadline for
     the whole streaming download; `StreamingIdleTimeoutSeconds` (export,
     default 10 s) bounds stalled inter-record gaps. Both surface as clear
     `TimeoutException`-based errors.
-21. Eye-rotation translation approximation: batch inference baselines eye
+23. Eye-rotation translation approximation: batch inference baselines eye
     rotations against the clip-wide mean; the streaming converter seeds the
     baseline from the first valid eye-rotation record and applies the same
     smoothing, inversion, and directional mapping per frame. This documented
     approximation only affects clips that start mid-gaze, and the affected
     eyeLook channels are stripped by the eyes-controlled filter in both paths,
     so the approximation never reaches playback directly.
-22. Base-class opt-in: streaming inference is opt-in through
+24. Base-class opt-in: streaming inference is opt-in through
     `SupportsStreamingInference` on the shared `LipSyncPlayer` base;
     batch-oriented backends (Wav2Arkit, test stubs) keep the full-response
     behaviour unchanged. `PreparedPlayback.PreparedFrameCount` reports the
     full frame count for batch data or the frames buffered so far under
     streaming, which AIVoice latency diagnostics consume.
-23. Streaming-server recovery integration contract: the standalone
-    `~/workspace/audio2face-api-server` service repository is the normative
-    implementation and verification owner for this contract. Its server request
-    intake and NDJSON output use bounded I/O; it detects client disconnects
-    during I/O and at stage boundaries, then emits diagnostics identifying the
-    stage (request intake, inference, or response output) and disconnect
-    outcome. An SDK `ComputeFrame` already executing is not pre-emptible;
-    detection may therefore occur only after that call returns, when the server
-    must avoid further response work for the disconnected client.
-24. Warm-service responsiveness target: the standalone service owns delivery
+25. Streaming-server recovery boundary: the standalone
+    `~/workspace/audio2face-api-server` service owns its request intake, NDJSON
+    output, disconnect recovery, observability, and verification. AlleyCat relies
+    on the published HTTP and NDJSON contracts and disconnect outcomes, but does
+    not reimplement or prescribe the service's internal logging, configuration,
+    or tests.
+26. Warm-service responsiveness target: the standalone service owns delivery
     and measurement of this target. For the flagged live-container smoke
     workflow, the first NDJSON record should arrive in under 10 seconds from a
     warm Audio2Face service. This is a feasibility target, not a production
     latency guarantee.
-25. Cross-repository integration boundary: AlleyCat owns the client behaviour
+27. Cross-repository integration boundary: AlleyCat owns the client behaviour
     in this specification, including request consumption, record reading,
     immediate cut, cancellation, and the invariant **prior `ReadLoop` settled
     before replacement request admission**. The standalone service owns HTTP and
     NDJSON response production in requirement 16 and the service conditions in
-    requirements 23–24. The client must rely on, but must not reimplement, those
-    mandatory service conditions. The service repository's implementation and
-    verification are a normative dependency of this client integration; the
-    obsolete `~/workspace/Audio2Face-3D-SDK/audio2face-api-server` checkout is
-    not a source of truth.
+    requirements 25–26. The client must rely on, but must not reimplement or
+    prescribe, service-owned behaviour. The current service repository is a
+    normative integration dependency; the obsolete
+    `~/workspace/Audio2Face-3D-SDK/audio2face-api-server` checkout is not a
+    source of truth.
+28. Streaming diagnostics are client-owned, observability-only, and low-volume.
+    For each streaming request, AlleyCat sends an opaque
+    `X-Client-Stream-Id` request header and includes that ID in its diagnostics.
+    AlleyCat logs request and response, gate opening, reader terminal outcome,
+    cancellation origin, starvation episode and recovery, and playback end.
+    Client diagnostics must not log request or response payloads, waveforms,
+    query parameters, player data, or other speech content, and must not alter
+    player-visible behaviour, timing, request routing, cancellation, or playback
+    outcomes. The standalone service owns any use of this header and its own
+    observability; this specification does not prescribe service logging,
+    configuration, or tests.
 
 ## In Scope
 
@@ -189,9 +212,9 @@ workflow when they opt in to startup probing.
 - Interruption handling for active playback.
 - Streaming playback gate, starvation hold, stream cancellation on stop, and
   timeout and bounded ordered replacement-admission contracts.
-- Per-session streaming playback diagnostics.
-- Bounded server I/O, disconnect detection, and stage diagnostics for streamed
-  requests.
+- Client-owned, low-volume streaming diagnostics, including the correlation
+  header, required client events, and privacy boundaries.
+- Standalone-service integration boundary and service-owned observability.
 - Cross-repository integration and verification with the standalone
   `audio2face-api-server` service.
 - Shared `LipSyncPlayer` playback-completed notification and stop/cut capability.
@@ -204,9 +227,12 @@ workflow when they opt in to startup probing.
 - Live microphone capture or real-time audio input pipelines.
 - Dialogue system integration or runtime model switching.
 - Animation polish and expressive-quality acceptance criteria.
+- Fixing or claiming to fix a separate whole-game freeze; this specification
+  governs Audio2Face lip-sync playback reliability only.
 - Docker container lifecycle management.
 - Automated regression beyond the required mock-backed recovery tests and the
-  flagged, soft-skipping live-container smoke test.
+  flagged, soft-skipping live-container smoke test. Diagnostics implementation
+  and validation required by this specification remain in scope.
 
 ## Acceptance Criteria
 
@@ -237,15 +263,21 @@ workflow when they opt in to startup probing.
 13. Shared-base stop/cut capability is defined: halts audio and lip-sync frame
     application immediately, cancels the active streaming download, and leaves
     ordinary non-streaming inference requests running.
-14. Streaming gate: tests verify preparation completes before the server sends
-    the complete record, that the startup buffer filled before the gate opened,
-    that audible playback starts immediately after hand-off, and that the
-    background download completes after playback started, matching the declared
-    frame count.
+14. Streaming gate: tests verify regression streaming requests the canonical
+    default intended 30 fps, metadata fps drives the gate and playback timing,
+    and preparation completes before the server sends the complete record. They
+    verify a conservative duration-scaled nonzero gate with a 5-second cap,
+    zero-buffer hand-off at the first valid frame, audible playback immediately
+    after hand-off, and background download completion after playback starts,
+    matching the declared frame count.
 15. Starvation: tests verify slower-than-playback frame arrival holds the last
-    applied frame (applied count and mesh values unchanged while starved),
-    warns through the rate limiter, resumes when frames catch up, and completes
-    cleanly with the starvation window counted as one episode.
+    applied frame (applied count and mesh values unchanged while starved), emits
+    one correlated first-starvation diagnostic and one correlated recovery
+    diagnostic per episode, resumes when frames catch up, and completes cleanly
+    with the starvation window counted as one episode. Tests verify late producer
+    output after audio completion is discarded without `PlaybackError` or an
+    artificial failure. Final session counters and the incomplete-buffer summary
+    remain available where applicable.
 16. Streaming interruption and replacement admission: tests verify `Stop()`
     cancels the in-flight download; the read loop settles; the server observes
     the client abort; no `PlaybackCompleted` fires for the cut session; and the
@@ -267,9 +299,10 @@ workflow when they opt in to startup probing.
     `TimeoutException`-based.
 20. Unit tests verify the NDJSON record contract (metadata/frame/complete
     ordering, validation, error cases, and chunk-boundary line reassembly) and
-    the frame-buffer gate (opens at the default startup buffer, at the first
-    frame for a zero-second buffer, early on short streams, faulted when the
-    producer fails before the gate, and consistent under parallel append/read).
+    the frame-buffer gate. They verify actual metadata fps consumption, the
+    conservative duration-scaled nonzero threshold and 5-second cap, first-frame
+    zero-buffer hand-off, short-stream handling, no zero-frame hand-off, producer
+    failure before the gate, and consistency under parallel append/read.
 21. Live smoke against the real local container (flagged, soft-skipped when
     unreachable) verifies the gate opens well before the full download time and
     the first NDJSON record arrives in under 10 seconds from a warm service.
@@ -277,24 +310,26 @@ workflow when they opt in to startup probing.
     consistently sized frames.
 22. Acceptance verifies both layers: user-visible early audio, interruption,
     and starvation behaviour, and the endpoint, gate, mode-routing, timeout,
-    failure, opt-in, replacement-admission, server-disconnect, and warm-service
-    contracts.
-23. Standalone-service validation in `~/workspace/audio2face-api-server`
-    verifies its HTTP/NDJSON transport, bounded request and response I/O,
-    disconnect detection, and diagnostics identifying request-intake, inference,
-    or response-output stages. It verifies that disconnects observed after an
-    executing SDK `ComputeFrame` produce no further response work, without
-    requiring pre-emption of that call. Debug and Release transport CTest
-    coverage is required, and service sources compile with
-    `-DA2X_ROOT=/home/mysticfall/workspace/Audio2Face-3D-SDK`; unavailable
-    TensorRT libraries may block executable final linking only as an explicitly
-    recorded environment limitation.
+    failure, opt-in, replacement-admission, server-disconnect, warm-service, and
+    client-diagnostics contracts.
+23. Service-boundary validation confirms that AlleyCat consumes the published
+    HTTP and NDJSON contracts without prescribing the current standalone
+    `~/workspace/audio2face-api-server` service's internal observability,
+    configuration, or test coverage. The obsolete SDK-nested server is not valid
+    integration evidence.
 24. AlleyCat validation verifies its client boundary independently: unit and
     integration tests prove immediate cut and the ordered-admission invariant,
     including no replacement request after failed predecessor settlement. The
     flagged live-container smoke test consumes the standalone service and
     verifies the warm-service first-record target; it does not substitute for
-    the standalone service's Debug/Release transport CTest coverage.
+    standalone service verification owned by that service.
+25. Diagnostics validation verifies both layers and code/spec alignment:
+    diagnostics do not change player-visible behaviour and do not expose
+    payloads, waveforms, query parameters, player data, or other speech content.
+    AlleyCat implementation must align with technical requirement 28: every
+    streaming request includes the opaque `X-Client-Stream-Id` header, and client
+    diagnostics cover every required client event. This acceptance does not
+    prescribe standalone-service logging, configuration, or test coverage.
 
 ## References
 

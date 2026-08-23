@@ -12,11 +12,14 @@ namespace AlleyCat.Speech.LipSync;
 /// is the point streaming playback may become audible while the download continues in the
 /// background.</para>
 /// </remarks>
-internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
+internal sealed class StreamingFrameBuffer(float startupBufferSeconds, double playableDurationSeconds = 0d)
 {
     private readonly Lock _lock = new();
     private readonly List<float[]> _frames = [];
     private readonly float _startupBufferSeconds = Math.Max(0f, startupBufferSeconds);
+    private readonly double _playableDurationSeconds = double.IsFinite(playableDurationSeconds)
+        ? Math.Max(0d, playableDurationSeconds)
+        : 0d;
     private readonly TaskCompletionSource _startupGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private IReadOnlyList<string>? _blendshapeNames;
@@ -27,6 +30,8 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
     private Exception? _error;
     private bool _startupGateResolved;
     private int _frameChannelCount = -1;
+    private DateTimeOffset? _lastAppendTimestampUtc;
+    private bool _consumerClosed;
 
     /// <summary>
     /// Number of frames appended so far.
@@ -99,10 +104,47 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
     }
 
     /// <summary>
+    /// Indicates that playback no longer consumes this stream. Producer records received after this point
+    /// are deliberately ignored rather than treated as a malformed stream.
+    /// </summary>
+    public bool IsConsumerClosed
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _consumerClosed;
+            }
+        }
+    }
+
+    /// <summary>
     /// Task completing once metadata and the startup buffer worth of frames have arrived, or the stream
     /// completed with fewer frames. Completes exceptionally when the producer fails before then.
     /// </summary>
     public Task StartupBufferReady => _startupGate.Task;
+
+    /// <summary>
+    /// Captures a mutually consistent diagnostic view of the producer state. This is intended for
+    /// low-volume lifecycle diagnostics only, never frame-by-frame polling.
+    /// </summary>
+    public StreamingFrameBufferDiagnosticSnapshot CaptureDiagnosticSnapshot()
+    {
+        lock (_lock)
+        {
+            DateTimeOffset? lastAppendTimestampUtc = _lastAppendTimestampUtc;
+            return new StreamingFrameBufferDiagnosticSnapshot(
+                _frames.Count,
+                _outputFps,
+                _declaredFrameCount >= 0 ? _declaredFrameCount : null,
+                _completed,
+                _error is not null,
+                lastAppendTimestampUtc,
+                lastAppendTimestampUtc is { } timestamp
+                    ? DateTimeOffset.UtcNow - timestamp
+                    : null);
+        }
+    }
 
     /// <summary>
     /// Captures the stream metadata (output frame rate and retained blendshape channel names). Must be
@@ -131,7 +173,7 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
 
             _outputFps = outputFps;
             _blendshapeNames = blendshapeNames;
-            _startupBufferFrameCount = Math.Max(1, (int)Math.Ceiling(_startupBufferSeconds * outputFps));
+            _startupBufferFrameCount = CalculateStartupBufferFrameCount(outputFps);
             SignalStartupGateLocked();
         }
     }
@@ -144,6 +186,11 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
     {
         lock (_lock)
         {
+            if (_consumerClosed)
+            {
+                return;
+            }
+
             if (_blendshapeNames is null)
             {
                 throw new InvalidOperationException("LipSyncPlayer: streaming frame record arrived before metadata.");
@@ -166,7 +213,19 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
             }
 
             _frames.Add(frame);
+            _lastAppendTimestampUtc = DateTimeOffset.UtcNow;
             SignalStartupGateLocked();
+        }
+    }
+
+    /// <summary>
+    /// Stops consumer-side playback. Safe to call repeatedly; later producer frames are discarded.
+    /// </summary>
+    public void CloseConsumer()
+    {
+        lock (_lock)
+        {
+            _consumerClosed = true;
         }
     }
 
@@ -178,6 +237,11 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
     {
         lock (_lock)
         {
+            if (_consumerClosed)
+            {
+                return;
+            }
+
             if (_blendshapeNames is null)
             {
                 throw new InvalidOperationException("LipSyncPlayer: streaming complete record arrived before metadata.");
@@ -196,6 +260,11 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
     {
         lock (_lock)
         {
+            if (_consumerClosed)
+            {
+                return;
+            }
+
             _error ??= error;
             SignalStartupGateLocked();
         }
@@ -264,4 +333,36 @@ internal sealed class StreamingFrameBuffer(float startupBufferSeconds)
             _ = _startupGate.TrySetResult();
         }
     }
+
+    private int CalculateStartupBufferFrameCount(float outputFps)
+    {
+        if (_startupBufferSeconds <= 0f)
+        {
+            return 1;
+        }
+
+        double fps = outputFps;
+        float configuredBufferFrames = outputFps * _startupBufferSeconds;
+        // Every nonzero configuration retains a duration allowance. The one-frame fallback keeps the
+        // canonical 30 fps stream conservative rather than reducing it to the configured buffer alone.
+        double durationCompensation = _playableDurationSeconds * Math.Max(1d, fps - 35d);
+        int cappedFrameCount = CeilingToFrameCount(5d * fps);
+        int durationScaledFrameCount = CeilingToFrameCount(configuredBufferFrames + durationCompensation);
+        return Math.Min(cappedFrameCount, Math.Max(1, durationScaledFrameCount));
+    }
+
+    private static int CeilingToFrameCount(double value)
+        => value >= int.MaxValue ? int.MaxValue : (int)Math.Ceiling(value);
 }
+
+/// <summary>
+/// Locked diagnostic state captured from a <see cref="StreamingFrameBuffer"/> at a lifecycle boundary.
+/// </summary>
+internal readonly record struct StreamingFrameBufferDiagnosticSnapshot(
+    int FrameCount,
+    float OutputFps,
+    int? DeclaredFrameCount,
+    bool IsCompleted,
+    bool IsFaulted,
+    DateTimeOffset? LastAppendTimestampUtc,
+    TimeSpan? LastAppendAge);

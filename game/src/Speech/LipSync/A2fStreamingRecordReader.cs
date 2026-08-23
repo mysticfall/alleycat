@@ -40,7 +40,8 @@ internal sealed record A2fEyeTranslationSettings(
 internal sealed class A2fStreamingRecordReader(
     TimeSpan idleTimeout,
     A2fEyeTranslationSettings eyeTranslationSettings,
-    ILogger logger)
+    ILogger logger,
+    string streamID = "untracked")
 {
     /// <summary>
     /// Reads records until the complete record arrives and the buffer is marked complete.
@@ -53,32 +54,81 @@ internal sealed class A2fStreamingRecordReader(
         NdjsonLineReader lineReader = new(responseStream, idleTimeout);
         StreamingFrameConverter? converter = null;
         HashSet<string> unknownRecordTypes = [];
-
-        while (true)
+        string terminalState = "Faulted";
+        try
         {
-            string? line = await lineReader.ReadLineAsync(cancellationToken);
-            if (line is null)
+            while (true)
             {
-                break;
+                string? line = await lineReader.ReadLineAsync(cancellationToken);
+                if (frameBuffer.IsConsumerClosed)
+                {
+                    terminalState = "ConsumerClosed";
+                    return;
+                }
+
+                if (line is null)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                converter = ProcessStreamingRecord(line, frameBuffer, converter, unknownRecordTypes);
+
+                if (frameBuffer.IsConsumerClosed)
+                {
+                    terminalState = "ConsumerClosed";
+                    return;
+                }
+
+                if (frameBuffer.IsCompleted)
+                {
+                    // The complete record is terminal; stop reading even if the connection stays open.
+                    terminalState = "Completed";
+                    return;
+                }
             }
 
-            if (string.IsNullOrWhiteSpace(line))
+            if (!frameBuffer.IsCompleted)
             {
-                continue;
-            }
-
-            converter = ProcessStreamingRecord(line, frameBuffer, converter, unknownRecordTypes);
-
-            if (frameBuffer.IsCompleted)
-            {
-                // The complete record is terminal; stop reading even if the connection stays open.
-                return;
+                throw new InvalidOperationException("LipSyncPlayer: Audio2Face stream ended without a complete record.");
             }
         }
-
-        if (!frameBuffer.IsCompleted)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            throw new InvalidOperationException("LipSyncPlayer: Audio2Face stream ended without a complete record.");
+            terminalState = "Cancelled";
+            throw;
+        }
+        catch (Exception) when (frameBuffer.IsConsumerClosed)
+        {
+            terminalState = "ConsumerClosed";
+        }
+        catch (Exception ex)
+        {
+            // Record the failure before the terminal diagnostic captures its locked state. The outer
+            // read-loop repeats MarkFailed safely (first failure wins) for non-A2F implementations too.
+            frameBuffer.MarkFailed(ex);
+            throw;
+        }
+        finally
+        {
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                StreamingFrameBufferDiagnosticSnapshot snapshot = frameBuffer.CaptureDiagnosticSnapshot();
+                logger.LogDebug(
+                    "A2FLipSyncPlayer streaming reader terminal {TerminalState} for stream {StreamID}: {FrameCount} frame(s), {OutputFps:0.###} fps, declared {DeclaredFrameCount}, complete {IsCompleted}, faulted {IsFaulted}, last append age {LastAppendAgeMilliseconds} ms.",
+                    terminalState,
+                    streamID,
+                    snapshot.FrameCount,
+                    snapshot.OutputFps,
+                    snapshot.DeclaredFrameCount,
+                    snapshot.IsCompleted,
+                    snapshot.IsFaulted,
+                    snapshot.LastAppendAge?.TotalMilliseconds);
+            }
         }
     }
 
@@ -88,6 +138,11 @@ internal sealed class A2fStreamingRecordReader(
         StreamingFrameConverter? converter,
         HashSet<string> unknownRecordTypes)
     {
+        if (frameBuffer.IsConsumerClosed)
+        {
+            return converter;
+        }
+
         JsonDocument document;
         try
         {
@@ -161,6 +216,11 @@ internal sealed class A2fStreamingRecordReader(
         StreamingFrameBuffer frameBuffer,
         StreamingFrameConverter converter)
     {
+        if (frameBuffer.IsConsumerClosed)
+        {
+            return;
+        }
+
         if (!root.TryGetProperty("index", out JsonElement indexElement)
             || !indexElement.TryGetInt32(out int frameIndex))
         {
@@ -193,6 +253,11 @@ internal sealed class A2fStreamingRecordReader(
 
     private static void HandleStreamingComplete(JsonElement root, StreamingFrameBuffer frameBuffer)
     {
+        if (frameBuffer.IsConsumerClosed)
+        {
+            return;
+        }
+
         if (!root.TryGetProperty("frame_count", out JsonElement countElement)
             || !countElement.TryGetInt32(out int declaredFrameCount))
         {

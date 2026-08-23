@@ -24,6 +24,30 @@ public sealed class A2fStreamingRecordReaderTests
         InvertVertical: false);
 
     /// <summary>
+    /// A consumer that has ended playback must cause the reader to stop before it validates any late
+    /// frame, so stale records cannot be reported as an artificial index or malformed-stream fault.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_WhenConsumerIsClosed_IgnoresLateFrameWithoutFaulting()
+    {
+        StreamingFrameBuffer buffer = new(startupBufferSeconds: 0.1f);
+        buffer.SetMetadata(30f, ["jawOpen"]);
+        buffer.Append([0.5f]);
+        buffer.CloseConsumer();
+
+        await ReadAsync(
+            BuildNdjson(
+                FrameLine(99, [0.9f]),
+                "{malformed"),
+            buffer);
+
+        Assert.True(buffer.IsConsumerClosed);
+        Assert.False(buffer.IsCompleted);
+        Assert.False(buffer.IsFaulted);
+        Assert.Equal(1, buffer.FrameCount);
+    }
+
+    /// <summary>
     /// A well-formed metadata/frame/complete sequence must populate metadata, frames, and completion in
     /// the buffer.
     /// </summary>
