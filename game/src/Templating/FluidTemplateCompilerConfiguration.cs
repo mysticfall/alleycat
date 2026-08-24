@@ -4,12 +4,12 @@ using GodotFileAccess = Godot.FileAccess;
 namespace AlleyCat.Templating;
 
 /// <summary>
-/// Applies Godot-authored Handlebars compiler configuration to a plain compiler engine.
+/// Applies Godot-authored Fluid compiler configuration to a plain compiler engine.
 /// </summary>
-internal static class HandlebarsTemplateCompilerConfiguration
+internal static class FluidTemplateCompilerConfiguration
 {
     public static void Apply(
-        HandlebarsTemplateCompilerEngine engine,
+        FluidTemplateCompilerEngine engine,
         string partialDirectoryPath,
         IEnumerable<ITemplateTool> tools,
         IEnumerable<TemplateToolResource> toolResources)
@@ -22,7 +22,7 @@ internal static class HandlebarsTemplateCompilerConfiguration
         RegisterConfiguredTools(engine, tools, toolResources);
     }
 
-    private static void RegisterConfiguredPartials(HandlebarsTemplateCompilerEngine engine, string partialDirectoryPath)
+    private static void RegisterConfiguredPartials(FluidTemplateCompilerEngine engine, string partialDirectoryPath)
     {
         if (string.IsNullOrWhiteSpace(partialDirectoryPath))
         {
@@ -38,7 +38,7 @@ internal static class HandlebarsTemplateCompilerConfiguration
     }
 
     private static void RegisterConfiguredTools(
-        HandlebarsTemplateCompilerEngine engine,
+        FluidTemplateCompilerEngine engine,
         IEnumerable<ITemplateTool> tools,
         IEnumerable<TemplateToolResource> toolResources)
     {

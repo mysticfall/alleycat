@@ -10,7 +10,7 @@ status: draft
 ## Requirement
 
 Provide a reusable templating system that compiles string sources, renders them with simple key/value context, and
-supports pluggable Handlebars tools.
+supports pluggable template tools.
 
 ## Goal
 
@@ -23,7 +23,7 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 3. Authored templates can use built-in helper tools for simple arithmetic, comparison, formatting, and repetition.
 4. Content authors can use `eqOrdinal` for exact, case-sensitive comparisons without changing the case-insensitive
    behaviour of `eq`.
-5. Developers can add project-specific Handlebars tools without changing the compiler implementation.
+5. Developers can add project-specific template tools without changing the compiler implementation.
 6. Developers can configure the compiler via Godot resources/nodes for partial loading and tool registration.
 7. Content authors can render human-readable relative-time labels for timestamps through a built-in `ago` tool.
 
@@ -32,8 +32,11 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 1. The system must expose plain C# contracts for compiling a string into a reusable template and rendering it with
     `IReadOnlyDictionary<string, object?>` context.
 2. Render context must remain a simple key/value dictionary provided directly by the caller.
-3. The initial compiler implementation must use Handlebars.Net and support registering partial templates by name.
-4. The Handlebars implementation must expose a pluggable tool contract that registers custom helpers by name.
+3. The initial compiler implementation must use [Fluid](https://github.com/sebastienros/fluid) with Liquid template
+   syntax. Partial templates must be registered by name and rendered through the Liquid `{% include 'name' %}` syntax.
+4. Pluggable tools must be exposed to templates as invocable functions or filters taking positional arguments, with
+   parser function-call support enabled, while custom tools register by name behind the retained plain C#
+   `ITemplateTool` contract.
 5. Built-in tools must include:
     - `add`: adds the first two integer-like arguments and renders the sum.
     - `eq`: compares the first two arguments with ordinal, case-insensitive string equality and renders `true` only when
@@ -52,21 +55,30 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
       `just now`; null or unparseable timestamps render empty.
 6. The implementation must not depend on the archived Language-Ext effect/map style or its Godot `ResourceFactory`
     service construction pattern.
-7. The Handlebars compiler implementation must be available as a Godot-authored `Resource` or `Node` and registered
-   globally as `ITemplateCompiler` during game startup via the global service resolution system.
+7. The Fluid compiler implementation must be available as a Godot-authored `Resource` or `Node` and registered globally
+    as `ITemplateCompiler` during game startup via the global service resolution system.
 8. The compiler must load partial templates from a configured Godot path/directory, using file names (without extension)
-   as partial names, in a deterministic manner.
+    as partial names, in a deterministic manner.
 9. Pluggable tools must be configurable through Godot-authored `Resource` or `Node` authoring while retaining the plain
-   C# `ITemplateTool` contract for tool implementation.
+    C# `ITemplateTool` contract for tool implementation.
+10. Rendering must be asynchronous — equivalent to a `ValueTask<string> RenderAsync(IReadOnlyDictionary<string,
+    object?>)` contract — while template compilation remains synchronous.
+11. Context values that are plain C# objects must resolve members through permissive (unsafe) member access; dictionary
+    values must be adapted when the template context is constructed. Rendered output must not be HTML-encoded.
+12. Conditional evaluation must follow Liquid truthiness: only nil and false are falsy, so empty strings and collections
+    are truthy — unlike engines that treat empty values as false.
+13. Template sources must originate from authored content supplied by callers or loaded from configured paths; the
+    system must not generate template syntax at runtime.
 
 ## In Scope
 
 - Plain C# template, compiler, render-context, and tool contracts.
-- Handlebars.Net-backed template compilation and rendering.
+- Fluid-based (Liquid syntax) template compilation and rendering.
 - Programmatic partial registration.
 - Programmatic custom tool registration.
 - Built-in `add`, `eq`, `eqOrdinal`, `nf`, and `repeat` tools.
 - Built-in `ago` relative-time tool.
+- Asynchronous rendering with synchronous compilation.
 - Unit tests covering the public contracts and built-in behaviours.
 - Godot-authored configuration of the template compiler service (as Resource or Node) for global service registration.
 - Loading partials from a configured Godot path/directory using filenames (without extension) as names.
@@ -75,14 +87,15 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 ## Out Of Scope
 
 - Localisation workflow integration.
-- Asynchronous compilation, caching policies, profiling, or performance budgets.
-- Advanced template inheritance beyond Handlebars partials.
+- Caching policies, profiling, or performance budgets.
+- Advanced template inheritance beyond Liquid includes.
 
 ## Acceptance Criteria
 
 1. A template such as `Hello {{name}}` compiles once and renders with supplied context values.
-2. Registered partials render through Handlebars partial syntax.
-3. A custom registered tool can be invoked from a template without modifying the compiler.
+2. Registered partials render through Liquid `{% include 'name' %}` syntax.
+3. A custom registered tool can be invoked from a template — as a function call or filter with positional arguments —
+   without modifying the compiler.
 4. The built-in `add`, `eq`, `eqOrdinal`, `nf`, and `repeat` tools produce the behaviours defined in Technical
    Requirement 5.
 5. `eqOrdinal` uses invariant string conversion and `StringComparison.Ordinal`: equal values render `true`, while case
@@ -91,13 +104,22 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 7. Templates render from caller-supplied key/value dictionaries without requiring renderable-object APIs.
 8. Unit tests verify the compiler, rendering, partials, custom tools, and built-in tools.
 9. The implementation uses plain C# contracts and contains no dependency on Language-Ext or the archived
-    `ResourceFactory` pattern.
-10. Handlebars compiler registered globally as `ITemplateCompiler` via global service resolution.
-11. Compiler loads partials from configured Godot path using filenames (no extension) as names.
-12. Pluggable tools configurable via Godot resources/nodes retaining plain C# `ITemplateTool` contract.
+   `ResourceFactory` pattern.
+10. The Fluid-based compiler is registered globally as `ITemplateCompiler` via global service resolution.
+11. The compiler loads partials from a configured Godot path using filenames (no extension) as names.
+12. Pluggable tools are configurable via Godot resources/nodes while retaining the plain C# `ITemplateTool` contract.
 13. The built-in `ago` tool renders the defined phrases for representative elapsed durations, including the just-now
     threshold boundary and singular forms, with a deterministic explicit reference timestamp, and renders empty for
     null or unparseable input.
+14. Rendering is asynchronous — equivalent to a `ValueTask<string> RenderAsync(IReadOnlyDictionary<string, object?>)`
+    contract — while compilation remains synchronous.
+15. No component of the system generates template syntax at runtime; every compiled template originates from authored
+    content supplied by callers or loaded from configured paths.
+16. All six built-in tools — `add`, `eq`, `eqOrdinal`, `nf`, `repeat`, and `ago` — satisfy their Technical Requirement 5
+    definitions with no semantic drift.
+17. The templating implementation introduces no Handlebars.Net package or assembly dependency.
+18. Plain C# context values resolve through permissive member access, dictionary values adapt at template-context
+    construction, conditionals treat only nil and false as falsy, and rendered output receives no HTML encoding.
 
 ## References
 

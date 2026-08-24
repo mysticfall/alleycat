@@ -651,8 +651,8 @@ public sealed partial class ScenarioIntegrationTests
             Godot.FileAccess.ModeFlags.Read);
         Assert.NotNull(scenarioFile);
         string template = scenarioFile.GetAsText();
-        Assert.Contains("{{#if scenario}}", template, StringComparison.Ordinal);
-        Assert.Contains("{{scenario.Description}}", template, StringComparison.Ordinal);
+        Assert.Contains("{% if scenario %}", template, StringComparison.Ordinal);
+        Assert.Contains("{{ scenario.Description }}", template, StringComparison.Ordinal);
 
         Assert.Null(typeof(PromptSection).GetProperty("IsEnabled"));
         Assert.Null(typeof(FilePromptSection).GetProperty("IsEnabled"));

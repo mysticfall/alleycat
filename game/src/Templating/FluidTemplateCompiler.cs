@@ -5,13 +5,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AlleyCat.Templating;
 
 /// <summary>
-/// Handlebars.Net-backed template compiler with deterministic helper and partial registration.
+/// Fluid (Liquid)-backed template compiler with deterministic helper and partial registration.
 /// </summary>
 [Tool]
 [GlobalClass]
-public sealed partial class HandlebarsTemplateCompiler : Resource, ITemplateCompiler, IServiceRegistrar
+public sealed partial class FluidTemplateCompiler : Resource, ITemplateCompiler, IServiceRegistrar
 {
-    private readonly HandlebarsTemplateCompilerEngine _engine = new();
+    private readonly FluidTemplateCompilerEngine _engine = new();
     private bool _configurationApplied;
 
     /// <summary>
@@ -34,7 +34,7 @@ public sealed partial class HandlebarsTemplateCompiler : Resource, ITemplateComp
     /// <summary>
     /// Creates a compiler with built-in tools registered.
     /// </summary>
-    public HandlebarsTemplateCompiler()
+    public FluidTemplateCompiler()
         : this(null, null)
     {
     }
@@ -44,7 +44,7 @@ public sealed partial class HandlebarsTemplateCompiler : Resource, ITemplateComp
     /// </summary>
     /// <param name="partials">Optional partial templates keyed by partial name.</param>
     /// <param name="tools">Optional additional tools to register after built-ins.</param>
-    public HandlebarsTemplateCompiler(
+    public FluidTemplateCompiler(
         IReadOnlyDictionary<string, string>? partials = null,
         IEnumerable<ITemplateTool>? tools = null)
     {
@@ -75,7 +75,7 @@ public sealed partial class HandlebarsTemplateCompiler : Resource, ITemplateComp
             return;
         }
 
-        HandlebarsTemplateCompilerConfiguration.Apply(_engine, PartialDirectoryPath, Tools, ToolResources);
+        FluidTemplateCompilerConfiguration.Apply(_engine, PartialDirectoryPath, Tools, ToolResources);
         _configurationApplied = true;
     }
 
@@ -107,5 +107,4 @@ public sealed partial class HandlebarsTemplateCompiler : Resource, ITemplateComp
         ApplyConfiguration();
         _ = services.AddSingleton<ITemplateCompiler>(this);
     }
-
 }

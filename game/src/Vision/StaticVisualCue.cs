@@ -42,7 +42,9 @@ public sealed partial class StaticVisualCue : VisualCue
             root["subject"] = subject;
         }
 
-        return GetTemplate().Render(root);
+        // The templating contract is asynchronous while the Describe contract is synchronous; Fluid rendering
+        // completes synchronously for the built-in tool set, so awaiting inline introduces no blocking.
+        return GetTemplate().RenderAsync(root).AsTask().GetAwaiter().GetResult();
     }
 
     private ITemplate GetTemplate()

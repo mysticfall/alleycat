@@ -377,7 +377,7 @@ public sealed partial class GameStartupIntegrationTests
                 game.Get("ServiceRegistrars").AsGodotArray<Resource>());
             Assert.Equal(2, serviceRegistrars.Count);
 
-            Resource templateCompilerRegistrar = Assert.IsType<HandlebarsTemplateCompiler>(serviceRegistrars[0]);
+            Resource templateCompilerRegistrar = Assert.IsType<FluidTemplateCompiler>(serviceRegistrars[0]);
             Resource promptWriterRegistrar = Assert.IsType<PseudoXmlPromptWriter>(serviceRegistrars[1]);
 
             Type templateCompilerInterface = templateCompilerRegistrar.GetType().GetInterface("AlleyCat.Templating.ITemplateCompiler")
@@ -389,7 +389,7 @@ public sealed partial class GameStartupIntegrationTests
             Type promptServiceRegistrarInterface = promptWriterRegistrar.GetType().GetInterface("AlleyCat.Core.IServiceRegistrar")
                 ?? throw new InvalidOperationException("Prompt writer registrar must implement IServiceRegistrar.");
 
-            Assert.Equal("AlleyCat.Templating.HandlebarsTemplateCompiler", templateCompilerRegistrar.GetType().FullName);
+            Assert.Equal("AlleyCat.Templating.FluidTemplateCompiler", templateCompilerRegistrar.GetType().FullName);
             Assert.Equal("AlleyCat.Templating.ITemplateCompiler", templateCompilerInterface.FullName);
             Assert.Equal("AlleyCat.Core.IServiceRegistrar", templateServiceRegistrarInterface.FullName);
             Assert.Equal("AlleyCat.Mind.AI.Prompting.PseudoXmlPromptWriter", promptWriterRegistrar.GetType().FullName);
@@ -410,9 +410,9 @@ public sealed partial class GameStartupIntegrationTests
     /// Verifies the Godot resource registrar directly registers itself as the template compiler service.
     /// </summary>
     [Fact]
-    public void HandlebarsTemplateCompilerRegisterServices_RegistersSelfAsTemplateCompiler()
+    public void FluidTemplateCompilerRegisterServices_RegistersSelfAsTemplateCompiler()
     {
-        HandlebarsTemplateCompiler compiler = new();
+        FluidTemplateCompiler compiler = new();
         ServiceCollection services = new();
 
         compiler.RegisterServices(services);

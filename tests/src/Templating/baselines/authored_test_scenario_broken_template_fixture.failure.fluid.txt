@@ -1,0 +1,4 @@
+# alleycat templating baseline failure
+# engine: Fluid.Core 2.40.0
+# exception: Fluid.ParseException
+# message: '{% endif %}' was expected at (1:46)\nSource:\n

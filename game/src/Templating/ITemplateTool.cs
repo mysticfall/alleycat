@@ -1,7 +1,7 @@
 namespace AlleyCat.Templating;
 
 /// <summary>
-/// Pluggable Handlebars helper/tool used by the template compiler.
+/// Pluggable template helper/tool used by the template compiler.
 /// </summary>
 public interface ITemplateTool
 {
@@ -16,7 +16,7 @@ public interface ITemplateTool
     /// <summary>
     /// Renders the helper output for the supplied positional arguments.
     /// </summary>
-    /// <param name="arguments">Positional Handlebars arguments.</param>
+    /// <param name="arguments">Positional template arguments.</param>
     /// <returns>Helper output text.</returns>
     string Render(IReadOnlyList<object?> arguments);
 }

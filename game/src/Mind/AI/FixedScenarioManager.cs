@@ -59,7 +59,9 @@ public partial class FixedScenarioManager : ScenarioManager
         try
         {
             ITemplateCompiler compiler = Game.Instance.GetRequiredService<ITemplateCompiler>();
-            rendered = compiler.Compile(body).Render(coreContext);
+            // The templating contract is asynchronous while GetCurrentScenario is synchronous; Fluid rendering
+            // completes synchronously for the built-in tool set, so awaiting inline introduces no blocking.
+            rendered = compiler.Compile(body).RenderAsync(coreContext).AsTask().GetAwaiter().GetResult();
         }
         catch (Exception exception)
         {

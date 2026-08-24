@@ -16,7 +16,7 @@ public sealed class GameServiceRegistrationTests
         string source = ReadGameSource();
 
         Assert.DoesNotContain("using AlleyCat.Templating;", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("HandlebarsTemplateCompiler", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("FluidTemplateCompiler", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ITemplateCompiler", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TemplateCompiler", source, StringComparison.Ordinal);
     }

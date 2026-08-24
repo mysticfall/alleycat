@@ -68,16 +68,19 @@ control over how concrete observation types appear in chronological event histor
     - an exported ordered array of authored fragments;
     - one exact, case-sensitive `TypeKey` per fragment; and
     - a mandatory authored fallback template.
-    Its fragments and fallback feed the on-demand `ObservationHistoryRenderer`, which renders observation records for
-    AI-002 `wait` results, timeline history (`history`) tool results, and interruption injections.
+    The renderer consumes each fragment and the fallback as standalone, individually compiled templates and renders
+    observation records for AI-002 `wait` results, timeline history (`history`) tool results, and interruption
+    injections.
 13. Event-history authoring must fail clearly for a blank key, duplicate exact key, or missing or blank fallback.
-14. Event history must dispatch each concrete observation by exact `TypeKey` in every rendered history. It must not use
-    global mutable partial registration, an observation visitor, or observation-owned formatting.
-15. Each observation record from the timeline snapshot must pass directly to Handlebars as the current context when its
-    selected fragment renders. This must preserve the record's fragment-visible properties. Unknown concrete
-    observations must render the fallback with the same record data.
-16. The fallback must keep terse event wording equivalent to `((Received {{TypeKey}} event.))` and may append the same
-    game-time label; it must still never render raw voice provenance.
+14. Event history must select each concrete observation's fragment at render time by exact, case-sensitive `TypeKey`
+    comparison performed in code, compiling each authored fragment as a standalone resource instead of composing
+    fragments into one generated template source. It must not use global mutable partial registration, an observation
+    visitor, or observation-owned formatting.
+15. Each observation record from the timeline snapshot must pass directly to the template compiler as the current
+    context when its selected fragment renders. This must preserve the record's fragment-visible properties. Unknown
+    concrete observations must render the fallback with the same record data.
+16. The fallback must keep terse wording identifying the unmatched observation type and may append the same game-time
+    label; it must still never render raw voice provenance.
 17. The shared `EventHistory` resource must use exactly one actor-relative fragment for `ObservedSpeech`, selected by
     the exact `speech.observed` key. Separate heard-speech and self-spoken fragments or semantic keys must not be
     authored.
@@ -120,7 +123,7 @@ control over how concrete observation types appear in chronological event histor
      the game-scoped game-time source (AI-002), stamped exactly once at ingestion by the owning Mind. The timestamp is a
      fragment-visible record property, nullable when the record was not ingested through Mind.
 29. Event-history entries may render an absolute game-time label derived from the record's `ObservedAt` game-time
-    seconds, conventionally guarded by `{{#if ObservedAt}}` in authored fragments so unstamped records render without
+    seconds; authored fragments conventionally guard the label with a conditional so unstamped records render without
     a label. Relative-time labels are not available to authored fragments: deriving one would require either a `now`
     top-level context key (forbidden by AC-17) or a game-time-aware extension of TMPL-001's `ago` helper (out of
     scope; see [TMPL-001](../../templating/001-templating-system/index.md)). The label must not leak voice provenance
@@ -147,7 +150,8 @@ control over how concrete observation types appear in chronological event histor
 
 - Timeline summarisation, compaction, token budgeting, or persistence beyond node lifetime.
 - Alternative prompt writers beyond the default pseudo-XML writer.
-- New template compilers, localisation workflows, and editor preview tooling.
+- Template-engine work outside what [TMPL-001](../../templating/001-templating-system/index.md) defines,
+  localisation workflows, and editor preview tooling.
 - Global mutable event-fragment registration.
 - Static-versus-dynamic prompt-section enforcement in the type system.
 - Detailed lore querying and retrieval behaviour, which is specified by AI-004.
@@ -171,10 +175,10 @@ control over how concrete observation types appear in chronological event histor
    ordering, and multiline fragment output through one exact `speech.observed` fragment.
 7. Event-history tests verify exact case-sensitive dispatch, clear blank and duplicate key failures, and mandatory
    nonblank fallback authoring.
-8. Event-history tests verify exact `TypeKey` dispatch and pass each timeline observation record directly to Handlebars
-   as the fragment context, preserving record property visibility. Unknown concrete observations render the fallback
-   with the same record data, without reflection property projection, global mutable partials, a visitor, or
-   observation-owned text rendering.
+8. Event-history tests verify exact `TypeKey` dispatch and pass each timeline observation record directly to the
+    template compiler as the fragment context, preserving record property visibility. Unknown concrete observations
+    render the fallback with the same record data, without reflection property projection, global mutable partials, a
+    visitor, or observation-owned text rendering.
 9. Observed-speech rendering compares `ActorId` with the owning character and never renders raw `VoiceId` provenance as
    wording or proof of identity.
 10. Male and female NPC role templates use one shared prompt stack containing the `mind.md` file section, lore, and

@@ -1,0 +1,4 @@
+# alleycat templating baseline failure
+# engine: Handlebars.Net 2.4.3
+# exception: HandlebarsDotNet.HandlebarsCompilerException
+# message: Reached end of template before block expression 'if' was closed

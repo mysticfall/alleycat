@@ -118,7 +118,7 @@ public sealed class VisualCueIntegrationTests
         var root = new Node3D();
         var cue = new StaticVisualCue
         {
-            Description = "observer={{observer.Label}}; {{#if subject}}subject-present{{else}}subject-absent{{/if}}",
+            Description = "observer={{ observer.Label }}; {% if subject %}subject-present{% else %}subject-absent{% endif %}",
         };
         root.AddChild(cue);
         sceneTree.Root.AddChild(root);

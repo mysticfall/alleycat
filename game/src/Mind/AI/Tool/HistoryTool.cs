@@ -25,7 +25,7 @@ public partial class HistoryTool : AgentTool
     /// <inheritdoc />
     protected override Delegate CreateDelegate() => ReadHistory;
 
-    private ValueTask<AgentToolResult> ReadHistory(
+    private async ValueTask<AgentToolResult> ReadHistory(
         ScenarioContext context,
         [Description("Optional limit: return only the most recent N events. Omit to read the complete timeline.")]
         int? count = null,
@@ -39,20 +39,15 @@ public partial class HistoryTool : AgentTool
             ? timeline.Skip(Math.Max(0, timeline.Count - count.Value))
             : timeline;
         IReadOnlyList<AgentObservation> selected = [.. records];
-
-        return ValueTask.FromResult(new AgentToolResult(ComposeResultMessage(session, selected)));
-    }
-
-    private static string ComposeResultMessage(AgentToolSession session, IReadOnlyList<AgentObservation> records)
-    {
-        if (records.Count == 0)
+        if (selected.Count == 0)
         {
-            return "You remember no past events yet.";
+            return new AgentToolResult("You remember no past events yet.");
         }
 
         string history = session.HistoryRenderer is { } renderer
-            ? renderer.Render(records)
-            : string.Join('\n', records.Select(static observation => observation.TypeKey));
-        return $"{records.Count.ToString(CultureInfo.InvariantCulture)} past event(s), oldest first:\n{history}";
+            ? await renderer.RenderAsync(selected)
+            : string.Join('\n', selected.Select(static observation => observation.TypeKey));
+        return new AgentToolResult(
+            $"{selected.Count.ToString(CultureInfo.InvariantCulture)} past event(s), oldest first:\n{history}");
     }
 }

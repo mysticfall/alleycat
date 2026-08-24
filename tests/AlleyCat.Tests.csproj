@@ -19,7 +19,7 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="Handlebars.Net" Version="2.4.3" />
+        <PackageReference Include="Fluid.Core" Version="2.40.0" />
         <PackageReference Include="Microsoft.Agents.AI" Version="1.18.0" />
         <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
         <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.11" />

@@ -2,13 +2,14 @@ using System.Globalization;
 using System.Reflection;
 using AlleyCat.Core;
 using AlleyCat.Templating;
+using Fluid;
 using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.Templating;
 
 /// <summary>
-/// Unit coverage for the TMPL-001 templating contracts.
+/// Unit coverage for the TMPL-001 templating contracts over the Fluid (Liquid) engine.
 /// </summary>
 public sealed class TemplatingTests
 {
@@ -16,36 +17,50 @@ public sealed class TemplatingTests
     /// The production compiler is a Godot-authored resource as required by TMPL-001.
     /// </summary>
     [Fact]
-    public void HandlebarsCompilerIsGodotAuthorableResource()
+    public void FluidCompilerIsGodotAuthorableResource()
     {
-        Assert.True(typeof(Resource).IsAssignableFrom(typeof(HandlebarsTemplateCompiler)));
-        Assert.NotNull(typeof(HandlebarsTemplateCompiler).GetCustomAttribute<GlobalClassAttribute>());
-        Assert.NotNull(typeof(HandlebarsTemplateCompiler).GetCustomAttribute<ToolAttribute>());
+        Assert.True(typeof(Resource).IsAssignableFrom(typeof(FluidTemplateCompiler)));
+        Assert.NotNull(typeof(FluidTemplateCompiler).GetCustomAttribute<GlobalClassAttribute>());
+        Assert.NotNull(typeof(FluidTemplateCompiler).GetCustomAttribute<ToolAttribute>());
     }
 
     /// <summary>
     /// The production compiler can register itself through the generic service registrar path.
     /// </summary>
     [Fact]
-    public void HandlebarsCompilerRegistersTemplateCompilerServiceThroughRegistrarContract()
+    public void FluidCompilerRegistersTemplateCompilerServiceThroughRegistrarContract()
     {
-        Assert.True(typeof(IServiceRegistrar).IsAssignableFrom(typeof(HandlebarsTemplateCompiler)));
+        Assert.True(typeof(IServiceRegistrar).IsAssignableFrom(typeof(FluidTemplateCompiler)));
         Assert.Contains(
             typeof(ITemplateCompiler),
-            typeof(HandlebarsTemplateCompiler).GetInterfaces());
+            typeof(FluidTemplateCompiler).GetInterfaces());
+    }
+
+    /// <summary>
+    /// Compilation stays synchronous while rendering is asynchronous.
+    /// </summary>
+    [Fact]
+    public void CompileStaysSynchronousWhileRenderingIsAsynchronous()
+    {
+        Assert.Equal(
+            typeof(ITemplate),
+            typeof(ITemplateCompiler).GetMethod(nameof(ITemplateCompiler.Compile))!.ReturnType);
+        MethodInfo? renderMethod = typeof(ITemplate).GetMethod(nameof(ITemplate.RenderAsync));
+        Assert.NotNull(renderMethod);
+        Assert.Equal(typeof(ValueTask<string>), renderMethod!.ReturnType);
     }
 
     /// <summary>
     /// Compiled templates substitute values from the render context.
     /// </summary>
     [Fact]
-    public void CompileAndRenderSubstitutesContextValues()
+    public async Task CompileAndRenderSubstitutesContextValues()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
+        FluidTemplateCompilerEngine compiler = new();
 
-        ITemplate template = compiler.Compile("Hello {{name}}");
+        ITemplate template = compiler.Compile("Hello {{ name }}");
 
-        string result = template.Render(new Dictionary<string, object?>
+        string result = await template.RenderAsync(new Dictionary<string, object?>
         {
             ["name"] = "World",
         });
@@ -54,17 +69,17 @@ public sealed class TemplatingTests
     }
 
     /// <summary>
-    /// Registered partials render through Handlebars partial syntax.
+    /// Registered partials render through the Liquid include syntax.
     /// </summary>
     [Fact]
-    public void RegisteredPartialRendersThroughHandlebarsSyntax()
+    public async Task RegisteredPartialRendersThroughLiquidIncludeSyntax()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
+        FluidTemplateCompilerEngine compiler = new();
         compiler.RegisterPartial("label", "{{name}}!");
 
-        ITemplate template = compiler.Compile("Hello {{> label}}");
+        ITemplate template = compiler.Compile("Hello {% include 'label' %}");
 
-        string result = template.Render(new Dictionary<string, object?>
+        string result = await template.RenderAsync(new Dictionary<string, object?>
         {
             ["name"] = "Nyx",
         });
@@ -73,19 +88,34 @@ public sealed class TemplatingTests
     }
 
     /// <summary>
-    /// Custom tools can be registered without changing the compiler.
+    /// Rendering a template whose include references an unregistered partial fails loudly instead of rendering
+    /// an empty fragment.
     /// </summary>
     [Fact]
-    public void CustomToolCanBeRegisteredAndInvoked()
+    public void UnregisteredPartialIncludeFailsLoudly()
+    {
+        FluidTemplateCompilerEngine compiler = new();
+
+        ITemplate template = compiler.Compile("Hello {% include 'absent_partial' %}");
+
+        _ = Assert.ThrowsAny<Exception>(() =>
+            _ = template.RenderAsync(new Dictionary<string, object?>()).AsTask().GetAwaiter().GetResult());
+    }
+
+    /// <summary>
+    /// Custom tools can be registered without changing the compiler and receive positional arguments.
+    /// </summary>
+    [Fact]
+    public async Task CustomToolCanBeRegisteredAndInvoked()
     {
         DelegateTemplateTool tool = new("shout", arguments =>
             Convert.ToString(arguments[0], CultureInfo.InvariantCulture)?.ToUpperInvariant() ?? string.Empty);
-        HandlebarsTemplateCompilerEngine compiler = new();
+        FluidTemplateCompilerEngine compiler = new();
         compiler.RegisterTool(tool);
 
-        ITemplate template = compiler.Compile("{{shout name}}");
+        ITemplate template = compiler.Compile("{{ shout(name) }}");
 
-        string result = template.Render(new Dictionary<string, object?>
+        string result = await template.RenderAsync(new Dictionary<string, object?>
         {
             ["name"] = "hello",
         });
@@ -97,18 +127,18 @@ public sealed class TemplatingTests
     /// Configured tools register after built-in tools.
     /// </summary>
     [Fact]
-    public void ConfiguredToolCanBeRegisteredAndInvoked()
+    public async Task ConfiguredToolCanBeRegisteredAndInvoked()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        HandlebarsTemplateCompilerConfiguration.Apply(
+        FluidTemplateCompilerEngine compiler = new();
+        FluidTemplateCompilerConfiguration.Apply(
             compiler,
             string.Empty,
             [new DelegateTemplateTool("bracket", arguments => $"[{arguments[0]}]")],
             []);
 
-        ITemplate template = compiler.Compile("{{bracket name}}");
+        ITemplate template = compiler.Compile("{{ bracket(name) }}");
 
-        string result = template.Render(new Dictionary<string, object?>
+        string result = await template.RenderAsync(new Dictionary<string, object?>
         {
             ["name"] = "Nyx",
         });
@@ -120,17 +150,17 @@ public sealed class TemplatingTests
     /// Configured partial directories load files as partials named by file stem.
     /// </summary>
     [Fact]
-    public void ConfiguredPartialDirectoryLoadsFilePartials()
+    public async Task ConfiguredPartialDirectoryLoadsFilePartials()
     {
         string directoryPath = CreateTemporaryPartialDirectory();
         File.WriteAllText(Path.Combine(directoryPath, "subject.hbs"), "{{name}}");
-        File.WriteAllText(Path.Combine(directoryPath, "greeting.txt"), "Hello {{> subject}}!");
-        HandlebarsTemplateCompilerEngine compiler = new();
-        HandlebarsTemplateCompilerConfiguration.Apply(compiler, directoryPath, [], []);
+        File.WriteAllText(Path.Combine(directoryPath, "greeting.txt"), "Hello {% include 'subject' %}!");
+        FluidTemplateCompilerEngine compiler = new();
+        FluidTemplateCompilerConfiguration.Apply(compiler, directoryPath, [], []);
 
-        ITemplate template = compiler.Compile("{{> greeting}}");
+        ITemplate template = compiler.Compile("{% include 'greeting' %}");
 
-        string result = template.Render(new Dictionary<string, object?>
+        string result = await template.RenderAsync(new Dictionary<string, object?>
         {
             ["name"] = "Mira",
         });
@@ -147,43 +177,238 @@ public sealed class TemplatingTests
         string directoryPath = CreateTemporaryPartialDirectory();
         File.WriteAllText(Path.Combine(directoryPath, "item.hbs"), "one");
         File.WriteAllText(Path.Combine(directoryPath, "item.txt"), "two");
-        HandlebarsTemplateCompilerEngine compiler = new();
+        FluidTemplateCompilerEngine compiler = new();
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            HandlebarsTemplateCompilerConfiguration.Apply(compiler, directoryPath, [], []));
+            FluidTemplateCompilerConfiguration.Apply(compiler, directoryPath, [], []));
 
         Assert.Contains("item", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Duplicate partial names are rejected with a clear invalid-operation failure.
+    /// </summary>
+    [Fact]
+    public void DuplicatePartialRegistrationThrows()
+    {
+        FluidTemplateCompilerEngine compiler = new();
+        compiler.RegisterPartial("item", "{{name}}");
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            compiler.RegisterPartial("item", "{{other}}"));
+
+        Assert.Contains("item", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Duplicate tool names are rejected with a clear invalid-operation failure.
+    /// </summary>
+    [Fact]
+    public void DuplicateToolRegistrationThrows()
+    {
+        FluidTemplateCompilerEngine compiler = new();
+        DelegateTemplateTool tool = new("custom", _ => string.Empty);
+        compiler.RegisterTool(tool);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            compiler.RegisterTool(tool));
+
+        Assert.Contains("custom", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Nested PascalCase dictionary members resolve through dot paths.
+    /// </summary>
+    [Fact]
+    public async Task MemberAccessResolvesPascalCaseDictionaryPaths()
+    {
+        string result = await RenderAsync(
+            "{{ character.FullId }}/{{ player.FullId }}/{{ record.Content }}/{{ record.ObservedAt }}",
+            new Dictionary<string, object?>
+            {
+                ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:npc_kaori" },
+                ["player"] = new Dictionary<string, object?> { ["FullId"] = "char:player_ava" },
+                ["record"] = new Dictionary<string, object?> { ["Content"] = "knock", ["ObservedAt"] = 12.5d },
+            });
+
+        Assert.Equal("char:npc_kaori/char:player_ava/knock/12.5", result);
+    }
+
+    /// <summary>
+    /// Variable and member lookup is ordinal case-sensitive, matching the pre-migration engine.
+    /// </summary>
+    [Fact]
+    public async Task MemberAccessIsCaseSensitive()
+    {
+        string result = await RenderAsync(
+            "{{ fullid }}|{{ FullId }}|{{ character.fullid }}|{{ character.FullId }}",
+            new Dictionary<string, object?>
+            {
+                ["FullId"] = "top-level",
+                ["character"] = new Dictionary<string, object?> { ["FullId"] = "nested" },
+            });
+
+        Assert.Equal("|top-level||nested", result);
+    }
+
+    /// <summary>
+    /// Conditionals follow Liquid truthiness: only nil and false are falsy while empty strings, zero, and empty
+    /// collections remain truthy.
+    /// </summary>
+    [Theory]
+    [InlineData(null, "falsy")]
+    [InlineData(false, "falsy")]
+    [InlineData("", "truthy")]
+    [InlineData(0, "truthy")]
+    [InlineData("text", "truthy")]
+    [InlineData(true, "truthy")]
+    public async Task ConditionalsFollowLiquidTruthiness(object? value, string expectedBranch)
+    {
+        string result = await RenderAsync(
+            "{% if value %}truthy{% else %}falsy{% endif %}",
+            new Dictionary<string, object?> { ["value"] = value });
+
+        Assert.Equal(expectedBranch, result);
+    }
+
+    /// <summary>
+    /// Empty collections stay truthy under Liquid conditional semantics.
+    /// </summary>
+    [Fact]
+    public async Task EmptyCollectionsStayTruthyInConditionals()
+    {
+        string arrayResult = await RenderAsync(
+            "{% if items %}truthy{% else %}falsy{% endif %}",
+            new Dictionary<string, object?> { ["items"] = Array.Empty<object?>() });
+        string dictionaryResult = await RenderAsync(
+            "{% if map %}truthy{% else %}falsy{% endif %}",
+            new Dictionary<string, object?> { ["map"] = new Dictionary<string, object?>() });
+
+        Assert.Equal("truthy", arrayResult);
+        Assert.Equal("truthy", dictionaryResult);
+    }
+
+    /// <summary>
+    /// Blank guards reproduce the pre-migration falsy treatment of empty text through explicit comparisons.
+    /// </summary>
+    [Fact]
+    public async Task BlankComparisonReproducesEmptyStringFalsyGuards()
+    {
+        string result = await RenderAsync(
+            "{% if actor != blank %}known:{{ actor }}{% else %}unknown{% endif %}",
+            new Dictionary<string, object?>
+            {
+                ["actor"] = "",
+                ["other"] = "char:rin",
+            });
+
+        Assert.Equal("unknown", result);
+    }
+
+    /// <summary>
+    /// Missing variables render as empty text because strict variable mode stays disabled.
+    /// </summary>
+    [Fact]
+    public async Task MissingVariablesRenderEmptyText()
+    {
+        string result = await RenderAsync("[{{ absent }}]", new Dictionary<string, object?>());
+
+        Assert.Equal("[]", result);
+    }
+
+    /// <summary>
+    /// Rendered output receives no HTML encoding.
+    /// </summary>
+    [Fact]
+    public async Task RenderedOutputIsNotHtmlEncoded()
+    {
+        string result = await RenderAsync(
+            "{{ markup }}",
+            new Dictionary<string, object?> { ["markup"] = "<b>&</b>" });
+
+        Assert.Equal("<b>&</b>", result);
+    }
+
+    /// <summary>
+    /// Unresolved variables passed to tools keep their positional arity through nil sentinels so argument
+    /// positions never shift.
+    /// </summary>
+    [Fact]
+    public async Task UnresolvedFunctionArgumentsKeepPositionalArity()
+    {
+        string result = await RenderAsync(
+            "[{{ nf(absent) }}]|[{{ add(absent, two) }}]",
+            new Dictionary<string, object?> { ["two"] = 2 });
+
+        Assert.Equal("[]|[2]", result);
+    }
+
+    /// <summary>
+    /// Malformed sources such as unclosed blocks throw a parse exception at compilation time.
+    /// </summary>
+    [Fact]
+    public void UnclosedBlockThrowsParseExceptionAtCompileTime()
+    {
+        FluidTemplateCompilerEngine compiler = new();
+
+        Exception exception = Record.Exception(() => compiler.Compile("{% if value %}unclosed"));
+
+        Assert.NotNull(exception);
+        _ = Assert.IsType<ParseException>(exception);
+    }
+
+    /// <summary>
+    /// Whitespace control markers are supported for byte-exact fragment composition.
+    /// </summary>
+    [Fact]
+    public async Task WhitespaceControlMarkersAreSupported()
+    {
+        string result = await RenderAsync(
+            "A\n{%- if flag -%}\nX\n{%- endif -%}\nB",
+            new Dictionary<string, object?> { ["flag"] = true });
+
+        Assert.Equal("AXB", result);
     }
 
     /// <summary>
     /// The built-in add tool sums the first two integer-like arguments.
     /// </summary>
     [Fact]
-    public void BuiltInAddAddsFirstTwoIntegerArguments()
+    public async Task BuiltInAddAddsFirstTwoIntegerArguments()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-
-        ITemplate template = compiler.Compile("{{add left right}}");
-
-        string result = template.Render(new Dictionary<string, object?>
-        {
-            ["left"] = 2,
-            ["right"] = "3",
-        });
+        string result = await RenderAsync(
+            "{{ add(left, right) }}",
+            new Dictionary<string, object?>
+            {
+                ["left"] = 2,
+                ["right"] = "3",
+            });
 
         Assert.Equal("5", result);
+    }
+
+    /// <summary>
+    /// The built-in add tool renders empty when fewer than two arguments are supplied.
+    /// </summary>
+    [Fact]
+    public async Task BuiltInAddRendersEmptyWithMissingArguments()
+    {
+        string result = await RenderAsync(
+            "|{{ add() }}|{{ add(one) }}|",
+            new Dictionary<string, object?> { ["one"] = 7 });
+
+        Assert.Equal("|||", result);
     }
 
     /// <summary>
     /// The built-in eq tool uses ordinal case-insensitive string comparison.
     /// </summary>
     [Fact]
-    public void BuiltInEqUsesOrdinalCaseInsensitiveComparison()
+    public async Task BuiltInEqUsesOrdinalCaseInsensitiveComparison()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-
-        ITemplate equalTemplate = compiler.Compile("{{eq left right}}");
-        ITemplate notEqualTemplate = compiler.Compile("{{eq left other}}");
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate equalTemplate = compiler.Compile("{{ eq(left, right) }}");
+        ITemplate notEqualTemplate = compiler.Compile("{{ eq(left, other) }}");
         Dictionary<string, object?> context = new()
         {
             ["left"] = "test",
@@ -191,51 +416,51 @@ public sealed class TemplatingTests
             ["other"] = "toast",
         };
 
-        Assert.Equal("true", equalTemplate.Render(context));
-        Assert.Equal(string.Empty, notEqualTemplate.Render(context));
+        Assert.Equal("true", await equalTemplate.RenderAsync(context));
+        Assert.Equal(string.Empty, await notEqualTemplate.RenderAsync(context));
     }
 
     /// <summary>
     /// The explicit ordinal equality helper is case-sensitive without changing legacy eq semantics.
     /// </summary>
     [Fact]
-    public void BuiltInEqOrdinalUsesCaseSensitiveComparison()
+    public async Task BuiltInEqOrdinalUsesCaseSensitiveComparison()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
+        FluidTemplateCompilerEngine compiler = new();
         Dictionary<string, object?> context = new()
         {
             ["value"] = "speech.observed",
         };
 
-        ITemplate exactTemplate = compiler.Compile("{{eqOrdinal value \"speech.observed\"}}");
-        ITemplate caseMismatchTemplate = compiler.Compile("{{eqOrdinal value \"Speech.Observed\"}}");
-        ITemplate legacyTemplate = compiler.Compile("{{eq value \"Speech.Observed\"}}");
+        ITemplate exactTemplate = compiler.Compile("{{ eqOrdinal(value, 'speech.observed') }}");
+        ITemplate caseMismatchTemplate = compiler.Compile("{{ eqOrdinal(value, 'Speech.Observed') }}");
+        ITemplate legacyTemplate = compiler.Compile("{{ eq(value, 'Speech.Observed') }}");
 
-        Assert.Equal("true", exactTemplate.Render(context));
-        Assert.Equal(string.Empty, caseMismatchTemplate.Render(context));
-        Assert.Equal("true", legacyTemplate.Render(context));
+        Assert.Equal("true", await exactTemplate.RenderAsync(context));
+        Assert.Equal(string.Empty, await caseMismatchTemplate.RenderAsync(context));
+        Assert.Equal("true", await legacyTemplate.RenderAsync(context));
     }
 
     /// <summary>
     /// The built-in nf tool uses fixed-point formatting with clamped precision.
     /// </summary>
     [Fact]
-    public void BuiltInNumberFormatUsesFixedPointDefaultPrecisionAndClampsPrecision()
+    public async Task BuiltInNumberFormatUsesFixedPointDefaultPrecisionAndClampsPrecision()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
         CultureInfo previousCulture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
         try
         {
-            ITemplate defaultTemplate = compiler.Compile("{{nf value}}");
-            ITemplate zeroPrecisionTemplate = compiler.Compile("{{nf value -1}}");
+            FluidTemplateCompilerEngine compiler = new();
+            ITemplate defaultTemplate = compiler.Compile("{{ nf(value) }}");
+            ITemplate zeroPrecisionTemplate = compiler.Compile("{{ nf(value, -1) }}");
 
-            string defaultResult = defaultTemplate.Render(new Dictionary<string, object?>
+            string defaultResult = await defaultTemplate.RenderAsync(new Dictionary<string, object?>
             {
                 ["value"] = 3.14159,
             });
-            string zeroPrecisionResult = zeroPrecisionTemplate.Render(new Dictionary<string, object?>
+            string zeroPrecisionResult = await zeroPrecisionTemplate.RenderAsync(new Dictionary<string, object?>
             {
                 ["value"] = "3.9",
             });
@@ -253,22 +478,22 @@ public sealed class TemplatingTests
     /// The built-in nf tool uses current-culture decimal separators and clamps high precision.
     /// </summary>
     [Fact]
-    public void BuiltInNumberFormatUsesCurrentCultureAndClampsHighPrecision()
+    public async Task BuiltInNumberFormatUsesCurrentCultureAndClampsHighPrecision()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
         CultureInfo previousCulture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
 
         try
         {
-            ITemplate cultureTemplate = compiler.Compile("{{nf value 1}}");
-            ITemplate highPrecisionTemplate = compiler.Compile("{{nf value 120}}");
+            FluidTemplateCompilerEngine compiler = new();
+            ITemplate cultureTemplate = compiler.Compile("{{ nf(value, 1) }}");
+            ITemplate highPrecisionTemplate = compiler.Compile("{{ nf(value, 120) }}");
 
-            string cultureResult = cultureTemplate.Render(new Dictionary<string, object?>
+            string cultureResult = await cultureTemplate.RenderAsync(new Dictionary<string, object?>
             {
                 ["value"] = 3.5,
             });
-            string highPrecisionResult = highPrecisionTemplate.Render(new Dictionary<string, object?>
+            string highPrecisionResult = await highPrecisionTemplate.RenderAsync(new Dictionary<string, object?>
             {
                 ["value"] = 1,
             });
@@ -284,51 +509,18 @@ public sealed class TemplatingTests
     }
 
     /// <summary>
-    /// Duplicate partial names are rejected with a clear invalid-operation failure.
-    /// </summary>
-    [Fact]
-    public void DuplicatePartialRegistrationThrows()
-    {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        compiler.RegisterPartial("item", "{{name}}");
-
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            compiler.RegisterPartial("item", "{{other}}"));
-
-        Assert.Contains("item", exception.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Duplicate tool names are rejected with a clear invalid-operation failure.
-    /// </summary>
-    [Fact]
-    public void DuplicateToolRegistrationThrows()
-    {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        DelegateTemplateTool tool = new("custom", _ => string.Empty);
-        compiler.RegisterTool(tool);
-
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            compiler.RegisterTool(tool));
-
-        Assert.Contains("custom", exception.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// The built-in repeat tool writes a value a configured number of times.
     /// </summary>
     [Fact]
-    public void BuiltInRepeatRendersValueCountTimes()
+    public async Task BuiltInRepeatRendersValueCountTimes()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-
-        ITemplate template = compiler.Compile("{{repeat value count}}");
-
-        string result = template.Render(new Dictionary<string, object?>
-        {
-            ["value"] = "A",
-            ["count"] = 3,
-        });
+        string result = await RenderAsync(
+            "{{ repeat(value, count) }}",
+            new Dictionary<string, object?>
+            {
+                ["value"] = "A",
+                ["count"] = 3,
+            });
 
         Assert.Equal("AAA", result);
     }
@@ -337,122 +529,122 @@ public sealed class TemplatingTests
     /// The built-in ago tool renders singular relative-time phrases with a deterministic reference timestamp.
     /// </summary>
     [Fact]
-    public void BuiltInAgoRendersSingularRelativeTimePhrases()
+    public async Task BuiltInAgoRendersSingularRelativeTimePhrases()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        ITemplate template = compiler.Compile("{{ago value now 0}}");
-        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ ago(value, now, 0) }}");
+        DateTimeOffset now = TemplatingBaselineScenarios.AgoNow;
 
-        Assert.Equal("1 second ago", RenderAgo(template, now.AddSeconds(-1), now));
-        Assert.Equal("1 minute ago", RenderAgo(template, now.AddMinutes(-1), now));
-        Assert.Equal("1 hour ago", RenderAgo(template, now.AddHours(-1), now));
-        Assert.Equal("1 day ago", RenderAgo(template, now.AddDays(-1), now));
-        Assert.Equal("1 week ago", RenderAgo(template, now.AddDays(-7), now));
+        Assert.Equal("1 second ago", await RenderAgo(template, now.AddSeconds(-1), now));
+        Assert.Equal("1 minute ago", await RenderAgo(template, now.AddMinutes(-1), now));
+        Assert.Equal("1 hour ago", await RenderAgo(template, now.AddHours(-1), now));
+        Assert.Equal("1 day ago", await RenderAgo(template, now.AddDays(-1), now));
+        Assert.Equal("1 week ago", await RenderAgo(template, now.AddDays(-7), now));
     }
 
     /// <summary>
     /// The built-in ago tool floors to the largest whole unit with correct plural forms and unit boundaries.
     /// </summary>
     [Fact]
-    public void BuiltInAgoFloorsToLargestWholeUnitWithPluralForms()
+    public async Task BuiltInAgoFloorsToLargestWholeUnitWithPluralForms()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        ITemplate template = compiler.Compile("{{ago value now}}");
-        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ ago(value, now) }}");
+        DateTimeOffset now = TemplatingBaselineScenarios.AgoNow;
 
-        Assert.Equal("30 seconds ago", RenderAgo(template, now.AddSeconds(-30), now));
-        Assert.Equal("59 seconds ago", RenderAgo(template, now.AddSeconds(-59), now));
-        Assert.Equal("1 minute ago", RenderAgo(template, now.AddSeconds(-60), now));
-        Assert.Equal("2 minutes ago", RenderAgo(template, now.AddMinutes(-2), now));
-        Assert.Equal("23 hours ago", RenderAgo(template, now.AddHours(-23), now));
-        Assert.Equal("1 day ago", RenderAgo(template, now.AddHours(-24), now));
-        Assert.Equal("6 days ago", RenderAgo(template, now.AddDays(-6), now));
-        Assert.Equal("1 week ago", RenderAgo(template, now.AddDays(-7), now));
-        Assert.Equal("1 minute ago", RenderAgo(template, now.AddSeconds(-90), now));
+        Assert.Equal("30 seconds ago", await RenderAgo(template, now.AddSeconds(-30), now));
+        Assert.Equal("59 seconds ago", await RenderAgo(template, now.AddSeconds(-59), now));
+        Assert.Equal("1 minute ago", await RenderAgo(template, now.AddSeconds(-60), now));
+        Assert.Equal("2 minutes ago", await RenderAgo(template, now.AddMinutes(-2), now));
+        Assert.Equal("23 hours ago", await RenderAgo(template, now.AddHours(-23), now));
+        Assert.Equal("1 day ago", await RenderAgo(template, now.AddHours(-24), now));
+        Assert.Equal("6 days ago", await RenderAgo(template, now.AddDays(-6), now));
+        Assert.Equal("1 week ago", await RenderAgo(template, now.AddDays(-7), now));
+        Assert.Equal("1 minute ago", await RenderAgo(template, now.AddSeconds(-90), now));
     }
 
     /// <summary>
     /// The built-in ago tool renders just now below the threshold and at the default boundary.
     /// </summary>
     [Fact]
-    public void BuiltInAgoUsesJustNowThresholdAndBoundary()
+    public async Task BuiltInAgoUsesJustNowThresholdAndBoundary()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        ITemplate defaultTemplate = compiler.Compile("{{ago value now}}");
-        ITemplate explicitTemplate = compiler.Compile("{{ago value now 10}}");
-        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate defaultTemplate = compiler.Compile("{{ ago(value, now) }}");
+        ITemplate explicitTemplate = compiler.Compile("{{ ago(value, now, 10) }}");
+        DateTimeOffset now = TemplatingBaselineScenarios.AgoNow;
 
-        Assert.Equal("just now", RenderAgo(defaultTemplate, now.AddSeconds(-4), now));
-        Assert.Equal("5 seconds ago", RenderAgo(defaultTemplate, now.AddSeconds(-5), now));
-        Assert.Equal("just now", RenderAgo(explicitTemplate, now.AddSeconds(-8), now));
-        Assert.Equal("10 seconds ago", RenderAgo(explicitTemplate, now.AddSeconds(-10), now));
+        Assert.Equal("just now", await RenderAgo(defaultTemplate, now.AddSeconds(-4), now));
+        Assert.Equal("5 seconds ago", await RenderAgo(defaultTemplate, now.AddSeconds(-5), now));
+        Assert.Equal("just now", await RenderAgo(explicitTemplate, now.AddSeconds(-8), now));
+        Assert.Equal("10 seconds ago", await RenderAgo(explicitTemplate, now.AddSeconds(-10), now));
     }
 
     /// <summary>
     /// The built-in ago tool renders just now for future timestamps and empty for null or unparseable input.
     /// </summary>
     [Fact]
-    public void BuiltInAgoHandlesFutureNullAndUnparseableInput()
+    public async Task BuiltInAgoHandlesFutureNullAndUnparseableInput()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        ITemplate template = compiler.Compile("{{ago value now}}");
-        ITemplate emptyTemplate = compiler.Compile("{{ago}}");
-        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ ago(value, now) }}");
+        ITemplate emptyTemplate = compiler.Compile("{{ ago() }}");
+        DateTimeOffset now = TemplatingBaselineScenarios.AgoNow;
 
-        Assert.Equal("just now", RenderAgo(template, now.AddSeconds(10), now));
-        Assert.Equal(string.Empty, RenderAgo(template, null, now));
-        Assert.Equal(string.Empty, RenderAgo(template, "not a timestamp", now));
-        Assert.Equal(string.Empty, emptyTemplate.Render(new Dictionary<string, object?>()));
+        Assert.Equal("just now", await RenderAgo(template, now.AddSeconds(10), now));
+        Assert.Equal(string.Empty, await RenderAgo(template, null, now));
+        Assert.Equal(string.Empty, await RenderAgo(template, "not a timestamp", now));
+        Assert.Equal(string.Empty, await emptyTemplate.RenderAsync(new Dictionary<string, object?>()));
     }
 
     /// <summary>
     /// The built-in ago tool parses ISO-8601 and round-trip string timestamps as UTC.
     /// </summary>
     [Fact]
-    public void BuiltInAgoParsesIso8601AndRoundTripStrings()
+    public async Task BuiltInAgoParsesIso8601AndRoundTripStrings()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        ITemplate template = compiler.Compile("{{ago value now}}");
-        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ ago(value, now) }}");
+        DateTimeOffset now = TemplatingBaselineScenarios.AgoNow;
 
-        Assert.Equal("30 seconds ago", RenderAgo(template, "2026-01-01T11:59:30Z", now));
-        Assert.Equal("30 seconds ago", RenderAgo(template, now.AddSeconds(-30).ToString("O"), now));
+        Assert.Equal("30 seconds ago", await RenderAgo(template, "2026-01-01T11:59:30Z", now));
+        Assert.Equal("30 seconds ago", await RenderAgo(template, now.AddSeconds(-30).ToString("O"), now));
     }
 
     /// <summary>
     /// The built-in ago tool treats DateTime values as UTC for Utc and Unspecified kinds.
     /// </summary>
     [Fact]
-    public void BuiltInAgoParsesDateTimeValuesAsUtc()
+    public async Task BuiltInAgoParsesDateTimeValuesAsUtc()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
-        ITemplate template = compiler.Compile("{{ago value now}}");
-        DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile("{{ ago(value, now) }}");
+        DateTimeOffset now = TemplatingBaselineScenarios.AgoNow;
 
         Assert.Equal(
             "30 seconds ago",
-            RenderAgo(template, new DateTime(2026, 1, 1, 11, 59, 30, DateTimeKind.Utc), now));
+            await RenderAgo(template, new DateTime(2026, 1, 1, 11, 59, 30, DateTimeKind.Utc), now));
         Assert.Equal(
             "30 seconds ago",
-            RenderAgo(template, new DateTime(2026, 1, 1, 11, 59, 30, DateTimeKind.Unspecified), now));
+            await RenderAgo(template, new DateTime(2026, 1, 1, 11, 59, 30, DateTimeKind.Unspecified), now));
     }
 
     /// <summary>
     /// The built-in ago tool parses round-trip strings under a non-invariant current culture.
     /// </summary>
     [Fact]
-    public void BuiltInAgoParsesRoundTripStringsUnderCurrentCulture()
+    public async Task BuiltInAgoParsesRoundTripStringsUnderCurrentCulture()
     {
-        HandlebarsTemplateCompilerEngine compiler = new();
         CultureInfo previousCulture = CultureInfo.CurrentCulture;
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
 
         try
         {
-            ITemplate template = compiler.Compile("{{ago value now}}");
-            DateTimeOffset now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            FluidTemplateCompilerEngine compiler = new();
+            ITemplate template = compiler.Compile("{{ ago(value, now) }}");
+            DateTimeOffset now = TemplatingBaselineScenarios.AgoNow;
 
-            Assert.Equal("30 seconds ago", RenderAgo(template, now.AddSeconds(-30).ToString("O"), now));
+            Assert.Equal("30 seconds ago", await RenderAgo(template, now.AddSeconds(-30).ToString("O"), now));
         }
         finally
         {
@@ -460,8 +652,17 @@ public sealed class TemplatingTests
         }
     }
 
-    private static string RenderAgo(ITemplate template, object? value, DateTimeOffset now)
-        => template.Render(new Dictionary<string, object?>
+    private static async Task<string> RenderAsync(
+        string source,
+        IReadOnlyDictionary<string, object?>? context = null)
+    {
+        FluidTemplateCompilerEngine compiler = new();
+        ITemplate template = compiler.Compile(source);
+        return await template.RenderAsync(context ?? new Dictionary<string, object?>());
+    }
+
+    private static async Task<string> RenderAgo(ITemplate template, object? value, DateTimeOffset now)
+        => await template.RenderAsync(new Dictionary<string, object?>
         {
             ["value"] = value,
             ["now"] = now,
@@ -473,5 +674,4 @@ public sealed class TemplatingTests
         _ = Directory.CreateDirectory(directoryPath);
         return directoryPath;
     }
-
 }

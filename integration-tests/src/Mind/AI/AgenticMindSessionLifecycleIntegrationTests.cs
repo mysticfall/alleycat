@@ -8,6 +8,7 @@ using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
+using AlleyCat.Templating;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
 using Godot;
@@ -94,6 +95,16 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            // The authored fragment proves the injection carries genuinely rendered record content instead of a
+            // count-only summary.
+            EventHistory = new EventHistory
+            {
+                Fragments =
+                [
+                    new EventHistoryPromptFragment { TypeKey = "test.lifecycle", Source = "- {{ Value }}" },
+                ],
+                FallbackSource = "fallback {{ TypeKey }}",
+            },
             ClientProvider = clientProvider,
             Tools = [tool],
             ObservationImportanceThreshold = 1f,
@@ -108,15 +119,15 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             IReadOnlyList<ChatMessage> freshRequest = clientProvider.Requests[1];
-            // The fresh request replays the session bootstrap input followed by the injected notable summary
-            // (AI-002 TR-7/40).
+            // The fresh request replays the session bootstrap input followed by the injected notable summary,
+            // whose text must be the exact rendered event-history fragment output (AI-002 TR-7/40).
             Assert.Equal(
                 [ChatRole.User, ChatRole.User],
                 freshRequest.Select(message => message.Role));
             ChatMessage injected = freshRequest[1];
             Assert.Equal(AgenticMind.SessionBootstrapInput, freshRequest[0].Text);
-            Assert.Contains("Important scene events require your attention:", injected.Text, StringComparison.Ordinal);
-            Assert.Contains("test.lifecycle", injected.Text, StringComparison.Ordinal);
+            Assert.Equal("Important scene events require your attention:\n- bridge", injected.Text);
+            Assert.DoesNotContain("notable observation(s)", injected.Text, StringComparison.Ordinal);
 
             await WaitUntilAsync(sceneTree, () => tool.CapturedContexts.Count == 1);
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 3);
@@ -135,6 +146,118 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         {
             mind.Free();
             tool.Free();
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>
+    /// A failed notable-summary render is a hard failure: the fault surfaces exactly once through the
+    /// OnlyOnFaulted Error logging with the full exception, and no interruption reaches the backend while the
+    /// held generation continues without an injected summary.
+    /// </summary>
+    [Fact]
+    public async Task NotableSignal_RenderFailure_FaultsToErrorLogWithoutInjectingInterruption()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        using RecordingLoggerProvider loggerProvider = new();
+        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        TaskCompletionSource firstRequestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueHold(firstRequestStarted);
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+            ObservationImportanceThreshold = 1f,
+        };
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+        try
+        {
+            await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            mind.SetActiveHistoryRendererForTesting(CreateThrowingHistoryRenderer());
+            mind.ObserveForTest(new TestObservation(1f, "bridge"));
+
+            await WaitUntilAsync(sceneTree, () => loggerProvider.Entries.Any(entry =>
+                entry.Level == LogLevel.Error
+                && entry.Exception?.GetBaseException().Message.Contains(
+                    FaultingRenderMessage, StringComparison.Ordinal) == true));
+            await TestUtils.WaitForFramesAsync(sceneTree, 6);
+
+            // The render fault is contained as exactly one Error entry, and no second request ever leaves: the
+            // interruption was not injected and the session continues on its original request.
+            _ = Assert.Single(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
+            _ = Assert.Single(clientProvider.Requests);
+
+            // Node exit ends the still-held second scripted request quietly.
+            (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
+            await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
+            Assert.Equal(["bridge"], TimelineValues(mind));
+        }
+        finally
+        {
+            mind.Free();
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>
+    /// A missing active renderer during a notable signal trips the hard guard: the fault surfaces through the
+    /// OnlyOnFaulted Error logging as an <see cref="InvalidOperationException" /> naming the missing renderer,
+    /// and nothing is injected.
+    /// </summary>
+    [Fact]
+    public async Task NotableSignal_WithoutActiveHistoryRenderer_ThrowsGuardAndNeverInjectsInterruption()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        using RecordingLoggerProvider loggerProvider = new();
+        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        TaskCompletionSource firstRequestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueHold(firstRequestStarted);
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            ClientProvider = clientProvider,
+            ObservationImportanceThreshold = 1f,
+        };
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+        try
+        {
+            await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            mind.SetActiveHistoryRendererForTesting(null);
+            mind.ObserveForTest(new TestObservation(1f, "bridge"));
+
+            await WaitUntilAsync(sceneTree, () => loggerProvider.Entries.Any(entry =>
+                entry.Level == LogLevel.Error
+                && entry.Exception?.GetBaseException() is InvalidOperationException invalidOperationException
+                && invalidOperationException.Message.Contains(
+                    "ObservationHistoryRenderer", StringComparison.Ordinal)));
+            await TestUtils.WaitForFramesAsync(sceneTree, 6);
+
+            // The guard fault is contained as exactly one Error entry, and no second request ever leaves.
+            _ = Assert.Single(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
+            _ = Assert.Single(clientProvider.Requests);
+
+            // Node exit ends the still-held second scripted request quietly.
+            (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
+            await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
+            Assert.Equal(["bridge"], TimelineValues(mind));
+        }
+        finally
+        {
+            mind.Free();
             clientProvider.Free();
             player.Free();
         }
@@ -288,6 +411,36 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             tool.Free();
             clientProvider.Free();
             player.Free();
+        }
+    }
+
+    private const string FaultingRenderMessage = "Synthetic event-history template render failure.";
+
+    /// <summary>
+    /// Builds a session renderer whose every compiled template faults at render time, standing in for an
+    /// authoring or engine failure inside the event-history contract.
+    /// </summary>
+    private static ObservationHistoryRenderer CreateThrowingHistoryRenderer()
+        => ObservationHistoryRenderer.Create(
+            new EventHistory(),
+            new FaultingTemplateCompiler(),
+            new Dictionary<string, object?>());
+
+    private sealed class FaultingTemplateCompiler : ITemplateCompiler
+    {
+        public ITemplate Compile(string source)
+        {
+            _ = source;
+            return new FaultingTemplate();
+        }
+
+        private sealed class FaultingTemplate : IRootedTemplate
+        {
+            public ValueTask<string> RenderAsync(IReadOnlyDictionary<string, object?> context)
+                => throw new InvalidOperationException(FaultingRenderMessage);
+
+            public ValueTask<string> RenderRootedAsync(object root, IReadOnlyDictionary<string, object?> namedValues)
+                => throw new InvalidOperationException(FaultingRenderMessage);
         }
     }
 

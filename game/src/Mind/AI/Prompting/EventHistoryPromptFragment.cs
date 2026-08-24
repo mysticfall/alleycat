@@ -12,7 +12,9 @@ public sealed partial class EventHistoryPromptFragment : Resource
     [Export]
     public string TypeKey { get; set; } = string.Empty;
 
-    /// <summary>Handlebars source rendered with the concrete observation as current context.</summary>
+    /// <summary>
+    /// Authored template source rendered with the matching concrete observation record as the root context.
+    /// </summary>
     [Export(PropertyHint.MultilineText)]
     public string Source { get; set; } = string.Empty;
 }

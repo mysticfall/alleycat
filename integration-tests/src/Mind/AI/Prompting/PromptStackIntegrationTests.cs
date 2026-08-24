@@ -159,7 +159,8 @@ public sealed partial class PromptStackIntegrationTests
 
     private sealed class RecordingTemplate : ITemplate
     {
-        public string Render(IReadOnlyDictionary<string, object?> context) => string.Empty;
+        public ValueTask<string> RenderAsync(IReadOnlyDictionary<string, object?> context)
+            => ValueTask.FromResult(string.Empty);
     }
 
     private sealed class RecordingPromptWriter(string source) : IPromptWriter

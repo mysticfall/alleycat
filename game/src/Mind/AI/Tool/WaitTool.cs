@@ -49,10 +49,11 @@ public partial class WaitTool : AgentTool
         double finishedAtSeconds = clock.NowSeconds;
         double elapsedSeconds = Math.Max(0d, finishedAtSeconds - startedAtSeconds);
 
-        return new AgentToolResult(ComposeResultMessage(session, outcome, elapsedSeconds, finishedAtSeconds));
+        return new AgentToolResult(
+            await ComposeResultMessageAsync(session, outcome, elapsedSeconds, finishedAtSeconds));
     }
 
-    private static string ComposeResultMessage(
+    private static async ValueTask<string> ComposeResultMessageAsync(
         AgentToolSession session,
         MindBase.WaitOutcome outcome,
         double elapsedSeconds,
@@ -68,7 +69,7 @@ public partial class WaitTool : AgentTool
         }
 
         string history = session.HistoryRenderer is { } renderer
-            ? renderer.Render(outcome.Notable)
+            ? await renderer.RenderAsync(outcome.Notable)
             : string.Join('\n', outcome.Notable.Select(static observation => observation.TypeKey));
         return $"Waited {elapsed} seconds. Current game time: {now}s. "
             + (outcome.AttendedSpeakerFinished ? "An attended speaker finished speaking. " : string.Empty)

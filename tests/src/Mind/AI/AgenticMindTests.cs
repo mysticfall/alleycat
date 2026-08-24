@@ -103,7 +103,7 @@ public sealed class AgenticMindTests
     /// AgenticMind must pass the CTX-001 dictionary directly to system-instruction template rendering.
     /// </summary>
     [Fact]
-    public void RenderSystemInstruction_PassesContextDictionaryToTemplate()
+    public async Task RenderSystemInstruction_PassesContextDictionaryToTemplate()
     {
         Dictionary<string, object?> context = new()
         {
@@ -111,7 +111,7 @@ public sealed class AgenticMindTests
         };
         CapturingTemplate template = new();
 
-        string result = AgenticMind.RenderSystemInstruction(template, context);
+        string result = await AgenticMind.RenderSystemInstruction(template, context);
 
         Assert.Equal("Hello Alley", result);
         Assert.Same(context, template.ReceivedContext);
@@ -372,10 +372,10 @@ public sealed class AgenticMindTests
             get; private set;
         }
 
-        public string Render(IReadOnlyDictionary<string, object?> context)
+        public ValueTask<string> RenderAsync(IReadOnlyDictionary<string, object?> context)
         {
             ReceivedContext = context;
-            return $"Hello {context["displayName"]}";
+            return ValueTask.FromResult($"Hello {context["displayName"]}");
         }
     }
 

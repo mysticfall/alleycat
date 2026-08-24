@@ -221,14 +221,15 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             .Select(fragment => GetPropertyValue<string>(fragment, "TypeKey")));
         object speechFragment = Assert.Single(fragments.Cast<object>());
         string speechSource = GetPropertyValue<string>(speechFragment, "Source");
-        Assert.Contains("eqOrdinal ActorId @root.character.FullId", speechSource, StringComparison.Ordinal);
-        Assert.Contains("I said: {{Content}}", speechSource, StringComparison.Ordinal);
-        Assert.Contains("Heard {{ActorId}} say: {{Content}}", speechSource, StringComparison.Ordinal);
-        Assert.Contains("Heard an unknown speaker say: {{Content}}", speechSource, StringComparison.Ordinal);
+        Assert.Contains("{% if ActorId != blank %}", speechSource, StringComparison.Ordinal);
+        Assert.Contains("ActorId == character.FullId", speechSource, StringComparison.Ordinal);
+        Assert.Contains("I said: {{ Content }}", speechSource, StringComparison.Ordinal);
+        Assert.Contains("Heard {{ ActorId }} say: {{ Content }}", speechSource, StringComparison.Ordinal);
+        Assert.Contains("Heard an unknown speaker say: {{ Content }}", speechSource, StringComparison.Ordinal);
         Assert.DoesNotContain("VoiceId", speechSource, StringComparison.Ordinal);
         string fallbackSource = GetPropertyValue<string>(eventHistory, "FallbackSource");
         Assert.Equal(
-            "((Received {{TypeKey}} event.)){{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n",
+            "((Received {{ TypeKey }} event.)){% if ObservedAt != blank %} (at {{ nf(ObservedAt, 1) }}s game time){% endif %}\n",
             fallbackSource);
         Assert.DoesNotContain("VoiceId", fallbackSource, StringComparison.Ordinal);
 

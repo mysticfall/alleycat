@@ -6,7 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://bt5ksnc6kjekx" path="res://assets/xr/openxr_runtime.tscn" id="1_bt0ui"]
 [ext_resource type="Script" uid="uid://bmvh0kef7f276" path="res://src/XR/XRManager.cs" id="1_drti4"]
 [ext_resource type="Script" uid="uid://df3lqtfafyjkg" path="res://src/Mind/AI/Prompting/PseudoXmlPromptWriter.cs" id="3_7pmvj"]
-[ext_resource type="Script" uid="uid://bsnxjgy8cpunq" path="res://src/Templating/HandlebarsTemplateCompiler.cs" id="3_b10sw"]
+[ext_resource type="Script" uid="uid://bsnxjgy8cpunq" path="res://src/Templating/FluidTemplateCompiler.cs" id="3_b10sw"]
 [ext_resource type="PackedScene" uid="uid://kxw5dgct6125" path="res://assets/ui/loading_screen.tscn" id="6_v86yw"]
 [ext_resource type="Script" uid="uid://5eb2vgmywko" path="res://src/IK/PlayerVRIKStartupBinder.cs" id="7_4dmod"]
 [ext_resource type="PackedScene" path="res://assets/ui/ui_overlay.tscn" id="8_i1pu0"]

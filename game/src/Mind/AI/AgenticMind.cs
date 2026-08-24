@@ -206,7 +206,7 @@ public partial class AgenticMind : MindBase
 
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
-        string instructions = RenderAndPublishSystemInstruction(template, renderContext);
+        string instructions = await RenderAndPublishSystemInstruction(template, renderContext);
 
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         IGameClock clock = GameClock;
@@ -279,16 +279,39 @@ public partial class AgenticMind : MindBase
             return;
         }
 
-        string rendered = RenderNotableSummary(notable);
-        runner.SignalInterruption(rendered);
+        // Fire-and-forget with containment like the session itself: rendering stays asynchronous end-to-end, and
+        // Fluid completes synchronously today so the interruption still signals before this handler returns. A
+        // render failure is a hard fault: the task faults without injecting anything, and an OnlyOnFaulted
+        // continuation surfaces the full exception at Error level instead of sinking into UnobservedTaskException.
+        _ = SignalNotableInterruptionAsync(runner, notable).ContinueWith(
+            static faulted =>
+            {
+                if (!GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) || logger is null)
+                {
+                    return;
+                }
+
+                logger.LogError(
+                    faulted.Exception,
+                    "Rendering the notable-observation summary failed; the interruption was not injected.");
+            },
+            TaskContinuationOptions.OnlyOnFaulted);
     }
 
     /// <summary>Renders one injected notable-observation summary through the event-history contract.</summary>
-    private string RenderNotableSummary(IReadOnlyList<AgentObservation> notable)
+    private async Task SignalNotableInterruptionAsync(
+        AgentSessionRunner runner,
+        IReadOnlyList<AgentObservation> notable)
+        => runner.SignalInterruption(await RenderNotableSummaryAsync(notable));
+
+    private async Task<string> RenderNotableSummaryAsync(IReadOnlyList<AgentObservation> notable)
     {
-        return _activeHistoryRenderer is { } renderer
-            ? $"Important scene events require your attention:\n{renderer.Render(notable)}"
-            : $"Important scene events require your attention: {notable.Count} notable observation(s).";
+        ObservationHistoryRenderer renderer = _activeHistoryRenderer
+            ?? throw new InvalidOperationException(
+                "AgenticMind has no active observation history renderer; a notable observation summary cannot be "
+                + "rendered without an initialised ObservationHistoryRenderer.");
+
+        return $"Important scene events require your attention:\n{await renderer.RenderAsync(notable)}";
     }
 
     private static IReadOnlyDictionary<string, object?> ResolveCharacterContext(
@@ -471,23 +494,23 @@ public partial class AgenticMind : MindBase
         }
     }
 
-    internal static string RenderSystemInstruction(
+    internal static async Task<string> RenderSystemInstruction(
         ITemplate template,
         IReadOnlyDictionary<string, object?> context)
     {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(context);
-        return template.Render(context);
+        return await template.RenderAsync(context);
     }
 
     internal IReadOnlyDictionary<string, object?> GetLatestRenderContext()
         => Volatile.Read(ref _latestRenderContext);
 
-    internal string RenderAndPublishSystemInstruction(
+    internal async Task<string> RenderAndPublishSystemInstruction(
         ITemplate template,
         IReadOnlyDictionary<string, object?> context)
     {
-        string instructions = RenderSystemInstruction(template, context);
+        string instructions = await RenderSystemInstruction(template, context);
         _ = Interlocked.Exchange(ref _latestRenderContext, context);
         return instructions;
     }
@@ -512,6 +535,10 @@ public partial class AgenticMind : MindBase
         ArgumentNullException.ThrowIfNull(diagnosticsSettingsLoader);
         _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
+
+    /// <summary>Replaces or clears the active observation-history renderer for fault and guard fixtures.</summary>
+    internal void SetActiveHistoryRendererForTesting(ObservationHistoryRenderer? historyRenderer)
+        => _activeHistoryRenderer = historyRenderer;
 
     /// <summary>
     /// Prepared session state captured once at session start (AI-002 TR-5/6): the trusted binding, the rendered

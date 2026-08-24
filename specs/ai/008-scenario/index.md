@@ -98,9 +98,9 @@ title: Scenario
     must fail with the existing duplicate-key error. AI-001 TR-25 and AI-003 TR-20 enumerate this key in their
     composition lists; AI-008 is normative for its value and reservation semantics.
 11. The scenario must be rendered by a plain `FilePromptSection`
-    in the shared generic NPC prompt stack referencing `res://prompts/scenario.md`, authored with a `{{#if scenario}}`
-    guard rendering `{{scenario.Description}}`
-    with PascalCase property access matching existing fragment conventions. There is deliberately no new `PromptSection`
+    in the shared generic NPC prompt stack referencing `res://prompts/scenario.md`, authored with a conditional guard
+    so the section content renders only when a scenario is present, rendering the scenario description through
+    PascalCase member access matching existing fragment conventions. There is deliberately no new `PromptSection`
     type, no `IsEnabled`
     machinery, and no writer skip behaviour: absence is handled inside `scenario.md`, and the section's pseudo-XML tag
     pair appearing in the prompt with empty content when the scenario is null is an accepted quirk.
@@ -186,8 +186,8 @@ title: Scenario
    key fails with the existing duplicate-key error.
 9. Prompt-asset tests verify the shared generic NPC prompt stack renders the scenario through a plain
    `FilePromptSection`
-   referencing `res://prompts/scenario.md` with a `{{#if scenario}}` guard and `{{scenario.Description}}`
-   PascalCase access, that no new `PromptSection` type, `IsEnabled`
+   referencing `res://prompts/scenario.md` with a conditional guard and PascalCase member access to the scenario
+   description, that no new `PromptSection` type, `IsEnabled`
    machinery, or writer skip behaviour exists, and that a null scenario renders the empty guarded section inside its
    tag pair.
 10. Render-context tests verify the phase-key contract: `character` and `player`

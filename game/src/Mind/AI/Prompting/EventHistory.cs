@@ -1,4 +1,3 @@
-using System.Text;
 using Godot;
 
 namespace AlleyCat.Mind.AI.Prompting;
@@ -6,57 +5,28 @@ namespace AlleyCat.Mind.AI.Prompting;
 /// <summary>
 /// Standalone authoring resource for exact-dispatch event-history rendering (AI-003 TR-12): it is not a prompt
 /// section and never enters the session-start prompt stack. Its fragments and fallback feed the on-demand
-/// <see cref="ObservationHistoryRenderer" /> for AI-002 wait results, timeline history tool results, and
-/// interruption injections.
+/// <see cref="ObservationHistoryRenderer" /> — which compiles each one individually as a standalone template —
+/// for AI-002 wait results, timeline history tool results, and interruption injections.
 /// </summary>
 [GlobalClass]
 public sealed partial class EventHistory : Resource
 {
-    /// <summary>Top-level render-context key carrying one ordered observation batch to the event-history template.</summary>
-    public const string ObservationsContextKey = "observations";
-
     /// <summary>Ordered authored fragments dispatched by exact semantic key.</summary>
     [Export]
     public EventHistoryPromptFragment[] Fragments { get; set; } = [];
 
-    /// <summary>Mandatory Handlebars source used when no exact fragment key matches.</summary>
+    /// <summary>Mandatory authored fallback source used when no fragment's exact <c>TypeKey</c> matches.</summary>
     [Export(PropertyHint.MultilineText)]
     public string FallbackSource { get; set; } = "((Received {{TypeKey}} event.))";
 
     /// <summary>
-    /// Builds the exact-dispatch Handlebars source for an ordered observation history, validated against the
-    /// authoring contract.
+    /// Validates the event-history authoring contract: nonblank fallback, nonblank fragment keys, and no duplicate
+    /// exact keys.
     /// </summary>
     /// <param name="fragments">Ordered authored fragments dispatched by exact semantic key.</param>
-    /// <param name="fallbackSource">Handlebars source used when no exact fragment key matches.</param>
-    /// <returns>Template source iterating the <c>observations</c> key with exact keyed dispatch.</returns>
-    internal static string BuildEventHistorySource(
-        IReadOnlyList<EventHistoryPromptFragment> fragments,
-        string? fallbackSource)
-    {
-        ValidateAuthoring(fragments, fallbackSource);
-
-        StringBuilder source = new("{{#each observations}}");
-        foreach (EventHistoryPromptFragment fragment in fragments)
-        {
-            _ = source.Append("{{#if (eqOrdinal TypeKey \"")
-                .Append(EscapeStringLiteral(fragment.TypeKey))
-                .Append("\")}}")
-                .Append(fragment.Source)
-                .Append("{{else}}");
-        }
-
-        _ = source.Append(fallbackSource);
-        for (int index = 0; index < fragments.Count; index++)
-        {
-            _ = source.Append("{{/if}}");
-        }
-
-        _ = source.Append("{{/each}}");
-        return source.ToString();
-    }
-
-    private static void ValidateAuthoring(
+    /// <param name="fallbackSource">Authored fallback source used when no exact fragment key matches.</param>
+    /// <exception cref="InvalidOperationException">Thrown with clear authoring guidance when invalid.</exception>
+    internal static void ValidateAuthoring(
         IReadOnlyList<EventHistoryPromptFragment> fragments,
         string? fallbackSource)
     {
@@ -83,10 +53,4 @@ public sealed partial class EventHistory : Resource
             }
         }
     }
-
-    private static string EscapeStringLiteral(string value)
-        => value.Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\"", "\\\"", StringComparison.Ordinal)
-            .Replace("\r", "\\r", StringComparison.Ordinal)
-            .Replace("\n", "\\n", StringComparison.Ordinal);
 }
