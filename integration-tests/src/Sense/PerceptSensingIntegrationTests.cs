@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.IntegrationTests.Support;
@@ -219,9 +218,6 @@ public sealed class PerceptSensingIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [voice];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
     }
 
     private sealed class TestSceneContext(IReadOnlyCollection<ICharacter> characters) : ISceneContext

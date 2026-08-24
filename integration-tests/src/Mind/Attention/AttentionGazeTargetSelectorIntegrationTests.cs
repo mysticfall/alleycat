@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Mind.Attention;
@@ -318,9 +317,6 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             }
         }
 
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
-
         public void RefreshComponents(params IComponent[] components)
         {
             _components = components;
@@ -378,7 +374,8 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
     private sealed partial class TestVisualCue : VisualCue
     {
-        public override string Describe(ISceneContext scene, IHasVision observer) => string.Empty;
+        public override ValueTask<string> Describe(ISceneContext scene, IHasVision observer)
+            => ValueTask.FromResult(string.Empty);
     }
 
     private sealed class TestVision : IVision, IDisposable

@@ -33,7 +33,7 @@ Provide a reusable eye component system that:
 6. The eyes must make bounded saccade movements around the active gaze anchor.
 7. Systems can discover authored visual cues that identify meaningful points on a character or other visual subject.
 8. A visual cue can describe itself using the observing character's eyes and, when applicable, its containing visual
-   subject, without requesting completed context.
+   subject, without drawing on character render context.
 9. Whole-character cues provide character-specific appearance descriptions while allowing shared character templates
    to use placeholder text.
 10. A character can sense visible subjects without changing its current gaze target or saccade behaviour.
@@ -119,8 +119,8 @@ Provide a reusable eye component system that:
     - Cue-local `VisualBounds` used exclusively to determine representative visual-scan geometry.
 20. `VisualCue` defines `Vector3 SampleGlobalPosition()` and
      `string Describe(ISceneContext scene, IHasVision observer)`.
-21. `Describe` requires a non-null eyes holder. It must not call `GetContext`, compose completed context, or accept an
-    `IContextual` or `IContextSource` input.
+21. `Describe` requires a non-null eyes holder. It must not compose character render context or accept render-context
+    inputs; eyes and visual inspection never feed AI-003 render-context composition.
 22. `Describe` builds its own local template root from the supplied scene and eyes holder. When present, it adds the
     nearest `IVisualSubject` ancestor as `subject`; a cue without subject ancestry is valid and omits `subject`.
 23. `StaticVisualCue` is the concrete fixed-description implementation: its exported authored `Description` property
@@ -277,9 +277,9 @@ Provide a reusable eye component system that:
 |    |                   | Requirements 19–24, including `Describe(ISceneContext scene, IHasVision observer)`, |
 |    |                   | the exported `StaticVisualCue.Description` property, and origin sampling independent of |
 |    |                   | bounds. |
-| 33 | Technical         | Description rendering builds a local root without `GetContext`, uses the supplied |
-|    |                   | `IHasVision`, and supplies the nearest `IVisualSubject` ancestor only when present. |
-|    |                   | Missing subject ancestry remains valid. |
+| 33 | Technical         | Description rendering builds a local root without composed render context, uses the |
+|    |                   | supplied `IHasVision`, and supplies the nearest `IVisualSubject` ancestor only when |
+|    |                   | present. Missing subject ancestry remains valid. |
 | 34 | Technical         | Provider publication or explicit refresh rejects empty cue IDs, non-finite |
 |    |                   | or negative prominence, ordinally duplicate IDs, and cues not owned by that |
 |    |                   | nearest provider; it accepts disabled prominence `0` and finite values above |
@@ -312,8 +312,8 @@ Provide a reusable eye component system that:
 |    |                   | publication or refresh failure for invalid cue ownership; surveys consume only |
 |    |                   | valid published collections and perform visibility selection without ownership |
 |    |                   | reconciliation or nested-leak filtering. |
-| 47 | Technical         | Tests verify visibility selection, cue description, and CTX-001 completed-context |
-|    |                   | aggregation remain separate operations. |
+| 47 | Technical         | Tests verify visibility selection, cue description, and AI-003 render-context |
+|    |                   | assembly remain separate operations. |
 | 48 | User              | Periodic NPC visual perception can notice all visible subjects without creating routine |
 |    |                   | visual history or changing gaze and eye presentation. |
 | 49 | Technical         | Each survey emits one producer-owned immutable ordered snapshot containing only |
@@ -329,7 +329,7 @@ Provide a reusable eye component system that:
 - [CHAR-003: Character Physical Response](../../character/003-physical-response/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
-- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
+- [AI-003: Prompt API](../../ai/003-prompt-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

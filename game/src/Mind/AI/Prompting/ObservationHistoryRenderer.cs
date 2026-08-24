@@ -1,4 +1,5 @@
 using System.Text;
+using AlleyCat.Character;
 using AlleyCat.Templating;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
@@ -10,12 +11,13 @@ namespace AlleyCat.Mind.AI.Prompting;
 /// </summary>
 /// <remarks>
 /// The renderer compiles each authored fragment and the fallback once per session as standalone templates from the
-/// Mind's authored <see cref="EventHistory" /> resource. Every record selects its template by exact, case-sensitive
-/// <c>TypeKey</c> dictionary lookup — unknown types render the fallback — and passes directly to that template as
-/// the rooted render context, so fragment-visible record properties resolve at the template's top level exactly
-/// like the pre-migration current-context semantics. No dispatch source is generated at runtime, no reflection
-/// projection happens here, and no global partial registration exists; the owning character context rides along as
-/// a named value so actor-relative wording matches the session system instruction.
+/// authored <see cref="EventHistoryDocument" /> parsed out of the configured event-history file. Every record
+/// selects its template by exact, case-sensitive <c>TypeKey</c> dictionary lookup — unknown types render the
+/// fallback — and passes directly to that template as the rooted render context, so fragment-visible record
+/// properties resolve at the template's top level exactly like the pre-migration current-context semantics. No
+/// dispatch source is generated at runtime, no reflection projection happens here, and no global partial
+/// registration exists; the owning character's curated render view rides along as a named value so actor-relative
+/// wording matches the session system instruction.
 /// </remarks>
 internal sealed class ObservationHistoryRenderer
 {
@@ -23,46 +25,45 @@ internal sealed class ObservationHistoryRenderer
 
     private readonly IReadOnlyDictionary<string, ITemplate> _fragments;
     private readonly ITemplate _fallback;
-    private readonly IReadOnlyDictionary<string, object?> _characterContext;
+    private readonly CharacterRenderView _characterView;
 
     private ObservationHistoryRenderer(
         IReadOnlyDictionary<string, ITemplate> fragments,
         ITemplate fallback,
-        IReadOnlyDictionary<string, object?> characterContext)
+        CharacterRenderView characterView)
     {
         _fragments = fragments;
         _fallback = fallback;
-        _characterContext = characterContext;
+        _characterView = characterView;
     }
 
     /// <summary>
-    /// Creates a session renderer from the authored standalone event-history resource, or from the default
-    /// authoring contract when the Mind declares no event history.
+    /// Creates a session renderer from the parsed authored event-history document, or from the default
+    /// authoring contract when the Mind declares no event-history file.
     /// </summary>
-    /// <param name="eventHistory">Authored event history supplying fragments and fallback, or null.</param>
+    /// <param name="eventHistory">Parsed authored event history supplying fragments and fallback, or null.</param>
     /// <param name="compiler">Template compiler used to compile each fragment and the fallback individually.</param>
-    /// <param name="characterContext">
-    /// Owning character context dictionary from the sealed session render context, used for actor-relative wording.
+    /// <param name="characterView">
+    /// Owning character's curated render view from the sealed session render context, used for actor-relative wording.
     /// </param>
     public static ObservationHistoryRenderer Create(
-        EventHistory? eventHistory,
+        EventHistoryDocument? eventHistory,
         ITemplateCompiler compiler,
-        IReadOnlyDictionary<string, object?> characterContext)
+        CharacterRenderView characterView)
     {
         ArgumentNullException.ThrowIfNull(compiler);
-        ArgumentNullException.ThrowIfNull(characterContext);
+        ArgumentNullException.ThrowIfNull(characterView);
 
-        EventHistoryPromptFragment[] fragments = eventHistory?.Fragments ?? [];
-        string fallbackSource = eventHistory?.FallbackSource ?? new EventHistory().FallbackSource;
-        EventHistory.ValidateAuthoring(fragments, fallbackSource);
+        IReadOnlyList<EventHistoryFragment> fragments = eventHistory?.Fragments ?? [];
+        string fallbackSource = eventHistory?.FallbackSource ?? EventHistoryDocument.DefaultFallbackSource;
 
         Dictionary<string, ITemplate> compiledFragments = new(StringComparer.Ordinal);
-        foreach (EventHistoryPromptFragment fragment in fragments)
+        foreach (EventHistoryFragment fragment in fragments)
         {
             compiledFragments.Add(fragment.TypeKey, compiler.Compile(fragment.Source));
         }
 
-        return new ObservationHistoryRenderer(compiledFragments, compiler.Compile(fallbackSource), characterContext);
+        return new ObservationHistoryRenderer(compiledFragments, compiler.Compile(fallbackSource), characterView);
     }
 
     /// <summary>Renders the ordered observation records through their individually compiled templates.</summary>
@@ -78,7 +79,7 @@ internal sealed class ObservationHistoryRenderer
 
         Dictionary<string, object?> namedValues = new(StringComparer.Ordinal)
         {
-            [CharacterContextKey] = _characterContext,
+            [CharacterContextKey] = _characterView,
         };
         StringBuilder rendered = new();
         foreach (AgentObservation observation in observations)

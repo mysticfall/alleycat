@@ -18,6 +18,8 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private const string ReferenceFemalePlayerScenePath = "res://assets/characters/templates/reference_female/reference_female_player.tscn";
     private const string AllyNpcScenePath = "res://assets/characters/reference/ally_npc.tscn";
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
+    private const string ReferenceFemaleBaseScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
+    private const string ReferenceMaleBaseScenePath = "res://assets/characters/templates/reference_male/reference_male_base.tscn";
     private const string AgenticMindTypeName = "AlleyCat.Mind.AI.AgenticMind";
     private const string AIVoiceTypeName = "AlleyCat.Speech.Voice.AIVoice";
     private const string A2FLipSyncPlayerTypeName = "AlleyCat.Speech.LipSync.A2FLipSyncPlayer";
@@ -37,6 +39,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         AssertReferenceNpcSceneDoesNotSerialiseConversationNodes();
         AssertReferenceFemalePlayerVoice();
         AssertNpcVoiceAndSharedMindPrompt();
+        AssertCharacterBaseTemplatesDoNotAuthorContextSources();
     }
 
     private static void AssertReferencePlayerSceneDoesNotSerialiseConversationNodes()
@@ -103,15 +106,13 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", maleSceneText, StringComparison.Ordinal);
         Assert.Contains("SystemInstruction = ExtResource(\"9_beijb\")", sceneText, StringComparison.Ordinal);
         Assert.Contains(
-            "uid=\"uid://dv8k4pqrmxe1n\" path=\"res://assets/characters/prompts/npc_event_history.tres\"",
+            "EventHistoryPath = \"res://prompts/event_history.md\"",
             sceneText,
             StringComparison.Ordinal);
         Assert.Contains(
-            "uid=\"uid://dv8k4pqrmxe1n\" path=\"res://assets/characters/prompts/npc_event_history.tres\"",
+            "EventHistoryPath = \"res://prompts/event_history.md\"",
             maleSceneText,
             StringComparison.Ordinal);
-        Assert.Contains("EventHistory = ExtResource(\"10_history\")", sceneText, StringComparison.Ordinal);
-        Assert.Contains("EventHistory = ExtResource(\"10_history\")", maleSceneText, StringComparison.Ordinal);
         // The production tool inventory is created internally by AgenticMind without scene authoring (AI-002
         // TR-16): neither template authors tool resources.
         Assert.DoesNotContain("SpeechTool.cs", sceneText, StringComparison.Ordinal);
@@ -170,15 +171,30 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Same(
                 GetRequiredPropertyValue(mind, "SystemInstruction"),
                 GetRequiredPropertyValue(maleMind, "SystemInstruction"));
-            Assert.Same(
-                GetRequiredPropertyValue(mind, "EventHistory"),
-                GetRequiredPropertyValue(maleMind, "EventHistory"));
+            Assert.Equal(
+                "res://prompts/event_history.md",
+                GetPropertyValue<string>(maleMind, "EventHistoryPath"));
         }
         finally
         {
             femaleNpc.Free();
             maleNpc.Free();
         }
+    }
+
+    /// <summary>
+    /// Character base templates author no context-source collections; the retired wiring stays absent.
+    /// </summary>
+    private static void AssertCharacterBaseTemplatesDoNotAuthorContextSources()
+    {
+        string femaleBaseText = ReadResourceText(ReferenceFemaleBaseScenePath);
+        string maleBaseText = ReadResourceText(ReferenceMaleBaseScenePath);
+
+        // No character template authors a ContextSources collection; the retired wiring stays absent.
+        Assert.DoesNotContain("ContextSources", femaleBaseText, StringComparison.Ordinal);
+        Assert.DoesNotContain("CharacterCardContextSource.cs", femaleBaseText, StringComparison.Ordinal);
+        Assert.DoesNotContain("ContextSources", maleBaseText, StringComparison.Ordinal);
+        Assert.DoesNotContain("CharacterCardContextSource.cs", maleBaseText, StringComparison.Ordinal);
     }
 
     private static void AssertNpcMindPromptAndTools(Node mind)
@@ -213,25 +229,22 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             orderedSections,
             section => section.GetType().FullName == "AlleyCat.Mind.AI.Prompting.EventHistory");
 
-        // Event history is authored as the standalone EventHistory resource exported by AgenticMind (AI-003 TR-12).
-        object eventHistory = GetRequiredPropertyValue(mind, "EventHistory");
-        Assert.Equal("AlleyCat.Mind.AI.Prompting.EventHistory", eventHistory.GetType().FullName);
-        Array fragments = Assert.IsAssignableFrom<Array>(GetRequiredPropertyValue(eventHistory, "Fragments"));
-        Assert.Equal(["speech.observed"], fragments.Cast<object>()
-            .Select(fragment => GetPropertyValue<string>(fragment, "TypeKey")));
-        object speechFragment = Assert.Single(fragments.Cast<object>());
-        string speechSource = GetPropertyValue<string>(speechFragment, "Source");
-        Assert.Contains("{% if ActorId != blank %}", speechSource, StringComparison.Ordinal);
-        Assert.Contains("ActorId == character.FullId", speechSource, StringComparison.Ordinal);
-        Assert.Contains("I said: {{ Content }}", speechSource, StringComparison.Ordinal);
-        Assert.Contains("Heard {{ ActorId }} say: {{ Content }}", speechSource, StringComparison.Ordinal);
-        Assert.Contains("Heard an unknown speaker say: {{ Content }}", speechSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("VoiceId", speechSource, StringComparison.Ordinal);
-        string fallbackSource = GetPropertyValue<string>(eventHistory, "FallbackSource");
+        // Event history is authored as the standalone fragment file wired by path on AgenticMind (AI-003 TR-12).
+        string eventHistoryPath = GetPropertyValue<string>(mind, "EventHistoryPath");
+        Assert.Equal("res://prompts/event_history.md", eventHistoryPath);
+        string eventHistory = ReadResourceText(eventHistoryPath);
+        Assert.Contains("<!-- event-history: speech.observed -->", eventHistory, StringComparison.Ordinal);
+        Assert.Contains("<!-- event-history: fallback -->", eventHistory, StringComparison.Ordinal);
+        Assert.Contains("{% if ActorId != blank %}", eventHistory, StringComparison.Ordinal);
+        Assert.Contains("ActorId == character.FullId", eventHistory, StringComparison.Ordinal);
+        Assert.Contains("I said: {{ Content }}", eventHistory, StringComparison.Ordinal);
+        Assert.Contains("Heard {{ ActorId }} say: {{ Content }}", eventHistory, StringComparison.Ordinal);
+        Assert.Contains("Heard an unknown speaker say: {{ Content }}", eventHistory, StringComparison.Ordinal);
+        Assert.DoesNotContain("VoiceId", eventHistory, StringComparison.Ordinal);
         Assert.Equal(
             "((Received {{ TypeKey }} event.)){% if ObservedAt != blank %} (at {{ nf(ObservedAt, 1) }}s game time){% endif %}\n",
-            fallbackSource);
-        Assert.DoesNotContain("VoiceId", fallbackSource, StringComparison.Ordinal);
+            GetEventHistoryFallbackSource(eventHistory));
+        Assert.DoesNotContain("VoiceId", GetEventHistoryFallbackSource(eventHistory), StringComparison.Ordinal);
 
         // The production tool inventory (speak, wait, history) is created internally without scene authoring
         // (AI-002 TR-16): authored tools remain an extension point and are empty in the shared templates.
@@ -272,6 +285,16 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         object? value = source.GetType().GetProperty(propertyName)?.GetValue(source);
         return value ?? throw new Xunit.Sdk.XunitException(
             $"Expected property '{propertyName}' on '{source.GetType().FullName}' to be present and non-null.");
+    }
+
+    private static string GetEventHistoryFallbackSource(string eventHistoryFileText)
+    {
+        const string fallbackDelimiter = "<!-- event-history: fallback -->\n";
+        int delimiterEnd = eventHistoryFileText.IndexOf(fallbackDelimiter, StringComparison.Ordinal);
+        Assert.True(
+            delimiterEnd >= 0,
+            "Expected the authored event-history file to contain a fallback section.");
+        return eventHistoryFileText[(delimiterEnd + fallbackDelimiter.Length)..];
     }
 
     private static string ReadResourceText(string path)

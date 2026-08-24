@@ -152,7 +152,7 @@ authored template contents without requiring generators to know internal node pl
 46. There is no Vadim player asset in this slice. A lightweight alternate female-player identity fixture must prove that
     generic installation preserves a different asset-owned player ID without using voice attribution as identity.
 47. Asset renames must preserve existing Godot UIDs so UID-backed scene and resource references remain valid.
-48. `CharacterCardContextSource` and `Actors` membership are attached at the lowest shared male/female character bases.
+48. `Actors` membership is attached at the lowest shared male/female character bases.
     Higher role templates and concrete character scenes must not add redundant compensation.
 
 ## In Scope
@@ -310,5 +310,4 @@ authored template contents without requiring generators to know internal node pl
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [CHAR-002: Character Root](../002-character-root/index.md)
-- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

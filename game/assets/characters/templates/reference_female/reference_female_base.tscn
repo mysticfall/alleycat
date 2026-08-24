@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://c7xlydturc3b0"]
 
 [ext_resource type="PackedScene" uid="uid://u5lgtgrohlyk" path="res://assets/characters/reference/female/reference_female.blend" id="1_5molt"]
-[ext_resource type="Script" uid="uid://b2ylrdplnarwo" path="res://src/Character/CharacterCardContextSource.cs" id="2_pyepr"]
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Rigging/Physics/DynamicPhysicalRig.cs" id="3_2a5tg"]
 [ext_resource type="PackedScene" uid="uid://dtal5jnyu6qnc" path="res://assets/characters/templates/ik/neck_spine_ccdik.tscn" id="3_kuxso"]
 [ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Vision/StaticVisualCue.cs" id="3_oqvej"]
@@ -18,9 +17,6 @@
 [ext_resource type="Script" uid="uid://cxh7lfqn5k3nw" path="res://src/Interaction/Hands/HandPoseBehaviour.cs" id="12_kqwe4"]
 [ext_resource type="AnimationLibrary" path="res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres" id="13_locomotion"]
 
-[sub_resource type="Resource" id="Resource_pyepr"]
-script = ExtResource("2_pyepr")
-
 [sub_resource type="Resource" id="Resource_42fxf"]
 script = ExtResource("4_8lkn1")
 Radius = 0.05
@@ -34,7 +30,6 @@ Locomotion = NodePath("Locomotion")
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
-ContextSources = [SubResource("Resource_pyepr")]
 AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
 
 [node name="Female" parent="." index="0" unique_id=1569261267]

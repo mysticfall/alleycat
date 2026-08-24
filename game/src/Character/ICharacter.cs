@@ -1,4 +1,3 @@
-using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction.Hands;
@@ -12,7 +11,7 @@ namespace AlleyCat.Character;
 /// <summary>
 /// Aggregate trait for the game's fully embodied humanoid character composition.
 /// </summary>
-public interface ICharacter : IContextual, IHasHands, IHasVoice, IHasHearing, ILocomotive, INavigator, IHasVision, IVisualSubject
+public interface ICharacter : IHasHands, IHasVoice, IHasHearing, ILocomotive, INavigator, IHasVision, IVisualSubject
 {
     /// <inheritdoc />
     string IIdentifiable.Type => "char";

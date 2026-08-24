@@ -52,5 +52,5 @@ public abstract partial class VisualCue : Node3D
     /// <summary>
     /// Describes the cue relative to the supplied observer and scene.
     /// </summary>
-    public abstract string Describe(ISceneContext scene, IHasVision observer);
+    public abstract ValueTask<string> Describe(ISceneContext scene, IHasVision observer);
 }

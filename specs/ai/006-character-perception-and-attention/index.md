@@ -152,7 +152,7 @@ attention, existing speech history, and existing eye visibility and presentation
 39. `Character.Components` deliberately includes configured `ISense` components in deterministic holder order, in
     addition to its required embodied components. No `CharacterPerception` component or bespoke wiring remains.
 40. AgenticMind session prompt context contains self and each attention-eligible `FullId` that currently resolves
-    through `ISceneContext.Find(FullId)` to an `IContextual` subject. It performs no additional visual survey.
+    through `ISceneContext.Find(FullId)` to an `ICharacter` subject. It performs no additional visual survey.
 
 ## In Scope
 
@@ -189,7 +189,7 @@ attention, existing speech history, and existing eye visibility and presentation
 1. NPCs record exactly one recognised or unknown speech memory for each accepted non-self speech publication and none
    for self speech.
 2. Periodic visual surveys reinforce every visible subject in survey order without producing visual memories.
-3. Session prompt context contains self and every currently resolvable attention-eligible contextual subject.
+3. Session prompt context contains self and every currently resolvable attention-eligible character.
 4. Visual sensing preserves all existing visibility and eye presentation behaviour, including gaze, saccades, and
    blinking.
 5. Invalid sense, faculty, cadence, or attention authoring fails before sensing activates.
@@ -232,7 +232,7 @@ attention, existing speech history, and existing eye visibility and presentation
    the speech tool's exactly-once self-action observation path remains, configured senses appear in deterministic
    `Character.Components`, and `CharacterPerception` and `MindStimulus` do not exist.
 14. Foreground-context tests verify self inclusion, eligible `FullId` resolution, omission of unresolved or
-   non-contextual subjects, no top-N selection, and no second visual survey.
+    non-character results, no top-N selection, and no second visual survey.
 15. Boundary tests verify sensing, surveys, faculties, and attention mutation never call `IVision.SetLookTarget` or
    `IVision.ClearLookTarget`; AI-007 alone consumes the published attention snapshot as the separately composed
    post-attention gaze consumer.
@@ -250,7 +250,6 @@ attention, existing speech history, and existing eye visibility and presentation
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
-- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

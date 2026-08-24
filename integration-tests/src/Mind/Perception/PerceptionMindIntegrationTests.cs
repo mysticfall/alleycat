@@ -1,11 +1,9 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
-using AlleyCat.Scene;
 using AlleyCat.Sense;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
@@ -238,7 +236,6 @@ public sealed class PerceptionMindIntegrationTests
                 ComponentsRefreshedHandlerCount--;
             }
         }
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer) => new Dictionary<string, object?>();
         public void RefreshComponents(params IComponent[] components)
         {
             _components = components;

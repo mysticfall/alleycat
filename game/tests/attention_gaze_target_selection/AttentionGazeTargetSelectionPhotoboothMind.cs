@@ -1,6 +1,5 @@
 using AlleyCat.Character;
 using AlleyCat.Common;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Scene;
@@ -95,9 +94,6 @@ public sealed partial class AttentionGazeTargetSelectionPhotoboothMind : MindBas
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues => subject.VisualCues;
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
     }
 
     private sealed class FixedRandom : IAttentionGazeRandom

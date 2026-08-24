@@ -3,16 +3,12 @@
 [ext_resource type="PackedScene" path="res://assets/testing/photobooth/photobooth.tscn" id="1_nb4pd"]
 [ext_resource type="PackedScene" path="res://assets/characters/templates/reference_female/reference_female_npc.tscn" id="2_r0iph"]
 [ext_resource type="Script" path="res://src/Character/Character.cs" id="3_omtfj"]
-[ext_resource type="Script" path="res://src/Character/CharacterCardContextSource.cs" id="4_r84fc"]
 [ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionPhotoboothMind.cs" id="5_b7eaq"]
 [ext_resource type="Script" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="6_y51pn"]
 [ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionCueSubject.cs" id="7_corx5"]
 [ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionPhotoboothMarker.cs" id="8_u5s5q"]
 [ext_resource type="Script" path="res://src/Vision/StaticVisualCue.cs" id="9_vgjg0"]
 [ext_resource type="Script" path="res://tests/attention_gaze_target_selection/AttentionGazeTargetSelectionPhotoboothDriver.cs" id="10_qnn8f"]
-
-[sub_resource type="Resource" id="Resource_pyepr"]
-script = ExtResource("4_r84fc")
 
 [sub_resource type="SphereMesh" id="SphereMesh_oybcf"]
 radius = 0.16
@@ -34,7 +30,6 @@ Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
 Hearing = NodePath("Hearing")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
-ContextSources = [SubResource("Resource_pyepr")]
 
 [node name="Mind" type="Node" parent="Subject/Observer" index="11" unique_id=1429938559]
 script = ExtResource("5_b7eaq")

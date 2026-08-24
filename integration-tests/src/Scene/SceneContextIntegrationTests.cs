@@ -1,5 +1,5 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
+using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Scene;
@@ -18,11 +18,12 @@ namespace AlleyCat.IntegrationTests.Scene;
 public sealed class SceneContextIntegrationTests
 {
     /// <summary>
-    /// Shared character bases provide Actors discovery and character-card context to inherited role templates.
+    /// Shared character bases provide Actors discovery and surface each role's canonical identity through curated
+    /// render views.
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterRoleTemplates_InheritActorsMembershipAndCharacterCardContext()
+    public void CharacterRoleTemplates_InheritActorsMembershipAndCanonicalRenderViewIdentity()
     {
         string[] scenePaths =
         [
@@ -38,8 +39,10 @@ public sealed class SceneContextIntegrationTests
             try
             {
                 Assert.True(character.IsInGroup("Actors"), $"{scenePath} should inherit Actors membership.");
-                ContextSource source = Assert.Single(character.ContextSources);
-                _ = Assert.IsType<CharacterCardContextSource>(source, exactMatch: false);
+                // Curated render views expose exactly the instantiated role template's canonical identity.
+                Assert.Equal(
+                    ((IIdentifiable)character).FullId,
+                    new CharacterRenderView(character).FullId);
             }
             finally
             {

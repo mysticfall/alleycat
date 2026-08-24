@@ -1,12 +1,10 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction;
 using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
-using AlleyCat.Scene;
 using AlleyCat.Sense;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
@@ -35,7 +33,6 @@ public sealed class ICharacterTests
         Assert.True(typeof(IHasHearing).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(INavigator).IsAssignableFrom(typeof(ICharacter)));
-        Assert.True(typeof(IContextual).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IVisualSubject).IsAssignableFrom(typeof(ICharacter)));
     }
 
@@ -84,9 +81,6 @@ public sealed class ICharacterTests
         public IReadOnlyList<IComponent> Components { get; } = components;
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
     }
 
     private sealed class FakeHand(LimbSide side) : IHand

@@ -29,8 +29,8 @@ roleplay without breaking immersion or performance.
    easily; AI must retrieve relevant information by conceptual relationships
    (not only tags/keywords) with efficiency for latency and token count;
    authored content must be able to evolve as in-game events unfold.
-4. Context: AI characters must be able to access scene membership from SCN-001 and contextual information from CTX-001,
-   plus short- and long-term memory, environmental and self sensory information, and spatial relationships.
+4. Context: AI characters must be able to access scene membership from SCN-001 and session prompt context through
+   AI-003, plus short- and long-term memory, environmental and self sensory information, and spatial relationships.
 5. Performance: The system must provide low latency for real-time interaction,
    support parallel/multi-agent workflows, implement an AI budget with
    prioritisation/queueing/configurable settings, allow less important
@@ -51,8 +51,8 @@ roleplay without breaking immersion or performance.
 3. Knowledge/Memory Model: Specify a model for storing and retrieving lore/backstory
    by conceptual relationships, optimised for latency and token count, with
    support for evolving content.
-4. Context Provider Interface: Use CTX-001 for top-level contextual information retrieval and define only AI-specific
-   provider interfaces for memory, sensory data, and spatial relationships.
+4. Context Access: Use SCN-001 for scene membership and AI-003 for the session render context; define AI-specific
+   provider interfaces only for memory, sensory data, and spatial relationships.
 5. Budget/Scheduler: Establish a system for AI resource allocation with
    prioritisation, queueing, and configurable settings, allowing fallback to
    cheaper/slower/non-AI control for less important characters.
@@ -68,7 +68,6 @@ roleplay without breaking immersion or performance.
 - Current entries for AI-001: Mind Component, AI-002: Agent Runtime, AI-003: Prompt API, AI-004: Lore And Backstory
   Source Compilation, AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven
   Gaze Target Selection, AI-008: Scenario, and AI-009: Attention-Driven Head Orientation.
-- CTX-001 as the normative top-level contextual information API used by AI and non-AI consumers.
 - High-level contracts covering the six requirement themes above, with scene membership delegated to SCN-001.
 - Extensibility points for lore, actions, and context providers.
 
@@ -85,8 +84,8 @@ roleplay without breaking immersion or performance.
    - Realtime Interaction: AI agents act without player input and handle timeouts.
    - Non-Dialogue Interaction: Outputs manifest as world changes, not chat.
    - Lore and Backstory: Retrieval uses conceptual relationships and remains efficient and updatable.
-   - Context: Agents access SCN-001 scene membership, CTX-001 contextual information, plus memory, sensory, and spatial
-     data.
+   - Context: Agents access SCN-001 scene membership and the AI-003 session render context, plus memory, sensory, and
+     spatial data.
    - Performance: System maintains low latency with multiple agents, supports priority queues, budget defaults, and
      cheaper fallback control.
    - Extensibility: New lore, actions, and context providers can be added externally without scene/code changes.
@@ -94,7 +93,7 @@ roleplay without breaking immersion or performance.
    - Existence of event/time-driven loop contracts.
    - Sensing/action integration interfaces defined.
    - Knowledge/memory model specified.
-   - CTX-001 top-level contextual information API used without redefining SCN-001 scene membership.
+   - AI-003 session render context used without redefining SCN-001 scene membership.
    - Budget/scheduler mechanism described.
    - Parallel workflow expectation stated.
    - Extensibility contracts for external data and pluggable components.
@@ -102,7 +101,6 @@ roleplay without breaking immersion or performance.
    AI-006: Percept-Based Sensing And Attention, AI-007: Attention-Driven Head Target
    Selection, AI-008: Scenario, and AI-009: Attention-Driven Head Orientation are identified as current normative
    child contracts for their respective scopes.
-4. CTX-001 is discoverable as the normative top-level contextual information API.
 
 ## Specifications
 
@@ -114,7 +112,6 @@ roleplay without breaking immersion or performance.
 - [AI-007: Attention-Driven Gaze Target Selection](007-attention-gaze-target-selection/index.md)
 - [AI-008: Scenario](008-scenario/index.md)
 - [AI-009: Attention-Driven Head Orientation](009-attention-head-orientation/index.md)
-- [CTX-001: Contextual Information API](../context/001-contextual-information-api/index.md)
 - [SCN-001: Scene Context API](../scene/001-scene-context-api/index.md)
 
 ## References
@@ -127,5 +124,4 @@ roleplay without breaking immersion or performance.
 - AI-007: Attention-Driven Gaze Target Selection
 - AI-008: Scenario
 - AI-009: Attention-Driven Head Orientation
-- CTX-001: Contextual Information API
 - SCN-001: Scene Context API

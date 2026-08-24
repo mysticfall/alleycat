@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
@@ -150,8 +149,5 @@ public sealed class SceneContextTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
     }
 }

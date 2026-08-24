@@ -1,4 +1,5 @@
 using System.Globalization;
+using AlleyCat.Character;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Tool;
@@ -13,14 +14,14 @@ using Xunit;
 namespace AlleyCat.IntegrationTests.Mind.AI.Prompting;
 
 /// <summary>
-/// Godot-runtime coverage for the standalone <see cref="EventHistory" /> authoring resource and its exact,
-/// per-record dispatch through the on-demand observation-history renderer.
+/// Godot-runtime coverage for the authored standalone event-history file and its exact, per-record dispatch
+/// through the on-demand observation-history renderer.
 /// </summary>
 [Headless]
 public sealed class EventHistoryIntegrationTests
 {
     private const string GenericPromptPath = "res://assets/characters/prompts/generic_npc_prompt_stack.tres";
-    private const string NpcEventHistoryPath = "res://assets/characters/prompts/npc_event_history.tres";
+    private const string NpcEventHistoryPath = "res://prompts/event_history.md";
 
     /// <summary>
     /// The shared generic NPC prompt stack contains no event-history section, and its <c>mind.md</c> guidance stays
@@ -82,14 +83,14 @@ public sealed class EventHistoryIntegrationTests
     }
 
     /// <summary>
-    /// The standalone NPC event-history resource owns exactly one unified speech fragment with safe actor-relative
-    /// output, rendered chronologically through the on-demand renderer.
+    /// The authored standalone event-history file owns exactly one unified speech fragment with safe
+    /// actor-relative output, rendered chronologically through the on-demand renderer.
     /// </summary>
     [Fact]
     public async Task StandaloneEventHistory_RendersUnifiedActorRelativeChronologicalHistory()
     {
-        EventHistory eventHistory = LoadNpcEventHistory();
-        EventHistoryPromptFragment fragment = Assert.Single(eventHistory.Fragments);
+        EventHistoryDocument eventHistory = LoadNpcEventHistory();
+        EventHistoryFragment fragment = Assert.Single(eventHistory.Fragments);
         Observation[] observations =
         [
             new ObservedSpeech("char:test_character", "private-self", "Self line.") { ObservedAt = 100.2d },
@@ -115,15 +116,15 @@ public sealed class EventHistoryIntegrationTests
     }
 
     /// <summary>
-    /// The runtime render path over the migrated authored resource reproduces the committed Handlebars-era golden
+    /// The runtime render path over the authored standalone file reproduces the committed pre-migration golden
     /// baseline byte-for-byte (invariant-culture capture), proving the individually compiled record-rooted model
-    /// keeps pre-migration output identical.
+    /// keeps migrated output identical.
     /// </summary>
     [Fact]
     public async Task StandaloneEventHistory_MatchesCommittedGoldenBaselineThroughRuntimePath()
     {
         string expected = await File.ReadAllTextAsync(BaselinePath("authored_npc_event_history_dispatch.txt"));
-        EventHistory eventHistory = LoadNpcEventHistory();
+        EventHistoryDocument eventHistory = LoadNpcEventHistory();
         Observation[] observations =
         [
             new ObservedSpeech("char:test_character", "unused-self", "Self line.") { ObservedAt = 100.2d },
@@ -161,7 +162,7 @@ public sealed class EventHistoryIntegrationTests
     [Fact]
     public async Task StandaloneEventHistory_RendersUnstampedObservationsWithoutLabels()
     {
-        EventHistory eventHistory = LoadNpcEventHistory();
+        EventHistoryDocument eventHistory = LoadNpcEventHistory();
         Observation[] observations =
         [
             new ObservedSpeech("char:test_character", "private-self", "Self line."),
@@ -183,7 +184,7 @@ public sealed class EventHistoryIntegrationTests
     [Fact]
     public async Task Render_RecognisedUnknownAndSelfSpeech_UsesPrivacySafeAuthoredWording()
     {
-        EventHistory eventHistory = CreateSpeechEventHistory();
+        EventHistoryDocument eventHistory = CreateSpeechEventHistory();
         Observation[] observations =
         [
             new ObservedSpeech("char:rin", "raw-known-device", "Hello"),
@@ -208,18 +209,9 @@ public sealed class EventHistoryIntegrationTests
     [Fact]
     public async Task Render_UnknownAndCaseMismatchedKeys_UsesFallbackWithConcreteContext()
     {
-        EventHistory eventHistory = new()
-        {
-            Fragments =
-            [
-                new EventHistoryPromptFragment
-                {
-                    TypeKey = "speech.observed",
-                    Source = "heard: {{ Content }}\n",
-                },
-            ],
-            FallbackSource = "fallback {{ TypeKey }}: {{ Detail }}\n",
-        };
+        EventHistoryDocument eventHistory = ParseSpeechDocument(
+            "heard: {{ Content }}\n",
+            "fallback {{ TypeKey }}: {{ Detail }}\n");
         Observation[] observations =
         [
             new TestObservation("Speech.Heard", "case mismatch"),
@@ -239,18 +231,9 @@ public sealed class EventHistoryIntegrationTests
     [Fact]
     public async Task Render_PreservesOrderingMultilineOutputAndEmptyHistory()
     {
-        EventHistory eventHistory = new()
-        {
-            Fragments =
-            [
-                new EventHistoryPromptFragment
-                {
-                    TypeKey = "test.event",
-                    Source = "line one: {{ Detail }}\nline two\n",
-                },
-            ],
-            FallbackSource = "fallback",
-        };
+        EventHistoryDocument eventHistory = ParseSpeechDocument(
+            "speech: {{ Content }}\n",
+            "line one: {{ Detail }}\nline two\n");
 
         ObservationHistoryRenderer renderer = CreateRenderer(eventHistory);
         string populated = await renderer.RenderAsync(
@@ -267,7 +250,7 @@ public sealed class EventHistoryIntegrationTests
     [Fact]
     public async Task Render_InterleavesSpeechAndFallbackWithoutLeakingVoiceProvenance()
     {
-        EventHistory eventHistory = CreateSpeechEventHistory();
+        EventHistoryDocument eventHistory = CreateSpeechEventHistory();
         Observation[] observations =
         [
             new ObservedSpeech(null, "private-first", "first"),
@@ -291,67 +274,60 @@ public sealed class EventHistoryIntegrationTests
     [Fact]
     public async Task Render_CompilesAuthoredTemplatesIndividuallyAndSuppliesRecordsAtRenderTime()
     {
-        EventHistory eventHistory = new()
-        {
-            Fragments =
-            [
-                new EventHistoryPromptFragment
-                {
-                    TypeKey = "test.event",
-                    Source = "{{ Detail }}",
-                },
-            ],
-            FallbackSource = "{{ TypeKey }}",
-        };
+        EventHistoryDocument eventHistory = ParseSpeechDocument("{{ Content }}\n", "{{ TypeKey }}");
         ObservationHistoryRenderer renderer = CreateRenderer(eventHistory);
 
         Assert.DoesNotContain("first runtime value", eventHistory.Fragments[0].Source, StringComparison.Ordinal);
         Assert.Equal(
-            "first runtime value",
-            await renderer.RenderAsync([new TestObservation("test.event", "first runtime value")]));
+            "first runtime value\n",
+            await renderer.RenderAsync([new ObservedSpeech(null, null, "first runtime value")]));
         Assert.Equal(
-            "second runtime value",
-            await renderer.RenderAsync([new TestObservation("test.event", "second runtime value")]));
+            "second runtime value\n",
+            await renderer.RenderAsync([new ObservedSpeech(null, null, "second runtime value")]));
     }
 
     /// <summary>
-    /// Blank keys, duplicate exact keys, and blank fallbacks fail as clear authoring errors when the renderer is
-    /// created (AI-003 TR-13).
+    /// Invalid authoring fails clearly at parse time, naming the offending section for every violation class
+    /// (AI-003 TR-13): blank, unknown, and duplicate exact keys, a missing or blank fallback section, and text
+    /// outside any section.
     /// </summary>
     [Fact]
-    public void Create_InvalidAuthoring_ThrowsClearErrors()
+    public void Parse_InvalidAuthoring_ThrowsClearErrorsNamingTheOffendingSection()
     {
-        EventHistory blankKey = new()
-        {
-            Fragments = [new EventHistoryPromptFragment { TypeKey = "  ", Source = "unused" }],
-        };
-        EventHistory duplicateKey = new()
-        {
-            Fragments =
-            [
-                new EventHistoryPromptFragment { TypeKey = "same", Source = "first" },
-                new EventHistoryPromptFragment { TypeKey = "same", Source = "second" },
-            ],
-        };
-        EventHistory blankFallback = new()
-        {
-            FallbackSource = "\t",
-        };
-
         InvalidOperationException blankKeyError = Assert.Throws<InvalidOperationException>(
-            () => CreateRenderer(blankKey));
-        InvalidOperationException duplicateError = Assert.Throws<InvalidOperationException>(
-            () => CreateRenderer(duplicateKey));
-        InvalidOperationException fallbackError = Assert.Throws<InvalidOperationException>(
-            () => CreateRenderer(blankFallback));
+            () => EventHistoryDocument.Parse("<!-- event-history:   -->\nunmatched\n" + FallbackSection() + "\tf\n"));
+        InvalidOperationException unknownKeyError = Assert.Throws<InvalidOperationException>(
+            () => EventHistoryDocument.Parse(
+                "<!-- event-history: world.changed -->\nunmatched\n" + FallbackSection() + "\tf\n"));
+        InvalidOperationException duplicateKeyError = Assert.Throws<InvalidOperationException>(
+            () => EventHistoryDocument.Parse(
+                "<!-- event-history: speech.observed -->\nfirst\n"
+                + "<!-- event-history: speech.observed -->\nsecond\n"
+                + FallbackSection() + "\tf\n"));
+        InvalidOperationException missingFallbackError = Assert.Throws<InvalidOperationException>(
+            () => EventHistoryDocument.Parse("<!-- event-history: speech.observed -->\nunmatched\n"));
+        InvalidOperationException blankFallbackError = Assert.Throws<InvalidOperationException>(
+            () => EventHistoryDocument.Parse(FallbackSection() + "\t\n"));
+        InvalidOperationException outsideTextError = Assert.Throws<InvalidOperationException>(
+            () => EventHistoryDocument.Parse("stray prose\n" + FallbackSection() + "\tf\n"));
 
         Assert.Contains("nonblank TypeKey", blankKeyError.Message, StringComparison.Ordinal);
-        Assert.Contains("duplicate exact TypeKey 'same'", duplicateError.Message, StringComparison.Ordinal);
-        Assert.Contains("nonblank fallback", fallbackError.Message, StringComparison.Ordinal);
+        Assert.Contains("unknown TypeKey 'world.changed'", unknownKeyError.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "duplicate exact TypeKey 'speech.observed'", duplicateKeyError.Message, StringComparison.Ordinal);
+        Assert.Contains("nonblank fallback", missingFallbackError.Message, StringComparison.Ordinal);
+        Assert.Contains("nonblank fallback", blankFallbackError.Message, StringComparison.Ordinal);
+        Assert.Contains("outside any section", outsideTextError.Message, StringComparison.Ordinal);
     }
 
-    private static EventHistory LoadNpcEventHistory()
-        => Assert.IsType<EventHistory>(ResourceLoader.Load(NpcEventHistoryPath), exactMatch: false);
+    private static string FallbackSection() => "<!-- event-history: fallback -->\n";
+
+    private static EventHistoryDocument LoadNpcEventHistory()
+    {
+        using var file = Godot.FileAccess.Open(NpcEventHistoryPath, Godot.FileAccess.ModeFlags.Read);
+        Assert.True(file is not null, $"Expected the authored event-history file '{NpcEventHistoryPath}' to open.");
+        return EventHistoryDocument.Parse(file!.GetAsText());
+    }
 
     private static string Describe(string value)
         => value.Replace("\r", "\\r", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal);
@@ -369,27 +345,26 @@ public sealed class EventHistoryIntegrationTests
             : throw new InvalidOperationException("Could not locate the repository root from the test binary path.");
     }
 
-    private static EventHistory CreateSpeechEventHistory()
-        => new()
-        {
-            Fragments =
-            [
-                new EventHistoryPromptFragment
-                {
-                    TypeKey = "speech.observed",
-                    Source = "{% if ActorId != blank %}{% if ActorId == character.FullId %}Said: {{ Content }}"
-                        + "{% else %}Heard {{ ActorId }}: {{ Content }}{% endif %}"
-                        + "{% else %}Heard an unknown speaker: {{ Content }}{% endif %}\n",
-                },
-            ],
-            FallbackSource = "((Received {{ TypeKey }} event.))\n",
-        };
+    /// <summary>Builds an authored-convention document with one speech fragment plus the supplied fallback.</summary>
+    private static EventHistoryDocument ParseSpeechDocument(string fragmentSource, string fallbackSource)
+        => EventHistoryDocument.Parse(
+            "<!-- event-history: speech.observed -->\n"
+            + fragmentSource
+            + FallbackSection()
+            + fallbackSource);
 
-    private static ObservationHistoryRenderer CreateRenderer(EventHistory eventHistory)
+    private static EventHistoryDocument CreateSpeechEventHistory()
+        => ParseSpeechDocument(
+            "{% if ActorId != blank %}{% if ActorId == character.FullId %}Said: {{ Content }}"
+                + "{% else %}Heard {{ ActorId }}: {{ Content }}{% endif %}"
+                + "{% else %}Heard an unknown speaker: {{ Content }}{% endif %}\n",
+            "((Received {{ TypeKey }} event.))\n");
+
+    private static ObservationHistoryRenderer CreateRenderer(EventHistoryDocument? eventHistory)
         => ObservationHistoryRenderer.Create(
             eventHistory,
             new FluidTemplateCompiler(),
-            new Dictionary<string, object?> { ["FullId"] = "char:test_character" });
+            new CharacterRenderView(new PromptOwnerCharacter("test_character")));
 
     private static PromptSectionBuildContext CreateBuildContext()
         => new(

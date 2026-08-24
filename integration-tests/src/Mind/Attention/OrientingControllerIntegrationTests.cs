@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.IK;
@@ -589,9 +588,6 @@ public sealed class OrientingControllerIntegrationTests
                 ComponentsRefreshedHandlerCount--;
             }
         }
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
 
         public void RefreshComponents(params IComponent[] components)
         {

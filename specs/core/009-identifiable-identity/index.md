@@ -42,8 +42,8 @@ cross-object references unambiguous.
     each character-owned voice the same local ID and validate its resulting `voice:<character-id>` identity before
     exposure to scene consumers. Template placeholder voice IDs must be valid lower `snake_case` and are replaced at
     that final installation boundary.
-12. `IIdentifiable` is the shared subject and optional-observer input boundary for CTX-001 context sources. This does
-    not make every identifiable object contextual or a visual subject.
+12. `IIdentifiable` is the shared identity boundary for AI-003 render contexts and VISION-001 visual subjects. This
+    does not make every identifiable object a renderable character or a visual subject.
 
 ## In Scope
 
@@ -52,7 +52,7 @@ cross-object references unambiguous.
 - The `char`, `loc`, and `voice` type vocabulary for this migration.
 - Normative identity integration for character, context, and lore specifications.
 - Character-owned voice-ID installation after target-scene precedence.
-- Identifiable inputs for CTX-001 sources and VISION-001 visual subjects.
+- Identifiable identities for AI-003 render contexts and VISION-001 visual subjects.
 
 ## Out Of Scope
 
@@ -83,14 +83,14 @@ cross-object references unambiguous.
    operational attribution rather than authenticated provenance.
 8. Installation tests verify each character-owned voice receives the final precedence-resolved `Character.Id`, valid
    lower-`snake_case` template placeholder IDs are replaced, and `voice:<character-id>` validates before exposure.
-9. CTX-001 sources accept identifiable subject and optional-observer inputs without requiring `IIdentifiable` to
-   implement contextual or visual-subject contracts.
+9. AI-003 render contexts expose characters through curated views without requiring `IIdentifiable` to implement
+   render-view or visual-subject contracts.
 
 ## References
 
 - [CORE-005: Scene Installer System](../005-scene-installer-system/index.md)
 - [CHAR-001: Character Skeleton Profile](../../character/001-character-skeleton/index.md)
-- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
+- [AI-003: Prompt API](../../ai/003-prompt-api/index.md)
 - [AI-004: Lore And Backstory Source Compilation](../../ai/004-lore-backstory/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)

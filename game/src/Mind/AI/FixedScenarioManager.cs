@@ -30,7 +30,7 @@ public partial class FixedScenarioManager : ScenarioManager
     public string DescriptionPath { get; set; } = string.Empty;
 
     /// <inheritdoc />
-    public override Scenario? GetCurrentScenario(IReadOnlyDictionary<string, object?> coreContext)
+    public override async ValueTask<Scenario?> GetCurrentScenario(IReadOnlyDictionary<string, object?> coreContext)
     {
         ArgumentNullException.ThrowIfNull(coreContext);
 
@@ -59,9 +59,7 @@ public partial class FixedScenarioManager : ScenarioManager
         try
         {
             ITemplateCompiler compiler = Game.Instance.GetRequiredService<ITemplateCompiler>();
-            // The templating contract is asynchronous while GetCurrentScenario is synchronous; Fluid rendering
-            // completes synchronously for the built-in tool set, so awaiting inline introduces no blocking.
-            rendered = compiler.Compile(body).RenderAsync(coreContext).AsTask().GetAwaiter().GetResult();
+            rendered = await compiler.Compile(body).RenderAsync(coreContext);
         }
         catch (Exception exception)
         {

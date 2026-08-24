@@ -1,8 +1,6 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Mind.Observation;
-using AlleyCat.Scene;
 using AlleyCat.Vision;
 using Xunit;
 
@@ -103,8 +101,5 @@ public sealed class ObservationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
     }
 }

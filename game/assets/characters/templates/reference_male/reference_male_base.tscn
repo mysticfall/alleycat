@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://baxl54fq0rpj3"]
 
 [ext_resource type="PackedScene" uid="uid://bsfkxbo34s5ch" path="res://assets/characters/reference/male/reference_male.blend" id="1_5molt"]
-[ext_resource type="Script" uid="uid://b2ylrdplnarwo" path="res://src/Character/CharacterCardContextSource.cs" id="2_58k5s"]
 [ext_resource type="Script" uid="uid://bortwjgmky2ik" path="res://src/IK/FootTargetSyncController.cs" id="2_btvlx"]
 [ext_resource type="Resource" uid="uid://bqt323cv54sr3" path="res://assets/characters/reference/male/body_collider_profile.tres" id="3_sypgb"]
 [ext_resource type="Script" uid="uid://dwr11ki66nkby" path="res://src/IK/ArmIKController.cs" id="4_2m28j"]
@@ -17,9 +16,6 @@
 [ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Vision/SphereVisualBounds.cs" id="14_c6lj4"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bs4kur56aknxq" path="res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres" id="19_4r77l"]
 [ext_resource type="AnimationLibrary" path="res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres" id="20_locomotion"]
-
-[sub_resource type="Resource" id="Resource_wlfxg"]
-script = ExtResource("2_58k5s")
 
 [sub_resource type="Resource" id="Resource_c6lj4"]
 script = ExtResource("14_c6lj4")
@@ -43,7 +39,6 @@ Locomotion = NodePath("Locomotion")
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
-ContextSources = [SubResource("Resource_wlfxg")]
 AuthoredVisualCues = [NodePath("Male/GeneralSkeleton/Head/BodyVisualCue")]
 
 [node name="Male" parent="." index="0" unique_id=240695816]

@@ -1,6 +1,5 @@
 using System.Reflection;
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
@@ -27,7 +26,7 @@ public sealed partial class ScenarioIntegrationTests
 {
     /// <summary>The fixed manager is an exportable GlobalClass resource returning its authored file's exact text.</summary>
     [Fact]
-    public void FixedScenarioManager_ReturnsAuthoredFileContentExactlyOnEveryCall()
+    public async Task FixedScenarioManager_ReturnsAuthoredFileContentExactlyOnEveryCall()
     {
         Assert.True(typeof(Resource).IsAssignableFrom(typeof(FixedScenarioManager)));
         Assert.NotNull(typeof(FixedScenarioManager).GetCustomAttribute<GlobalClassAttribute>());
@@ -43,8 +42,8 @@ public sealed partial class ScenarioIntegrationTests
         try
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
-            Scenario first = manager.GetCurrentScenario(coreContext)!;
-            Scenario second = manager.GetCurrentScenario(coreContext)!;
+            Scenario first = (await manager.GetCurrentScenario(coreContext))!;
+            Scenario second = (await manager.GetCurrentScenario(coreContext))!;
 
             Assert.Equal("File-backed fixed scenario description for AI-008.\n", first.Description);
             Assert.Equal(first.Description, second.Description);
@@ -59,7 +58,7 @@ public sealed partial class ScenarioIntegrationTests
 
     /// <summary>The fixed manager strips a leading well-formed front-matter block and returns the exact body.</summary>
     [Fact]
-    public void FixedScenarioManager_WithLeadingFrontmatter_ReturnsExactBodyOnEveryCall()
+    public async Task FixedScenarioManager_WithLeadingFrontmatter_ReturnsExactBodyOnEveryCall()
     {
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
@@ -72,8 +71,8 @@ public sealed partial class ScenarioIntegrationTests
         try
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
-            Scenario first = manager.GetCurrentScenario(coreContext)!;
-            Scenario second = manager.GetCurrentScenario(coreContext)!;
+            Scenario first = (await manager.GetCurrentScenario(coreContext))!;
+            Scenario second = (await manager.GetCurrentScenario(coreContext))!;
 
             Assert.Equal("File-backed fixed scenario body after front matter for AI-008.\n", first.Description);
             Assert.Equal(first.Description, second.Description);
@@ -90,7 +89,7 @@ public sealed partial class ScenarioIntegrationTests
 
     /// <summary>The fixed manager renders player and character tokens in the authored body to their canonical FullIds.</summary>
     [Fact]
-    public void FixedScenarioManager_WithTokenBody_RendersPlayerAndCharacterFullIds()
+    public async Task FixedScenarioManager_WithTokenBody_RendersPlayerAndCharacterFullIds()
     {
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
@@ -103,7 +102,7 @@ public sealed partial class ScenarioIntegrationTests
         try
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
-            Scenario scenario = manager.GetCurrentScenario(coreContext)!;
+            Scenario scenario = (await manager.GetCurrentScenario(coreContext))!;
 
             Assert.Equal(
                 "The interrogator char:owner must extract the pass phrase from the detainee char:fixture_player before the shift changes.\n",
@@ -119,7 +118,7 @@ public sealed partial class ScenarioIntegrationTests
 
     /// <summary>The fixed manager rejects a missing path, missing file, and blank content.</summary>
     [Fact]
-    public void FixedScenarioManager_WithBlankMissingOrEmptyAuthoring_FailsClearly()
+    public async Task FixedScenarioManager_WithBlankMissingOrEmptyAuthoring_FailsClearly()
     {
         TestCharacter owner = new();
         SceneContext scene = new([owner]);
@@ -129,25 +128,25 @@ public sealed partial class ScenarioIntegrationTests
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateMinimalCoreContext();
 
-            InvalidOperationException missingPath = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(coreContext));
+            InvalidOperationException missingPath = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => _ = await manager.GetCurrentScenario(coreContext));
             Assert.Contains("non-empty Godot resource path", missingPath.Message, StringComparison.Ordinal);
 
             manager.DescriptionPath = "res://assets/testing/prompts/missing_scenario_fixed.md";
-            InvalidOperationException missingFile = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(coreContext));
+            InvalidOperationException missingFile = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => _ = await manager.GetCurrentScenario(coreContext));
             Assert.Contains("res://assets/testing/prompts/missing_scenario_fixed.md", missingFile.Message, StringComparison.Ordinal);
             Assert.Contains("could not read scenario description file", missingFile.Message, StringComparison.Ordinal);
 
             manager.DescriptionPath = "res://assets/testing/prompts/test_scenario_blank.md";
-            InvalidOperationException blankContent = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(coreContext));
+            InvalidOperationException blankContent = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => _ = await manager.GetCurrentScenario(coreContext));
             Assert.Contains("res://assets/testing/prompts/test_scenario_blank.md", blankContent.Message, StringComparison.Ordinal);
             Assert.Contains("non-empty scenario description", blankContent.Message, StringComparison.Ordinal);
 
             manager.DescriptionPath = "res://assets/testing/prompts/test_scenario_frontmatter_only.md";
-            InvalidOperationException blankAfterStrip = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(coreContext));
+            InvalidOperationException blankAfterStrip = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => _ = await manager.GetCurrentScenario(coreContext));
             Assert.Contains(
                 "res://assets/testing/prompts/test_scenario_frontmatter_only.md",
                 blankAfterStrip.Message,
@@ -162,7 +161,7 @@ public sealed partial class ScenarioIntegrationTests
 
     /// <summary>The fixed manager wraps template compilation or render failure clearly, naming the document path.</summary>
     [Fact]
-    public void FixedScenarioManager_WithBrokenTemplateBody_FailsClearlyNamingThePath()
+    public async Task FixedScenarioManager_WithBrokenTemplateBody_FailsClearlyNamingThePath()
     {
         TestCharacter owner = new();
         FixturePlayerCharacter player = new();
@@ -175,8 +174,8 @@ public sealed partial class ScenarioIntegrationTests
         try
         {
             IReadOnlyDictionary<string, object?> coreContext = CreateCoreContextForManager(owner, scene);
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-                () => manager.GetCurrentScenario(coreContext));
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => _ = await manager.GetCurrentScenario(coreContext));
 
             Assert.Contains(
                 "failed to compile or render the scenario description template",
@@ -416,9 +415,10 @@ public sealed partial class ScenarioIntegrationTests
                 published["characters"]);
 
             Assert.Equal(["char:fixture_player", "char:owner"], characters.Keys);
+            CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(published["player"]);
+            Assert.Equal(player.FullId, playerView.FullId);
+            // The attended player's entry is reused verbatim for the unconditional player key.
             Assert.Same(characters[player.FullId], published["player"]);
-            Assert.Same(player.Context, published["player"]);
-            Assert.Equal(1, player.ContextRequestCount);
         }
         finally
         {
@@ -429,12 +429,12 @@ public sealed partial class ScenarioIntegrationTests
     }
 
     /// <summary>
-    /// A player outside attention eligibility still renders <c>{{player.FullId}}</c> from the unconditional core
-    /// player context dictionary.
+    /// A player outside attention eligibility still renders <c>{{player.FullId}}</c> from the unconditional
+    /// player view.
     /// </summary>
     /// <remarks>
-    /// Regression coverage for the empty-token defect: raw <c>ICharacter</c> objects never expose the default
-    /// interface <c>FullId</c> member to Handlebars, so the player must arrive as its rendered context dictionary.
+    /// Regression coverage for the empty-token defect: raw <c>ICharacter</c> objects never expose the curated
+    /// template surface, so the player must arrive as its <see cref="CharacterRenderView" /> wrapper.
     /// </remarks>
     [Fact]
     public async Task SessionRender_WhenPlayerIsNotAttentionEligible_PlayerFullIdTokenStillRenders()
@@ -469,7 +469,8 @@ public sealed partial class ScenarioIntegrationTests
             Assert.DoesNotContain("{{", sectionContent, StringComparison.Ordinal);
 
             IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
-            Assert.Same(player.Context, published["player"]);
+            CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(published["player"]);
+            Assert.Equal(player.FullId, playerView.FullId);
         }
         finally
         {
@@ -504,8 +505,8 @@ public sealed partial class ScenarioIntegrationTests
                 published["characters"]);
 
             Assert.Equal(["char:owner"], characters.Keys);
-            Assert.Same(player.Context, published["player"]);
-            Assert.Equal(1, player.ContextRequestCount);
+            CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(published["player"]);
+            Assert.Equal(player.FullId, playerView.FullId);
         }
         finally
         {
@@ -717,7 +718,7 @@ public sealed partial class ScenarioIntegrationTests
 
         public void EnqueueFailure(Exception exception) => _script.Enqueue(exception);
 
-        public override Scenario? GetCurrentScenario(IReadOnlyDictionary<string, object?> coreContext)
+        public override ValueTask<Scenario?> GetCurrentScenario(IReadOnlyDictionary<string, object?> coreContext)
         {
             ArgumentNullException.ThrowIfNull(coreContext);
             ReceivedCoreContexts.Add(coreContext);
@@ -725,11 +726,11 @@ public sealed partial class ScenarioIntegrationTests
             SceneCaptureCountsAtQuery.Add(SceneCaptureCountProbe());
             if (_script.Count == 0)
             {
-                return null;
+                return ValueTask.FromResult<Scenario?>(null);
             }
 
             object? next = _script.Dequeue();
-            return next is Exception exception ? throw exception : (Scenario?)next;
+            return next is Exception exception ? throw exception : ValueTask.FromResult((Scenario?)next);
         }
     }
 
@@ -854,15 +855,6 @@ public sealed partial class ScenarioIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        // Production-shaped context: the canonical identity is a string entry mirroring CharacterCardContextSource,
-        // so dictionary-based Handlebars access ({{character.FullId}}) resolves in tests exactly as in production.
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>
-            {
-                ["name"] = $"Character {Id}",
-                ["FullId"] = FullId,
-            };
     }
 
     private sealed class RecordingLoggerProvider : ILoggerProvider

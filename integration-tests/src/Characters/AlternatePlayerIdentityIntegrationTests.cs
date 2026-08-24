@@ -1,6 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
-using AlleyCat.Scene;
 using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
 using Xunit;
@@ -38,12 +36,8 @@ public sealed class AlternatePlayerIdentityIntegrationTests
             Assert.True(character.IsInGroup("Player"));
             Assert.True(character.IsInGroup("Actors"));
 
-            ContextSource contextSource = Assert.Single(character.ContextSources);
-            _ = Assert.IsType<CharacterCardContextSource>(contextSource, exactMatch: false);
-            IReadOnlyDictionary<string, object?> characterCard = character.GetContext(
-                new SceneContext([character]),
-                observer: null);
-            Assert.Equal("char:riley", Assert.Single(characterCard).Value);
+            // The authored canonical identity is the exact value curated render views expose to templates.
+            Assert.Equal("char:riley", new CharacterRenderView(character).FullId);
         }
         finally
         {

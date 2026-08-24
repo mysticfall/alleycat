@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Prompting;
@@ -100,7 +99,7 @@ public sealed class AgenticMindTests
     }
 
     /// <summary>
-    /// AgenticMind must pass the CTX-001 dictionary directly to system-instruction template rendering.
+    /// AgenticMind must pass the AI-003 render context directly to system-instruction template rendering.
     /// </summary>
     [Fact]
     public async Task RenderSystemInstruction_PassesContextDictionaryToTemplate()
@@ -118,36 +117,25 @@ public sealed class AgenticMindTests
     }
 
     /// <summary>
-    /// AgenticMind obtains observer-relative CTX-001 data for self and explicitly eligible characters in ordinal exact-ID order.
+    /// AgenticMind exposes curated render views for itself and every explicitly eligible character in ordinal
+    /// exact-ID order (AI-003 TR-20).
     /// </summary>
     [Fact]
-    public void CreateRenderContext_BuildsDeterministicOwnerAndCharacterContext()
+    public void CreateRenderContext_BuildsDeterministicOwnerAndCharacterViews()
     {
-        Dictionary<string, object?> ownerContext = new()
-        {
-            ["FullId"] = "char:owner"
-        };
-        Dictionary<string, object?> firstContext = new()
-        {
-            ["FullId"] = "char:alpha"
-        };
-        FakeCharacter owner = new(ownerContext)
+        FakeCharacter owner = new()
         {
             Id = "owner"
         };
-        FakeCharacter last = new(new Dictionary<string, object?> { ["FullId"] = "char:zulu" })
+        FakeCharacter last = new()
         {
             Id = "zulu"
         };
-        FakeCharacter first = new(firstContext)
+        FakeCharacter first = new()
         {
             Id = "alpha"
         };
-        Dictionary<string, object?> playerContext = new()
-        {
-            ["FullId"] = "char:player"
-        };
-        FakeCharacter player = new(playerContext)
+        FakeCharacter player = new()
         {
             Id = "player"
         };
@@ -160,39 +148,37 @@ public sealed class AgenticMindTests
             owner,
             scene,
             ["char:zulu", "char:alpha"]);
-        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
+        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            result["characters"]);
 
         Assert.Equal(["char:alpha", "char:owner", "char:zulu"], characters.Keys);
-        Assert.Same(ownerContext, result["character"]);
-        Assert.Same(firstContext, characters["char:alpha"]);
-        Assert.Same(characters["char:owner"], result["character"]);
-        Assert.Equal("char:owner", Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["character"])["FullId"]);
+        CharacterRenderView ownerView = Assert.IsType<CharacterRenderView>(result["character"]);
+        Assert.Equal("char:owner", ownerView.FullId);
+        Assert.Equal("char:alpha", Assert.IsType<CharacterRenderView>(characters["char:alpha"]).FullId);
+        Assert.Equal("char:zulu", Assert.IsType<CharacterRenderView>(characters["char:zulu"]).FullId);
+        // The owner appears in both locations referencing the exact same view instance (AI-001 TR-25).
+        Assert.Same(ownerView, characters["char:owner"]);
+        Assert.All(characters.Values, value => _ = Assert.IsType<CharacterRenderView>(value));
         // Observations never enter the render dictionary (AI-001 TR-25): they reach the model exclusively through
         // AI-002 tool results and interruption injections.
         Assert.False(result.ContainsKey("observations"));
         // The player is not attention-eligible here, so 'characters' omits it while the unconditional 'player' key
-        // carries the player's own context dictionary.
-        Assert.Same(playerContext, result["player"]);
+        // carries its own curated view.
+        CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(result["player"]);
+        Assert.Equal("char:player", playerView.FullId);
         _ = Assert.Throws<NotSupportedException>(
             () => ((IDictionary<string, object?>)result).Add("mutation", null));
-        Assert.All([first, owner, last], subject =>
-        {
-            Assert.Same(scene, subject.ReceivedScene);
-            Assert.Same(owner, subject.ReceivedObserver);
-        });
     }
 
-    /// <summary>
-    /// An owning character outside the scene snapshot is an invalid prompt context.
-    /// </summary>
+    /// <summary>An owning character outside the scene snapshot is an invalid prompt context.</summary>
     [Fact]
     public void CreateRenderContext_WhenOwnerIsAbsent_FailsClearly()
     {
-        FakeCharacter sceneCharacter = new(new Dictionary<string, object?>())
+        FakeCharacter sceneCharacter = new()
         {
             Id = "scene_character"
         };
-        FakeCharacter owner = new(new Dictionary<string, object?>())
+        FakeCharacter owner = new()
         {
             Id = "owner"
         };
@@ -202,10 +188,9 @@ public sealed class AgenticMindTests
             () => AgenticMind.CreateRenderContext(owner, scene));
 
         Assert.Contains("absent", exception.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(0, sceneCharacter.ContextRequestCount);
     }
 
-    /// <summary>Arbitrary scene contexts cannot bypass CTX-001 character identity validation.</summary>
+    /// <summary>Arbitrary scene contexts cannot bypass AI-001 render-context identity validation.</summary>
     [Theory]
     [InlineData("invalid-type", "subject", null)]
     [InlineData("char", "invalid-id", null)]
@@ -216,11 +201,11 @@ public sealed class AgenticMindTests
         string id,
         string? fullIdOverride)
     {
-        FakeCharacter owner = new(new Dictionary<string, object?>())
+        FakeCharacter owner = new()
         {
             Id = "owner",
         };
-        FakeCharacter invalidSubject = new(new Dictionary<string, object?>())
+        FakeCharacter invalidSubject = new()
         {
             Type = type,
             Id = id,
@@ -234,21 +219,19 @@ public sealed class AgenticMindTests
         Assert.Contains("invalid identity", exception.Message, StringComparison.OrdinalIgnoreCase);
         ArgumentException innerException = Assert.IsType<ArgumentException>(exception.InnerException);
         Assert.Equal("character", innerException.ParamName);
-        Assert.Equal(0, owner.ContextRequestCount);
-        Assert.Equal(0, invalidSubject.ContextRequestCount);
     }
 
-    /// <summary>Valid identities from arbitrary scene-context implementations retain CTX-001 output semantics.</summary>
+    /// <summary>
+    /// Valid identities from arbitrary scene-context implementations retain AI-003 render-context semantics.
+    /// </summary>
     [Fact]
     public void CreateRenderContext_WithCustomSceneAndValidCharacterIdentities_BuildsContext()
     {
-        Dictionary<string, object?> ownerContext = [];
-        Dictionary<string, object?> subjectContext = [];
-        FakeCharacter owner = new(ownerContext)
+        FakeCharacter owner = new()
         {
             Id = "owner",
         };
-        FakeCharacter subject = new(subjectContext)
+        FakeCharacter subject = new()
         {
             Id = "subject",
         };
@@ -261,55 +244,44 @@ public sealed class AgenticMindTests
             owner,
             scene,
             attentionEligibleFullIDs: ["char:subject"]);
-        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(result["characters"]);
+        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            result["characters"]);
 
         Assert.Equal(["char:owner", "char:subject"], characters.Keys);
-        Assert.Same(ownerContext, result["character"]);
-        Assert.Same(subjectContext, characters["char:subject"]);
-        Assert.Same(subjectContext, result["player"]);
-        Assert.Same(owner, subject.ReceivedObserver);
+        Assert.Equal("char:owner", Assert.IsType<CharacterRenderView>(result["character"]).FullId);
+        Assert.Equal("char:subject", Assert.IsType<CharacterRenderView>(characters["char:subject"]).FullId);
+        // The attended player's entry is reused verbatim for the unconditional player key.
+        Assert.Same(characters["char:subject"], result["player"]);
     }
 
     /// <summary>
-    /// Foreground context always aliases the owner's exact dictionary and omits unresolved or non-contextual attention
-    /// identities without mutating the supplied eligible set.
+    /// Foreground context always aliases the owner's exact view and omits unresolved or non-character attention
+    /// identities without mutating the supplied eligible set or resolving anything twice.
     /// </summary>
     [Fact]
-    public void CreateRenderContext_WithAttentionEligibility_ResolvesContextualSubjectsOnlyInOrdinalOrder()
+    public void CreateRenderContext_WithAttentionEligibility_ResolvesCharactersOnlyOnceInOrdinalOrder()
     {
-        Dictionary<string, object?> ownerContext = new()
-        {
-            ["FullId"] = "char:owner"
-        };
-        Dictionary<string, object?> alphaContext = new()
-        {
-            ["FullId"] = "char:alpha"
-        };
-        Dictionary<string, object?> zuluContext = new()
-        {
-            ["FullId"] = "char:zulu"
-        };
-        FakeCharacter owner = new(ownerContext)
+        FakeCharacter owner = new()
         {
             Id = "owner"
         };
-        FakeCharacter alpha = new(alphaContext)
+        FakeCharacter alpha = new()
         {
             Id = "alpha"
         };
-        FakeCharacter zulu = new(zuluContext)
+        FakeCharacter zulu = new()
         {
             Id = "zulu"
         };
-        var nonContextual = new FakeIdentifiable("object", "prop");
-        var scene = new MappingSceneContext(
+        var nonCharacter = new FakeIdentifiable("object", "prop");
+        CountingMappingSceneContext scene = new(
             [owner],
             new Dictionary<string, IIdentifiable>(StringComparer.Ordinal)
             {
                 [owner.FullId] = owner,
                 [alpha.FullId] = alpha,
                 [zulu.FullId] = zulu,
-                [nonContextual.FullId] = nonContextual,
+                [nonCharacter.FullId] = nonCharacter,
             })
         {
             PlayerCharacter = alpha,
@@ -330,18 +302,58 @@ public sealed class AgenticMindTests
             result["characters"]);
 
         Assert.Equal(["char:alpha", "char:owner", "char:zulu"], characters.Keys);
-        Assert.Same(ownerContext, result["character"]);
         Assert.Same(result["character"], characters[owner.FullId]);
-        Assert.Same(alphaContext, characters[alpha.FullId]);
-        Assert.Same(zuluContext, characters[zulu.FullId]);
-        Assert.Same(alphaContext, result["player"]);
+        Assert.Equal("char:alpha", Assert.IsType<CharacterRenderView>(characters[alpha.FullId]).FullId);
+        Assert.Equal("char:zulu", Assert.IsType<CharacterRenderView>(characters[zulu.FullId]).FullId);
+        Assert.Same(result["player"], characters[alpha.FullId]);
         Assert.Equal(new[] { "char:zulu", "char:missing", "object:prop", "char:alpha" }, eligibleIDs);
-        Assert.All([owner, alpha, zulu], subject =>
+        // Exactly one scene lookup per identity (one presence check plus four eligible IDs): no second visual
+        // survey and no hidden subject cache sit behind assembly (AI-006 TR-40, AI-001 AC-T18).
+        Assert.Equal(5, scene.FindCallCount);
+    }
+
+    /// <summary>Attention including the owner keeps one shared view instance across both context locations.</summary>
+    [Fact]
+    public void CreateRenderContext_WhenAttentionIncludesTheOwner_PreservesSameInstanceInBothLocations()
+    {
+        FakeCharacter owner = new()
         {
-            Assert.Equal(1, subject.ContextRequestCount);
-            Assert.Same(scene, subject.ReceivedScene);
-            Assert.Same(owner, subject.ReceivedObserver);
-        });
+            Id = "owner"
+        };
+        FakeCharacter alpha = new()
+        {
+            Id = "alpha"
+        };
+        ArbitrarySceneContext scene = new([owner, alpha])
+        {
+            PlayerCharacter = alpha,
+        };
+
+        IReadOnlyDictionary<string, object?> result = AgenticMind.CreateRenderContext(
+            owner,
+            scene,
+            attentionEligibleFullIDs: ["char:owner"]);
+        IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
+            result["characters"]);
+
+        Assert.Equal(["char:owner"], characters.Keys);
+        Assert.Same(result["character"], characters[owner.FullId]);
+    }
+
+    /// <summary>Two distinct characters resolving to one exact FullId fail context assembly clearly.</summary>
+    [Fact]
+    public void CreateRenderContext_WhenDistinctInstancesShareAnExactFullId_FailsClearly()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        FactorySceneContext scene = new(owner);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => AgenticMind.CreateRenderContext(owner, scene, ["char:twin", "char:twin"]));
+
+        Assert.Contains("duplicate exact FullId 'char:twin'", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -352,7 +364,7 @@ public sealed class AgenticMindTests
     {
         using ServiceProvider services = new ServiceCollection().BuildServiceProvider();
         SceneContext scene = new([]);
-        FakeCharacter character = new(new Dictionary<string, object?>())
+        FakeCharacter character = new()
         {
             Id = string.Empty,
         };
@@ -379,7 +391,7 @@ public sealed class AgenticMindTests
         }
     }
 
-    private sealed class FakeCharacter(IReadOnlyDictionary<string, object?> context) : ICharacter
+    private sealed class FakeCharacter : ICharacter
     {
         public string Id { get; set; } = "fake-character";
 
@@ -395,29 +407,6 @@ public sealed class AgenticMindTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public ISceneContext? ReceivedScene
-        {
-            get; private set;
-        }
-
-        public IContextual? ReceivedObserver
-        {
-            get; private set;
-        }
-
-        public int ContextRequestCount
-        {
-            get; private set;
-        }
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-        {
-            ContextRequestCount++;
-            ReceivedScene = scene;
-            ReceivedObserver = observer;
-            return context;
-        }
     }
 
     private sealed record ArbitrarySceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
@@ -443,14 +432,21 @@ public sealed class AgenticMindTests
             => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
     }
 
-    private sealed record MappingSceneContext(
-        IReadOnlyCollection<ICharacter> Characters,
-        IReadOnlyDictionary<string, IIdentifiable> Mappings) : ISceneContext
+    private sealed class CountingMappingSceneContext(
+        IReadOnlyCollection<ICharacter> characters,
+        IReadOnlyDictionary<string, IIdentifiable> mappings) : ISceneContext
     {
         public ICharacter? PlayerCharacter
         {
             get; init;
         }
+
+        public int FindCallCount
+        {
+            get; private set;
+        }
+
+        public IReadOnlyCollection<ICharacter> Characters => characters;
 
         public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
 
@@ -461,7 +457,38 @@ public sealed class AgenticMindTests
         public IIdentifiable? Find(string fullId)
         {
             IdentityValidator.ValidateFullId(fullId, nameof(fullId));
-            return Mappings.GetValueOrDefault(fullId);
+            FindCallCount++;
+            return mappings.GetValueOrDefault(fullId);
+        }
+
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
+    }
+
+    /// <summary>
+    /// Yields a freshly created character per <c>char:twin</c> lookup so two resolutions of one exact FullId return
+    /// genuinely distinct instances.
+    /// </summary>
+    private sealed class FactorySceneContext(FakeCharacter owner) : ISceneContext
+    {
+        public IReadOnlyCollection<ICharacter> Characters => [owner];
+
+        public AlleyCat.Core.Content.ContentContext Content => AlleyCat.Core.Content.ContentContext.Default;
+
+        public ICharacter Player => throw new InvalidOperationException(
+            "Scene context contains no player character. Scene authoring guarantees the player is present.");
+
+        public IIdentifiable? Find(string fullId)
+        {
+            IdentityValidator.ValidateFullId(fullId, nameof(fullId));
+            return string.Equals(fullId, owner.FullId, StringComparison.Ordinal)
+                ? owner
+                : string.Equals(fullId, "char:twin", StringComparison.Ordinal)
+                    ? new FakeCharacter
+                    {
+                        Id = "twin",
+                    }
+                    : null;
         }
 
         public IIdentifiable Resolve(string fullId)

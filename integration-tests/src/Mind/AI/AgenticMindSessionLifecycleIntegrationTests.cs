@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
@@ -97,14 +96,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
             // The authored fragment proves the injection carries genuinely rendered record content instead of a
             // count-only summary.
-            EventHistory = new EventHistory
-            {
-                Fragments =
-                [
-                    new EventHistoryPromptFragment { TypeKey = "test.lifecycle", Source = "- {{ Value }}" },
-                ],
-                FallbackSource = "fallback {{ TypeKey }}",
-            },
+            EventHistoryPath = "res://assets/testing/prompts/test_event_history_lifecycle.md",
             ClientProvider = clientProvider,
             Tools = [tool],
             ObservationImportanceThreshold = 1f,
@@ -126,7 +118,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 freshRequest.Select(message => message.Role));
             ChatMessage injected = freshRequest[1];
             Assert.Equal(AgenticMind.SessionBootstrapInput, freshRequest[0].Text);
-            Assert.Equal("Important scene events require your attention:\n- bridge", injected.Text);
+            Assert.Equal("Important scene events require your attention:\n- bridge\n", injected.Text);
             Assert.DoesNotContain("notable observation(s)", injected.Text, StringComparison.Ordinal);
 
             await WaitUntilAsync(sceneTree, () => tool.CapturedContexts.Count == 1);
@@ -422,9 +414,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// </summary>
     private static ObservationHistoryRenderer CreateThrowingHistoryRenderer()
         => ObservationHistoryRenderer.Create(
-            new EventHistory(),
+            eventHistory: null,
             new FaultingTemplateCompiler(),
-            new Dictionary<string, object?>());
+            new CharacterRenderView(new TestCharacter()));
 
     private sealed class FaultingTemplateCompiler : ITemplateCompiler
     {
@@ -459,7 +451,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     private sealed record TestObservation(float Importance, string Value) : AgentObservation
     {
-        public override string TypeKey => "test.lifecycle";
+        public override string TypeKey => ObservedSpeech.TypeKeyValue;
 
         public override float CalculateImportance(ObservationContext context) => Importance;
     }
@@ -626,9 +618,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?> { ["FullId"] = FullId };
     }
 
     private sealed class RecordingLoggerProvider : ILoggerProvider

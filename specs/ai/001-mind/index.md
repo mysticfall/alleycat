@@ -30,7 +30,7 @@ title: Mind Component
 7. An NPC's Mind must synchronously interpret sense-owned percepts into attention and zero or more ordered durable
    observations without delaying normal gameplay.
 8. Character context assembled for the NPC's session prompt must contain self and every currently resolvable
-   contextual subject whose attention meets the context threshold, rather than every scene character unconditionally.
+   attention-eligible character, rather than every scene character unconditionally.
 9. Speech from speakers the NPC does not currently attend to, and speech that cannot be attributed to a character,
    must neither wake the NPC's waits nor interrupt the NPC's session.
 10. Every remembered event must carry the game time at which it was observed, in seconds elapsed since the game began.
@@ -110,8 +110,11 @@ title: Mind Component
      character's context under [SCN-001](../../scene/001-scene-context-api/index.md) — a mandatory, unconditional key
      resolved via `ISceneContext.Player`, never attention-gated — deterministic attention-eligible subject context,
      which may omit the player, and the current scenario under
-     [AI-008](../008-scenario/index.md). The dictionary defines no `observations` key: observations reach the model
-     exclusively through the AI-002 session's tool results and interruption injections. AI-006 normatively defines
+     [AI-008](../008-scenario/index.md). The owner appears in both `character` and `characters[owner.FullId]` as the
+     exact same view instance, and assembly fails clearly for an invalid included identity, a duplicate exact included
+     `FullId`, or an owner absent from the scene context. The dictionary defines no `observations` key: observations
+     reach the model exclusively through the AI-002 session's tool results and interruption injections. AI-006
+     normatively defines
      attention eligibility and scene resolution; AI-008
      normatively defines the two-phase construction order in which the core context is built first and completed with
      the `scenario`
@@ -167,7 +170,7 @@ title: Mind Component
 - Synchronous percept interpretation, exact faculty dispatch, and Mind-owned attention under AI-006.
 - Published attention snapshots for the separately composed, post-attention AI-007 gaze selector; direct gaze
   assignment remains outside Mind sensing and perception processing.
-- Attention-filtered session contextual-subject selection.
+- Attention-filtered session character selection.
 - AgenticMind session orchestration through AI-002 and AI-003.
 - Typed tool-context hand-off of Character-owned capabilities without Mind-owned voice authoring.
 - Session-start render-context construction.
@@ -249,9 +252,11 @@ title: Mind Component
     and calculated-importance validation occurs before mutation, duplicate attention effects apply sequentially in
     order, and ordered observations use the existing atomic ingestion path, without selecting or assigning an IVision
     look target.
-18. Tests verify session context contains self plus all currently resolvable attention-eligible `IContextual`
-    subjects, with no unconditional all-scene-character inclusion, second visual scan, hidden subject cache, or Mind
-    state passed to `IContextual.GetContext`.
+18. Tests verify session context contains self plus all currently resolvable attention-eligible characters resolved as
+    `ICharacter` subjects, with no unconditional all-scene-character inclusion, second visual scan, hidden subject
+    cache, or Mind or attention state passed into render-context assembly. The owner appears in both `character` and
+    `characters[owner.FullId]` as the exact same view instance, and invalid included identity, duplicate exact included
+    `FullId`, or owner absence fails assembly clearly.
 19. Tests verify Mind, not AgenticMind, owns synchronous incoming `IPerception`
     interpretation; every outbound production tool starts once through `AgentTool`
     and `IMainThreadDispatcher`; AgenticMind has no local deferred action machinery; and the actor-stamped self-action
@@ -293,7 +298,6 @@ title: Mind Component
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
 - [AI-007: Attention-Driven Gaze Target Selection](../007-attention-gaze-target-selection/index.md)
 - [AI-008: Scenario](../008-scenario/index.md)
-- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)

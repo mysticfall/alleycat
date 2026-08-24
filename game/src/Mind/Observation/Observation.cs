@@ -55,8 +55,11 @@ public sealed record ObservedSpeech(
     string? VoiceId,
     string Content) : ObservedAction(ActorId)
 {
+    /// <summary>The unified stable semantic key shared by every observed-speech perspective (AI-001 TR-10).</summary>
+    public const string TypeKeyValue = "speech.observed";
+
     /// <inheritdoc />
-    public override string TypeKey => "speech.observed";
+    public override string TypeKey => TypeKeyValue;
 
     /// <inheritdoc />
     public override float CalculateImportance(ObservationContext context)

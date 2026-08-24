@@ -21,10 +21,8 @@ log. It is explanatory only; the linked specifications are authoritative.
 - [AI-003](../specs/ai/003-prompt-api/index.md) defines complete timeline rendering and actor-relative observed speech.
 - [SPCH-005](../specs/speech/005-voice/index.md) defines FIFO speech admission, serial production, and voice teardown.
 - [SPCH-006](../specs/speech/006-hearing/index.md) defines completed-speech acquisition without interpretation.
-- [CTX-001](../specs/context/001-contextual-information-api/index.md) defines non-AI-specific contextual data and scene
-  requests through `AlleyCat.Context`.
-- CTX-001 excludes prompt placement, rendering, ranking, summarisation, AI retrieval, memory, lore, perception backends,
-  and detailed context taxonomy.
+- [AI-003](../specs/ai/003-prompt-api/index.md) defines the session prompt render context, and
+  [SCN-001](../specs/scene/001-scene-context-api/index.md) owns scene membership and discovery.
 - A future AI context-provider API may define presentation-neutral retrieval, but this memo establishes no such API.
 
 ## Approved Current Architecture

@@ -41,14 +41,15 @@ internal static class TemplatingBaselineScenarios
 
     private const string NpcEventHistoryFragmentTypeKey = "speech.observed";
 
-    // Copied verbatim from game/assets/characters/prompts/npc_event_history.tres (fragment Source).
+    // Captured verbatim from the shared NPC event-history asset's speech fragment before the Liquid migration
+    // (Handlebars syntax at capture time).
     private const string NpcEventHistoryFragmentSource =
         "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.FullId)}}I said: {{Content}}"
         + "{{else}}Heard {{ActorId}} say: {{Content}}{{/if}}"
         + "{{else}}Heard an unknown speaker say: {{Content}}{{/if}}"
         + "{{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n";
 
-    // Copied verbatim from game/assets/characters/prompts/npc_event_history.tres (FallbackSource).
+    // Captured verbatim from the shared NPC event-history asset's fallback before the Liquid migration.
     private const string NpcEventHistoryFallbackSource =
         "((Received {{TypeKey}} event.)){{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n";
 
@@ -404,10 +405,10 @@ internal static class TemplatingBaselineScenarios
 
     private static string ComposeNpcEventHistorySource()
     {
-        // Reproduces the pre-migration EventHistory composed dispatch source exactly, as it existed when the
-        // baselines were captured: the single authored fragment of game/assets/characters/prompts/npc_event_history.tres
-        // plus its fallback. The composition is inlined here because unit tests must not instantiate Godot resource
-        // types outside the Godot runtime.
+        // Reproduces the pre-migration event-history composed dispatch source exactly, as it existed when the
+        // baselines were captured: the shared NPC asset's single authored speech fragment plus its fallback,
+        // both in the Handlebars syntax used at capture time. The composition is inlined here because unit tests
+        // must not instantiate Godot resource types outside the Godot runtime.
         return "{{#each observations}}"
             + "{{#if (eqOrdinal TypeKey \"" + NpcEventHistoryFragmentTypeKey + "\")}}"
             + NpcEventHistoryFragmentSource

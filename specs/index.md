@@ -29,10 +29,6 @@
 - [AI-008: Scenario](ai/008-scenario/index.md)
 - [AI-009: Attention-Driven Head Orientation](ai/009-attention-head-orientation/index.md)
 
-## Context
-
-- [CTX-001: Contextual Information API](context/001-contextual-information-api/index.md)
-
 ## Navigation
 
 - [NAV-001: NPC Navigation](nav/001-npc-navigation/index.md)

@@ -1,6 +1,5 @@
 using System.Reflection;
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Mind.AI;
 using AlleyCat.Scene;
@@ -49,7 +48,7 @@ public sealed class ScenarioTests
         MethodInfo[] members = managerType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
         MethodInfo query = Assert.Single(members);
         Assert.Equal(nameof(IScenarioManager.GetCurrentScenario), query.Name);
-        Assert.Equal(typeof(Scenario), query.ReturnType);
+        Assert.Equal(typeof(ValueTask<Scenario>), query.ReturnType);
         ParameterInfo parameter = Assert.Single(query.GetParameters());
         Assert.Equal("coreContext", parameter.Name);
         Assert.Equal(typeof(IReadOnlyDictionary<string, object?>), parameter.ParameterType);
@@ -65,11 +64,7 @@ public sealed class ScenarioTests
         {
             Id = "owner"
         };
-        Dictionary<string, object?> playerContext = new()
-        {
-            ["name"] = "Player"
-        };
-        FakeCharacter player = new(playerContext)
+        FakeCharacter player = new()
         {
             Id = "player"
         };
@@ -93,15 +88,15 @@ public sealed class ScenarioTests
         Assert.Same(scenario, withScenario["scenario"]);
         Assert.Null(withoutScenario["scenario"]);
         Assert.Null(defaulted["scenario"]);
-        Assert.Same(playerContext, withScenario["player"]);
+        Assert.Equal("char:player", Assert.IsType<CharacterRenderView>(withScenario["player"]).FullId);
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             withScenario["characters"]);
         Assert.Same(characters[player.FullId], withScenario["player"]);
-        // The player context is unconditional: attention filtering removes the player from 'characters' only.
+        // The player view is unconditional: attention filtering removes the player from 'characters' only.
         IReadOnlyDictionary<string, object?> filteredCharacters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             playerFiltered["characters"]);
         Assert.DoesNotContain(player.FullId, filteredCharacters.Keys);
-        Assert.Same(playerContext, playerFiltered["player"]);
+        Assert.Equal("char:player", Assert.IsType<CharacterRenderView>(playerFiltered["player"]).FullId);
         Assert.All(
             [withScenario, withoutScenario, defaulted],
             context => Assert.Equal(["character", "characters", "player", "scenario"], context.Keys));
@@ -119,7 +114,7 @@ public sealed class ScenarioTests
             => Find(fullId) ?? throw new InvalidOperationException($"Current scene does not contain identifiable object '{fullId}'.");
     }
 
-    private sealed class FakeCharacter(IReadOnlyDictionary<string, object?>? context = null) : ICharacter
+    private sealed class FakeCharacter : ICharacter
     {
         public string Id { get; set; } = "fake-character";
 
@@ -128,8 +123,5 @@ public sealed class ScenarioTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => context ?? new Dictionary<string, object?>();
     }
 }

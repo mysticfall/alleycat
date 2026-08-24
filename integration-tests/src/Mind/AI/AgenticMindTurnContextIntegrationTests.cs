@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
@@ -45,15 +44,15 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
 
             SceneContext capturedScene = Assert.IsType<SceneContext>(section.CapturedScene);
             Assert.Equal(1, sceneProvider.CaptureCount);
-            Assert.Same(capturedScene, owner.ReceivedScene);
+            // Render-context assembly resolves identities through this same snapshot but never calls back into the
+            // characters (AI-001 AC-T18): prompt construction and trusted tool binding remain the snapshot consumers.
             Assert.Same(capturedScene, tool.CapturedContext!.SceneContext);
             Assert.Same(owner, tool.CapturedContext.Character);
             Assert.Equal("after", owner.State);
-            // Two-phase rendering builds the core context before prompt construction: the section's mid-compile state
-            // mutation happens after the owner's context dictionary was captured, so the prompt renders the
-            // session-start state while the live character object still reflects the mutation.
-            Assert.Contains("before", clientProvider.Instructions, StringComparison.Ordinal);
-            Assert.DoesNotContain("after", clientProvider.Instructions, StringComparison.Ordinal);
+            // Two-phase rendering builds the core render context before prompt construction: the section's
+            // mid-compile mutation happens after the owner's curated view entered the context, so the prompt renders
+            // the canonical identity while the live character object already reflects the state mutation.
+            Assert.Contains("Owner: char:owner", clientProvider.Instructions, StringComparison.Ordinal);
 
             Assert.Collection(
                 capturedScene.Characters,
@@ -105,7 +104,7 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             CapturedScene = buildContext.Scene;
             owner.State = "after";
             liveMembership.Add(newcomer);
-            return Task.FromResult("Owner state: {{character.state}}");
+            return Task.FromResult("Owner: {{character.FullId}}");
         }
     }
 
@@ -152,17 +151,6 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public ISceneContext? ReceivedScene
-        {
-            get; private set;
-        }
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-        {
-            ReceivedScene = scene;
-            return new Dictionary<string, object?> { ["state"] = State };
-        }
     }
 
     private sealed partial class CancellingClientProvider : ClientProvider

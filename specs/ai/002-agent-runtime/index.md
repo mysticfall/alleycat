@@ -208,8 +208,8 @@ title: Agent Runtime
 
 36. The timeline history tool — `history`, implemented by `HistoryTool` — must let the agent query the Mind's committed
     observation records under AI-001 without relying on provider message logs. It must be read-only, preserve timeline
-    order, and render records through the AI-003 event-history contract (authored through the standalone `EventHistory`
-    resource exported by `AgenticMind`).
+    order, and render records through the AI-003 event-history contract (authored in the standalone
+    `game/prompts/event_history.md` fragment file).
 
 ### Timestamps
 

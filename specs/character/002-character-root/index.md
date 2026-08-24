@@ -105,11 +105,11 @@ exists.
      Template placeholder voice IDs must be valid lower `snake_case`; installers must replace them and validate the
      resulting voice identity at the final installation boundary before exposure to scene consumers.
 30. `Voiceprint` is a listener-recognition key and must not be used as proof that a voice belongs to a character.
-31. The lowest shared male/female character bases must author `CharacterCardContextSource`, `Actors` membership, and
-    `VisualSubjects` membership. Both bases must be valid `IVisualSubject` scan members. Higher role templates and
-     concrete scenes must not add redundant compensation; VISION-001 normatively owns cue and scan details.
-32. Under CTX-001, `CharacterCardContextSource` must publish canonical character identity as exactly
-    `{ FullId: subject.FullId }`, not a bare local `Id`.
+31. The lowest shared male/female character bases must author `Actors` membership and `VisualSubjects` membership.
+    Both bases must be valid `IVisualSubject` scan members. Higher role templates and concrete scenes must not add
+    redundant compensation; VISION-001 normatively owns cue and scan details.
+32. Session render contexts receive characters through the curated `CharacterRenderView`, whose sole exposed member is
+    the canonical `FullId`, never a bare local `Id`.
 33. The concrete `Character` root owns a validated, read-only published visual-cue collection for its `IVisualSubject`
     role. Its visual-cue topology is immutable after publication until an explicit refresh.
 34. `Character.RefreshComponents()` must perform provider-side nearest-provider cue-ownership validation when it
@@ -156,7 +156,7 @@ exists.
 - Character-root membership in the `Actors` group for SCN-001 scene-context discovery.
 - Asset-owned CORE-009 character identity and character-owned voice-ID installation for operational attribution.
 - Character component projection as the sole authored downstream voice source.
-- Lowest-shared-base character-card context wiring.
+- Lowest-shared-base `Actors` and `VisualSubjects` membership wiring.
 - `ICharacter` aggregation of the VISION-001 vision-holder and visual-subject roles.
 - Validated, template-authored whole-character visual-cue references and character-specific description overrides.
 - NPC-only `LocomotiveNavigation` composition through the character root's `Node3D` and `ILocomotive` contracts.
@@ -236,9 +236,10 @@ exists.
     `Character.Id`, validates canonical `voice:<character-id>` before identity exposure, and replaces only valid lower
     `snake_case` template placeholder IDs. The raw local voice ID remains operational attribution rather than
     authenticated provenance; Voiceprint remains recognition metadata and is not used to establish character ownership.
-19. Shared male/female bases each author one `CharacterCardContextSource`, `Actors` membership, and `VisualSubjects`
-    membership; each is a valid `IVisualSubject` scan member and higher layers do not compensate redundantly.
-20. `CharacterCardContextSource` returns only the canonical `FullId` entry with value `subject.FullId`, not bare `Id`.
+19. Shared male/female bases each author `Actors` membership and `VisualSubjects` membership; each is a valid
+    `IVisualSubject` scan member and higher layers do not compensate redundantly.
+20. Render context exposes characters through the curated `CharacterRenderView`, whose sole exposed member is the
+    canonical `FullId`, never a bare local `Id`.
 21. `ICharacter` normatively aggregates `IHasVision` and `IVisualSubject` from VISION-001 and `IHasHearing` from
     SPCH-006; `IVisualObserver` does not exist.
 22. Character roots expose validated published visual-cue references through a read-only collection; installation
@@ -281,4 +282,3 @@ exists.
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
-- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)

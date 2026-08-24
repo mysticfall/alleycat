@@ -1,6 +1,5 @@
 using System.Text;
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
@@ -1643,9 +1642,6 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         public IReadOnlyList<IComponent> Components => components;
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
-
-        public IReadOnlyDictionary<string, object?> GetContext(ISceneContext scene, IContextual? observer)
-            => new Dictionary<string, object?>();
     }
 
     private sealed partial class ToolFailureVoice : Voice

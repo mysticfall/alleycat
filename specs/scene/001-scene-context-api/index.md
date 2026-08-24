@@ -107,7 +107,7 @@ character and Godot node objects remain live.
 ## Out Of Scope
 
 - AI-specific request semantics, prompt placement, requesting character identity, and interaction-target selection.
-- Contextual information retrieval, memory, perception, relationship, inventory, lore, or RAG provider contracts.
+- Memory, perception, relationship, inventory, lore, or RAG provider contracts.
 - Lore-specific paths, AI prompt construction, prompt rendering, or retrieval semantics.
 - Static convenience accessors or `Game` properties for scene-context access.
 - Treating items as actors.
@@ -175,7 +175,6 @@ character and Godot node objects remain live.
 - [CORE-008: Content Pack Resolution](../../core/008-content-pack-resolution/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
-- [CTX-001: Contextual Information API](../../context/001-contextual-information-api/index.md)
 - [VISION-001: Eyes](../../vision/001-eyes/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [AI-001: Mind Component](../../ai/001-mind/index.md)

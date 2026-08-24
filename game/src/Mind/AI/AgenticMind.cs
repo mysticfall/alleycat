@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using AlleyCat.Character;
-using AlleyCat.Context;
 using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Core.Threading;
@@ -58,15 +57,12 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Editor-authored event-history resource feeding the on-demand observation-history renderer for wait results,
-    /// history results, and interruption injections, or null when the default fallback-only contract applies.
+    /// Godot resource path to the authored standalone event-history file feeding the on-demand observation-history
+    /// renderer for wait results, history results, and interruption injections (AI-003 TR-12), or empty when the
+    /// default fallback-only contract applies.
     /// </summary>
-    [Export]
-    public EventHistory? EventHistory
-    {
-        get;
-        set;
-    }
+    [Export(PropertyHint.File, "*.md")]
+    public string EventHistoryPath { get; set; } = string.Empty;
 
     /// <summary>
     /// Backend factory used to create the session's chat client.
@@ -200,7 +196,9 @@ public partial class AgenticMind : MindBase
             GetContextEligibleAttentionIDs());
 
         // Phase 2: one manager query with the freshly assembled core context, then the scenario key (AI-008 TR-7).
-        Scenario? scenario = ScenarioManager?.GetCurrentScenario(coreContext);
+        Scenario? scenario = ScenarioManager is not null
+            ? await ScenarioManager.GetCurrentScenario(coreContext)
+            : null;
         ScenarioContext sessionContext = new(character, scene, scenario);
         IReadOnlyDictionary<string, object?> renderContext = AddScenarioAndSeal(coreContext, scenario);
 
@@ -210,10 +208,7 @@ public partial class AgenticMind : MindBase
 
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         IGameClock clock = GameClock;
-        var historyRenderer = ObservationHistoryRenderer.Create(
-            EventHistory,
-            Game.Instance.GetRequiredService<ITemplateCompiler>(),
-            ResolveCharacterContext(renderContext));
+        ObservationHistoryRenderer historyRenderer = CreateSessionHistoryRenderer(renderContext);
         _activeHistoryRenderer = historyRenderer;
         List<AITool> tools = CreateSessionTools(sessionContext, dispatcher, historyRenderer, clock);
         var invalidResponseRecoveryPolicy = new InvalidResponseRecoveryPolicy(
@@ -314,12 +309,49 @@ public partial class AgenticMind : MindBase
         return $"Important scene events require your attention:\n{await renderer.RenderAsync(notable)}";
     }
 
-    private static IReadOnlyDictionary<string, object?> ResolveCharacterContext(
+    private static CharacterRenderView ResolveCharacterView(
         IReadOnlyDictionary<string, object?> renderContext)
-        => renderContext["character"] is IReadOnlyDictionary<string, object?> characterContext
-            ? characterContext
+        => renderContext["character"] is CharacterRenderView characterView
+            ? characterView
             : throw new InvalidOperationException(
-                "The session render context is missing the owning character context dictionary.");
+                "The session render context is missing the owning character render view.");
+
+    private ObservationHistoryRenderer CreateSessionHistoryRenderer(
+        IReadOnlyDictionary<string, object?> renderContext)
+        => ObservationHistoryRenderer.Create(
+            LoadEventHistoryDocument(),
+            Game.Instance.GetRequiredService<ITemplateCompiler>(),
+            ResolveCharacterView(renderContext));
+
+    /// <summary>
+    /// Loads and parses the configured event-history file once at session start, or returns null when no file is
+    /// configured so the default fallback-only contract applies (AI-003 TR-12).
+    /// </summary>
+    private EventHistoryDocument? LoadEventHistoryDocument()
+    {
+        if (string.IsNullOrWhiteSpace(EventHistoryPath))
+        {
+            return null;
+        }
+
+        using var file = Godot.FileAccess.Open(EventHistoryPath, Godot.FileAccess.ModeFlags.Read);
+        if (file is null)
+        {
+            Error error = Godot.FileAccess.GetOpenError();
+            throw new InvalidOperationException(
+                $"Could not read the event-history file '{EventHistoryPath}'. Godot FileAccess error: {error}.");
+        }
+
+        try
+        {
+            return EventHistoryDocument.Parse(file.GetAsText());
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new InvalidOperationException(
+                $"Invalid event-history authoring in '{EventHistoryPath}'.", exception);
+        }
+    }
 
     private List<AITool> CreateSessionTools(
         ScenarioContext context,
@@ -366,9 +398,10 @@ public partial class AgenticMind : MindBase
     /// </summary>
     /// <remarks>
     /// The returned dictionary is intentionally left mutable and scenario-less: scenario managers receive it as their
-    /// template context, and the session flow seals it with the <c>scenario</c> key afterwards. Observations are
-    /// never placed in the dictionary (AI-001 TR-25): they reach the model exclusively through AI-002 tool results
-    /// and interruption injections.
+    /// template context, and the session flow seals it with the <c>scenario</c> key afterwards. Entries hold curated
+    /// <see cref="CharacterRenderView" /> instances, so sensitive character members stay unreachable from templates by
+    /// construction. Observations are never placed in the dictionary (AI-001 TR-25): they reach the model exclusively
+    /// through AI-002 tool results and interruption injections.
     /// </remarks>
     internal static Dictionary<string, object?> CreateCoreRenderContext(
         ICharacter character,
@@ -393,50 +426,57 @@ public partial class AgenticMind : MindBase
             }
         }
 
-        var included = new SortedDictionary<string, IContextual>(StringComparer.Ordinal)
+        // Views are cached per resolved instance so repeated resolutions of one character reuse a single view:
+        // the owner keeps its pre-seeded view in both locations, and only genuinely distinct characters sharing an
+        // exact FullId trip the duplicate guard.
+        Dictionary<ICharacter, CharacterRenderView> viewCache = new(ReferenceEqualityComparer.Instance)
         {
-            [character.FullId] = character,
+            [character] = new CharacterRenderView(character),
+        };
+        var included = new SortedDictionary<string, CharacterRenderView>(StringComparer.Ordinal)
+        {
+            [character.FullId] = viewCache[character],
         };
         foreach (string fullID in attentionEligibleFullIDs ?? [.. scene.Characters.Select(static subject => subject.FullId)])
         {
             IdentityValidator.ValidateFullId(fullID, nameof(attentionEligibleFullIDs));
-            if (scene.Find(fullID) is not IContextual contextual)
+            if (scene.Find(fullID) is not ICharacter includedCharacter)
             {
                 continue;
             }
 
-            ValidateIncludedContextualIdentity(contextual, fullID);
-            if (!included.TryAdd(fullID, contextual) && !ReferenceEquals(included[fullID], contextual))
+            ValidateIncludedCharacterIdentity(includedCharacter, fullID);
+            if (!viewCache.TryGetValue(includedCharacter, out CharacterRenderView? view))
+            {
+                view = new CharacterRenderView(includedCharacter);
+                viewCache.Add(includedCharacter, view);
+            }
+
+            if (!included.TryAdd(fullID, view) && !ReferenceEquals(included[fullID], view))
             {
                 throw new InvalidOperationException($"Foreground context contains duplicate exact FullId '{fullID}'.");
             }
         }
 
-        Dictionary<string, object?> characterContexts = new(StringComparer.Ordinal);
-        IReadOnlyDictionary<string, object?>? owningCharacterContext = null;
-        foreach (KeyValuePair<string, IContextual> entry in included)
+        Dictionary<string, object?> characterViews = new(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, CharacterRenderView> entry in included)
         {
-            IReadOnlyDictionary<string, object?> subjectContext = entry.Value.GetContext(scene, observer: character);
-            characterContexts.Add(entry.Key, subjectContext);
-            if (ReferenceEquals(entry.Value, character))
-            {
-                owningCharacterContext = subjectContext;
-            }
+            characterViews.Add(entry.Key, entry.Value);
         }
+        CharacterRenderView owningCharacterView = viewCache[character];
 
-        // The player context is mandatory and unconditional: reuse the attention-eligible dictionary when present,
+        // The player context is mandatory and unconditional: reuse the attention-included view when present,
         // otherwise compute it separately. 'characters' stays attention-gated and may omit the player.
         ICharacter player = scene.Player;
-        if (!characterContexts.TryGetValue(player.FullId, out object? playerContext))
-        {
-            playerContext = player.GetContext(scene, observer: character);
-        }
+        CharacterRenderView playerView = characterViews.TryGetValue(player.FullId, out object? includedPlayerView)
+            ? (CharacterRenderView)includedPlayerView!
+            : new CharacterRenderView(player);
 
         Dictionary<string, object?> context = new(StringComparer.Ordinal)
         {
-            ["character"] = owningCharacterContext,
-            ["characters"] = new ReadOnlyDictionary<string, object?>(characterContexts),
-            ["player"] = playerContext,
+            ["character"] = owningCharacterView,
+            ["characters"] = new ReadOnlyDictionary<string, object?>(characterViews),
+            ["player"] = playerView,
         };
 
         return context;
@@ -453,29 +493,23 @@ public partial class AgenticMind : MindBase
             : throw new InvalidOperationException(
                 $"Core render context already contains the reserved '{ScenarioContextKey}' key.");
 
-    private static void ValidateIncludedContextualIdentity(IContextual contextual, string expectedFullID)
+    private static void ValidateIncludedCharacterIdentity(ICharacter character, string expectedFullID)
     {
-        if (contextual is not IIdentifiable identifiable)
-        {
-            throw new InvalidOperationException(
-                $"Foreground contextual subject for '{expectedFullID}' must retain an identifiable canonical identity.");
-        }
-
         try
         {
-            IdentityValidator.Validate(identifiable, "character");
+            IdentityValidator.Validate(character, "character");
         }
         catch (ArgumentException exception)
         {
             throw new InvalidOperationException(
-                $"Foreground contextual subject has invalid identity '{identifiable.FullId}'.",
+                $"Foreground contextual subject has invalid identity '{character.FullId}'.",
                 exception);
         }
 
-        if (!string.Equals(identifiable.FullId, expectedFullID, StringComparison.Ordinal))
+        if (!string.Equals(character.FullId, expectedFullID, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Foreground contextual subject resolved for '{expectedFullID}' reported mismatched identity '{identifiable.FullId}'.");
+                $"Foreground contextual subject resolved for '{expectedFullID}' reported mismatched identity '{character.FullId}'.");
         }
     }
 

@@ -24,7 +24,7 @@ public sealed partial class StaticVisualCue : VisualCue
     public override Vector3 SampleGlobalPosition() => GlobalPosition;
 
     /// <inheritdoc />
-    public override string Describe(ISceneContext scene, IHasVision observer)
+    public override async ValueTask<string> Describe(ISceneContext scene, IHasVision observer)
     {
         ArgumentNullException.ThrowIfNull(observer);
         ArgumentNullException.ThrowIfNull(scene);
@@ -42,9 +42,7 @@ public sealed partial class StaticVisualCue : VisualCue
             root["subject"] = subject;
         }
 
-        // The templating contract is asynchronous while the Describe contract is synchronous; Fluid rendering
-        // completes synchronously for the built-in tool set, so awaiting inline introduces no blocking.
-        return GetTemplate().RenderAsync(root).AsTask().GetAwaiter().GetResult();
+        return await GetTemplate().RenderAsync(root);
     }
 
     private ITemplate GetTemplate()
