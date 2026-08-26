@@ -31,7 +31,7 @@ internal sealed class FluidTemplateCompilerEngine : ITemplateCompiler
 
         _templateOptions = new TemplateOptions
         {
-            MemberAccessStrategy = UnsafeMemberAccessStrategy.Instance,
+            MemberAccessStrategy = CuratedTemplateMemberAccessStrategy.Shared,
             ModelNamesComparer = StringComparer.Ordinal,
             StrictVariables = false,
             FileProvider = new RegisteredPartialFileProvider(_partialSources),

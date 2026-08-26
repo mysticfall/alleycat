@@ -18,12 +18,12 @@ namespace AlleyCat.IntegrationTests.Scene;
 public sealed class SceneContextIntegrationTests
 {
     /// <summary>
-    /// Shared character bases provide Actors discovery and surface each role's canonical identity through curated
-    /// render views.
+    /// Shared character bases provide Actors discovery and surface each role's canonical identity as the raw
+    /// character templates receive.
     /// </summary>
     [Headless]
     [Fact]
-    public void CharacterRoleTemplates_InheritActorsMembershipAndCanonicalRenderViewIdentity()
+    public void CharacterRoleTemplates_InheritActorsMembershipAndCanonicalCharacterIdentity()
     {
         string[] scenePaths =
         [
@@ -39,10 +39,10 @@ public sealed class SceneContextIntegrationTests
             try
             {
                 Assert.True(character.IsInGroup("Actors"), $"{scenePath} should inherit Actors membership.");
-                // Curated render views expose exactly the instantiated role template's canonical identity.
+                // The raw character itself carries the canonical identity that curated templates render.
                 Assert.Equal(
                     ((IIdentifiable)character).FullId,
-                    new CharacterRenderView(character).FullId);
+                    Assert.IsAssignableFrom<ICharacter>(character).FullId);
             }
             finally
             {

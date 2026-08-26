@@ -88,15 +88,15 @@ public sealed class ScenarioTests
         Assert.Same(scenario, withScenario["scenario"]);
         Assert.Null(withoutScenario["scenario"]);
         Assert.Null(defaulted["scenario"]);
-        Assert.Equal("char:player", Assert.IsType<CharacterRenderView>(withScenario["player"]).FullId);
+        Assert.Same(player, withScenario["player"]);
         IReadOnlyDictionary<string, object?> characters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             withScenario["characters"]);
         Assert.Same(characters[player.FullId], withScenario["player"]);
-        // The player view is unconditional: attention filtering removes the player from 'characters' only.
+        // The player entry is unconditional: attention filtering removes the player from 'characters' only.
         IReadOnlyDictionary<string, object?> filteredCharacters = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(
             playerFiltered["characters"]);
         Assert.DoesNotContain(player.FullId, filteredCharacters.Keys);
-        Assert.Equal("char:player", Assert.IsType<CharacterRenderView>(playerFiltered["player"]).FullId);
+        Assert.Same(player, playerFiltered["player"]);
         Assert.All(
             [withScenario, withoutScenario, defaulted],
             context => Assert.Equal(["character", "characters", "player", "scenario"], context.Keys));

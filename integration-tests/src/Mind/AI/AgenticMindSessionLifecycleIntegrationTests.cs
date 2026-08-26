@@ -416,7 +416,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         => ObservationHistoryRenderer.Create(
             eventHistory: null,
             new FaultingTemplateCompiler(),
-            new CharacterRenderView(new TestCharacter()));
+            new TestCharacter());
 
     private sealed class FaultingTemplateCompiler : ITemplateCompiler
     {

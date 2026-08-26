@@ -1,3 +1,5 @@
+using AlleyCat.Templating;
+
 namespace AlleyCat.Core;
 
 /// <summary>
@@ -22,7 +24,9 @@ public interface IIdentifiable
     }
 
     /// <summary>
-    /// Gets the canonical typed identity in <c>Type:Id</c> form.
+    /// Gets the canonical typed identity in <c>Type:Id</c> form. This is the only identity member templates may
+    /// read; <see cref="Id" /> and <see cref="Type" /> stay out of the curated template surface.
     /// </summary>
+    [TemplateExposed]
     string FullId => $"{Type}:{Id}";
 }

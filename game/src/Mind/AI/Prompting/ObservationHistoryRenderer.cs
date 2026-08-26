@@ -16,8 +16,9 @@ namespace AlleyCat.Mind.AI.Prompting;
 /// fallback — and passes directly to that template as the rooted render context, so fragment-visible record
 /// properties resolve at the template's top level exactly like the pre-migration current-context semantics. No
 /// dispatch source is generated at runtime, no reflection projection happens here, and no global partial
-/// registration exists; the owning character's curated render view rides along as a named value so actor-relative
-/// wording matches the session system instruction.
+/// registration exists; the owning character rides along as a named value — its template surface curated to
+/// <c>FullId</c> by the engine's member-access policy — so actor-relative wording matches the session system
+/// instruction.
 /// </remarks>
 internal sealed class ObservationHistoryRenderer
 {
@@ -25,16 +26,16 @@ internal sealed class ObservationHistoryRenderer
 
     private readonly IReadOnlyDictionary<string, ITemplate> _fragments;
     private readonly ITemplate _fallback;
-    private readonly CharacterRenderView _characterView;
+    private readonly ICharacter _character;
 
     private ObservationHistoryRenderer(
         IReadOnlyDictionary<string, ITemplate> fragments,
         ITemplate fallback,
-        CharacterRenderView characterView)
+        ICharacter character)
     {
         _fragments = fragments;
         _fallback = fallback;
-        _characterView = characterView;
+        _character = character;
     }
 
     /// <summary>
@@ -43,16 +44,17 @@ internal sealed class ObservationHistoryRenderer
     /// </summary>
     /// <param name="eventHistory">Parsed authored event history supplying fragments and fallback, or null.</param>
     /// <param name="compiler">Template compiler used to compile each fragment and the fallback individually.</param>
-    /// <param name="characterView">
-    /// Owning character's curated render view from the sealed session render context, used for actor-relative wording.
+    /// <param name="character">
+    /// Owning character from the sealed session render context, used for actor-relative wording; its template
+    /// surface is curated by the engine's member-access policy.
     /// </param>
     public static ObservationHistoryRenderer Create(
         EventHistoryDocument? eventHistory,
         ITemplateCompiler compiler,
-        CharacterRenderView characterView)
+        ICharacter character)
     {
         ArgumentNullException.ThrowIfNull(compiler);
-        ArgumentNullException.ThrowIfNull(characterView);
+        ArgumentNullException.ThrowIfNull(character);
 
         IReadOnlyList<EventHistoryFragment> fragments = eventHistory?.Fragments ?? [];
         string fallbackSource = eventHistory?.FallbackSource ?? EventHistoryDocument.DefaultFallbackSource;
@@ -63,7 +65,7 @@ internal sealed class ObservationHistoryRenderer
             compiledFragments.Add(fragment.TypeKey, compiler.Compile(fragment.Source));
         }
 
-        return new ObservationHistoryRenderer(compiledFragments, compiler.Compile(fallbackSource), characterView);
+        return new ObservationHistoryRenderer(compiledFragments, compiler.Compile(fallbackSource), character);
     }
 
     /// <summary>Renders the ordered observation records through their individually compiled templates.</summary>
@@ -79,7 +81,7 @@ internal sealed class ObservationHistoryRenderer
 
         Dictionary<string, object?> namedValues = new(StringComparer.Ordinal)
         {
-            [CharacterContextKey] = _characterView,
+            [CharacterContextKey] = _character,
         };
         StringBuilder rendered = new();
         foreach (AgentObservation observation in observations)

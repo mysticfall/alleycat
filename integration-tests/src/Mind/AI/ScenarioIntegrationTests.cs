@@ -415,8 +415,7 @@ public sealed partial class ScenarioIntegrationTests
                 published["characters"]);
 
             Assert.Equal(["char:fixture_player", "char:owner"], characters.Keys);
-            CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(published["player"]);
-            Assert.Equal(player.FullId, playerView.FullId);
+            Assert.Same(player, published["player"]);
             // The attended player's entry is reused verbatim for the unconditional player key.
             Assert.Same(characters[player.FullId], published["player"]);
         }
@@ -429,12 +428,12 @@ public sealed partial class ScenarioIntegrationTests
     }
 
     /// <summary>
-    /// A player outside attention eligibility still renders <c>{{player.FullId}}</c> from the unconditional
-    /// player view.
+    /// A player outside attention eligibility still renders <c>{{player.FullId}}</c> from the unconditional player
+    /// entry.
     /// </summary>
     /// <remarks>
-    /// Regression coverage for the empty-token defect: raw <c>ICharacter</c> objects never expose the curated
-    /// template surface, so the player must arrive as its <see cref="CharacterRenderView" /> wrapper.
+    /// Regression coverage for the empty-token defect: the player arrives as its raw <c>ICharacter</c> instance,
+    /// whose template surface the engine's curated member-access policy seals to exactly <c>FullId</c>.
     /// </remarks>
     [Fact]
     public async Task SessionRender_WhenPlayerIsNotAttentionEligible_PlayerFullIdTokenStillRenders()
@@ -469,8 +468,7 @@ public sealed partial class ScenarioIntegrationTests
             Assert.DoesNotContain("{{", sectionContent, StringComparison.Ordinal);
 
             IReadOnlyDictionary<string, object?> published = mind.GetLatestRenderContext();
-            CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(published["player"]);
-            Assert.Equal(player.FullId, playerView.FullId);
+            Assert.Same(player, published["player"]);
         }
         finally
         {
@@ -505,8 +503,7 @@ public sealed partial class ScenarioIntegrationTests
                 published["characters"]);
 
             Assert.Equal(["char:owner"], characters.Keys);
-            CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(published["player"]);
-            Assert.Equal(player.FullId, playerView.FullId);
+            Assert.Same(player, published["player"]);
         }
         finally
         {

@@ -117,11 +117,11 @@ public sealed class AgenticMindTests
     }
 
     /// <summary>
-    /// AgenticMind exposes curated render views for itself and every explicitly eligible character in ordinal
-    /// exact-ID order (AI-003 TR-20).
+    /// AgenticMind exposes the raw owning and eligible characters in ordinal exact-ID order (AI-003 TR-20); their
+    /// template surface is curated to <c>FullId</c> by the engine's member-access policy.
     /// </summary>
     [Fact]
-    public void CreateRenderContext_BuildsDeterministicOwnerAndCharacterViews()
+    public void CreateRenderContext_BuildsDeterministicOwnerAndCharacterEntries()
     {
         FakeCharacter owner = new()
         {
@@ -152,20 +152,18 @@ public sealed class AgenticMindTests
             result["characters"]);
 
         Assert.Equal(["char:alpha", "char:owner", "char:zulu"], characters.Keys);
-        CharacterRenderView ownerView = Assert.IsType<CharacterRenderView>(result["character"]);
-        Assert.Equal("char:owner", ownerView.FullId);
-        Assert.Equal("char:alpha", Assert.IsType<CharacterRenderView>(characters["char:alpha"]).FullId);
-        Assert.Equal("char:zulu", Assert.IsType<CharacterRenderView>(characters["char:zulu"]).FullId);
-        // The owner appears in both locations referencing the exact same view instance (AI-001 TR-25).
-        Assert.Same(ownerView, characters["char:owner"]);
-        Assert.All(characters.Values, value => _ = Assert.IsType<CharacterRenderView>(value));
+        Assert.Same(owner, result["character"]);
+        Assert.Equal("char:alpha", Assert.IsAssignableFrom<ICharacter>(characters["char:alpha"]).FullId);
+        Assert.Equal("char:zulu", Assert.IsAssignableFrom<ICharacter>(characters["char:zulu"]).FullId);
+        // The owner appears in both locations as the exact same character instance (AI-001 TR-25).
+        Assert.Same(result["character"], characters["char:owner"]);
+        Assert.All(characters.Values, value => _ = Assert.IsAssignableFrom<ICharacter>(value));
         // Observations never enter the render dictionary (AI-001 TR-25): they reach the model exclusively through
         // AI-002 tool results and interruption injections.
         Assert.False(result.ContainsKey("observations"));
         // The player is not attention-eligible here, so 'characters' omits it while the unconditional 'player' key
-        // carries its own curated view.
-        CharacterRenderView playerView = Assert.IsType<CharacterRenderView>(result["player"]);
-        Assert.Equal("char:player", playerView.FullId);
+        // carries the raw player character.
+        Assert.Same(player, result["player"]);
         _ = Assert.Throws<NotSupportedException>(
             () => ((IDictionary<string, object?>)result).Add("mutation", null));
     }
@@ -248,14 +246,14 @@ public sealed class AgenticMindTests
             result["characters"]);
 
         Assert.Equal(["char:owner", "char:subject"], characters.Keys);
-        Assert.Equal("char:owner", Assert.IsType<CharacterRenderView>(result["character"]).FullId);
-        Assert.Equal("char:subject", Assert.IsType<CharacterRenderView>(characters["char:subject"]).FullId);
+        Assert.Same(owner, result["character"]);
+        Assert.Same(subject, characters["char:subject"]);
         // The attended player's entry is reused verbatim for the unconditional player key.
         Assert.Same(characters["char:subject"], result["player"]);
     }
 
     /// <summary>
-    /// Foreground context always aliases the owner's exact view and omits unresolved or non-character attention
+    /// Foreground context always aliases the owner's exact instance and omits unresolved or non-character attention
     /// identities without mutating the supplied eligible set or resolving anything twice.
     /// </summary>
     [Fact]
@@ -303,8 +301,8 @@ public sealed class AgenticMindTests
 
         Assert.Equal(["char:alpha", "char:owner", "char:zulu"], characters.Keys);
         Assert.Same(result["character"], characters[owner.FullId]);
-        Assert.Equal("char:alpha", Assert.IsType<CharacterRenderView>(characters[alpha.FullId]).FullId);
-        Assert.Equal("char:zulu", Assert.IsType<CharacterRenderView>(characters[zulu.FullId]).FullId);
+        Assert.Same(alpha, characters[alpha.FullId]);
+        Assert.Same(zulu, characters[zulu.FullId]);
         Assert.Same(result["player"], characters[alpha.FullId]);
         Assert.Equal(new[] { "char:zulu", "char:missing", "object:prop", "char:alpha" }, eligibleIDs);
         // Exactly one scene lookup per identity (one presence check plus four eligible IDs): no second visual
@@ -312,7 +310,7 @@ public sealed class AgenticMindTests
         Assert.Equal(5, scene.FindCallCount);
     }
 
-    /// <summary>Attention including the owner keeps one shared view instance across both context locations.</summary>
+    /// <summary>Attention including the owner keeps one shared instance across both context locations.</summary>
     [Fact]
     public void CreateRenderContext_WhenAttentionIncludesTheOwner_PreservesSameInstanceInBothLocations()
     {

@@ -309,19 +309,14 @@ public partial class AgenticMind : MindBase
         return $"Important scene events require your attention:\n{await renderer.RenderAsync(notable)}";
     }
 
-    private static CharacterRenderView ResolveCharacterView(
-        IReadOnlyDictionary<string, object?> renderContext)
-        => renderContext["character"] is CharacterRenderView characterView
-            ? characterView
-            : throw new InvalidOperationException(
-                "The session render context is missing the owning character render view.");
-
     private ObservationHistoryRenderer CreateSessionHistoryRenderer(
         IReadOnlyDictionary<string, object?> renderContext)
         => ObservationHistoryRenderer.Create(
             LoadEventHistoryDocument(),
             Game.Instance.GetRequiredService<ITemplateCompiler>(),
-            ResolveCharacterView(renderContext));
+            renderContext["character"] as ICharacter
+                ?? throw new InvalidOperationException(
+                    "The session render context is missing the owning character."));
 
     /// <summary>
     /// Loads and parses the configured event-history file once at session start, or returns null when no file is
@@ -398,10 +393,11 @@ public partial class AgenticMind : MindBase
     /// </summary>
     /// <remarks>
     /// The returned dictionary is intentionally left mutable and scenario-less: scenario managers receive it as their
-    /// template context, and the session flow seals it with the <c>scenario</c> key afterwards. Entries hold curated
-    /// <see cref="CharacterRenderView" /> instances, so sensitive character members stay unreachable from templates by
-    /// construction. Observations are never placed in the dictionary (AI-001 TR-25): they reach the model exclusively
-    /// through AI-002 tool results and interruption injections.
+    /// template context, and the session flow seals it with the <c>scenario</c> key afterwards. Entries hold the raw
+    /// <see cref="ICharacter" /> instances, whose template surface the curated member-access policy seals to exactly
+    /// <c>FullId</c>, so sensitive character members stay unreachable from templates by construction. Observations
+    /// are never placed in the dictionary (AI-001 TR-25): they reach the model exclusively through AI-002 tool
+    /// results and interruption injections.
     /// </remarks>
     internal static Dictionary<string, object?> CreateCoreRenderContext(
         ICharacter character,
@@ -426,16 +422,11 @@ public partial class AgenticMind : MindBase
             }
         }
 
-        // Views are cached per resolved instance so repeated resolutions of one character reuse a single view:
-        // the owner keeps its pre-seeded view in both locations, and only genuinely distinct characters sharing an
-        // exact FullId trip the duplicate guard.
-        Dictionary<ICharacter, CharacterRenderView> viewCache = new(ReferenceEqualityComparer.Instance)
+        // Included characters are stored as their resolved instances so the owner keeps its single instance in both
+        // context locations, and only genuinely distinct characters sharing an exact FullId trip the duplicate guard.
+        SortedDictionary<string, ICharacter> included = new(StringComparer.Ordinal)
         {
-            [character] = new CharacterRenderView(character),
-        };
-        var included = new SortedDictionary<string, CharacterRenderView>(StringComparer.Ordinal)
-        {
-            [character.FullId] = viewCache[character],
+            [character.FullId] = character,
         };
         foreach (string fullID in attentionEligibleFullIDs ?? [.. scene.Characters.Select(static subject => subject.FullId)])
         {
@@ -446,37 +437,30 @@ public partial class AgenticMind : MindBase
             }
 
             ValidateIncludedCharacterIdentity(includedCharacter, fullID);
-            if (!viewCache.TryGetValue(includedCharacter, out CharacterRenderView? view))
-            {
-                view = new CharacterRenderView(includedCharacter);
-                viewCache.Add(includedCharacter, view);
-            }
-
-            if (!included.TryAdd(fullID, view) && !ReferenceEquals(included[fullID], view))
+            if (!included.TryAdd(fullID, includedCharacter) && !ReferenceEquals(included[fullID], includedCharacter))
             {
                 throw new InvalidOperationException($"Foreground context contains duplicate exact FullId '{fullID}'.");
             }
         }
 
-        Dictionary<string, object?> characterViews = new(StringComparer.Ordinal);
-        foreach (KeyValuePair<string, CharacterRenderView> entry in included)
+        Dictionary<string, object?> characterEntries = new(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, ICharacter> entry in included)
         {
-            characterViews.Add(entry.Key, entry.Value);
+            characterEntries.Add(entry.Key, entry.Value);
         }
-        CharacterRenderView owningCharacterView = viewCache[character];
 
-        // The player context is mandatory and unconditional: reuse the attention-included view when present,
-        // otherwise compute it separately. 'characters' stays attention-gated and may omit the player.
+        // The player context is mandatory and unconditional: reuse the attention-included character when present,
+        // otherwise use the scene player directly. 'characters' stays attention-gated and may omit the player.
         ICharacter player = scene.Player;
-        CharacterRenderView playerView = characterViews.TryGetValue(player.FullId, out object? includedPlayerView)
-            ? (CharacterRenderView)includedPlayerView!
-            : new CharacterRenderView(player);
+        ICharacter playerCharacter = characterEntries.TryGetValue(player.FullId, out object? includedPlayer)
+            ? (ICharacter)includedPlayer!
+            : player;
 
         Dictionary<string, object?> context = new(StringComparer.Ordinal)
         {
-            ["character"] = owningCharacterView,
-            ["characters"] = new ReadOnlyDictionary<string, object?>(characterViews),
-            ["player"] = playerView,
+            ["character"] = character,
+            ["characters"] = new ReadOnlyDictionary<string, object?>(characterEntries),
+            ["player"] = playerCharacter,
         };
 
         return context;

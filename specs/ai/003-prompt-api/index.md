@@ -94,10 +94,11 @@ control over how concrete observation types appear in chronological event histor
 20. Exactly once per agent session, at session start, AgenticMind must assemble the render context on demand, compile
      the configured `PromptStack`, and render the template with the exact top-level read-only dictionary returned. The
      dictionary defines exactly these keys:
-     - `character`: the owner's curated character view;
-     - `characters`: curated character views keyed and inserted in ordinal order by exact canonical `Character.FullId`
-       — the owner plus every attention-eligible character under AI-006, which may omit the player;
-     - `player`: the mandatory, unconditional player view under
+     - `character`: the owner's curated `ICharacter` value;
+     - `characters`: curated `ICharacter` values keyed and inserted in ordinal order by exact canonical
+       `Character.FullId` — the owner plus every attention-eligible character under AI-006, which may omit the
+       player;
+     - `player`: the mandatory, unconditional player `ICharacter` value under
        [SCN-001](../../scene/001-scene-context-api/index.md), resolved via `ISceneContext.Player`, never
        attention-gated; and
      - `scenario`: the current scenario under [AI-008](../008-scenario/index.md) two-phase sealing — the scenario
@@ -136,10 +137,11 @@ control over how concrete observation types appear in chronological event histor
      top-level context key (forbidden by AC-17) or a game-time-aware extension of TMPL-001's `ago` helper (out of
      scope; see [TMPL-001](../../templating/001-templating-system/index.md)). The label must not leak voice provenance
      or other private payloads.
-30. Character values reach authored templates through the read-only curated `CharacterRenderView`
-     ([CHAR-002](../../character/002-character-root/index.md)), which exposes exactly `FullId`: live component state,
-     such as voice configuration, is unreachable from templates by construction, preserving prompt determinism and
-     hygiene.
+30. Character values reach authored templates as raw `ICharacter` values whose template surface is curated by the
+    member-access policy owned by [TMPL-001](../../templating/001-templating-system/index.md) (character contract in
+    [CHAR-002](../../character/002-character-root/index.md)): templates can read exactly the canonical `FullId`, and
+    live component state, such as voice configuration, is unreachable from templates by construction, preserving
+    prompt determinism and hygiene.
 
 ## In Scope
 
@@ -177,11 +179,12 @@ control over how concrete observation types appear in chronological event histor
 3. Writer tests verify matching pseudo-XML tags, existing lax authored names, replacement of only `<`, `>`, and `/` in
    tag names, exact content preservation, and clear invalid-authoring failures.
 4. Exactly once per agent session, AgenticMind assembles the render context on demand, compiles its prompt stack, and
-     renders with its exact top-level read-only dictionary: `character`, a mandatory unconditional `player` view under
-     SCN-001, deterministic attention-eligible `characters` — curated views keyed and inserted in ordinal order by
-     exact `FullId`, which may omit the player — and the current `scenario` under AI-008. The dictionary defines no
-     `observations` key, and its character entries expose exactly `FullId`. No later request re-renders or supplements
-     the instruction, and unchanged authored content renders byte-identically to the established golden baselines.
+     renders with its exact top-level read-only dictionary: `character`, a mandatory unconditional `player` value
+     under SCN-001, deterministic attention-eligible `characters` — curated `ICharacter` values keyed and inserted in
+     ordinal order by exact `FullId`, which may omit the player — and the current `scenario` under AI-008. The
+     dictionary defines no `observations` key, and its character entries expose exactly `FullId`. No later request
+     re-renders or supplements the instruction, and unchanged authored content renders byte-identically to the
+     established golden baselines.
 5. Capturing-client tests verify the rendered stack is the session's sole system instruction and no observation-summary
    user message or re-rendered instruction accompanies it.
 6. Event-history tests cover self speech, recognised-other speech, unknown speech, empty history, chronological

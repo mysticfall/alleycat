@@ -63,17 +63,34 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
     C# `ITemplateTool` contract for tool implementation.
 10. Rendering must be asynchronous — equivalent to a `ValueTask<string> RenderAsync(IReadOnlyDictionary<string,
     object?>)` contract — while template compilation remains synchronous.
-11. Context values that are plain C# objects must resolve members through permissive (unsafe) member access; dictionary
-    values must be adapted when the template context is constructed. Rendered output must not be HTML-encoded.
+11. Context values that are plain C# objects must resolve members through permissive (unsafe) member access, except
+    where the value's type carries curated template registrations under Technical Requirement 14; dictionary values
+    must be adapted when the template context is constructed. Rendered output must not be HTML-encoded.
 12. Conditional evaluation must follow Liquid truthiness: only nil and false are falsy, so empty strings and collections
     are truthy — unlike engines that treat empty values as false.
 13. Template sources must originate from authored content supplied by callers or loaded from configured paths; the
     system must not generate template syntax at runtime.
+14. The Fluid compiler engine must enforce a curated member-access policy for annotated interfaces, applying to every
+    template the engine renders:
+    - Interface properties marked `TemplateExposedAttribute` are curated members readable by templates, registered
+      against their declaring interface so every concrete implementer resolves them through Fluid's interface walk
+      without per-type registration. `IIdentifiable.FullId` is curated; `Id` and `Type` deliberately are not.
+    - Interfaces marked `TemplateSealedAttribute` expose exactly their curated members; every other member name on an
+      implementer renders nil. `ICharacter` is sealed, so live component state — such as voice configuration — and
+      framework surfaces, including the Godot `Node` surface and `IComponentHolder.Components`, are unreachable from
+      any template, including visual-cue description contexts (`observer`/`subject`), not only AI prompt contexts.
+    - Curated registrations and seals are discovered once per process through reflection over the game assembly into
+      a thread-safe, owned strategy instance shared by every compiler engine; the strategy must never mutate Fluid's
+      shared unsafe member-access singleton.
+    - Curating the same member name on more than one interface must fail loudly at discovery (the single-level rule),
+      because Fluid enumerates a type's interfaces in unspecified order and duplicate names would resolve ambiguously.
 
 ## In Scope
 
 - Plain C# template, compiler, render-context, and tool contracts.
 - Fluid-based (Liquid syntax) template compilation and rendering.
+- Curated member-access policy for annotated interfaces: curated template members, sealed template surfaces, and the
+  owned strategy instance.
 - Programmatic partial registration.
 - Programmatic custom tool registration.
 - Built-in `add`, `eq`, `eqOrdinal`, `nf`, and `repeat` tools.
@@ -89,6 +106,8 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 - Localisation workflow integration.
 - Caching policies, profiling, or performance budgets.
 - Advanced template inheritance beyond Liquid includes.
+- Curating or sealing further interfaces or members beyond the currently annotated `IIdentifiable.FullId` and
+  `ICharacter`.
 
 ## Acceptance Criteria
 
@@ -118,8 +137,16 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 16. All six built-in tools — `add`, `eq`, `eqOrdinal`, `nf`, `repeat`, and `ago` — satisfy their Technical Requirement 5
     definitions with no semantic drift.
 17. The templating implementation introduces no Handlebars.Net package or assembly dependency.
-18. Plain C# context values resolve through permissive member access, dictionary values adapt at template-context
-    construction, conditionals treat only nil and false as falsy, and rendered output receives no HTML encoding.
+18. Plain C# context values without curated registrations resolve through permissive member access, dictionary values
+    adapt at template-context construction, conditionals treat only nil and false as falsy, and rendered output
+    receives no HTML encoding.
+19. The curated member-access policy satisfies its Technical Requirement 14 contract: curated members resolve on every
+    concrete implementer through interface composition, sealed interfaces render every non-curated member nil
+    independently of Fluid's interface enumeration order, curating the same member name on two interfaces fails
+    loudly at discovery, and types without curated registrations keep permissive member access with deterministic
+    rendering across repeat engine instantiation.
+20. Rendering a real authored scene character through the running engine exposes exactly the canonical `FullId`, while
+    `Id`, `Components`, and the Godot `Name` render empty.
 
 ## References
 
@@ -128,3 +155,4 @@ Enable gameplay, AI, and content systems to produce dynamic text without hard-co
 - [Configuration API](../../core/002-configuration-api/index.md)
 - `game/src/Templating/`
 - `tests/src/Templating/TemplatingTests.cs`
+- `tests/src/Templating/CuratedTemplateMemberAccessStrategyTests.cs`

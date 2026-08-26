@@ -1,5 +1,4 @@
 using System.Globalization;
-using AlleyCat.Character;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Tool;
@@ -364,7 +363,7 @@ public sealed class EventHistoryIntegrationTests
         => ObservationHistoryRenderer.Create(
             eventHistory,
             new FluidTemplateCompiler(),
-            new CharacterRenderView(new PromptOwnerCharacter("test_character")));
+            new PromptOwnerCharacter("test_character"));
 
     private static PromptSectionBuildContext CreateBuildContext()
         => new(

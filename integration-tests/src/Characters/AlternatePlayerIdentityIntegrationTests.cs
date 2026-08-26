@@ -36,8 +36,8 @@ public sealed class AlternatePlayerIdentityIntegrationTests
             Assert.True(character.IsInGroup("Player"));
             Assert.True(character.IsInGroup("Actors"));
 
-            // The authored canonical identity is the exact value curated render views expose to templates.
-            Assert.Equal("char:riley", new CharacterRenderView(character).FullId);
+            // The authored canonical identity is the exact value the raw character exposes to curated templates.
+            Assert.Equal("char:riley", Assert.IsAssignableFrom<ICharacter>(character).FullId);
         }
         finally
         {

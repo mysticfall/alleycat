@@ -83,8 +83,9 @@ cross-object references unambiguous.
    operational attribution rather than authenticated provenance.
 8. Installation tests verify each character-owned voice receives the final precedence-resolved `Character.Id`, valid
    lower-`snake_case` template placeholder IDs are replaced, and `voice:<character-id>` validates before exposure.
-9. AI-003 render contexts expose characters through curated views without requiring `IIdentifiable` to implement
-   render-view or visual-subject contracts.
+9. AI-003 render contexts expose characters through the
+   [TMPL-001](../../templating/001-templating-system/index.md) curated member-access policy — `IIdentifiable.FullId`
+   is the curated member — without requiring `IIdentifiable` to implement render or visual-subject contracts.
 
 ## References
 

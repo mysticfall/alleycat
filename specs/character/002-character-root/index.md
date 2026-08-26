@@ -108,8 +108,9 @@ exists.
 31. The lowest shared male/female character bases must author `Actors` membership and `VisualSubjects` membership.
     Both bases must be valid `IVisualSubject` scan members. Higher role templates and concrete scenes must not add
     redundant compensation; VISION-001 normatively owns cue and scan details.
-32. Session render contexts receive characters through the curated `CharacterRenderView`, whose sole exposed member is
-    the canonical `FullId`, never a bare local `Id`.
+32. Session render contexts receive characters as raw `ICharacter` values whose template surface is curated by the
+    [TMPL-001](../../templating/001-templating-system/index.md) member-access policy: templates can read exactly the
+    canonical `FullId`, never a bare local `Id`.
 33. The concrete `Character` root owns a validated, read-only published visual-cue collection for its `IVisualSubject`
     role. Its visual-cue topology is immutable after publication until an explicit refresh.
 34. `Character.RefreshComponents()` must perform provider-side nearest-provider cue-ownership validation when it
@@ -238,8 +239,8 @@ exists.
     authenticated provenance; Voiceprint remains recognition metadata and is not used to establish character ownership.
 19. Shared male/female bases each author `Actors` membership and `VisualSubjects` membership; each is a valid
     `IVisualSubject` scan member and higher layers do not compensate redundantly.
-20. Render context exposes characters through the curated `CharacterRenderView`, whose sole exposed member is the
-    canonical `FullId`, never a bare local `Id`.
+20. Render context exposes characters as raw `ICharacter` values whose template surface is curated by the TMPL-001
+    member-access policy: only the canonical `FullId` resolves, never a bare local `Id`.
 21. `ICharacter` normatively aggregates `IHasVision` and `IVisualSubject` from VISION-001 and `IHasHearing` from
     SPCH-006; `IVisualObserver` does not exist.
 22. Character roots expose validated published visual-cue references through a read-only collection; installation
@@ -281,4 +282,5 @@ exists.
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
+- [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
