@@ -1,11 +1,9 @@
 using System.Reflection;
-using AlleyCat.Core;
 using AlleyCat.Core.Logging;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.Generation.Supertonic;
 using AlleyCat.TestFramework;
 using Godot;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -13,15 +11,13 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.Speech;
 
 /// <summary>
-/// Runtime coverage for the offline Supertonic speech generator against the shipped model assets (SPCH-007).
+/// Runtime coverage for the offline Supertonic speech generator at its inference-pipeline boundary (SPCH-007).
 /// </summary>
-/// <remarks>
-/// Synthesis facts reuse a single generator instance per process so the 245 MB vector-estimator graph is loaded
-/// once per generator, and the suite as a whole performs at most five inference invocations.
-/// </remarks>
 public sealed partial class SupertonicSpeechGeneratorIntegrationTests
 {
-    private const int NativeSampleRate = 44100;
+    private const int FakeSampleRate = 16000;
+    private const string FixtureModelDirectoryPath = "res://assets/testing/speech/supertonic/model";
+    private const string FixtureVoiceStylesDirectoryPath = "res://assets/testing/speech/supertonic/voice_styles";
 
     private static readonly MethodInfo _invokeGenerationAsyncMethod = typeof(SpeechGenerator)
         .GetMethod("InvokeGenerationAsync", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -48,21 +44,30 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
     }
 
     /// <summary>
-    /// Real local synthesis must produce whole PCM16 mono RIFF/WAVE utterances at the 44100 Hz vocoder rate and
-    /// record the backend latency trace without generator-side sample-rate conversion.
+    /// The production generator must globalise and forward its model directory, load the configured voice style,
+    /// encode pipeline samples as PCM16, reuse its pipeline, and record its backend and latency traces.
     /// </summary>
     [Fact]
     [Headless]
-    public async Task Generate_WithRealModel_ProducesPcm16MonoWave_AtNativeSampleRate()
+    public async Task Generate_WithInjectedPipeline_ProducesPcm16MonoWave_AndReusesPipeline()
     {
         SceneTree sceneTree = GetSceneTree();
         using CapturingPipelineLogFixture pipelineLog = new();
         pipelineLog.Install();
 
+        FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cuda);
         SupertonicSpeechGenerator generator = new()
         {
             Name = "SupertonicSpeechGenerator",
+            ModelDirectoryPath = FixtureModelDirectoryPath,
+            VoiceStylesDirectoryPath = FixtureVoiceStylesDirectoryPath,
         };
+        using IDisposable pipelineOverride = generator.OverridePipelineFactoryForTesting(
+            (modelDirectory, requestedBackend) =>
+            {
+                pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                return pipeline;
+            });
 
         sceneTree.Root.AddChild(generator);
         await WaitForFramesAsync(sceneTree, 2);
@@ -71,110 +76,69 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         {
             byte[] audio = await generator.Generate("Hello there, friend.");
 
-            AssertPcm16MonoWave(audio, NativeSampleRate);
-            Assert.True(ReadWaveDataLength(audio) > NativeSampleRate / 2, "Expected at least half a second of synthesised audio.");
+            AssertPcm16MonoWave(audio, FakeSampleRate);
+            Assert.Equal(new short[] { -32767, -16383, 0, 8191, 32767 }, ReadPcm16Samples(audio));
+            AssertPipelineInitialised(pipeline, SupertonicExecutionBackend.Cuda);
+            _ = Assert.Single(pipeline.SynthesisRequests);
+            Assert.Equal("Hello there, friend.", pipeline.SynthesisRequests[0].Text);
+            AssertFixtureVoiceStyle(pipeline.SynthesisRequests[0].VoiceStyle);
 
-            CapturedLogEntry latencyEntry = Assert.Single(pipelineLog.Entries, entry => entry.Message.Contains("TTS backend returned in", StringComparison.Ordinal));
+            CapturedLogEntry backendEntry = Assert.Single(
+                pipelineLog.Entries,
+                entry => entry.Message.Contains("TTS backend engaged", StringComparison.Ordinal));
+            Assert.Equal(LogLevel.Trace, backendEntry.Level);
+            Assert.Contains("supertonic-3 backend cuda", backendEntry.Message, StringComparison.Ordinal);
+
+            CapturedLogEntry latencyEntry = Assert.Single(
+                pipelineLog.Entries,
+                entry => entry.Message.Contains("TTS backend returned in", StringComparison.Ordinal));
             Assert.Equal(LogLevel.Trace, latencyEntry.Level);
             Assert.Equal("AlleyCat.Pipeline", latencyEntry.CategoryName);
             Assert.Contains("TTS backend returned in", latencyEntry.Message, StringComparison.Ordinal);
             Assert.Contains("supertonic-3", latencyEntry.Message, StringComparison.Ordinal);
 
             byte[] secondAudio = await generator.Generate("Hello there, friend.");
-            AssertPcm16MonoWave(secondAudio, NativeSampleRate);
-            Assert.True(
-                ReadWaveDataLength(secondAudio) > NativeSampleRate / 2,
-                "Expected at least half a second of synthesised audio.");
+            AssertPcm16MonoWave(secondAudio, FakeSampleRate);
+            Assert.Equal(1, pipeline.InitialisationCount);
+            Assert.Equal(2, pipeline.SynthesisRequests.Count);
         }
         finally
         {
-            generator.QueueFree();
+            generator.GetParent()?.RemoveChild(generator);
+            generator._ExitTree();
+            generator.Free();
             await WaitForFramesAsync(sceneTree, 2);
         }
+
+        Assert.True(pipeline.IsDisposed);
     }
 
     /// <summary>
-    /// A default CUDA request must either engage CUDA without a fallback warning or fully rebuild on CPU
-    /// with exactly one warning, while recording the active backend as a pipeline trace (SPCH-007 AC 11-12).
+    /// A CUDA request with a CUDA pipeline must record CUDA as active without a fallback warning.
     /// </summary>
     [Fact]
     [Headless]
-    public async Task Generate_WithCudaRequest_ReportsConsistentActiveBackendAndFallbackDiagnostics()
+    public async Task Generate_WithCudaRequest_RecordsCudaBackendWithoutFallbackWarning()
     {
         SceneTree sceneTree = GetSceneTree();
         using CapturingPipelineLogFixture pipelineLog = new();
         using RecordingLoggerProvider loggerProvider = new();
         pipelineLog.Install();
-        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
 
+        FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cuda);
         SupertonicSpeechGenerator generator = new()
         {
             Name = "SupertonicSpeechGenerator",
             ExecutionBackend = SupertonicExecutionBackend.Cuda,
+            ModelDirectoryPath = FixtureModelDirectoryPath,
+            VoiceStylesDirectoryPath = FixtureVoiceStylesDirectoryPath,
         };
-
-        sceneTree.Root.AddChild(generator);
-        await WaitForFramesAsync(sceneTree, 2);
-
-        try
-        {
-            byte[] audio = await generator.Generate("Hello there, friend.");
-
-            AssertPcm16MonoWave(audio, NativeSampleRate);
-            CapturedLogEntry backendEntry = Assert.Single(
-                pipelineLog.Entries,
-                entry => entry.Message.Contains("supertonic-3 backend", StringComparison.Ordinal));
-            Assert.Equal(LogLevel.Trace, backendEntry.Level);
-            Assert.Equal("AlleyCat.Pipeline", backendEntry.CategoryName);
-
-            IReadOnlyList<CapturedLogEntry> fallbackWarnings =
-            [
-                .. loggerProvider.Entries.Where(entry => entry.CategoryName == typeof(SupertonicSpeechGenerator).FullName
-                    && entry.Level == LogLevel.Warning
-                    && entry.Message.Contains("execution backend was requested but could not be initialised", StringComparison.Ordinal)),
-            ];
-
-            if (backendEntry.Message.Contains("supertonic-3 backend cuda", StringComparison.Ordinal))
+        using IDisposable pipelineOverride = generator.OverridePipelineFactoryForTesting(
+            (modelDirectory, requestedBackend) =>
             {
-                Assert.Empty(fallbackWarnings);
-            }
-            else
-            {
-                Assert.Contains("supertonic-3 backend cpu", backendEntry.Message, StringComparison.Ordinal);
-                CapturedLogEntry fallbackWarning = Assert.Single(fallbackWarnings);
-                Assert.Contains("Cuda", fallbackWarning.Message, StringComparison.Ordinal);
-                Assert.Contains("Reason:", fallbackWarning.Message, StringComparison.Ordinal);
-            }
-        }
-        finally
-        {
-            generator.QueueFree();
-            await WaitForFramesAsync(sceneTree, 2);
-        }
-    }
-
-    /// <summary>
-    /// A forced CUDA provider-append failure must rebuild the real generator pipeline on CPU, emit one
-    /// fallback warning, and record CPU as the active backend (SPCH-007 AC 11-12).
-    /// </summary>
-    [Fact]
-    [Headless]
-    public async Task Generate_WithForcedCudaProviderAppendFailure_FallsBackToCpuWithSingleDiagnostics()
-    {
-        const string failureReason = "Deterministic CUDA provider append failure.";
-
-        SceneTree sceneTree = GetSceneTree();
-        using CapturingPipelineLogFixture pipelineLog = new();
-        using RecordingLoggerProvider loggerProvider = new();
-        using IDisposable cudaProviderOverride = SupertonicSessionFactory.OverrideCudaExecutionProviderForTesting(
-            static _ => throw new DllNotFoundException(failureReason));
-        pipelineLog.Install();
-
-        SupertonicSpeechGenerator generator = new()
-        {
-            Name = "SupertonicSpeechGenerator",
-            ExecutionBackend = SupertonicExecutionBackend.Cuda,
-        };
+                pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                return pipeline;
+            });
 
         sceneTree.Root.AddChild(generator);
         await WaitForFramesAsync(sceneTree, 2);
@@ -185,13 +149,73 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         {
             byte[] audio = await generator.Generate("Hello there, friend.");
 
-            AssertPcm16MonoWave(audio, NativeSampleRate);
+            AssertPcm16MonoWave(audio, FakeSampleRate);
+            AssertPipelineInitialised(pipeline, SupertonicExecutionBackend.Cuda);
+            CapturedLogEntry backendEntry = Assert.Single(
+                pipelineLog.Entries,
+                entry => entry.Message.Contains("supertonic-3 backend", StringComparison.Ordinal));
+            Assert.Equal(LogLevel.Trace, backendEntry.Level);
+            Assert.Equal("AlleyCat.Pipeline", backendEntry.CategoryName);
+            Assert.Contains("supertonic-3 backend cuda", backendEntry.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(loggerProvider.Entries, entry => entry.Level == LogLevel.Warning);
+        }
+        finally
+        {
+            generator.GetParent()?.RemoveChild(generator);
+            generator._ExitTree();
+            generator.Free();
+            await WaitForFramesAsync(sceneTree, 2);
+        }
+
+        Assert.True(pipeline.IsDisposed);
+    }
+
+    /// <summary>
+    /// A pipeline reporting CUDA fallback must produce the generator's fallback warning and CPU backend trace.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task Generate_WithCudaFallbackPipeline_EmitsSingleFallbackWarning_AndCpuTrace()
+    {
+        const string failureReason = "Deterministic pipeline fallback.";
+
+        SceneTree sceneTree = GetSceneTree();
+        using CapturingPipelineLogFixture pipelineLog = new();
+        using RecordingLoggerProvider loggerProvider = new();
+        pipelineLog.Install();
+
+        FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cpu, failureReason);
+        SupertonicSpeechGenerator generator = new()
+        {
+            Name = "SupertonicSpeechGenerator",
+            ExecutionBackend = SupertonicExecutionBackend.Cuda,
+            ModelDirectoryPath = FixtureModelDirectoryPath,
+            VoiceStylesDirectoryPath = FixtureVoiceStylesDirectoryPath,
+        };
+        using IDisposable pipelineOverride = generator.OverridePipelineFactoryForTesting(
+            (modelDirectory, requestedBackend) =>
+            {
+                pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                return pipeline;
+            });
+
+        sceneTree.Root.AddChild(generator);
+        await WaitForFramesAsync(sceneTree, 2);
+        using IDisposable loggerOverride = generator.OverrideLoggerForTesting(
+            loggerProvider.CreateLogger<SupertonicSpeechGenerator>());
+
+        try
+        {
+            byte[] audio = await generator.Generate("Hello there, friend.");
+
+            AssertPcm16MonoWave(audio, FakeSampleRate);
+            AssertPipelineInitialised(pipeline, SupertonicExecutionBackend.Cuda);
 
             CapturedLogEntry fallbackWarning = Assert.Single(loggerProvider.Entries);
             Assert.Equal(typeof(SupertonicSpeechGenerator).FullName, fallbackWarning.CategoryName);
             Assert.Equal(LogLevel.Warning, fallbackWarning.Level);
             Assert.Contains("Cuda", fallbackWarning.Message, StringComparison.Ordinal);
-            Assert.Contains($"DllNotFoundException: {failureReason}", fallbackWarning.Message, StringComparison.Ordinal);
+            Assert.Contains(failureReason, fallbackWarning.Message, StringComparison.Ordinal);
 
             CapturedLogEntry activeBackendEntry = Assert.Single(
                 pipelineLog.Entries,
@@ -202,9 +226,13 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         }
         finally
         {
-            generator.QueueFree();
+            generator.GetParent()?.RemoveChild(generator);
+            generator._ExitTree();
+            generator.Free();
             await WaitForFramesAsync(sceneTree, 2);
         }
+
+        Assert.True(pipeline.IsDisposed);
     }
 
     /// <summary>
@@ -219,22 +247,33 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         using CapturingPipelineLogFixture pipelineLog = new();
         using RecordingLoggerProvider loggerProvider = new();
         pipelineLog.Install();
-        Game.Instance.GetRequiredService<ILoggerFactory>().AddProvider(loggerProvider);
 
+        FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cpu);
         SupertonicSpeechGenerator generator = new()
         {
             Name = "SupertonicSpeechGenerator",
             ExecutionBackend = SupertonicExecutionBackend.Cpu,
+            ModelDirectoryPath = FixtureModelDirectoryPath,
+            VoiceStylesDirectoryPath = FixtureVoiceStylesDirectoryPath,
         };
+        using IDisposable pipelineOverride = generator.OverridePipelineFactoryForTesting(
+            (modelDirectory, requestedBackend) =>
+            {
+                pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                return pipeline;
+            });
 
         sceneTree.Root.AddChild(generator);
         await WaitForFramesAsync(sceneTree, 2);
+        using IDisposable loggerOverride = generator.OverrideLoggerForTesting(
+            loggerProvider.CreateLogger<SupertonicSpeechGenerator>());
 
         try
         {
             byte[] audio = await generator.Generate("Hello there, friend.");
 
-            AssertPcm16MonoWave(audio, NativeSampleRate);
+            AssertPcm16MonoWave(audio, FakeSampleRate);
+            AssertPipelineInitialised(pipeline, SupertonicExecutionBackend.Cpu);
             CapturedLogEntry backendEntry = Assert.Single(
                 pipelineLog.Entries,
                 entry => entry.Message.Contains("supertonic-3 backend", StringComparison.Ordinal));
@@ -248,9 +287,13 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         }
         finally
         {
-            generator.QueueFree();
+            generator.GetParent()?.RemoveChild(generator);
+            generator._ExitTree();
+            generator.Free();
             await WaitForFramesAsync(sceneTree, 2);
         }
+
+        Assert.True(pipeline.IsDisposed);
     }
 
     /// <summary>
@@ -261,14 +304,28 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
     public async Task GenerateSpeech_WithUnknownVoice_FallsBackToDefaultStyle_AndEmitsCompletion()
     {
         SceneTree sceneTree = GetSceneTree();
+        using CapturingPipelineLogFixture pipelineLog = new();
+        using RecordingLoggerProvider loggerProvider = new();
+        pipelineLog.Install();
+        FakeInferencePipeline pipeline = new(SupertonicExecutionBackend.Cuda);
         SupertonicSpeechGenerator generator = new()
         {
             Name = "SupertonicSpeechGenerator",
             Voice = "Z9",
+            ModelDirectoryPath = FixtureModelDirectoryPath,
+            VoiceStylesDirectoryPath = FixtureVoiceStylesDirectoryPath,
         };
+        using IDisposable pipelineOverride = generator.OverridePipelineFactoryForTesting(
+            (modelDirectory, requestedBackend) =>
+            {
+                pipeline.RecordInitialisation(modelDirectory, requestedBackend);
+                return pipeline;
+            });
 
         sceneTree.Root.AddChild(generator);
         await WaitForFramesAsync(sceneTree, 2);
+        using IDisposable loggerOverride = generator.OverrideLoggerForTesting(
+            loggerProvider.CreateLogger<SupertonicSpeechGenerator>());
 
         byte[]? generatedAudio = null;
         int completedCount = 0;
@@ -293,13 +350,30 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
             Assert.Equal(0, failedCount);
             Assert.False(generator.IsGenerating);
             byte[] audio = Assert.IsType<byte[]>(generatedAudio);
-            AssertPcm16MonoWave(audio, NativeSampleRate);
+            AssertPcm16MonoWave(audio, FakeSampleRate);
+            Assert.Equal(new short[] { -32767, -16383, 0, 8191, 32767 }, ReadPcm16Samples(audio));
+            AssertPipelineInitialised(pipeline, SupertonicExecutionBackend.Cuda);
+            SupertonicSynthesisRequest request = Assert.Single(pipeline.SynthesisRequests);
+            Assert.Equal("Hello there, friend.", request.Text);
+            AssertFixtureVoiceStyle(request.VoiceStyle);
+
+            CapturedLogEntry fallbackWarning = Assert.Single(
+                loggerProvider.Entries,
+                entry => entry.Level == LogLevel.Warning
+                    && entry.Message.Contains("voice style", StringComparison.Ordinal));
+            Assert.Equal(LogLevel.Warning, fallbackWarning.Level);
+            Assert.Contains("Z9", fallbackWarning.Message, StringComparison.Ordinal);
+            Assert.Contains("M1", fallbackWarning.Message, StringComparison.Ordinal);
         }
         finally
         {
-            generator.QueueFree();
+            generator.GetParent()?.RemoveChild(generator);
+            generator._ExitTree();
+            generator.Free();
             await WaitForFramesAsync(sceneTree, 2);
         }
+
+        Assert.True(pipeline.IsDisposed);
     }
 
     /// <summary>
@@ -427,8 +501,87 @@ public sealed partial class SupertonicSpeechGeneratorIntegrationTests
         Assert.Equal(audio.Length - 44, BitConverter.ToInt32(audio, 40));
     }
 
-    private static int ReadWaveDataLength(byte[] audio)
-        => BitConverter.ToInt32(audio, 40);
+    private static short[] ReadPcm16Samples(byte[] audio)
+    {
+        int sampleCount = BitConverter.ToInt32(audio, 40) / sizeof(short);
+        short[] samples = new short[sampleCount];
+        for (int index = 0; index < samples.Length; index++)
+        {
+            samples[index] = BitConverter.ToInt16(audio, 44 + (index * sizeof(short)));
+        }
+
+        return samples;
+    }
+
+    private static void AssertPipelineInitialised(
+        FakeInferencePipeline pipeline,
+        SupertonicExecutionBackend requestedBackend)
+    {
+        Assert.Equal(1, pipeline.InitialisationCount);
+        Assert.Equal(ProjectSettings.GlobalizePath(FixtureModelDirectoryPath), pipeline.ModelDirectory);
+        Assert.Equal(requestedBackend, pipeline.RequestedBackend);
+    }
+
+    private static void AssertFixtureVoiceStyle(SupertonicVoiceStyle voiceStyle)
+    {
+        Assert.Equal([0.125f], voiceStyle.TtlData);
+        Assert.Equal([1, 1, 1], voiceStyle.TtlShape);
+        Assert.Equal([0.75f], voiceStyle.DpData);
+        Assert.Equal([1, 1, 1], voiceStyle.DpShape);
+        Assert.Equal("M1", voiceStyle.Metadata["fixture"]);
+        Assert.Equal("integration-test", voiceStyle.Metadata["speaker"]);
+    }
+
+    private sealed class FakeInferencePipeline(
+        SupertonicExecutionBackend activeBackend,
+        string? backendFallbackReason = null) : ISupertonicInferencePipeline
+    {
+        private static readonly float[] _samples = [-1f, -0.5f, 0f, 0.25f, 1f];
+
+        public int SampleRate => FakeSampleRate;
+
+        public SupertonicExecutionBackend ActiveBackend => activeBackend;
+
+        public string? BackendFallbackReason => backendFallbackReason;
+
+        public string? ModelDirectory
+        {
+            get; private set;
+        }
+
+        public SupertonicExecutionBackend? RequestedBackend
+        {
+            get; private set;
+        }
+
+        public int InitialisationCount
+        {
+            get; private set;
+        }
+
+        public List<SupertonicSynthesisRequest> SynthesisRequests { get; } = [];
+
+        public bool IsDisposed
+        {
+            get; private set;
+        }
+
+        public void RecordInitialisation(string modelDirectory, SupertonicExecutionBackend requestedBackend)
+        {
+            ModelDirectory = modelDirectory;
+            RequestedBackend = requestedBackend;
+            InitialisationCount++;
+        }
+
+        public float[] Synthesise(SupertonicSynthesisRequest request)
+        {
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
+            SynthesisRequests.Add(request);
+            return [.. _samples];
+        }
+
+        public void Dispose() => IsDisposed = true;
+    }
 
     /// <summary>
     /// Installs a trace-enabled capturing logger for <see cref="PipelineDebugLog" /> while isolating the

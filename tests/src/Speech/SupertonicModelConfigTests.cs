@@ -9,20 +9,35 @@ namespace AlleyCat.Tests.Speech;
 public sealed class SupertonicModelConfigTests
 {
     /// <summary>
-    /// The shipped Supertonic model configuration must expose the pipeline constants downstream code relies on,
-    /// including the 44100 Hz vocoder rate assumed by the WAV output contract.
+    /// Loading from the filesystem must forward a valid configuration document to the parser without relying on
+    /// downloaded model assets.
     /// </summary>
     [Fact]
-    public void Load_ShippedModelConfig_ReadsPipelineConstants()
+    public void Load_ValidFile_MapsAllConfigurationValues()
     {
-        string configPath = RepositoryPath.Get("game", "models", "supertonic-3", "onnx", "tts.json");
+        const string json = /*lang=json,strict*/ """
+            {
+              "ae": { "sample_rate": 12345, "base_chunk_size": 37 },
+              "ttl": { "chunk_compress_factor": 5, "latent_dim": 13 }
+            }
+            """;
+        string configPath = Path.Combine(Path.GetTempPath(), $"supertonic-config-{Guid.NewGuid():N}.json");
 
-        var config = SupertonicModelConfig.Load(configPath);
+        try
+        {
+            File.WriteAllText(configPath, json);
 
-        Assert.Equal(44100, config.SampleRate);
-        Assert.Equal(512, config.BaseChunkSize);
-        Assert.Equal(6, config.ChunkCompressFactor);
-        Assert.Equal(24, config.LatentDim);
+            var config = SupertonicModelConfig.Load(configPath);
+
+            Assert.Equal(12345, config.SampleRate);
+            Assert.Equal(37, config.BaseChunkSize);
+            Assert.Equal(5, config.ChunkCompressFactor);
+            Assert.Equal(13, config.LatentDim);
+        }
+        finally
+        {
+            File.Delete(configPath);
+        }
     }
 
     /// <summary>

@@ -24,6 +24,29 @@ public sealed record SupertonicSynthesisRequest(
     float SpeedRatio);
 
 /// <summary>
+/// The narrow Supertonic pipeline boundary required by <see cref="SupertonicSpeechGenerator" />.
+/// </summary>
+internal interface ISupertonicInferencePipeline : IDisposable
+{
+    int SampleRate
+    {
+        get;
+    }
+
+    SupertonicExecutionBackend ActiveBackend
+    {
+        get;
+    }
+
+    string? BackendFallbackReason
+    {
+        get;
+    }
+
+    float[] Synthesise(SupertonicSynthesisRequest request);
+}
+
+/// <summary>
 /// Executes the five-stage Supertonic synthesis pipeline over local ONNX graphs:
 /// unicode tokenisation → duration prediction → text encoding → flow-matching sampling → vocoding.
 /// </summary>
@@ -45,7 +68,7 @@ public sealed class SupertonicInferencePipeline(
     InferenceSession vectorEstimator,
     InferenceSession vocoder,
     SupertonicModelConfig config,
-    SupertonicTextProcessor textProcessor) : IDisposable
+    SupertonicTextProcessor textProcessor) : ISupertonicInferencePipeline
 {
     private const string DurationPredictorModelFile = "duration_predictor.onnx";
     private const string TextEncoderModelFile = "text_encoder.onnx";

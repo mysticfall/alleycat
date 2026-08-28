@@ -17,7 +17,8 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
     private readonly Lock _pipelineLock = new();
 
     private ILogger<SupertonicSpeechGenerator>? _logger;
-    private SupertonicInferencePipeline? _pipeline;
+    private ISupertonicInferencePipeline? _pipeline;
+    private Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> _pipelineFactory = CreatePipeline;
     private string? _globalisedModelDirectory;
     private string? _globalisedVoiceStylesDirectory;
     private bool _disposed;
@@ -128,6 +129,33 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
         return new LoggerOverride(this, previousLogger);
     }
 
+    /// <summary>
+    /// Temporarily replaces the inference-pipeline factory for this generator instance.
+    /// </summary>
+    /// <remarks>
+    /// This hook must be installed before the first generation request, so cached production pipelines cannot be
+    /// replaced. It is internal to keep test doubles out of production scene configuration.
+    /// </remarks>
+    internal IDisposable OverridePipelineFactoryForTesting(
+        Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> pipelineFactory)
+    {
+        ArgumentNullException.ThrowIfNull(pipelineFactory);
+
+        lock (_pipelineLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (_pipeline is not null)
+            {
+                throw new InvalidOperationException("The Supertonic inference pipeline has already been created.");
+            }
+
+            Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> previousFactory = _pipelineFactory;
+            _pipelineFactory = pipelineFactory;
+            return new PipelineFactoryOverride(this, previousFactory, pipelineFactory);
+        }
+    }
+
     /// <inheritdoc />
     public override void _ExitTree()
     {
@@ -155,7 +183,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
 
         byte[] wavAudio = await Task.Run(() =>
         {
-            SupertonicInferencePipeline pipeline = GetOrCreatePipeline(modelDirectory);
+            ISupertonicInferencePipeline pipeline = GetOrCreatePipeline(modelDirectory);
             SupertonicVoiceStyle voiceStyle = LoadVoiceStyle(voiceStylesDirectory);
 
             float[] samples = pipeline.Synthesise(new SupertonicSynthesisRequest(
@@ -179,7 +207,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
         return wavAudio;
     }
 
-    private SupertonicInferencePipeline GetOrCreatePipeline(string modelDirectory)
+    private ISupertonicInferencePipeline GetOrCreatePipeline(string modelDirectory)
     {
         lock (_pipelineLock)
         {
@@ -187,7 +215,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
 
             if (_pipeline is null)
             {
-                _pipeline = SupertonicInferencePipeline.Create(modelDirectory, ExecutionBackend);
+                _pipeline = _pipelineFactory(modelDirectory, ExecutionBackend);
                 LogExecutionBackend(modelDirectory, _pipeline);
             }
 
@@ -197,7 +225,7 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
 
     private void LogExecutionBackend(
         string modelDirectory,
-        SupertonicInferencePipeline pipeline)
+        ISupertonicInferencePipeline pipeline)
     {
         if (ExecutionBackend != pipeline.ActiveBackend)
         {
@@ -248,6 +276,11 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
             : SupertonicVoiceStyle.Load(resolution.FilePath);
     }
 
+    private static ISupertonicInferencePipeline CreatePipeline(
+        string modelDirectory,
+        SupertonicExecutionBackend executionBackend)
+        => SupertonicInferencePipeline.Create(modelDirectory, executionBackend);
+
     private sealed class LoggerOverride(
         SupertonicSpeechGenerator generator,
         ILogger<SupertonicSpeechGenerator>? previousLogger) : IDisposable
@@ -262,6 +295,32 @@ public partial class SupertonicSpeechGenerator : SpeechGenerator
             }
 
             generator._logger = previousLogger;
+            _generator = null;
+        }
+    }
+
+    private sealed class PipelineFactoryOverride(
+        SupertonicSpeechGenerator generator,
+        Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> previousFactory,
+        Func<string, SupertonicExecutionBackend, ISupertonicInferencePipeline> installedFactory) : IDisposable
+    {
+        private SupertonicSpeechGenerator? _generator = generator;
+
+        public void Dispose()
+        {
+            if (_generator is not { } generator)
+            {
+                return;
+            }
+
+            lock (generator._pipelineLock)
+            {
+                if (ReferenceEquals(generator._pipelineFactory, installedFactory))
+                {
+                    generator._pipelineFactory = previousFactory;
+                }
+            }
+
             _generator = null;
         }
     }

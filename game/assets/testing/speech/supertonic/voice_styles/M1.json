@@ -1,0 +1,14 @@
+{
+  "style_ttl": {
+    "dims": [1, 1, 1],
+    "data": [[[0.125]]]
+  },
+  "style_dp": {
+    "dims": [1, 1, 1],
+    "data": [[[0.75]]]
+  },
+  "metadata": {
+    "fixture": "M1",
+    "speaker": "integration-test"
+  }
+}
