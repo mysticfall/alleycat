@@ -318,7 +318,7 @@ public sealed class EyesBlendTreeIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         var root = new Node3D();
         var eyeOrigin = new Node3D();
-        var target = new Node3D();
+        var target = new StaticVisualCue();
         var eyes = new TestEyesBehaviour
         {
             EyeOrigin = eyeOrigin,
@@ -366,7 +366,7 @@ public sealed class EyesBlendTreeIntegrationTests
         SceneTree sceneTree = GetSceneTree();
         var root = new Node3D();
         var eyeOrigin = new Node3D();
-        var target = new Node3D();
+        var target = new StaticVisualCue();
         var eyes = new TestEyesBehaviour
         {
             EyeOrigin = eyeOrigin,
@@ -429,7 +429,7 @@ public sealed class EyesBlendTreeIntegrationTests
                 Name = "RuntimeEyesOrigin",
                 TopLevel = true,
             };
-            Node3D lookTarget = new()
+            StaticVisualCue lookTarget = new()
             {
                 Name = "RuntimeEyesLookTarget",
                 TopLevel = true,
@@ -483,7 +483,7 @@ public sealed class EyesBlendTreeIntegrationTests
                 Name = "RuntimeEyesOrigin",
                 TopLevel = true,
             };
-            Node3D lookTarget = new()
+            StaticVisualCue lookTarget = new()
             {
                 Name = "RuntimeEyesLookTarget",
                 TopLevel = true,

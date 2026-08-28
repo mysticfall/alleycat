@@ -2,6 +2,16 @@ using AlleyCat.Character;
 
 namespace AlleyCat.Mind.Observation;
 
+/// <summary>Controls whether equivalent retained observations are accepted.</summary>
+public enum ObservationDuplicatePolicy
+{
+    /// <summary>Retains every observation.</summary>
+    Allow,
+
+    /// <summary>Suppresses an observation equivalent to the latest retained observation in its scope.</summary>
+    IgnoreEquivalent,
+}
+
 /// <summary>
 /// Context available when an observation calculates its scheduling importance.
 /// </summary>
@@ -13,6 +23,12 @@ public sealed record ObservationContext(ICharacter Character);
 /// </summary>
 public abstract record Observation
 {
+    /// <summary>Gets duplicate handling for this observation. Retention is the default.</summary>
+    public virtual ObservationDuplicatePolicy DuplicatePolicy => ObservationDuplicatePolicy.Allow;
+
+    /// <summary>Gets the stable ordinal scope used by opt-in duplicate handling.</summary>
+    public virtual string? DuplicateScope => null;
+
     /// <summary>
     /// Exact, case-sensitive semantic key used for authored prompt dispatch.
     /// </summary>
@@ -36,6 +52,13 @@ public abstract record Observation
     /// Calculates significance relative to the observing character at ingestion time.
     /// </summary>
     public abstract float CalculateImportance(ObservationContext context);
+
+    /// <summary>Determines semantic equivalence, excluding ingestion metadata such as <see cref="ObservedAt"/>.</summary>
+    public virtual bool IsSemanticallyEquivalentTo(Observation other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return false;
+    }
 }
 
 /// <summary>

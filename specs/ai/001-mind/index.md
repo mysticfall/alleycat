@@ -13,27 +13,30 @@ title: Mind Component
 ## Goal
 
  Give NPCs coherent node-lifetime experience without treating transient provider protocol as memory, while keeping
- observation ingestion synchronous, interruption-free, and safe across the node lifetime.
+ ordered perception, atomic observation ingestion, and node-lifetime shutdown safe.
 
 ## User Requirements
 
 1. An NPC must remember, for its node lifetime, the ordered observations it perceived or produced through successful
    actions.
-2. Every observation must be retained and scored; important observations must reach the NPC promptly through the
-   session, while observations below the importance threshold remain recorded and browsable rather than being pushed.
+2. Observations are retained by default. An observation type may suppress the latest equivalent retained observation
+   in its semantic scope; accepted important observations must reach the NPC promptly, while accepted observations
+   below the importance threshold remain recorded and browsable rather than being pushed.
 3. Speech history must attribute a speaker by matching the received voice ID to current-scene characters. It must
    distinguish the NPC, a recognised other character, and an unknown speaker without rendering the voice ID as
    identity wording. No match must remain unknown, while ambiguous matches must fail clearly.
 4. Spoken responses must use the NPC's character-owned in-world voice rather than normal chat text.
 5. Missing configuration and backend failures must be contained and logged without crashing the scene.
 6. Removing an NPC's Mind from the scene must prevent delayed actions and other post-destruction effects from that Mind.
-7. An NPC's Mind must synchronously interpret sense-owned percepts into attention and zero or more ordered durable
-   observations without delaying normal gameplay.
+7. An NPC's Mind must accept sense-owned percepts immediately, interpret them asynchronously in publication order, and
+   commit each percept's combined attention and durable observations atomically without blocking the publisher.
 8. Character context assembled for the NPC's session prompt must contain self and every currently resolvable
    attention-eligible character, rather than every scene character unconditionally.
 9. Speech from speakers the NPC does not currently attend to, and speech that cannot be attributed to a character,
    must neither wake the NPC's waits nor interrupt the NPC's session.
 10. Every remembered event must carry the game time at which it was observed, in seconds elapsed since the game began.
+11. Looking at a valid visual subject may add its focused description to memory, without retaining repeated equivalent
+    descriptions of that same subject.
 
 ## Technical Requirements
 
@@ -122,34 +125,38 @@ title: Mind Component
 26. AgenticMind must publish a general typed C# event after each committed observation; the base Mind exposes only the
     protected `OnObservationIngested` hook, which AgenticMind overrides to publish. Relevant consumers subscribe and
     unsubscribe directly. Contained failures and cancellations must not publish events for uncommitted work.
-27. Mind must subscribe to configured `ISense`
-    components and own authorable Resource faculties, exact percept-type registration, synchronous interpretation,
-    attention, result validation, and observation ingestion. AI-006 is the normative percept, sense, faculty,
-    attention, and result contract.
-28. Before activation, Mind must require exactly one exact faculty mapping for every exact percept type declared by
-    its configured senses. Missing, duplicate, incompatible, or undeclared mappings must fail clearly.
-29. Mind must validate a complete `PerceptionResult`, including every calculated observation importance, before any
-    mutation. It then applies ordered attention effects sequentially and atomically ingests ordered observations
-    through the existing timeline and notable-observation accumulation path. This sensing and perception path must not
-    select or assign an IVision look target.
-30. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation
-    remains synchronous through Mind's `IPerception`
-    faculties. Outbound production-tool invocation must start once through `AgentTool`
+27. Mind must subscribe to configured `ISense` components and discover authorable `IPerception` Node faculties among
+    its direct children in scene order. It owns percept registration, asynchronous interpretation, attention, result
+    validation, and observation ingestion. AI-006 is the normative percept, sense, faculty, attention, and result
+    contract.
+28. Before activation, Mind must require at least one assignability-compatible faculty for every exact concrete percept
+    type declared by its configured senses. Multiple matching faculties are intentional and execute in direct-child
+    order. Missing, incompatible, duplicate declared, or undeclared publisher types must fail clearly.
+29. On publication, Mind must synchronously validate that the publisher declared the percept's exact concrete type,
+    snapshot the current ordered matching-faculty binding, and enqueue interpretation without blocking the sense. Mind
+    must process percepts serially in publication order and await each matching faculty sequentially.
+30. Mind must aggregate all faculty results in deterministic order and validate the complete aggregate, including every
+    accepted observation importance, before any mutation. It then applies ordered attention effects sequentially and
+    atomically ingests the ordered accepted observations. Faults are contained and logged; cancellation and a final
+    lifetime guard prevent post-exit commits. This path must not select or assign an `IVision` look target.
+31. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation
+    remains asynchronous through Mind's `IPerception` faculties. Outbound production-tool invocation must start once
+    through `AgentTool`
     and the shared `IMainThreadDispatcher`; cancellation remains linked to session and Mind lifetime. The Game-scoped
     dispatcher owns accepted-work queueing and settlement, and AgenticMind must not retain local deferred voice or
     Godot-action machinery. The actor-stamped self-action speech observation commits exactly once at playback hand-off
     (SPCH-005 TR-26), not at admission, through ordinary Mind ingestion.
-31. Mind must not own or export an output-voice reference. Character-owned capabilities required by tools must enter
+32. Mind must not own or export an output-voice reference. Character-owned capabilities required by tools must enter
     through AI-002's typed `ScenarioContext`; Character remains the sole authored voice source under CHAR-002.
-32. AI-007 separately defines the direct Mind-child post-attention consumer that may assign a look target. It consumes
+33. AI-007 separately defines the direct Mind-child post-attention consumer that may assign a look target. It consumes
     Mind's published attention snapshot after perception has completed; Mind's sensing and attention-mutation
     contracts remain gaze-neutral.
-33. Mind must stamp each committed observation exactly once with an `ObservedAt`
+34. Mind must stamp each committed observation exactly once with an `ObservedAt`
     timestamp in game-time seconds from the game-scoped game-time source (AI-002), stamped at ingestion before the
     record enters the timeline or accumulation. Stamps must be monotonically non-decreasing. The identical stamped
     record must be used for the timeline, the notable accumulation, and ingestion notification. Observations are
     otherwise unchanged and remain immutable after publication.
-34. Attended-speaker-finished cue: Mind must monitor the speaking windows of attended speakers — voices whose owning
+35. Attended-speaker-finished cue: Mind must monitor the speaking windows of attended speakers — voices whose owning
     character's canonical `FullId`
     is present in Mind's current attention snapshot at or above the retention threshold (AI-006), regardless of weight
     or score — and signal the session runtime when such a speaker's window closes (`SpeechEnded`, SPCH-005 TR-2),
@@ -157,8 +164,18 @@ title: Mind Component
     and unblocking a blocked `speak`
     under AI-002. Voices whose speaker cannot be attributed to a current-scene character must not signal; this is an
     accepted limitation of the attribution model.
-35. Notable-observation signalling must never interrupt observation ingestion itself: ingestion is synchronous and
+36. Notable-observation signalling must never interrupt observation ingestion itself: ingestion is synchronous and
     atomic, and wake or interruption signalling happens only after the batch has committed.
+37. `ObservationDuplicatePolicy` must default to `Allow`, retaining every submitted observation. An observation that
+    selects `IgnoreEquivalent` must expose a stable duplicate scope and semantic equality that both exclude
+    `ObservedAt`.
+38. Mind must apply duplicate filtering to the complete staged batch before importance calculation, timestamping,
+    timeline or notable-accumulation mutation, and ingestion notification. Earlier accepted entries in the same staged
+    batch participate in filtering. A suppressed entry causes none of those effects.
+39. Duplicate comparison must scan backwards to the latest retained observation of the same concrete type and ordinal
+    scope. Removed or summarised observations no longer participate. Timeline summarisation remains out of scope.
+40. `ObservedVisualDescription` must use exact key `vision.description`, scope duplicates by ordinal subject `FullId`,
+    and compare ordinal subject identity plus description against the latest retained entry in that scope.
 
 ## In Scope
 
@@ -167,7 +184,9 @@ title: Mind Component
 - Unified external and tool-result observation ingestion.
 - Threshold and maximum-wait behaviour driving `wait` early completion and notable-observation delivery.
 - Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
-- Synchronous percept interpretation, exact faculty dispatch, and Mind-owned attention under AI-006.
+- Immediate percept intake, ordered asynchronous faculty interpretation, deterministic fan-out, and Mind-owned
+  attention under AI-006.
+- Default-allow observation ingestion and opt-in latest-equivalent suppression before all ingestion effects.
 - Published attention snapshots for the separately composed, post-attention AI-007 gaze selector; direct gaze
   assignment remains outside Mind sensing and perception processing.
 - Attention-filtered session character selection.
@@ -209,6 +228,8 @@ title: Mind Component
 5. Acceptance verifies speech from unattended or unattributable speakers neither wakes the NPC's waits nor interrupts
    the NPC's session.
 6. Acceptance verifies every remembered event carries a game-time stamp in seconds elapsed since the game began.
+7. Acceptance verifies a focused visual subject can enter memory with its description and that the latest equivalent
+   description in the same subject scope is suppressed.
 
 ### Technical Requirements
 
@@ -245,19 +266,17 @@ title: Mind Component
     with the exact dictionary returned.
 15. Tests verify the general typed C# event is published only after observation commitment, never for contained
     failures or cancellations, with consumers subscribing and unsubscribing directly.
-16. Tests verify Mind subscribes to configured senses, requires one exact faculty per declared exact percept type
-    before activation, and synchronously dispatches immutable percepts without inheritance fallback, queues, or
-    background processing.
-17. Tests verify complete `PerceptionResult`
-    and calculated-importance validation occurs before mutation, duplicate attention effects apply sequentially in
-    order, and ordered observations use the existing atomic ingestion path, without selecting or assigning an IVision
-    look target.
+16. Tests verify Mind subscribes to configured senses, synchronously validates each publisher's exact concrete type,
+    snapshots all assignability-matched faculty bindings, and accepts immutable percepts without blocking the publisher.
+17. Tests verify Mind serialises asynchronous interpretation in publication order, invokes matching faculties
+    sequentially in direct-child order, aggregates results in faculty and result order, and validates the complete
+    aggregate before one atomic commit without selecting or assigning an `IVision` look target.
 18. Tests verify session context contains self plus all currently resolvable attention-eligible characters resolved as
     `ICharacter` subjects, with no unconditional all-scene-character inclusion, second visual scan, hidden subject
     cache, or Mind or attention state passed into render-context assembly. The owner appears in both `character` and
     `characters[owner.FullId]` as the exact same view instance, and invalid included identity, duplicate exact included
     `FullId`, or owner absence fails assembly clearly.
-19. Tests verify Mind, not AgenticMind, owns synchronous incoming `IPerception`
+19. Tests verify Mind, not AgenticMind, owns asynchronous incoming `IPerception`
     interpretation; every outbound production tool starts once through `AgentTool`
     and `IMainThreadDispatcher`; AgenticMind has no local deferred action machinery; and the actor-stamped self-action
     speech observation commits exactly once at playback hand-off (SPCH-005 TR-26), not at admission.
@@ -279,6 +298,14 @@ title: Mind Component
      and never attention-gated, even when the attention-gated `characters`
      dictionaries omit the player — and the session's `scenario` value under [AI-008](../008-scenario/index.md), with
      no `observations` key in the dictionary.
+26. Tests verify observation duplicate handling defaults to allow and that ignore-equivalent scope and semantic equality
+    exclude `ObservedAt`.
+27. Tests verify duplicate filtering precedes importance, timestamp, ingestion, and notification; includes earlier
+    accepted staged entries; and ignores removed or summarised entries.
+28. Tests verify `ObservedVisualDescription` uses ordinal subject `FullId` scope and ordinal subject-plus-description
+    equality against the latest retained observation of the same concrete type and scope.
+29. Async tests verify publication-order serialisation, sequential deterministic faculty fan-out, aggregate rollback,
+    binding snapshots across component refresh, cancellation, contained and logged faults, and no post-lifetime commit.
 
 ## References
 

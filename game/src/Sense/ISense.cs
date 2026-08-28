@@ -14,3 +14,10 @@ public interface ISense : IComponent
         get;
     }
 }
+
+/// <summary>Sense marker exposing the family of percepts published through the non-generic event bridge.</summary>
+/// <typeparam name="TPercept">Covariant percept family published by the sense.</typeparam>
+public interface ISense<out TPercept> : ISense
+    where TPercept : IPercept
+{
+}

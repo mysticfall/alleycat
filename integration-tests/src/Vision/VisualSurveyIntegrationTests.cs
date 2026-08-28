@@ -35,7 +35,7 @@ public sealed class VisualSurveyIntegrationTests
             observer.AddToGroup("VisualSubjects");
             visible.AddToGroup("VisualSubjects");
             occluded.AddToGroup("VisualSubjects");
-            Node3D? lookTargetBefore = eyes.LookTarget;
+            VisualCue? lookTargetBefore = eyes.LookTarget;
             float horizontalBefore = eyes.GetHorizontalLookSeekTime();
             float verticalBefore = eyes.GetVerticalLookSeekTime();
             List<VisualSurveyPercept> surveys = [];

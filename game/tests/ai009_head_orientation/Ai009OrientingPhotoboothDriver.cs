@@ -75,7 +75,7 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
     }
 
     /// <summary>Assigns the gaze anchor for the named character, simulating the AI-007 selector role.</summary>
-    public void AssignLookTarget(string characterId, Node3D anchor)
+    public void AssignLookTarget(string characterId, VisualCue anchor)
         => Eyes(characterId).SetLookTarget(anchor);
 
     /// <summary>Clears the gaze anchor for the named character, simulating the AI-007 selector role.</summary>
@@ -93,7 +93,7 @@ public sealed partial class Ai009OrientingPhotoboothDriver : Node
     public float GetHeadToAnchorAngleDegrees(string characterId)
     {
         CharacterRig rig = Rig(characterId);
-        Node3D? anchor = rig.Eyes?.LookTarget;
+        VisualCue? anchor = rig.Eyes?.LookTarget;
         if (anchor is null || !IsInstanceValid(anchor))
         {
             return -1f;

@@ -40,6 +40,7 @@ internal static class TemplatingBaselineScenarios
     public static readonly DateTimeOffset AgoNow = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private const string NpcEventHistoryFragmentTypeKey = "speech.observed";
+    private const string NpcVisualDescriptionTypeKey = "vision.description";
 
     // Captured verbatim from the shared NPC event-history asset's speech fragment before the Liquid migration
     // (Handlebars syntax at capture time).
@@ -53,6 +54,10 @@ internal static class TemplatingBaselineScenarios
     private const string NpcEventHistoryFallbackSource =
         "((Received {{TypeKey}} event.)){{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n";
 
+    private const string NpcVisualDescriptionSource =
+        "Observed {{SubjectId}}: {{Description}}{{#if ObservedAt}}"
+        + " (at {{nf ObservedAt 1}}s game time){{/if}}\n";
+
     /// <summary>
     /// Liquid equivalent of the composed event-history dispatch source used to prove that the migrated engine
     /// reproduces the Handlebars-era output once authored fragments move to Liquid syntax.
@@ -63,6 +68,8 @@ internal static class TemplatingBaselineScenarios
         + "{% if o.ActorId != blank %}{% if o.ActorId == character.FullId %}I said: {{ o.Content }}"
         + "{% else %}Heard {{ o.ActorId }} say: {{ o.Content }}{% endif %}"
         + "{% else %}Heard an unknown speaker say: {{ o.Content }}{% endif %}"
+        + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
+        + "{% elsif o.TypeKey == 'vision.description' %}Observed {{ o.SubjectId }}: {{ o.Description }}"
         + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
         + "{% else %}((Received {{ o.TypeKey }} event.))"
         + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
@@ -413,7 +420,11 @@ internal static class TemplatingBaselineScenarios
             + "{{#if (eqOrdinal TypeKey \"" + NpcEventHistoryFragmentTypeKey + "\")}}"
             + NpcEventHistoryFragmentSource
             + "{{else}}"
+            + "{{#if (eqOrdinal TypeKey \"" + NpcVisualDescriptionTypeKey + "\")}}"
+            + NpcVisualDescriptionSource
+            + "{{else}}"
             + NpcEventHistoryFallbackSource
+            + "{{/if}}"
             + "{{/if}}{{/each}}";
     }
 
@@ -451,6 +462,13 @@ internal static class TemplatingBaselineScenarios
                     ["Content"] = "Case-distinct line.",
                     ["ObservedAt"] = 864000d,
                     ["TypeKey"] = "speech.observed",
+                },
+                new Dictionary<string, object?>
+                {
+                    ["SubjectId"] = "char:coat",
+                    ["Description"] = "A weathered red coat.",
+                    ["ObservedAt"] = 900000d,
+                    ["TypeKey"] = "vision.description",
                 },
                 new Dictionary<string, object?>
                 {

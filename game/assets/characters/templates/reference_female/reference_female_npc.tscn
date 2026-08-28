@@ -14,12 +14,7 @@
 [ext_resource type="Script" uid="uid://dudl5uhyyp755" path="res://src/Mind/Attention/AttentionGazeTargetSelector.cs" id="attention_gaze_selector_1"]
 [ext_resource type="Script" uid="uid://r0roprsf0efd" path="res://src/Mind/Attention/OrientingController.cs" id="orienting_controller_1"]
 [ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
-
-[sub_resource type="Resource" id="Resource_speech_perception"]
-script = ExtResource("14_speech_perception")
-
-[sub_resource type="Resource" id="Resource_visual_perception"]
-script = ExtResource("15_visual_perception")
+[ext_resource type="Script" uid="uid://bja302idxebx6" path="res://src/Mind/Perception/VisualDescriptionPerception.cs" id="16_visual_description_perception"]
 
 [node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Voice", "Navigation", "Hearing") instance=ExtResource("1_vf6rf")]
 Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
@@ -87,8 +82,19 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 script = ExtResource("7_xyj0a")
 SystemInstruction = ExtResource("9_beijb")
 EventHistoryPath = "res://prompts/event_history.md"
-Perceptions = Array[Resource]([SubResource("Resource_speech_perception"), SubResource("Resource_visual_perception")])
 metadata/_custom_type_script = "uid://hadsjgek6b2p"
+
+[node name="SpeechPerception" type="Node" parent="Mind"]
+script = ExtResource("14_speech_perception")
+metadata/_custom_type_script = "uid://nb7frvgohlfq"
+
+[node name="VisualSurveyPerception" type="Node" parent="Mind"]
+script = ExtResource("15_visual_perception")
+metadata/_custom_type_script = "uid://bxv46b4g0jcnq"
+
+[node name="VisualDescriptionPerception" type="Node" parent="Mind"]
+script = ExtResource("16_visual_description_perception")
+metadata/_custom_type_script = "uid://bja302idxebx6"
 
 [node name="AttentionGazeTargetSelector" type="Node" parent="Mind"]
 script = ExtResource("attention_gaze_selector_1")

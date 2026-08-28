@@ -36,6 +36,8 @@ control over how concrete observation types appear in chronological event histor
    and reacting — are carried by the respective tool descriptions.
 7. The session prompt includes the NPC and all currently resolvable characters meeting its attention threshold,
    without unconditionally including every scene character.
+8. Focused visual descriptions in event history identify the observed subject and expose the authored description to
+   the NPC's agent.
 
 ## Technical Requirements
 
@@ -140,8 +142,11 @@ control over how concrete observation types appear in chronological event histor
 30. Character values reach authored templates as raw `ICharacter` values whose template surface is curated by the
     member-access policy owned by [TMPL-001](../../templating/001-templating-system/index.md) (character contract in
     [CHAR-002](../../character/002-character-root/index.md)): templates can read exactly the canonical `FullId`, and
-    live component state, such as voice configuration, is unreachable from templates by construction, preserving
-    prompt determinism and hygiene.
+     live component state, such as voice configuration, is unreachable from templates by construction, preserving
+     prompt determinism and hygiene.
+31. The shared event-history file must define an authored fragment for the exact `vision.description` key. It must
+    expose the `ObservedVisualDescription` subject `FullId` and description to the agent rather than relying on the
+    generic fallback.
 
 ## In Scope
 
@@ -149,6 +154,7 @@ control over how concrete observation types appear in chronological event histor
 - Separate prompt compilation and ordinary-context rendering phases.
 - Exact keyed event-history fragments, direct record rendering, and mandatory fallback rendering.
 - One actor-relative `speech.observed` fragment for every observed-speech perspective.
+- One authored `vision.description` fragment exposing visual subject identity and description.
 - Session-start `CreateRenderContext` assembly and exact-context rendering for the session system instruction.
 - Shared generic NPC prompt-stack authoring: `mind.md` file section, lore, and scenario, with no event-history
   section in the stack.
@@ -217,6 +223,8 @@ control over how concrete observation types appear in chronological event histor
     ordering, privacy, or the exact render-context dictionary contract (no new top-level key).
 17. Tests verify the prompt API adds no top-level `now` key to the render context; absolute labels derive from the
      game-scoped game-time source.
+18. Event-history tests verify the exact `vision.description` fragment renders the subject `FullId` and description in
+    chronological `wait`, `history`, and interruption output without falling back to generic wording.
 
 ## References
 

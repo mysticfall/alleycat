@@ -103,7 +103,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
     /// </summary>
     [Headless]
     [Fact]
-    public void Install_DistinctFinalCharacterIDs_AssignsDistinctVoicesAndRecognisesCrossNpcSpeech()
+    public async Task Install_DistinctFinalCharacterIDs_AssignsDistinctVoicesAndRecognisesCrossNpcSpeech()
     {
         using var firstFixture = RuntimeInstallFixture.CreateWithActualRootHub();
         using var secondFixture = RuntimeInstallFixture.CreateWithActualRootHub();
@@ -123,9 +123,10 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.Equal("voice:second_npc", secondFixture.TargetVoice.FullId);
         Assert.NotEqual(firstFixture.TargetVoice.Id, secondFixture.TargetVoice.Id);
 
-        PerceptionResult result = new SpeechPerception().Perceive(
+        PerceptionResult result = await new SpeechPerception().PerceiveAsync(
             new SpeechPercept("hello", firstFixture.TargetVoice.Id),
-            new PerceptionContext(second, new TestSceneContext([first, second]), null!));
+            new PerceptionContext(second, new TestSceneContext([first, second]), null!),
+            CancellationToken.None);
 
         ObservedSpeech speech = Assert.IsType<ObservedSpeech>(Assert.Single(result.Observations));
         Assert.Equal(((IIdentifiable)first).FullId, speech.ActorId);

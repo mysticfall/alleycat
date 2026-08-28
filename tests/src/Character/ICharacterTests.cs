@@ -98,7 +98,7 @@ public sealed class ICharacterTests
 
     private sealed class FakeEyes : IVision
     {
-        public Node3D? LookTarget
+        public VisualCue? LookTarget
         {
             get; set;
         }
@@ -115,7 +115,7 @@ public sealed class ICharacterTests
             }
         }
 
-        public void SetLookTarget(Node3D? target) => LookTarget = target;
+        public void SetLookTarget(VisualCue? target) => LookTarget = target;
 
         public void ClearLookTarget() => LookTarget = null;
 

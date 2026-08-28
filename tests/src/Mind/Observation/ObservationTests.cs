@@ -94,6 +94,44 @@ public sealed class ObservationTests
         Assert.Equal(stamp, clone.ObservedAt);
     }
 
+    /// <summary>Existing observations retain duplicates unless they explicitly opt into suppression.</summary>
+    [Fact]
+    public void DuplicateContract_DefaultsToAllowWithoutScopeOrSemanticEquivalence()
+    {
+        var first = new ObservedSpeech("char:character", "raw-voice", "Hello") { ObservedAt = 1d };
+        ObservedSpeech second = first with
+        {
+            ObservedAt = 2d
+        };
+
+        Assert.Equal(ObservationDuplicatePolicy.Allow, first.DuplicatePolicy);
+        Assert.Null(first.DuplicateScope);
+        Assert.False(first.IsSemanticallyEquivalentTo(second));
+    }
+
+    /// <summary>Visual descriptions use canonical identity, stable importance, and timestamp-free semantics.</summary>
+    [Fact]
+    public void ObservedVisualDescription_UsesSpecifiedImportanceScopeAndOrdinalSemanticEquality()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        var first = new ObservedVisualDescription("char:subject", "A red coat.") { ObservedAt = 1d };
+        var same = new ObservedVisualDescription("char:subject", "A red coat.") { ObservedAt = 2d };
+        var changed = new ObservedVisualDescription("char:subject", "A blue coat.");
+        var otherSubject = new ObservedVisualDescription("char:other", "A red coat.");
+
+        Assert.Equal("vision.description", first.TypeKey);
+        Assert.Equal(1f, first.CalculateImportance(new ObservationContext(owner)));
+        Assert.Equal(ObservationDuplicatePolicy.IgnoreEquivalent, first.DuplicatePolicy);
+        Assert.Equal("char:subject", first.DuplicateScope);
+        Assert.True(first.IsSemanticallyEquivalentTo(same));
+        Assert.False(first.IsSemanticallyEquivalentTo(changed));
+        Assert.False(first.IsSemanticallyEquivalentTo(otherSubject));
+        _ = Assert.Throws<ArgumentException>(() => new ObservedVisualDescription("subject", "Invalid identity"));
+    }
+
     private sealed class FakeCharacter : ICharacter
     {
         public string Id { get; set; } = string.Empty;

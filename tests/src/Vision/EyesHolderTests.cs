@@ -1,7 +1,6 @@
 using AlleyCat.Core;
 using AlleyCat.Sense;
 using AlleyCat.Vision;
-using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.Vision;
@@ -32,7 +31,7 @@ public sealed class EyesHolderTests
 
     private sealed class FakeEyes : IVision
     {
-        public Node3D? LookTarget
+        public VisualCue? LookTarget
         {
             get; set;
         }
@@ -49,7 +48,7 @@ public sealed class EyesHolderTests
             }
         }
 
-        public void SetLookTarget(Node3D? target) => LookTarget = target;
+        public void SetLookTarget(VisualCue? target) => LookTarget = target;
 
         public void ClearLookTarget() => LookTarget = null;
 

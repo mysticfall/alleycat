@@ -11,6 +11,8 @@ public sealed class EventHistoryDocumentTests
 {
     private const string FragmentDelimiter = "<!-- event-history: speech.observed -->";
 
+    private const string VisualFragmentDelimiter = "<!-- event-history: vision.description -->";
+
     private const string FallbackDelimiter = "<!-- event-history: fallback -->";
 
     // Authored sources migrated byte-for-byte from the retired npc_event_history.tres resource.
@@ -24,16 +26,42 @@ public sealed class EventHistoryDocumentTests
         "((Received {{ TypeKey }} event.)){% if ObservedAt != blank %}"
         + " (at {{ nf(ObservedAt, 1) }}s game time){% endif %}\n";
 
+    private const string VisualFragmentSource =
+        "Observed {{ SubjectId }}: {{ Description }}{% if ObservedAt != blank %}"
+        + " (at {{ nf(ObservedAt, 1) }}s game time){% endif %}\n";
+
     /// <summary>The committed standalone file parses into the exact pre-migration template sources.</summary>
     [Fact]
     public void Parse_CommittedAuthoredFile_ProducesVerbatimMigratedSources()
     {
         var document = EventHistoryDocument.Parse(ReadCommittedEventHistoryFile());
 
-        EventHistoryFragment fragment = Assert.Single(document.Fragments);
-        Assert.Equal("speech.observed", fragment.TypeKey);
-        Assert.Equal(MigratedFragmentSource, fragment.Source);
+        Assert.Collection(
+            document.Fragments,
+            fragment =>
+            {
+                Assert.Equal("speech.observed", fragment.TypeKey);
+                Assert.Equal(MigratedFragmentSource, fragment.Source);
+            },
+            fragment =>
+            {
+                Assert.Equal("vision.description", fragment.TypeKey);
+                Assert.Equal(VisualFragmentSource, fragment.Source);
+                Assert.Contains("SubjectId", fragment.Source, StringComparison.Ordinal);
+                Assert.Contains("Description", fragment.Source, StringComparison.Ordinal);
+            });
         Assert.Equal(MigratedFallbackSource, document.FallbackSource);
+    }
+
+    /// <summary>The exact visual-description key is accepted as an authored dispatch section.</summary>
+    [Fact]
+    public void Parse_VisualDescriptionFragment_IsKnownExactKey()
+    {
+        var document = EventHistoryDocument.Parse(
+            VisualFragmentDelimiter + "\nvisual\n" + FallbackDelimiter + "\nfallback\n");
+
+        EventHistoryFragment fragment = Assert.Single(document.Fragments);
+        Assert.Equal("vision.description", fragment.TypeKey);
     }
 
     /// <summary>Section content excludes the delimiter lines and keeps one trailing newline per section.</summary>

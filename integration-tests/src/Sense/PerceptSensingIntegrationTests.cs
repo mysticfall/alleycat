@@ -5,6 +5,7 @@ using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;
+using AlleyCat.Sense;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
@@ -80,7 +81,7 @@ public sealed class PerceptSensingIntegrationTests
             List<VisualSurveyPercept> received = [];
             eyes.Perceived += percept => received.Add(Assert.IsType<VisualSurveyPercept>(percept));
 
-            Assert.Equal([typeof(VisualSurveyPercept)], eyes.PerceptTypes);
+            Assert.Equal([typeof(VisualSurveyPercept), typeof(LookTargetChangedPercept)], eyes.PerceptTypes);
             // Stop the live physics loop so only the manual _PhysicsProcess(1d) drives the survey; without this a
             // second live survey can fire during the measurement window and cause a 2-percept flake under windowed runs.
             eyes.SetPhysicsProcess(false);
@@ -98,18 +99,90 @@ public sealed class PerceptSensingIntegrationTests
         }
     }
 
+    /// <summary>Eyes publishes only effective cue-identity transitions through its single synchronous bridge.</summary>
+    [Fact]
+    public void Eyes_LookTargetTransitions_PublishExactlyOnceAndSuppressEquivalentAssignmentsAndNullClears()
+    {
+        var eyes = new EyesBehaviour();
+        var first = new StaticVisualCue();
+        var second = new StaticVisualCue();
+        List<IPercept> received = [];
+        eyes.Perceived += received.Add;
+
+        eyes.SetLookTarget(first);
+        eyes.SetLookTarget(first);
+        eyes.SetLookTarget(second);
+        eyes.ClearLookTarget();
+        eyes.ClearLookTarget();
+
+        Assert.Collection(
+            received.Cast<LookTargetChangedPercept>(),
+            transition =>
+            {
+                Assert.Null(transition.Previous);
+                Assert.Same(first, transition.Current);
+            },
+            transition =>
+            {
+                Assert.Same(first, transition.Previous);
+                Assert.Same(second, transition.Current);
+            },
+            transition =>
+            {
+                Assert.Same(second, transition.Previous);
+                Assert.Null(transition.Current);
+            });
+    }
+
+    /// <summary>Convention fallback accepts only authored visual cues and ignores arbitrary named anchors.</summary>
+    [Fact]
+    public async Task Eyes_ConventionLookTarget_AcceptsOnlyVisualCue()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var invalidRoot = new Node3D();
+        invalidRoot.AddChild(new Node3D { Name = "LookTarget" });
+        var invalidEyes = new EyesBehaviour();
+        invalidRoot.AddChild(invalidEyes);
+        var validRoot = new Node3D();
+        var cue = new StaticVisualCue { Name = "LookTarget" };
+        validRoot.AddChild(cue);
+        var validEyes = new EyesBehaviour();
+        List<LookTargetChangedPercept> received = [];
+        validEyes.Perceived += percept => received.Add(Assert.IsType<LookTargetChangedPercept>(percept));
+        validRoot.AddChild(validEyes);
+        AddToTree(tree, invalidRoot);
+        AddToTree(tree, validRoot);
+
+        try
+        {
+            await TestUtils.WaitForFramesAsync(tree, 2);
+
+            Assert.Null(invalidEyes.LookTarget);
+            Assert.Same(cue, validEyes.LookTarget);
+            LookTargetChangedPercept transition = Assert.Single(received);
+            Assert.Null(transition.Previous);
+            Assert.Same(cue, transition.Current);
+        }
+        finally
+        {
+            invalidRoot.QueueFree();
+            validRoot.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
     /// <summary>Speech attribution uses ordinal voice IDs, preserves unknown speech, and rejects ambiguity atomically.</summary>
     [Fact]
-    public void SpeechPerception_UsesVoiceIDsForSelfUnknownRecognisedAndAmbiguousSources()
+    public async Task SpeechPerception_UsesVoiceIDsForSelfUnknownRecognisedAndAmbiguousSources()
     {
         var observerVoice = new TestVoice("observer");
         var observer = new TestCharacter("observer", observerVoice);
         var recognised = new TestCharacter("recognised", new TestVoice("speaker"));
         var perception = new SpeechPerception();
 
-        PerceptionResult self = perception.Perceive(new SpeechPercept("self", "observer"), CreateContext(observer, [recognised]));
-        PerceptionResult unknown = perception.Perceive(new SpeechPercept("unknown", "missing"), CreateContext(observer, [recognised]));
-        PerceptionResult recognisedResult = perception.Perceive(new SpeechPercept("recognised", "speaker"), CreateContext(observer, [recognised]));
+        PerceptionResult self = await perception.PerceiveAsync(new SpeechPercept("self", "observer"), CreateContext(observer, [recognised]), CancellationToken.None);
+        PerceptionResult unknown = await perception.PerceiveAsync(new SpeechPercept("unknown", "missing"), CreateContext(observer, [recognised]), CancellationToken.None);
+        PerceptionResult recognisedResult = await perception.PerceiveAsync(new SpeechPercept("recognised", "speaker"), CreateContext(observer, [recognised]), CancellationToken.None);
 
         Assert.Empty(self.AttentionEffects);
         Assert.Empty(self.Observations);
@@ -121,18 +194,21 @@ public sealed class PerceptSensingIntegrationTests
         Assert.Equal("char:recognised", recognisedSpeech.ActorId);
 
         var duplicate = new TestCharacter("duplicate", new TestVoice("speaker"));
-        _ = Assert.Throws<InvalidOperationException>(() =>
-            perception.Perceive(new SpeechPercept("ambiguous", "speaker"), CreateContext(observer, [recognised, duplicate])));
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await perception.PerceiveAsync(new SpeechPercept("ambiguous", "speaker"), CreateContext(observer, [recognised, duplicate]), CancellationToken.None));
     }
 
     /// <summary>Visual faculties preserve each canonical ID and duplicate in percept order without observations.</summary>
     [Fact]
-    public void VisualSurveyPerception_ReturnsOrderedDuplicateReinforcementsWithoutObservations()
+    public async Task VisualSurveyPerception_ReturnsOrderedDuplicateReinforcementsWithoutObservations()
     {
         var perception = new VisualSurveyPerception();
         var percept = new VisualSurveyPercept(["char:second", "char:first", "char:second"]);
 
-        PerceptionResult result = perception.Perceive(percept, CreateContext(new TestCharacter("observer", new TestVoice("observer")), []));
+        PerceptionResult result = await perception.PerceiveAsync(
+            percept,
+            CreateContext(new TestCharacter("observer", new TestVoice("observer")), []),
+            CancellationToken.None);
 
         Assert.Equal(["char:second", "char:first", "char:second"], result.AttentionEffects.Select(effect => effect.SubjectFullId));
         Assert.Empty(result.Observations);

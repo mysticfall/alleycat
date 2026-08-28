@@ -16,16 +16,17 @@ reference character uses eye blend shapes instead of independent eye transform b
 
 Provide a reusable eye component system that:
 
-- Exposes an optional target node representing where the eyes are currently looking.
+- Exposes an optional `VisualCue` representing where the eyes are currently looking.
 - Drives horizontal and vertical eye rotation through blend shape animation parameters.
 - Adds subtle saccade motion around the current gaze anchor without owning semantic visual interpretation.
 - Supports randomised blinking with configurable cadence.
 - Integrates with AnimationTree partial blending analogous to hand pose setup.
 - Periodically publishes a synchronous immutable survey of authored visual subjects visible to the character.
+- Publishes immutable visual-family percepts when the assigned cue changes so Mind may inspect focused subjects.
 
 ## User Requirements
 
-1. Eye look direction must be controllable via a target node reference.
+1. Eye look direction must be controllable via an authored visual-cue reference.
 2. Eye movement must use AnimationTree TimeSeek parameters, not direct transform rotation.
 3. Blinking must occur at random intervals with configurable timing parameters.
 4. Eye animations must blend with existing facial animations without overriding them.
@@ -41,20 +42,23 @@ Provide a reusable eye component system that:
 12. Invalid authored cue ownership fails clearly when its provider is published or explicitly refreshed.
 13. NPC perception can inspect visible subjects periodically without creating routine visual memories or changing gaze
     and eye presentation.
+14. Effective focus changes can trigger a durable description of the newly focused visual subject; clearing focus or
+    repeating the same cue creates no description by itself.
 
 ## Technical Requirements
 
-1. Define `IVision`, `IHasVision`, `VisualSurveyPercept`, and all visual-cue contracts directly in
-   `AlleyCat.Vision`; it is the only vision contract namespace. `IVision : ISense` exposes:
-   - `LookTarget: Node3D?` — optional target node the eyes are looking at.
-   - `SetLookTarget(Node3D? target)` — sets the look target.
+1. Define `IVision`, `IHasVision`, `IVisualPercept`, `VisualSurveyPercept`, `LookTargetChangedPercept`, and all
+   visual-cue contracts directly in `AlleyCat.Vision`; it is the only vision contract namespace.
+   `IVision : ISense<IVisualPercept>` preserves the non-generic `ISense` event bridge and exposes:
+   - `LookTarget: VisualCue?` — optional authored cue the eyes are looking at.
+   - `SetLookTarget(VisualCue? target)` — sets or clears the look target.
    - `ClearLookTarget()` — clears the look target.
 2. Define `IHasVision : IComponentHolder` holder trait:
     - `TryGetVision(out IVision? vision)` — resolves the vision component.
     - `RequireVision()` — returns the vision component or throws if not found.
 3. Implement `EyesBehaviour : Node, IVision` directly in `AlleyCat.Vision`:
    - Accepts an `AnimationTree` reference or inherits from parent.
-   - Exposes `LookTarget` as the assigned gaze anchor node.
+    - Exposes `LookTarget` as the assigned visual-cue gaze anchor.
    - Provides a protected target-resolution method for the world-space look point.
     - Resolves to the assigned `LookTarget` position when present.
     - Falls back to a point 1 metre directly in front of the eyes when no target is assigned.
@@ -117,8 +121,8 @@ Provide a reusable eye component system that:
     - A finite, non-negative relative `Prominence`, defaulting to `1`; `0` disables the cue and there is no fixed upper
       bound.
     - Cue-local `VisualBounds` used exclusively to determine representative visual-scan geometry.
-20. `VisualCue` defines `Vector3 SampleGlobalPosition()` and
-     `string Describe(ISceneContext scene, IHasVision observer)`.
+20. `VisualCue` defines `Vector3 SampleGlobalPosition()` and the asynchronous description
+    operation `ValueTask<string> Describe(ISceneContext scene, IHasVision observer)`.
 21. `Describe` requires a non-null eyes holder. It must not compose character render context or accept render-context
     inputs; eyes and visual inspection never feed AI-003 render-context composition.
 22. `Describe` builds its own local template root from the supplied scene and eyes holder. When present, it adds the
@@ -138,8 +142,9 @@ Provide a reusable eye component system that:
     description content.
 27. Ally NPC, Ally player, and Vadim character assets override the `body` cue template with character-specific
     appearance descriptions.
-28. `IVision` must not expose a public `Scan()` operation. As an `ISense`, it declares exactly
-    `VisualSurveyPercept` and publishes percepts synchronously through `Perceived`.
+28. `IVision` must not expose a public `Scan()` operation. Its exact concrete `PerceptTypes` are
+    `VisualSurveyPercept` and `LookTargetChangedPercept`; both implement `IVisualPercept`, and publication uses the
+    synchronous non-generic `ISense.Perceived` bridge.
 29. `EyesBehaviour` owns its polling lifecycle. Its exported survey interval must be finite and positive; invalid
     authored or runtime values fail before activation. The final minimum and default remain tunable.
 30. `EyesBehaviour` performs at most one survey per frame. A delayed frame performs one survey without catch-up and
@@ -174,10 +179,16 @@ Provide a reusable eye component system that:
     canonical visible-subject `FullId` values. It contains no cues, descriptions, observations, or live subjects.
 41. Routine surveys must not call `VisualCue.Describe`, produce visual observations, select gaze, change `LookTarget`,
     or otherwise alter saccade, blink, or eye-presentation state.
+42. An effective cue-identity change publishes exactly one immutable
+    `LookTargetChangedPercept(previous, current)`. Assigning the current cue again publishes none. Clearing an active
+    cue publishes `current -> null`, while clearing an already null target publishes none.
+43. EyesBehaviour owns applied target state and transition sensing but no target-selection policy. Focused inspection
+    is owned by AI-006 perception and must validate cue lifetime and subject association before awaiting `Describe`.
 
 ## In Scope
 
 - `IVision` component capability interface.
+- Visual-family typing, exact concrete percept metadata, and look-target transition publication.
 - `IHasVision` holder trait.
 - `EyesBehaviour` Godot node facade.
 - TimeSeek-driven eye movement (horizontal and vertical).
@@ -197,12 +208,14 @@ Provide a reusable eye component system that:
 - `EyesBehaviour`-owned strict `VisualSubjects` querying, member validation, authoring failure, scan filtering,
   `EyeOrigin` cone evaluation, and `VisionOccluder` ray tests.
 - Cue-local `VisualBounds`, per-cue distance limits, and representative visibility sampling.
+- Awaitable cue description for transition-driven focused inspection under AI-006.
 
 ## Out Of Scope
 
 - Attention, Mind interpretation, or gaze-selection policy. AI-007 alone is the separately composed post-attention
   consumer that may assign look targets; Vision remains policy-neutral and has no attention-gaze hook.
 - Automatic visual-cue selection or gaze movement towards cues.
+- Pose-change detection or continuous reinspection while the same cue remains assigned.
 - Emotional-state policy that modifies saccade tuning.
 - Eyebrow movement or expression changes.
 - Lip-sync or mouth animation.
@@ -214,15 +227,16 @@ Provide a reusable eye component system that:
 
 | ID | Requirement Layer | Criterion |
 |----|-------------------|----------|
-| 1  | Technical         | `IVision`, `IHasVision`, `VisualSurveyPercept`, and visual-cue contracts live |
-|    |                   | directly in `AlleyCat.Vision`; `IVision : ISense` defines `LookTarget`, |
-|    |                   | `SetLookTarget`, and `ClearLookTarget`. |
+| 1  | Technical         | `IVision`, `IHasVision`, `IVisualPercept`, both concrete visual percepts, and |
+|    |                   | visual-cue contracts live directly in `AlleyCat.Vision`; |
+|    |                   | `IVision : ISense<IVisualPercept>` preserves the non-generic bridge and defines |
+|    |                   | `VisualCue?` `LookTarget`, `SetLookTarget`, and `ClearLookTarget`. |
 | 2  | Technical         | `IHasVision` defines `TryGetVision` and `RequireVision` methods. |
 | 3  | Technical         | `EyesBehaviour` implements `IVision` and delegates supplied look points to the |
 |    |                   | controller without directly rotating eye transforms. |
 | 4  | Technical         | `EyesBehaviour` exposes a protected look-point resolver that returns the |
 |    |                   | assigned `LookTarget`, or a point 1 metre in front of the eyes as fallback. |
-| 5  | User              | Setting a `LookTarget` causes the eyes to orient toward that target using |
+| 5  | User              | Setting a visual-cue `LookTarget` causes the eyes to orient toward that cue using |
 |    |                   | TimeSeek-driven animation. |
 | 6  | User              | Clearing the look target makes the eyes fall back to looking 1 metre forward. |
 | 7  | User              | Bounded saccades move around the active gaze anchor without changing focus. |
@@ -274,7 +288,8 @@ Provide a reusable eye component system that:
 |    |                   | Requirement 18; `IVisualObserver` does not exist. |
 | 32 | Technical         | `VisualCue` and `StaticVisualCue` expose the authoring, sampling, prominence, |
 |    |                   | and required-observer description contracts specified in Technical |
-|    |                   | Requirements 19–24, including `Describe(ISceneContext scene, IHasVision observer)`, |
+|    |                   | Requirements 19–24, including asynchronous |
+|    |                   | `Describe(ISceneContext scene, IHasVision observer)`, |
 |    |                   | the exported `StaticVisualCue.Description` property, and origin sampling independent of |
 |    |                   | bounds. |
 | 33 | Technical         | Description rendering builds a local root without composed render context, uses the |
@@ -294,8 +309,9 @@ Provide a reusable eye component system that:
 |    |                   | look target, blink cadence, or saccade anchor. |
 | 38 | User              | Cues outside the field of view or positive distance limit, behind an occluder, |
 |    |                   | on the observing subject, or disabled by zero prominence are not reported. |
-| 39 | Technical         | `IVision : ISense` declares only `VisualSurveyPercept`, publishes synchronously, |
-|    |                   | and exposes no public `Scan()` operation. |
+| 39 | Technical         | `IVision : ISense<IVisualPercept>` declares exact concrete metadata for only |
+|    |                   | `VisualSurveyPercept` and `LookTargetChangedPercept`, publishes through the |
+|    |                   | synchronous non-generic bridge, and exposes no public `Scan()` operation. |
 | 40 | Technical         | `EyesBehaviour` owns a finite positive interval, performs |
 |    |                   | at most one survey per frame, performs no delayed-frame catch-up, and rejects |
 |    |                   | invalid authored or runtime cadence before activation. |
@@ -322,6 +338,14 @@ Provide a reusable eye component system that:
 |    |                   | `LookTarget`, or alter saccades, blink cadence, or other eye presentation. |
 | 51 | Technical         | Tests verify EyesBehaviour remains policy-neutral and has no attention-gaze |
 |    |                   | hook; AI-007 is the separately composed post-attention look-target consumer. |
+| 52 | User              | An effective NPC focus change can lead to a durable description of the newly |
+|    |                   | focused subject, while same-cue assignment and clearing create none by themselves. |
+| 53 | Technical         | Transition tests verify one immutable previous/current percept per effective |
+|    |                   | cue-identity change, no percept for same-cue assignment, `current -> null` on |
+|    |                   | active clear, and no percept for an already clear target. |
+| 54 | Technical         | Tests verify transition publication reports applied state without selecting gaze, |
+|    |                   | and focused inspection validates cue lifetime and subject association before |
+|    |                   | awaiting `Describe`. |
 
 ## References
 

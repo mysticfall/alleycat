@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using ObservedSpeechRecord = AlleyCat.Mind.Observation.ObservedSpeech;
+using ObservedVisualDescriptionRecord = AlleyCat.Mind.Observation.ObservedVisualDescription;
 
 namespace AlleyCat.Mind.AI.Prompting;
 
@@ -32,7 +33,7 @@ internal sealed record EventHistoryDocument(IReadOnlyList<EventHistoryFragment> 
     // Exact keys an authored fragment may target: one entry per concrete observation type (AI-003 TR-13). Extend
     // when a new concrete observation type is introduced.
     private static readonly HashSet<string> _knownFragmentKeys =
-        [ObservedSpeechRecord.TypeKeyValue];
+        [ObservedSpeechRecord.TypeKeyValue, ObservedVisualDescriptionRecord.TypeKeyValue];
 
     /// <summary>
     /// Parses the authored file content into individually compiled-at-session-start template sources.

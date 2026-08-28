@@ -5,11 +5,13 @@ using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
 using AlleyCat.IntegrationTests.Support;
 using AlleyCat.Mind.AI;
+using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Speech.Voice;
+using AlleyCat.Templating;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
 using Godot;
@@ -28,6 +30,8 @@ namespace AlleyCat.IntegrationTests.Mind.AI;
 [Headless]
 public sealed partial class SessionToolsIntegrationTests
 {
+    private const string NpcEventHistoryPath = "res://prompts/event_history.md";
+
     private const string CutShortBeforeSpoken =
         "Your speech was cut short by another event before it could be spoken.";
 
@@ -206,6 +210,27 @@ public sealed partial class SessionToolsIntegrationTests
     }
 
     /// <summary>
+    /// The wait route renders focused visual descriptions through the production-authored NPC event-history
+    /// fragment, in observation order, instead of exposing the generic event fallback (AI-003 AC-18).
+    /// </summary>
+    [Fact]
+    public async Task Wait_WithAuthoredNpcHistory_RendersVisualDescriptionChronologically()
+    {
+        await using ToolFixture fixture = new(useAuthoredHistory: true);
+        await fixture.ReadyAsync();
+        fixture.Mind.ObserveForTest(new TypedObservation("test.before", 0.5f));
+        fixture.Mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
+        fixture.Mind.ObserveForTest(new TypedObservation("test.after", 0.5f));
+
+        string message = Assert.IsType<string>(
+            await fixture.InvokeWaitAsync(null, CancellationToken.None)
+                .AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(2)));
+
+        AssertAuthoredVisualDescriptionIsChronological(message);
+    }
+
+    /// <summary>
     /// A quiet wait reports its elapsed game-time duration and the game timestamp, and the omitted duration
     /// falls back to the configured maximum.
     /// </summary>
@@ -279,6 +304,37 @@ public sealed partial class SessionToolsIntegrationTests
         Assert.Equal(3, fixture.Mind.GetTimelineForTest().Count);
     }
 
+    /// <summary>
+    /// The history route renders focused visual descriptions through the production-authored NPC event-history
+    /// fragment, in timeline order, instead of exposing the generic event fallback (AI-003 AC-18).
+    /// </summary>
+    [Fact]
+    public async Task History_WithAuthoredNpcHistory_RendersVisualDescriptionChronologically()
+    {
+        await using ToolFixture fixture = new(useAuthoredHistory: true);
+        await fixture.ReadyAsync();
+        fixture.Mind.ObserveForTest(new TypedObservation("test.before", 0.5f));
+        fixture.Mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
+        fixture.Mind.ObserveForTest(new TypedObservation("test.after", 0.5f));
+
+        string message = Assert.IsType<string>(await fixture.InvokeHistoryAsync(null, CancellationToken.None));
+
+        AssertAuthoredVisualDescriptionIsChronological(message);
+        Assert.Equal(3, fixture.Mind.GetTimelineForTest().Count);
+    }
+
+    private static void AssertAuthoredVisualDescriptionIsChronological(string output)
+    {
+        int before = output.IndexOf("((Received test.before event.))", StringComparison.Ordinal);
+        int visual = output.IndexOf("Observed char:coat: A weathered red coat.", StringComparison.Ordinal);
+        int after = output.IndexOf("((Received test.after event.))", StringComparison.Ordinal);
+
+        Assert.True(
+            before >= 0 && visual > before && after > visual,
+            "The authored visual description must retain its chronological position between surrounding events.");
+        Assert.DoesNotContain("((Received vision.description event.))", output, StringComparison.Ordinal);
+    }
+
     private sealed record TypedObservation(string Key, float Importance) : AgentObservation
     {
         public override string TypeKey => Key;
@@ -298,9 +354,11 @@ public sealed partial class SessionToolsIntegrationTests
         private AIFunction? _speakFunction;
         private AIFunction? _waitFunction;
         private AIFunction? _historyFunction;
+        private readonly bool _useAuthoredHistory;
 
-        public ToolFixture(bool addAiVoice = false, FakeGameClock? clock = null)
+        public ToolFixture(bool addAiVoice = false, FakeGameClock? clock = null, bool useAuthoredHistory = false)
         {
+            _useAuthoredHistory = useAuthoredHistory;
             Clock = clock ?? new FakeGameClock { NowSeconds = 100d };
             OwnerVoice = new ControllableVoice("owner-voice");
             SpeakerVoice = new WindowedVoice("speaker-voice");
@@ -383,7 +441,10 @@ public sealed partial class SessionToolsIntegrationTests
 
             ScenarioContext context = new(Owner, new TestSceneContext(Membership));
             IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
-            AgentToolSession sessionServices = new(context, Mind, HistoryRenderer: null, Clock);
+            ObservationHistoryRenderer? historyRenderer = _useAuthoredHistory
+                ? CreateAuthoredHistoryRenderer(Owner)
+                : null;
+            AgentToolSession sessionServices = new(context, Mind, historyRenderer, Clock);
             _speakFunction = _speechTool.CreateFunction(context, Mind, dispatcher, sessionServices);
             _waitFunction = _waitTool.CreateFunction(context, Mind, dispatcher, sessionServices);
             _historyFunction = _historyTool.CreateFunction(context, Mind, dispatcher, sessionServices);
@@ -446,6 +507,15 @@ public sealed partial class SessionToolsIntegrationTests
             IDictionary<string, object?> arguments,
             CancellationToken cancellationToken)
             => function.InvokeAsync(new AIFunctionArguments(arguments), cancellationToken);
+
+        private static ObservationHistoryRenderer CreateAuthoredHistoryRenderer(ICharacter owner)
+        {
+            using var file = Godot.FileAccess.Open(NpcEventHistoryPath, Godot.FileAccess.ModeFlags.Read);
+            Assert.True(file is not null, $"Expected the authored event-history file '{NpcEventHistoryPath}' to open.");
+            var eventHistory = EventHistoryDocument.Parse(file!.GetAsText());
+            ITemplateCompiler compiler = Game.Instance.GetRequiredService<ITemplateCompiler>();
+            return ObservationHistoryRenderer.Create(eventHistory, compiler, owner);
+        }
     }
 
     private sealed partial class TestMind(VoiceCharacter owner) : MindBase

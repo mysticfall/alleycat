@@ -14,14 +14,17 @@ public sealed partial class SpeechPerception : Perception<SpeechPercept>
     private const float Contribution = 0.5f;
 
     /// <inheritdoc/>
-    public override PerceptionResult Perceive(SpeechPercept percept, PerceptionContext context)
+    public override ValueTask<PerceptionResult> PerceiveAsync(
+        SpeechPercept percept,
+        PerceptionContext context,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(percept);
         ArgumentNullException.ThrowIfNull(context);
         IVoice observerVoice = context.Character.RequireVoice();
         if (string.Equals(percept.SourceVoiceID, observerVoice.Id, StringComparison.Ordinal))
         {
-            return new PerceptionResult([], []);
+            return ValueTask.FromResult(new PerceptionResult([], []));
         }
 
         ICharacter? recognised = null;
@@ -46,10 +49,11 @@ public sealed partial class SpeechPerception : Perception<SpeechPercept>
             }
         }
 
-        return recognised is null
+        PerceptionResult result = recognised is null
             ? new PerceptionResult([], [new ObservedSpeech(null, percept.SourceVoiceID, percept.Content)])
             : new PerceptionResult(
                 [new AttentionEffect(recognised.FullId, Contribution)],
                 [new ObservedSpeech(recognised.FullId, percept.SourceVoiceID, percept.Content)]);
+        return ValueTask.FromResult(result);
     }
 }

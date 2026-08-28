@@ -144,6 +144,69 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
+    /// The interruption route uses the production-authored NPC event-history document to render a focused visual
+    /// description in accumulation order, without falling back to generic event wording (AI-003 AC-18).
+    /// </summary>
+    [Fact]
+    public async Task NotableVisualDescription_DuringGeneration_UsesAuthoredFragmentChronologically()
+    {
+        SceneTree sceneTree = TestUtils.GetSceneTree();
+        TestCharacter owner = new();
+        FixturePlayerCharacter player = new();
+        TaskCompletionSource firstRequestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedSessionClientProvider clientProvider = new();
+        clientProvider.EnqueueHold(firstRequestStarted);
+        clientProvider.EnqueueHoldForever();
+        TestAgenticMind mind = new(owner)
+        {
+            SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
+            EventHistoryPath = "res://prompts/event_history.md",
+            ClientProvider = clientProvider,
+            ObservationImportanceThreshold = 1f,
+        };
+        mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
+
+        try
+        {
+            await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            mind.ObserveForTest(new RouteObservation("world.changed"));
+            mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
+
+            await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
+            ChatMessage injected = clientProvider.Requests[1][1];
+            int preceding = injected.Text.IndexOf("((Received world.changed event.))", StringComparison.Ordinal);
+            int visual = injected.Text.IndexOf(
+                "Observed char:coat: A weathered red coat.",
+                StringComparison.Ordinal);
+
+            Assert.Equal(ChatRole.User, injected.Role);
+            Assert.True(
+                preceding >= 0 && visual > preceding,
+                "The authored visual description must follow the earlier accumulated event.");
+            Assert.DoesNotContain(
+                "((Received vision.description event.))",
+                injected.Text,
+                StringComparison.Ordinal);
+
+            (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
+            await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
+
+            IReadOnlyList<AgentObservation> timeline = mind.GetTimelineForTest();
+            Assert.Collection(
+                timeline,
+                observation => Assert.IsType<RouteObservation>(observation),
+                observation => Assert.IsType<ObservedVisualDescription>(observation));
+        }
+        finally
+        {
+            mind.Free();
+            clientProvider.Free();
+            player.Free();
+        }
+    }
+
+    /// <summary>
     /// A failed notable-summary render is a hard failure: the fault surfaces exactly once through the
     /// OnlyOnFaulted Error logging with the full exception, and no interruption reaches the backend while the
     /// held generation continues without an injected summary.
@@ -454,6 +517,13 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         public override string TypeKey => ObservedSpeech.TypeKeyValue;
 
         public override float CalculateImportance(ObservationContext context) => Importance;
+    }
+
+    private sealed record RouteObservation(string Key) : AgentObservation
+    {
+        public override string TypeKey => Key;
+
+        public override float CalculateImportance(ObservationContext context) => 0f;
     }
 
     private sealed partial class TestAgenticMind(ICharacter owner) : AgenticMind

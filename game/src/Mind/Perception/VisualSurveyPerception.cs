@@ -11,7 +11,10 @@ public sealed partial class VisualSurveyPerception : Perception<VisualSurveyPerc
     private const float Contribution = 0.25f;
 
     /// <inheritdoc/>
-    public override PerceptionResult Perceive(VisualSurveyPercept percept, PerceptionContext context)
+    public override ValueTask<PerceptionResult> PerceiveAsync(
+        VisualSurveyPercept percept,
+        PerceptionContext context,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(percept);
         ArgumentNullException.ThrowIfNull(context);
@@ -21,6 +24,6 @@ public sealed partial class VisualSurveyPerception : Perception<VisualSurveyPerc
             effects[index] = new AttentionEffect(percept.SubjectFullIDs[index], Contribution);
         }
 
-        return new PerceptionResult(effects, []);
+        return ValueTask.FromResult(new PerceptionResult(effects, []));
     }
 }

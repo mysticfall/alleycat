@@ -26,6 +26,8 @@ existing EyeBehaviour presentation, and a clear boundary for future trigger stra
 4. Visual surveys, blinking, and saccades remain presentation-neutral: surveys do not choose gaze, while assigned
    targets continue to anchor saccades and blinking continues normally.
 5. Player characters remain unaffected; only NPC role templates that compose the selector gain attention-driven gaze.
+6. A genuine focus transition may be perceived and described by the NPC without making the selector responsible for
+   visual interpretation.
 
 ## Technical Requirements
 
@@ -39,7 +41,8 @@ existing EyeBehaviour presentation, and a clear boundary for future trigger stra
    `AlleyCat.Mind.Attention`. `Mind.GetAttentionSnapshot()` remains the public read API for an immutable attention
    snapshot.
 4. The selector consumes only its owner Mind's attention snapshot and invokes the owner character's
-   `IVision.SetLookTarget` or `IVision.ClearLookTarget`. It must not add a Mind dependency to Vision or EyesBehaviour.
+    `IVision.SetLookTarget(VisualCue?)` or `IVision.ClearLookTarget`. It must not add a Mind dependency to Vision or
+    EyesBehaviour.
 
 ### Candidate Resolution And Ranking
 
@@ -47,7 +50,8 @@ existing EyeBehaviour presentation, and a clear boundary for future trigger stra
    distance, angle, occlusion, visibility, or a new visual scan to choose a target.
 6. At an evaluation boundary, the selector resolves every snapshot identity with `ISceneContext.Find(FullId)`. It skips
    an unresolved subject and every cue that is disabled or has non-finite or non-positive prominence.
-7. Current resolution supports characters only, using their published visual cues as candidate target nodes, because
+7. Current resolution supports characters only, using their published `VisualCue` instances as candidate targets,
+   because
    SCN-001 initially maps only `char` identities. This is a resolution boundary, not target-selection type logic.
    Generic non-character subject resolution is deferred.
 8. Each valid cue score is its subject attention multiplied by its prominence. The primary candidate is the highest
@@ -73,7 +77,8 @@ existing EyeBehaviour presentation, and a clear boundary for future trigger stra
     initial, replaceable trigger strategy: a future perception or attention subscription may request evaluation without
     changing the ranking policy, dwell semantics, or permitting mid-dwell interruption.
 15. Target application is delta-driven and deterministic: unchanged assignments do not produce redundant Vision calls,
-    and a change or clear is applied exactly when the state transition requires it.
+    and a change or clear is applied exactly when the state transition requires it. Vision owns publication of the
+    resulting previous/current `LookTargetChangedPercept`; the selector does not publish or interpret that percept.
 16. Exported cadence and dwell settings must be finite and positive; secondary dwell must be shorter than primary dwell.
     Secondary probability must be finite and within `0..1`. All settings validate before activation. Probability,
     weighted selection, and any other randomness must use an injectable deterministic test seam.
@@ -93,11 +98,15 @@ existing EyeBehaviour presentation, and a clear boundary for future trigger stra
   randomness for tests.
 - NPC-only role-template composition, Mind/component-projection lifecycle integration, and no-clear teardown behaviour.
 - Preservation of Vision's assigned-target, saccade, blink, and survey responsibilities.
+- Compatibility with AI-006 transition-driven visual-description perception, without moving interpretation into the
+  selector.
 
 ## Out Of Scope
 
 - Speech, conversation, pointing, relationship, type-based, distance, angle, occlusion, or visibility-based gaze policy.
 - Changes to `EyesBehaviour`, visual-survey acquisition, saccade behaviour, blinking, or Vision target fallback.
+- Visual-description interpretation, duplicate filtering, or event-history rendering, which are owned by AI-006,
+  AI-001, and AI-003 respectively.
 - Generic non-character scene-subject resolution beyond SCN-001's current character mapping.
 - Urgent target priority, mid-dwell interruption, or a final tuning value for cadence, dwell, probability, or weighting.
 - Replacing periodic evaluation now; future perception or attention subscriptions are an allowed trigger extension only.
@@ -112,25 +121,29 @@ existing EyeBehaviour presentation, and a clear boundary for future trigger stra
 2. Coverage shows that no valid candidate clears the assigned target and restores ordinary IVision fallback behaviour.
 3. Coverage confirms that surveys do not select gaze, assigned targets still anchor saccades, blinking continues, and
    the player template remains free of the selector.
+4. Coverage confirms that effective NPC focus transitions may produce focused descriptions through AI-006 while gaze
+   ranking and visual interpretation remain separate.
 
 ### Technical Requirements
 
-4. Contract and composition tests verify a direct Mind child under `AlleyCat.Mind.Attention`, no `IComponent` or
+5. Contract and composition tests verify a direct Mind child under `AlleyCat.Mind.Attention`, no `IComponent` or
    `Character.Components` membership, NPC-only template composition, and no Vision or EyesBehaviour ownership of policy.
-5. Migration tests verify attention contracts, settings, snapshots, policies, and effects live in
+6. Migration tests verify attention contracts, settings, snapshots, policies, and effects live in
    `AlleyCat.Mind.Attention`, while `Mind.GetAttentionSnapshot()` remains the public immutable read API.
-6. Candidate tests verify `ISceneContext.Find(FullId)` resolution, unresolved-subject skipping, character-only support,
+7. Candidate tests verify `ISceneContext.Find(FullId)` resolution, unresolved-subject skipping, character-only support,
    published-cue order, disabled/non-finite/non-positive prominence rejection, and no semantic or visibility filtering.
-7. Ranking tests verify attention-times-prominence scoring, ordinal `FullId` primary tie resolution, and provider
+8. Ranking tests verify attention-times-prominence scoring, ordinal `FullId` primary tie resolution, and provider
    cue-order tie resolution.
-8. State tests verify configurable primary and shorter secondary dwell, probability-controlled score-weighted
+9. State tests verify configurable primary and shorter secondary dwell, probability-controlled score-weighted
    secondary selection excluding the primary, return/reselection, no-candidate clearing, dwell stability, and
    boundary-only invalid abandonment with no urgent or mid-dwell interruption.
-9. Trigger tests verify configurable periodic evaluation without catch-up and establish that a future evaluation request
-   uses the same policy and dwell semantics rather than a special interruption path.
-10. Lifecycle and output tests verify component-projection-before-Vision resolution, projection-safe rebinding,
-    delta-driven `SetLookTarget` and `ClearLookTarget` calls, deterministic injected randomness, finite positive cadence
-    and dwell validation, shorter secondary dwell, valid probability, and no teardown clear.
+10. Trigger tests verify configurable periodic evaluation without catch-up and establish that a future evaluation
+    request uses the same policy and dwell semantics rather than a special interruption path.
+11. Lifecycle and output tests verify component-projection-before-Vision resolution, projection-safe rebinding,
+    delta-driven `VisualCue?` target and clear calls, deterministic injected randomness, finite positive cadence and
+    dwell validation, shorter secondary dwell, valid probability, and no teardown clear.
+12. Boundary tests verify the selector neither publishes nor interprets look-target transition percepts and that
+    sensing and visual-description faculties do not select gaze.
 
 ## References
 

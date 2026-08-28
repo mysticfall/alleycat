@@ -49,6 +49,24 @@ public sealed class PerceptContractTests
         Assert.DoesNotContain(typeof(IVision).GetMethods(), method => method.Name == "Scan");
         Assert.True(typeof(ISense).IsAssignableFrom(typeof(EyesBehaviour)));
         Assert.True(typeof(ISense).IsAssignableFrom(typeof(Hearing)));
+        Assert.True(typeof(ISense<IVisualPercept>).IsAssignableFrom(typeof(IVision)));
+        Assert.True(typeof(ISense).IsAssignableFrom(typeof(ISense<IVisualPercept>)));
+        Assert.True(typeof(ISense<IPercept>).IsAssignableFrom(typeof(ISense<IVisualPercept>)));
+        _ = Assert.Single(typeof(ISense).GetEvents());
+    }
+
+    /// <summary>Visual percepts expose one family while target transitions retain exact cue identity.</summary>
+    [Fact]
+    public void VisualPerceptFamily_IncludesSurveyAndImmutableLookTargetTransition()
+    {
+        var percept = new LookTargetChangedPercept(null, null);
+
+        _ = Assert.IsAssignableFrom<IVisualPercept>(new VisualSurveyPercept([]));
+        _ = Assert.IsAssignableFrom<IVisualPercept>(percept);
+        Assert.Equal(
+            [typeof(VisualCue), typeof(VisualCue)],
+            typeof(LookTargetChangedPercept).GetConstructors().Single().GetParameters().Select(parameter => parameter.ParameterType));
+        Assert.All(typeof(LookTargetChangedPercept).GetProperties(), property => Assert.False(property.CanWrite));
     }
 
     /// <summary>Speech ownership remains top-level while voice implementations remain isolated below Voice.</summary>

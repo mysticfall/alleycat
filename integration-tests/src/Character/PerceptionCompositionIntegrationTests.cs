@@ -9,6 +9,7 @@ using AlleyCat.Rigging.Installation;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
+using AlleyCat.Vision;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -56,7 +57,7 @@ public sealed class PerceptionCompositionIntegrationTests
 
     /// <inheritdoc/>
     [Fact]
-    public void NpcTemplates_RebaseHearingAndReferencesExposeSensesDeterministicallyAndKeepPlayerSemantics()
+    public async Task NpcTemplates_RebaseHearingAndReferencesExposeSensesDeterministicallyAndKeepPlayerSemantics()
     {
         Node npcNode = LoadPackedScene("res://assets/characters/templates/reference_female/reference_female_npc.tscn").Instantiate();
         Node maleNpcNode = LoadPackedScene("res://assets/characters/templates/reference_male/reference_male_npc.tscn").Instantiate();
@@ -73,7 +74,9 @@ public sealed class PerceptionCompositionIntegrationTests
                 exactMatch: false);
 
             Assert.Same(npc, hearing.GetParent());
-            Assert.Equal([typeof(SpeechPerception), typeof(VisualSurveyPerception)], mind.Perceptions.Select(faculty => faculty.GetType()));
+            Assert.Equal(
+                [typeof(SpeechPerception), typeof(VisualSurveyPerception), typeof(VisualDescriptionPerception)],
+                mind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
             Assert.Equal(["CharacterLocomotion", "LocomotiveNavigation", "EyesBehaviour", "AIVoice", "Hearing", "HandPoseBehaviour", "HandPoseBehaviour"], npc.Components.Select(component => component.GetType().Name));
             Assert.Same(mind, femaleSelector.GetParent());
             Assert.False(femaleSelector is IComponent);
@@ -89,6 +92,22 @@ public sealed class PerceptionCompositionIntegrationTests
 
             CharacterHub maleNpc = Assert.IsType<CharacterHub>(maleNpcNode, exactMatch: false);
             AgenticMind maleMind = Assert.IsType<AgenticMind>(maleNpc.GetNode("Mind"), exactMatch: false);
+            Assert.Equal(
+                [typeof(SpeechPerception), typeof(VisualSurveyPerception), typeof(VisualDescriptionPerception)],
+                maleMind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
+            Assert.NotSame(mind.GetNode("SpeechPerception"), maleMind.GetNode("SpeechPerception"));
+            Assert.NotSame(mind.GetNode("VisualSurveyPerception"), maleMind.GetNode("VisualSurveyPerception"));
+            Assert.NotSame(mind.GetNode("VisualDescriptionPerception"), maleMind.GetNode("VisualDescriptionPerception"));
+            VisualDescriptionPerception femaleVisualDescription = mind.GetNode<VisualDescriptionPerception>("VisualDescriptionPerception");
+            VisualDescriptionPerception maleVisualDescription = maleMind.GetNode<VisualDescriptionPerception>("VisualDescriptionPerception");
+            var isolatedCue = new StaticVisualCue();
+            npc.AddChild(isolatedCue);
+            _ = await femaleVisualDescription.PerceiveAsync(
+                new LookTargetChangedPercept(null, isolatedCue),
+                new PerceptionContext(npc, null!, null!),
+                CancellationToken.None);
+            Assert.Same(isolatedCue, femaleVisualDescription.ActiveCue);
+            Assert.Null(maleVisualDescription.ActiveCue);
             AttentionGazeTargetSelector maleSelector = Assert.IsType<AttentionGazeTargetSelector>(
                 maleMind.GetNode("AttentionGazeTargetSelector"),
                 exactMatch: false);
@@ -111,6 +130,7 @@ public sealed class PerceptionCompositionIntegrationTests
             Assert.DoesNotContain(player.GetChildren(), node => node is AgenticMind or Hearing);
             Assert.DoesNotContain(player.GetChildren(), node => node is AttentionGazeTargetSelector);
             Assert.DoesNotContain(player.GetChildren().SelectMany(node => node.GetChildren()), node => node is AttentionGazeTargetSelector);
+            Assert.DoesNotContain(player.GetChildren().SelectMany(node => node.GetChildren()), node => node is VisualDescriptionPerception);
         }
         finally
         {
@@ -144,7 +164,7 @@ public sealed class PerceptionCompositionIntegrationTests
             Hearing hearing = Assert.IsType<Hearing>(vadim.Hearing);
             AgenticMind mind = Assert.IsType<AgenticMind>(vadim.GetNode("Mind"), exactMatch: false);
             SpeechPerception speechPerception = Assert.IsType<SpeechPerception>(
-                Assert.Single(mind.Perceptions, perception => perception is SpeechPerception));
+                Assert.Single(mind.GetChildren().OfType<IPerception>(), perception => perception is SpeechPerception));
 
             Assert.Contains(hearing, vadim.Components);
             Assert.True(mind.Enabled);
@@ -157,6 +177,7 @@ public sealed class PerceptionCompositionIntegrationTests
             mind.ObservationCommitted += observation => committed.Add(Assert.IsType<ObservedSpeech>(observation));
 
             hearing.ReceiveVoice("runtime activation evidence", new TestVoice("external_test_voice"));
+            await mind.DrainPerceptionsForTestingAsync();
 
             SpeechPercept publishedPercept = Assert.Single(published);
             Assert.Equal("runtime activation evidence", publishedPercept.Content);
@@ -167,10 +188,12 @@ public sealed class PerceptionCompositionIntegrationTests
 
             vadim.RefreshComponents();
             hearing.ReceiveVoice("second runtime activation evidence", new TestVoice("external_test_voice"));
+            await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(2, committed.Count);
             Assert.Equal("second runtime activation evidence", committed[1].Content);
 
             hearing.ReceiveVoice("self speech", vadim.Voice!);
+            await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(2, committed.Count);
 
         }

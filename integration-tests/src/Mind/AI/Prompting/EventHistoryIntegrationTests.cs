@@ -89,7 +89,8 @@ public sealed class EventHistoryIntegrationTests
     public async Task StandaloneEventHistory_RendersUnifiedActorRelativeChronologicalHistory()
     {
         EventHistoryDocument eventHistory = LoadNpcEventHistory();
-        EventHistoryFragment fragment = Assert.Single(eventHistory.Fragments);
+        EventHistoryFragment speechFragment = Assert.Single(eventHistory.Fragments, item => item.TypeKey == "speech.observed");
+        EventHistoryFragment visualFragment = Assert.Single(eventHistory.Fragments, item => item.TypeKey == "vision.description");
         Observation[] observations =
         [
             new ObservedSpeech("char:test_character", "private-self", "Self line.") { ObservedAt = 100.2d },
@@ -97,20 +98,24 @@ public sealed class EventHistoryIntegrationTests
             new ObservedSpeech("char:rin", "private-known", "Known line.") { ObservedAt = 7200d },
             new ObservedSpeech(null, "private-unknown", "Unknown line.") { ObservedAt = 259200.4d },
             new ObservedSpeech("CHAR:TEST_CHARACTER", "private-case", "Case-distinct line.") { ObservedAt = 864000d },
+            new ObservedVisualDescription("char:coat", "A weathered red coat.") { ObservedAt = 900000d },
         ];
 
         string output = await CreateRenderer(eventHistory).RenderAsync(observations);
 
-        Assert.Equal("speech.observed", fragment.TypeKey);
+        Assert.Equal("speech.observed", speechFragment.TypeKey);
         Assert.Equal(
             "I said: Self line. (at " + Label(100.2d) + "s game time)\n"
                 + "((Received world.changed event.)) (at " + Label(300.55d) + "s game time)\n"
                 + "Heard char:rin say: Known line. (at " + Label(7200d) + "s game time)\n"
                 + "Heard an unknown speaker say: Unknown line. (at " + Label(259200.4d) + "s game time)\n"
-                + "Heard CHAR:TEST_CHARACTER say: Case-distinct line. (at " + Label(864000d) + "s game time)\n",
+                + "Heard CHAR:TEST_CHARACTER say: Case-distinct line. (at " + Label(864000d) + "s game time)\n"
+                + "Observed char:coat: A weathered red coat. (at " + Label(900000d) + "s game time)\n",
             output);
         Assert.DoesNotContain("private-", output, StringComparison.Ordinal);
-        Assert.DoesNotContain("VoiceId", fragment.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("VoiceId", speechFragment.Source, StringComparison.Ordinal);
+        Assert.Contains("SubjectId", visualFragment.Source, StringComparison.Ordinal);
+        Assert.Contains("Description", visualFragment.Source, StringComparison.Ordinal);
         Assert.DoesNotContain("VoiceId", eventHistory.FallbackSource, StringComparison.Ordinal);
     }
 
@@ -130,6 +135,7 @@ public sealed class EventHistoryIntegrationTests
             new ObservedSpeech("char:rin", "unused-known", "Known line.") { ObservedAt = 7200d },
             new ObservedSpeech(null, "unused-unknown", "Unknown line."),
             new ObservedSpeech("CHAR:TEST_CHARACTER", "unused-case", "Case-distinct line.") { ObservedAt = 864000d },
+            new ObservedVisualDescription("char:coat", "A weathered red coat.") { ObservedAt = 900000d },
             new TestObservation("world.changed", "door opened") { ObservedAt = 300.55d },
         ];
 

@@ -162,7 +162,7 @@ public sealed class OrientingControllerIntegrationTests
                 Transform = new Transform3D(Basis.Identity, new Vector3(0f, 0.1f, 0f)),
             };
             head.AddChild(viewpoint);
-            var anchor = new Node3D { Name = "Anchor" };
+            var anchor = new StaticVisualCue { Name = "Anchor" };
             root.AddChild(anchor);
 
             var controller = new OrientingController { Name = "OrientingController", Viewpoint = viewpoint };
@@ -211,7 +211,7 @@ public sealed class OrientingControllerIntegrationTests
             AssertCentredOn(controller, anchor, viewpoint);
 
             // A different anchor straight after a sustained one is a glance reset, then recentres on both axes.
-            var secondAnchor = new Node3D { Name = "SecondAnchor" };
+            var secondAnchor = new StaticVisualCue { Name = "SecondAnchor" };
             root.AddChild(secondAnchor);
             PlaceAnchorAtLocalAngles(
                 secondAnchor,
@@ -257,7 +257,7 @@ public sealed class OrientingControllerIntegrationTests
                 Transform = new Transform3D(Basis.Identity, new Vector3(0f, 0.1f, 0f)),
             };
             root.AddChild(viewpoint);
-            var anchor = new Node3D
+            var anchor = new StaticVisualCue
             {
                 Name = "Anchor",
                 Position = new Vector3(0f, 0.1f, -2f),
@@ -479,7 +479,7 @@ public sealed class OrientingControllerIntegrationTests
                 Transform = new Transform3D(flippedMarkerBasis, new Vector3(0f, 0.1f, 0f)),
             };
             head.AddChild(viewpoint);
-            var anchor = new Node3D { Name = "Anchor" };
+            var anchor = new StaticVisualCue { Name = "Anchor" };
             root.AddChild(anchor);
 
             TestVision vision = new();
@@ -599,7 +599,7 @@ public sealed class OrientingControllerIntegrationTests
 
     private sealed class TestVision : IVision
     {
-        public Node3D? LookTarget
+        public VisualCue? LookTarget
         {
             get
             {
@@ -639,7 +639,7 @@ public sealed class OrientingControllerIntegrationTests
 
         public IReadOnlyList<Type> PerceptTypes { get; } = [];
 
-        public void SetLookTarget(Node3D? target)
+        public void SetLookTarget(VisualCue? target)
         {
             SetLookTargetCalls++;
             LookTarget = target;

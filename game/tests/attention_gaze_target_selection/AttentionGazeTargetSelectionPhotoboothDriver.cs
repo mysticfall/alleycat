@@ -65,7 +65,7 @@ public sealed partial class AttentionGazeTargetSelectionPhotoboothDriver : Node
     public string GetAssignedLookTargetPath()
     {
         EnsureActivated();
-        Node3D? lookTarget = _eyes!.LookTarget;
+        VisualCue? lookTarget = _eyes!.LookTarget;
         return lookTarget is null ? string.Empty : lookTarget.GetPath().ToString();
     }
 

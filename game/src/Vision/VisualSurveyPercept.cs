@@ -1,11 +1,9 @@
 using System.Collections.ObjectModel;
 using AlleyCat.Core;
-using AlleyCat.Sense;
-
 namespace AlleyCat.Vision;
 
 /// <summary>Immutable ordered snapshot of visible canonical subject identities.</summary>
-public sealed record VisualSurveyPercept : IPercept
+public sealed record VisualSurveyPercept : IVisualPercept
 {
     /// <summary>Creates a producer-owned snapshot of the supplied ordered identities.</summary>
     public VisualSurveyPercept(IEnumerable<string> subjectFullIDs)

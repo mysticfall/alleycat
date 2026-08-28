@@ -6,7 +6,6 @@ using AlleyCat.Scene;
 using AlleyCat.Sense;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
-using Godot;
 using Xunit;
 using MindBase = AlleyCat.Mind.Mind;
 
@@ -380,7 +379,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
     private sealed class TestVision : IVision, IDisposable
     {
-        public Node3D? LookTarget
+        public VisualCue? LookTarget
         {
             get; set;
         }
@@ -404,7 +403,7 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
             get; private set;
         }
 
-        public void SetLookTarget(Node3D? target)
+        public void SetLookTarget(VisualCue? target)
         {
             LookTarget = target;
             SetTargets.Add(Assert.IsAssignableFrom<VisualCue>(target));

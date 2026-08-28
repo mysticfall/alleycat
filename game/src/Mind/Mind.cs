@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using AlleyCat.Character;
 using AlleyCat.Core;
+using AlleyCat.Core.Logging;
 using AlleyCat.Core.Time;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
@@ -12,12 +13,13 @@ using AlleyCat.Sense;
 using AlleyCat.Speech.Voice;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
 namespace AlleyCat.Mind;
 
 /// <summary>
-/// Abstract base for NPC mind-like components that synchronously interpret stimuli into an ordered observation
+/// Abstract base for NPC mind-like components that serially interpret stimuli into an ordered observation
 /// timeline and accumulate notable observations for delivery to the NPC's agent session.
 /// </summary>
 [GlobalClass]
@@ -62,18 +64,20 @@ public abstract partial class Mind : Node
     private static readonly TimeSpan _defaultMaxObservationWait = TimeSpan.FromSeconds(10);
 
     private readonly Lock _observationStateLock = new();
+    private readonly Lock _perceptionQueueLock = new();
     private readonly Lock _deferredGodotActionsLock = new();
     private readonly Lock _speechVoiceSubscriptionLock = new();
     private readonly List<AgentObservation> _observationTimeline = [];
     private readonly List<PendingObservation> _notableAccumulation = [];
     private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
     private readonly AttentionPolicy _attention = new(GetStopwatchSeconds);
-    private readonly Dictionary<Type, IPerception> _perceptions = [];
+    private readonly Queue<QueuedPercept> _perceptionQueue = [];
     private readonly Dictionary<ISense, Action<IPercept>> _senseHandlers = [];
     private readonly HashSet<IVoice> _subscribedSpeechVoices = [];
     private readonly Dictionary<IVoice, ICharacter?> _speechVoiceOwners = [];
     private readonly ConcurrentQueue<IVoice> _speechStartNotifications = new();
     private ISense[] _senses = [];
+    private IReadOnlyDictionary<Type, IPerception[]> _perceptionBindings = new Dictionary<Type, IPerception[]>();
     private IComponentProjectionNotifier? _componentProjectionNotifier;
     private Func<ISceneContext> _sceneContextLoader = LoadCurrentSceneContext;
     private Func<IGameClock> _gameClockLoader = LoadDefaultGameClock;
@@ -84,6 +88,10 @@ public abstract partial class Mind : Node
     private bool _notablePending;
     private bool _speechSubscriptionEvaluationQueued;
     private int _nodeLifetimeEnded;
+    private bool _perceptionDrainRunning;
+    private Task _perceptionDrainTask = Task.CompletedTask;
+    private Action? _beforePerceptionEnqueueForTesting;
+    private ILogger<Mind>? _logger;
     [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Enabled setter controls delivery.")]
     private bool _enabled = true;
 
@@ -162,10 +170,6 @@ public abstract partial class Mind : Node
     [Export(PropertyHint.Range, "0,100,0.01,or_greater")]
     public float AttentionContextThreshold { get; set; } = 0.25f;
 
-    /// <summary>Authorable exact-type perception faculties used for composed senses.</summary>
-    [Export]
-    public PerceptionResource[] Perceptions { get; set; } = [];
-
     /// <inheritdoc />
     public override void _EnterTree()
     {
@@ -176,6 +180,7 @@ public abstract partial class Mind : Node
         }
 
         Volatile.Write(ref _cachedOwningCharacter, ResolveOwningCharacter());
+        _logger = GameLoggerResolver.ResolveRequired<Mind>();
         SubscribeToComponentProjectionRefreshes();
     }
 
@@ -212,11 +217,15 @@ public abstract partial class Mind : Node
         UnsubscribeFromComponentProjectionRefreshes();
         UnsubscribeFromSenses();
         UnsubscribeFromSpeechVoices();
-        _perceptions.Clear();
 
         // One irreversible lifetime boundary: cancels active waits, session activity, and cue subscriptions so no
         // deferred callback accesses Mind services after exit (AI-001 TR-18).
         _nodeLifetimeCancellation.Cancel();
+        Volatile.Write(ref _perceptionBindings, new Dictionary<Type, IPerception[]>());
+        lock (_perceptionQueueLock)
+        {
+            _perceptionQueue.Clear();
+        }
         OnNodeLifetimeEnding();
     }
 
@@ -242,20 +251,164 @@ public abstract partial class Mind : Node
     /// </summary>
     protected CancellationToken NodeLifetimeCancellationToken => _nodeLifetimeCancellation.Token;
 
-    private void OnPerceived(IPercept percept)
+    private void OnPerceived(IPercept percept, IPerception[] faculties)
     {
         ArgumentNullException.ThrowIfNull(percept);
+        ArgumentNullException.ThrowIfNull(faculties);
         if (IsNodeLifetimeEnded || !Enabled)
         {
             return;
         }
 
+        Volatile.Read(ref _beforePerceptionEnqueueForTesting)?.Invoke();
+        lock (_perceptionQueueLock)
+        {
+            if (IsNodeLifetimeEnded)
+            {
+                return;
+            }
+
+            _perceptionQueue.Enqueue(new QueuedPercept(percept, faculties));
+            if (!_perceptionDrainRunning)
+            {
+                _perceptionDrainRunning = true;
+                _perceptionDrainTask = DrainPerceptionsAsync();
+            }
+        }
+    }
+
+    private async Task DrainPerceptionsAsync()
+    {
+        await Task.Yield();
+        while (true)
+        {
+            QueuedPercept queued;
+            lock (_perceptionQueueLock)
+            {
+                if (IsNodeLifetimeEnded)
+                {
+                    SettlePerceptionDrainUnderLock();
+                    return;
+                }
+
+                if (_perceptionQueue.Count == 0)
+                {
+                    _perceptionDrainRunning = false;
+                    return;
+                }
+
+                queued = _perceptionQueue.Dequeue();
+            }
+
+            try
+            {
+                await ProcessPerceptAsync(queued);
+            }
+            catch (OperationCanceledException) when (IsNodeLifetimeEnded || NodeLifetimeCancellationToken.IsCancellationRequested)
+            {
+                lock (_perceptionQueueLock)
+                {
+                    SettlePerceptionDrainUnderLock();
+                }
+                return;
+            }
+            catch (Exception) when (IsNodeLifetimeEnded)
+            {
+                lock (_perceptionQueueLock)
+                {
+                    SettlePerceptionDrainUnderLock();
+                }
+                return;
+            }
+            catch (Exception exception)
+            {
+                ILogger<Mind> logger = _logger
+                    ?? throw new InvalidOperationException("Mind perception fault logging requires an active logger.");
+                logger.LogError(
+                    exception,
+                    "Mind {MindPath} failed to interpret percept {PerceptType}; the aggregate was discarded.",
+                    GetPath(),
+                    queued.Percept.GetType().FullName);
+            }
+        }
+    }
+
+    private void SettlePerceptionDrainUnderLock()
+    {
+        _perceptionQueue.Clear();
+        _perceptionDrainRunning = false;
+    }
+
+    private async ValueTask ProcessPerceptAsync(QueuedPercept queued)
+    {
+        CancellationToken cancellationToken = NodeLifetimeCancellationToken;
+        ThrowIfPerceptionLifetimeEnded(cancellationToken);
         AttentionSettings attentionSettings = CreateAttentionSettings();
-        IPerception perception = _perceptions.GetValueOrDefault(percept.GetType())
-            ?? throw new InvalidOperationException($"Mind '{GetPath()}' received undeclared percept type '{percept.GetType().FullName}'.");
-        ISceneContext scene = _sceneContextLoader();
-        PerceptionResult result = perception.Perceive(percept, new PerceptionContext(ResolveOwningCharacter(), scene, attentionSettings));
-        ApplyPerceptionResult(result, attentionSettings);
+        var context = new PerceptionContext(ResolveOwningCharacter(), _sceneContextLoader(), attentionSettings);
+        var effects = new List<AttentionEffect>();
+        var observations = new List<AgentObservation>();
+        foreach (IPerception faculty in queued.Faculties)
+        {
+            ThrowIfPerceptionLifetimeEnded(cancellationToken);
+            PerceptionResult? result = await faculty.PerceiveAsync(queued.Percept, context, cancellationToken);
+            ThrowIfPerceptionLifetimeEnded(cancellationToken);
+            if (result is null)
+            {
+                throw new InvalidOperationException(
+                    $"Perception faculty '{faculty.GetType().FullName}' returned a null result.");
+            }
+
+            effects.AddRange(result.AttentionEffects);
+            observations.AddRange(result.Observations);
+        }
+
+        ThrowIfPerceptionLifetimeEnded(cancellationToken);
+        ApplyPerceptionResult(new PerceptionResult(effects, observations), attentionSettings);
+    }
+
+    private void ThrowIfPerceptionLifetimeEnded(CancellationToken cancellationToken)
+    {
+        if (IsNodeLifetimeEnded)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    /// <summary>Waits until all percepts accepted before this call have settled.</summary>
+    internal async Task DrainPerceptionsForTestingAsync()
+    {
+        while (true)
+        {
+            Task drain;
+            lock (_perceptionQueueLock)
+            {
+                drain = _perceptionDrainTask;
+            }
+
+            await drain;
+            lock (_perceptionQueueLock)
+            {
+                if (!_perceptionDrainRunning && _perceptionQueue.Count == 0)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>Installs a deterministic test seam immediately before perception intake acquires its queue lock.</summary>
+    internal void SetBeforePerceptionEnqueueForTesting(Action? callback)
+        => Volatile.Write(ref _beforePerceptionEnqueueForTesting, callback);
+
+    /// <summary>Gets the number of percepts awaiting interpretation for deterministic lifetime tests.</summary>
+    internal int GetPendingPerceptionCountForTesting()
+    {
+        lock (_perceptionQueueLock)
+        {
+            return _perceptionQueue.Count;
+        }
     }
 
     private void ActivatePerceptions()
@@ -263,48 +416,50 @@ public abstract partial class Mind : Node
         AttentionSettings _ = CreateAttentionSettings();
         ICharacter character = ResolveOwningCharacter();
         ISense[] senses = [.. character.Components.OfType<ISense>()];
-        var perceptions = new Dictionary<Type, IPerception>();
+        IPerception[] faculties = [.. GetChildren().OfType<IPerception>()];
+        var bindings = new Dictionary<Type, IPerception[]>();
         var declaredTypes = new HashSet<Type>();
         foreach (ISense sense in senses)
         {
             foreach (Type perceptType in sense.PerceptTypes)
             {
-                if (perceptType is null || !typeof(IPercept).IsAssignableFrom(perceptType) || !declaredTypes.Add(perceptType))
+                if (perceptType is null
+                    || perceptType.IsAbstract
+                    || perceptType.IsInterface
+                    || !typeof(IPercept).IsAssignableFrom(perceptType)
+                    || !declaredTypes.Add(perceptType))
                 {
                     throw new InvalidOperationException($"Mind '{GetPath()}' requires each configured sense to declare unique exact IPercept runtime types.");
                 }
             }
         }
 
-        foreach (PerceptionResource faculty in Perceptions)
+        foreach (IPerception faculty in faculties)
         {
-            if (faculty is null)
-            {
-                throw new InvalidOperationException($"Mind '{GetPath()}' has a null perception faculty.");
-            }
-
             Type perceptType = faculty.PerceptType;
-            if (!declaredTypes.Contains(perceptType)
+            if (perceptType is null
+                || !typeof(IPercept).IsAssignableFrom(perceptType)
                 || !faculty.GetType().GetInterfaces().Any(type => type.IsGenericType
                     && type.GetGenericTypeDefinition() == typeof(IPerception<>)
-                    && type.GenericTypeArguments[0] == perceptType)
-                || !perceptions.TryAdd(perceptType, faculty))
+                    && type.GenericTypeArguments[0] == perceptType))
             {
-                throw new InvalidOperationException($"Mind '{GetPath()}' has an invalid, duplicate, or undeclared perception faculty mapping for '{perceptType.FullName}'.");
+                throw new InvalidOperationException($"Mind '{GetPath()}' has an invalid perception faculty declaration for '{perceptType?.FullName}'.");
             }
         }
 
-        if (perceptions.Count != declaredTypes.Count)
+        foreach (Type declaredType in declaredTypes)
         {
-            throw new InvalidOperationException($"Mind '{GetPath()}' requires exactly one perception faculty for every configured sense percept type.");
+            IPerception[] matching = [.. faculties.Where(faculty => faculty.PerceptType.IsAssignableFrom(declaredType))];
+            if (matching.Length == 0)
+            {
+                throw new InvalidOperationException($"Mind '{GetPath()}' requires at least one perception faculty for configured percept type '{declaredType.FullName}'.");
+            }
+
+            bindings.Add(declaredType, matching);
         }
 
         UnsubscribeFromSenses();
-        _perceptions.Clear();
-        foreach (KeyValuePair<Type, IPerception> perception in perceptions)
-        {
-            _perceptions.Add(perception.Key, perception.Value);
-        }
+        Volatile.Write(ref _perceptionBindings, bindings);
 
         _senses = senses;
         foreach (ISense sense in _senses)
@@ -316,7 +471,10 @@ public abstract partial class Mind : Node
                     throw new InvalidOperationException($"Sense '{sense.GetType().FullName}' published undeclared percept type '{percept.GetType().FullName}'.");
                 }
 
-                OnPerceived(percept);
+                IReadOnlyDictionary<Type, IPerception[]> currentBindings = Volatile.Read(ref _perceptionBindings);
+                IPerception[] snapshot = currentBindings.GetValueOrDefault(percept.GetType())
+                    ?? throw new InvalidOperationException($"Mind '{GetPath()}' received unbound percept type '{percept.GetType().FullName}'.");
+                OnPerceived(percept, snapshot);
             }
             _senseHandlers.Add(sense, handler);
             sense.Perceived += handler;
@@ -667,7 +825,7 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Appends an observation to the timeline and the notable-observation accumulation.
+    /// Submits an observation for duplicate filtering and atomic ingestion.
     /// </summary>
     protected void Observe(AgentObservation observation)
     {
@@ -679,9 +837,7 @@ public abstract partial class Mind : Node
 
         ICharacter character = ResolveOwningCharacter();
         var context = new ObservationContext(character);
-        float importance = CalculateAndValidateImportance(observation, context);
-
-        CommitObservations([new PendingObservation(observation, importance)]);
+        IngestObservations([observation], context);
     }
 
     private void ApplyPerceptionResult(PerceptionResult result, AttentionSettings attentionSettings)
@@ -690,7 +846,6 @@ public abstract partial class Mind : Node
 
         ICharacter character = ResolveOwningCharacter();
         var context = new ObservationContext(character);
-        var pending = new PendingObservation[result.Observations.Count];
         for (int index = 0; index < result.AttentionEffects.Count; index++)
         {
             AttentionEffect effect = result.AttentionEffects[index]
@@ -699,23 +854,58 @@ public abstract partial class Mind : Node
             AttentionSettings.ValidateContribution(effect.Contribution, nameof(result));
         }
 
-        for (int index = 0; index < result.Observations.Count; index++)
+        NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
+        IngestObservations(result.Observations, context, beforeCommit: () =>
         {
-            AgentObservation observation = result.Observations[index]
-                ?? throw new ArgumentException($"Perception observation at index {index} cannot be null.", nameof(result));
-            pending[index] = new PendingObservation(observation, CalculateAndValidateImportance(observation, context));
+            _attention.ApplyElapsedDecay(attentionSettings);
+            foreach (AttentionEffect effect in result.AttentionEffects)
+            {
+                ReinforceAttention(effect.SubjectFullId, effect.Contribution, attentionSettings);
+            }
+        });
+    }
+
+    private static bool ShouldSuppressDuplicate(
+        AgentObservation observation,
+        IReadOnlyList<AgentObservation> retained,
+        IReadOnlyList<AgentObservation> accepted)
+    {
+        if (observation.DuplicatePolicy == ObservationDuplicatePolicy.Allow)
+        {
+            return false;
         }
 
-        _attention.ApplyElapsedDecay(attentionSettings);
-        foreach (AttentionEffect effect in result.AttentionEffects)
+        if (observation.DuplicatePolicy != ObservationDuplicatePolicy.IgnoreEquivalent)
         {
-            ReinforceAttention(effect.SubjectFullId, effect.Contribution, attentionSettings);
+            throw new InvalidOperationException(
+                $"Observation '{observation.GetType().FullName}' declares unsupported duplicate policy '{observation.DuplicatePolicy}'.");
         }
 
-        if (pending.Length > 0)
+        string scope = observation.DuplicateScope
+            ?? throw new InvalidOperationException(
+                $"Observation '{observation.GetType().FullName}' must declare a duplicate scope when ignoring equivalents.");
+        Type concreteType = observation.GetType();
+        for (int index = accepted.Count - 1; index >= 0; index--)
         {
-            CommitObservations(pending);
+            AgentObservation candidate = accepted[index];
+            if (candidate.GetType() == concreteType
+                && string.Equals(candidate.DuplicateScope, scope, StringComparison.Ordinal))
+            {
+                return observation.IsSemanticallyEquivalentTo(candidate);
+            }
         }
+
+        for (int index = retained.Count - 1; index >= 0; index--)
+        {
+            AgentObservation candidate = retained[index];
+            if (candidate.GetType() == concreteType
+                && string.Equals(candidate.DuplicateScope, scope, StringComparison.Ordinal))
+            {
+                return observation.IsSemanticallyEquivalentTo(candidate);
+            }
+        }
+
+        return false;
     }
 
     private AttentionSettings CreateAttentionSettings()
@@ -758,7 +948,7 @@ public abstract partial class Mind : Node
         NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
         ICharacter character = ResolveOwningCharacter();
         var context = new ObservationContext(character);
-        var pending = new PendingObservation[observations.Count];
+        var stampedObservations = new AgentObservation[observations.Count];
         for (int index = 0; index < observations.Count; index++)
         {
             AgentObservation observation = observations[index]
@@ -769,18 +959,22 @@ public abstract partial class Mind : Node
                     ActorId = character.FullId
                 }
                 : observation;
-            float importance = CalculateAndValidateImportance(stampedObservation, context);
-            pending[index] = new PendingObservation(stampedObservation, importance);
+            stampedObservations[index] = stampedObservation;
         }
 
         NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
-        CommitObservations(pending, throwWhenLifetimeEnded: true);
+        IngestObservations(stampedObservations, context, throwWhenLifetimeEnded: true);
     }
 
-    private void CommitObservations(
-        IReadOnlyList<PendingObservation> observations,
+    private void IngestObservations(
+        IReadOnlyList<AgentObservation> observations,
+        ObservationContext context,
+        Action? beforeCommit = null,
         bool throwWhenLifetimeEnded = false)
     {
+        ArgumentNullException.ThrowIfNull(observations);
+        ArgumentNullException.ThrowIfNull(context);
+
         bool becameNotable;
         var stampedObservations = new List<AgentObservation>();
 
@@ -796,9 +990,30 @@ public abstract partial class Mind : Node
                 return;
             }
 
+            var acceptedObservations = new List<AgentObservation>(observations.Count);
+            for (int index = 0; index < observations.Count; index++)
+            {
+                AgentObservation observation = observations[index]
+                    ?? throw new ArgumentException($"Observation at index {index} cannot be null.", nameof(observations));
+                if (!ShouldSuppressDuplicate(observation, _observationTimeline, acceptedObservations))
+                {
+                    acceptedObservations.Add(observation);
+                }
+            }
+
+            var pending = new PendingObservation[acceptedObservations.Count];
+            for (int index = 0; index < acceptedObservations.Count; index++)
+            {
+                AgentObservation observation = acceptedObservations[index];
+                pending[index] = new PendingObservation(
+                    observation,
+                    CalculateAndValidateImportance(observation, context));
+            }
+
+            beforeCommit?.Invoke();
             becameNotable = false;
-            double stamp = GameClock.NowSeconds;
-            foreach (PendingObservation pendingObservation in observations)
+            double? stamp = pending.Length > 0 ? GameClock.NowSeconds : null;
+            foreach (PendingObservation pendingObservation in pending)
             {
                 AgentObservation stampedObservation = pendingObservation.Observation with
                 {
@@ -822,6 +1037,11 @@ public abstract partial class Mind : Node
 
         foreach (AgentObservation observation in stampedObservations)
         {
+            if (IsNodeLifetimeEnded)
+            {
+                return;
+            }
+
             OnObservationIngested(observation);
         }
 
@@ -1009,6 +1229,8 @@ public abstract partial class Mind : Node
     private static double GetStopwatchSeconds() => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
 
     private readonly record struct PendingObservation(AgentObservation Observation, float Importance);
+
+    private readonly record struct QueuedPercept(IPercept Percept, IPerception[] Faculties);
 
     /// <summary>
     /// Outcome of one observation wait: the notable observations delivered and whether the attended-speaker-finished

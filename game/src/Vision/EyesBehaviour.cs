@@ -18,10 +18,10 @@ public partial class EyesBehaviour : Node, IVision
     private const uint VisionOccluderLayer = 1u << 4;
     private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
     private static readonly IReadOnlyList<Type> _perceptTypes =
-        new ReadOnlyCollection<Type>([typeof(VisualSurveyPercept)]);
+        new ReadOnlyCollection<Type>([typeof(VisualSurveyPercept), typeof(LookTargetChangedPercept)]);
 
     private EyesController? _controller;
-    private Node3D? _lookTarget;
+    private VisualCue? _lookTarget;
     private bool _lookTargetExplicitlyAssigned;
     private bool _deferredRefreshScheduled;
     private readonly RandomNumberGenerator _saccadeRandom = new();
@@ -77,7 +77,7 @@ public partial class EyesBehaviour : Node, IVision
 
     /// <inheritdoc />
     [Export]
-    public Node3D? LookTarget
+    public VisualCue? LookTarget
     {
         get => _lookTarget;
         set => SetLookTarget(value);
@@ -317,7 +317,7 @@ public partial class EyesBehaviour : Node, IVision
                 EyeOrigin = ResolveConventionEyeOrigin();
             }
 
-            Node3D? conventionLookTarget = ResolveConventionLookTarget();
+            VisualCue? conventionLookTarget = ResolveConventionLookTarget();
             if (!_lookTargetExplicitlyAssigned && conventionLookTarget is not null && !AreSameNode(_lookTarget, conventionLookTarget))
             {
                 SetResolvedLookTarget(conventionLookTarget, explicitlyAssigned: false);
@@ -607,35 +607,44 @@ public partial class EyesBehaviour : Node, IVision
             : Transform3D.Identity;
 
     /// <inheritdoc />
-    public void SetLookTarget(Node3D? target)
+    public void SetLookTarget(VisualCue? target)
         => SetResolvedLookTarget(target, explicitlyAssigned: target is not null);
 
-    private void SetResolvedLookTarget(Node3D? target, bool explicitlyAssigned)
+    private void SetResolvedLookTarget(VisualCue? target, bool explicitlyAssigned)
     {
-        if (AreSameNode(_lookTarget, target) && _lookTargetExplicitlyAssigned == explicitlyAssigned)
+        bool effectiveCueChanged = !AreSameNode(_lookTarget, target);
+        if (!effectiveCueChanged && _lookTargetExplicitlyAssigned == explicitlyAssigned)
         {
             return;
         }
 
+        VisualCue? previous = _lookTarget;
         _lookTarget = target;
         _lookTargetExplicitlyAssigned = explicitlyAssigned;
         _hasSaccadeAnchor = false;
         ScheduleDeferredRefresh();
+        if (effectiveCueChanged)
+        {
+            Perceived?.Invoke(new LookTargetChangedPercept(previous, target));
+        }
     }
 
     private static bool IsValidNode(Node? node) => node is not null && IsInstanceValid(node);
 
     private static bool AreSameNode(Node? left, Node? right)
-        => left is null
-            ? right is null
-            : right is not null && IsInstanceValid(left) && IsInstanceValid(right) && left.GetInstanceId() == right.GetInstanceId();
+        => ReferenceEquals(left, right)
+            || (left is not null
+                && right is not null
+                && IsInstanceValid(left)
+                && IsInstanceValid(right)
+                && left.GetInstanceId() == right.GetInstanceId());
 
-    private Node3D? ResolveConventionLookTarget()
+    private VisualCue? ResolveConventionLookTarget()
     {
         Node? ancestor = this;
         while (ancestor is not null)
         {
-            if (ancestor.FindChild("LookTarget", recursive: false, owned: false) is Node3D lookTarget)
+            if (ancestor.FindChild("LookTarget", recursive: false, owned: false) is VisualCue lookTarget)
             {
                 return lookTarget;
             }
