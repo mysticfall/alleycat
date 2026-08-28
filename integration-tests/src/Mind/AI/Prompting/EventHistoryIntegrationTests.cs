@@ -334,7 +334,7 @@ public sealed class EventHistoryIntegrationTests
     private static string BaselinePath(string fileName)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "AlleyCat.sln")))
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "game", "project.godot")))
         {
             directory = directory.Parent;
         }
