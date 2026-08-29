@@ -26,8 +26,45 @@ namespace AlleyCat.Mind;
 [GlobalClass]
 public abstract partial class Mind : Node
 {
+    /// <summary>Reason one observation wait completed (AI-002 TR-33).</summary>
+    internal enum ObservationWaitWake
+    {
+        /// <summary>The requested wait duration elapsed without a qualifying wake.</summary>
+        QuietExpiry,
+
+        /// <summary>An attended speaker finished speaking (AI-001 TR-34).</summary>
+        AttendedSpeakerFinished,
+
+        /// <summary>Accumulated importance reached the configured threshold (AI-001 TR-6).</summary>
+        ThresholdCrossed,
+
+        /// <summary>
+        /// A fresh observation upgraded the complete accumulation regardless of cumulative importance (AI-001 TR-43).
+        /// </summary>
+        FreshObservation,
+    }
+
+    /// <summary>Delivery urgency of one pending observation window (AI-001 TR-44).</summary>
+    internal enum ObservationDeliveryUrgency
+    {
+        /// <summary>Threshold-qualified ordinary delivery that never cancels session work.</summary>
+        Ordinary = 0,
+
+        /// <summary>Fresh-turn urgency that bypasses the importance threshold and replaces stale reasoning.</summary>
+        Fresh = 1,
+    }
+
     /// <summary>
-    /// Registered active wait woken by threshold crossings or attended-speaker-finished cues.
+    /// Post-commit delivery signal (AI-001 TR-44): the pending window's delivery urgency and whether an active wait
+    /// owns the delivery instead of the signalled runtime.
+    /// </summary>
+    /// <param name="Urgency">Delivery urgency of the newly deliverable window; fresh dominates ordinary.</param>
+    /// <param name="WaitOwned">Whether an active wait was woken to deliver the window through its own result.</param>
+    internal readonly record struct ObservationDeliverySignal(ObservationDeliveryUrgency Urgency, bool WaitOwned);
+
+    /// <summary>
+    /// Registered active wait woken through its normal completion mechanism by attended-speaker-finished cues,
+    /// threshold crossings, or fresh observations — never by cancelling the wait's token.
     /// </summary>
     private sealed class ActiveWait
     {
@@ -36,7 +73,7 @@ public abstract partial class Mind : Node
             Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
-        public TaskCompletionSource<bool> Completion
+        public TaskCompletionSource<ObservationWaitWake> Completion
         {
             get;
         }
@@ -46,7 +83,7 @@ public abstract partial class Mind : Node
             get; private set;
         }
 
-        public bool TryWake(bool attendedSpeakerFinished)
+        public bool TryWake(ObservationWaitWake wake)
         {
             lock (this)
             {
@@ -58,7 +95,7 @@ public abstract partial class Mind : Node
                 Settled = true;
             }
 
-            return Completion.TrySetResult(attendedSpeakerFinished);
+            return Completion.TrySetResult(wake);
         }
     }
 
@@ -88,6 +125,7 @@ public abstract partial class Mind : Node
     private ICharacter? _cachedOwningCharacter;
     private float _cumulativeNotableImportance;
     private bool _notablePending;
+    private bool _freshUrgencyPending;
     private bool _speechSubscriptionEvaluationQueued;
     private int _nodeLifetimeEnded;
     private bool _perceptionDrainRunning;
@@ -98,10 +136,11 @@ public abstract partial class Mind : Node
     private bool _enabled = true;
 
     /// <summary>
-    /// Occurs when accumulated observations become notable while no wait is active, signalling the agent session
-    /// runtime to interrupt as defined by AI-002 (AI-001 TR-6, TR-35).
+    /// Occurs after a committed batch raises the pending accumulation's delivery urgency (AI-001 TR-44): carries
+    /// delivery urgency — ordinary threshold-qualified delivery versus fresh-turn urgency — and whether an active
+    /// wait owns the delivery instead of the signalled runtime (AI-002 TR-41).
     /// </summary>
-    internal event Action? NotableObservationsSignalled;
+    internal event Action<ObservationDeliverySignal>? ObservationDeliverySignalled;
 
     /// <summary>
     /// Enables stimulus intake, timeline ingestion, and notable-observation delivery.
@@ -132,11 +171,13 @@ public abstract partial class Mind : Node
                 }
 
                 _enabled = value;
-                if (value && _notablePending)
+                if (value && (_notablePending || _freshUrgencyPending))
                 {
-                    // Delivery resumes for the preserved accumulation: a held notable window wakes an active wait
-                    // (AI-001 TR-5). When no wait is active the window stays held for the next wait call.
-                    _ = _activeWait?.TryWake(attendedSpeakerFinished: false);
+                    // Delivery resumes for the preserved accumulation — including any retained fresh urgency
+                    // (AI-001 TR-5): a held deliverable window wakes an active wait. When no wait is active the
+                    // window stays held for the next wait call or delivery claim.
+                    _ = _activeWait?.TryWake(
+                        _freshUrgencyPending ? ObservationWaitWake.FreshObservation : ObservationWaitWake.ThresholdCrossed);
                 }
             }
         }
@@ -818,7 +859,7 @@ public abstract partial class Mind : Node
         // itself decides whether anything notable is returned; sub-threshold observations are never promoted.
         lock (_observationStateLock)
         {
-            _ = _activeWait?.TryWake(attendedSpeakerFinished: true);
+            _ = _activeWait?.TryWake(ObservationWaitWake.AttendedSpeakerFinished);
         }
 
         PulseAttendedSpeakerFinished();
@@ -1054,7 +1095,7 @@ public abstract partial class Mind : Node
         ArgumentNullException.ThrowIfNull(observations);
         ArgumentNullException.ThrowIfNull(context);
 
-        bool becameNotable;
+        ObservationDeliveryUrgency? signalledUrgency;
         var stampedObservations = new List<AgentObservation>();
 
         lock (_observationStateLock)
@@ -1080,17 +1121,22 @@ public abstract partial class Mind : Node
                 }
             }
 
+            // Staged evaluation (AI-001 TR-42): importance and freshness are each calculated exactly once for every
+            // accepted observation, before timestamping, mutation, or commitment. Rejected duplicates contribute
+            // neither importance nor freshness.
             var pending = new PendingObservation[acceptedObservations.Count];
             for (int index = 0; index < acceptedObservations.Count; index++)
             {
                 AgentObservation observation = acceptedObservations[index];
+                bool requiresFreshTurn = observation.RequiresFreshTurn(context);
                 pending[index] = new PendingObservation(
                     observation,
-                    CalculateAndValidateImportance(observation, context));
+                    CalculateAndValidateImportance(observation, context),
+                    requiresFreshTurn);
             }
 
             beforeCommit?.Invoke();
-            becameNotable = false;
+            ObservationDeliveryUrgency? urgencyBefore = PendingDeliveryUrgencyLocked();
             double? stamp = pending.Length > 0 ? GameClock.NowSeconds : null;
             foreach (PendingObservation pendingObservation in pending)
             {
@@ -1106,12 +1152,19 @@ public abstract partial class Mind : Node
                 _cumulativeNotableImportance += pendingObservation.Importance;
                 stampedObservations.Add(stampedObservation);
 
+                // Freshness upgrades the complete current accumulation — including preceding sub-threshold
+                // observations — to deliverable regardless of cumulative importance (AI-001 TR-43).
+                _freshUrgencyPending |= pendingObservation.RequiresFreshTurn;
                 if (!_notablePending && _cumulativeNotableImportance >= EffectiveObservationImportanceThreshold)
                 {
                     _notablePending = true;
-                    becameNotable = true;
                 }
             }
+
+            ObservationDeliveryUrgency? urgencyAfter = PendingDeliveryUrgencyLocked();
+            signalledUrgency = urgencyAfter is { } urgency && (urgencyBefore is not { } before || urgency > before)
+                ? urgency
+                : null;
         }
 
         foreach (AgentObservation observation in stampedObservations)
@@ -1124,20 +1177,21 @@ public abstract partial class Mind : Node
             OnObservationIngested(observation);
         }
 
-        if (becameNotable)
+        if (signalledUrgency is { } deliveryUrgency)
         {
-            SignalNotableAccumulation();
+            SignalObservationDelivery(deliveryUrgency);
         }
     }
 
     /// <summary>
-    /// Delivers one notable accumulation after its committing batch has settled (AI-001 TR-35): an active wait
-    /// completes early with it; otherwise, while delivery is enabled, the agent session runtime is signalled to
-    /// interrupt (AI-001 TR-6, AI-002 TR-41).
+    /// Delivers one urgency upgrade after its committing batch has settled (AI-001 TR-35/44): an active wait is
+    /// woken through its normal completion mechanism — never by runner cancellation — with the wake reason matching
+    /// the urgency, and listeners receive delivery urgency plus wait ownership. Disabled minds retain the window
+    /// without waking or signalling (AI-001 TR-5).
     /// </summary>
-    private void SignalNotableAccumulation()
+    private void SignalObservationDelivery(ObservationDeliveryUrgency urgency)
     {
-        bool wakeWait;
+        bool waitOwned;
         lock (_observationStateLock)
         {
             if (IsNodeLifetimeEnded || !_enabled)
@@ -1145,35 +1199,96 @@ public abstract partial class Mind : Node
                 return;
             }
 
-            wakeWait = _activeWait is not null;
-            if (wakeWait)
+            waitOwned = _activeWait is not null;
+            if (_activeWait is { } wait)
             {
-                _ = _activeWait!.TryWake(attendedSpeakerFinished: false);
+                _ = wait.TryWake(
+                    urgency == ObservationDeliveryUrgency.Fresh
+                        ? ObservationWaitWake.FreshObservation
+                        : ObservationWaitWake.ThresholdCrossed);
             }
         }
 
-        if (!wakeWait)
+        ObservationDeliverySignalled?.Invoke(new ObservationDeliverySignal(urgency, waitOwned));
+    }
+
+    /// <summary>
+    /// Gets whether an observation wait is currently active: deterministic synchronisation for fixtures that must
+    /// observe strictly after a wait registered its delivery ownership (AI-002 TR-41).
+    /// </summary>
+    internal bool HasActiveObservationWait
+    {
+        get
         {
-            NotableObservationsSignalled?.Invoke();
+            lock (_observationStateLock)
+            {
+                return _activeWait is not null;
+            }
         }
     }
 
     /// <summary>
-    /// Takes the pending notable accumulation for injected delivery when no wait is active, resetting the window.
+    /// Claims the pending deliverable observation window when no wait is active and delivery is enabled,
+    /// transferring delivery ownership atomically (AI-001 TR-44): exactly one consumer — a claim or a wait — owns
+    /// each observation batch. The claim is completed once its observations are safely queued for rendering, or
+    /// abandoned to restore the window.
     /// </summary>
-    /// <returns>The notable observations in FIFO ingestion order, or null when nothing is currently notable.</returns>
-    internal IReadOnlyList<AgentObservation>? TryTakePendingNotableWindow()
+    /// <returns>The claimed delivery window in FIFO ingestion order with its urgency, or null when nothing is
+    /// deliverable, a wait owns delivery, delivery is paused while disabled (AI-001 TR-5), or the node lifetime has
+    /// ended.</returns>
+    internal ObservationDeliveryClaim? TryClaimPendingObservationDelivery()
     {
         lock (_observationStateLock)
         {
-            if (IsNodeLifetimeEnded || !_notablePending || _activeWait is not null)
+            if (IsNodeLifetimeEnded || !_enabled || _activeWait is not null || PendingDeliveryUrgencyLocked() is null)
             {
                 return null;
             }
 
-            List<AgentObservation> window = [.. _notableAccumulation.Select(static entry => entry.Observation)];
+            ObservationDeliveryClaim claim = new(
+                [.. _notableAccumulation],
+                _freshUrgencyPending ? ObservationDeliveryUrgency.Fresh : ObservationDeliveryUrgency.Ordinary);
             ResetNotableAccumulationLocked();
-            return window;
+            return claim;
+        }
+    }
+
+    /// <summary>
+    /// Finalises one claimed delivery after its observations are safely queued for rendering (AI-001 TR-44): the
+    /// claim releases ownership and its observations are not deliverable again.
+    /// </summary>
+    internal void CompleteObservationDelivery(ObservationDeliveryClaim claim)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        lock (_observationStateLock)
+        {
+            claim.MarkSettled();
+        }
+    }
+
+    /// <summary>
+    /// Restores an undelivered claim to the front of the pending accumulation in FIFO order (AI-001 TR-44): a
+    /// failed rendering never silently loses its observations — they stay deliverable for the next wait or claim.
+    /// Restoring never re-signals; the next urgency upgrade or wait call delivers the restored window.
+    /// </summary>
+    internal void AbandonObservationDelivery(ObservationDeliveryClaim claim)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        lock (_observationStateLock)
+        {
+            if (IsNodeLifetimeEnded || !claim.TryMarkAbandoned())
+            {
+                return;
+            }
+
+            _notableAccumulation.InsertRange(0, claim.Records);
+            _cumulativeNotableImportance += claim.TotalImportance;
+            if (_cumulativeNotableImportance >= EffectiveObservationImportanceThreshold)
+            {
+                _notablePending = true;
+            }
+
+            _freshUrgencyPending |= claim.HasFreshRecords;
         }
     }
 
@@ -1197,16 +1312,19 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Waits for the notable-observation accumulation, completing early when accumulated importance reaches the
-    /// configured threshold or when an attended speaker finishes speaking, and otherwise after
-    /// <paramref name="maxWait"/> (AI-001 TR-6/7, AI-002 TR-31–33).
+    /// Waits for the pending observation accumulation, completing early when accumulated importance reaches the
+    /// configured threshold, when a fresh observation arrives regardless of importance, or when an attended speaker
+    /// finishes speaking, and otherwise after <paramref name="maxWait"/> (AI-001 TR-6/7/43, AI-002 TR-31–33).
     /// </summary>
     /// <param name="maxWait">Maximum duration of one wait before quiet expiry.</param>
-    /// <param name="cancellationToken">Cancellation that abandons the wait.</param>
+    /// <param name="cancellationToken">Cancellation that abandons the wait; node-lifetime cancellation is terminal
+    /// and never surfaces a normal wait result (AI-001 TR-19). A wait already woken through its normal completion
+    /// mechanism still delivers its window when this token is cancelled afterwards (AI-002 TR-41).</param>
     /// <returns>
-    /// The notable observations accumulated since the previous wait completion — normally nothing on quiet expiry —
-    /// and whether an attended speaker's finished cue woke the wait. Sub-threshold observations are never promoted;
-    /// they remain recorded in the timeline and reachable through the history tool.
+    /// The observations its delivery window owns in FIFO ingestion order — the accumulation since the previous wait
+    /// completion plus any sub-threshold predecessors a fresh observation upgraded — and the wake reason. Quiet
+    /// expiry of an ordinary accumulation returns nothing: sub-threshold observations stay recorded in the timeline
+    /// and reachable through the history tool.
     /// </returns>
     internal async Task<WaitOutcome> WaitForNotableObservationsAsync(TimeSpan maxWait, CancellationToken cancellationToken)
     {
@@ -1229,18 +1347,25 @@ public abstract partial class Mind : Node
                 throw new InvalidOperationException($"Mind '{GetPath()}' supports exactly one active observation wait.");
             }
 
-            if (_notablePending)
+            if (PendingDeliveryUrgencyLocked() is { } heldUrgency)
             {
-                List<AgentObservation> window = [.. _notableAccumulation.Select(static entry => entry.Observation)];
+                // An already-deliverable window — held ordinary threshold or retained fresh urgency — is delivered
+                // immediately by this wait call (AI-001 TR-6, TR-43).
+                List<AgentObservation> held = [.. _notableAccumulation.Select(static entry => entry.Observation)];
                 ResetNotableAccumulationLocked();
-                return new WaitOutcome(window, AttendedSpeakerFinished: false);
+                return new WaitOutcome(
+                    held,
+                    heldUrgency == ObservationDeliveryUrgency.Fresh
+                        ? ObservationWaitWake.FreshObservation
+                        : ObservationWaitWake.ThresholdCrossed);
             }
 
             wait = _activeWait = new ActiveWait();
         }
 
-        bool speakerFinished = false;
-        List<AgentObservation> notable = [];
+        ObservationWaitWake wake = ObservationWaitWake.QuietExpiry;
+        List<AgentObservation> delivered = [];
+        bool wokenByCompletion = false;
         try
         {
             Task wakeOrExpiry = await Task.WhenAny(
@@ -1248,7 +1373,14 @@ public abstract partial class Mind : Node
                 Task.Delay(boundedWait, waitToken)).ConfigureAwait(false);
             if (ReferenceEquals(wakeOrExpiry, wait.Completion.Task))
             {
-                speakerFinished = await wait.Completion.Task.ConfigureAwait(false);
+                wokenByCompletion = true;
+                wake = await wait.Completion.Task.ConfigureAwait(false);
+            }
+            else
+            {
+                // Abandoned wait: cancellation — terminal node lifetime above all — must throw rather than surface a
+                // normal wait result (AI-001 TR-19).
+                waitToken.ThrowIfCancellationRequested();
             }
         }
         finally
@@ -1260,17 +1392,33 @@ public abstract partial class Mind : Node
                     _activeWait = null;
                 }
 
-                // The accumulation covers observations since the previous wait completion (AI-001 TR-6): any wait
-                // completion, early or quiet, starts a fresh accumulation window. Quiet expiry returns whatever is
-                // already notable — normally nothing — and never promotes sub-threshold observations.
-                notable = _notablePending
-                    ? [.. _notableAccumulation.Select(static entry => entry.Observation)]
-                    : [];
-                ResetNotableAccumulationLocked();
+                if (wokenByCompletion || !waitToken.IsCancellationRequested)
+                {
+                    // A wait that was woken completed through its normal mechanism and owns its window (AI-002
+                    // TR-41): it delivers the complete accumulation even when the external token was cancelled
+                    // after the wake — a wait-owned fresh signal invalidates the surrounding batch without
+                    // cancelling the wait — so only a wait that never woke treats cancellation as "never
+                    // completed" and retains its accumulation. The window covers observations since the previous
+                    // wait completion (AI-001 TR-6): any wait completion, early or quiet, starts a fresh
+                    // accumulation window. Quiet expiry returns only what is already deliverable and never
+                    // promotes sub-threshold observations — except that a pending fresh window, including one
+                    // racing this completion, is delivered with fresh urgency rather than reset (TR-43).
+                    if (_freshUrgencyPending || _notablePending)
+                    {
+                        if (_freshUrgencyPending)
+                        {
+                            wake = ObservationWaitWake.FreshObservation;
+                        }
+
+                        delivered = [.. _notableAccumulation.Select(static entry => entry.Observation)];
+                    }
+
+                    ResetNotableAccumulationLocked();
+                }
             }
         }
 
-        return new WaitOutcome(notable, speakerFinished);
+        return new WaitOutcome(delivered, wake);
     }
 
     private void ResetNotableAccumulationLocked()
@@ -1278,7 +1426,14 @@ public abstract partial class Mind : Node
         _notableAccumulation.Clear();
         _cumulativeNotableImportance = 0f;
         _notablePending = false;
+        _freshUrgencyPending = false;
     }
+
+    /// <summary>Gets the current pending delivery urgency, or null while the accumulation is not deliverable.</summary>
+    private ObservationDeliveryUrgency? PendingDeliveryUrgencyLocked()
+        => _freshUrgencyPending ? ObservationDeliveryUrgency.Fresh
+            : _notablePending ? ObservationDeliveryUrgency.Ordinary
+            : null;
 
     private TimeSpan MaxObservationWait
         => TimeSpan.FromSeconds(Math.Max(MaxObservationWaitSeconds, 0.05f));
@@ -1307,7 +1462,11 @@ public abstract partial class Mind : Node
 
     private static double GetStopwatchSeconds() => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
 
-    private readonly record struct PendingObservation(AgentObservation Observation, float Importance);
+    /// <summary>One staged accumulation entry with its once-evaluated importance and freshness (AI-001 TR-42).</summary>
+    internal readonly record struct PendingObservation(
+        AgentObservation Observation,
+        float Importance,
+        bool RequiresFreshTurn);
 
     /// <summary>
     /// One serialisable unit of perception work: either a percept fan-out or an observation awaiting atomic commit,
@@ -1320,10 +1479,63 @@ public abstract partial class Mind : Node
     private sealed record QueuedObservation(AgentObservation Observation) : PerceptionWork;
 
     /// <summary>
-    /// Outcome of one observation wait: the notable observations delivered and whether the attended-speaker-finished
-    /// cue completed the wait early.
+    /// Ownership token for one claimed pending observation window (AI-001 TR-44): delivery ownership transfers only
+    /// through Mind's claim API, and an abandoned — undelivered — claim restores its observations instead of losing
+    /// them.
     /// </summary>
-    /// <param name="Notable">Notable observations in FIFO ingestion order; empty on quiet expiry.</param>
-    /// <param name="AttendedSpeakerFinished">Whether an attended speaker finishing speech woke the wait early.</param>
-    internal readonly record struct WaitOutcome(IReadOnlyList<AgentObservation> Notable, bool AttendedSpeakerFinished);
+    internal sealed class ObservationDeliveryClaim
+    {
+        private int _settled;
+
+        internal ObservationDeliveryClaim(IReadOnlyList<PendingObservation> records, ObservationDeliveryUrgency urgency)
+        {
+            Records = records;
+            Urgency = urgency;
+            Observations = [.. records.Select(static record => record.Observation)];
+            TotalImportance = records.Sum(static record => record.Importance);
+            HasFreshRecords = records.Any(static record => record.RequiresFreshTurn);
+        }
+
+        /// <summary>Claimed observations in FIFO ingestion order.</summary>
+        public IReadOnlyList<AgentObservation> Observations
+        {
+            get;
+        }
+
+        /// <summary>Delivery urgency of the claimed window; fresh urgency dominates ordinary threshold delivery.</summary>
+        public ObservationDeliveryUrgency Urgency
+        {
+            get;
+        }
+
+        internal IReadOnlyList<PendingObservation> Records
+        {
+            get;
+        }
+
+        internal float TotalImportance
+        {
+            get;
+        }
+
+        internal bool HasFreshRecords
+        {
+            get;
+        }
+
+        /// <summary>Marks the claim settled after its delivery completed; later settlement attempts are no-ops.</summary>
+        internal void MarkSettled() => Interlocked.Exchange(ref _settled, 1);
+
+        /// <summary>Attempts to settle the claim as abandoned; only the first settlement restores ownership.</summary>
+        internal bool TryMarkAbandoned() => Interlocked.Exchange(ref _settled, 1) == 0;
+    }
+
+    /// <summary>
+    /// Outcome of one observation wait: the observations its delivery window owns and the wake reason that
+    /// completed it.
+    /// </summary>
+    /// <param name="Delivered">Delivered observations in FIFO ingestion order; empty on ordinary quiet expiry.</param>
+    /// <param name="Wake">Reason the wait completed: quiet expiry, attended-speaker cue, threshold crossing, or a
+    /// fresh observation that upgraded the complete accumulation.</param>
+    internal readonly record struct WaitOutcome(IReadOnlyList<AgentObservation> Delivered, ObservationWaitWake Wake);
 }

@@ -17,7 +17,8 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 
 ## User Requirements
 
-1. NPCs notice non-self speech, including speech from an unknown speaker.
+1. NPCs notice non-self speech, including speech from an unknown speaker, and every accepted non-self speech
+   observation immediately invalidates the observing NPC's stale reasoning as a fresh turn, regardless of attention.
 2. NPCs periodically notice visible subjects and retain relevant subjects in attention as that relevance decays.
 3. Recognised speakers and visible subjects can enter session prompt context when their attention reaches the
    configured threshold.
@@ -134,15 +135,16 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 ### Faculty Behaviour
 
 25. `SpeechPerception` compares the percept's source voice `Id` with the observer's current voice `Id` using ordinal
-    value equality. Equal values, including the installed character-owned voice ID, identify self speech and produce no
-    attention effect or observation.
+     value equality. Equal values, including the installed character-owned voice ID, identify self speech and produce
+     no attention effect or observation — and therefore no fresh turn.
 26. For non-self speech, `SpeechPerception` resolves current-scene characters whose composed voice `Id` ordinally equals
     the source voice `Id`. Blank configured candidate IDs do not match.
 27. Other values follow ordinary attribution handling: zero matches produce exactly one unknown `ObservedSpeech`; one
     match reinforces that character's canonical `FullId` and produces exactly one recognised `ObservedSpeech` with that
      `ActorId`; and multiple matches fail without attention, timeline, notable-accumulation, or other effects.
 28. Recognised and unknown observations retain the speech and raw local source voice `Id`. That ID remains operational
-    attribution, not authenticated provenance.
+     attribution, not authenticated provenance. Recognised and unknown `ObservedSpeech` must return `true` from
+     AI-001's `RequiresFreshTurn(ObservationContext)`; self speech emits nothing, so it produces no fresh turn.
 29. `VisualSurveyPerception` emits exactly one transient visual-presence observation for every subject `FullId` in
     percept order, duplicates included.
 30. `ActiveLookPerception` tracks the current `VisualCue?` from look-target transitions and owns live-cue validation
@@ -172,15 +174,18 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     and invalid observations roll back only that observation, earlier commits stand, later queue items continue, and
     lifetime cancellation and a final lifetime guard forbid post-exit commits.
 35. Transient observations apply their attention atomically and nothing else: no `ObservedAt` timestamp, no duplicate
-    history, no timeline entry, no notable-observation accumulation, no prompt history, and no committed-observation
-    notification. Durable observations ingest through AI-001's existing timeline and notable-observation accumulation
-    path, and existing wake and interruption signalling behaviour remains unchanged.
+     history, no timeline entry, no notable-observation accumulation, no prompt history, and no committed-observation
+     notification. Durable observations ingest through AI-001's existing timeline, notable-observation accumulation,
+     and freshness evaluation path: AI-001's `RequiresFreshTurn(ObservationContext)` decides fresh-turn delivery for
+     every accepted observation, and accepted non-self speech observations therefore require a fresh turn regardless
+     of attention membership.
 36. Attention is keyed by canonical `FullId` using ordinal comparison. Reinforcement applies
     `current + (maximum - current) * contribution` without exceeding maximum.
 37. Attention decays lazily and linearly with elapsed game time on percept commit, queries, and snapshots. Entries
-    below retention are evicted; every entry at or above the context threshold is eligible for context. Retention-level
-    snapshot presence is also the membership criterion for AI-002's attended-speaker determination — `speak` blocking
-    and `wait` waking — deliberately decoupled from the context threshold used for prompt-context eligibility.
+     below retention are evicted; every entry at or above the context threshold is eligible for context. Retention-level
+     snapshot presence is also the membership criterion for AI-002's attended-speaker determination — `speak` blocking
+     and `wait` waking — deliberately decoupled from the context threshold used for prompt-context eligibility.
+     Attention membership governs turn-taking only; it must not gate AI-001's fresh-turn delivery of non-self speech.
 38. Maximum must be finite and positive; decay must be finite and non-negative; thresholds must be finite and satisfy
     `0 <= retention <= context <= maximum`. Settings validation must complete before activation or mutation.
 39. Attention snapshots are immutable identity/value sequences ordered by `FullId` using ordinal comparison. Attention
@@ -245,7 +250,8 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 ### User Requirements
 
 1. NPCs record exactly one recognised or unknown speech memory for each accepted non-self speech publication and none
-   for self speech.
+   for self speech. Acceptance verifies recognised and unknown speech each require a fresh turn through AI-001's
+   `RequiresFreshTurn`, attended or not, while self speech produces no observation and no fresh turn.
 2. Periodic visual surveys reinforce every visible subject in survey order without producing visual memories.
 3. Session prompt context contains self and every currently resolvable attention-eligible character.
 4. Focusing a valid visual cue can create one durable subject description; clearing, an invalid or freed cue, or a cue
@@ -285,8 +291,9 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
    once without duplicate delivery, while already published work retains its faculty snapshot and tree exit removes
    handlers and cancels interpretation.
 8. Speech tests verify ordinal source/observer ID self filtering, including the installed character-owned voice ID;
-   ordinal zero, one, and ambiguous scene matching; ambiguity without effects; recognised `FullId` reinforcement; and
-   exactly one recognised or unknown observation.
+    ordinal zero, one, and ambiguous scene matching; ambiguity without effects; recognised `FullId` reinforcement;
+    exactly one recognised or unknown observation; and that recognised and unknown observations require a fresh turn
+    regardless of attention membership while self speech produces no observation.
 9. Visual faculty tests verify survey perception emits one transient visual-presence observation per subject `FullId`
    in percept order, duplicates included. Active-look and visual description tests verify clear, invalid or freed cues,
    and cues without resolvable subjects emit nothing; a valid cue awaits `Describe(scene, observer)` and emits one

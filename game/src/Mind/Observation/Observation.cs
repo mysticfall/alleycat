@@ -73,6 +73,17 @@ public abstract record Observation
     public abstract float CalculateImportance(ObservationContext context);
 
     /// <summary>
+    /// Determines whether this observation invalidates the observing character's current reasoning context and
+    /// therefore forces a fresh model turn. The default never requires a fresh turn; overrides evaluate
+    /// owner-relative identity against the supplied context.
+    /// </summary>
+    public virtual bool RequiresFreshTurn(ObservationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return false;
+    }
+
+    /// <summary>
     /// Calculates the ordered attention effects this observation applies when Mind commits it.
     /// </summary>
     public virtual IReadOnlyList<AttentionEffect> GetAttentionEffects(ObservationContext context)

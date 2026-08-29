@@ -128,8 +128,8 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
 
             MindBase.WaitOutcome outcome = await waitTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-            Assert.True(outcome.AttendedSpeakerFinished);
-            Assert.Empty(outcome.Notable);
+            Assert.Equal(MindBase.ObservationWaitWake.AttendedSpeakerFinished, outcome.Wake);
+            Assert.Empty(outcome.Delivered);
         }
         finally
         {
@@ -158,8 +158,8 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
                 voice.BeginSpeech();
                 voice.EndSpeech();
                 MindBase.WaitOutcome outcome = await waitTask;
-                Assert.False(outcome.AttendedSpeakerFinished);
-                Assert.Empty(outcome.Notable);
+                Assert.Equal(MindBase.ObservationWaitWake.QuietExpiry, outcome.Wake);
+                Assert.Empty(outcome.Delivered);
             }
         }
         finally

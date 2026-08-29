@@ -35,8 +35,6 @@ public sealed partial class SessionToolsIntegrationTests
     private const string CutShortBeforeSpoken =
         "Your speech was cut short by another event before it could be spoken.";
 
-    private const string CutShort = "Your speech was cut short by another event.";
-
     /// <summary>
     /// Blank speech is rejected through the voice contract without submitting or observing anything
     /// (AI-002 TR-25).
@@ -148,29 +146,31 @@ public sealed partial class SessionToolsIntegrationTests
     }
 
     /// <summary>
-    /// Cancellation after playback hand-off cuts the audible speech through the shared cut capability, keeps the
-    /// committed observation, and reports the cut-short result (AI-002 TR-27).
+    /// Cancellation landing after playback hand-off commits the speech: playback stays active — never cut by
+    /// cancellation or freshness — and exactly one self observation is ingested with the delivered result
+    /// (AI-002 TR-27, SPCH-005 UR-14/TR-25).
     /// </summary>
     [Fact]
-    public async Task Speak_CancelledAfterHandOff_CutsVoiceAndKeepsCommittedObservation()
+    public async Task Speak_CancelledAfterHandOff_KeepsCommittedSpeechUncutAndObservesOnce()
     {
         await using ToolFixture fixture = new(addAiVoice: true);
         await fixture.ReadyAsync();
         using CancellationTokenSource cancellation = new();
 
-        Task<object?> speakTask = fixture.InvokeSpeakAsync("Cut mid-flight.", cancellation.Token).AsTask();
+        Task<object?> speakTask = fixture.InvokeSpeakAsync("Committed mid-flight.", cancellation.Token).AsTask();
         await fixture.HandOffVoice!.HandOffStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        Assert.True(fixture.HandOffVoice.IsSpeaking, "Hand-off opens the speaking window before the cut.");
+        Assert.True(fixture.HandOffVoice.IsSpeaking, "Hand-off opens the speaking window before cancellation.");
         cancellation.Cancel();
         fixture.HandOffVoice.CompleteHandOff();
         object? result = await speakTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.Equal(CutShort, result);
-        Assert.False(fixture.HandOffVoice.IsSpeaking, "The shared cut capability must close the speaking window.");
-        Assert.Equal(1, fixture.HandOffVoice.SpeechEndedCount);
+        Assert.Equal("Spoken through the configured voice.", result);
+        Assert.True(fixture.HandOffVoice.IsSpeaking, "Committed speech must never be cut by cancellation or freshness.");
+        Assert.Equal(0, fixture.HandOffVoice.SpeechEndedCount);
         ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(fixture.Mind.GetTimelineForTest()));
         Assert.Equal(fixture.Owner.FullId, committed.ActorId);
-        Assert.Equal("Cut mid-flight.", committed.Content);
+        Assert.Null(committed.VoiceId);
+        Assert.Equal("Committed mid-flight.", committed.Content);
     }
 
     /// <summary>

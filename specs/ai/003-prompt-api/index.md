@@ -11,7 +11,7 @@ status: draft
 
 Provide an authorable prompt-composition API that compiles ordered sections into the sole system instruction of an
 NPC's agent session, and an authorable event-history contract that renders observation records on demand for tool
-results and interruption injections.
+results and injected messages.
 
 ## Goal
 
@@ -24,7 +24,7 @@ control over how concrete observation types appear in chronological event histor
 2. Content authors can define exact event-history wording for known observation types and mandatory safe wording for
    unknown types, including one actor-relative observed-speech fragment.
 3. An NPC receives its observation history through on-demand renderings — `wait` results, timeline history (`history`)
-   tool results, and interruption injections — presented in chronological order with authored wording, rather than
+   tool results, and injected messages — presented in chronological order with authored wording, rather than
    through the session system instruction.
 4. Speech history distinguishes the NPC, a recognised other character, and an unknown speaker without exposing raw
    voice provenance as recognised identity or rendered wording.
@@ -49,7 +49,8 @@ control over how concrete observation types appear in chronological event histor
    `ICharacter Character`. It must not contain observations, lore-query state, or template render context.
 4. Prompt construction and template rendering must remain separate phases. Runtime observation records must be
    supplied only at render time — never compiled into section content — and must never enter the session-start render
-   dictionary: observations reach the model exclusively through AI-002 tool results and interruption injections.
+   dictionary: observations reach the model exclusively through AI-002 tool results, `wait` results, and injected
+   messages.
 5. `TextPromptSection` and `FilePromptSection` must contribute their authored text through the asynchronous build
    contract without altering content.
 6. `PromptStack` must expose an ordered array of `PromptSection` resources and asynchronous compilation through
@@ -78,8 +79,8 @@ control over how concrete observation types appear in chronological event histor
 14. Event history must select each concrete observation's fragment at render time by exact, case-sensitive `TypeKey`
     comparison performed in code, rendering the individually compiled template parsed from the matching authored
     section instead of composing fragments into one generated template source. It must not use global mutable partial
-    registration, an observation visitor, or observation-owned formatting. It renders observation records for AI-002
-    `wait` results, timeline history (`history`) tool results, and interruption injections.
+     registration, an observation visitor, or observation-owned formatting. It renders observation records for AI-002
+     `wait` results, timeline history (`history`) tool results, and injected messages.
 15. Each observation record from the timeline snapshot must pass directly to the template compiler as the current
     context when its selected fragment renders. This must preserve the record's fragment-visible properties. Unknown
     concrete observations must render the fallback with the same record data.
@@ -162,7 +163,7 @@ control over how concrete observation types appear in chronological event histor
 - Cross-cutting session guidance aligned with AI-002: tool-call-only frame and game-time timestamp literacy, with
   per-tool mechanics and etiquette carried by tool descriptions.
 - On-demand event-history rendering through the standalone `game/prompts/event_history.md` fragment file for AI-002
-  `wait` results, timeline history tool results, and interruption injections.
+  `wait` results, timeline history tool results, and injected messages.
 - Default pseudo-XML prompt writer and existing templating-system integration.
 - AgenticMind's prompt/render/tool boundary from AI-006, excluding incoming percept interpretation.
 
@@ -224,7 +225,7 @@ control over how concrete observation types appear in chronological event histor
 17. Tests verify the prompt API adds no top-level `now` key to the render context; absolute labels derive from the
      game-scoped game-time source.
 18. Event-history tests verify the exact `vision.description` fragment renders the subject `FullId` and description in
-    chronological `wait`, `history`, and interruption output without falling back to generic wording.
+    chronological `wait`, `history`, and injection output without falling back to generic wording.
 
 ## References
 

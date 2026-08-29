@@ -389,7 +389,7 @@ public sealed class PerceptionMindIntegrationTests
         string ownerFullId = ((ICharacter)owner).FullId;
         int notableSignals = 0;
         mind.SetGameClockLoaderForTesting(() => clock);
-        mind.NotableSignalForTest(() => notableSignals++);
+        mind.DeliverySignalForTest(_ => notableSignals++);
         mind.AddChild(faculty);
         var root = new Node();
         root.AddChild(mind);
@@ -602,9 +602,11 @@ public sealed class PerceptionMindIntegrationTests
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
         public void IngestToolObservationsForTest(IReadOnlyList<AgentObservation> observations)
             => IngestToolObservations(observations);
-        public void NotableSignalForTest(Action handler) => NotableObservationsSignalled += handler;
+        public void DeliverySignalForTest(Action<ObservationDeliverySignal> handler)
+            => ObservationDeliverySignalled += handler;
         public void ObserveForTest(AgentObservation observation) => Observe(observation);
-        public IReadOnlyList<AgentObservation>? TakeNotableForTest() => TryTakePendingNotableWindow();
+        public IReadOnlyList<AgentObservation>? TakeNotableForTest()
+            => TryClaimPendingObservationDelivery()?.Observations;
         protected override ICharacter ResolveOwningCharacter() => owner;
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
     }

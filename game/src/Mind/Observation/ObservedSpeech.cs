@@ -29,6 +29,17 @@ public sealed record ObservedSpeech(
         return string.Equals(ActorId, context.Character.FullId, StringComparison.Ordinal) ? 0f : 1f;
     }
 
+    /// <summary>
+    /// Requires a fresh turn for every accepted non-self speaker: recognised other characters, unknown speakers,
+    /// and any actor identity that is not the observing character's exact full ID. Exact self speech never
+    /// requires one.
+    /// </summary>
+    public override bool RequiresFreshTurn(ObservationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return !string.Equals(ActorId, context.Character.FullId, StringComparison.Ordinal);
+    }
+
     /// <inheritdoc />
     public override IReadOnlyList<AttentionEffect> GetAttentionEffects(ObservationContext context)
     {

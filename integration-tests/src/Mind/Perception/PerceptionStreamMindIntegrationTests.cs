@@ -149,7 +149,7 @@ public sealed class PerceptionStreamMindIntegrationTests
         var clock = new CountingGameClock { CurrentSeconds = 10d };
         mind.SetGameClockLoaderForTesting(() => clock);
         int notableSignals = 0;
-        mind.NotableSignalForTest(() => notableSignals++);
+        mind.DeliverySignalForTest(_ => notableSignals++);
         var faculty = new EmittingFaculty();
         mind.AddChild(faculty);
         var root = new Node();
@@ -308,8 +308,10 @@ public sealed class PerceptionStreamMindIntegrationTests
     {
         public List<AgentObservation> Ingested { get; } = [];
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
-        public void NotableSignalForTest(Action handler) => NotableObservationsSignalled += handler;
-        public IReadOnlyList<AgentObservation>? TakeNotableForTest() => TryTakePendingNotableWindow();
+        public void DeliverySignalForTest(Action<ObservationDeliverySignal> handler)
+            => ObservationDeliverySignalled += handler;
+        public IReadOnlyList<AgentObservation>? TakeNotableForTest()
+            => TryClaimPendingObservationDelivery()?.Observations;
         protected override ICharacter ResolveOwningCharacter() => owner;
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
     }

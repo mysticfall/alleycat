@@ -22,12 +22,16 @@ namespace AlleyCat.Mind.AI;
 /// used unchanged through <see cref="IChatClient"/>.
 /// </para>
 /// <para>
-/// Thread safety: <see cref="SignalInterruption"/> may be called from any thread; the transcript itself is only
-/// touched by <see cref="RunAsync"/>.
+/// Thread safety: <see cref="QueueInjection"/>, <see cref="QueueFreshInjection"/>,
+/// <see cref="InvalidateForFreshTurn(bool, bool)"/>, and <see cref="AbandonFreshInjection"/> may be called from any
+/// thread; the transcript itself is only touched by <see cref="RunAsync"/>.
 /// </para>
 /// </remarks>
 internal sealed class AgentSessionRunner
 {
+    /// <summary>Canonical cancellation result for every tool call that produced no natural result (AI-002 TR-40).</summary>
+    private const string CancelledActionResult = "The action was cancelled before it completed.";
+
     private static readonly TimeSpan[] _defaultRetryDelays =
     [
         TimeSpan.FromSeconds(1),
@@ -46,7 +50,11 @@ internal sealed class AgentSessionRunner
     private readonly IInvalidResponseRecoveryPolicy _invalidResponseRecoveryPolicy;
     private readonly ConcurrentQueue<string> _pendingInjections = new();
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
+    private readonly Lock _freshInjectionGateLock = new();
+    private TaskCompletionSource _freshInjectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _pendingFreshInjections;
     private CancellationTokenSource? _phaseCancellation;
+    private int _freshInvalidation;
     private volatile bool _ended;
 
     public AgentSessionRunner(
@@ -81,12 +89,13 @@ internal sealed class AgentSessionRunner
     }
 
     /// <summary>
-    /// Signals newly notable observations while the session runs (AI-002 TR-41): the active phase is cancelled —
-    /// discarding partial generation output, or letting an in-flight tool return its cut-short result — and the
-    /// supplied message is appended as an injected user message before the next request replays the transcript.
+    /// Queues an ordinary injected user message (AI-002 TR-39): the payload coalesces in FIFO order with every
+    /// other pending payload into one injected user message appended at the next natural model-request boundary the
+    /// session reaches. Ordinary injection never cancels an in-flight request, tool, backoff, or speech, never
+    /// consumes a recovery budget, and never issues a model request of its own.
     /// </summary>
-    /// <param name="injectedMessage">Concise rendered summary of the notable observations.</param>
-    public void SignalInterruption(string injectedMessage)
+    /// <param name="injectedMessage">Concise rendered summary of the ordinary notable observations.</param>
+    public void QueueInjection(string injectedMessage)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(injectedMessage);
         if (_ended)
@@ -95,15 +104,142 @@ internal sealed class AgentSessionRunner
         }
 
         _pendingInjections.Enqueue(injectedMessage);
+    }
+
+    /// <summary>
+    /// Records a fresh-turn invalidation (AI-002 TR-40) that immediately supersedes every piece of work originating
+    /// from the current stale response: the active phase — generation, invalid-response backoff, or the active tool
+    /// call of a validated batch — is cancelled co-operatively at once, and the stale latch persists across
+    /// generation, validation, backoff, and the complete remaining tool batch until the replacement request is
+    /// issued. A response returned by a non-cooperative provider after its generation was invalidated is discarded.
+    /// </summary>
+    /// <param name="expectFreshInjection">
+    /// Whether the caller will deliver the fresh payload through <see cref="QueueFreshInjection"/> — establishing a
+    /// rendering barrier that keeps the replacement request behind the asynchronously rendered payload — and release
+    /// it through <see cref="AbandonFreshInjection"/> when delivery is impossible. Wait-owned deliveries, whose wait
+    /// result is the sole delivery channel, pass false.
+    /// </param>
+    public void InvalidateForFreshTurn(bool expectFreshInjection)
+        => InvalidateForFreshTurn(expectFreshInjection, cancelActivePhase: true);
+
+    /// <summary>
+    /// Records a fresh-turn invalidation (AI-002 TR-40) whose cancellation of the active phase is optional: a
+    /// wait-owned fresh signal passes <paramref name="cancelActivePhase"/> as false because the woken wait — the
+    /// active phase and the sole delivery channel for its window — must complete naturally with its delivery
+    /// (AI-002 TR-41), after which the stale latch persists across the wait's natural result, skips the batch's
+    /// remaining calls with canonical cancellation results, and precedes exactly one replacement request. Every
+    /// other caller cancels the active phase co-operatively at once.
+    /// </summary>
+    public void InvalidateForFreshTurn(bool expectFreshInjection, bool cancelActivePhase)
+    {
+        if (_ended)
+        {
+            return;
+        }
+
+        Volatile.Write(ref _freshInvalidation, 1);
+        if (expectFreshInjection)
+        {
+            lock (_freshInjectionGateLock)
+            {
+                ExpectFreshInjectionLocked();
+            }
+        }
+
+        if (cancelActivePhase)
+        {
+            CancelActivePhase();
+        }
+    }
+
+    /// <summary>
+    /// Queues the fresh replacement payload (AI-002 TR-40) and releases one rendering-barrier expectation: the
+    /// payload coalesces in FIFO order with every pending ordinary payload into the single injected user message
+    /// preceding the replacement request.
+    /// </summary>
+    /// <param name="injectedMessage">Concise rendered summary of the fresh observations and their accumulation.</param>
+    public void QueueFreshInjection(string injectedMessage)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(injectedMessage);
+        if (_ended)
+        {
+            return;
+        }
+
+        _pendingInjections.Enqueue(injectedMessage);
+        ReleaseFreshInjectionExpectation();
+    }
+
+    /// <summary>
+    /// Releases one rendering-barrier expectation without queueing a payload: the fresh delivery failed — its
+    /// observations were restored to Mind for later delivery — so the replacement request proceeds without an
+    /// injected message while the invalidation stays in force.
+    /// </summary>
+    public void AbandonFreshInjection()
+    {
+        if (_ended)
+        {
+            return;
+        }
+
+        ReleaseFreshInjectionExpectation();
+    }
+
+    /// <summary>
+    /// Cancels the currently registered phase — always the phase whose token discriminates self-inflicted
+    /// interruption from provider timeouts — quietly when that phase already completed naturally.
+    /// </summary>
+    private void CancelActivePhase()
+    {
         try
         {
             Volatile.Read(ref _phaseCancellation)?.Cancel();
         }
         catch (ObjectDisposedException)
         {
-            // The phase completed naturally after the signal was queued; the injection drains before the next
-            // request instead.
+            // The phase completed naturally after the invalidation was recorded; the stale latch still supersedes
+            // its response or skips its remaining batch calls before the replacement request.
         }
+    }
+
+    private void ExpectFreshInjectionLocked()
+    {
+        if (_pendingFreshInjections++ == 0)
+        {
+            _freshInjectionGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    private void ReleaseFreshInjectionExpectation()
+    {
+        lock (_freshInjectionGateLock)
+        {
+            if (_pendingFreshInjections > 0 && --_pendingFreshInjections == 0)
+            {
+                _ = _freshInjectionGate.TrySetResult();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Blocks the replacement request while any fresh payload is still expected but not yet queued (AI-002 TR-40
+    /// rendering barrier). Node-lifetime cancellation observed here ends the session without a replacement request.
+    /// </summary>
+    private async Task WaitForFreshInjectionsAsync(CancellationToken lifetimeToken)
+    {
+        Task gate;
+        lock (_freshInjectionGateLock)
+        {
+            gate = _pendingFreshInjections > 0 ? _freshInjectionGate.Task : Task.CompletedTask;
+        }
+
+        if (gate.IsCompleted)
+        {
+            return;
+        }
+
+        _logger.LogDebug("Agent session waiting for pending fresh-observation rendering before its next request.");
+        await gate.WaitAsync(lifetimeToken);
     }
 
     /// <summary>
@@ -122,13 +258,23 @@ internal sealed class AgentSessionRunner
             while (!lifetimeToken.IsCancellationRequested)
             {
                 DrainPendingInjections(transcript);
+                while (Interlocked.Exchange(ref _freshInvalidation, 0) != 0)
+                {
+                    // A fresh invalidation makes this boundary's request the replacement request (AI-002 TR-40):
+                    // it waits behind every still-rendering fresh payload, then drains the coalesced injection
+                    // before leaving. A second signal during the drain re-enters the loop.
+                    await WaitForFreshInjectionsAsync(lifetimeToken);
+                    DrainPendingInjections(transcript);
+                }
+
                 requestCount++;
 
                 ChatResponse? response = await RequestWithTransportRetryAsync(transcript, requestCount, lifetimeToken);
                 if (response is null)
                 {
-                    // Interrupted mid-generation: partial assistant output was discarded; the injected message
-                    // drains above and a fresh request replays the transcript (AI-002 TR-40).
+                    // Interrupted mid-generation — by fresh-turn invalidation or lifetime — so partial assistant
+                    // output was discarded; the drained injection and a fresh request replay the transcript
+                    // (AI-002 TR-40).
                     continue;
                 }
 
@@ -159,6 +305,20 @@ internal sealed class AgentSessionRunner
                 List<AIContent> results = new(calls.Length);
                 foreach (FunctionCallContent call in calls)
                 {
+                    lifetimeToken.ThrowIfCancellationRequested();
+                    if (Volatile.Read(ref _freshInvalidation) != 0)
+                    {
+                        // The originating response is stale (AI-002 TR-40): this and every remaining call is never
+                        // invoked, and each call ID without a natural result receives exactly one canonical
+                        // cancellation result so the appended exchange stays protocol-valid. Node lifetime is
+                        // checked first and stays terminal without synthetic results.
+                        _logger.LogDebug(
+                            "Agent session tool '{ToolName}' skipped: its response batch was invalidated.",
+                            call.Name);
+                        results.Add(new FunctionResultContent(call.CallId, CancelledActionResult));
+                        continue;
+                    }
+
                     results.Add(new FunctionResultContent(call.CallId, await InvokeToolAsync(call, lifetimeToken)));
                 }
 
@@ -189,8 +349,10 @@ internal sealed class AgentSessionRunner
         try
         {
             lifetimeToken.ThrowIfCancellationRequested();
-            if (recoveryCancellation.IsCancellationRequested)
+            if (recoveryCancellation.IsCancellationRequested || Volatile.Read(ref _freshInvalidation) != 0)
             {
+                // Superseded by a fresh-turn invalidation (AI-002 TR-40 versus TR-43): the fresh request replaces
+                // recovery without consuming the invalid-response budget or issuing an extra recovery request.
                 return false;
             }
 
@@ -207,7 +369,7 @@ internal sealed class AgentSessionRunner
                 _invalidResponseRecoveryPolicy.ConsecutiveFailureBudget);
             await _invalidResponseRecoveryPolicy.BackoffAsync(nextInvalidResponseCount, recoveryCancellation.Token);
             lifetimeToken.ThrowIfCancellationRequested();
-            return !recoveryCancellation.IsCancellationRequested;
+            return !recoveryCancellation.IsCancellationRequested && Volatile.Read(ref _freshInvalidation) == 0;
         }
         catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
         {
@@ -243,11 +405,24 @@ internal sealed class AgentSessionRunner
             Volatile.Write(ref _phaseCancellation, phase);
             try
             {
+                if (Volatile.Read(ref _freshInvalidation) != 0)
+                {
+                    // A fresh-turn invalidation superseded this attempt before or between transport retries
+                    // (AI-002 TR-40 versus TR-43): abandon it — the loop boundary drains the fresh payload and
+                    // issues the replacement request — without consuming the transport-retry budget.
+                    _logger.LogDebug(
+                        "Agent session request {RequestCount} superseded by a fresh-turn invalidation.",
+                        requestCount);
+                    return null;
+                }
+
                 _logger.LogDebug("Agent session request {RequestCount} starting.", requestCount);
                 ChatResponse response = await _chatClient.GetResponseAsync(transcript, _chatOptions, phase.Token);
                 lifetimeToken.ThrowIfCancellationRequested();
-                if (phase.IsCancellationRequested)
+                if (phase.IsCancellationRequested || Volatile.Read(ref _freshInvalidation) != 0)
                 {
+                    // Cancelled generation — or a non-cooperative provider returning after invalidation — is
+                    // discarded whole: the stale response is never validated, appended, or executed (AI-002 TR-40).
                     _logger.LogDebug("Agent session request {RequestCount} interrupted.", requestCount);
                     return null;
                 }
@@ -260,9 +435,10 @@ internal sealed class AgentSessionRunner
             }
             catch (OperationCanceledException) when (phase.Token.IsCancellationRequested)
             {
-                // Self-inflicted phase cancellation — issued only by SignalInterruption, always before its own
-                // cancellation can arrive — is the expected interruption path: never a backend failure, never
-                // retried (AI-002 TR-41).
+                // Self-inflicted phase cancellation — issued only by a fresh-turn invalidation, always after the
+                // stale latch is set and always before its own cancellation can arrive — is the expected
+                // invalidation path: never a backend failure, never retried (AI-002 TR-40/41). Node-lifetime
+                // cancellation is checked first and stays terminal (TR-44).
                 _logger.LogDebug("Agent session request {RequestCount} interrupted.", requestCount);
                 return null;
             }
@@ -274,7 +450,30 @@ internal sealed class AgentSessionRunner
                     "Agent session request {RequestCount} failed transiently; retrying in {RetryDelay}.",
                     requestCount,
                     delay);
-                await Task.Delay(delay, lifetimeToken);
+                var retryCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+                Volatile.Write(ref _phaseCancellation, retryCancellation);
+                try
+                {
+                    await Task.Delay(delay, retryCancellation.Token);
+                }
+                catch (OperationCanceledException) when (!lifetimeToken.IsCancellationRequested)
+                {
+                    // A fresh-turn invalidation superseded the pending retry (AI-002 TR-40): the stale request is
+                    // never re-issued and the transport-retry budget is not consumed by the invalidation.
+                    _logger.LogDebug(
+                        "Agent session request {RequestCount} retry superseded by a fresh-turn invalidation.",
+                        requestCount);
+                    return null;
+                }
+                finally
+                {
+                    if (ReferenceEquals(Volatile.Read(ref _phaseCancellation), retryCancellation))
+                    {
+                        Volatile.Write(ref _phaseCancellation, null);
+                    }
+
+                    retryCancellation.Dispose();
+                }
             }
             catch (Exception exception) when (IsTransientTransportFailure(exception, phase.Token))
             {
@@ -320,10 +519,11 @@ internal sealed class AgentSessionRunner
         }
         catch (OperationCanceledException)
         {
-            // Interruption makes a tool return early with an interrupted result (AI-002 TR-39); production tools
-            // normally report their own cut-short wording.
+            // Fresh-turn invalidation makes a co-operatively cancelled tool return early with the canonical
+            // cancelled result (AI-002 TR-39/40); production tools normally report their own cut-short wording, and
+            // a tool that crossed its commit boundary keeps its natural result above.
             _logger.LogDebug("Agent session tool '{ToolName}' interrupted.", function.Name);
-            return "The action was interrupted before it completed.";
+            return CancelledActionResult;
         }
         catch (Exception exception)
         {
@@ -344,13 +544,32 @@ internal sealed class AgentSessionRunner
         }
     }
 
+    /// <summary>
+    /// Drains every pending payload in FIFO signalling order into exactly one injected user message (AI-002
+    /// TR-39/40): ordinary and fresh windows coalesce at the boundary, and the message precedes the next request.
+    /// </summary>
     private void DrainPendingInjections(List<ChatMessage> transcript)
     {
+        if (_pendingInjections.IsEmpty)
+        {
+            return;
+        }
+
+        List<string> payloads = [];
         while (_pendingInjections.TryDequeue(out string? injectedMessage))
         {
-            _logger.LogDebug("Agent session appending injected message after interruption.");
-            transcript.Add(new ChatMessage(ChatRole.User, injectedMessage));
+            payloads.Add(injectedMessage);
         }
+
+        if (payloads.Count == 0)
+        {
+            return;
+        }
+
+        _logger.LogDebug(
+            "Agent session appending {PayloadCount} coalesced injected payload(s) before the next request.",
+            payloads.Count);
+        transcript.Add(new ChatMessage(ChatRole.User, string.Join("\n", payloads)));
     }
 
     private static IReadOnlyDictionary<string, AIFunction> ResolveFunctions(IList<AITool> productionTools)
@@ -545,9 +764,11 @@ internal sealed class AgentSessionRunner
     /// timeouts — the OpenAI SDK's network timeout and <c>HttpClient</c> timeouts — surface as
     /// <see cref="TaskCanceledException" />/<see cref="OperationCanceledException" /> on a linked token rather than as
     /// <see cref="TimeoutException" /> and without cancelling the phase token, so a cancellation that cancelled
-    /// neither the lifetime token nor the phase token is by elimination such a transport timeout:
-    /// <see cref="SignalInterruption(string)" /> always cancels the phase token before its own cancellation can
-    /// arrive, making phase-cancellation state the only self-inflicted-interruption discriminator.
+    /// neither the lifetime token nor the phase token is by elimination such a transport timeout: a cancelling
+    /// <see cref="InvalidateForFreshTurn(bool, bool)" /> always cancels the phase token before its own cancellation
+    /// can arrive, the wait-owned no-cancel invalidation cancels nothing at all, and ordinary
+    /// <see cref="QueueInjection(string)" /> cancels nothing, making phase-cancellation state
+    /// the only self-inflicted-interruption discriminator.
     /// </summary>
     private static bool IsTransientTransportFailure(Exception exception, CancellationToken phaseToken)
     {

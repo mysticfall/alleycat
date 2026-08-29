@@ -49,6 +49,67 @@ public sealed class ObservationTests
     }
 
     /// <summary>
+    /// Observations never force a fresh turn unless their type explicitly overrides freshness.
+    /// </summary>
+    [Fact]
+    public void Observation_RequiresFreshTurn_DefaultsToFalse()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        ObservationContext context = new(owner);
+        var plain = new DefaultObservation();
+        var presence = new ObservedVisualPresence("char:subject");
+        var description = new ObservedVisualDescription("char:subject", "A red coat.");
+
+        Assert.False(plain.RequiresFreshTurn(context));
+        Assert.False(presence.RequiresFreshTurn(context));
+        Assert.False(description.RequiresFreshTurn(context));
+    }
+
+    /// <summary>
+    /// Freshness uses exact ordinal actor-to-owner identity, so only exact self speech avoids a fresh turn.
+    /// </summary>
+    [Theory]
+    [InlineData("char:owner", false)]
+    [InlineData("char:other", true)]
+    [InlineData(null, true)]
+    [InlineData("owner", true)]
+    [InlineData("char:owner:extra", true)]
+    public void ObservedSpeech_RequiresFreshTurn_IsOwnerRelativeAndOrdinalExact(
+        string? actorId,
+        bool expected)
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        ObservationContext context = new(owner);
+        var observation = new ObservedSpeech(actorId, "private-device", "Hello");
+
+        Assert.Equal(expected, observation.RequiresFreshTurn(context));
+        Assert.Equal(expected ? 1f : 0f, observation.CalculateImportance(context));
+    }
+
+    /// <summary>
+    /// Owner identity matching is case-sensitive, so the same ID differing only in case requires a fresh turn.
+    /// </summary>
+    [Theory]
+    [InlineData("CHAR:owner")]
+    [InlineData("char:Owner")]
+    public void ObservedSpeech_RequiresFreshTurn_IsCaseSensitive(string actorId)
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        var observation = new ObservedSpeech(actorId, "private-device", "Hello");
+
+        Assert.True(observation.RequiresFreshTurn(new ObservationContext(owner)));
+    }
+
+    /// <summary>
     /// ObservedAt defaults to null for records created outside Mind ingestion.
     /// </summary>
     [Fact]

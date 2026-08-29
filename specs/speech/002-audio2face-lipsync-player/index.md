@@ -96,10 +96,10 @@ workflow when they opt in to startup probing.
     (typed C# event or Godot signal) when audible playback finishes, observed
     through its existing `IsAudioPlaying` polling in `_Process`.
 14. The shared `LipSyncPlayer` base must expose a stop/cut capability that halts
-    both audio playback and lip-sync frame application immediately, and that
-    cancels the active streaming session's background download (session-linked
-    cancellation aborts the read loop and the HTTP request). Mind interruption
-    uses it to cut audible speech; ordinary non-streaming `/blendshapes`
+    both audio playback and lip-sync frame application immediately, for callers
+    that need to stop playback explicitly, and that cancels the active streaming
+    session's background download (session-linked cancellation aborts the read
+    loop and the HTTP request); ordinary non-streaming `/blendshapes`
     requests keep running to completion.
 15. Mode routing is decided client-side before the request is sent: resolved
     regression mode (including auto-adjusted Mark, Claire, and James models)

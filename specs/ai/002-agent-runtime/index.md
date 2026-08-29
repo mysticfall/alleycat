@@ -22,19 +22,22 @@ title: Agent Runtime
 1. From the moment an NPC's Mind activates until it leaves the scene or suffers an unrecoverable failure, the NPC
    sustains one continuous session and behaves consistently with everything it observed, said, and did during that
    session.
-2. Apart from runtime-driven interruption while it is already generating, the NPC receives updates about important
-   scene events only through the `wait`
-   tool. Waiting returns the notable observations accumulated since the previous wait, so an NPC that never waits
-   receives no updates about important scene events.
-3. A wait may finish early — when something important happens, or when a speaker the NPC attends to finishes speaking
-   — and otherwise completes after its requested duration. Its result states the notable observations, how long the
-   wait lasted, and the current game time.
+2. Ordinary important scene events reach the NPC through the `wait`
+   tool and, when no wait owns them, through one coalesced injected message at the next model request the session
+   would make naturally — so an NPC that never waits still receives them, without extra requests and without
+   cancelling work in progress. Newly observed non-self speech instead immediately replaces the NPC's stale
+   reasoning as a fresh turn, regardless of importance or attention (AI-001).
+3. A wait may finish early — when accumulated observations become important, when a fresh observation arrives
+   regardless of importance, or when a speaker the NPC attends to finishes speaking — and otherwise completes after
+   its requested duration. Its result states the delivered observations, how long the wait lasted, and the current
+   game time.
 4. The NPC can recall its own past at any time through the timeline history tool — exposed to the model as `history` —
    including minor events that wait results did not surface.
 5. The NPC must not talk over a speaker it attends to: speech submitted while such a speaker's speaking window is open
    waits until that window closes.
-6. When the NPC's speech is cut short by another event, the NPC learns this through the speak result rather than an
-   error, and may react to the interruption.
+6. When the NPC's speech is withdrawn before it becomes audible — because a fresh observation replaced the stale
+   turn — the NPC learns this through the speak result rather than an error, and may react. Speech that has become
+   audible is committed and is never cut by observation freshness.
 7. Spoken responses must use the NPC's character-owned in-world voice rather than normal chat text, and successful
    speech must be remembered exactly once as the NPC's own observed speech.
 8. Voice availability must constrain speech only, not whether the NPC can run the session or use other tools.
@@ -112,8 +115,8 @@ title: Agent Runtime
     generation but must not make an otherwise valid multi-call batch fail local validation.
 14. After each successful batch, the runtime must append all assistant tool calls and the corresponding tool results
     to the transcript in order, then issue the next request by replaying the complete transcript. Only the system
-    instruction, the optional bootstrap input message (TR-7), assistant tool calls, tool-result messages, and injected
-    messages (TR-40) may enter the transcript;
+    instruction, the optional bootstrap input message (TR-7), assistant tool calls, tool-result messages, and
+    injected messages (TR-39, TR-40) may enter the transcript;
     structured envelopes and ingested observations must not be exposed to the model beyond the tool-result message.
 15. The transcript is session-scoped transient protocol and must be discarded when the session ends. The Mind timeline
     under [AI-001](../001-mind/index.md) is the only durable memory.
@@ -165,19 +168,20 @@ title: Agent Runtime
       weight or score. Voices whose speaker cannot be attributed to a current-scene character must not block; this is
       an accepted limitation of the attribution model. This blocking is the turn-taking guard and replaces the former
       turn-start speaking gate;
-    - await the explicitly cancellable submission (SPCH-005 TR-25) through playback hand-off, passing the session
-      cancellation token to the configured character-owned `IVoice.SpeakAsync(...)`;
+    - await the explicitly cancellable submission (SPCH-005 TR-25) through playback hand-off, passing a cancellation
+      token that covers session lifetime and fresh-turn invalidation to the configured character-owned
+      `IVoice.SpeakAsync(...)`;
     - return exactly one actorless `ObservedSpeech` in its `AgentToolResult` at hand-off, not at admission; and
     - optionally return a transient model-facing acknowledgement.
 26. Playback hand-off, not admission, is the successful tool-action boundary. Failure or cancellation before hand-off
     must produce no observed speech (silent abort, SPCH-005 TR-25); cancellation after hand-off does not retract the
     committed item.
-27. On interruption while speak is in flight, the tool must return early with a result stating that the speech was cut
-    short by another event; it must not throw. The explicitly cancellable pre-hand-off submission must be cancelled
-    silently — no `SpeechFailed`, no `IHearing`
-    broadcast, no listener notification — and speech already at or past hand-off must be cut: audio and lip-sync stop
-    through the shared `LipSyncPlayer`
-    stop/cut capability (SPCH-001/SPCH-002). Ordinary non-tool callers retain admission-only semantics (SPCH-005 TR-25).
+27. When fresh-turn invalidation withdraws a speak in flight before playback hand-off, the tool must return early
+    with a result stating that the speech was not delivered; it must not throw. The explicitly cancellable
+    pre-hand-off submission must be cancelled silently — no `SpeechFailed`, no `IHearing`
+    broadcast, no listener notification. Speech at or past playback hand-off is committed: freshness must not cut
+    audible speech or retract the committed item and its self-observation. Ordinary non-tool callers retain
+    admission-only semantics (SPCH-005 TR-25).
 28. `SpeechTool` must resolve the raw `IVoice`
     from the context Character's authored component projection. It must not depend on an AgenticMind voice property,
     special case, or duplicate voice binding.
@@ -190,17 +194,23 @@ title: Agent Runtime
 31. `wait`
     must accept an optional duration argument with a sensible default of 10 seconds (today's `MaxObservationWaitSeconds`
     default).
-32. A `wait` call must return the notable observations accumulated since the previous `wait`
-    call, the elapsed wait duration, and a current game timestamp (TR-37).
+32. A `wait` call must return the observations its delivery window owns in FIFO ingestion order — the notable
+    observations accumulated since the previous `wait`
+    call, plus any sub-threshold predecessors a fresh observation upgraded — together with the elapsed wait duration
+    and a current game timestamp (TR-37).
 33. A wait in progress must finish early when AI-001's cumulative-importance machinery makes accumulated observations
-    notable, and when an attended speaker finishes speaking (the attended-speaker-finished cue, AI-001). The same
-    attention-snapshot membership rule as speak blocking (TR-25) decides which speakers wake the wait.
+    notable, when a fresh observation arrives regardless of the importance threshold (AI-001), and when an attended
+    speaker finishes speaking (the attended-speaker-finished cue, AI-001). The same attention-snapshot membership
+    rule as speak blocking (TR-25) decides which speakers wake the wait through the attended-speaker cue only;
+    fresh-turn delivery is not attention-gated.
 34. Observations whose accumulated importance stays below the configured threshold must not be pushed into wait
-    results. They remain in the timeline and are reachable through the `history` tool.
+    results on their own. They remain in the timeline and are reachable through the `history`
+    tool until a fresh observation upgrades the complete accumulation into the wait result (TR-32).
 35. The `wait`
     tool description is the sole carrier of the tool's mechanics and etiquette. It must make clear that the tool's
-    purpose is to observe the scene, not to pass time: without invoking it, the agent receives no updates about
-    important scene events. It must include wait etiquette — for example, after asking another character a question,
+    purpose is to observe the scene, not to pass time: waiting is how the agent receives scene updates promptly,
+    since without invoking it updates arrive only at the session's next natural request. It must include wait
+    etiquette — for example, after asking another character a question,
     wait a reasonable duration before assuming refusal and reacting. The session prompt carries no per-tool mechanics;
     its guidance is cross-cutting only.
 
@@ -220,17 +230,33 @@ title: Agent Runtime
     under `AlleyCat.Core.Time`, exposing elapsed in-game seconds. For now in-game time advances with real time; no
     day/night cycle exists.
 
-### Interruption
+### Observation Delivery And Turn Invalidation
 
-39. During a tool invocation, interruption must make the tool return early with a cut-short or interrupted result (for
-    example speak, TR-27); committed actions and observations remain committed.
-40. During model generation, interruption must cancel the in-flight request, discard partial assistant output, append
-    the new information to the transcript as an injected message — observation content rendered through the AI-003
-    event-history contract, with no prompt-stack dependency — and resume with a fresh request replaying the
-    complete transcript. Partial assistant output must never be retained.
-41. When AI-001's machinery makes new observations notable, it must signal the session runtime so the runtime applies
-    TR-39 or TR-40 as applicable. Expected interruption must not be reported as a backend failure and must not trigger
-    transport retry.
+39. Ordinary notable observations must never cancel an in-flight model request, an active tool, or pending speech.
+    When no active `wait` owns them, the runtime must coalesce every pending undelivered observation window in FIFO
+    order into one injected user message — observation content rendered through the AI-003 event-history contract,
+    with no prompt-stack dependency — appended to the transcript at the next natural model-request boundary the
+    session reaches. The runtime must not issue a separate request solely to deliver ordinary observations.
+40. A fresh observation (AI-001) must immediately invalidate the stale model response and every piece of work
+    originating from it:
+    - during model generation, cancel the in-flight request and discard partial assistant output; a response that
+      arrives after its generation was invalidated must be discarded and never retained;
+    - during a validated tool batch, cancel the active call co-operatively where possible, never invoke the
+      remaining stale calls, retain every already-committed effect without rollback, and emit exactly one
+      protocol-valid result for every assistant tool-call ID in the batch — synthesising canonical cancelled results
+      for unstarted calls, and keeping a real result only where a non-cooperative call crossed its commit boundary;
+    - append the complete assistant tool calls with one result per call ID so the provider protocol remains valid,
+      then append the fresh observation and the pending accumulation as one injected message (AI-003 event-history
+      rendering) and issue a single fresh request replaying the complete transcript.
+    Invalidation must persist across generation, response validation, and invalid-response recovery backoff until the
+    fresh request is issued.
+41. When AI-001 commits observations, it must signal the session runtime with delivery urgency — ordinary versus
+    fresh — and whether an active `wait` owns the delivery. The runtime applies TR-39 or TR-40 as applicable. A fresh
+    observation arriving during an active `wait` must fulfil that wait through its normal completion mechanism —
+    returning the complete pending accumulation plus the fresh observation in FIFO order — and must not duplicate
+    that delivery as an injected user message; freshness still invalidates the surrounding stale batch and skips its
+    remaining calls. A fresh wake must never surface generic action-interrupted wording. Expected invalidation must
+    not be reported as a backend failure and must not trigger transport retry.
 
 ### Failure And Cancellation
 
@@ -246,12 +272,13 @@ title: Agent Runtime
     response, issue a fresh request that replays only the last valid transcript, and produce no assistant transcript
     entry, tool invocation, tool result, observation, or other in-world effect from that response. The consecutive
     invalid-response failure streak resets only after an entire response batch validates. Only exhaustion of this
-    budget may end the session through the contained failure path. Node-lifetime cancellation and observation-driven
-    generation interruption take precedence over this recovery: they must not consume its budget or cause an
-    additional recovery request, and TR-40's injected-message resumption semantics remain unchanged.
-44. Node-lifetime cancellation from AI-001 must propagate through active requests and tool work. Expected interruption
-    and lifetime cancellation must not trigger retry, further unintended session activity, or misleading failure
-    diagnostics.
+    budget may end the session through the contained failure path. Node-lifetime cancellation and fresh-turn
+    invalidation take precedence over this recovery: they must not consume its budget or cause an additional
+    recovery request, and TR-40's replacement-request semantics remain unchanged.
+44. Node-lifetime cancellation from AI-001 must propagate through active requests and tool work and is terminal: it
+    takes precedence over fresh-turn invalidation and must settle without synthetic tool results, a replacement
+    request, or any other follow-up session activity. Expected interruption and lifetime cancellation must not
+    trigger retry, further unintended session activity, or misleading failure diagnostics.
 45. Queued or deferred tool tasks must settle when Mind exits, without dispatch or successful observation. Deferred
     callbacks must not access services from the exited node.
 46. AI-001 is normative for node lifetime, actor stamping, atomic ingestion, notable-observation accumulation, and
@@ -307,13 +334,15 @@ title: Agent Runtime
 - The `speak`, `wait`, and timeline history (`history`) tool inventory, including the standard `AgentToolResult`
   contract.
 - `speak`
-  blocking turn-taking, cut-short interruption results, playback hand-off as the success boundary, and exactly-once
-  observed-speech production.
+  blocking turn-taking, pre-hand-off withdrawal on fresh-turn invalidation, playback hand-off as the success
+  boundary, and exactly-once observed-speech production.
 - `wait`
-  notable-observation delivery, early finish on importance and attended-speech end, and observe-not-sleep guidance.
+  notable-observation delivery, early finish on importance, fresh observations, and attended-speech end, and
+  observe-not-sleep guidance.
 - Read-only timeline recall through the `history` tool.
 - The game-time convention for all time-sensitive tool results and the game-scoped game clock.
-- Interruption semantics for tool invocations and model generation, including injected-message resumption.
+- Ordinary boundary injection and fresh-turn invalidation for model generation and complete tool batches, including
+  injected-message resumption and one protocol-valid result per stale call ID.
 - Tool errors as tool results, separate bounded transport retry and invalid-response recovery, and contained
   session-ending failure after the applicable budget is exhausted.
 - Trusted typed `ScenarioContext`
@@ -331,7 +360,11 @@ title: Agent Runtime
 - Additional production tools beyond `speak`, `wait`, and the timeline history tool.
 - Provider-directed model repair or feedback for invalid output. Invalid-response recovery instead replays the last
   valid transcript through a fresh request.
-- Cancelling or reversing non-speech world actions already admitted before interruption or a later failure.
+- Cancelling or reversing world actions already admitted; fresh-turn invalidation performs no rollback of committed
+  effects.
+- Gameplay policy for interrupting already-audible speech; playback hand-off commits speech.
+- Speaker priority, addressee, audibility, and conversational-target metadata for classifying observed speech;
+  attention membership and name-text heuristics must not substitute for it.
 - Speech playback-finished success semantics.
 - Timeline summarisation, compaction, token budgeting, persistence, and provider transcript retention beyond the
   session.
@@ -348,14 +381,16 @@ title: Agent Runtime
    unrecoverable failure, with no session restart or re-anchoring, and later behaviour reflects earlier observations,
    speech, and actions of the same session.
 2. Wait-delivery coverage verifies notable observations accumulated since the previous wait are returned together with
-   the elapsed duration and a game timestamp, that important arrivals and an attended speaker finishing speech finish
-   the wait early, and that quiet expiry returns no sub-threshold observations.
+   the elapsed duration and a game timestamp, that important arrivals, fresh observations below the importance
+   threshold, and an attended speaker finishing speech finish the wait early, and that quiet expiry returns no
+   sub-threshold observations.
 3. Acceptance verifies an NPC that has not invoked `wait`
-   receives no updates about important scene events, and that the `wait`
+   still receives ordinary notable updates through one coalesced injected message at the next natural request
+   boundary, and that the `wait`
    tool description frames waiting as observation rather than passing time, including question-then-wait etiquette.
-4. Turn-taking coverage verifies an NPC does not begin speech while an attended speaker's window is open, and that
-   speech cut short by another event is reported through the speak result rather than an error, allowing the NPC to
-   react.
+4. Turn-taking coverage verifies an NPC does not begin speech while an attended speaker's window is open, that speech
+   withdrawn before playback hand-off by fresh-turn invalidation is reported through the speak result rather than an
+   error — allowing the NPC to react — and that audible speech is never cut by observation freshness.
 5. Speech and action coverage verifies character-owned in-world voice, exactly-once own observed speech, no false
    memory of failed or cancelled actions, and voice availability constraining speech only.
 6. Failure coverage verifies tool errors surface as tool results for the NPC to act on, while transport failures are
@@ -369,6 +404,9 @@ title: Agent Runtime
    effects, and an ownership mismatch produces no world effect.
 9. Diagnostics coverage verifies speech-pipeline latency diagnostics remain opt-in through the `AlleyCat.Pipeline`
    category's log level (CORE-007) and change no NPC behaviour.
+10. Fresh-turn coverage verifies newly observed non-self speech — recognised or unknown speaker, attended or not —
+    immediately replaces the NPC's stale reasoning, even below the configured importance threshold, and that
+    ordinary important observations never cancel active reasoning, tools, or pending and committed speech.
 
 ### Technical Requirements
 
@@ -402,29 +440,34 @@ title: Agent Runtime
    public observation recorder, sink, or direct tool-mutation path, and ingests ordered observation batches
    atomically.
 10. Speak tests verify blank-input rejection, the attended-speaker blocking filter including the unattributable-voice
-    exclusion, silent pre-hand-off cancellation, cutting of already-audible speech through the shared `LipSyncPlayer`
-    stop/cut capability, the non-throwing cut-short result on interruption, the playback hand-off success boundary
-    with no retraction after hand-off, exactly one actor-stamped self-relative `ObservedSpeech`, self-listener
-    exclusion, and resolution of the Character-authored `IVoice`
-    through the typed context.
+    exclusion, silent pre-hand-off withdrawal under fresh-turn invalidation, the non-throwing not-delivered result,
+    the playback hand-off success boundary with no retraction and no freshness-driven cutting of audible speech,
+    exactly one actor-stamped self-relative `ObservedSpeech`, self-listener exclusion, and resolution of the
+    Character-authored `IVoice` through the typed context.
 11. Wait tests verify the default duration of 10 seconds, delivery of the notable window accumulated since the
-    previous wait, early finish on the cumulative-importance threshold and on the attended-speaker-finished cue, the
-    elapsed-duration and game-timestamp result fields, and that sub-threshold observations never enter wait results
-    while remaining reachable through the `history` tool.
+    previous wait, early finish on the cumulative-importance threshold, on fresh observations below the threshold,
+    and on the attended-speaker-finished cue, the elapsed-duration and game-timestamp result fields, FIFO delivery
+    of the complete accumulation including sub-threshold predecessors on a fresh wake, delivery through the wait
+    result with no duplicate injected message, and that sub-threshold observations otherwise never enter wait
+    results while remaining reachable through the `history` tool.
 12. History tests verify the `history` tool is read-only, preserves timeline order, and answers from the Mind timeline
     rather than provider message logs.
 13. Game-clock tests verify a game-scoped game-time source (`IGameClock`) exists, is resolvable from the Game service
     provider, advances with real time, and backs every time-sensitive tool-result timestamp and `ObservedAt` stamp.
-14. Interruption tests verify a tool in flight returns a cut-short or interrupted result, generation in flight is
-    cancelled with partial assistant output discarded and the new information appended as an injected message before a
-    fresh full-transcript request, committed actions and observations survive, and expected interruption produces no
-    backend-failure diagnostics or retry.
+14. Delivery-and-invalidation tests verify ordinary notable observations never cancel generation, tools, or speech
+    and arrive as one coalesced injected message at the next natural request boundary without a separate request;
+    fresh observations cancel in-flight generation, including a provider response arriving after cancellation;
+    a stale tool batch is completed with exactly one protocol-valid result for every assistant call ID —
+    co-operative cancellation of the active call, canonical cancelled results for unstarted calls, and a retained
+    real result only where a non-cooperative call crossed its commit boundary, without rollback; the complete
+    assistant exchange precedes the fresh injected message; and expected invalidation produces no backend-failure
+    diagnostics or retry.
 15. Failure tests verify tool errors are returned through tool results; transport failures use only the bounded
     transport-retry policy and are never surfaced to the agent; and invalid responses use only a separate bounded
     consecutive-invalid-response recovery policy. They verify a fresh request replays the last valid transcript after
     each invalid response, the invalid-response streak resets only after complete response validation, and contained
-    failure occurs only when the applicable budget is exhausted. They also verify cancellation and observation-driven
-    generation interruption neither consume the invalid-response budget nor issue an additional recovery request.
+    failure occurs only when the applicable budget is exhausted. They also verify cancellation and fresh-turn
+    invalidation neither consume the invalid-response budget nor issue an additional recovery request.
 16. Diagnostics tests verify the dual `LoggingChatClient`
     request/response gate with deferred serialisation and either-control suppression, decoration before session
     execution, unchanged behaviour with diagnostics enabled or disabled, isolation from STT and TTS traffic and shared
@@ -432,7 +475,8 @@ title: Agent Runtime
     body logging, gated non-secret structural evidence, and the separate reasoning-logging gate with its off-switch
     default.
 17. Node-exit tests verify active and queued work settles without delayed dispatch, successful observation, retry,
-    exited-node service access, or erroneous expected-cancellation diagnostics.
+    exited-node service access, or erroneous expected-cancellation diagnostics, and that lifetime cancellation takes
+    precedence over fresh-turn invalidation, issuing no synthetic tool result or replacement request.
 18. Tests verify the runtime builds on `Microsoft.Agents.AI`
     where it fits and retains custom tool-only validation and wait wake semantics where the framework does not provide
     them, with no legacy generic terminal-result route selectable.

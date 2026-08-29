@@ -8,7 +8,8 @@ title: Mind Component
 ## Requirement
 
  The system must provide a Mind component that records an NPC's subjective observations in order, scores them through
- one contextual-importance pipeline, and accumulates notable observations for delivery to the NPC's agent session.
+ one contextual-importance pipeline, evaluates contextual freshness, and accumulates notable observations for
+ delivery to the NPC's agent session.
 
 ## Goal
 
@@ -20,8 +21,10 @@ title: Mind Component
 1. An NPC must remember, for its node lifetime, the ordered observations it perceived or produced through successful
    actions.
 2. Observations are retained by default. An observation type may suppress the latest equivalent retained observation
-   in its semantic scope; accepted important observations must reach the NPC promptly, while accepted observations
-   below the importance threshold remain recorded and browsable rather than being pushed.
+   in its semantic scope. Importance is accumulated delivery pressure: ordinary observations that cross the
+   importance threshold complete an active `wait` or coalesce for delivery at the next natural session boundary,
+   while observations below the threshold remain recorded and browsable unless a fresh turn delivers them. Ordinary
+   observations must never cancel the NPC's generation, tools, or speech.
 3. Speech history must attribute a speaker by matching the received voice ID to current-scene characters. It must
    distinguish the NPC, a recognised other character, and an unknown speaker without rendering the voice ID as
    identity wording. No match must remain unknown, while ambiguous matches must fail clearly.
@@ -33,8 +36,10 @@ title: Mind Component
    blocking the publisher.
 8. Character context assembled for the NPC's session prompt must contain self and every currently resolvable
    attention-eligible character, rather than every scene character unconditionally.
-9. Speech from speakers the NPC does not currently attend to, and speech that cannot be attributed to a character,
-   must neither wake the NPC's waits nor interrupt the NPC's session.
+9. Every accepted non-self speech observation — recognised or unknown speaker, attended or not — must immediately
+   reach the NPC's session as a fresh turn that replaces stale reasoning, regardless of the importance threshold.
+   Ambiguous speech that fails attribution produces no observation and therefore no fresh turn. Attention
+   membership governs turn-taking cues only and must not gate fresh-turn delivery.
 10. Every remembered event must carry the game time at which it was observed, in seconds elapsed since the game began.
 11. Looking at a valid visual subject may add its focused description to memory, without retaining repeated equivalent
     descriptions of that same subject.
@@ -51,16 +56,18 @@ title: Mind Component
 4. Every successfully ingested observation must enter both the timeline and the notable-observation accumulation.
    There must be no public recorder or sink contract and no timeline-only ingestion path.
 5. Accumulated observations must retain FIFO ingestion order. Disabling Mind must pause notable-observation delivery
-   and wake signalling while preserving accumulated entries for delivery after re-enable; timeline ingestion itself is
-   unaffected.
+   and wake signalling while preserving accumulated entries — including any retained fresh urgency — for delivery
+   after re-enable; timeline ingestion itself is unaffected. Fresh-turn delivery guarantees apply while the Mind is
+   enabled; broader disable-mode semantics are deferred (Out Of Scope).
 6. Mind must maintain the notable-observation accumulation with configurable cumulative importance threshold and
    maximum observation wait:
     - the accumulation covers observations ingested since the previous wait completion;
     - when the accumulated importance reaches the threshold, the accumulated observations become notable: an active
       `wait`
-      completes early with them, and pending notable observations are delivered by the next `wait` call; and
-    - when no wait is active and the session is generating, newly notable observations must signal the session runtime
-      to interrupt as defined by AI-002.
+       completes early with them, and pending notable observations are delivered by the next `wait` call; and
+     - when no wait is active, newly notable observations must be coalesced and injected at the next natural
+       model-request boundary of the always-running session (AI-002); ordinary notable observations must never
+       cancel generation, tool execution, or speech.
 7. The maximum observation wait must bound a single `wait`
    call and default to 10 seconds. Threshold and wait values remain configurable; final tuning stays flexible.
 8. Delivery must not exempt observations by source. Owning-character actions achieve calm through contextual
@@ -90,8 +97,10 @@ title: Mind Component
 18. Tree exit must establish one irreversible node-lifetime boundary that stops intake, session activity, timers, and
     cue subscriptions, and cancels active observation processing. Deferred callbacks must not access Mind services
     after exit.
-19. Node-lifetime cancellation must propagate through active agent and tool work. Expected interruption and lifetime
-    cancellation must not be reported as backend failures or trigger retries or unintended session activity.
+19. Node-lifetime cancellation must propagate through active agent and tool work and is terminal: it takes precedence
+    over fresh-turn invalidation and must issue no replacement request, synthetic tool result, or other follow-up
+    session activity. Expected interruption and lifetime cancellation must not be reported as backend failures or
+    trigger retries or unintended session activity.
 20. Mind's `SpeechPerception` faculty must resolve attribution only against `ICharacter`
     instances in the current scene. It must compare the percept's raw source voice `Id`
     ordinally with each character's composed `IVoice.Id`. Voice object-reference identity, lore prose, character
@@ -116,8 +125,9 @@ title: Mind Component
      which may omit the player, and the current scenario under
      [AI-008](../008-scenario/index.md). The owner appears in both `character` and `characters[owner.FullId]` as the
      exact same view instance, and assembly fails clearly for an invalid included identity, a duplicate exact included
-     `FullId`, or an owner absent from the scene context. The dictionary defines no `observations` key: observations
-     reach the model exclusively through the AI-002 session's tool results and interruption injections. AI-006
+      `FullId`, or an owner absent from the scene context. The dictionary defines no `observations` key: observations
+      reach the model exclusively through the AI-002 session's tool results, `wait` results, and injected messages.
+      AI-006
      normatively defines
      attention eligibility and scene resolution; AI-008
      normatively defines the two-phase construction order in which the core context is built first and completed with
@@ -146,8 +156,9 @@ title: Mind Component
     commits. This path must not select or assign an `IVision` look target.
 31. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation
     remains asynchronous through Mind's `IPerception` faculties. Outbound production-tool invocation must start once
-    through `AgentTool`
-    and the shared `IMainThreadDispatcher`; cancellation remains linked to session and Mind lifetime. The Game-scoped
+     through `AgentTool`
+     and the shared `IMainThreadDispatcher`; cancellation remains linked to session activity, fresh-turn invalidation
+     (AI-002), and Mind lifetime. The Game-scoped
     dispatcher owns accepted-work queueing and settlement, and AgenticMind must not retain local deferred voice or
     Godot-action machinery. The actor-stamped self-action speech observation commits exactly once at playback hand-off
     (SPCH-005 TR-26), not at admission, through ordinary Mind ingestion.
@@ -167,10 +178,11 @@ title: Mind Component
     or score — and signal the session runtime when such a speaker's window closes (`SpeechEnded`, SPCH-005 TR-2),
     waking an active `wait`
     and unblocking a blocked `speak`
-    under AI-002. Voices whose speaker cannot be attributed to a current-scene character must not signal; this is an
-    accepted limitation of the attribution model.
-36. Notable-observation signalling must never interrupt observation ingestion itself: ingestion is synchronous and
-    atomic, and wake or interruption signalling happens only after the batch has committed.
+     under AI-002. Voices whose speaker cannot be attributed to a current-scene character must not signal; this is an
+     accepted limitation of the attribution model. This cue is a turn-taking and wait-wake cue only; it must not
+     constrain fresh-turn speech invalidation (TR-43).
+36. Notable-observation and freshness signalling must never interrupt observation ingestion itself: ingestion is
+    synchronous and atomic, and wake or delivery signalling happens only after the batch has committed.
 37. `ObservationDuplicatePolicy` must default to `Allow`, retaining every submitted observation. An observation that
     selects `IgnoreEquivalent` must expose a stable duplicate scope and semantic equality that both exclude
     `ObservedAt`.
@@ -185,13 +197,30 @@ title: Mind Component
     record: no `ObservedAt` stamp, no duplicate-history comparison, no timeline entry, no notable-observation
     accumulation, no session prompt history, and no committed-observation notification. Durable observations alone
     follow the ordinary ingestion path that requirements 34-40 govern.
+42. `Observation` must expose contextual freshness through virtual `RequiresFreshTurn(ObservationContext)`, which
+    defaults to `false`. Mind must evaluate freshness exactly once during the same staged, duplicate-filtered
+    ingestion pass as importance — before timestamping, mutation, or commitment — and store the result with the
+    entry. Rejected duplicates must contribute neither importance nor freshness.
+43. Accepted non-self `ObservedSpeech` must require a fresh turn: recognised-external and unknown speech return
+    `true`, while exact self speech returns `false` through ordinal comparison with the observing character's exact
+    full ID. A fresh observation upgrades the complete current accumulation — including preceding sub-threshold
+    observations — to deliverable in FIFO order without depending on cumulative importance, and signals the session
+    runtime for immediate fresh-turn replacement as defined by AI-002. Attention membership must not gate
+    freshness.
+44. Mind's post-commit delivery signalling must carry delivery urgency — ordinary threshold-qualified delivery
+    versus fresh-turn urgency — and whether an active `wait` owns the delivery, rather than a single
+    notable-interruption signal. A claimed delivery must not be silently lost if asynchronous rendering fails:
+    ownership is retained or restored, and no replacement request may be issued without its invalidating context.
 
 ## In Scope
 
 - Mind-owned node-lifetime observation timeline and notable-observation accumulation.
 - Contextual importance calculation, validation, and stored values.
 - Unified external and tool-result observation ingestion.
-- Threshold and maximum-wait behaviour driving `wait` early completion and notable-observation delivery.
+- Threshold and maximum-wait behaviour driving `wait` early completion, ordinary boundary injection, and
+  notable-observation delivery.
+- Contextual freshness evaluation and fresh-turn delivery signalling, independent of the importance threshold and
+  attention membership.
 - Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
 - Immediate percept intake, ordered asynchronous faculty interpretation, deterministic fan-out, and Mind-owned
   attention under AI-006.
@@ -218,8 +247,15 @@ title: Mind Component
 - Perception- or sensing-driven eye presentation changes, including direct gaze assignment. AI-007 alone is the
   separately composed post-attention consumer that may assign a look target; unchanged Vision presentation remains
   mandatory acceptance scope.
-- Cueing on speech that cannot be attributed to a current-scene character; such speakers never wake or block and
-  remain an accepted limitation of the attribution model.
+- Attended-speaker-finished cueing on speech that cannot be attributed to a current-scene character; such speakers
+  never block `speak` or wake through the cue, while their accepted unknown speech observations still require a
+  fresh turn.
+- Gameplay policy for interrupting already-audible speech; playback hand-off commits speech and freshness must not
+  cut it (AI-002).
+- Reliable speaker priority, addressee, audibility, or conversational-target metadata; attention membership and
+  name-text heuristics must not substitute for it.
+- Distinct disable modes — such as agent-loop culling, sleep, unconsciousness, or permanent shutdown — beyond the
+  existing pause-and-retain `Enabled` behaviour.
 
 ## Acceptance Criteria
 
@@ -232,13 +268,17 @@ title: Mind Component
    as identity wording or treats it as authenticated provenance.
 3. Acceptance verifies bounded, privacy-safe behaviour, Character-owned speech, and safe containment for missing
    configuration, backend failure, cancellation, and node exit.
-4. Acceptance verifies important observations reach the NPC promptly through wait delivery or session interruption,
-   while sub-threshold observations stay recorded and browsable.
-5. Acceptance verifies speech from unattended or unattributable speakers neither wakes the NPC's waits nor interrupts
-   the NPC's session.
+4. Acceptance verifies important observations reach the NPC promptly through wait delivery or boundary injection
+   without cancelling active generation, tools, or speech, while sub-threshold observations stay recorded and
+   browsable unless a fresh turn delivers them.
+5. Acceptance verifies recognised and unknown speech — attended or not — produce an immediate fresh turn, while
+   ambiguous speech produces no observation and no fresh turn.
 6. Acceptance verifies every remembered event carries a game-time stamp in seconds elapsed since the game began.
 7. Acceptance verifies a focused visual subject can enter memory with its description and that the latest equivalent
    description in the same subject scope is suppressed.
+8. Acceptance verifies a fresh observation delivers the pending accumulation plus the fresh observation exactly once,
+   wakes an active `wait` below the importance threshold, and that ordinary observations never cancel generation,
+   tools, or speech.
 
 ### Technical Requirements
 
@@ -249,8 +289,8 @@ title: Mind Component
    accumulation-window reset on wait completion, disable/re-enable pause and preservation, pre-`_Ready()`
    intake, and atomic snapshots.
 4. Tests verify threshold crossing makes the accumulated window notable, completes an active wait early, and is
-   delivered by the next wait when none is active, and that sub-threshold observations never enter wait results while
-   remaining in the timeline.
+   delivered by the next wait when none is active, and that sub-threshold observations enter wait results only when
+   a fresh observation upgrades the complete accumulation, while otherwise remaining in the timeline.
 5. Tests verify Mind stamps tool-produced actors, prevents spoofing, atomically ingests ordered batches, and exposes
    no public observation recorder, sink, or timeline-only path.
 6. Tests verify a later recall of the timeline reflects the complete ordered record without carrying forward transient
@@ -300,7 +340,7 @@ title: Mind Component
 23. Tests verify the attended-speaker-finished cue: a speaker present in the attention snapshot at or above the
     retention threshold wakes an active wait and unblocks a blocked speak on `SpeechEnded`; unattended or
     unattributable voices never signal.
-24. Tests verify wake and interruption signalling occurs only after the committing batch settles and never interrupts
+24. Tests verify wake and delivery signalling occurs only after the committing batch settles and never interrupts
     observation ingestion itself.
 25. Tests verify the session prompt renders with a dictionary containing a mandatory `player`
      value under [SCN-001](../../scene/001-scene-context-api/index.md) — resolved unconditionally via
@@ -320,6 +360,14 @@ title: Mind Component
 30. Transient tests verify transient observations apply attention atomically while producing no `ObservedAt` stamp,
     duplicate-history participation, timeline or notable-accumulation entry, session prompt history, or
     committed-observation notification.
+31. Tests verify `RequiresFreshTurn` defaults to `false`, that freshness is evaluated exactly once during staged
+    ingestion before commitment, and that rejected duplicates contribute neither importance nor freshness.
+32. Tests verify exact self `ObservedSpeech` returns `false` while recognised-external and unknown speech return
+    `true`, using ordinal comparison with the observing character's exact full ID, regardless of attention
+    membership.
+33. Tests verify fresh delivery is exact-once across threshold and fresh races, wait expiry races, and node exit;
+    that node exit takes precedence over fresh invalidation and issues no replacement request; and that a disabled
+    Mind retains urgency without waking, cancelling, or signalling the runner.
 
 ## References
 

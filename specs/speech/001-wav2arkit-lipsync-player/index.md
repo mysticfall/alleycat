@@ -50,8 +50,8 @@ updates) in Godot as a feasibility prototype.
    Godot signal) when audible playback finishes, observed through its existing
    `IsAudioPlaying` polling in `_Process`.
 8. `LipSyncPlayer` must expose a stop/cut capability that halts both audio playback
-   and lip-sync frame application immediately. Mind interruption uses it to cut
-   audible speech; in-flight synchronous inference need not be cancelled.
+   and lip-sync frame application immediately, for callers that need to stop
+   playback explicitly. In-flight synchronous inference need not be cancelled.
 
 ## In Scope
 

@@ -36,8 +36,10 @@ public partial class AgenticMind : MindBase
     private static readonly IReadOnlyDictionary<string, object?> _emptyRenderContext =
         new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>());
 
+    private readonly Lock _observationDeliveryChainLock = new();
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
+    private Task _observationDeliveryChain = Task.CompletedTask;
     private volatile AgentSessionRunner? _activeRunner;
     private volatile ObservationHistoryRenderer? _activeHistoryRenderer;
     private volatile bool _sessionStarted;
@@ -139,7 +141,7 @@ public partial class AgenticMind : MindBase
     private async Task RunSessionUntilNodeExitAsync()
     {
         CancellationToken lifetimeToken = NodeLifetimeCancellationToken;
-        NotableObservationsSignalled += HandleNotableObservationsSignalled;
+        ObservationDeliverySignalled += HandleObservationDeliverySignalled;
         try
         {
             using var sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
@@ -167,7 +169,7 @@ public partial class AgenticMind : MindBase
         }
         finally
         {
-            NotableObservationsSignalled -= HandleNotableObservationsSignalled;
+            ObservationDeliverySignalled -= HandleObservationDeliverySignalled;
         }
     }
 
@@ -257,47 +259,143 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Bridges Mind's notable-observation signal into a session interruption (AI-001 TR-6, AI-002 TR-41): the
-    /// pending notable window is taken atomically and appended as an injected user message.
+    /// Bridges Mind's urgency-aware delivery signal into the session runtime (AI-001 TR-44, AI-002 TR-39/40/41).
+    /// Ordinary unowned windows are claimed, rendered, and queued as boundary injections without cancelling
+    /// anything; fresh unowned windows record their invalidation immediately — cancelling the stale generation or
+    /// batch first — and then queue their payload behind the runner's rendering barrier; wait-owned fresh windows
+    /// skip injection entirely, because the wait result is the sole delivery channel, while still recording the
+    /// stale latch without cancelling the wait itself so it completes naturally with its delivery and the batch's
+    /// remaining calls are skipped. Windows are claimed, rendered, and queued serially in signal order so pending
+    /// payloads coalesce in FIFO order, and a window that fails to render is abandoned back to Mind so its
+    /// observations are never silently lost.
     /// </summary>
-    private void HandleNotableObservationsSignalled()
+    private void HandleObservationDeliverySignalled(ObservationDeliverySignal signal)
     {
+        if (IsNodeLifetimeEnded)
+        {
+            return;
+        }
+
         AgentSessionRunner? runner = _activeRunner;
-        if (runner is null || IsNodeLifetimeEnded)
+        if (runner is null)
         {
+            // Before the session's runner exists — or after it ended — nothing can be invalidated or injected:
+            // Mind retains the unclaimed window (AI-001 TR-44) for the next wait or delivery claim.
             return;
         }
 
-        IReadOnlyList<AgentObservation>? notable = TryTakePendingNotableWindow();
-        if (notable is not { Count: > 0 })
+        if (signal.WaitOwned)
         {
-            return;
-        }
-
-        // Fire-and-forget with containment like the session itself: rendering stays asynchronous end-to-end, and
-        // Fluid completes synchronously today so the interruption still signals before this handler returns. A
-        // render failure is a hard fault: the task faults without injecting anything, and an OnlyOnFaulted
-        // continuation surfaces the full exception at Error level instead of sinking into UnobservedTaskException.
-        _ = SignalNotableInterruptionAsync(runner, notable).ContinueWith(
-            static faulted =>
+            if (signal.Urgency is ObservationDeliveryUrgency.Fresh)
             {
-                if (!GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) || logger is null)
-                {
-                    return;
-                }
+                // The woken wait delivers the window through its own result (AI-002 TR-41): no injected
+                // duplication, and the wait — the active phase — is never cancelled, because it must complete
+                // naturally with its delivery. The stale latch still invalidates the surrounding batch: its
+                // remaining calls are skipped before the forced next request proceeds behind the wait's natural
+                // result.
+                runner.InvalidateForFreshTurn(expectFreshInjection: false, cancelActivePhase: false);
+            }
 
-                logger.LogError(
-                    faulted.Exception,
-                    "Rendering the notable-observation summary failed; the interruption was not injected.");
-            },
-            TaskContinuationOptions.OnlyOnFaulted);
+            return;
+        }
+
+        bool fresh = signal.Urgency is ObservationDeliveryUrgency.Fresh;
+        if (fresh)
+        {
+            // Cancel the stale generation or batch immediately (AI-002 TR-40); the rendering barrier keeps the
+            // replacement request behind the fresh payload queued by the delivery below.
+            runner.InvalidateForFreshTurn(expectFreshInjection: true);
+        }
+
+        EnqueueObservationDelivery(runner, fresh);
     }
 
-    /// <summary>Renders one injected notable-observation summary through the event-history contract.</summary>
-    private async Task SignalNotableInterruptionAsync(
-        AgentSessionRunner runner,
-        IReadOnlyList<AgentObservation> notable)
-        => runner.SignalInterruption(await RenderNotableSummaryAsync(notable));
+    /// <summary>
+    /// Serialises observation deliveries end-to-end in signal order: claims, renders, and payload queueing run as
+    /// one chain so concurrently signalled windows coalesce in FIFO order (AI-002 TR-39/40).
+    /// </summary>
+    private void EnqueueObservationDelivery(AgentSessionRunner runner, bool spawnedByFreshSignal)
+    {
+        lock (_observationDeliveryChainLock)
+        {
+            _observationDeliveryChain = _observationDeliveryChain.ContinueWith(
+                static (_, state) => ((Func<Task>)state!)(),
+                () => DeliverPendingObservationWindowAsync(runner, spawnedByFreshSignal),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default).Unwrap();
+        }
+    }
+
+    /// <summary>
+    /// Claims, renders, and queues every currently deliverable observation window (AI-001 TR-44, AI-002 TR-39/40):
+    /// a fresh claim queues through the runner's rendering barrier while an ordinary claim queues as a plain
+    /// boundary injection. A claim that cannot render is abandoned — restoring the window to Mind so scheduling
+    /// pressure is never silently lost — and releases any fresh barrier so the replacement request is never blocked
+    /// on a lost payload. The delivery never throws; failures surface through contained Error-level logging.
+    /// </summary>
+    private async Task DeliverPendingObservationWindowAsync(AgentSessionRunner runner, bool spawnedByFreshSignal)
+    {
+        ObservationDeliveryClaim? claim = null;
+        bool payloadQueued = false;
+        try
+        {
+            claim = TryClaimPendingObservationDelivery();
+            if (claim is null || claim.Observations.Count == 0)
+            {
+                // Another delivery or an active wait owns the window: a fresh signal's rendering barrier is
+                // released because no payload will arrive through injection.
+                if (spawnedByFreshSignal)
+                {
+                    runner.AbandonFreshInjection();
+                }
+
+                return;
+            }
+
+            string summary = await RenderNotableSummaryAsync(claim.Observations);
+            if (claim.Urgency is ObservationDeliveryUrgency.Fresh)
+            {
+                runner.QueueFreshInjection(summary);
+            }
+            else
+            {
+                runner.QueueInjection(summary);
+            }
+
+            payloadQueued = true;
+            CompleteObservationDelivery(claim);
+        }
+        catch (Exception exception)
+        {
+            bool releaseFreshBarrier = spawnedByFreshSignal;
+            if (claim is not null && claim.Observations.Count > 0 && !payloadQueued)
+            {
+                // Rendering or queueing failed before the payload was queued: restore the claimed window so it
+                // stays deliverable (AI-001 TR-44). A payload that already reached the queue cannot be
+                // un-delivered, so its window is never restored on top of the queued copy.
+                AbandonObservationDelivery(claim);
+                releaseFreshBarrier = claim.Urgency is ObservationDeliveryUrgency.Fresh;
+            }
+
+            if (releaseFreshBarrier)
+            {
+                runner.AbandonFreshInjection();
+            }
+
+            LogObservationDeliveryFailure(exception);
+        }
+    }
+
+    private static void LogObservationDeliveryFailure(Exception exception)
+    {
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
+        {
+            logger.LogError(
+                exception,
+                "Delivering the pending observation window failed; its ownership was restored to Mind.");
+        }
+    }
 
     private async Task<string> RenderNotableSummaryAsync(IReadOnlyList<AgentObservation> notable)
     {

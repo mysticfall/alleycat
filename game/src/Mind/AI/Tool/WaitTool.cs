@@ -61,18 +61,25 @@ public partial class WaitTool : AgentTool
     {
         string elapsed = elapsedSeconds.ToString("F1", CultureInfo.InvariantCulture);
         string now = finishedAtSeconds.ToString("F1", CultureInfo.InvariantCulture);
-        if (outcome.Notable.Count == 0)
+        if (outcome.Delivered.Count == 0)
         {
-            return outcome.AttendedSpeakerFinished
+            return outcome.Wake == MindBase.ObservationWaitWake.AttendedSpeakerFinished
                 ? $"Waited {elapsed} seconds. An attended speaker finished speaking. Current game time: {now}s. Nothing notable happened."
                 : $"Waited {elapsed} seconds. Current game time: {now}s. Nothing notable happened.";
         }
 
         string history = session.HistoryRenderer is { } renderer
-            ? await renderer.RenderAsync(outcome.Notable)
-            : string.Join('\n', outcome.Notable.Select(static observation => observation.TypeKey));
+            ? await renderer.RenderAsync(outcome.Delivered)
+            : string.Join('\n', outcome.Delivered.Select(static observation => observation.TypeKey));
+        // A fresh wake fulfils the wait normally and this result is its sole delivery channel (AI-002 TR-32/41):
+        // the wording states what arrived — never a generic interrupted-action notice.
+        string lead = outcome.Wake == MindBase.ObservationWaitWake.FreshObservation
+            ? "Fresh events arrived that need your attention. "
+            : outcome.Wake == MindBase.ObservationWaitWake.AttendedSpeakerFinished
+                ? "An attended speaker finished speaking. "
+                : string.Empty;
         return $"Waited {elapsed} seconds. Current game time: {now}s. "
-            + (outcome.AttendedSpeakerFinished ? "An attended speaker finished speaking. " : string.Empty)
+            + lead
             + $"Notable observations:\n{history}";
     }
 }
