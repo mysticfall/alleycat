@@ -89,14 +89,23 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 1, 30);
             Assert.True(voice.IsSpeaking);
 
-            // The first item's playback ends while the second item is still in flight; the window must remain open.
-            fixture.LipSyncPlayer.CompletePlaybackForTesting();
+            // The second item generates and prepares in the background while the first utterance plays; its
+            // playback hand-off stays gated until the first playback completes.
+            await WaitUntilAsync(
+                sceneTree,
+                () => speechGenerator.GenerateCallCount == 2 && voice.PrepareGeneratedSpeechCallCount == 2,
+                30);
             await WaitForFramesAsync(sceneTree, 2);
             Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
             Assert.Equal(0, endedCount);
 
+            // The first item's playback ends while the second item was waiting at the gate; the successor hands
+            // off now and the window must remain open for its own playback.
+            fixture.LipSyncPlayer.CompletePlaybackForTesting();
             await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 2, 60);
             Assert.True(voice.IsSpeaking);
+            Assert.Equal(0, endedCount);
 
             fixture.LipSyncPlayer.CompletePlaybackForTesting();
             await WaitUntilAsync(sceneTree, () => !voice.IsSpeaking, 30);
@@ -229,6 +238,159 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             await WaitUntilAsync(sceneTree, () => !voice.IsSpeaking, 30);
             Assert.Equal(1, voice.SpeechGeneratedCallCount);
             _ = Assert.Single(fixture.Listener.Events);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, fixture.Root);
+        }
+    }
+
+    /// <summary>
+    /// Cancelling a prepared-but-waiting successor at the playback gate withdraws it silently while the active
+    /// utterance plays to completion (SPCH-005 TR-32).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task AIVoice_SpeakCancellableAsync_WhenPreparedSuccessorCancelledAtGate_WithdrawsSilently()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        QueuedSpeechGenerator speechGenerator = new()
+        {
+            NextResult = CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16),
+        };
+        AIVoiceFixture fixture = await CreateAIVoiceFixtureAsync(sceneTree, speechGenerator);
+        WindowTestAIVoice voice = fixture.Voice;
+
+        int endedCount = 0;
+        voice.SpeechEnded += _ => endedCount++;
+
+        try
+        {
+            await voice.SpeakAsync("active utterance");
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 1, 30);
+
+            using CancellationTokenSource cancellation = new();
+            ValueTask submission = voice.SpeakCancellableAsync("waiting successor", cancellation.Token);
+            await WaitUntilAsync(sceneTree, () => voice.PrepareGeneratedSpeechCallCount == 2, 30);
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.False(submission.IsCompleted);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+
+            cancellation.Cancel();
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(submission.AsTask);
+            await voice.PumpSettlement.WaitAsync(TimeSpan.FromSeconds(5));
+            await WaitForFramesAsync(sceneTree, 2);
+
+            // The withdrawn successor commits no hand-off, failure signal, or listener notification.
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(1, voice.SpeechGeneratedCallCount);
+            Assert.Empty(voice.FailureErrors);
+            Assert.Equal("active utterance", Assert.Single(fixture.Listener.Events).Speech);
+
+            // The active utterance is unaffected and plays to completion.
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(0, endedCount);
+            fixture.LipSyncPlayer.CompletePlaybackForTesting();
+            await WaitUntilAsync(sceneTree, () => !voice.IsSpeaking, 30);
+            Assert.Equal(1, endedCount);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, fixture.Root);
+        }
+    }
+
+    /// <summary>
+    /// An explicit cut releases the playback gate so a prepared successor starts immediately, with correct
+    /// speaking-window bookkeeping (SPCH-005 TR-32).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task AIVoice_CutSpeech_ReleasesGateSoPreparedSuccessorStartsImmediately()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        QueuedSpeechGenerator speechGenerator = new()
+        {
+            NextResult = CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16),
+        };
+        AIVoiceFixture fixture = await CreateAIVoiceFixtureAsync(sceneTree, speechGenerator);
+        WindowTestAIVoice voice = fixture.Voice;
+
+        int startedCount = 0;
+        int endedCount = 0;
+        voice.SpeechStarted += _ => startedCount++;
+        voice.SpeechEnded += _ => endedCount++;
+
+        try
+        {
+            await voice.SpeakAsync("first utterance");
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 1, 30);
+
+            await voice.SpeakAsync("cut successor");
+            await WaitUntilAsync(sceneTree, () => voice.PrepareGeneratedSpeechCallCount == 2, 30);
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+
+            // Cutting stops the active utterance and must release the gate: the lip-sync player's stop never
+            // raises the playback-completed notification the prepared successor is waiting for.
+            voice.CutSpeech();
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 2, 30);
+
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(0, endedCount);
+
+            fixture.LipSyncPlayer.CompletePlaybackForTesting();
+            await WaitUntilAsync(sceneTree, () => !voice.IsSpeaking, 30);
+
+            Assert.Equal(1, startedCount);
+            Assert.Equal(1, endedCount);
+            Assert.Equal(2, voice.SpeechGeneratedCallCount);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, fixture.Root);
+        }
+    }
+
+    /// <summary>
+    /// Node teardown while a prepared item waits at the gate settles the pump and the cancellable submission
+    /// without a late hand-off, listener notification, or failure signal (SPCH-005 TR-32).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task AIVoice_TeardownWhilePreparedItemWaitsAtGate_SettlesWithoutLateHandOff()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        QueuedSpeechGenerator speechGenerator = new()
+        {
+            NextResult = CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16),
+        };
+        AIVoiceFixture fixture = await CreateAIVoiceFixtureAsync(sceneTree, speechGenerator);
+        WindowTestAIVoice voice = fixture.Voice;
+
+        try
+        {
+            await voice.SpeakAsync("active utterance");
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 1, 30);
+
+            using CancellationTokenSource cancellation = new();
+            ValueTask submission = voice.SpeakCancellableAsync("waiting successor", cancellation.Token);
+            Task pumpSettlement = voice.PumpSettlement;
+            await WaitUntilAsync(sceneTree, () => voice.PrepareGeneratedSpeechCallCount == 2, 30);
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.False(submission.IsCompleted);
+
+            voice.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(submission.AsTask);
+            await pumpSettlement.WaitAsync(TimeSpan.FromSeconds(5));
+            await WaitForFramesAsync(sceneTree, 2);
+
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(1, voice.SpeechGeneratedCallCount);
+            Assert.Empty(voice.FailureErrors);
+            Assert.Equal("active utterance", Assert.Single(fixture.Listener.Events).Speech);
         }
         finally
         {
@@ -628,6 +790,12 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             private set;
         }
 
+        public int PrepareGeneratedSpeechCallCount
+        {
+            get;
+            private set;
+        }
+
         public int SpeechGeneratedCallCount
         {
             get;
@@ -635,6 +803,16 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
         }
 
         public List<string> FailureErrors { get; } = [];
+
+        protected override async Task<LipSyncPlayer.PreparedPlayback> PrepareGeneratedSpeechAsync(
+            AudioStreamWav speechStream,
+            CancellationToken cancellationToken)
+        {
+            LipSyncPlayer.PreparedPlayback preparedPlayback =
+                await base.PrepareGeneratedSpeechAsync(speechStream, cancellationToken);
+            PrepareGeneratedSpeechCallCount++;
+            return preparedPlayback;
+        }
 
         protected override void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
         {

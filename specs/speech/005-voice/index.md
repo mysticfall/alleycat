@@ -21,7 +21,9 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
 ## User Requirements
 
 1. Players must hear AI-generated speech output with synchronised lip-sync when valid speech is requested.
-2. Speech requests made while AI voice generation is busy must queue in request order rather than being rejected.
+2. Speech requests made while AI voice generation is busy must queue in request order rather than being rejected. FIFO
+   playback means the player hears every utterance complete and in order: a queued utterance must never audibly
+   interrupt or cut short its predecessor.
 3. A caller that successfully submits speech must not wait for generation or playback to finish.
 4. Blank speech, disabled output, and missing required configuration must fail clearly rather than report success.
 5. Cancellation before admission must cancel the request. After admission, an ordinary submission remains committed,
@@ -82,14 +84,17 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
 12. `IHasVoice` must follow the component-holder trait pattern and expose `TryGetVoice(out IVoice? voice)` and
     `RequireVoice()` over `IComponentHolder`.
 13. `AIVoice` must admit valid requests atomically into one FIFO queue and drain it serially. At most one generation,
-    conversion, lip-sync preparation, and playback hand-off pipeline may run at a time.
+    conversion, lip-sync preparation, and playback hand-off pipeline may run at a time. Production of the next
+    utterance may overlap the current utterance's active playback, and the hand-off itself is gated on active playback
+    completion (TR-30).
 14. Busy requests must queue in admission order. `AIVoice` must not reject a valid request merely because another item
     is active.
 15. For each admitted item, `AIVoice` must:
     - generate audio through the configured `SpeechGenerator`;
     - convert generated `byte[]` to compatible `AudioStreamWav` data;
     - await `LipSyncPlayer.PreparePlaybackAsync(...)`;
-    - invoke `LipSyncPlayer.PlayPrepared(...)` as the playback initiation boundary; and
+    - invoke `LipSyncPlayer.PlayPrepared(...)` as the playback initiation boundary, gated on completion of the active
+      predecessor playback where one exists (TR-30); and
     - invoke the post-generation hook only after successful playback hand-off.
 16. `AIVoice` must accept generated PCM 16-bit mono WAV at any sample rate, keep the source sample rate in the playable
     `AudioStreamWav.MixRate`, and perform no resampling; stereo and non-PCM-16 audio remain incompatible with no
@@ -144,12 +149,30 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
     count only (CORE-007). Emission must run in a `finally` block so console coverage is preserved on hand-off
     success, failure, and cancellation; when the hand-off does not bind meshes, the mesh count is the last-known
     mapping — zero on the first utterance — and the console line remains adjacent to the playback-start line.
+30. AIVoice-orchestrated playback uses background preparation with a gated hand-off. Generation, conversion, and
+    lip-sync preparation of a queued utterance may proceed in the background while the predecessor utterance is still
+    playing, but the playback hand-off must wait until the active playback session has raised its playback-completed
+    notification (`LipSyncPlayer.PlaybackCompleted`, SPCH-001/SPCH-002). A queued utterance must never replace or
+    audibly cut its predecessor: FIFO order yields complete audible utterances in admission order.
+31. The gating rule is an AIVoice orchestration concern only. `LipSyncPlayer.Play` and `LipSyncPlayer.PlayPrepared`
+    keep their direct-replacement semantics — stopping the active session and starting the new one — for direct
+    callers (SPCH-001/SPCH-002). This spec changes how `AIVoice` times its hand-off, not the `LipSyncPlayer`
+    contracts.
+32. Gate release and waiting-item lifecycle:
+    - an explicit user- or system-initiated cut through `AIVoice.CutSpeech` releases the gate so a prepared successor
+      may start playback immediately; a cut does not raise the playback-completed notification (SPCH-001/SPCH-002),
+      so the gate must not keep waiting for one after a cut;
+    - cancellation of a prepared-but-waiting submission withdraws it silently under the pre-hand-off rules (TR-25)
+      with no effect on the active utterance, which plays to completion; and
+    - node teardown while an item waits at the gate must produce no late hand-off, `IHearing` broadcast, or listener
+      notification (TR-18).
 
 ## In Scope
 
 - Abstract `Voice` component identity, location, control, submission, compatibility, failure, and listener contracts.
 - Non-result `IVoice.SpeakAsync(...)` and safe lossy `Speak(...)` compatibility.
-- FIFO `AIVoice` admission and serial generation, preparation, and playback hand-off.
+- FIFO `AIVoice` admission, serial generation and preparation that may overlap active playback, and playback hand-off
+  gated on active playback completion (TR-30).
 - Speaking-activity state, `SpeechStarted`/`SpeechEnded` typed events, and base-owned window plumbing.
 - Window boundary contracts per implementation, consuming the `LipSyncPlayer` playback-completed notification.
 - Explicitly cancellable submissions with playback hand-off as the irreversibility boundary.
@@ -164,7 +187,8 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
 ## Out Of Scope
 
 - Visual verification or runtime XR testing, which requires backend access.
-- Parallel speech generation or playback; admission queues, but production remains serial.
+- Concurrent speech generation or concurrent audible playback; admission queues, production remains serial, and
+  background preparation overlapping active playback stays in scope through the gated hand-off (TR-30).
 - Cancelling or reversing speech work after playback hand-off.
 - New live microphone capture or real-time streaming beyond the existing `Transcriber` dependency.
 - Additional speech-generation implementations beyond `AIVoice` and `PlayerVoice`.
@@ -203,14 +227,19 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
 2. Atomically admit valid requests in FIFO order, including while another item is active.
 3. Complete an ordinary submission's `SpeakAsync` when admission commits, without awaiting generation or playback;
    complete the explicitly cancellable submission at playback hand-off (TR-25).
-4. Drain admitted items through one serial generation and playback-hand-off pipeline.
+4. Drain admitted items through one serial production pipeline, preparing the next utterance in the background while
+   the current utterance plays.
 5. Isolate each item's failure, emit diagnostics, and continue with the next queued item.
 6. Treat post-hand-off caller cancellation as non-retracting; honour explicitly cancellable submissions until
-   playback hand-off.
-7. Settle the queue and active pipeline safely during node teardown.
+   playback hand-off; withdraw a prepared-but-waiting submission cancelled at the gate silently without affecting the
+   active utterance.
+7. Settle the queue and active pipeline safely during node teardown, producing no late playback hand-off or listener
+   notification from a waiting item.
 8. Open the speaking window at first FIFO admission and keep it open continuously across queued items.
 9. Close the window at playback completion of the last queued item, on item failure, on effective cancellation, and
    during node teardown.
+10. Gate each playback hand-off on the active utterance's playback completion (TR-30), and release the gate
+    immediately when `CutSpeech` cuts the active utterance (TR-32).
 
 ## PlayerVoice Behaviour
 
@@ -233,8 +262,9 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
 4. Tests verify cancellation before admission admits no work and surfaces as cancellation, while cancellation after
    admission does not retract the item once playback hand-off has occurred; explicit pre-hand-off cancellation aborts
    silently.
-5. Tests verify second and third busy submissions are admitted, processed FIFO, and never create concurrent generation
-   pipelines.
+5. Tests verify second and third busy submissions are admitted, processed FIFO, never create concurrent generation
+   pipelines, and play each utterance to completion before its successor starts, with no queued utterance audibly
+   cutting its predecessor.
 6. Tests verify an ordinary submission's `SpeakAsync` completes at admission without awaiting generation, playback
    hand-off, or playback, while the explicitly cancellable submission completes at playback hand-off (TR-25).
 7. Tests verify one item's generation, conversion, preparation, or hand-off failure logs and emits `SpeechFailed`, does
@@ -253,8 +283,9 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
     exact `Character.Id` after target-scene precedence, validates `voice:<character-id>` before identity exposure, and
     supports configured attribution without claiming authenticated provenance or rejecting a source that presents the
     same ID.
-14. Acceptance verifies both user-visible FIFO speech and failure isolation and the validation, admission,
-    serialisation, cancellation, listener, and node-lifetime contracts.
+14. Acceptance verifies both user-visible FIFO speech — complete utterances heard in order, never cut by a queued
+    successor — and failure isolation plus the validation, admission, serialisation, gated hand-off, cancellation,
+    listener, and node-lifetime contracts.
 15. Tests verify `IVoice : IComponent, IIdentifiable`, mutable authored local `Id`, exact Type `voice`, canonical
     `voice:<id>` `FullId`, and ordinal semantic identity comparison without object-reference equality.
 16. Tests verify `IVoice` exposes `IsSpeaking` and typed `SpeechStarted`/`SpeechEnded` events (optionally mirrored as
@@ -280,6 +311,12 @@ supports Mind turn-taking and speech-ended wake cues under AI-002's session cont
     latency whose console detail carries the generated byte, frame, and mapped mesh counts while the lip-sync
     notification text keeps the frame count only; log-only request-receipt, parsing, and playback-start entries; and
     log-only failure latency — route through the shared pipeline diagnostic log without changing speech behaviour.
+24. Tests verify the gated hand-off: a successor utterance's playback does not start until the active playback session
+    raises its playback-completed notification, background preparation overlaps active playback, and an explicit
+    `CutSpeech` cut releases the gate so a prepared successor starts immediately.
+25. Tests verify the waiting-item lifecycle at the gate: cancelling a prepared-but-waiting submission withdraws it
+    silently without disrupting the active utterance, which plays to completion, and node teardown while an item waits
+    produces no late hand-off, `IHearing` broadcast, or listener notification.
 
 ## References
 

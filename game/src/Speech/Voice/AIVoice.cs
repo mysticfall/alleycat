@@ -25,7 +25,15 @@ public partial class AIVoice : Voice
     private bool _pumpRunning;
     private TaskCompletionSource? _pumpSettlement;
     private int _outstandingItems;
-    private bool _playbackPending;
+
+    /// <summary>
+    /// Gate held by the utterance that has crossed its playback hand-off and has not yet raised
+    /// <see cref="LipSyncPlayer.PlaybackCompleted" />; null when playback is available. Successor items await this
+    /// gate before their own hand-off so direct-replacement playback never cuts the active utterance short (TR-30).
+    /// Guarded by <see cref="_submissionLock" />.
+    /// </summary>
+    private TaskCompletionSource? _activePlaybackGate;
+
     private LipSyncPlayer? _playbackWatchPlayer;
     private ILogger<AIVoice>? _logger;
 
@@ -104,13 +112,19 @@ public partial class AIVoice : Voice
         base._ExitTree();
 
         AdmittedSpeech[] queuedItems;
+        TaskCompletionSource? activePlaybackGate;
         lock (_submissionLock)
         {
             queuedItems = [.. _pendingSpeech];
             _pendingSpeech.Clear();
             _outstandingItems = 0;
-            _playbackPending = false;
+            activePlaybackGate = _activePlaybackGate;
+            _activePlaybackGate = null;
         }
+
+        // Wake any item waiting behind the active playback with the node-lifetime token so the pump and its
+        // cancellable submissions settle without post-lifetime dispatch.
+        _ = activePlaybackGate?.TrySetCanceled(NodeLifetimeCancellationToken);
 
         foreach (AdmittedSpeech item in queuedItems)
         {
@@ -130,7 +144,8 @@ public partial class AIVoice : Voice
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This is the interruption-driven cut (AI-001 TR-44): the lip-sync player's stop does not raise
+    /// This is the interruption-driven cut (SPCH-005 TR-32; the underlying stop/cut capability is defined in
+    /// SPCH-001 and SPCH-002): the lip-sync player's stop does not raise
     /// <see cref="LipSyncPlayer.PlaybackCompleted" />, so the speaking-window bookkeeping that the notification would
     /// have performed is settled here exactly once. Queued FIFO submissions are not retracted; the window stays open
     /// while any remain outstanding. Must be called on the Godot thread.
@@ -152,7 +167,9 @@ public partial class AIVoice : Voice
                 return;
             }
 
-            _playbackPending = false;
+            // The lip-sync player's stop never raises PlaybackCompleted, so the gate must be released here: a
+            // prepared successor would otherwise wait forever for a notification that cannot arrive.
+            ReleaseActivePlaybackGateLocked();
             closeWindow = _outstandingItems == 0;
         }
 
@@ -247,7 +264,7 @@ public partial class AIVoice : Voice
                 return;
             }
 
-            _playbackPending = false;
+            ReleaseActivePlaybackGateLocked();
             closeWindow = _outstandingItems == 0;
         }
 
@@ -255,6 +272,57 @@ public partial class AIVoice : Voice
         {
             CloseSpeakingWindow();
         }
+    }
+
+    /// <summary>
+    /// Waits until the active utterance's playback has completed so the caller's playback hand-off cannot replace
+    /// it early.
+    /// </summary>
+    /// <param name="cancellationToken">Pipeline cancellation that withdraws the waiting item before hand-off.</param>
+    private async Task AwaitActivePlaybackGateAsync(CancellationToken cancellationToken)
+    {
+        Task playbackGateTask;
+        lock (_submissionLock)
+        {
+            playbackGateTask = _activePlaybackGate?.Task ?? Task.CompletedTask;
+        }
+
+        if (!playbackGateTask.IsCompletedSuccessfully)
+        {
+            await playbackGateTask.WaitAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Releases the active playback gate so prepared successors may hand off, completing any waiting item.
+    /// </summary>
+    /// <remarks>
+    /// <para>Must be called while holding <see cref="_submissionLock" />.</para>
+    /// <para>Duplicate or stale completion notifications are harmless: the gate is detached by identity before
+    /// completion, so a second callback finds no gate to release.</para>
+    /// </remarks>
+    private void ReleaseActivePlaybackGateLocked()
+    {
+        if (_activePlaybackGate is { } gate)
+        {
+            ReleaseReservedPlaybackGateLocked(gate);
+        }
+    }
+
+    /// <summary>
+    /// Releases a gate reserved for one specific hand-off attempt, identity-checked so already-released or
+    /// re-reserved gates are left untouched.
+    /// </summary>
+    /// <remarks>Must be called while holding <see cref="_submissionLock" />.</remarks>
+    private void ReleaseReservedPlaybackGateLocked(TaskCompletionSource gate)
+    {
+        if (!ReferenceEquals(_activePlaybackGate, gate))
+        {
+            return;
+        }
+
+        _activePlaybackGate = null;
+        _ = gate.TrySetResult();
     }
 
     /// <summary>
@@ -331,7 +399,7 @@ public partial class AIVoice : Voice
                 _outstandingItems--;
             }
 
-            closeWindow = _outstandingItems == 0 && !_playbackPending;
+            closeWindow = _outstandingItems == 0 && _activePlaybackGate is null;
         }
 
         if (closeWindow)
@@ -403,6 +471,10 @@ public partial class AIVoice : Voice
                 speechStream,
                 pipelineCancellation);
             pipelineCancellation.ThrowIfCancellationRequested();
+
+            // Preparation may overlap the active utterance's playback; the hand-off below now waits for that
+            // playback to complete so the successor cannot cut its predecessor short (TR-30).
+            await AwaitActivePlaybackGateAsync(pipelineCancellation);
 
             // The mapped mesh count only exists once playback hand-off binds the prepared frames to the character
             // meshes, so the stage is emitted after the hand-off dispatch using the elapsed snapshot taken at the
@@ -482,6 +554,15 @@ public partial class AIVoice : Voice
             throw new OperationCanceledException(item.TurnCancellation?.Token ?? CancellationToken.None);
         }
 
+        // The successor gate is reserved before playback starts: a playback-completed notification raised
+        // synchronously by PlayGeneratedSpeech then releases this gate instead of arriving before any gate exists,
+        // and later FIFO items keep waiting on the correct playback session.
+        TaskCompletionSource playbackGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_submissionLock)
+        {
+            _activePlaybackGate = playbackGate;
+        }
+
         try
         {
             PlayGeneratedSpeech(preparedPlayback);
@@ -492,11 +573,13 @@ public partial class AIVoice : Voice
             lock (_submissionLock)
             {
                 item.HandOffCommitted = false;
+                ReleaseReservedPlaybackGateLocked(playbackGate);
             }
 
             throw;
         }
 
+        bool closeWindow;
         lock (_submissionLock)
         {
             if (!item.Settled)
@@ -508,7 +591,14 @@ public partial class AIVoice : Voice
                 }
             }
 
-            _playbackPending = true;
+            // The reserved gate keeps the window open until the playback-completed notification; when that
+            // notification already arrived synchronously during playback start, the window closes here instead.
+            closeWindow = _outstandingItems == 0 && _activePlaybackGate is null;
+        }
+
+        if (closeWindow)
+        {
+            CloseSpeakingWindow();
         }
 
         OnSpeechGenerated(item.Text);

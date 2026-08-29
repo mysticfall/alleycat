@@ -464,7 +464,8 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Busy submissions are admitted immediately and generated in exact FIFO order through one serial pipeline.
+    /// Busy submissions are admitted immediately and generated in exact FIFO order through one serial pipeline,
+    /// with each successor's playback hand-off gated on the predecessor's playback completion.
     /// </summary>
     [Fact]
     [Headless]
@@ -499,9 +500,32 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
 
             _ = generationResult.TrySetResult(
                 CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
-            await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 3, 60);
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 1, 30);
+
+            // The successor generates and prepares in the background while the first utterance plays, but its
+            // playback hand-off stays gated until the first playback completes.
+            await WaitUntilAsync(
+                sceneTree,
+                () => speechGenerator.GenerateCallCount == 2 && voice.PrepareGeneratedSpeechCallCount == 2,
+                30);
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+
+            lipSyncPlayer.CompletePlaybackForTesting();
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 2, 60);
+
+            await WaitUntilAsync(
+                sceneTree,
+                () => speechGenerator.GenerateCallCount == 3 && voice.PrepareGeneratedSpeechCallCount == 3,
+                30);
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.Equal(2, voice.PlayGeneratedSpeechCallCount);
+
+            lipSyncPlayer.CompletePlaybackForTesting();
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 3, 60);
+
             Assert.Equal(["First request", "Second request", "Third request"], speechGenerator.RequestedTexts);
-            Assert.Equal(3, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(3, voice.SpeechGeneratedCallCount);
             Assert.Equal(1, voice.MaximumConcurrentPipelines);
         }
         finally
@@ -653,11 +677,14 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             int lastKnownMeshCount = lipSyncPlayer.MappedMeshCount;
             Assert.True(lastKnownMeshCount > 0, "The fixture must map at least one mesh for the first utterance.");
 
-            // The second utterance is cancelled right before its deferred hand-off dispatch, so preparation has
-            // completed but the commit is refused through the real cancellation path.
+            // The second utterance prepares behind the still-playing first utterance and waits at the playback
+            // gate. Cancellation is armed before the gate is released, so it fires exactly at the second item's
+            // deferred hand-off dispatch, where the commit is refused through the real cancellation path.
             using CancellationTokenSource cancellation = new();
             voice.ArmCancellationBeforeNextDispatch(cancellation);
             ValueTask submission = voice.SpeakCancellableAsync("second utterance", cancellation.Token);
+            await WaitUntilAsync(sceneTree, () => lipSyncPlayer.InferenceCallCount == 2, 30);
+            lipSyncPlayer.CompletePlaybackForTesting();
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(submission.AsTask);
             await WaitUntilAsync(sceneTree, () => LipSyncPreparedEntries(loggingFixture).Count == 2, 30);
 
@@ -846,8 +873,9 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// Multiple SpeechTool calls queue in order, each committing exactly one owner-stamped observation at playback
-    /// hand-off, while pre-hand-off cancellation commits none.
+    /// Multiple SpeechTool calls queue in order, each committing exactly one owner-stamped observation at its own
+    /// playback hand-off, while pre-hand-off cancellation commits none and a queued invocation stays unobserved
+    /// until the active playback completes.
     /// </summary>
     [Fact]
     [Headless]
@@ -917,6 +945,17 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             _ = generationResult.TrySetResult(
                 CreateWaveFileBytes([0x00, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
             object? acceptedResult = await accepted.WaitAsync(TimeSpan.FromSeconds(5));
+
+            // The queued invocation remains incomplete and unobserved while the accepted utterance plays: its
+            // playback hand-off is gated on the first playback's completion.
+            await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 1, 30);
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.False(queued.IsCompleted);
+            Assert.Equal(
+                ["Accepted request"],
+                acceptedMind.Timeline.Cast<ObservedSpeech>().Select(observation => observation.Content));
+
+            lipSyncPlayer.CompletePlaybackForTesting();
             object? queuedResult = await queued.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal("Spoken through the configured voice.", acceptedResult);
