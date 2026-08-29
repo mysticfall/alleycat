@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://c6n3e74dnkfd6" path="res://src/UI/UIOverlay.cs" id="1_jvum8"]
 [ext_resource type="PackedScene" path="res://assets/ui/debug_overlay.tscn" id="2_yxxw3"]
 [ext_resource type="PackedScene" path="res://assets/ui/notification_overlay.tscn" id="4_5yfyj"]
+[ext_resource type="PackedScene" uid="uid://dv4nkgmqz2p8c" path="res://assets/ui/game_menu.tscn" id="5_gmenu"]
 
 [node name="UIOverlay" type="Control" unique_id=1158971358]
 layout_mode = 3
@@ -27,3 +28,6 @@ offset_left = 80.0
 offset_top = 80.0
 offset_right = 520.0
 offset_bottom = 360.0
+
+[node name="GameMenu" parent="." unique_id=731205800 instance=ExtResource("5_gmenu")]
+visible = false

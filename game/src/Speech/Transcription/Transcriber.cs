@@ -12,6 +12,12 @@ namespace AlleyCat.Speech.Transcription;
 /// <summary>
 /// Base XR speech-transcription component that records microphone input and dispatches transcription requests.
 /// </summary>
+/// <remarks>
+/// While the <see cref="SceneTree" /> is paused (for example while the main menu is open), record-button presses
+/// are ignored through the built-in <see cref="Node.CanProcess()" /> guard, and an active recording is stopped and
+/// finalised through the normal stop path. A trigger still held across the unpause boundary does not start a
+/// recording; only a fresh release-then-press edge does.
+/// </remarks>
 public abstract partial class Transcriber : Node
 {
     private const string DefaultRecordingBusName = "SpeechRecord";
@@ -243,6 +249,7 @@ public abstract partial class Transcriber : Node
 
         CancelDeferredGodotActions(staleActions);
         _xrManager = ResolveXRManager();
+
         _audioCapture = AudioCaptureForTesting ?? EnsureAudioCapture();
         _microphonePlayer = CreateMicrophonePlayer();
         _maxDurationTimer = CreateMaxDurationTimer();
@@ -431,8 +438,36 @@ public abstract partial class Transcriber : Node
         }
     }
 
+    /// <inheritdoc />
+    public override void _Notification(int what)
+    {
+        base._Notification(what);
+
+        if (what != NotificationPaused)
+        {
+            return;
+        }
+
+        if (IsRecording)
+        {
+            // The microphone must not keep recording into a paused world; the normal stop path parks the
+            // capture in its finalising state, and the drained transcription dispatch resumes after the
+            // tree unpauses.
+            ResolveLogger()?.LogInformation(
+                "Scene tree paused while recording; stopping and finalising the active recording.");
+            StopRecording();
+        }
+    }
+
     private void OnControllerButtonPressed(string actionName)
     {
+        // XR controller relays keep emitting while the tree is paused, so the record handler must
+        // ignore presses it cannot act on.
+        if (!CanProcess())
+        {
+            return;
+        }
+
         if (!Enabled)
         {
             return;
@@ -446,6 +481,11 @@ public abstract partial class Transcriber : Node
 
     private void OnControllerButtonReleased(string actionName)
     {
+        if (!CanProcess())
+        {
+            return;
+        }
+
         if (string.Equals(actionName, RecordButton.ToString(), StringComparison.Ordinal))
         {
             StopRecording();

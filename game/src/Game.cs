@@ -89,6 +89,16 @@ public partial class Game : Node, IServiceProvider
     public static Game Instance => _instance
         ?? throw new InvalidOperationException("Game singleton is not available.");
 
+    /// <summary>
+    /// Gets or sets the global game pause state. Paused gameplay stops processing while
+    /// always-processing subsystems (XR tracking, menus) continue.
+    /// </summary>
+    public bool Paused
+    {
+        get => GetTree().Paused;
+        set => GetTree().Paused = value;
+    }
+
     /// <inheritdoc />
     public override void _EnterTree()
     {
@@ -299,7 +309,7 @@ public partial class Game : Node, IServiceProvider
         if (!xrInitialised)
         {
             GetService<ILogger<Game>>()?.LogError("XR initialisation failed. Quitting the game.");
-            QuitGame(1);
+            RequestExit(1);
             return;
         }
 
@@ -329,7 +339,7 @@ public partial class Game : Node, IServiceProvider
                 "Failed to start loading start scene {StartScenePath} with error {LoadStartError}. Quitting the game.",
                 startScenePath,
                 loadStartError);
-            QuitGame(1);
+            RequestExit(1);
         }
     }
 
@@ -337,8 +347,12 @@ public partial class Game : Node, IServiceProvider
     /// Requests game shutdown with the supplied exit code.
     /// </summary>
     /// <param name="exitCode">Process exit code to return to the host.</param>
-    protected virtual void QuitGame(int exitCode)
-        => GetTree().Quit(exitCode);
+    public virtual void RequestExit(int exitCode = 0)
+    {
+        GetService<ILogger<Game>>()?.LogInformation(
+            "Game exit requested with exit code {ExitCode}.", exitCode);
+        GetTree().Quit(exitCode);
+    }
 
     private void OnXRInitialised(bool succeeded)
         => _xrInitialisationCompletionSource.TrySetResult(succeeded);

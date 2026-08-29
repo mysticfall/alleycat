@@ -1,15 +1,32 @@
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Core.Logging;
 using AlleyCat.Interaction.Hands;
 using AlleyCat.Rigging;
 using AlleyCat.XR;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Control;
 
 /// <summary>
 /// XR input bridge that drives a player locomotion component.
 /// </summary>
+/// <remarks>
+/// <para>
+/// While the <see cref="SceneTree" /> is paused (for example while the main menu is open), incoming XR
+/// events are ignored through the built-in <see cref="Node.CanProcess()" /> guard. XR controller relays
+/// keep emitting during a pause (their runtime subtree processes with
+/// <see cref="Node.ProcessModeEnum.Always" />), so each gameplay handler must return early while this node
+/// cannot process.
+/// </para>
+/// <para>
+/// Grab <em>presses and releases</em> are both suppressed during the pause: the whole world, including
+/// hands and held objects, resumes with the world, and a grab held across the pause is released with a
+/// fresh squeeze-and-release gesture after unpause. Routing a release into a frozen world was rejected
+/// because the release velocity and hand transforms it would act on are stale while paused.
+/// </para>
+/// </remarks>
 [GlobalClass]
 public partial class PlayerController : Node
 {
@@ -18,6 +35,7 @@ public partial class PlayerController : Node
     private IXRHandController? _rightHandController;
     private ILocomotion? _locomotion;
     private IHasHands? _hands;
+    private ILogger<PlayerController>? _logger;
     private bool _xrInitialised;
     private bool _isBound;
     private bool _leftFloatGrabPressed;
@@ -143,6 +161,23 @@ public partial class PlayerController : Node
         }
     }
 
+    /// <inheritdoc />
+    public override void _Notification(int what)
+    {
+        base._Notification(what);
+
+        if (what != NotificationPaused)
+        {
+            return;
+        }
+
+        // A stick held deflected through the pause sends no new Vector2Changed event on unpause while
+        // its value is unchanged, so the last value would linger as stale movement input. Zeroing at
+        // the pause boundary keeps post-unpause input clean until the stick actually moves.
+        ZeroLocomotionInput();
+        ResolveLogger()?.LogInformation("Scene tree paused; locomotion input zeroed until it unpauses.");
+    }
+
     private bool TryResolveLocomotion(out ILocomotion? locomotion)
     {
         locomotion = null;
@@ -240,6 +275,7 @@ public partial class PlayerController : Node
         _rightHandController.ActionFloatInputChanged += OnRightControllerFloatChanged;
         _isBound = true;
         SetProcess(false);
+
         return true;
     }
 
@@ -296,6 +332,14 @@ public partial class PlayerController : Node
 
     private void OnLeftControllerVector2Changed(string actionName, Vector2 value)
     {
+        // XR controller relays keep emitting while the tree is paused, so gameplay handlers must
+        // ignore events they cannot act on. See the class remarks for the release-suppression
+        // rationale.
+        if (!CanProcess())
+        {
+            return;
+        }
+
         if (actionName == MovementActionName)
         {
             UpdateMovementInput(value);
@@ -304,6 +348,11 @@ public partial class PlayerController : Node
 
     private void OnRightControllerVector2Changed(string actionName, Vector2 value)
     {
+        if (!CanProcess())
+        {
+            return;
+        }
+
         if (actionName == RotationActionName)
         {
             UpdateRotationInput(value);
@@ -311,16 +360,64 @@ public partial class PlayerController : Node
     }
 
     private void OnLeftControllerFloatChanged(string actionName, float value)
-        => HandleGrabFloatChanged(LimbSide.Left, actionName, value, ref _leftFloatGrabPressed);
+    {
+        if (!CanProcess())
+        {
+            return;
+        }
+
+        HandleGrabFloatChanged(LimbSide.Left, actionName, value, ref _leftFloatGrabPressed);
+    }
 
     private void OnRightControllerFloatChanged(string actionName, float value)
-        => HandleGrabFloatChanged(LimbSide.Right, actionName, value, ref _rightFloatGrabPressed);
+    {
+        if (!CanProcess())
+        {
+            return;
+        }
 
-    private void OnLeftControllerButtonPressed(string actionName) => HandleGrabButtonPressed(LimbSide.Left, actionName);
+        HandleGrabFloatChanged(LimbSide.Right, actionName, value, ref _rightFloatGrabPressed);
+    }
 
-    private void OnLeftControllerButtonReleased(string actionName) => HandleGrabButtonReleased(LimbSide.Left, actionName);
-    private void OnRightControllerButtonPressed(string actionName) => HandleGrabButtonPressed(LimbSide.Right, actionName);
-    private void OnRightControllerButtonReleased(string actionName) => HandleGrabButtonReleased(LimbSide.Right, actionName);
+    private void OnLeftControllerButtonPressed(string actionName)
+    {
+        if (!CanProcess())
+        {
+            return;
+        }
+
+        HandleGrabButtonPressed(LimbSide.Left, actionName);
+    }
+
+    private void OnLeftControllerButtonReleased(string actionName)
+    {
+        if (!CanProcess())
+        {
+            return;
+        }
+
+        HandleGrabButtonReleased(LimbSide.Left, actionName);
+    }
+
+    private void OnRightControllerButtonPressed(string actionName)
+    {
+        if (!CanProcess())
+        {
+            return;
+        }
+
+        HandleGrabButtonPressed(LimbSide.Right, actionName);
+    }
+
+    private void OnRightControllerButtonReleased(string actionName)
+    {
+        if (!CanProcess())
+        {
+            return;
+        }
+
+        HandleGrabButtonReleased(LimbSide.Right, actionName);
+    }
 
     private void HandleGrabButtonPressed(LimbSide side, string actionName)
     {
@@ -370,4 +467,20 @@ public partial class PlayerController : Node
 
     private void UpdateRotationInput(Vector2 value)
         => _locomotion?.Rotate(value);
+
+    private void ZeroLocomotionInput()
+    {
+        UpdateMovementInput(Vector2.Zero);
+        UpdateRotationInput(Vector2.Zero);
+    }
+
+    private ILogger<PlayerController>? ResolveLogger()
+    {
+        if (_logger is null && GameLoggerResolver.TryResolve(out ILogger<PlayerController>? logger))
+        {
+            _logger = logger;
+        }
+
+        return _logger;
+    }
 }

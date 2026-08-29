@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://n6yev308glgw" path="res://src/XR/Mock/MockXRRuntimeNode.cs" id="1_xjl7o"]
 
 [node name="Origin" type="Node3D" unique_id=402881029]
+process_mode = 4
 script = ExtResource("1_xjl7o")
 metadata/_custom_type_script = "uid://n6yev308glgw"
 

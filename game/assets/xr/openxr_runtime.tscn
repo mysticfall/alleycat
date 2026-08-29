@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://bkdutbkqpelq8" path="res://src/XR/OpenXR/OpenXRHandControllerNode.cs" id="1_22d6f"]
 
 [node name="Origin" type="XROrigin3D" unique_id=2070622317]
+process_mode = 4
 script = ExtResource("1_4of4h")
 metadata/_custom_type_script = "uid://dv076impllmml"
 

@@ -329,6 +329,7 @@ public partial class TestRuntimeRunner : Node
         => testTypeName is "AlleyCat.IntegrationTests.GameStartupIntegrationTests"
             or "AlleyCat.IntegrationTests.UI.UIOverlayIntegrationTests"
             or "AlleyCat.IntegrationTests.UI.LoadingScreenIntegrationTests"
+            or "AlleyCat.IntegrationTests.UI.GameMenuIntegrationTests"
             or "AlleyCat.IntegrationTests.Speech.TranscriberIntegrationTests"
             or "AlleyCat.IntegrationTests.Control.PlayerControllerGrabInputIntegrationTests";
 

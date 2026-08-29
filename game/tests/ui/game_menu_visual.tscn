@@ -1,0 +1,61 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://b78rpt4gkq7cu" path="res://assets/ui/ui_overlay.tscn" id="1_overlay"]
+[ext_resource type="Script" path="res://tests/ui/GameMenuVisualGameStub.cs" id="2_gstub"]
+
+[node name="GameMenuVisualFixture" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.235, 0.29, 0.35, 1)
+
+[node name="OverlayDisplay" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Game" type="Node" parent="."]
+script = ExtResource("2_gstub")
+
+[node name="GameMenuViewport" type="SubViewport" parent="Game"]
+audio_listener_enable_2d = false
+disable_3d = true
+size = Vector2i(1800, 1200)
+render_target_update_mode = 4
+
+[node name="Backdrop" type="ColorRect" parent="Game/GameMenuViewport"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.235, 0.29, 0.35, 1)
+
+[node name="UIOverlay" parent="Game/GameMenuViewport" instance=ExtResource("1_overlay")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2

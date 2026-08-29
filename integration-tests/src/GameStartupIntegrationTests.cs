@@ -528,7 +528,7 @@ public sealed partial class GameStartupIntegrationTests
     {
         public List<int> QuitRequests { get; } = [];
 
-        protected override void QuitGame(int exitCode)
+        public override void RequestExit(int exitCode)
             => QuitRequests.Add(exitCode);
     }
 

@@ -1,0 +1,59 @@
+[gd_scene format=3 uid="uid://dv4nkgmqz2p8c"]
+
+[ext_resource type="Script" uid="uid://cgj7m3nu2q8v4" path="res://src/UI/GameMenu.cs" id="1_gmenu"]
+
+[node name="GameMenu" type="Control" unique_id=731205801]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_gmenu")
+metadata/_custom_type_script = "uid://cgj7m3nu2q8v4"
+
+[node name="Center" type="CenterContainer" parent="." unique_id=731205802]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="Center" unique_id=731205803]
+custom_minimum_size = Vector2(360, 220)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Options" type="VBoxContainer" parent="Center/Panel" unique_id=731205804]
+layout_mode = 2
+theme_override_constants/separation = 16
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Center/Panel/Options" unique_id=731205805]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "Menu"
+horizontal_alignment = 1
+
+[node name="ResumeOption" type="Button" parent="Center/Panel/Options" unique_id=731205806]
+custom_minimum_size = Vector2(300, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+alignment = 1
+focus_mode = 0
+mouse_filter = 2
+text = "Resume"
+
+[node name="ExitOption" type="Button" parent="Center/Panel/Options" unique_id=731205807]
+custom_minimum_size = Vector2(300, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+alignment = 1
+focus_mode = 0
+mouse_filter = 2
+text = "Exit Game"
