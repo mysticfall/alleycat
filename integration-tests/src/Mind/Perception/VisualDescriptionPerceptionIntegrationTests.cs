@@ -78,16 +78,20 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
         try
         {
             var perception = new VisualDescriptionPerception();
-            PerceptionResult result = await perception.PerceiveAsync(
+            List<Observation> emissions = [];
+            perception.Observed += emissions.Add;
+
+            await perception.PerceiveAsync(
                 new LookTargetChangedPercept(null, cue),
                 CreateContext(),
                 CancellationToken.None);
 
-            ObservedVisualDescription observation = Assert.IsType<ObservedVisualDescription>(Assert.Single(result.Observations));
+            ObservedVisualDescription observation = Assert.IsType<ObservedVisualDescription>(Assert.Single(emissions));
             Assert.Equal("test:subject", observation.SubjectId);
             Assert.Equal("A weathered red coat.", observation.Description);
-            Assert.Empty(result.AttentionEffects);
+            Assert.Empty(observation.GetAttentionEffects(new ObservationContext(TestCharacter.Instance)));
             Assert.Same(cue, perception.ActiveCue);
+            Assert.Same(subject, perception.ActiveSubject);
         }
         finally
         {
@@ -114,19 +118,24 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
         {
             var first = new VisualDescriptionPerception();
             var second = new VisualDescriptionPerception();
+            List<Observation> firstEmissions = [];
+            List<Observation> secondEmissions = [];
+            first.Observed += firstEmissions.Add;
+            second.Observed += secondEmissions.Add;
 
-            PerceptionResult unassociatedResult = await first.PerceiveAsync(
+            await first.PerceiveAsync(
                 new LookTargetChangedPercept(null, unassociated), CreateContext(), CancellationToken.None);
-            PerceptionResult freedResult = await second.PerceiveAsync(
+            await second.PerceiveAsync(
                 new LookTargetChangedPercept(null, freed), CreateContext(), CancellationToken.None);
-            PerceptionResult clearResult = await first.PerceiveAsync(
+            await first.PerceiveAsync(
                 new LookTargetChangedPercept(unassociated, null), CreateContext(), CancellationToken.None);
 
-            Assert.Empty(unassociatedResult.Observations);
-            Assert.Empty(freedResult.Observations);
-            Assert.Empty(clearResult.Observations);
+            Assert.Empty(firstEmissions);
+            Assert.Empty(secondEmissions);
             Assert.Null(first.ActiveCue);
+            Assert.Null(first.ActiveSubject);
             Assert.Same(freed, second.ActiveCue);
+            Assert.Null(second.ActiveSubject);
         }
         finally
         {
@@ -135,7 +144,10 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
         }
     }
 
-    /// <summary>Reparenting during Describe invalidates association and cancellation prevents a completed result.</summary>
+    /// <summary>
+    /// Reparenting during Describe invalidates association and cancellation prevents a completed emission; neither
+    /// route commits an observation through the owning Mind (AI-006 UR-11, TR-32).
+    /// </summary>
     [Fact]
     public async Task ReparentingAndCancellationDuringDescribe_ProduceNoCommittedObservation()
     {
@@ -164,16 +176,29 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
         try
         {
             var perception = new VisualDescriptionPerception();
-            PerceptionResult stale = await perception.PerceiveAsync(
+            List<Observation> emissions = [];
+            perception.Observed += emissions.Add;
+            var mind = new EndToEndMind(TestCharacter.Instance);
+            mind.AddChild(perception);
+            mind.SetSceneContextLoaderForTesting(() => TestSceneContext.Instance);
+            root.AddChild(mind);
+            await TestUtils.WaitForFramesAsync(tree, 2);
+
+            await perception.PerceiveAsync(
                 new LookTargetChangedPercept(null, reparentingCue), CreateContext(), CancellationToken.None);
-            Assert.Empty(stale.Observations);
+            await mind.DrainPerceptionsForTestingAsync();
+            Assert.Empty(emissions);
+            Assert.Empty(mind.Timeline);
 
             using var cancellation = new CancellationTokenSource();
-            Task<PerceptionResult> pending = perception.PerceiveAsync(
+            Task pending = perception.PerceiveAsync(
                 new LookTargetChangedPercept(reparentingCue, delayedCue), CreateContext(), cancellation.Token).AsTask();
             cancellation.Cancel();
             completion.SetResult("cancelled description");
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+            await mind.DrainPerceptionsForTestingAsync();
+            Assert.Empty(emissions);
+            Assert.Empty(mind.Timeline);
         }
         finally
         {
@@ -182,8 +207,7 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
         }
     }
 
-    private static PerceptionContext CreateContext()
-        => new(TestCharacter.Instance, TestSceneContext.Instance, null!);
+    private static PerceptionContext CreateContext() => new(TestCharacter.Instance, TestSceneContext.Instance);
 
     private static void AddToTree(SceneTree tree, Node node) => (tree.CurrentScene ?? tree.Root).AddChild(node);
 

@@ -1,4 +1,5 @@
 using AlleyCat.Character;
+using AlleyCat.Mind.Attention;
 
 namespace AlleyCat.Mind.Observation;
 
@@ -10,6 +11,19 @@ public enum ObservationDuplicatePolicy
 
     /// <summary>Suppresses an observation equivalent to the latest retained observation in its scope.</summary>
     IgnoreEquivalent,
+}
+
+/// <summary>Controls how Mind commits an observation.</summary>
+public enum ObservationRetention
+{
+    /// <summary>The observation ingests through the ordinary timeline and prompt-history path.</summary>
+    Durable,
+
+    /// <summary>
+    /// The observation applies its attention effects only and leaves no durable record, history entry, or prompt
+    /// participation.
+    /// </summary>
+    Transient,
 }
 
 /// <summary>
@@ -28,6 +42,11 @@ public abstract record Observation
 
     /// <summary>Gets the stable ordinal scope used by opt-in duplicate handling.</summary>
     public virtual string? DuplicateScope => null;
+
+    /// <summary>
+    /// Gets how Mind commits this observation; durable ingestion is the default.
+    /// </summary>
+    public virtual ObservationRetention Retention => ObservationRetention.Durable;
 
     /// <summary>
     /// Exact, case-sensitive semantic key used for authored prompt dispatch.
@@ -53,6 +72,15 @@ public abstract record Observation
     /// </summary>
     public abstract float CalculateImportance(ObservationContext context);
 
+    /// <summary>
+    /// Calculates the ordered attention effects this observation applies when Mind commits it.
+    /// </summary>
+    public virtual IReadOnlyList<AttentionEffect> GetAttentionEffects(ObservationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return [];
+    }
+
     /// <summary>Determines semantic equivalence, excluding ingestion metadata such as <see cref="ObservedAt"/>.</summary>
     public virtual bool IsSemanticallyEquivalentTo(Observation other)
     {
@@ -66,28 +94,3 @@ public abstract record Observation
 /// </summary>
 /// <param name="ActorId">Exact stable actor FullId, or <see langword="null"/> when the actor is unknown.</param>
 public abstract record ObservedAction(string? ActorId) : Observation;
-
-/// <summary>
-/// Speech observed from the owning character, a recognised other character, or an unknown speaker.
-/// </summary>
-/// <param name="ActorId">Exact recognised actor FullId, or <see langword="null"/> when unknown.</param>
-/// <param name="VoiceId">Optional raw voice ID used for configured attribution, but not authenticated provenance.</param>
-/// <param name="Content">Observed speech content.</param>
-public sealed record ObservedSpeech(
-    string? ActorId,
-    string? VoiceId,
-    string Content) : ObservedAction(ActorId)
-{
-    /// <summary>The unified stable semantic key shared by every observed-speech perspective (AI-001 TR-10).</summary>
-    public const string TypeKeyValue = "speech.observed";
-
-    /// <inheritdoc />
-    public override string TypeKey => TypeKeyValue;
-
-    /// <inheritdoc />
-    public override float CalculateImportance(ObservationContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return string.Equals(ActorId, context.Character.FullId, StringComparison.Ordinal) ? 0f : 1f;
-    }
-}

@@ -102,9 +102,9 @@ public sealed class PerceptionCompositionIntegrationTests
             VisualDescriptionPerception maleVisualDescription = maleMind.GetNode<VisualDescriptionPerception>("VisualDescriptionPerception");
             var isolatedCue = new StaticVisualCue();
             npc.AddChild(isolatedCue);
-            _ = await femaleVisualDescription.PerceiveAsync(
+            await femaleVisualDescription.PerceiveAsync(
                 new LookTargetChangedPercept(null, isolatedCue),
-                new PerceptionContext(npc, null!, null!),
+                new PerceptionContext(npc, null!),
                 CancellationToken.None);
             Assert.Same(isolatedCue, femaleVisualDescription.ActiveCue);
             Assert.Null(maleVisualDescription.ActiveCue);

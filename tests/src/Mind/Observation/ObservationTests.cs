@@ -1,5 +1,6 @@
 using AlleyCat.Character;
 using AlleyCat.Core;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Vision;
 using Xunit;
@@ -109,6 +110,80 @@ public sealed class ObservationTests
         Assert.False(first.IsSemanticallyEquivalentTo(second));
     }
 
+    /// <summary>Recognised non-self speech contributes one fixed attention effect on its actor.</summary>
+    [Fact]
+    public void ObservedSpeech_GetAttentionEffects_RecognisedActorContributesFixedAttention()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        var observation = new ObservedSpeech("char:speaker", "speaker-voice", "Hello");
+
+        AttentionEffect effect = Assert.Single(observation.GetAttentionEffects(new ObservationContext(owner)));
+
+        Assert.Equal("char:speaker", effect.SubjectFullId);
+        Assert.Equal(0.5f, effect.Contribution);
+    }
+
+    /// <summary>Self speech and speech from an unknown speaker contribute no attention effects.</summary>
+    [Fact]
+    public void ObservedSpeech_GetAttentionEffects_SelfAndUnknownSpeakersContributeNone()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        var self = new ObservedSpeech("char:owner", "private-device", "Hello");
+        var unknown = new ObservedSpeech(null, "private-device", "Hello");
+
+        Assert.Empty(self.GetAttentionEffects(new ObservationContext(owner)));
+        Assert.Empty(unknown.GetAttentionEffects(new ObservationContext(owner)));
+    }
+
+    /// <summary>Visual presence is transient and contributes one fixed attention effect on its subject.</summary>
+    [Fact]
+    public void ObservedVisualPresence_IsTransientAndContributesFixedSubjectAttention()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        var presence = new ObservedVisualPresence("char:subject");
+
+        Assert.Equal("char:subject", presence.SubjectId);
+        Assert.Equal("vision.presence", presence.TypeKey);
+        Assert.Equal(ObservationRetention.Transient, presence.Retention);
+        AttentionEffect effect = Assert.Single(presence.GetAttentionEffects(new ObservationContext(owner)));
+        Assert.Equal("char:subject", effect.SubjectFullId);
+        Assert.Equal(0.25f, effect.Contribution);
+    }
+
+    /// <summary>Visual-presence subject identity must be a canonical <c>Type:Id</c> FullId.</summary>
+    [Theory]
+    [InlineData("subject")]
+    [InlineData("char:")]
+    [InlineData(":subject")]
+    [InlineData("char:subject:extra")]
+    [InlineData("CHAR:subject")]
+    [InlineData(" ")]
+    public void ObservedVisualPresence_RejectsNonCanonicalSubjectId(string subjectId)
+        => Assert.Throws<ArgumentException>(() => new ObservedVisualPresence(subjectId));
+
+    /// <summary>Base observations default to durable retention with no attention effects.</summary>
+    [Fact]
+    public void Observation_DefaultsToDurableRetentionAndEmptyAttention()
+    {
+        FakeCharacter owner = new()
+        {
+            Id = "owner"
+        };
+        var observation = new DefaultObservation();
+
+        Assert.Equal(ObservationRetention.Durable, observation.Retention);
+        Assert.Empty(observation.GetAttentionEffects(new ObservationContext(owner)));
+    }
+
     /// <summary>Visual descriptions use canonical identity, stable importance, and timestamp-free semantics.</summary>
     [Fact]
     public void ObservedVisualDescription_UsesSpecifiedImportanceScopeAndOrdinalSemanticEquality()
@@ -130,6 +205,18 @@ public sealed class ObservationTests
         Assert.False(first.IsSemanticallyEquivalentTo(changed));
         Assert.False(first.IsSemanticallyEquivalentTo(otherSubject));
         _ = Assert.Throws<ArgumentException>(() => new ObservedVisualDescription("subject", "Invalid identity"));
+    }
+
+    /// <summary>Minimal observation leaving every optional contract member at its base default.</summary>
+    private sealed record DefaultObservation : AlleyCat.Mind.Observation.Observation
+    {
+        public override string TypeKey => "test.default";
+
+        public override float CalculateImportance(ObservationContext context)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+            return 0f;
+        }
     }
 
     private sealed class FakeCharacter : ICharacter

@@ -30,6 +30,12 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
    observations.
 8. Repeated equivalent focused descriptions of the same subject are suppressed, while changed descriptions and
    descriptions of different subjects remain memorable.
+9. NPCs notice and remember subjects through ongoing observation, including periodic re-examination of a subject that
+   stays in focus, and stop that re-examination promptly when focus changes or clears.
+10. Routine periodic awareness of visible subjects refreshes attention without creating memories, so sustained presence
+    does not flood the NPC's memory.
+11. When focus changes or clears while a description is still being produced, the NPC does not react to the stale
+    description.
 
 ## Technical Requirements
 
@@ -42,9 +48,9 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
      - Mind's sensing and attention-production path may depend on Sense contracts, but not modality or delivery domains.
        AI-007's separately composed post-attention selector may depend only on the `IVision` capability contract to
        assign a target; Vision and other modality or delivery domains must not depend on Mind.
-        Mind's attended-speaker resolution — which voices block `speak` and wake `wait` — resolves voice activity
-        through current-scene characters' composed `IVoice` via `ICharacter.TryGetVoice()`, mirroring the established
-        `SpeechPerception` attribution precedent (TR-23–TR-26).
+       Mind's attended-speaker resolution — which voices block `speak` and wake `wait` — resolves voice activity
+       through current-scene characters' composed `IVoice` via `ICharacter.TryGetVoice()`, mirroring the established
+       `SpeechPerception` attribution precedent (TR-25–TR-28).
        This exception is acknowledged explicitly rather than presenting strict separation; it adds no dependency beyond
        the existing precedent.
 2. Scene composition may place a Mind node beneath a Character node without creating a Character-to-Mind source
@@ -103,19 +109,27 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     must have at least one match; multiple matches intentionally fan out in direct-child order.
 20. Missing matches, duplicate sense-declared exact types, incompatible generic mappings, and senses that publish an
     undeclared concrete type must fail clearly before activation or publication, as applicable.
-21. `IPerception` interpretation is asynchronous and cancellation-aware. On `ISense.Perceived`, Mind synchronously
-    validates the publisher's exact concrete type, snapshots the ordered matching faculties, and queues the percept
-    without blocking the publisher.
-22. Mind processes queued percepts serially in publication order and awaits matching faculties sequentially in their
-    snapshotted order. A successful component refresh affects later publications only. Async faults are contained and
-    logged; lifetime cancellation and a final lifetime guard forbid post-exit commits.
-23. When a live owning Character commits a replacement `Components` projection, Mind must synchronously revalidate and
-    replace its sense bindings as one refresh operation. For a successful rebind, it must remove every previous sense
-    handler before subscribing to current senses. Repeated equivalent refreshes must not duplicate delivery; node exit
-    must unsubscribe projection and sense handlers and cancel queued or active interpretation.
-24. Each concrete faculty type owns one fixed, non-authorable initial semantic attention contribution in the inclusive
-    range `0..1`. Generic `AttentionSettings` contains only maximum, decay, retention threshold, and context threshold
-    values.
+21. `IPerception` interpretation is asynchronous and cancellation-aware through
+    `PerceiveAsync(IPercept, PerceptionContext, CancellationToken)`, which returns `ValueTask` and produces no result.
+    On `ISense.Perceived`, Mind synchronously validates the publisher's exact concrete type, snapshots the ordered
+    matching faculties, and enqueues the percept without blocking the publisher.
+22. Each faculty exposes exactly one synchronous observation-emission event, and the perception Node base provides a
+    protected emission helper. A faculty may emit zero or many observations, including outside any percept invocation;
+    polling and subject-event faculties own their emission cadence. The refactor must remove `PerceptionResult`.
+    `AttentionEffect` survives only as immutable attention-description data returned by observation behaviour, and
+    faculties never construct it.
+23. Mind subscribes to each configured faculty's observation event for its node lifetime. When a live owning Character
+    commits a replacement `Components` projection, Mind must synchronously revalidate and replace its sense bindings as
+    one refresh operation. For a successful rebind, it must remove every previous sense handler before subscribing to
+    current senses, and rebind or exit must remove observation-event subscriptions without duplicate delivery. Repeated
+    equivalent refreshes must not duplicate delivery; node exit must unsubscribe projection, sense, and observation
+    handlers and cancel queued or active interpretation.
+24. Each observation owns its attention contribution through a virtual context-aware method that returns zero or more
+    attention effects with fixed, non-authorable semantic values: recognised non-self speech contributes `0.5` on its
+    actor, unknown speech contributes none, self speech is not emitted at all, and visual presence contributes `0.25`
+    on its subject, applied in order with duplicates compounding. Generic `AttentionSettings` contains only maximum,
+    decay, retention threshold, and context threshold values. `PerceptionContext` carries no attention settings; Mind
+    applies attention at commit time with its own settings.
 
 ### Faculty Behaviour
 
@@ -129,25 +143,38 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
      `ActorId`; and multiple matches fail without attention, timeline, notable-accumulation, or other effects.
 28. Recognised and unknown observations retain the speech and raw local source voice `Id`. That ID remains operational
     attribution, not authenticated provenance.
-29. `VisualSurveyPerception` returns one attention reinforcement for every subject `FullId` in percept order and no
-    observations.
-30. Active-look perception tracks the current `VisualCue?` from look-target transitions. Clear updates that state and
-    emits no observation. An invalid or freed cue, or a cue with no associated `IVisualSubject`, emits no observation.
-31. For a valid newly active cue, `VisualDescriptionPerception` awaits `cue.Describe(context.Scene,
-    context.Character)` and returns one `ObservedVisualDescription` with exact key `vision.description`, the associated
-    subject's canonical `FullId`, and the rendered description.
+29. `VisualSurveyPerception` emits exactly one transient visual-presence observation for every subject `FullId` in
+    percept order, duplicates included.
+30. `ActiveLookPerception` tracks the current `VisualCue?` from look-target transitions and owns live-cue validation
+    and nearest `IVisualSubject` resolution, responsibilities moved up from `VisualDescriptionPerception`. It exposes
+    public read-only `ActiveCue` and `ActiveSubject` state and subject detach/attach hooks with teardown on clear,
+    replacement, cancellation, and exit, detaching the previous subject before publishing replacement state; the
+    derived-faculty hook receives the cue and subject. Clear updates that state and emits no observation. An invalid
+    or freed cue, or a cue with no resolvable live subject, emits no observation.
+31. `PollingActiveLookPerception` re-examines the active look state periodically: its exported interval must be finite
+    and positive, it performs at most one poll per frame with no catch-up after delayed frames, it polls only while a
+    live active subject is attached, and it stops polling on clear, replacement, cancellation, and exit.
+32. For a valid newly active cue, `VisualDescriptionPerception` awaits `cue.Describe(context.Scene,
+    context.Character)`, revalidates the cue and subject after the await, and emits one durable
+    `ObservedVisualDescription` with exact key `vision.description`, the associated subject's canonical `FullId`, and
+    the rendered description. Stale-result protection: a cue freed, reparented, or replaced during the asynchronous
+    description emits nothing.
 
-### Results, Attention, And Atomicity
+### Observations, Attention, And Atomicity
 
-32. `PerceptionResult` contains an ordered sequence of attention effects and an ordered sequence of zero or more
-    `Observation` records. Both sequences are immutable after return.
-33. Mind concatenates every matching faculty result in faculty order while preserving each result's internal order. It
-    applies duplicate filtering, calculates importance, and validates the complete aggregate before any mutation. Any
-    failure leaves attention, timeline, notable accumulation, timestamps, and notifications unchanged.
-34. After successful validation, Mind applies attention effects sequentially in declared order. Duplicate subject
-    effects are valid and compound in that order.
-35. Mind then atomically ingests all accepted observations in result order through AI-001's existing timeline and
-    notable-observation accumulation path. Existing wake and interruption signalling behaviour remains unchanged.
+33. `Observation` declares its retention policy: `Durable` by default, or `Transient`. Mind commits each observation as
+    one independent atomic unit whose attention application and, for durable observations, ingestion effects apply
+    together or not at all.
+34. Emitted observations enqueue into Mind's existing serial worker alongside percept work in enqueue order;
+    publication callbacks never block on interpretation or commit. Mind processes the queue serially in enqueue order
+    and awaits matching faculties sequentially in their snapshotted order; a successful component refresh affects later
+    publications only. The cross-faculty all-or-nothing aggregate commit for a percept is intentionally removed: faults
+    and invalid observations roll back only that observation, earlier commits stand, later queue items continue, and
+    lifetime cancellation and a final lifetime guard forbid post-exit commits.
+35. Transient observations apply their attention atomically and nothing else: no `ObservedAt` timestamp, no duplicate
+    history, no timeline entry, no notable-observation accumulation, no prompt history, and no committed-observation
+    notification. Durable observations ingest through AI-001's existing timeline and notable-observation accumulation
+    path, and existing wake and interruption signalling behaviour remains unchanged.
 36. Attention is keyed by canonical `FullId` using ordinal comparison. Reinforcement applies
     `current + (maximum - current) * contribution` without exceeding maximum.
 37. Attention decays lazily and linearly with elapsed game time on percept commit, queries, and snapshots. Entries
@@ -164,9 +191,10 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 
 ### Ownership And Composition
 
-41. Mind owns incoming percept subscription, assignability-matched faculty fan-out, result validation, attention
-    mutation, observation ingestion, and notable-observation accumulation. It must not select or assign an `IVision`
-    look target from a sense, survey, faculty, or attention effect.
+41. Mind owns incoming percept subscription, faculty observation-event subscription, assignability-matched faculty
+    fan-out, per-observation validation, attention mutation, observation ingestion, and notable-observation
+    accumulation. It must not select or assign an `IVision` look target from a sense, survey, faculty, or attention
+    effect.
 42. AgenticMind owns only provider, prompt, render-context, and tool concerns. It must not interpret incoming percepts.
     The existing speech output tool and exactly-once self-action observation path remain unchanged.
 43. `Character.Components` deliberately includes configured `ISense` components in deterministic holder order, in
@@ -182,14 +210,17 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 - Immutable percept families and the synchronous non-generic sense event bridge.
 - EyesBehaviour-owned visual survey cadence and Hearing-owned speech acquisition.
 - Mind-owned direct-child Node faculties, assignability matching, deterministic fan-out, ordered asynchronous
-  interpretation, attention, and aggregate atomic result handling.
+  interpretation, observation-event ingestion, attention, and per-observation atomic commit handling.
+- Faculty observation-emission events with zero-or-many emission, including polling and subject-event faculties
+  outside any percept invocation.
+- Active-look cue and subject tracking with detach/attach hooks and the opt-in `PollingActiveLookPerception` cadence.
 - Attention contract namespace and immutable snapshot publication for AI-007's separately composed post-attention
   consumer; not gaze policy or target assignment.
-- Speech interpretation, observation-free visual reinforcement, and transition-driven focused visual descriptions.
+- Speech interpretation, transient visual-presence observations, and transition-driven focused visual descriptions.
 - Sense projection through `Character.Components` and approved dependency direction.
 - Mind attended-speaker voice-activity resolution through the established scene-character `IVoice` attribution
   precedent.
-- Post-commit projection refresh and Mind sense rebinding.
+- Post-commit projection refresh, Mind sense rebinding, and node-lifetime faculty observation subscriptions.
 - NPC role-template perception composition with independently owned faculty state; unchanged player composition.
 
 ## Out Of Scope
@@ -198,14 +229,16 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
   the separately composed post-attention consumer that may assign a look target.
 - Spatial hearing, acoustics, distance attenuation, or directionality.
 - Non-sensory stimuli.
-- Parallel or out-of-publication-order faculty dispatch, Reactive Extensions, or unbounded background processing.
+- Parallel or out-of-enqueue-order percept dispatch and observation commit, Reactive Extensions, or unbounded
+  background processing.
 - Separate assemblies for the dependency layers.
 - Replacing the current Mind owner with a narrower owner abstraction.
 - Top-N attention selection or context budgets.
 - Removal of the current render-context fallback behaviour.
-- Final tuning values for cadence, contributions, decay, and thresholds.
-- Pose-change detection, continuous reinspection while a cue remains selected, and broad renaming of existing
-  `Observation` subtypes.
+- Final tuning values for cadence, decay, and thresholds.
+- Pose-change detection and broad renaming of existing `Observation` subtypes.
+- Reintroducing `PerceptionResult`, faculty-constructed attention effects, or the cross-faculty all-or-nothing
+  aggregate commit.
 
 ## Acceptance Criteria
 
@@ -224,6 +257,11 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
    memory per accepted non-self publication.
 8. Repeating the latest equivalent description for one subject creates no duplicate history entry, while a changed
    description or another subject remains recordable.
+9. Acceptance verifies NPCs re-examine a focused subject only while it remains live in focus and stop re-examination
+   when focus changes or clears.
+10. Acceptance verifies routine periodic awareness of visible subjects creates no memories and only refreshes
+    attention, so sustained presence does not flood memory.
+11. Acceptance verifies a focus change or clear during description production creates no stale reaction or memory.
 
 ### Technical Requirements
 
@@ -249,14 +287,17 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 8. Speech tests verify ordinal source/observer ID self filtering, including the installed character-owned voice ID;
    ordinal zero, one, and ambiguous scene matching; ambiguity without effects; recognised `FullId` reinforcement; and
    exactly one recognised or unknown observation.
-9. Visual faculty tests verify survey effects follow percept order and return no observations. Active-look and visual
-   description tests verify clear, invalid or freed cues, and cues without associated subjects emit nothing; a valid cue
-   awaits `Describe(scene, observer)` and emits `vision.description` with canonical subject `FullId` and description.
-10. Settings tests verify generic settings contain only maximum, decay, retention, and context thresholds, while each
-   concrete faculty supplies its fixed valid semantic contribution.
-11. Atomicity tests verify all matching faculties run sequentially in direct-child order; results aggregate in faculty
-    and internal order; duplicate filtering, importance calculation, and complete validation precede mutation; failure
-    changes no state; and accepted observations commit once atomically in order.
+9. Visual faculty tests verify survey perception emits one transient visual-presence observation per subject `FullId`
+   in percept order, duplicates included. Active-look and visual description tests verify clear, invalid or freed cues,
+   and cues without resolvable subjects emit nothing; a valid cue awaits `Describe(scene, observer)` and emits one
+   durable `vision.description` observation with canonical subject `FullId` and description.
+10. Settings tests verify generic settings contain only maximum, decay, retention, and context thresholds; observation
+    behaviour supplies the fixed valid semantic contributions for recognised speech and visual presence; and
+    `PerceptionContext` carries no attention settings.
+11. Atomicity tests verify matching faculties run sequentially in direct-child order and each observation commits as
+    one independent atomic unit: duplicate filtering and importance calculation precede per-observation mutation; a
+    fault or invalid observation changes no state beyond itself, leaves earlier commits standing, and lets later queue
+    items continue; and no cross-faculty aggregate validation or rollback exists.
 12. Attention tests verify ordinal canonical identity, the reinforcement formula, lazy decay, retention, context
    eligibility, immutable ordered snapshots, and absence of live object references.
 13. Composition tests verify faculties are independently owned direct Mind-child Nodes discovered in scene order; male
@@ -274,14 +315,34 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 17. Transition tests verify an effective `VisualCue?` target change publishes one immutable previous/current percept,
     same-cue assignment publishes none, and clear publishes `current -> null` without transferring gaze policy to
     sensing or perception.
-18. Async tests verify synchronous publisher validation and binding snapshots, non-blocking intake,
-    publication-order serialisation, sequential cancellation-aware faculties, contained and logged faults, and no
-    post-lifetime commit.
+18. Async tests verify synchronous publisher validation and binding snapshots, non-blocking intake, enqueue-order
+    serialisation across percept work and observations, sequential cancellation-aware faculties, contained and logged
+    faults, and no post-lifetime commit.
 19. Duplicate tests verify default-allow behaviour and `ObservedVisualDescription` latest-retained comparison by same
     concrete type, ordinal subject scope, and ordinal subject-plus-description equality excluding `ObservedAt`. Earlier
     accepted staged entries participate; removed or summarised entries do not.
-20. Scope tests verify focused inspection is transition-driven and adds no pose-change detection, continuous
-    reinspection, or broad `Observation` subtype renaming.
+20. Scope tests verify focused inspection adds no pose-change detection and no broad `Observation` subtype renaming,
+    and that periodic reinspection occurs only through `PollingActiveLookPerception` at its configured cadence.
+21. Subscription tests verify Mind subscribes to each configured faculty's observation event exactly once for its
+    node lifetime, rebinds without duplicate delivery, and unsubscribes every sense and observation handler on rebind
+    and tree exit.
+22. Queue tests verify faculty-emitted observations enter Mind's existing serial worker alongside percept work in
+    enqueue order and that emission callbacks never block on interpretation or commit.
+23. Transient tests verify transient observations apply attention atomically while producing no `ObservedAt`
+    timestamp, duplicate-history participation, timeline entry, notable accumulation, prompt history, or
+    committed-observation notification; visual-survey perception emits one transient visual-presence observation per
+    percept subject `FullId` in order, duplicates included.
+24. Presence-attention tests verify ordered visual-presence observations apply their fixed `0.25` contribution on
+    each subject with duplicates compounding, recognised non-self speech applies `0.5` on its actor, unknown speech
+    applies none, and self speech is not emitted.
+25. Active-look tests verify public read-only `ActiveCue` and `ActiveSubject`, live-cue validation, and
+    nearest-`IVisualSubject` resolution, with subject detach/attach hooks torn down on clear, replacement,
+    cancellation, and exit and the previous subject detached before replacement state is published.
+26. Polling tests verify a finite positive exported interval, at most one poll per frame, no catch-up after delayed
+    frames, polling only while a live active subject is attached, and stopped polling on clear, replacement,
+    cancellation, and exit.
+27. Stale-description tests verify that a cue freed, reparented, or replaced during an asynchronous `Describe` await
+    emits no observation, through post-await revalidation of the cue and subject.
 
 ## References
 

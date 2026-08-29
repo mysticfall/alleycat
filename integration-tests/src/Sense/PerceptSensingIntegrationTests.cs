@@ -2,6 +2,7 @@ using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;
@@ -179,43 +180,68 @@ public sealed class PerceptSensingIntegrationTests
         var observer = new TestCharacter("observer", observerVoice);
         var recognised = new TestCharacter("recognised", new TestVoice("speaker"));
         var perception = new SpeechPerception();
+        List<Observation> emissions = [];
+        perception.Observed += emissions.Add;
 
-        PerceptionResult self = await perception.PerceiveAsync(new SpeechPercept("self", "observer"), CreateContext(observer, [recognised]), CancellationToken.None);
-        PerceptionResult unknown = await perception.PerceiveAsync(new SpeechPercept("unknown", "missing"), CreateContext(observer, [recognised]), CancellationToken.None);
-        PerceptionResult recognisedResult = await perception.PerceiveAsync(new SpeechPercept("recognised", "speaker"), CreateContext(observer, [recognised]), CancellationToken.None);
+        await perception.PerceiveAsync(new SpeechPercept("self", "observer"), CreateContext(observer, [recognised]), CancellationToken.None);
+        Assert.Empty(emissions);
 
-        Assert.Empty(self.AttentionEffects);
-        Assert.Empty(self.Observations);
-        ObservedSpeech unknownSpeech = Assert.IsType<ObservedSpeech>(Assert.Single(unknown.Observations));
+        await perception.PerceiveAsync(new SpeechPercept("unknown", "missing"), CreateContext(observer, [recognised]), CancellationToken.None);
+        ObservedSpeech unknownSpeech = Assert.IsType<ObservedSpeech>(Assert.Single(emissions));
         Assert.Null(unknownSpeech.ActorId);
         Assert.Equal("missing", unknownSpeech.VoiceId);
-        Assert.Equal("char:recognised", Assert.Single(recognisedResult.AttentionEffects).SubjectFullId);
-        ObservedSpeech recognisedSpeech = Assert.IsType<ObservedSpeech>(Assert.Single(recognisedResult.Observations));
+        Assert.Equal("unknown", unknownSpeech.Content);
+        Assert.Empty(unknownSpeech.GetAttentionEffects(new ObservationContext(observer)));
+
+        emissions.Clear();
+        await perception.PerceiveAsync(new SpeechPercept("recognised", "speaker"), CreateContext(observer, [recognised]), CancellationToken.None);
+        ObservedSpeech recognisedSpeech = Assert.IsType<ObservedSpeech>(Assert.Single(emissions));
         Assert.Equal("char:recognised", recognisedSpeech.ActorId);
+        var observationContext = new ObservationContext(observer);
+        AttentionEffect attentionEffect = Assert.Single(recognisedSpeech.GetAttentionEffects(observationContext));
+        Assert.Equal("char:recognised", attentionEffect.SubjectFullId);
+        Assert.Equal(0.5f, attentionEffect.Contribution);
 
         var duplicate = new TestCharacter("duplicate", new TestVoice("speaker"));
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await perception.PerceiveAsync(new SpeechPercept("ambiguous", "speaker"), CreateContext(observer, [recognised, duplicate]), CancellationToken.None));
     }
 
-    /// <summary>Visual faculties preserve each canonical ID and duplicate in percept order without observations.</summary>
+    /// <summary>Visual survey emits ordered transient presence observations with duplicate subjects preserved in order.</summary>
     [Fact]
-    public async Task VisualSurveyPerception_ReturnsOrderedDuplicateReinforcementsWithoutObservations()
+    public async Task VisualSurveyPerception_EmitsOrderedTransientPresenceObservationsPreservingDuplicateSubjects()
     {
+        var observer = new TestCharacter("observer", new TestVoice("observer"));
         var perception = new VisualSurveyPerception();
-        var percept = new VisualSurveyPercept(["char:second", "char:first", "char:second"]);
+        List<Observation> emissions = [];
+        perception.Observed += emissions.Add;
 
-        PerceptionResult result = await perception.PerceiveAsync(
-            percept,
-            CreateContext(new TestCharacter("observer", new TestVoice("observer")), []),
+        await perception.PerceiveAsync(
+            new VisualSurveyPercept(["char:second", "char:first", "char:second"]),
+            CreateContext(observer, []),
             CancellationToken.None);
 
-        Assert.Equal(["char:second", "char:first", "char:second"], result.AttentionEffects.Select(effect => effect.SubjectFullId));
-        Assert.Empty(result.Observations);
+        var observationContext = new ObservationContext(observer);
+        Assert.Collection(
+            emissions,
+            emission => AssertTransientPresence(emission, "char:second", observationContext),
+            emission => AssertTransientPresence(emission, "char:first", observationContext),
+            emission => AssertTransientPresence(emission, "char:second", observationContext));
+
+        static void AssertTransientPresence(Observation emission, string expectedSubjectId, ObservationContext context)
+        {
+            ObservedVisualPresence presence = Assert.IsType<ObservedVisualPresence>(emission);
+            Assert.Equal("vision.presence", presence.TypeKey);
+            Assert.Equal(ObservationRetention.Transient, presence.Retention);
+            Assert.Equal(expectedSubjectId, presence.SubjectId);
+            AttentionEffect effect = Assert.Single(presence.GetAttentionEffects(context));
+            Assert.Equal(expectedSubjectId, effect.SubjectFullId);
+            Assert.Equal(0.25f, effect.Contribution);
+        }
     }
 
     private static PerceptionContext CreateContext(ICharacter observer, IReadOnlyCollection<ICharacter> characters)
-        => new(observer, new TestSceneContext(characters), null!);
+        => new(observer, new TestSceneContext(characters));
 
     private static TestVisualSubject CreateVisibleSubject(string id, Vector3 position)
     {

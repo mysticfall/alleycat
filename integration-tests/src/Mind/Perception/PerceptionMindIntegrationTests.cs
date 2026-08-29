@@ -60,10 +60,14 @@ public sealed class PerceptionMindIntegrationTests
         AssertActivationFails(new TestCharacter(new TestSense(typeof(FirstPercept))), []);
         AssertActivationFails(
             new TestCharacter(new TestSense(typeof(IPercept))),
-            [new DelegatingFaculty<IPercept>((_, _, _) => ValueTask.FromResult(Result("invalid")))]);
+            [new DelegatingFaculty<IPercept>((_, _, _) => ValueTask.CompletedTask)]);
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Percept interpretation serialises in publication order, faculty bindings snapshot per publication, and a
+    /// component refresh rebinds observation subscriptions so emissions from replaced faculties stop committing
+    /// (AI-001 TR-29, AI-006 TR-23/34).
+    /// </summary>
     [Fact]
     public async Task Intake_SerialisesAsyncFacultiesAndSnapshotsBindingsAcrossRefresh()
     {
@@ -73,15 +77,23 @@ public sealed class PerceptionMindIntegrationTests
         var mind = new TestMind(owner);
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var oldFaculty = new DelegatingFaculty<FirstPercept>(async (percept, _, _) =>
+        List<string> invocations = [];
+        DelegatingFaculty<FirstPercept>? oldFaculty = null;
+        oldFaculty = new DelegatingFaculty<FirstPercept>(async (percept, _, _) =>
         {
-            _ = started.TrySetResult();
+            invocations.Add($"old:{percept.Id}");
             if (percept.Id == "first")
             {
+                // Emitted while the faculty is still bound, so Mind commits this observation.
+                oldFaculty!.EmitForTest(new TestObservation("old:first", 0f));
+                _ = started.TrySetResult();
                 await gate.Task;
             }
-
-            return Result($"old:{percept.Id}");
+            else
+            {
+                // Emitted after the rebind removed this faculty's observation subscription, so Mind drops it.
+                oldFaculty!.EmitForTest(new TestObservation($"old:{percept.Id}", 0f));
+            }
         });
         mind.AddChild(oldFaculty);
         var root = new Node();
@@ -92,18 +104,30 @@ public sealed class PerceptionMindIntegrationTests
         try
         {
             sense.Publish(new FirstPercept("first"));
-            sense.Publish(new FirstPercept("second"));
             await started.Task;
+            sense.Publish(new FirstPercept("second"));
 
             mind.RemoveChild(oldFaculty);
-            var replacement = new RecordingFaculty<FirstPercept>("new");
+            DelegatingFaculty<FirstPercept>? replacement = null;
+            replacement = new DelegatingFaculty<FirstPercept>((percept, _, _) =>
+            {
+                invocations.Add($"new:{percept.Id}");
+                replacement!.EmitForTest(new TestObservation($"new:{percept.Id}", 0f));
+                return ValueTask.CompletedTask;
+            });
             mind.AddChild(replacement);
             owner.RefreshComponents(sense);
             sense.Publish(new FirstPercept("third"));
 
+            // The gated first percept still blocks the queued second percept: serial publication-order processing.
+            Assert.Equal(["old:first"], invocations);
             _ = gate.TrySetResult();
             await mind.DrainPerceptionsForTestingAsync();
-            Assert.Equal(["old:first", "old:second", "new:third"], Values(mind.Timeline));
+
+            // Pre-refresh publications dispatch to the snapshotted old faculty; the post-refresh publication uses the
+            // replacement. Only emissions raised while subscribed commit.
+            Assert.Equal(["old:first", "old:second", "new:third"], invocations);
+            Assert.Equal(["old:first", "new:third"], Values(mind.Timeline));
             oldFaculty.Free();
         }
         finally
@@ -113,23 +137,37 @@ public sealed class PerceptionMindIntegrationTests
         }
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Faults and invalid observations roll back only their own observation: earlier committed observations stand
+    /// and later queued items continue (AI-001 TR-30, AI-006 TR-34).
+    /// </summary>
     [Fact]
-    public async Task Aggregate_FaultsAndInvalidResultsRollBackWithoutBlockingLaterPercepts()
+    public async Task Aggregate_FaultsAndInvalidObservationsRollBackOnlyThatObservationWithoutBlockingLaterPercepts()
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var sense = new TestSense(typeof(FirstPercept));
         var owner = new TestCharacter(sense);
         var mind = new TestMind(owner) { ObservationImportanceThreshold = 100f };
-        mind.AddChild(new RecordingFaculty<FirstPercept>("first"));
-        mind.AddChild(new DelegatingFaculty<FirstPercept>((percept, _, _) => percept.Id switch
+        DelegatingFaculty<FirstPercept>? faculty = null;
+        faculty = new DelegatingFaculty<FirstPercept>((percept, _, _) =>
         {
-            "fault" => ValueTask.FromException<PerceptionResult>(new InvalidOperationException("expected fault")),
-            "invalid" => ValueTask.FromResult(new PerceptionResult(
-                [new AttentionEffect("char:invalid", 0.5f)],
-                [new TestObservation("invalid", float.NaN)])),
-            _ => ValueTask.FromResult(Result($"second:{percept.Id}")),
-        }));
+            if (percept.Id == "fault")
+            {
+                faculty!.EmitForTest(new TestObservation("first:before", 0f));
+                faculty.EmitForTest(new FaultingObservation());
+                faculty.EmitForTest(new TestObservation("first:after", 0f));
+            }
+            else
+            {
+                faculty!.EmitForTest(new TestObservation("second:before", 0f));
+                faculty.EmitForTest(new TestObservation("invalid-importance", float.NaN));
+                faculty.EmitForTest(new AttentionObservation("invalid-id", 0.5f));
+                faculty.EmitForTest(new TestObservation("second:after", 0f));
+            }
+
+            return ValueTask.CompletedTask;
+        });
+        mind.AddChild(faculty);
         var root = new Node();
         root.AddChild(mind);
         AddToTree(tree, root);
@@ -139,12 +177,11 @@ public sealed class PerceptionMindIntegrationTests
         {
             sense.Publish(new FirstPercept("fault"));
             sense.Publish(new FirstPercept("invalid"));
-            sense.Publish(new FirstPercept("valid"));
             await mind.DrainPerceptionsForTestingAsync();
 
-            Assert.Equal(["first:valid", "second:valid"], Values(mind.Timeline));
+            Assert.Equal(["first:before", "first:after", "second:before", "second:after"], Values(mind.Timeline));
+            Assert.Equal(4, mind.Ingested.Count);
             Assert.Equal(0f, mind.GetAttention("char:invalid"));
-            Assert.Equal(2, mind.Ingested.Count);
         }
         finally
         {
@@ -164,11 +201,14 @@ public sealed class PerceptionMindIntegrationTests
         var intakeReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var releaseIntake = new ManualResetEventSlim(initialState: false);
         var facultyInvocations = new Counter();
-        mind.AddChild(new DelegatingFaculty<FirstPercept>((_, _, _) =>
+        DelegatingFaculty<FirstPercept>? faculty = null;
+        faculty = new DelegatingFaculty<FirstPercept>((_, _, _) =>
         {
             facultyInvocations.Value++;
-            return ValueTask.FromResult(Result("too-late"));
-        }));
+            faculty!.EmitForTest(new TestObservation("too-late", 0f));
+            return ValueTask.CompletedTask;
+        });
+        mind.AddChild(faculty);
         mind.SetBeforePerceptionEnqueueForTesting(() =>
         {
             _ = intakeReached.TrySetResult();
@@ -207,17 +247,22 @@ public sealed class PerceptionMindIntegrationTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var laterFacultyInvocations = new Counter();
-        mind.AddChild(new DelegatingFaculty<FirstPercept>(async (_, _, _) =>
+        DelegatingFaculty<FirstPercept>? gatedFaculty = null;
+        gatedFaculty = new DelegatingFaculty<FirstPercept>(async (_, _, _) =>
         {
             _ = started.TrySetResult();
             await release.Task;
-            return Result("too-late");
-        }));
-        mind.AddChild(new DelegatingFaculty<FirstPercept>((_, _, _) =>
+            gatedFaculty!.EmitForTest(new TestObservation("too-late", 0f));
+        });
+        mind.AddChild(gatedFaculty);
+        DelegatingFaculty<FirstPercept>? laterFaculty = null;
+        laterFaculty = new DelegatingFaculty<FirstPercept>((_, _, _) =>
         {
             laterFacultyInvocations.Value++;
-            return ValueTask.FromResult(Result("later"));
-        }));
+            laterFaculty!.EmitForTest(new TestObservation("later", 0f));
+            return ValueTask.CompletedTask;
+        });
+        mind.AddChild(laterFaculty);
         var root = new Node();
         root.AddChild(mind);
         AddToTree(tree, root);
@@ -256,7 +301,7 @@ public sealed class PerceptionMindIntegrationTests
 
         try
         {
-            faculty.Result = new PerceptionResult([],
+            faculty.Observations =
             [
                 new TestObservation("allowed", 0f),
                 new TestObservation("allowed", 0f),
@@ -264,7 +309,7 @@ public sealed class PerceptionMindIntegrationTests
                 Equivalent("a", "same", importanceCounter),
                 Equivalent("b", "same", importanceCounter),
                 Equivalent("A", "same", importanceCounter),
-            ]);
+            ];
             sense.Publish(new FirstPercept("batch"));
             await mind.DrainPerceptionsForTestingAsync();
 
@@ -272,12 +317,12 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Equal(3, importanceCounter.Value);
             Assert.Equal(5, mind.Ingested.Count);
 
-            faculty.Result = new PerceptionResult([],
+            faculty.Observations =
             [
                 Equivalent("a", "same", importanceCounter) with { ObservedAt = 999d },
                 Equivalent("a", "different", importanceCounter),
                 Equivalent("a", "same", importanceCounter),
-            ]);
+            ];
             sense.Publish(new FirstPercept("latest"));
             await mind.DrainPerceptionsForTestingAsync();
 
@@ -285,24 +330,24 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Equal(5, importanceCounter.Value);
             Assert.Equal(7, mind.Ingested.Count);
 
-            faculty.Result = new PerceptionResult([],
+            faculty.Observations =
             [
                 Equivalent("a", "same", importanceCounter),
                 new TestObservation("invalid", float.NaN),
-            ]);
+            ];
             sense.Publish(new FirstPercept("rollback"));
             await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(7, mind.Timeline.Count);
             Assert.Equal(5, importanceCounter.Value);
             Assert.Equal(7, mind.Ingested.Count);
 
-            faculty.Result = new PerceptionResult([],
+            faculty.Observations =
             [
                 new ObservedVisualDescription("char:a", "same") { ObservedAt = 1d },
                 new ObservedVisualDescription("char:a", "same") { ObservedAt = 2d },
                 new ObservedVisualDescription("char:a", "different"),
                 new ObservedVisualDescription("char:b", "same"),
-            ]);
+            ];
             sense.Publish(new FirstPercept("visual-batch"));
             await mind.DrainPerceptionsForTestingAsync();
 
@@ -310,12 +355,12 @@ public sealed class PerceptionMindIntegrationTests
                 [("char:a", "same"), ("char:a", "different"), ("char:b", "same")],
                 mind.Timeline.OfType<ObservedVisualDescription>().Select(item => (item.SubjectId, item.Description)));
 
-            faculty.Result = new PerceptionResult([], [new ObservedVisualDescription("char:a", "different")]);
+            faculty.Observations = [new ObservedVisualDescription("char:a", "different")];
             sense.Publish(new FirstPercept("visual-latest-equivalent"));
             await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(3, mind.Timeline.OfType<ObservedVisualDescription>().Count());
 
-            faculty.Result = new PerceptionResult([], [new ObservedVisualDescription("char:a", "same")]);
+            faculty.Observations = [new ObservedVisualDescription("char:a", "same")];
             sense.Publish(new FirstPercept("visual-latest-different"));
             await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(4, mind.Timeline.OfType<ObservedVisualDescription>().Count());
@@ -383,11 +428,11 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Equal(2, mind.Ingested.Count);
             _ = Assert.Single(mind.TakeNotableForTest()!);
 
-            faculty.Result = new PerceptionResult([],
+            faculty.Observations =
             [
                 EquivalentAction(ownerFullId, "perception", "same", importanceCounter),
                 EquivalentAction(ownerFullId, "perception", "same", importanceCounter) with { ObservedAt = 999d },
-            ]);
+            ];
             sense.Publish(new FirstPercept("duplicate-batch"));
             await mind.DrainPerceptionsForTestingAsync();
 
@@ -447,8 +492,6 @@ public sealed class PerceptionMindIntegrationTests
         string value,
         Counter counter)
         => new(actorId, scope, value, () => counter.Value++);
-
-    private static PerceptionResult Result(string value) => new([], [new TestObservation(value, 0f)]);
 
     private static IReadOnlyList<string> Values(IReadOnlyList<AgentObservation> observations)
         => [.. observations.Select(observation => observation switch
@@ -569,18 +612,23 @@ public sealed class PerceptionMindIntegrationTests
     private sealed partial class RecordingFaculty<TPercept>(string prefix) : Perception<TPercept>
         where TPercept : BasePercept
     {
-        public override ValueTask<PerceptionResult> PerceiveAsync(
+        public override ValueTask PerceiveAsync(
             TPercept percept,
             PerceptionContext context,
             CancellationToken cancellationToken)
-            => ValueTask.FromResult(Result($"{prefix}:{percept.Id}"));
+        {
+            Emit(new TestObservation($"{prefix}:{percept.Id}", 0f));
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed partial class DelegatingFaculty<TPercept>(
-        Func<TPercept, PerceptionContext, CancellationToken, ValueTask<PerceptionResult>> handler) : Perception<TPercept>
+        Func<TPercept, PerceptionContext, CancellationToken, ValueTask> handler) : Perception<TPercept>
         where TPercept : IPercept
     {
-        public override ValueTask<PerceptionResult> PerceiveAsync(
+        public void EmitForTest(AgentObservation observation) => Emit(observation);
+
+        public override ValueTask PerceiveAsync(
             TPercept percept,
             PerceptionContext context,
             CancellationToken cancellationToken)
@@ -589,29 +637,54 @@ public sealed class PerceptionMindIntegrationTests
 
     private sealed partial class BatchFaculty : Perception<FirstPercept>
     {
-        public PerceptionResult Result { get; set; } = new([], []);
-        public override ValueTask<PerceptionResult> PerceiveAsync(
+        public IReadOnlyList<AgentObservation> Observations { get; set; } = [];
+
+        public override ValueTask PerceiveAsync(
             FirstPercept percept,
             PerceptionContext context,
             CancellationToken cancellationToken)
-            => ValueTask.FromResult(Result);
+        {
+            foreach (AgentObservation observation in Observations)
+            {
+                Emit(observation);
+            }
+
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed partial class HearingFaculty : Perception<SpeechPercept>
     {
-        public override ValueTask<PerceptionResult> PerceiveAsync(
+        public override ValueTask PerceiveAsync(
             SpeechPercept percept,
             PerceptionContext context,
             CancellationToken cancellationToken)
-            => ValueTask.FromResult(new PerceptionResult(
-                [],
-                [new ObservedSpeech(null, percept.SourceVoiceID, percept.Content)]));
+        {
+            Emit(new ObservedSpeech(null, percept.SourceVoiceID, percept.Content));
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed record TestObservation(string Value, float Importance) : AgentObservation
     {
         public override string TypeKey => "test";
         public override float CalculateImportance(ObservationContext context) => Importance;
+    }
+
+    private sealed record FaultingObservation : AgentObservation
+    {
+        public override string TypeKey => "fault.test";
+        public override float CalculateImportance(ObservationContext context)
+            => throw new InvalidOperationException("expected fault");
+    }
+
+    private sealed record AttentionObservation(string SubjectId, float Contribution) : AgentObservation
+    {
+        public override string TypeKey => "attention.test";
+        public override float CalculateImportance(ObservationContext context) => 0f;
+
+        public override IReadOnlyList<AttentionEffect> GetAttentionEffects(ObservationContext context)
+            => [new AttentionEffect(SubjectId, Contribution)];
     }
 
     private sealed record EquivalentObservation(

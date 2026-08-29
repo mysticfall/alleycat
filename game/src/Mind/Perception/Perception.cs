@@ -6,6 +6,9 @@ namespace AlleyCat.Mind.Perception;
 /// <summary>Node base that checks assignable percept dispatch before calling a typed faculty.</summary>
 public abstract partial class PerceptionNode : Node, IPerception
 {
+    /// <inheritdoc cref="IPerception.Observed" />
+    public event Action<Observation.Observation>? Observed;
+
     /// <inheritdoc/>
     public abstract Type PerceptType
     {
@@ -13,10 +16,18 @@ public abstract partial class PerceptionNode : Node, IPerception
     }
 
     /// <inheritdoc/>
-    public abstract ValueTask<PerceptionResult> PerceiveAsync(
+    public abstract ValueTask PerceiveAsync(
         IPercept percept,
         PerceptionContext context,
         CancellationToken cancellationToken);
+
+    /// <summary>Raises <see cref="Observed" /> for one observation emitted by this faculty.</summary>
+    protected void Emit(Observation.Observation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        Action<Observation.Observation>? handlers = Observed;
+        handlers?.Invoke(observation);
+    }
 }
 
 /// <summary>Typed node base that checks assignable percept dispatch before calling a faculty.</summary>
@@ -27,7 +38,7 @@ public abstract partial class Perception<TPercept> : PerceptionNode, IPerception
     public override Type PerceptType => typeof(TPercept);
 
     /// <inheritdoc />
-    public override ValueTask<PerceptionResult> PerceiveAsync(
+    public override ValueTask PerceiveAsync(
         IPercept percept,
         PerceptionContext context,
         CancellationToken cancellationToken)
@@ -39,7 +50,7 @@ public abstract partial class Perception<TPercept> : PerceptionNode, IPerception
     }
 
     /// <inheritdoc />
-    public abstract ValueTask<PerceptionResult> PerceiveAsync(
+    public abstract ValueTask PerceiveAsync(
         TPercept percept,
         PerceptionContext context,
         CancellationToken cancellationToken);

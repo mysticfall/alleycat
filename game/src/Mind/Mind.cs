@@ -19,8 +19,9 @@ using AgentObservation = AlleyCat.Mind.Observation.Observation;
 namespace AlleyCat.Mind;
 
 /// <summary>
-/// Abstract base for NPC mind-like components that serially interpret stimuli into an ordered observation
-/// timeline and accumulate notable observations for delivery to the NPC's agent session.
+/// Abstract base for NPC mind-like components that serially interpret percepts, commit faculty-emitted observations
+/// as independent atomic units, maintain an ordered observation timeline, and accumulate notable observations for
+/// delivery to the NPC's agent session.
 /// </summary>
 [GlobalClass]
 public abstract partial class Mind : Node
@@ -71,8 +72,9 @@ public abstract partial class Mind : Node
     private readonly List<PendingObservation> _notableAccumulation = [];
     private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
     private readonly AttentionPolicy _attention = new(GetStopwatchSeconds);
-    private readonly Queue<QueuedPercept> _perceptionQueue = [];
+    private readonly Queue<PerceptionWork> _perceptionQueue = [];
     private readonly Dictionary<ISense, Action<IPercept>> _senseHandlers = [];
+    private readonly List<IPerception> _observedFaculties = [];
     private readonly HashSet<IVoice> _subscribedSpeechVoices = [];
     private readonly Dictionary<IVoice, ICharacter?> _speechVoiceOwners = [];
     private readonly ConcurrentQueue<IVoice> _speechStartNotifications = new();
@@ -216,6 +218,7 @@ public abstract partial class Mind : Node
 
         UnsubscribeFromComponentProjectionRefreshes();
         UnsubscribeFromSenses();
+        UnsubscribeFromFaculties();
         UnsubscribeFromSpeechVoices();
 
         // One irreversible lifetime boundary: cancels active waits, session activity, and cue subscriptions so no
@@ -261,6 +264,30 @@ public abstract partial class Mind : Node
         }
 
         Volatile.Read(ref _beforePerceptionEnqueueForTesting)?.Invoke();
+        EnqueuePerceptionWork(new QueuedPercept(percept, faculties));
+    }
+
+    /// <summary>
+    /// Trivial faculty observation intake (AI-006 TR-22/23): validates and enqueues one observation work item without
+    /// interpreting, committing, or blocking the emitting faculty.
+    /// </summary>
+    private void OnFacultyObserved(AgentObservation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        if (IsNodeLifetimeEnded || !Enabled)
+        {
+            return;
+        }
+
+        EnqueuePerceptionWork(new QueuedObservation(observation));
+    }
+
+    /// <summary>
+    /// Enqueues one serial perception-work item and starts the drain worker when idle, preserving enqueue order across
+    /// percepts and observations (AI-001 TR-29, AI-006 TR-34).
+    /// </summary>
+    private void EnqueuePerceptionWork(PerceptionWork work)
+    {
         lock (_perceptionQueueLock)
         {
             if (IsNodeLifetimeEnded)
@@ -268,7 +295,7 @@ public abstract partial class Mind : Node
                 return;
             }
 
-            _perceptionQueue.Enqueue(new QueuedPercept(percept, faculties));
+            _perceptionQueue.Enqueue(work);
             if (!_perceptionDrainRunning)
             {
                 _perceptionDrainRunning = true;
@@ -282,7 +309,7 @@ public abstract partial class Mind : Node
         await Task.Yield();
         while (true)
         {
-            QueuedPercept queued;
+            PerceptionWork queued;
             lock (_perceptionQueueLock)
             {
                 if (IsNodeLifetimeEnded)
@@ -302,7 +329,7 @@ public abstract partial class Mind : Node
 
             try
             {
-                await ProcessPerceptAsync(queued);
+                await ProcessPerceptionWorkAsync(queued);
             }
             catch (OperationCanceledException) when (IsNodeLifetimeEnded || NodeLifetimeCancellationToken.IsCancellationRequested)
             {
@@ -324,11 +351,13 @@ public abstract partial class Mind : Node
             {
                 ILogger<Mind> logger = _logger
                     ?? throw new InvalidOperationException("Mind perception fault logging requires an active logger.");
+                (string workKind, Type workType) = DescribePerceptionWork(queued);
                 logger.LogError(
                     exception,
-                    "Mind {MindPath} failed to interpret percept {PerceptType}; the aggregate was discarded.",
+                    "Mind {MindPath} failed to process {WorkKind} '{WorkType}'; the item was discarded, earlier commits stand, and later queue items continue.",
                     GetPath(),
-                    queued.Percept.GetType().FullName);
+                    workKind,
+                    workType);
             }
         }
     }
@@ -339,32 +368,86 @@ public abstract partial class Mind : Node
         _perceptionDrainRunning = false;
     }
 
+    private ValueTask ProcessPerceptionWorkAsync(PerceptionWork work) => work switch
+    {
+        QueuedPercept queuedPercept => ProcessPerceptAsync(queuedPercept),
+        QueuedObservation queuedObservation => ProcessObservationAsync(queuedObservation),
+        _ => throw new ArgumentOutOfRangeException(nameof(work)),
+    };
+
     private async ValueTask ProcessPerceptAsync(QueuedPercept queued)
     {
         CancellationToken cancellationToken = NodeLifetimeCancellationToken;
         ThrowIfPerceptionLifetimeEnded(cancellationToken);
-        AttentionSettings attentionSettings = CreateAttentionSettings();
-        var context = new PerceptionContext(ResolveOwningCharacter(), _sceneContextLoader(), attentionSettings);
-        var effects = new List<AttentionEffect>();
-        var observations = new List<AgentObservation>();
+        var context = new PerceptionContext(ResolveOwningCharacter(), _sceneContextLoader());
         foreach (IPerception faculty in queued.Faculties)
         {
             ThrowIfPerceptionLifetimeEnded(cancellationToken);
-            PerceptionResult? result = await faculty.PerceiveAsync(queued.Percept, context, cancellationToken);
+            await faculty.PerceiveAsync(queued.Percept, context, cancellationToken);
             ThrowIfPerceptionLifetimeEnded(cancellationToken);
-            if (result is null)
-            {
-                throw new InvalidOperationException(
-                    $"Perception faculty '{faculty.GetType().FullName}' returned a null result.");
-            }
+        }
+    }
 
-            effects.AddRange(result.AttentionEffects);
-            observations.AddRange(result.Observations);
+    /// <summary>
+    /// Commits one faculty-emitted observation as one independent atomic unit (AI-001 TR-30/41, AI-006 TR-33–35): its
+    /// attention effects apply together with, for durable observations, ingestion effects, or not at all.
+    /// </summary>
+    private ValueTask ProcessObservationAsync(QueuedObservation queued)
+    {
+        CancellationToken cancellationToken = NodeLifetimeCancellationToken;
+        ThrowIfPerceptionLifetimeEnded(cancellationToken);
+
+        AgentObservation observation = queued.Observation;
+        var context = new ObservationContext(ResolveOwningCharacter());
+        IReadOnlyList<AttentionEffect> effects = observation.GetAttentionEffects(context);
+        for (int index = 0; index < effects.Count; index++)
+        {
+            AttentionEffect effect = effects[index]
+                ?? throw new ArgumentException($"Observation attention effect at index {index} cannot be null.", nameof(observation));
+            IdentityValidator.ValidateFullId(effect.SubjectFullId, nameof(observation));
+            AttentionSettings.ValidateContribution(effect.Contribution, nameof(observation));
         }
 
         ThrowIfPerceptionLifetimeEnded(cancellationToken);
-        ApplyPerceptionResult(new PerceptionResult(effects, observations), attentionSettings);
+        AttentionSettings attentionSettings = CreateAttentionSettings();
+        if (observation.Retention == ObservationRetention.Transient)
+        {
+            // Transient observations apply attention atomically and nothing else: no stamp, duplicate filtering,
+            // timeline entry, notable accumulation, or notification (AI-001 TR-41, AI-006 TR-35).
+            lock (_observationStateLock)
+            {
+                if (IsNodeLifetimeEnded)
+                {
+                    return ValueTask.CompletedTask;
+                }
+
+                ApplyAttentionEffectsLocked(effects, attentionSettings);
+            }
+
+            return ValueTask.CompletedTask;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        IngestObservations([observation], context, beforeCommit: () => ApplyAttentionEffectsLocked(effects, attentionSettings));
+        return ValueTask.CompletedTask;
     }
+
+    /// <summary>Applies elapsed decay then sequential reinforcement; callers must hold the observation state lock.</summary>
+    private void ApplyAttentionEffectsLocked(IReadOnlyList<AttentionEffect> effects, AttentionSettings attentionSettings)
+    {
+        _attention.ApplyElapsedDecay(attentionSettings);
+        foreach (AttentionEffect effect in effects)
+        {
+            ReinforceAttention(effect.SubjectFullId, effect.Contribution, attentionSettings);
+        }
+    }
+
+    private static (string WorkKind, Type WorkType) DescribePerceptionWork(PerceptionWork work) => work switch
+    {
+        QueuedPercept queuedPercept => ("percept", queuedPercept.Percept.GetType()),
+        QueuedObservation queuedObservation => ("observation", queuedObservation.Observation.GetType()),
+        _ => throw new ArgumentOutOfRangeException(nameof(work)),
+    };
 
     private void ThrowIfPerceptionLifetimeEnded(CancellationToken cancellationToken)
     {
@@ -376,7 +459,7 @@ public abstract partial class Mind : Node
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    /// <summary>Waits until all percepts accepted before this call have settled.</summary>
+    /// <summary>Waits until all percepts and observations accepted before this call have settled.</summary>
     internal async Task DrainPerceptionsForTestingAsync()
     {
         while (true)
@@ -402,7 +485,7 @@ public abstract partial class Mind : Node
     internal void SetBeforePerceptionEnqueueForTesting(Action? callback)
         => Volatile.Write(ref _beforePerceptionEnqueueForTesting, callback);
 
-    /// <summary>Gets the number of percepts awaiting interpretation for deterministic lifetime tests.</summary>
+    /// <summary>Gets the number of percepts and observations awaiting processing for deterministic lifetime tests.</summary>
     internal int GetPendingPerceptionCountForTesting()
     {
         lock (_perceptionQueueLock)
@@ -459,6 +542,13 @@ public abstract partial class Mind : Node
         }
 
         UnsubscribeFromSenses();
+        UnsubscribeFromFaculties();
+        foreach (IPerception faculty in faculties)
+        {
+            faculty.Observed += OnFacultyObserved;
+            _observedFaculties.Add(faculty);
+        }
+
         Volatile.Write(ref _perceptionBindings, bindings);
 
         _senses = senses;
@@ -525,6 +615,20 @@ public abstract partial class Mind : Node
 
         _senses = [];
         _senseHandlers.Clear();
+    }
+
+    /// <summary>
+    /// Removes every faculty observation-event subscription so rebind and exit never duplicate or outlive delivery
+    /// (AI-001 TR-27, AI-006 TR-23).
+    /// </summary>
+    private void UnsubscribeFromFaculties()
+    {
+        foreach (IPerception faculty in _observedFaculties)
+        {
+            faculty.Observed -= OnFacultyObserved;
+        }
+
+        _observedFaculties.Clear();
     }
 
     /// <summary>Reinforces one canonical identity using the exact configured policy.</summary>
@@ -838,31 +942,6 @@ public abstract partial class Mind : Node
         ICharacter character = ResolveOwningCharacter();
         var context = new ObservationContext(character);
         IngestObservations([observation], context);
-    }
-
-    private void ApplyPerceptionResult(PerceptionResult result, AttentionSettings attentionSettings)
-    {
-        ArgumentNullException.ThrowIfNull(result);
-
-        ICharacter character = ResolveOwningCharacter();
-        var context = new ObservationContext(character);
-        for (int index = 0; index < result.AttentionEffects.Count; index++)
-        {
-            AttentionEffect effect = result.AttentionEffects[index]
-                ?? throw new ArgumentException($"Perception attention effect at index {index} cannot be null.", nameof(result));
-            IdentityValidator.ValidateFullId(effect.SubjectFullId, nameof(result));
-            AttentionSettings.ValidateContribution(effect.Contribution, nameof(result));
-        }
-
-        NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
-        IngestObservations(result.Observations, context, beforeCommit: () =>
-        {
-            _attention.ApplyElapsedDecay(attentionSettings);
-            foreach (AttentionEffect effect in result.AttentionEffects)
-            {
-                ReinforceAttention(effect.SubjectFullId, effect.Contribution, attentionSettings);
-            }
-        });
     }
 
     private static bool ShouldSuppressDuplicate(
@@ -1230,7 +1309,15 @@ public abstract partial class Mind : Node
 
     private readonly record struct PendingObservation(AgentObservation Observation, float Importance);
 
-    private readonly record struct QueuedPercept(IPercept Percept, IPerception[] Faculties);
+    /// <summary>
+    /// One serialisable unit of perception work: either a percept fan-out or an observation awaiting atomic commit,
+    /// committed strictly in enqueue order (AI-001 TR-29, AI-006 TR-34).
+    /// </summary>
+    private abstract record PerceptionWork;
+
+    private sealed record QueuedPercept(IPercept Percept, IPerception[] Faculties) : PerceptionWork;
+
+    private sealed record QueuedObservation(AgentObservation Observation) : PerceptionWork;
 
     /// <summary>
     /// Outcome of one observation wait: the notable observations delivered and whether the attended-speaker-finished

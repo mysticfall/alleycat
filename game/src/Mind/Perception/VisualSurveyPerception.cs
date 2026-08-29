@@ -1,29 +1,26 @@
-using AlleyCat.Mind.Attention;
+using AlleyCat.Mind.Observation;
 using AlleyCat.Vision;
 using Godot;
 
 namespace AlleyCat.Mind.Perception;
 
-/// <summary>Reinforces all visibly surveyed identities without creating observations.</summary>
+/// <summary>Emits one transient presence observation for every visibly surveyed subject identity.</summary>
 [GlobalClass]
 public sealed partial class VisualSurveyPerception : Perception<VisualSurveyPercept>
 {
-    private const float Contribution = 0.25f;
-
     /// <inheritdoc/>
-    public override ValueTask<PerceptionResult> PerceiveAsync(
+    public override ValueTask PerceiveAsync(
         VisualSurveyPercept percept,
         PerceptionContext context,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(percept);
         ArgumentNullException.ThrowIfNull(context);
-        var effects = new AttentionEffect[percept.SubjectFullIDs.Count];
-        for (int index = 0; index < effects.Length; index++)
+        foreach (string subjectFullId in percept.SubjectFullIDs)
         {
-            effects[index] = new AttentionEffect(percept.SubjectFullIDs[index], Contribution);
+            Emit(new ObservedVisualPresence(subjectFullId));
         }
 
-        return ValueTask.FromResult(new PerceptionResult(effects, []));
+        return ValueTask.CompletedTask;
     }
 }

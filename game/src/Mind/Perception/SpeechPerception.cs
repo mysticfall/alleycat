@@ -1,5 +1,4 @@
 using AlleyCat.Character;
-using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
@@ -7,14 +6,12 @@ using Godot;
 
 namespace AlleyCat.Mind.Perception;
 
-/// <summary>Interprets speech into an actor-aware observation and recognised-actor attention.</summary>
+/// <summary>Interprets speech into an actor-aware observation emission.</summary>
 [GlobalClass]
 public sealed partial class SpeechPerception : Perception<SpeechPercept>
 {
-    private const float Contribution = 0.5f;
-
     /// <inheritdoc/>
-    public override ValueTask<PerceptionResult> PerceiveAsync(
+    public override ValueTask PerceiveAsync(
         SpeechPercept percept,
         PerceptionContext context,
         CancellationToken cancellationToken)
@@ -24,7 +21,7 @@ public sealed partial class SpeechPerception : Perception<SpeechPercept>
         IVoice observerVoice = context.Character.RequireVoice();
         if (string.Equals(percept.SourceVoiceID, observerVoice.Id, StringComparison.Ordinal))
         {
-            return ValueTask.FromResult(new PerceptionResult([], []));
+            return ValueTask.CompletedTask;
         }
 
         ICharacter? recognised = null;
@@ -49,11 +46,9 @@ public sealed partial class SpeechPerception : Perception<SpeechPercept>
             }
         }
 
-        PerceptionResult result = recognised is null
-            ? new PerceptionResult([], [new ObservedSpeech(null, percept.SourceVoiceID, percept.Content)])
-            : new PerceptionResult(
-                [new AttentionEffect(recognised.FullId, Contribution)],
-                [new ObservedSpeech(recognised.FullId, percept.SourceVoiceID, percept.Content)]);
-        return ValueTask.FromResult(result);
+        Emit(recognised is null
+            ? new ObservedSpeech(null, percept.SourceVoiceID, percept.Content)
+            : new ObservedSpeech(recognised.FullId, percept.SourceVoiceID, percept.Content));
+        return ValueTask.CompletedTask;
     }
 }

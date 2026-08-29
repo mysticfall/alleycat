@@ -28,8 +28,9 @@ title: Mind Component
 4. Spoken responses must use the NPC's character-owned in-world voice rather than normal chat text.
 5. Missing configuration and backend failures must be contained and logged without crashing the scene.
 6. Removing an NPC's Mind from the scene must prevent delayed actions and other post-destruction effects from that Mind.
-7. An NPC's Mind must accept sense-owned percepts immediately, interpret them asynchronously in publication order, and
-   commit each percept's combined attention and durable observations atomically without blocking the publisher.
+7. An NPC's Mind must accept sense-owned percepts and faculty-emitted observations immediately, interpret them
+   asynchronously in enqueue order, and commit each observation's attention and durable record atomically without
+   blocking the publisher.
 8. Character context assembled for the NPC's session prompt must contain self and every currently resolvable
    attention-eligible character, rather than every scene character unconditionally.
 9. Speech from speakers the NPC does not currently attend to, and speech that cannot be attributed to a character,
@@ -126,19 +127,23 @@ title: Mind Component
     protected `OnObservationIngested` hook, which AgenticMind overrides to publish. Relevant consumers subscribe and
     unsubscribe directly. Contained failures and cancellations must not publish events for uncommitted work.
 27. Mind must subscribe to configured `ISense` components and discover authorable `IPerception` Node faculties among
-    its direct children in scene order. It owns percept registration, asynchronous interpretation, attention, result
-    validation, and observation ingestion. AI-006 is the normative percept, sense, faculty, attention, and result
-    contract.
+    its direct children in scene order. It must subscribe to each configured faculty's observation-emission event for
+    its node lifetime, unsubscribing on rebind and tree exit. It owns percept registration, asynchronous
+    interpretation, attention application, per-observation validation, and observation ingestion. AI-006 is the
+    normative percept, sense, faculty, observation, and attention contract.
 28. Before activation, Mind must require at least one assignability-compatible faculty for every exact concrete percept
     type declared by its configured senses. Multiple matching faculties are intentional and execute in direct-child
     order. Missing, incompatible, duplicate declared, or undeclared publisher types must fail clearly.
 29. On publication, Mind must synchronously validate that the publisher declared the percept's exact concrete type,
-    snapshot the current ordered matching-faculty binding, and enqueue interpretation without blocking the sense. Mind
-    must process percepts serially in publication order and await each matching faculty sequentially.
-30. Mind must aggregate all faculty results in deterministic order and validate the complete aggregate, including every
-    accepted observation importance, before any mutation. It then applies ordered attention effects sequentially and
-    atomically ingests the ordered accepted observations. Faults are contained and logged; cancellation and a final
-    lifetime guard prevent post-exit commits. This path must not select or assign an `IVision` look target.
+    snapshot the current ordered matching-faculty binding, and enqueue interpretation without blocking the sense.
+    Faculty-emitted observations must enqueue into the same serial worker alongside percept work in enqueue order, and
+    publication callbacks must never block on interpretation or commit. Mind must process the queue serially in
+    enqueue order and await each matching faculty sequentially.
+30. Mind must commit each observation as one independent atomic unit, applying its attention effects with its own
+    attention settings and ingesting durable records through the ordinary timeline and notable-observation
+    accumulation path. Faults and invalid observations are contained and logged and roll back only that observation:
+    earlier commits stand and later queued items continue; cancellation and a final lifetime guard prevent post-exit
+    commits. This path must not select or assign an `IVision` look target.
 31. AgenticMind must own only provider, prompt, render-context, and tool concerns. Incoming sensory interpretation
     remains asynchronous through Mind's `IPerception` faculties. Outbound production-tool invocation must start once
     through `AgentTool`
@@ -176,6 +181,10 @@ title: Mind Component
     scope. Removed or summarised observations no longer participate. Timeline summarisation remains out of scope.
 40. `ObservedVisualDescription` must use exact key `vision.description`, scope duplicates by ordinal subject `FullId`,
     and compare ordinal subject identity plus description against the latest retained entry in that scope.
+41. An observation marked transient under AI-006 must apply its attention effects atomically and otherwise leave no
+    record: no `ObservedAt` stamp, no duplicate-history comparison, no timeline entry, no notable-observation
+    accumulation, no session prompt history, and no committed-observation notification. Durable observations alone
+    follow the ordinary ingestion path that requirements 34-40 govern.
 
 ## In Scope
 
@@ -268,9 +277,10 @@ title: Mind Component
     failures or cancellations, with consumers subscribing and unsubscribing directly.
 16. Tests verify Mind subscribes to configured senses, synchronously validates each publisher's exact concrete type,
     snapshots all assignability-matched faculty bindings, and accepts immutable percepts without blocking the publisher.
-17. Tests verify Mind serialises asynchronous interpretation in publication order, invokes matching faculties
-    sequentially in direct-child order, aggregates results in faculty and result order, and validates the complete
-    aggregate before one atomic commit without selecting or assigning an `IVision` look target.
+17. Tests verify Mind serialises percept interpretation and faculty-emitted observations in enqueue order on one
+    serial worker, invokes matching faculties sequentially in direct-child order, commits each observation as one
+    independent atomic unit, and never blocks publication callbacks on interpretation or commit, without selecting or
+    assigning an `IVision` look target.
 18. Tests verify session context contains self plus all currently resolvable attention-eligible characters resolved as
     `ICharacter` subjects, with no unconditional all-scene-character inclusion, second visual scan, hidden subject
     cache, or Mind or attention state passed into render-context assembly. The owner appears in both `character` and
@@ -304,8 +314,12 @@ title: Mind Component
     accepted staged entries; and ignores removed or summarised entries.
 28. Tests verify `ObservedVisualDescription` uses ordinal subject `FullId` scope and ordinal subject-plus-description
     equality against the latest retained observation of the same concrete type and scope.
-29. Async tests verify publication-order serialisation, sequential deterministic faculty fan-out, aggregate rollback,
-    binding snapshots across component refresh, cancellation, contained and logged faults, and no post-lifetime commit.
+29. Async tests verify enqueue-order serialisation across percepts and observations, sequential deterministic faculty
+    fan-out, per-observation rollback containment, binding snapshots across component refresh, cancellation, contained
+    and logged faults, and no post-lifetime commit.
+30. Transient tests verify transient observations apply attention atomically while producing no `ObservedAt` stamp,
+    duplicate-history participation, timeline or notable-accumulation entry, session prompt history, or
+    committed-observation notification.
 
 ## References
 

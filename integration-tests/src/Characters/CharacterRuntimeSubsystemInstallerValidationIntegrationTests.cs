@@ -4,6 +4,7 @@ using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Installer;
 using AlleyCat.Interaction.Hands;
+using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Navigation;
@@ -123,14 +124,20 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.Equal("voice:second_npc", secondFixture.TargetVoice.FullId);
         Assert.NotEqual(firstFixture.TargetVoice.Id, secondFixture.TargetVoice.Id);
 
-        PerceptionResult result = await new SpeechPerception().PerceiveAsync(
+        var perception = new SpeechPerception();
+        List<Observation> emissions = [];
+        perception.Observed += emissions.Add;
+
+        await perception.PerceiveAsync(
             new SpeechPercept("hello", firstFixture.TargetVoice.Id),
-            new PerceptionContext(second, new TestSceneContext([first, second]), null!),
+            new PerceptionContext(second, new TestSceneContext([first, second])),
             CancellationToken.None);
 
-        ObservedSpeech speech = Assert.IsType<ObservedSpeech>(Assert.Single(result.Observations));
+        ObservedSpeech speech = Assert.IsType<ObservedSpeech>(Assert.Single(emissions));
         Assert.Equal(((IIdentifiable)first).FullId, speech.ActorId);
-        Assert.Equal(((IIdentifiable)first).FullId, Assert.Single(result.AttentionEffects).SubjectFullId);
+        AttentionEffect attentionEffect = Assert.Single(speech.GetAttentionEffects(new ObservationContext(second)));
+        Assert.Equal(((IIdentifiable)first).FullId, attentionEffect.SubjectFullId);
+        Assert.Equal(0.5f, attentionEffect.Contribution);
     }
 
     /// <summary>
