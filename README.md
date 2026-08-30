@@ -40,6 +40,17 @@ Every commit then runs:
 - `dotnet format --verify-no-changes AlleyCat.sln`
 - `dotnet build AlleyCat.sln -warnaserror`
 
+## 🎮 Game CLI Options
+
+Custom game options are passed as user arguments after Godot's `--` separator, for example
+`godot-mono --path game -- <options>`:
+
+| Option | Description |
+| ------ | ----------- |
+| `-- --no-ai` | Suppresses all Mind agent sessions. NPCs keep perceiving and attending, but make no LLM requests. |
+| `-- --integration-run-fact <args>` | Runs a single integration test fact, used by the integration test framework. |
+| `-- --integration-probe <args>` | Integration test assembly/type discovery probe used by the test framework. |
+
 ---
 
 ## 📜 Licence

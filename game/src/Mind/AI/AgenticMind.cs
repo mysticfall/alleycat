@@ -125,7 +125,8 @@ public partial class AgenticMind : MindBase
 
     /// <summary>
     /// Starts the one session for this Mind's node lifetime — fire-and-forget with full containment: the session
-    /// never crashes the scene, and failures are logged like any contained response failure (AI-002 TR-1/2).
+    /// never crashes the scene, and failures are logged like any contained response failure (AI-002 TR-1/2). A
+    /// process-wide <c>--no-ai</c> switch instead ends the session before it begins with one Information notice.
     /// </summary>
     private void StartSession()
     {
@@ -134,7 +135,21 @@ public partial class AgenticMind : MindBase
             return;
         }
 
+        // The suppression switch is process-wide and resolved once, so a suppressed mind can never legitimately
+        // start a session later in its node lifetime: consuming the one-shot start guard here keeps it ended for
+        // good and preserves the guard's simple semantics.
         _sessionStarted = true;
+
+        if (AgentSessionSuppression.IsDisabled)
+        {
+            if (AgentSessionSuppression.TryBeginSuppressionNotice())
+            {
+                LogSessionSuppressed();
+            }
+
+            return;
+        }
+
         _ = RunSessionUntilNodeExitAsync();
     }
 
@@ -643,6 +658,17 @@ public partial class AgenticMind : MindBase
         if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
         {
             logger.LogError(exception, "AgenticMind agent session failed.");
+        }
+    }
+
+    private static void LogSessionSuppressed()
+    {
+        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
+        {
+            logger.LogInformation(
+                "Agent sessions are suppressed process-wide by the '{NoAISwitch}' command-line switch; "
+                + "no LLM requests will be made.",
+                AgentSessionSuppression.NoAISwitch);
         }
     }
 

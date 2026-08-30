@@ -60,6 +60,9 @@ title: Agent Runtime
 16. An action must never execute against a character other than the character that owns the Mind.
 17. During development, developers can observe speech-pipeline latency diagnostics through CORE-007 logging — with the
     speak-tool invocation marker surfaced as an opt-in notification — without changing NPC behaviour.
+18. A user can launch the game with the `--no-ai` user argument — passed after Godot's `--` separator — so NPCs keep
+    perceiving, attending, and orienting while never contacting an AI provider: a playtesting mode with zero LLM
+    traffic and a single clear notice that AI is disabled.
 
 ## Technical Requirements
 
@@ -78,6 +81,20 @@ title: Agent Runtime
    package wherever it provides the required session and agent abstractions without significant deviation. Custom
    behaviour must remain where the framework does not provide it, notably tool-only response validation and `wait`'s
    wake semantics.
+
+### AI Suppression Switch
+
+55. The exact user argument `--no-ai` — passed among the user args after Godot's `--` separator — must suppress every
+    agent session process-wide. The switch is a plain presence check over the process's command-line user arguments
+    (`OS.GetCmdlineUserArgs()`) with no precedence interaction with `--integration-run-fact` or `--integration-probe`;
+    it resolves lazily on first access and is memoised once per process. The gate point is an early return in
+    `AgenticMind.StartSession()` before `PrepareSessionAsync()`, so prompt compilation, scenario resolution, and
+    chat-client creation never run and provider-configuration failures are not logged for suppressed minds. The
+    one-shot `_sessionStarted` guard is still consumed, so a suppressed Mind can never start a session later in its
+    node lifetime. Suppression emits exactly one Information-level notice per process naming the switch — never Error,
+    so log-asserting tests stay clean. An internal test seam (force/reset, also resetting the notice guard) enables
+    targeted integration tests without launch plumbing, and suppression has no effect on `Mind.Enabled` or AI-001
+    perception and attention.
 
 ### Session Prompt
 
@@ -352,6 +369,8 @@ title: Agent Runtime
 - Development-only MEAI diagnostics and non-secret structural transport evidence with explicit gating.
 - Speech-pipeline latency diagnostics through the shared pipeline diagnostic log: the speak-boundary marker before the
   turn-taking wait and log-only session-end latency (CORE-007 is normative for routing).
+- Process-wide agent-session suppression through the `--no-ai` user argument: lazy once-per-process resolution, the
+  `StartSession()` gate before session preparation, and the single Information notice.
 
 ## Out Of Scope
 
@@ -372,6 +391,10 @@ title: Agent Runtime
 - Voice as a requirement for generic non-speech session execution.
 - Multi-agent orchestration and guidance-agent APIs.
 - Complete or production HTTP wire-body logging.
+- Runtime toggling or per-Mind enable/disable of the suppression switch; suppression is process-wide only.
+- Test-framework changes to inject or reject the flag (TEST-001); the internal test seam covers targeted testing.
+- Suppressing local speech synthesis (Supertonic) or scenario rendering; only agent sessions are gated.
+- Changing `Mind.Enabled` semantics; suppressed minds remain fully enabled nodes.
 
 ## Acceptance Criteria
 
@@ -407,6 +430,8 @@ title: Agent Runtime
 10. Fresh-turn coverage verifies newly observed non-self speech — recognised or unknown speaker, attended or not —
     immediately replaces the NPC's stale reasoning, even below the configured importance threshold, and that
     ordinary important observations never cancel active reasoning, tools, or pending and committed speech.
+11. Acceptance verifies launching with `-- --no-ai` produces NPCs that still perceive and attend, exactly one
+    Information notice naming the switch, and provably zero provider requests.
 
 ### Technical Requirements
 
@@ -482,12 +507,17 @@ title: Agent Runtime
     them, with no legacy generic terminal-result route selectable.
 19. Diagnostics tests verify the speak-boundary pipeline marker fires after final speech acceptance and before the
     turn-taking wait, changes no tool behaviour, and that session-end latency remains log-only.
+20. Suppression tests verify the parser truth table and the `--no-ai` literal at unit level, and — through the test
+    seam — that a fully-wired suppressed mind never calls `CreateChatClient` or issues requests, that the
+    once-per-process notice guard holds across multiple suppressed minds, that timeline ingestion is unaffected, and
+    that the gate-open control path starts sessions normally.
 
 ## References
 
 ### Implementation
 
 - `game/src/Mind/AI/AgenticMind.cs`
+- `game/src/Mind/AI/AgentSessionSuppression.cs`
 - `game/src/Mind/AI/` session runtime (replacing `ToolOnlyTurnRunner.cs`)
 - `game/src/Mind/AI/AIChatClientDiagnostics.cs`
 - `game/src/Mind/AI/AIDiagnosticsOptions.cs`
