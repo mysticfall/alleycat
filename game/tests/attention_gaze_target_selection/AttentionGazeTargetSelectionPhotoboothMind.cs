@@ -94,6 +94,8 @@ public sealed partial class AttentionGazeTargetSelectionPhotoboothMind : MindBas
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues => subject.VisualCues;
+
+        public Transform3D GlobalTransform => subject.GlobalTransform;
     }
 
     private sealed class FixedRandom : IAttentionGazeRandom

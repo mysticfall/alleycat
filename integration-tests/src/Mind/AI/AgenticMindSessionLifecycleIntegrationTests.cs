@@ -304,9 +304,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// An ordinary visual description during held generation is delivered without cancellation, rendered through
-    /// the production-authored NPC event-history document in accumulation order at the next natural boundary, and
-    /// without falling back to generic event wording (AI-002 TR-39, AI-003 AC-18).
+    /// An ordinary visual description at its provisional importance during held generation is delivered without
+    /// cancellation, rendered through the production-authored NPC event-history document in accumulation order at
+    /// the next natural boundary, and without falling back to generic event wording (AI-002 TR-39, AI-003 AC-18).
     /// </summary>
     [Fact]
     public async Task NotableVisualDescription_DuringGeneration_UsesAuthoredFragmentChronologically()
@@ -318,6 +318,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
         CapturingTool tool = new();
         ScriptedSessionClientProvider clientProvider = new();
+        const float provisionalVisualDescriptionImportance = 0.1f;
+        // Keep the threshold strictly below the provisional importance so this remains a crossing if Mind uses
+        // strictly-greater threshold semantics.
+        float visualDescriptionDeliveryThreshold = provisionalVisualDescriptionImportance - 0.01f;
         clientProvider.EnqueueHoldUntilReleasedCall(firstRequestStarted, releaseGeneration, "capture_context");
         clientProvider.EnqueueHoldForever();
         TestAgenticMind mind = new(owner)
@@ -326,7 +330,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             EventHistoryPath = "res://prompts/event_history.md",
             ClientProvider = clientProvider,
             Tools = [tool],
-            ObservationImportanceThreshold = 1f,
+            ObservationImportanceThreshold = visualDescriptionDeliveryThreshold,
         };
         mind.SetSceneContextLoaderForTesting(() => new SceneContext([owner, player]));
         (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mind);
@@ -1025,6 +1029,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class RecordingLoggerProvider : ILoggerProvider

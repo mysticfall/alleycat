@@ -1,6 +1,7 @@
 using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Vision;
+using Godot;
 
 namespace AlleyCat.IntegrationTests.Support;
 
@@ -14,4 +15,6 @@ internal sealed class PromptOwnerCharacter(string id = "test_character") : IChar
     public IReadOnlyList<IComponent> Components { get; } = [];
 
     public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+    public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
 }

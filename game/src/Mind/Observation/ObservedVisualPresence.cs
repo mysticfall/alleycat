@@ -32,12 +32,13 @@ public sealed record ObservedVisualPresence : Observation
 
     /// <summary>
     /// Calculates this observation's scheduling importance. Transient observations bypass importance and prompt
-    /// history entirely, so this nominal value never influences scheduling or rendering.
+    /// history entirely, so this nominal value exists for consistency only and never influences scheduling or
+    /// rendering.
     /// </summary>
     public override float CalculateImportance(ObservationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return 0f;
+        return 0.1f;
     }
 
     /// <inheritdoc />

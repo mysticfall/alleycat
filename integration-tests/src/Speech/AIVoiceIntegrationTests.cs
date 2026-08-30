@@ -1681,6 +1681,8 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         public IReadOnlyList<IComponent> Components => components;
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed partial class ToolFailureVoice : Voice

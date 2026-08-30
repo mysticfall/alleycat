@@ -1,5 +1,6 @@
 using AlleyCat.Core;
 using AlleyCat.Vision;
+using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.Vision;
@@ -15,6 +16,7 @@ public sealed class VisualCueContractTests
     {
         Assert.True(typeof(IProvidesVisualCues).IsAssignableFrom(typeof(IVisualSubject)));
         Assert.True(typeof(IIdentifiable).IsAssignableFrom(typeof(IVisualSubject)));
+        Assert.True(typeof(ISpatial).IsAssignableFrom(typeof(IVisualSubject)));
     }
 
     /// <summary>Eyes expose synchronous visual scanning and scan results expose immutable read-only contracts.</summary>
@@ -50,5 +52,7 @@ public sealed class VisualCueContractTests
         public string Type => "test";
 
         public IReadOnlyList<VisualCue> VisualCues => [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 }

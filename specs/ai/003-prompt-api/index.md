@@ -38,6 +38,10 @@ control over how concrete observation types appear in chronological event histor
    without unconditionally including every scene character.
 8. Focused visual descriptions in event history identify the observed subject and expose the authored description to
    the NPC's agent.
+9. Relative-position observations in event history identify the observed subject and read as present-tense statements
+   of where it stands relative to the observing NPC — how far away it is, whether ahead or behind and to which side —
+   and of how it is facing relative to the NPC — facing it, back turned to it, or the NPC standing to its left or
+   right — with every direction unambiguous about whose frame it is measured from.
 
 ## Technical Requirements
 
@@ -148,6 +152,13 @@ control over how concrete observation types appear in chronological event histor
 31. The shared event-history file must define an authored fragment for the exact `vision.description` key. It must
     expose the `ObservedVisualDescription` subject `FullId` and description to the agent rather than relying on the
     generic fallback.
+32. The shared event-history file must define an authored fragment for the exact `vision.relative_position` key. It
+    must expose the `ObservedRelativePosition` subject `FullId` and relative-position state to the agent rather than
+    relying on the generic fallback: present-tense standing position — the observed distance plus ahead/behind and
+    left/right from the observing NPC's frame — and facing relation — the subject facing the NPC, its back turned to
+    the NPC, or the NPC standing to the subject's left or right. Each direction must be worded unambiguously about
+    whose frame it is measured from, and the fragment renders no near or far clause. AI-006 owns the observation
+    contract.
 
 ## In Scope
 
@@ -156,6 +167,8 @@ control over how concrete observation types appear in chronological event histor
 - Exact keyed event-history fragments, direct record rendering, and mandatory fallback rendering.
 - One actor-relative `speech.observed` fragment for every observed-speech perspective.
 - One authored `vision.description` fragment exposing visual subject identity and description.
+- One authored `vision.relative_position` fragment exposing subject identity with present-tense, unambiguous
+  reciprocal relative-position wording.
 - Session-start `CreateRenderContext` assembly and exact-context rendering for the session system instruction.
 - Shared generic NPC prompt-stack authoring: `mind.md` file section, lore, and scenario, with no event-history
   section in the stack.
@@ -226,6 +239,10 @@ control over how concrete observation types appear in chronological event histor
      game-scoped game-time source.
 18. Event-history tests verify the exact `vision.description` fragment renders the subject `FullId` and description in
     chronological `wait`, `history`, and injection output without falling back to generic wording.
+19. Event-history tests verify the exact `vision.relative_position` fragment renders the subject `FullId` and
+    relative-position state in present-tense wording — standing position from the observing NPC's frame plus the
+    reciprocal facing relation — that keeps every direction unambiguous about whose frame it uses and renders no near
+    or far clause, in chronological `wait`, `history`, and injection output without falling back to generic wording.
 
 ## References
 

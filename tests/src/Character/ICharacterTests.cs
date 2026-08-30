@@ -34,6 +34,7 @@ public sealed class ICharacterTests
         Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(INavigator).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IVisualSubject).IsAssignableFrom(typeof(ICharacter)));
+        Assert.True(typeof(ISpatial).IsAssignableFrom(typeof(ICharacter)));
     }
 
     /// <summary>
@@ -81,6 +82,8 @@ public sealed class ICharacterTests
         public IReadOnlyList<IComponent> Components { get; } = components;
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class FakeHand(LimbSide side) : IHand

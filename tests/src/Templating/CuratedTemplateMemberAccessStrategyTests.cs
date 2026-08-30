@@ -4,6 +4,7 @@ using AlleyCat.Core;
 using AlleyCat.Templating;
 using AlleyCat.Vision;
 using Fluid;
+using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.Templating;
@@ -196,6 +197,8 @@ public sealed class CuratedTemplateMemberAccessStrategyTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class PlainRecord

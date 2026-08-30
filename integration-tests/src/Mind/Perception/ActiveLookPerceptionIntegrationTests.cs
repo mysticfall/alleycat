@@ -228,6 +228,7 @@ public sealed class ActiveLookPerceptionIntegrationTests
         public string Id { get; set; } = "observer";
         public IReadOnlyList<IComponent> Components { get; } = [];
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class TestSceneContext : ISceneContext

@@ -3,6 +3,7 @@ using AlleyCat.Core;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Vision;
+using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.Mind.Observation;
@@ -259,7 +260,7 @@ public sealed class ObservationTests
         var otherSubject = new ObservedVisualDescription("char:other", "A red coat.");
 
         Assert.Equal("vision.description", first.TypeKey);
-        Assert.Equal(1f, first.CalculateImportance(new ObservationContext(owner)));
+        Assert.Equal(0.1f, first.CalculateImportance(new ObservationContext(owner)));
         Assert.Equal(ObservationDuplicatePolicy.IgnoreEquivalent, first.DuplicatePolicy);
         Assert.Equal("char:subject", first.DuplicateScope);
         Assert.True(first.IsSemanticallyEquivalentTo(same));
@@ -287,5 +288,7 @@ public sealed class ObservationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 }

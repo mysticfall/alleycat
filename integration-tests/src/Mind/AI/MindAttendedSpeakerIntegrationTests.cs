@@ -343,6 +343,8 @@ public sealed partial class MindAttendedSpeakerIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [voice];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed record TestSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext

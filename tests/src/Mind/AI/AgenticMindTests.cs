@@ -6,6 +6,7 @@ using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using AlleyCat.Vision;
+using Godot;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -405,6 +406,8 @@ public sealed class AgenticMindTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed record ArbitrarySceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext

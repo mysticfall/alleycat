@@ -15,6 +15,7 @@
 [ext_resource type="Script" uid="uid://r0roprsf0efd" path="res://src/Mind/Attention/OrientingController.cs" id="orienting_controller_1"]
 [ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
 [ext_resource type="Script" uid="uid://bja302idxebx6" path="res://src/Mind/Perception/VisualDescriptionPerception.cs" id="16_visual_description_perception"]
+[ext_resource type="Script" uid="uid://c84drh32xjhfh" path="res://src/Mind/Perception/RelativePositionPerception.cs" id="17_relative_position_perception"]
 
 [node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Voice", "Navigation", "Hearing") instance=ExtResource("1_vf6rf")]
 Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
@@ -95,6 +96,10 @@ metadata/_custom_type_script = "uid://bxv46b4g0jcnq"
 [node name="VisualDescriptionPerception" type="Node" parent="Mind"]
 script = ExtResource("16_visual_description_perception")
 metadata/_custom_type_script = "uid://bja302idxebx6"
+
+[node name="RelativePositionPerception" type="Node" parent="Mind"]
+script = ExtResource("17_relative_position_perception")
+metadata/_custom_type_script = "uid://c84drh32xjhfh"
 
 [node name="AttentionGazeTargetSelector" type="Node" parent="Mind"]
 script = ExtResource("attention_gaze_selector_1")

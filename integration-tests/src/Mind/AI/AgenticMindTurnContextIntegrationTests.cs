@@ -7,6 +7,7 @@ using AlleyCat.Mind.AI.Provider;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
+using Godot;
 using Microsoft.Extensions.AI;
 using Xunit;
 
@@ -151,6 +152,8 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed partial class CancellingClientProvider : ClientProvider

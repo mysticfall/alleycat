@@ -36,11 +36,14 @@ public sealed record ObservedVisualDescription : Observation
     /// <inheritdoc />
     public override string DuplicateScope => SubjectId;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Calculates this observation's scheduling importance. The returned value is provisional tuning and
+    /// deliberately not normative; later tuning passes may replace it.
+    /// </summary>
     public override float CalculateImportance(ObservationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return 1f;
+        return 0.1f;
     }
 
     /// <inheritdoc />

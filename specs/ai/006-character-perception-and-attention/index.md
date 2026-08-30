@@ -37,6 +37,13 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     does not flood the NPC's memory.
 11. When focus changes or clears while a description is still being produced, the NPC does not react to the stale
     description.
+12. When an NPC focuses on a subject, it promptly becomes aware of that subject's relative position — how far away the
+    subject is and in which direction it lies from the NPC and the NPC from it — without waiting for a polling
+    interval.
+13. While a subject stays in focus, the NPC notices material changes in its relative position — including changes
+    caused by the NPC's own movement or rotation — without flooding its memory with immaterial updates.
+14. Looking away and back at an unchanged subject creates no duplicate memory, while a subject whose relative position
+    materially changed in the meantime is noticed promptly on re-focus.
 
 ## Technical Requirements
 
@@ -206,9 +213,62 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     addition to its required embodied components. No `CharacterPerception` component or bespoke wiring remains.
 44. AgenticMind session prompt context contains self and each attention-eligible `FullId` that currently resolves
     through `ISceneContext.Find(FullId)` to an `ICharacter` subject. It performs no additional visual survey.
-45. Shared male and female NPC role templates must compose `SpeechPerception`, `VisualSurveyPerception`, and
-    `VisualDescriptionPerception` as deterministic direct Mind children with independently owned state. Player
-    composition remains unchanged.
+45. Shared male and female NPC role templates must compose `SpeechPerception`, `VisualSurveyPerception`,
+    `VisualDescriptionPerception`, and `RelativePositionPerception` as deterministic direct Mind children with
+    independently owned state. Player composition remains unchanged.
+
+### Relative Position Perception
+
+46. `RelativePositionPerception` is a `PollingActiveLookPerception` faculty that perceives the active look subject's
+    position relative to the observing character. It emits one durable `ObservedRelativePosition` observation with
+    exact key `vision.relative_position` (event-history fragment owned by AI-003), carrying:
+    - the associated subject's canonical `FullId`;
+    - a full-3D `Distance` between the observer and subject origins; and
+    - reciprocal ground-plane direction classifications `SubjectDirection` (subject relative to the observer) and
+      `ObserverDirection` (observer relative to the subject), each exactly one of `Front`, `Back`, `Left`, or `Right`.
+    Two `ObservedRelativePosition` records are semantically equal when their subject `FullId` values match ordinally,
+    both direction classifications match, and their `Distance` values compare equal within a small numerical-noise
+    tolerance. That tolerance is a non-normative implementation-level constant guarding equivalence comparison against
+    floating-point noise, deliberately distinct from the faculty's perceptual-acuity threshold
+    `MinimumDistanceChange`, which governs material-change emission (TR-49) rather than record equivalence. The
+    observation reports a provisional code-level importance that must be finite and valid; its concrete value is a
+    tunable implementation detail and is not authored. The observation contributes no attention effects and never
+    requires a fresh reasoning turn through AI-001's `RequiresFreshTurn(ObservationContext)`.
+47. On subject attach, the faculty samples immediately on the next process frame without waiting for the exported poll
+    interval, then re-examines at the inherited `PollingActiveLookPerception` cadence (TR-31). It performs at most one
+    examination per frame in total and stops on clear, replacement, cancellation, and exit without emitting stale
+    state.
+48. Every sample, including the attach-time sample, requires both the observing character — resolved through the
+    perception context — and the active subject to resolve to valid in-tree `ISpatial` providers (the `IVisualSubject`
+    spatial base defined in VISION-001). When either fails to resolve, the faculty performs no sample and emits
+    nothing for that examination; this is a runtime resolution precondition, not an activation failure.
+49. The faculty retains the last emitted `ObservedRelativePosition` state per canonical subject `FullId` (ordinal
+    comparison) for its node lifetime, persisting across focus detach/attach cycles. It emits the subject's first-ever
+    valid state unconditionally; afterwards it emits only a material change: the absolute `Distance` change from the
+    last emitted state reaches `MinimumDistanceChange` or either direction classification changed. Immaterial states
+    emit nothing, so re-focusing an unchanged subject creates no duplicate memory while a materially changed re-focus
+    emits immediately. This faculty-owned pre-emission suppression is independent of Mind's generic ingestion-time
+    duplicate filtering. Changes caused by observer motion or rotation count identically to subject motion.
+50. The faculty exports exactly these tunables: `MinimumDistanceChange` (finite, non-negative),
+    `FrontAngleThresholdDegrees` (finite), and `BackAngleThresholdDegrees` (finite), which together must satisfy
+    `0 <= FrontAngleThresholdDegrees <= BackAngleThresholdDegrees <= 180`. Names are normative; default values remain
+    tunable. Invalid authored or runtime values must fail before activation, mirroring the
+    `PollingActiveLookPerception` interval-validation pattern (TR-31).
+51. Geometry contract:
+    - `Distance` uses the full 3D origin distance between the two resolved `ISpatial` transforms.
+    - Direction classification projects both participants' origins and forward directions onto the world ground plane
+      (perpendicular to the world up axis). For each participant, the absolute ground-plane angle θ in degrees between
+      that participant's forward direction and the ground-plane bearing to the other participant classifies, tested in
+      this order, as `Front` when `θ <= FrontAngleThresholdDegrees`, as `Back` when
+      `θ >= BackAngleThresholdDegrees`, and otherwise as `Left` or `Right` according to which side of the
+      participant's forward direction the bearing lies on.
+    - `SubjectDirection` classifies the bearing from observer to subject against the observer's forward;
+      `ObserverDirection` classifies the reciprocal bearing from subject to observer against the subject's forward.
+    - Zero horizontal separation classifies deterministically as `Front` for that participant.
+    - There is no hysteresis, and no numeric bearing is exposed on the observation.
+52. Distance and direction classification helpers are owned by the faculty and operate only on `AlleyCat.Core.ISpatial`
+    transforms; the faculty must not add a Vision dependency for geometry (TR-1 dependency direction). VISION-001 owns
+    the `ISpatial` contract, and AI-003 owns the `vision.relative_position` event-history fragment.
 
 ## In Scope
 
@@ -219,6 +279,11 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 - Faculty observation-emission events with zero-or-many emission, including polling and subject-event faculties
   outside any percept invocation.
 - Active-look cue and subject tracking with detach/attach hooks and the opt-in `PollingActiveLookPerception` cadence.
+- `RelativePositionPerception` attach-time and polling re-examination of the active look subject's relative position.
+- Durable `ObservedRelativePosition` observations with exact key `vision.relative_position`, material-change-only
+  emission, and per-subject duplicate suppression across focus cycles.
+- Exported relative-position distance and angular thresholds with pre-activation validation.
+- Faculty-owned full-3D distance and ground-plane reciprocal direction classification without a Vision dependency.
 - Attention contract namespace and immutable snapshot publication for AI-007's separately composed post-attention
   consumer; not gaze policy or target assignment.
 - Speech interpretation, transient visual-presence observations, and transition-driven focused visual descriptions.
@@ -241,7 +306,9 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 - Top-N attention selection or context budgets.
 - Removal of the current render-context fallback behaviour.
 - Final tuning values for cadence, decay, and thresholds.
-- Pose-change detection and broad renaming of existing `Observation` subtypes.
+- Pose-change detection — relative position is not pose — and broad renaming of existing `Observation` subtypes.
+- Hysteresis, dead-bands, or smoothing around the distance-materiality and direction-classification boundaries.
+- Numeric bearing or raw angular exposure on `ObservedRelativePosition` or in its event-history fragment.
 - Reintroducing `PerceptionResult`, faculty-constructed attention effects, or the cross-faculty all-or-nothing
   aggregate commit.
 
@@ -268,6 +335,12 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 10. Acceptance verifies routine periodic awareness of visible subjects creates no memories and only refreshes
     attention, so sustained presence does not flood memory.
 11. Acceptance verifies a focus change or clear during description production creates no stale reaction or memory.
+12. Acceptance verifies an NPC perceives a focused subject's relative position — distance and reciprocal directions —
+    on the first process frame after focus attaches, without waiting a polling interval.
+13. Acceptance verifies material relative-position changes, including changes driven by the NPC's own motion, create
+    new memories while immaterial changes create none, so sustained focus does not flood memory.
+14. Acceptance verifies re-focusing an unchanged subject creates no duplicate memory, while a subject whose relative
+    position materially changed in the meantime is noticed promptly on re-focus.
 
 ### Technical Requirements
 
@@ -308,8 +381,9 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 12. Attention tests verify ordinal canonical identity, the reinforcement formula, lazy decay, retention, context
    eligibility, immutable ordered snapshots, and absence of live object references.
 13. Composition tests verify faculties are independently owned direct Mind-child Nodes discovered in scene order; male
-    and female NPC templates compose speech, visual survey, and visual description faculties deterministically; two NPC
-    instances do not share faculty state; player composition is unchanged; and Resource faculty arrays do not exist.
+    and female NPC templates compose speech, visual survey, visual description, and relative-position faculties
+    deterministically; two NPC instances do not share faculty state; player composition is unchanged; and Resource
+    faculty arrays do not exist.
 14. Foreground-context tests verify self inclusion, eligible `FullId` resolution, omission of unresolved or
     non-character results, no top-N selection, and no second visual survey.
 15. Boundary tests verify sensing, surveys, faculties, and attention mutation never call `IVision.SetLookTarget` or
@@ -350,6 +424,32 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     cancellation, and exit.
 27. Stale-description tests verify that a cue freed, reparented, or replaced during an asynchronous `Describe` await
     emits no observation, through post-await revalidation of the cue and subject.
+28. Faculty tests verify `RelativePositionPerception` derives from `PollingActiveLookPerception` and emits durable
+    `ObservedRelativePosition` observations with exact key `vision.relative_position` carrying the canonical subject
+    `FullId`, full-3D `Distance`, and reciprocal `SubjectDirection`/`ObserverDirection` classifications; that record
+    equivalence compares by subject and both direction classifications with `Distance` equal within a small
+    numerical-noise tolerance distinct from the `MinimumDistanceChange` material-change test; that importance is
+    finite and valid but not authored; and that the observation contributes no attention effects and never requires a
+    fresh reasoning turn.
+29. Validation tests verify `MinimumDistanceChange` is finite and non-negative, both angular thresholds are finite and
+    satisfy `0 <= FrontAngleThresholdDegrees <= BackAngleThresholdDegrees <= 180`, and invalid authored or runtime
+    values fail before activation, mirroring the `PollingActiveLookPerception` interval-validation pattern.
+30. Timing tests verify the first sample runs on the next process frame after subject attach without waiting for the
+    poll interval, later examinations follow the inherited polling cadence, and polling stops on clear, replacement,
+    cancellation, and exit without stale emission.
+31. Emission tests verify the subject's first-ever valid state is emitted; that afterwards only a distance change
+    reaching `MinimumDistanceChange` or a direction change emits; that the last emitted state persists per canonical
+    subject across focus cycles; and that an unchanged refocus emits nothing while a materially changed refocus emits
+    immediately.
+32. Geometry tests verify distance uses the full 3D origins; that directions classify ground-plane bearings against
+    each participant's forward using the front and back thresholds and the lateral side, with zero horizontal
+    separation classifying as `Front`; that observer-motion-driven changes behave identically to subject motion; and
+    that no sample or emission occurs while either participant fails to resolve to a valid in-tree `ISpatial`
+    provider.
+33. Composition and dependency tests verify shared male and female NPC role templates compose
+    `RelativePositionPerception` as a deterministic direct Mind child alongside the existing three faculties with
+    independently owned state, that player composition remains unchanged, and that classification helpers live with
+    the faculty without a Vision dependency.
 
 ## References
 

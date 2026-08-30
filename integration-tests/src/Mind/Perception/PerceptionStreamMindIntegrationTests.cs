@@ -292,6 +292,7 @@ public sealed class PerceptionStreamMindIntegrationTests
         public string Id { get; set; } = "owner";
         public IReadOnlyList<IComponent> Components { get; } = components;
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class TestSceneContext : ISceneContext

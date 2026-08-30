@@ -13,6 +13,8 @@ public sealed class EventHistoryDocumentTests
 
     private const string VisualFragmentDelimiter = "<!-- event-history: vision.description -->";
 
+    private const string RelativePositionFragmentDelimiter = "<!-- event-history: vision.relative_position -->";
+
     private const string FallbackDelimiter = "<!-- event-history: fallback -->";
 
     // Authored sources migrated byte-for-byte from the retired npc_event_history.tres resource.
@@ -29,6 +31,14 @@ public sealed class EventHistoryDocumentTests
     private const string VisualFragmentSource =
         "Observed {{ SubjectId }}: {{ Description }}{% if ObservedAt != blank %}"
         + " (at {{ nf(ObservedAt, 1) }}s game time){% endif %}\n";
+
+    private const string RelativePositionFragmentSource =
+        "I observe {{ SubjectId }} {{ nf(Distance, 1) }} m "
+        + "{% if SubjectDirection == \"Front\" %}ahead of me{% elsif SubjectDirection == \"Back\" %}behind me"
+        + "{% elsif SubjectDirection == \"Left\" %}to my left{% else %}to my right{% endif %}; "
+        + "{% if ObserverDirection == \"Front\" %}they are facing me{% elsif ObserverDirection == \"Back\" %}"
+        + "their back is turned to me{% else %}I am to their {{ ObserverDirection | downcase }}{% endif %}."
+        + "{% if ObservedAt != blank %} (at {{ nf(ObservedAt, 1) }}s game time){% endif %}\n";
 
     /// <summary>The committed standalone file parses into the exact pre-migration template sources.</summary>
     [Fact]
@@ -49,6 +59,15 @@ public sealed class EventHistoryDocumentTests
                 Assert.Equal(VisualFragmentSource, fragment.Source);
                 Assert.Contains("SubjectId", fragment.Source, StringComparison.Ordinal);
                 Assert.Contains("Description", fragment.Source, StringComparison.Ordinal);
+            },
+            fragment =>
+            {
+                Assert.Equal("vision.relative_position", fragment.TypeKey);
+                Assert.Equal(RelativePositionFragmentSource, fragment.Source);
+                Assert.Contains("SubjectId", fragment.Source, StringComparison.Ordinal);
+                Assert.Contains("Distance", fragment.Source, StringComparison.Ordinal);
+                Assert.Contains("SubjectDirection", fragment.Source, StringComparison.Ordinal);
+                Assert.Contains("ObserverDirection", fragment.Source, StringComparison.Ordinal);
             });
         Assert.Equal(MigratedFallbackSource, document.FallbackSource);
     }
@@ -62,6 +81,17 @@ public sealed class EventHistoryDocumentTests
 
         EventHistoryFragment fragment = Assert.Single(document.Fragments);
         Assert.Equal("vision.description", fragment.TypeKey);
+    }
+
+    /// <summary>The exact relative-position key is accepted as an authored dispatch section.</summary>
+    [Fact]
+    public void Parse_RelativePositionFragment_IsKnownExactKey()
+    {
+        var document = EventHistoryDocument.Parse(
+            RelativePositionFragmentDelimiter + "\nrelative\n" + FallbackDelimiter + "\nfallback\n");
+
+        EventHistoryFragment fragment = Assert.Single(document.Fragments);
+        Assert.Equal("vision.relative_position", fragment.TypeKey);
     }
 
     /// <summary>Section content excludes the delimiter lines and keeps one trailing newline per section.</summary>

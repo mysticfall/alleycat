@@ -4,6 +4,7 @@ using AlleyCat.Core;
 using AlleyCat.Mind.AI;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
+using Godot;
 using Xunit;
 
 namespace AlleyCat.Tests.Mind.AI;
@@ -123,5 +124,7 @@ public sealed class ScenarioTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 }

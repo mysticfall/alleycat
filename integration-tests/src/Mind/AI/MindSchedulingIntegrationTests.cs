@@ -9,6 +9,7 @@ using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
+using Godot;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -239,5 +240,7 @@ public sealed partial class MindSchedulingIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 }

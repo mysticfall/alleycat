@@ -320,6 +320,8 @@ public sealed class PerceptSensingIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [voice];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class TestSceneContext(IReadOnlyCollection<ICharacter> characters) : ISceneContext

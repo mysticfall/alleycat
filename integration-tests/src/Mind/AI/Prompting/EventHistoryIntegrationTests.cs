@@ -99,6 +99,10 @@ public sealed class EventHistoryIntegrationTests
             new ObservedSpeech(null, "private-unknown", "Unknown line.") { ObservedAt = 259200.4d },
             new ObservedSpeech("CHAR:TEST_CHARACTER", "private-case", "Case-distinct line.") { ObservedAt = 864000d },
             new ObservedVisualDescription("char:coat", "A weathered red coat.") { ObservedAt = 900000d },
+            new ObservedRelativePosition("char:rin", 1.4f, RelativeDirection.Left, RelativeDirection.Front)
+            {
+                ObservedAt = 900100d,
+            },
         ];
 
         string output = await CreateRenderer(eventHistory).RenderAsync(observations);
@@ -110,7 +114,9 @@ public sealed class EventHistoryIntegrationTests
                 + "Heard char:rin say: Known line. (at " + Label(7200d) + "s game time)\n"
                 + "Heard an unknown speaker say: Unknown line. (at " + Label(259200.4d) + "s game time)\n"
                 + "Heard CHAR:TEST_CHARACTER say: Case-distinct line. (at " + Label(864000d) + "s game time)\n"
-                + "Observed char:coat: A weathered red coat. (at " + Label(900000d) + "s game time)\n",
+                + "Observed char:coat: A weathered red coat. (at " + Label(900000d) + "s game time)\n"
+                + "I observe char:rin " + Label(1.4d) + " m to my left; they are facing me. (at "
+                + Label(900100d) + "s game time)\n",
             output);
         Assert.DoesNotContain("private-", output, StringComparison.Ordinal);
         Assert.DoesNotContain("VoiceId", speechFragment.Source, StringComparison.Ordinal);
@@ -136,6 +142,10 @@ public sealed class EventHistoryIntegrationTests
             new ObservedSpeech(null, "unused-unknown", "Unknown line."),
             new ObservedSpeech("CHAR:TEST_CHARACTER", "unused-case", "Case-distinct line.") { ObservedAt = 864000d },
             new ObservedVisualDescription("char:coat", "A weathered red coat.") { ObservedAt = 900000d },
+            new ObservedRelativePosition("char:rin", 1.4f, RelativeDirection.Left, RelativeDirection.Front)
+            {
+                ObservedAt = 900100d,
+            },
             new TestObservation("world.changed", "door opened") { ObservedAt = 300.55d },
         ];
 
@@ -155,6 +165,45 @@ public sealed class EventHistoryIntegrationTests
         {
             CultureInfo.CurrentCulture = previousCulture;
         }
+    }
+
+    /// <summary>
+    /// The authored standalone event-history file owns exactly one relative-position fragment that renders
+    /// present-tense fused position-and-distance wording with unambiguous reciprocal facing for the exact
+    /// <c>vision.relative_position</c> key, including unstamped records (AI-003 TR-32, AC-19).
+    /// </summary>
+    [Fact]
+    public async Task StandaloneEventHistory_RendersPresentTenseRelativePositionWithUnambiguousDirections()
+    {
+        EventHistoryDocument eventHistory = LoadNpcEventHistory();
+        EventHistoryFragment relativePositionFragment = Assert.Single(
+            eventHistory.Fragments,
+            item => item.TypeKey == "vision.relative_position");
+        Observation[] observations =
+        [
+            new ObservedRelativePosition("char:rin", 1.4f, RelativeDirection.Front, RelativeDirection.Front)
+            {
+                ObservedAt = 1200.25d,
+            },
+            new ObservedRelativePosition("char:ava", 3.75f, RelativeDirection.Back, RelativeDirection.Right),
+            new ObservedRelativePosition("char:coat", 0.4f, RelativeDirection.Left, RelativeDirection.Back)
+            {
+                ObservedAt = 1200.3d,
+            },
+            new ObservedRelativePosition("char:mika", 2f, RelativeDirection.Right, RelativeDirection.Left),
+        ];
+
+        string output = await CreateRenderer(eventHistory).RenderAsync(observations);
+
+        Assert.Equal(
+            "I observe char:rin " + Label(1.4d) + " m ahead of me; they are facing me."
+                + " (at " + Label(1200.25d) + "s game time)\n"
+                + "I observe char:ava " + Label(3.75d) + " m behind me; I am to their right.\n"
+                + "I observe char:coat " + Label(0.4d) + " m to my left; their back is turned to me."
+                + " (at " + Label(1200.3d) + "s game time)\n"
+                + "I observe char:mika " + Label(2d) + " m to my right; I am to their left.\n",
+            output);
+        Assert.DoesNotContain("VoiceId", relativePositionFragment.Source, StringComparison.Ordinal);
     }
 
     /// <summary>Formats one game-time label exactly as the template's number-format tool renders it.</summary>

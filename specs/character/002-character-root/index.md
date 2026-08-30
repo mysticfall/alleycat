@@ -51,6 +51,7 @@ exists.
     - `IHasVoice` from SPCH-005.
    - `ILocomotive` from CTRL-001.
     - `IVisualSubject` from VISION-001.
+    - `ISpatial` from VISION-001 (`AlleyCat.Core`), inherited transitively through `IVisualSubject`.
 3. `ICharacter` must also remain an `IComponentHolder`, inheriting CORE-003 deterministic component iteration and its
    local component-only `IServiceProvider` contract through the holder traits.
 4. The concrete Godot type must be named `AlleyCat.Character.Character`.
@@ -242,7 +243,8 @@ exists.
 20. Render context exposes characters as raw `ICharacter` values whose template surface is curated by the TMPL-001
     member-access policy: only the canonical `FullId` resolves, never a bare local `Id`.
 21. `ICharacter` normatively aggregates `IHasVision` and `IVisualSubject` from VISION-001 and `IHasHearing` from
-    SPCH-006; `IVisualObserver` does not exist.
+    SPCH-006. `IVisualSubject` inherits the VISION-001 `AlleyCat.Core.ISpatial` contract, so `ICharacter` exposes the
+    read-only `GlobalTransform` trait transitively; `IVisualObserver` does not exist.
 22. Character roots expose validated published visual-cue references through a read-only collection; installation
     preserves or rebases those authored references, and published cue topology is immutable until explicit refresh.
 23. Shared reference female and male templates each contain exactly one `StaticVisualCue` with ID `body` at

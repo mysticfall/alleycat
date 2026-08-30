@@ -41,6 +41,7 @@ internal static class TemplatingBaselineScenarios
 
     private const string NpcEventHistoryFragmentTypeKey = "speech.observed";
     private const string NpcVisualDescriptionTypeKey = "vision.description";
+    private const string NpcRelativePositionTypeKey = "vision.relative_position";
 
     // Captured verbatim from the shared NPC event-history asset's speech fragment before the Liquid migration
     // (Handlebars syntax at capture time).
@@ -58,6 +59,19 @@ internal static class TemplatingBaselineScenarios
         "Observed {{SubjectId}}: {{Description}}{{#if ObservedAt}}"
         + " (at {{nf ObservedAt 1}}s game time){{/if}}\n";
 
+    // Handlebars-syntax view of the authored relative-position fragment, matching the post-near-removal authoring,
+    // written in the syntax the capture harness expects for dispatch-era scenarios.
+    private const string NpcRelativePositionSource =
+        "I observe {{SubjectId}} {{nf Distance 1}} m "
+        + "{{#if (eqOrdinal SubjectDirection \"Front\")}}ahead of me"
+        + "{{else if (eqOrdinal SubjectDirection \"Back\")}}behind me"
+        + "{{else if (eqOrdinal SubjectDirection \"Left\")}}to my left"
+        + "{{else}}to my right{{/if}}; "
+        + "{{#if (eqOrdinal ObserverDirection \"Front\")}}they are facing me"
+        + "{{else if (eqOrdinal ObserverDirection \"Back\")}}their back is turned to me"
+        + "{{else}}I am to their {{downcase ObserverDirection}}{{/if}}."
+        + "{{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n";
+
     /// <summary>
     /// Liquid equivalent of the composed event-history dispatch source used to prove that the migrated engine
     /// reproduces the Handlebars-era output once authored fragments move to Liquid syntax.
@@ -70,6 +84,12 @@ internal static class TemplatingBaselineScenarios
         + "{% else %}Heard an unknown speaker say: {{ o.Content }}{% endif %}"
         + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
         + "{% elsif o.TypeKey == 'vision.description' %}Observed {{ o.SubjectId }}: {{ o.Description }}"
+        + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
+        + "{% elsif o.TypeKey == 'vision.relative_position' %}I observe {{ o.SubjectId }} {{ nf(o.Distance, 1) }} m "
+        + "{% if o.SubjectDirection == 'Front' %}ahead of me{% elsif o.SubjectDirection == 'Back' %}behind me"
+        + "{% elsif o.SubjectDirection == 'Left' %}to my left{% else %}to my right{% endif %}; "
+        + "{% if o.ObserverDirection == 'Front' %}they are facing me{% elsif o.ObserverDirection == 'Back' %}"
+        + "their back is turned to me{% else %}I am to their {{ o.ObserverDirection | downcase }}{% endif %}."
         + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
         + "{% else %}((Received {{ o.TypeKey }} event.))"
         + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
@@ -423,6 +443,9 @@ internal static class TemplatingBaselineScenarios
             + "{{#if (eqOrdinal TypeKey \"" + NpcVisualDescriptionTypeKey + "\")}}"
             + NpcVisualDescriptionSource
             + "{{else}}"
+            + "{{#if (eqOrdinal TypeKey \"" + NpcRelativePositionTypeKey + "\")}}"
+            + NpcRelativePositionSource
+            + "{{else}}"
             + NpcEventHistoryFallbackSource
             + "{{/if}}"
             + "{{/if}}{{/each}}";
@@ -469,6 +492,15 @@ internal static class TemplatingBaselineScenarios
                     ["Description"] = "A weathered red coat.",
                     ["ObservedAt"] = 900000d,
                     ["TypeKey"] = "vision.description",
+                },
+                new Dictionary<string, object?>
+                {
+                    ["SubjectId"] = "char:rin",
+                    ["Distance"] = 1.4f,
+                    ["SubjectDirection"] = "Left",
+                    ["ObserverDirection"] = "Front",
+                    ["ObservedAt"] = 900100d,
+                    ["TypeKey"] = "vision.relative_position",
                 },
                 new Dictionary<string, object?>
                 {

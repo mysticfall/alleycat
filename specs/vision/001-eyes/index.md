@@ -112,10 +112,10 @@ Provide a reusable eye component system that:
 18. Define the visual-cue contracts directly in `AlleyCat.Vision`:
     - `IProvidesVisualCues` exposes its authoritative, published, read-only `VisualCues` collection of owned
       `VisualCue` instances.
-    - `IVisualSubject : IIdentifiable, IProvidesVisualCues` represents an identifiable subject that owns discoverable
-      cues. Its `IIdentifiable` identity semantics are authoritatively defined by
-      [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md). `IVisualObserver` must not
-      exist.
+    - `IVisualSubject : IIdentifiable, IProvidesVisualCues, ISpatial` represents an identifiable subject that owns
+      discoverable cues. Its `IIdentifiable` identity semantics are authoritatively defined by
+      [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md); its `ISpatial` base is defined
+      by Technical Requirement 44. `IVisualObserver` must not exist.
 19. `VisualCue` is an abstract `Node3D` base that supports Godot authoring and exports:
     - A non-empty `ID` that is ordinally unique within its `IProvidesVisualCues` provider.
     - A finite, non-negative relative `Prominence`, defaulting to `1`; `0` disables the cue and there is no fixed upper
@@ -183,7 +183,14 @@ Provide a reusable eye component system that:
     `LookTargetChangedPercept(previous, current)`. Assigning the current cue again publishes none. Clearing an active
     cue publishes `current -> null`, while clearing an already null target publishes none.
 43. EyesBehaviour owns applied target state and transition sensing but no target-selection policy. Focused inspection
-    is owned by AI-006 perception and must validate cue lifetime and subject association before awaiting `Describe`.
+     is owned by AI-006 perception and must validate cue lifetime and subject association before awaiting `Describe`.
+44. `AlleyCat.Core.ISpatial` is the minimal read-only spatial trait consumed through `IVisualSubject` inheritance:
+    - It exposes exactly one member: `Transform3D GlobalTransform { get; }`, the provider's current world-space
+      transform.
+    - It lives in `AlleyCat.Core`, so Vision may depend on it under the AI-006 dependency direction without adding a
+      Sense or Mind dependency.
+    - It is contract-only: Vision owns no spatial sampling, polling, or interpretation policy around it; perceiver-side
+      geometry is owned by AI-006 perception faculties.
 
 ## In Scope
 
@@ -201,6 +208,7 @@ Provide a reusable eye component system that:
   placeholder/no-op tracks when no recognised eye blend shapes exist.
 - Per-character AnimationTree integration.
 - Visual subject, visual-cue provider, ownership, and visual-cue contracts under `AlleyCat.Vision`.
+- The `AlleyCat.Core.ISpatial` read-only global-transform trait inherited by `IVisualSubject`.
 - Static cue origin sampling, fixed template-backed local descriptions, optional nearest-subject input, provider
   publication/refresh validation, and immutable published cue topology.
 - Authored whole-character `body` cues and character-specific appearance overrides.
@@ -215,7 +223,8 @@ Provide a reusable eye component system that:
 - Attention, Mind interpretation, or gaze-selection policy. AI-007 alone is the separately composed post-attention
   consumer that may assign look targets; Vision remains policy-neutral and has no attention-gaze hook.
 - Automatic visual-cue selection or gaze movement towards cues.
-- Pose-change detection or continuous reinspection while the same cue remains assigned.
+- Pose-change detection or continuous reinspection while the same cue remains assigned; periodic re-examination of a
+  focused subject is owned by AI-006 polling faculties, not Vision.
 - Emotional-state policy that modifies saccade tuning.
 - Eyebrow movement or expression changes.
 - Lip-sync or mouth animation.
@@ -284,8 +293,8 @@ Provide a reusable eye component system that:
 | 30 | User              | Shared female and male templates provide a usable `body` cue even when its |
 |    |                   | description is placeholder text. |
 | 31 | Technical         | `IProvidesVisualCues` and `IVisualSubject` have the authoritative ownership, |
-|    |                   | `IIdentifiable`, and read-only collection contracts specified in Technical |
-|    |                   | Requirement 18; `IVisualObserver` does not exist. |
+|    |                   | `IIdentifiable`, read-only collection, and `ISpatial` inheritance contracts |
+|    |                   | specified in Technical Requirement 18; `IVisualObserver` does not exist. |
 | 32 | Technical         | `VisualCue` and `StaticVisualCue` expose the authoring, sampling, prominence, |
 |    |                   | and required-observer description contracts specified in Technical |
 |    |                   | Requirements 19–24, including asynchronous |
@@ -346,6 +355,9 @@ Provide a reusable eye component system that:
 | 54 | Technical         | Tests verify transition publication reports applied state without selecting gaze, |
 |    |                   | and focused inspection validates cue lifetime and subject association before |
 |    |                   | awaiting `Describe`. |
+| 55 | Technical         | Tests verify `IVisualSubject` inherits `AlleyCat.Core.ISpatial`, that `ISpatial` |
+|    |                   | exposes exactly the read-only `Transform3D GlobalTransform` member, and that Vision |
+|    |                   | owns no spatial sampling or interpretation policy around it. |
 
 ## References
 

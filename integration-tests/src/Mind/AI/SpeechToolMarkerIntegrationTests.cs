@@ -188,6 +188,8 @@ public sealed class SpeechToolMarkerIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [voice];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed record ToolSpeechSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext

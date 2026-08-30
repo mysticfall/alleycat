@@ -583,6 +583,7 @@ public sealed class PerceptionMindIntegrationTests
         public IReadOnlyList<IComponent> Components => _components;
         public bool HasComponentProjection { get; private set; } = true;
         public IReadOnlyList<VisualCue> VisualCues => [];
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
         public event Action? ComponentsRefreshed
         {
             add => _componentsRefreshed += value;

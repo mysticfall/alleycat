@@ -28,4 +28,6 @@ internal sealed partial class FixturePlayerCharacter : Node, ICharacter
     public IReadOnlyList<IComponent> Components { get; } = [];
 
     public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+    public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
 }

@@ -6,6 +6,7 @@ using AlleyCat.Scene;
 using AlleyCat.Sense;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
+using Godot;
 using Xunit;
 using MindBase = AlleyCat.Mind.Mind;
 
@@ -297,6 +298,8 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
 
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
+
         public int ComponentsRefreshedHandlerCount
         {
             get; private set;
@@ -360,6 +363,8 @@ public sealed class AttentionGazeTargetSelectorIntegrationTests
         public string FullId => $"{Type}:{Id}";
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = visualCues;
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class NonVisualIdentifiable(string id) : IIdentifiable

@@ -75,7 +75,12 @@ public sealed class PerceptionCompositionIntegrationTests
 
             Assert.Same(npc, hearing.GetParent());
             Assert.Equal(
-                [typeof(SpeechPerception), typeof(VisualSurveyPerception), typeof(VisualDescriptionPerception)],
+                [
+                    typeof(SpeechPerception),
+                    typeof(VisualSurveyPerception),
+                    typeof(VisualDescriptionPerception),
+                    typeof(RelativePositionPerception),
+                ],
                 mind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
             Assert.Equal(["CharacterLocomotion", "LocomotiveNavigation", "EyesBehaviour", "AIVoice", "Hearing", "HandPoseBehaviour", "HandPoseBehaviour"], npc.Components.Select(component => component.GetType().Name));
             Assert.Same(mind, femaleSelector.GetParent());
@@ -93,11 +98,17 @@ public sealed class PerceptionCompositionIntegrationTests
             CharacterHub maleNpc = Assert.IsType<CharacterHub>(maleNpcNode, exactMatch: false);
             AgenticMind maleMind = Assert.IsType<AgenticMind>(maleNpc.GetNode("Mind"), exactMatch: false);
             Assert.Equal(
-                [typeof(SpeechPerception), typeof(VisualSurveyPerception), typeof(VisualDescriptionPerception)],
+                [
+                    typeof(SpeechPerception),
+                    typeof(VisualSurveyPerception),
+                    typeof(VisualDescriptionPerception),
+                    typeof(RelativePositionPerception),
+                ],
                 maleMind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
             Assert.NotSame(mind.GetNode("SpeechPerception"), maleMind.GetNode("SpeechPerception"));
             Assert.NotSame(mind.GetNode("VisualSurveyPerception"), maleMind.GetNode("VisualSurveyPerception"));
             Assert.NotSame(mind.GetNode("VisualDescriptionPerception"), maleMind.GetNode("VisualDescriptionPerception"));
+            Assert.NotSame(mind.GetNode("RelativePositionPerception"), maleMind.GetNode("RelativePositionPerception"));
             VisualDescriptionPerception femaleVisualDescription = mind.GetNode<VisualDescriptionPerception>("VisualDescriptionPerception");
             VisualDescriptionPerception maleVisualDescription = maleMind.GetNode<VisualDescriptionPerception>("VisualDescriptionPerception");
             var isolatedCue = new StaticVisualCue();
@@ -131,6 +142,7 @@ public sealed class PerceptionCompositionIntegrationTests
             Assert.DoesNotContain(player.GetChildren(), node => node is AttentionGazeTargetSelector);
             Assert.DoesNotContain(player.GetChildren().SelectMany(node => node.GetChildren()), node => node is AttentionGazeTargetSelector);
             Assert.DoesNotContain(player.GetChildren().SelectMany(node => node.GetChildren()), node => node is VisualDescriptionPerception);
+            Assert.DoesNotContain(player.GetChildren().SelectMany(node => node.GetChildren()), node => node is RelativePositionPerception);
         }
         finally
         {

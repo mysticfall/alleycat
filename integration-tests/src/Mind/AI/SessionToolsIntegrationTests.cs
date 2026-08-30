@@ -685,6 +685,8 @@ public sealed partial class SessionToolsIntegrationTests
         public IReadOnlyList<IComponent> Components { get; } = [voice];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed class FakeGameClock : IGameClock

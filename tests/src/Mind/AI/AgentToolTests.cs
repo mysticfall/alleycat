@@ -9,6 +9,7 @@ using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Vision;
+using Godot;
 using Microsoft.Extensions.AI;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
@@ -380,6 +381,8 @@ public sealed class AgentToolTests
         public IReadOnlyList<IComponent> Components { get; } = [];
 
         public IReadOnlyList<VisualCue> VisualCues { get; } = [];
+
+        public Transform3D GlobalTransform { get; set; } = Transform3D.Identity;
     }
 
     private sealed record TestObservation(string Value) : AgentObservation
