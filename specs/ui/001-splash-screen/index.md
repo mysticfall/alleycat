@@ -16,8 +16,8 @@ Provide a predictable branded startup transition that cleanly hands control to t
 
 1. Players must see a centred project logo that fades in and out smoothly during startup.
 2. The splash sequence must complete automatically and hand off to the next flow without manual input.
-3. When `--skip-splash` is provided, the splash screen must be bypassed entirely while preserving startup
-   flow continuity.
+3. When `--skip-splash` is provided as a user argument after Godot's `--` separator, the splash screen must be
+   bypassed entirely while preserving startup flow continuity.
 
 ## Technical Requirements
 
@@ -25,7 +25,10 @@ Provide a predictable branded startup transition that cleanly hands control to t
 2. Completion must emit `SplashFinished` as the integration contract for downstream flow control.
 3. Splash must be dynamically instantiated by `Game` via the exported `SplashScreenScene` property.
 4. Instantiated splash must be added as a child of the UI SubViewport.
-5. Splash must be skipped when `--skip-splash` command-line argument is present, without breaking the startup flow.
+5. Splash must be skipped when `--skip-splash` is passed as a user argument after Godot's `--` separator (for example
+   `godot-mono --path game -- --skip-splash`), resolved from `OS.GetCmdlineUserArgs()` without breaking the startup
+   flow, matching how the game's other custom user-arg switches (`--no-ai`, `--integration-run-fact`) are resolved.
+   The flag must not activate when passed before the `--` separator.
 
 ## In Scope
 
@@ -33,7 +36,7 @@ Provide a predictable branded startup transition that cleanly hands control to t
 - Fade timing contract with configurable delay and duration parameters.
 - Completion signalling contract (`SplashFinished`).
 - Dynamic instantiation contract via `Game.SplashScreenScene` property.
-- Skip flag contract (`--skip-splash`).
+- Skip flag contract (`--skip-splash` as a user argument after Godot's `--` separator).
 
 ## Out Of Scope
 
@@ -48,7 +51,8 @@ Provide a predictable branded startup transition that cleanly hands control to t
 2. Fade-in starts after the configured delay, uses the configured duration, and reaches full visibility.
 3. Fade-out starts after the post-fade delay, uses the configured duration, and reaches full transparency.
 4. `SplashFinished` is emitted when fade-out completes.
-5. When `--skip-splash` is passed, splash instantiation is skipped but startup continues to loading screen.
+5. When `--skip-splash` is passed as a user argument after `--`, splash instantiation is skipped but startup
+   continues to loading screen; passing the flag before `--` does not activate the skip.
 6. Criteria 1-5 verify user-visible behaviour; criteria 2-4 verify technical integration contracts.
 
 ## References

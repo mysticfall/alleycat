@@ -226,11 +226,11 @@ public partial class Game : Node, IServiceProvider
     }
 
     /// <summary>
-    /// Checks if the "--skip-splash" command-line argument was provided.
+    /// Checks if the "--skip-splash" user argument was provided (after the "--" separator).
     /// </summary>
     /// <returns>True if the splash screen should be skipped.</returns>
     private static bool ShouldSkipSplashScreen() =>
-        OS.GetCmdlineArgs().Contains("--skip-splash");
+        OS.GetCmdlineUserArgs().Contains("--skip-splash");
 
     /// <inheritdoc />
     public override void _Ready()
