@@ -322,6 +322,68 @@ public sealed class EventHistoryIntegrationTests
     }
 
     /// <summary>
+    /// The model sees grouped segments as one latest-position event while Mind-facing raw records stay individual and
+    /// immutable. Selecting either segment expands the selected window to the full known utterance (AI-001 TR-45/48,
+    /// AI-003 TR-33/34). The projected event's identity is Prompting-owned correlation metadata — the contributing
+    /// group's source voice, speech-group identity, and segment indexes — never a runner session-protocol type
+    /// (AI-003 TR-35).
+    /// </summary>
+    [Fact]
+    public async Task ContinuationProjection_JoinsSelectedSegmentsAtLatestPositionWithoutLeakingIdentity()
+    {
+        EventHistoryDocument eventHistory = CreateSpeechEventHistory();
+        Observation[] timeline =
+        [
+            new ObservedSpeech("char:rin", "private-voice", "later", "private-group", 1, continued: true),
+            new TestObservation("world.changed", "door opened"),
+            new ObservedSpeech("char:rin", "private-voice", "earlier", "private-group", 0),
+        ];
+        ObservationHistoryRenderer renderer = CreateRenderer(eventHistory);
+
+        IReadOnlyList<ContinuationProjection.Event> projected = ObservationHistoryRenderer.Project(timeline);
+        string selected = await renderer.RenderAsync([timeline[0]], timeline);
+        string rendered = await renderer.RenderAsync(timeline);
+
+        ContinuationProjection.Event grouped = Assert.Single(projected, item => item.Correlation is not null);
+        ContinuationProjection.SpeechGroupCorrelation correlation =
+            Assert.IsType<ContinuationProjection.SpeechGroupCorrelation>(grouped.Correlation);
+        Assert.Equal("private-voice", correlation.SourceVoiceID);
+        Assert.Equal("private-group", correlation.SpeechGroupID);
+        Assert.True(
+            correlation.SegmentIndexes.SetEquals([0, 1]),
+            "The correlation must list every contributing segment index of the projected group.");
+        Assert.Equal(3, grouped.Position);
+        Assert.Equal(3, grouped.Revision);
+        Assert.Equal(2, projected.Count); // history(count) counts model events, not all three raw records.
+        Assert.Equal("Heard char:rin: earlier … later\n", selected);
+        Assert.Equal(
+            "((Received world.changed event.))\nHeard char:rin: earlier … later\n",
+            rendered);
+        Assert.Equal(["later", "earlier"], timeline.OfType<ObservedSpeech>().Select(static speech => speech.Content));
+        Assert.DoesNotContain("private-voice", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-group", rendered, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Reused group IDs with incompatible attribution never join text across the identity boundary.
+    /// </summary>
+    [Fact]
+    public async Task ContinuationProjection_InconsistentAttributionRemainsSeparate()
+    {
+        Observation[] timeline =
+        [
+            new ObservedSpeech("char:rin", "voice", "first", "group", 0),
+            new ObservedSpeech("char:ava", "voice", "second", "group", 1, continued: true),
+        ];
+        ObservationHistoryRenderer renderer = CreateRenderer(CreateSpeechEventHistory());
+
+        string rendered = await renderer.RenderAsync(timeline);
+
+        Assert.Equal("Heard char:rin: first\nHeard char:ava: second\n", rendered);
+        Assert.DoesNotContain("first … second", rendered, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Authored fragments compile individually without consuming observation data; records supply their concrete
     /// values only at render time (AI-003 TR-14/15).
     /// </summary>
@@ -380,7 +442,7 @@ public sealed class EventHistoryIntegrationTests
     {
         using var file = Godot.FileAccess.Open(NpcEventHistoryPath, Godot.FileAccess.ModeFlags.Read);
         Assert.True(file is not null, $"Expected the authored event-history file '{NpcEventHistoryPath}' to open.");
-        return EventHistoryDocument.Parse(file!.GetAsText());
+        return EventHistoryDocument.Parse(file.GetAsText());
     }
 
     private static string Describe(string value)

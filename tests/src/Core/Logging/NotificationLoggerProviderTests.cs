@@ -100,6 +100,75 @@ public sealed class NotificationLoggerProviderTests
     }
 
     /// <summary>
+    /// A debug-level notification-eligible entry under a child category of the pipeline category posts exactly its
+    /// notification text through a factory whose category filter admits debug entries.
+    /// </summary>
+    [Fact]
+    public void Log_WithNotificationEntry_AtDebugWithChildCategoryAdmitted_PostsEntryNotificationText()
+    {
+        CapturingNotificationSink sink = new();
+        using NotificationLoggerProvider provider = new(sink);
+        using ILoggerFactory loggerFactory = LoggerFactory.Create(
+            builder => builder.AddProvider(provider).AddFilter<NotificationLoggerProvider>(
+                ChildCategoryName,
+                LogLevel.Debug));
+        ILogger logger = loggerFactory.CreateLogger(ChildCategoryName);
+
+        LogNeutralEntry(logger, LogLevel.Debug);
+
+        Assert.Equal("Neutral fixture entry dispatched", Assert.Single(sink.Messages));
+    }
+
+    /// <summary>
+    /// Child-category floors at None or above debug filter the entry before it reaches the provider — the framework
+    /// filter precedes notification routing, so the configured level alone keeps the toast off.
+    /// </summary>
+    [Fact]
+    public void Log_WithNotificationEntry_AtDebugWithChildCategoryFloorAtNoneOrHigher_ReachesNothing()
+    {
+        CapturingNotificationSink sink = new();
+        using NotificationLoggerProvider provider = new(sink);
+        using ILoggerFactory noneFactory = LoggerFactory.Create(
+            builder => builder.AddProvider(provider).AddFilter<NotificationLoggerProvider>(
+                ChildCategoryName,
+                LogLevel.None));
+        LogNeutralEntry(noneFactory.CreateLogger(ChildCategoryName), LogLevel.Debug);
+        Assert.Empty(sink.Messages);
+
+        using ILoggerFactory informationFactory = LoggerFactory.Create(
+            builder => builder.AddProvider(provider).AddFilter<NotificationLoggerProvider>(
+                ChildCategoryName,
+                LogLevel.Information));
+        LogNeutralEntry(informationFactory.CreateLogger(ChildCategoryName), LogLevel.Debug);
+        Assert.Empty(sink.Messages);
+    }
+
+    /// <summary>
+    /// Configuration-rule prefix matching lets a parent pipeline level admit the child's debug entry by inheritance,
+    /// while an explicit child entry overrides the parent in both directions, mirroring the shipped
+    /// <c>Logging:LogLevel</c> semantics for child categories.
+    /// </summary>
+    [Fact]
+    public void Log_WithNotificationEntry_ParentRulesAdmitByPrefixWhileChildEntryOverrides()
+    {
+        CapturingNotificationSink parentDebugSink = new();
+        using NotificationLoggerProvider parentDebugProvider = new(parentDebugSink);
+        using ILoggerFactory parentDebugFactory = LoggerFactory.Create(
+            builder => builder.AddProvider(parentDebugProvider).AddFilter("AlleyCat.Pipeline", LogLevel.Trace));
+        LogNeutralEntry(parentDebugFactory.CreateLogger(ChildCategoryName), LogLevel.Debug);
+        Assert.Equal("Neutral fixture entry dispatched", Assert.Single(parentDebugSink.Messages));
+
+        CapturingNotificationSink childNoneSink = new();
+        using NotificationLoggerProvider childNoneProvider = new(childNoneSink);
+        using ILoggerFactory childNoneFactory = LoggerFactory.Create(
+            builder => builder.AddProvider(childNoneProvider)
+                .AddFilter("AlleyCat.Pipeline", LogLevel.Trace)
+                .AddFilter(ChildCategoryName, LogLevel.None));
+        LogNeutralEntry(childNoneFactory.CreateLogger(ChildCategoryName), LogLevel.Debug);
+        Assert.Empty(childNoneSink.Messages);
+    }
+
+    /// <summary>
     /// Ordinary trace entries stay filtered by the provider's minimum-level short-circuit.
     /// </summary>
     [Fact]
@@ -184,6 +253,8 @@ public sealed class NotificationLoggerProviderTests
         Assert.Equal(3.0, Assert.Single(sink.TimeoutSeconds));
     }
 
+    private const string ChildCategoryName = "AlleyCat.Pipeline.Child";
+
     private static void LogLatencyEntry(ILogger logger, LogLevel logLevel)
         => logger.Log(
             logLevel,
@@ -191,6 +262,21 @@ public sealed class NotificationLoggerProviderTests
             new PipelineLatencyEntry("TTS audio generated in", TimeSpan.FromSeconds(1.4), "44100 bytes"),
             exception: null,
             static (state, _) => $"AI pipeline latency {state.Stage} 1400 ms (44100 bytes)");
+
+    private static void LogNeutralEntry(ILogger logger, LogLevel logLevel)
+        => logger.Log(
+            logLevel,
+            default,
+            new NeutralNotificationEntry("Neutral fixture entry dispatched"),
+            exception: null,
+            static (state, _) => state.ToNotificationText());
+
+    /// <summary>Neutral notification-eligible fixture entry, carrying no feature-specific payload concepts.</summary>
+    private sealed record NeutralNotificationEntry(string Text) : IUINotificationEntry
+    {
+        /// <inheritdoc />
+        public string ToNotificationText() => Text;
+    }
 
     private sealed class CapturingNotificationSink : ILogNotificationSink
     {

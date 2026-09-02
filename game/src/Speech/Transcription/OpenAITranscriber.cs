@@ -1,5 +1,7 @@
 using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Diagnostics;
+using System.Text.Json;
 using AlleyCat.Core.Configuration;
 using AlleyCat.Core.Logging;
 using Godot;
@@ -12,8 +14,13 @@ using OpenAI.Audio;
 namespace AlleyCat.Speech.Transcription;
 
 /// <summary>
-/// OpenAI-compatible speech transcriber backed by the official OpenAI .NET SDK.
+/// OpenAI-compatible speech transcriber backed by the official OpenAI .NET SDK, sending one multipart REST request
+/// per recording so native backends receive every configured hint — including WhisperLive's <c>hotwords</c>.
 /// </summary>
+/// <remarks>
+/// Manual push-to-talk and automatic utterance finalisation share the same request path: both retain whole-utterance
+/// audio and settle through one authoritative REST transcription.
+/// </remarks>
 [GlobalClass]
 public partial class OpenAITranscriber : Transcriber
 {
@@ -21,10 +28,12 @@ public partial class OpenAITranscriber : Transcriber
     private const string DefaultConfigPath = GameConfiguration.DefaultBaseConfigPath;
     private const string DefaultModel = "whisper-1";
     private const string DefaultCompatibleBackendApiKey = "unused-api-key";
+    internal const string ManualDispatchSource = "manual";
+    internal const string AutomaticDispatchSource = "automatic";
 
     private OpenAITranscriberSettings? _settings;
+    private AudioClient? _audioClient;
     private ILogger<OpenAITranscriber>? _logger;
-    private bool _pipelineDebugLoggingEnabled;
 
     /// <summary>
     /// Config file used to resolve OpenAI-compatible speech settings.
@@ -41,122 +50,130 @@ public partial class OpenAITranscriber : Transcriber
     {
         base._Ready();
         _logger = GameLoggerResolver.ResolveRequired<OpenAITranscriber>();
-        _pipelineDebugLoggingEnabled = PipelineDebugLog.IsEnabled;
 
         try
         {
             _settings = OpenAITranscriberSettings.Load(ConfigPath);
+            _audioClient = _settings.CreateAudioClient(GameLoggerResolver.ResolveFactoryRequired());
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to load STT configuration from {ConfigPath}.", ConfigPath);
             _settings = null;
+            _audioClient = null;
         }
     }
 
     /// <inheritdoc />
-    public override async Task<string> Transcribe(RecordedAudioData recording)
+    public override Task<string> Transcribe(RecordedAudioData recording)
+        => TranscribeAsync(recording, CancellationToken.None, ManualDispatchSource);
+
+    /// <inheritdoc />
+    protected override Task<string> FinaliseAutomaticUtteranceAsync(RecordedAudioData recording, CancellationToken cancellationToken)
+        => TranscribeAsync(recording, cancellationToken, AutomaticDispatchSource);
+
+    private async Task<string> TranscribeAsync(
+        RecordedAudioData recording,
+        CancellationToken cancellationToken,
+        string dispatchSourceMode)
     {
         OpenAITranscriberSettings settings = _settings
             ?? throw new InvalidOperationException("OpenAI transcription settings were not initialised on the Godot thread.");
-
-        Stopwatch preparationStopwatch = PipelineDebugLog.StartTimer();
-        using PreparedTranscriptionRequest request = PrepareTranscriptionRequest(recording, settings);
-        if (_pipelineDebugLoggingEnabled)
-        {
-            await LogOnlyLatencyOnGodotThreadAsync("STT request prepared in", preparationStopwatch, $"model {settings.Model}")
-                .ConfigureAwait(false);
-        }
+        AudioClient audioClient = _audioClient
+            ?? throw new InvalidOperationException("OpenAI transcription client was not initialised on the Godot thread.");
 
         Stopwatch backendStopwatch = PipelineDebugLog.StartTimer();
-        AudioTranscription response = await request.Client
-            .TranscribeAudioAsync(request.WavStream, "alleycat-recording.wav", request.Options)
+        string text = await TranscribeViaMultipartAsync(audioClient, recording, settings, cancellationToken, dispatchSourceMode)
             .ConfigureAwait(false);
-        if (_pipelineDebugLoggingEnabled)
+        if (PipelineDebugLog.IsEnabled)
         {
-            // The console line keeps the model detail; the toast omits it to stay short.
-            await LogLatencyOnGodotThreadAsync(
-                "STT backend returned in",
-                backendStopwatch,
-                $"model {settings.Model}",
-                notificationDetail: string.Empty)
+            await LogOnlyLatencyOnGodotThreadAsync("STT backend returned in", backendStopwatch, $"model {settings.Model}")
                 .ConfigureAwait(false);
         }
 
-        return GetTranscriptionTextOrThrow(response);
+        return text;
     }
 
-    internal static PreparedTranscriptionRequest PrepareTranscriptionRequest(
-        RecordedAudioData recordedAudio,
+    /// <summary>
+    /// Sends one multipart REST transcription request through the SDK's authenticated pipeline — whose retry policy
+    /// replays the seekable WAV body — and trims the plain-JSON <c>text</c> field from the response. Immediately
+    /// before the single SDK await, emits the one notification-eligible STT dispatch marker for the logical request.
+    /// </summary>
+#pragma warning disable SCME0004
+    internal static async Task<string> TranscribeViaMultipartAsync(
+        AudioClient audioClient,
+        RecordedAudioData recording,
         OpenAITranscriberSettings settings,
-        ILoggerFactory? loggerFactory = null)
-        => PrepareTranscriptionRequestCore(recordedAudio, settings, loggerFactory);
-
-    internal static AudioTranscriptionOptions CreateTranscriptionOptions(OpenAITranscriberSettings settings)
+        CancellationToken cancellationToken,
+        string dispatchSourceMode)
     {
-        AudioTranscriptionOptions options = new();
+        ArgumentNullException.ThrowIfNull(audioClient);
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(settings);
+        if (recording.PCMData.IsEmpty)
+        {
+            throw new InvalidOperationException("OpenAITranscriber requires non-empty microphone audio.");
+        }
 
+        using var wav = new WaveFileStream(recording.PCMData, recording.SampleRate, recording.ChannelCount);
+        using MultiPartFormContent content = CreateTranscriptionContent(wav, settings);
+
+        // Emitted once per logical request before the single SDK await, so the retry policy's body replays cannot
+        // duplicate it; the marker's state carries only non-sensitive operational metadata.
+        SttDispatchLog.Dispatch(
+            dispatchSourceMode,
+            TimeSpan.FromSeconds((double)recording.FrameCount / recording.SampleRate),
+            recording.PCMData.Length);
+
+        ClientResult response = await audioClient.TranscribeAudioAsync(
+            content,
+            content.MediaType,
+            new RequestOptions { CancellationToken = cancellationToken }).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(response.GetRawResponse().Content.ToString());
+        return document.RootElement.TryGetProperty("text", out JsonElement text) && text.ValueKind == JsonValueKind.String
+            ? text.GetString()?.Trim() ?? string.Empty
+            : throw new InvalidOperationException("OpenAI transcription response did not contain a string 'text' field.");
+    }
+
+    /// <summary>
+    /// Builds the multipart transcription body: <c>file</c>, <c>model</c>, optional <c>language</c>, optional
+    /// <c>prompt</c>, optional <c>hotwords</c>, and a plain-JSON <c>response_format</c>.
+    /// </summary>
+    internal static MultiPartFormContent CreateTranscriptionContent(Stream wavStream, OpenAITranscriberSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(wavStream);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        // AudioTranscriptionOptions cannot encode every compatible backend's native hotwords field. The SDK's
+        // protocol operation still provides its authenticated pipeline, logging, timeout, and retry behaviour while
+        // this content supplies the request body.
+        var content = new MultiPartFormContent();
+        var file = new FileBinaryContent(wavStream, "audio/wav")
+        {
+            Filename = "alleycat-recording.wav",
+        };
+        content.Add("file", file);
+        content.Add("model", BinaryData.FromString(settings.Model.Trim()));
         if (!string.IsNullOrWhiteSpace(settings.Language))
         {
-            options.Language = settings.Language;
+            content.Add("language", BinaryData.FromString(settings.Language.Trim()));
         }
 
-        if (!string.IsNullOrWhiteSpace(settings.Prompt))
+        if (settings.Prompt is not null)
         {
-            options.Prompt = settings.Prompt;
+            content.Add("prompt", BinaryData.FromString(settings.Prompt));
         }
 
-        if (settings.Temperature is float temperature)
+        if (settings.Hotwords is not null)
         {
-            options.Temperature = temperature;
+            content.Add("hotwords", BinaryData.FromString(settings.Hotwords));
         }
 
-        return options;
+        // The explicit plain JSON result deliberately avoids the SDK's SSE helper, which omits hotwords for this backend.
+        content.Add("response_format", BinaryData.FromString("json"));
+        return content;
     }
-
-    internal static string GetTranscriptionTextOrThrow(AudioTranscription response)
-        => string.IsNullOrWhiteSpace(response.Text)
-            ? throw new InvalidOperationException(
-                "OpenAI transcription response did not contain a non-empty 'text' field.")
-            : response.Text.Trim();
-
-    private static PreparedTranscriptionRequest PrepareTranscriptionRequestCore(
-        RecordedAudioData recordedAudio,
-        OpenAITranscriberSettings settings,
-        ILoggerFactory? loggerFactory)
-    {
-        WaveFileStream? wavStream = null;
-
-        try
-        {
-            if (recordedAudio.PCMData.IsEmpty)
-            {
-                throw new InvalidOperationException("OpenAITranscriber requires non-empty microphone audio.");
-            }
-
-            wavStream = new WaveFileStream(
-                recordedAudio.PCMData,
-                recordedAudio.SampleRate,
-                recordedAudio.ChannelCount);
-
-            return new PreparedTranscriptionRequest(
-                wavStream,
-                loggerFactory is null ? settings.CreateAudioClient() : settings.CreateAudioClient(loggerFactory),
-                CreateTranscriptionOptions(settings));
-        }
-        catch
-        {
-            wavStream?.Dispose();
-            throw;
-        }
-    }
-
-    private Task LogLatencyOnGodotThreadAsync(
-        string stage,
-        Stopwatch stopwatch,
-        string detail,
-        string? notificationDetail = null)
-        => DispatchDeferredGodotActionAsync(() => PipelineDebugLog.Latency(stage, stopwatch, detail, notificationDetail));
+#pragma warning restore SCME0004
 
     private Task LogOnlyLatencyOnGodotThreadAsync(string stage, Stopwatch stopwatch, string detail)
         => DispatchDeferredGodotActionAsync(() => PipelineDebugLog.LogOnlyLatency(stage, stopwatch, detail));
@@ -167,7 +184,7 @@ public partial class OpenAITranscriber : Transcriber
         string Model,
         string? Language,
         string? Prompt,
-        float? Temperature,
+        string? Hotwords,
         int? TimeoutSeconds)
     {
         public string GetApiKeyOrDefault()
@@ -228,7 +245,7 @@ public partial class OpenAITranscriber : Transcriber
                 Clean(options.Model) ?? DefaultModel,
                 Clean(options.Language),
                 Clean(options.Prompt),
-                options.Temperature,
+                Clean(options.Hotwords),
                 options.Timeout)
             {
                 ConfigPathDescription = configPathDescription,
@@ -273,19 +290,5 @@ public partial class OpenAITranscriber : Transcriber
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
 
-    }
-
-    internal sealed class PreparedTranscriptionRequest(
-        Stream wavStream,
-        AudioClient client,
-        AudioTranscriptionOptions options) : IDisposable
-    {
-        public Stream WavStream { get; } = wavStream;
-
-        public AudioClient Client { get; } = client;
-
-        public AudioTranscriptionOptions Options { get; } = options;
-
-        public void Dispose() => WavStream.Dispose();
     }
 }

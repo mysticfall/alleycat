@@ -27,6 +27,76 @@ public sealed class ObservationTests
         Assert.Equal("Hello", observation.Content);
     }
 
+    /// <summary>Grouped completed speech retains immutable source and segment identity transport.</summary>
+    [Fact]
+    public void ObservedSpeech_GroupedMetadata_IsImmutableAndDefaultsRemainUngrouped()
+    {
+        var grouped = new ObservedSpeech("char:character", "raw-voice", "Hello", "group-1", 2, continued: true);
+        var ungrouped = new ObservedSpeech("char:character", "raw-voice", "Hello");
+
+        Assert.Equal("group-1", grouped.SpeechGroupID);
+        Assert.Equal(2, grouped.SegmentIndex);
+        Assert.True(grouped.Continued);
+        Assert.All(
+            typeof(ObservedSpeech).GetProperties().Where(property => property.Name is nameof(ObservedSpeech.SpeechGroupID)
+                or nameof(ObservedSpeech.SegmentIndex)
+                or nameof(ObservedSpeech.Continued)),
+            property => Assert.False(property.CanWrite));
+        Assert.Null(ungrouped.SpeechGroupID);
+        Assert.Equal(0, ungrouped.SegmentIndex);
+        Assert.False(ungrouped.Continued);
+    }
+
+    /// <summary>
+    /// Commit identity compares components ordinally and order-sensitively, so only the same tuple matches
+    /// (AI-001 TR-49).
+    /// </summary>
+    [Fact]
+    public void ObservationCommitIdentity_ComparesOrdinalOrderedComponents()
+    {
+        ObservationCommitIdentity first = new("voice-1", "group-1", 2);
+        ObservationCommitIdentity same = new("voice-1", "group-1", 2);
+
+        Assert.Equal(first, same);
+        Assert.Equal(first.GetHashCode(), same.GetHashCode());
+        Assert.NotEqual(first, new ObservationCommitIdentity("voice-1", "group-2", 2));
+        Assert.NotEqual(first, new ObservationCommitIdentity("voice-1", "group-1", 3));
+        Assert.NotEqual(first, new ObservationCommitIdentity("voice-1", "Group-1", 2));
+        Assert.NotEqual(first, new ObservationCommitIdentity("group-1", "voice-1", 2));
+        Assert.NotEqual(first, new ObservationCommitIdentity("voice-1", "group-1"));
+    }
+
+    /// <summary>Commit identity copies its supplied components, so later mutation cannot rewrite a committed identity.</summary>
+    [Fact]
+    public void ObservationCommitIdentity_ClonesSuppliedComponents()
+    {
+        object?[] components = ["voice-1", "group-1", 0];
+        ObservationCommitIdentity identity = new(components);
+        components[0] = "mutated";
+
+        Assert.Equal(["voice-1", "group-1", 0], identity.Components);
+    }
+
+    /// <summary>
+    /// Grouped speech supplies its exact-once (VoiceId, SpeechGroupID, SegmentIndex) commit identity through the
+    /// generic contract, while ungrouped, manual, and inconsistent-continuation speech claim none (AI-001
+    /// TR-45/49).
+    /// </summary>
+    [Fact]
+    public void ObservedSpeech_CommitIdentity_GroupedSegmentSuppliesTupleUngroupedClaimsNone()
+    {
+        var grouped = new ObservedSpeech("char:speaker", "voice-1", "Hello", "group-1", 1, continued: true);
+        var ungrouped = new ObservedSpeech("char:speaker", "voice-1", "Hello");
+        var inconsistentContinuation = new ObservedSpeech("char:speaker", "voice-1", "Hello", "group-1", 0, continued: true);
+        var missingVoice = new ObservedSpeech(null, null, "Hello", "group-1", 0);
+
+        Assert.NotNull(grouped.CommitIdentity);
+        Assert.Equal(["voice-1", "group-1", 1], grouped.CommitIdentity!.Components);
+        Assert.Null(ungrouped.CommitIdentity);
+        Assert.Null(inconsistentContinuation.CommitIdentity);
+        Assert.Null(missingVoice.CommitIdentity);
+    }
+
     /// <summary>
     /// Importance uses exact actor-to-owner identity while unknown and external speech remain important.
     /// </summary>

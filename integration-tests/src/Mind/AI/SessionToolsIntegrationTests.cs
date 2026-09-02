@@ -17,6 +17,7 @@ using AlleyCat.Vision;
 using Godot;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 using MindBase = AlleyCat.Mind.Mind;
@@ -171,6 +172,104 @@ public sealed partial class SessionToolsIntegrationTests
         Assert.Equal(fixture.Owner.FullId, committed.ActorId);
         Assert.Null(committed.VoiceId);
         Assert.Equal("Committed mid-flight.", committed.Content);
+    }
+
+    /// <summary>
+    /// The speak tool resolves the admission capability from the authored voice projection without any
+    /// concrete-voice dependency: a capable voice receives the runner-owned admission transaction, its admitted
+    /// submission commits at playback hand-off with exactly one self observation, and the ordinary cancellable
+    /// path stays untouched (AI-002 TR-63/AC-27, SPCH-005 TR-37).
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithAdmissionCapableVoice_CommitsAtHandOffThroughTheCapability()
+    {
+        ToolAdmissionBroker admission = CreateUnstartedAdmissionBroker();
+        AdmissionCapableVoice ownerVoice = new("capable-voice");
+        await using ToolFixture fixture = new(speechTool: new SpeechTool(admission), ownerVoiceOverride: ownerVoice);
+        await fixture.ReadyAsync();
+
+        Task<object?> speakTask = fixture.InvokeSpeakAsync("Capable words.", CancellationToken.None).AsTask();
+        await ownerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        ownerVoice.CompleteHandOff();
+        object? result = await speakTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal("Spoken through the configured voice.", result);
+        Assert.Equal(["Capable words."], ownerVoice.AdmittedSubmissions);
+        _ = Assert.Single(ownerVoice.ReceivedTransactions);
+        Assert.Empty(ownerVoice.OrdinarySubmissions);
+        ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(fixture.Mind.GetTimelineForTest()));
+        Assert.Equal(fixture.Owner.FullId, committed.ActorId);
+        Assert.Equal("Capable words.", committed.Content);
+    }
+
+    /// <summary>
+    /// A cue-first admission refusal through the capability surfaces the non-throwing not-delivered result with no
+    /// ordinary submission and no self observation (AI-002 TR-27/63, SPCH-005 TR-37): the transaction the tool
+    /// resolved onto the capable voice refuses while the runner owns no pending arbitrated phase.
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithAdmissionCapableVoice_CueFirstRefusalSurfacesNotDeliveredResult()
+    {
+        ToolAdmissionBroker admission = CreateUnstartedAdmissionBroker();
+        AdmissionCapableVoice ownerVoice = new("capable-voice")
+        {
+            AttemptTransaction = true,
+        };
+        await using ToolFixture fixture = new(speechTool: new SpeechTool(admission), ownerVoiceOverride: ownerVoice);
+        await fixture.ReadyAsync();
+
+        object? result = await fixture.InvokeSpeakAsync("Refused at the gate.", CancellationToken.None).AsTask();
+
+        Assert.Equal(CutShortBeforeSpoken, result);
+        Assert.Equal(["Refused at the gate."], ownerVoice.AdmittedSubmissions);
+        _ = Assert.Single(ownerVoice.ReceivedTransactions);
+        Assert.False(ownerVoice.TransactionAdmitted, "The transaction must refuse without a pending arbitrated phase.");
+        Assert.Empty(ownerVoice.OrdinarySubmissions);
+        Assert.Empty(fixture.Mind.GetTimelineForTest());
+    }
+
+    /// <summary>
+    /// An editor-authored speech tool resource — constructed outside the AgenticMind composition — takes the
+    /// specified fallback path even for a capability voice: admission arbitration applies only to composition-bound
+    /// tools, so the submission runs through the ordinary cancellable path with no admission transaction resolved,
+    /// commits at hand-off, and observes exactly once (AI-002 TR-63, SPCH-005 TR-38).
+    /// </summary>
+    [Fact]
+    public async Task Speak_WithEditorAuthoredToolAndCapableVoice_TakesOrdinarySubmissionPath()
+    {
+        AdmissionCapableVoice ownerVoice = new("capable-voice");
+        await using ToolFixture fixture = new(ownerVoiceOverride: ownerVoice);
+        await fixture.ReadyAsync();
+
+        Task<object?> speakTask = fixture.InvokeSpeakAsync("Unbound words.", CancellationToken.None).AsTask();
+        await ownerVoice.SubmissionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        ownerVoice.CompleteHandOff();
+        object? result = await speakTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal("Spoken through the configured voice.", result);
+        Assert.Equal(["Unbound words."], ownerVoice.OrdinarySubmissions);
+        Assert.Empty(ownerVoice.AdmittedSubmissions);
+        Assert.Empty(ownerVoice.ReceivedTransactions);
+        ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(fixture.Mind.GetTimelineForTest()));
+        Assert.Equal(fixture.Owner.FullId, committed.ActorId);
+        Assert.Equal("Unbound words.", committed.Content);
+    }
+
+    /// <summary>
+    /// Creates the composition admission binding with an attached but never-run session runner, so tool-level
+    /// fixtures resolve real admission transactions while no provider is ever contacted (AI-002 TR-19/62).
+    /// </summary>
+    private static ToolAdmissionBroker CreateUnstartedAdmissionBroker()
+    {
+        ToolAdmissionBroker admission = new();
+        admission.AttachRunner(new AgentSessionRunner(
+            new UnstartedSessionClient(),
+            "Unused tool-fixture instructions.",
+            [],
+            [],
+            allowMultipleToolCalls: false,
+            NullLogger.Instance));
+        return admission;
     }
 
     /// <summary>
@@ -348,7 +447,7 @@ public sealed partial class SessionToolsIntegrationTests
     /// </summary>
     private sealed class ToolFixture : IAsyncDisposable
     {
-        private readonly SpeechTool _speechTool = new();
+        private readonly SpeechTool _speechTool;
         private readonly WaitTool _waitTool = new();
         private readonly HistoryTool _historyTool = new();
         private AIFunction? _speakFunction;
@@ -356,9 +455,15 @@ public sealed partial class SessionToolsIntegrationTests
         private AIFunction? _historyFunction;
         private readonly bool _useAuthoredHistory;
 
-        public ToolFixture(bool addAiVoice = false, FakeGameClock? clock = null, bool useAuthoredHistory = false)
+        public ToolFixture(
+            bool addAiVoice = false,
+            FakeGameClock? clock = null,
+            bool useAuthoredHistory = false,
+            SpeechTool? speechTool = null,
+            IVoice? ownerVoiceOverride = null)
         {
             _useAuthoredHistory = useAuthoredHistory;
+            _speechTool = speechTool ?? new SpeechTool();
             Clock = clock ?? new FakeGameClock { NowSeconds = 100d };
             OwnerVoice = new ControllableVoice("owner-voice");
             SpeakerVoice = new WindowedVoice("speaker-voice");
@@ -367,7 +472,9 @@ public sealed partial class SessionToolsIntegrationTests
             TwinA = new VoiceCharacter("twin-a", TwinVoice);
             TwinB = new VoiceCharacter("twin-b", TwinVoice);
             HandOffVoice = addAiVoice ? new HandOffAIVoice() : null;
-            Owner = new VoiceCharacter("owner", HandOffVoice is null ? OwnerVoice : HandOffVoice);
+            Owner = new VoiceCharacter(
+                "owner",
+                ownerVoiceOverride ?? (HandOffVoice is null ? OwnerVoice : HandOffVoice));
             Membership = [Owner, Speaker, TwinA, TwinB];
             Mind = new TestMind(Owner)
             {
@@ -641,6 +748,126 @@ public sealed partial class SessionToolsIntegrationTests
 
         public ValueTask SpeakCancellableAsync(string speech, CancellationToken cancellationToken = default)
             => ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Plain <see cref="IVoice" /> double that additionally implements the admission capability (SPCH-005 TR-37):
+    /// it records the admission transactions the speak tool resolves onto it, models an admitted submission that
+    /// completes at a demanded playback hand-off, and can exercise the refusal path by attempting the received
+    /// transaction — which refuses while the runner owns no pending arbitrated phase.
+    /// </summary>
+    private sealed class AdmissionCapableVoice(string id) : IVoice, IAdmissionCapableVoice
+    {
+        private readonly TaskCompletionSource _handOff = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Id { get; set; } = id;
+
+        public string Type => "voice";
+
+        public string FullId => $"voice:{Id}";
+
+        public bool IsSpeaking
+        {
+            get;
+            private set;
+        }
+
+        public List<string> AdmittedSubmissions { get; } = [];
+
+        public List<SpeechAdmissionTransaction> ReceivedTransactions { get; } = [];
+
+        public List<string> OrdinarySubmissions { get; } = [];
+
+        public TaskCompletionSource SubmissionStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Whether the double attempts the received transaction, modelling a cue-first refusal.</summary>
+        public bool AttemptTransaction
+        {
+            get;
+            set;
+        }
+
+        public bool TransactionAdmitted
+        {
+            get;
+            private set;
+        }
+
+        public event Action<IVoice>? SpeechStarted;
+
+        public event Action<IVoice>? SpeechEnded;
+
+        public Vector3 Origin => Vector3.Zero;
+
+        public void Speak(string speech)
+        {
+        }
+
+        public ValueTask SpeakAsync(string speech, CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
+
+        public async ValueTask SpeakCancellableAsync(string speech, CancellationToken cancellationToken = default)
+        {
+            OrdinarySubmissions.Add(speech);
+            _ = SubmissionStarted.TrySetResult();
+            await _handOff.Task.WaitAsync(cancellationToken);
+        }
+
+        async ValueTask<bool> IAdmissionCapableVoice.SpeakCancellableAdmittedAsync(
+            string speech,
+            CancellationToken cancellationToken,
+            SpeechAdmissionTransaction admission)
+        {
+            AdmittedSubmissions.Add(speech);
+            ReceivedTransactions.Add(admission);
+            if (AttemptTransaction)
+            {
+                TransactionAdmitted = admission.TryAdmit(() => { });
+                if (!TransactionAdmitted)
+                {
+                    return false;
+                }
+            }
+
+            IsSpeaking = true;
+            SpeechStarted?.Invoke(this);
+            _ = SubmissionStarted.TrySetResult();
+            await _handOff.Task.WaitAsync(cancellationToken);
+            return true;
+        }
+
+        public void CompleteHandOff()
+        {
+            IsSpeaking = false;
+            SpeechEnded?.Invoke(this);
+            _ = _handOff.TrySetResult();
+        }
+    }
+
+    /// <summary>Chat client proving the tool-level admission broker's runner is never run against a provider.</summary>
+    private sealed class UnstartedSessionClient : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException(
+                "The tool-level admission broker runner must never contact a provider.");
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            _ = await GetResponseAsync(messages, options, cancellationToken);
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
     }
 
     /// <summary>

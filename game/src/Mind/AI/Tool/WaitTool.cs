@@ -26,6 +26,26 @@ public partial class WaitTool : AgentTool
             + "current game time.";
     }
 
+    /// <summary>
+    /// Wait-delivery acknowledgement typed-bound at the AgenticMind composition boundary (AI-002 TR-19/41/57), or
+    /// null when this tool was authored or constructed outside that composition — such instances deliver their
+    /// window without runner correlation.
+    /// </summary>
+    internal AgentWaitDeliveryNotifier? Delivery
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Creates a wait tool whose delivered observation windows are acknowledged to the session runtime so pending
+    /// keyed speech holds settle without a duplicate injected replacement (AI-002 TR-41/57).
+    /// </summary>
+    internal WaitTool(AgentWaitDeliveryNotifier delivery) : this()
+    {
+        ArgumentNullException.ThrowIfNull(delivery);
+        Delivery = delivery;
+    }
+
     /// <inheritdoc />
     protected override Delegate CreateDelegate() => Wait;
 
@@ -49,6 +69,11 @@ public partial class WaitTool : AgentTool
         double finishedAtSeconds = clock.NowSeconds;
         double elapsedSeconds = Math.Max(0d, finishedAtSeconds - startedAtSeconds);
 
+        // The wait result is its window's sole delivery channel (AI-002 TR-41): report the delivered window so
+        // the session runtime settles any pending keyed speech hold whose text reached the model this way, with no
+        // duplicate injected replacement (AI-002 TR-57).
+        Delivery?.NotifyDelivered(outcome.Delivered);
+
         return new AgentToolResult(
             await ComposeResultMessageAsync(session, outcome, elapsedSeconds, finishedAtSeconds));
     }
@@ -69,7 +94,7 @@ public partial class WaitTool : AgentTool
         }
 
         string history = session.HistoryRenderer is { } renderer
-            ? await renderer.RenderAsync(outcome.Delivered)
+            ? await renderer.RenderAsync(outcome.Delivered, session.Mind.GetObservationTimelineSnapshot())
             : string.Join('\n', outcome.Delivered.Select(static observation => observation.TypeKey));
         // A fresh wake fulfils the wait normally and this result is its sole delivery channel (AI-002 TR-32/41):
         // the wording states what arrived — never a generic interrupted-action notice.

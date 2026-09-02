@@ -39,16 +39,32 @@ title: Mind Component
 9. Every accepted non-self speech observation — recognised or unknown speaker, attended or not — must immediately
    reach the NPC's session as a fresh turn that replaces stale reasoning, regardless of the importance threshold.
    Ambiguous speech that fails attribution produces no observation and therefore no fresh turn. Attention
-   membership governs turn-taking cues only and must not gate fresh-turn delivery.
+   membership governs turn-taking cues and start/resume suppression (UR-13) only and must never gate fresh-turn
+   delivery; this all-hearer, attention-independent completed-speech delivery is intended.
 10. Every remembered event must carry the game time at which it was observed, in seconds elapsed since the game began.
 11. Looking at a valid visual subject may add its focused description to memory, without retaining repeated equivalent
-    descriptions of that same subject.
+     descriptions of that same subject.
+12. When a speaker pauses briefly and continues, the NPC experiences one contiguous conversation: every completed
+    spoken part is remembered exactly as observed, while the dialogue the NPC reasons over presents the joined parts
+    as a single utterance.
+13. When a speaker the NPC attends to at that moment begins or resumes speaking, the NPC immediately stops its
+    in-flight reaction and holds its reasoning until the utterance settles — before any continued words exist — and
+    never replies to a half-finished utterance. The hold is source-generic — any attended non-self character, never
+    assumed to be the player — and is decided once at cue receipt, so attention changes afterwards neither release
+    nor retroactively create it. A speaker not attended at cue receipt causes no hold, and their completed speech
+    still arrives as a fresh turn. The hold never cuts the NPC's own speech already admitted to the voice pipeline,
+    which settles naturally (AI-002). Effects the NPC already committed remain part of history.
+14. A blank, failed, or abandoned automatic segment — or a manual session that ends without committed text — settles
+    any matching paused reaction without inventing speech. It never becomes NPC memory, attention, a wait result,
+    freshness input, or a transcript.
 
 ## Technical Requirements
 
 1. Each Mind must own a private, synchronised, ordered timeline of subjective `Observation`
-   records. The timeline lasts for the Mind node's lifetime and is the authoritative memory record; the agent
-   session's tools read it, and transient provider protocol must never serve as memory.
+   records. The timeline lasts for the Mind node's lifetime and is the authoritative memory record of raw
+   observations; the agent session's tools read it, and transient provider protocol must never serve as memory. The
+   timeline is append-only at the raw observation level: model-facing projection that coalesces grouped speech
+   (TR-48, AI-003) is rendering and never mutates timeline records.
 2. `Observation` must calculate importance through `CalculateImportance(ObservationContext)`. `ObservationContext`
    must initially contain the owning `ICharacter` and remain extensible for future contextual scoring.
 3. Mind must calculate and validate importance exactly once at ingestion, before mutation, and store the calculated
@@ -133,9 +149,10 @@ title: Mind Component
      normatively defines the two-phase construction order in which the core context is built first and completed with
      the `scenario`
      key after the manager query. The session prompt must render with the exact dictionary returned.
-26. AgenticMind must publish a general typed C# event after each committed observation; the base Mind exposes only the
-    protected `OnObservationIngested` hook, which AgenticMind overrides to publish. Relevant consumers subscribe and
-    unsubscribe directly. Contained failures and cancellations must not publish events for uncommitted work.
+26. AgenticMind must publish a general typed C# event after each committed observation; the base Mind exposes only
+    the protected `OnObservationIngested` observation hook, which AgenticMind overrides to publish. Relevant consumers
+    subscribe and unsubscribe directly. Contained failures and cancellations must not publish events for uncommitted
+    work.
 27. Mind must subscribe to configured `ISense` components and discover authorable `IPerception` Node faculties among
     its direct children in scene order. It must subscribe to each configured faculty's observation-emission event for
     its node lifetime, unsubscribing on rebind and tree exit. It owns percept registration, asynchronous
@@ -180,7 +197,9 @@ title: Mind Component
     and unblocking a blocked `speak`
      under AI-002. Voices whose speaker cannot be attributed to a current-scene character must not signal; this is an
      accepted limitation of the attribution model. This cue is a turn-taking and wait-wake cue only; it must not
-     constrain fresh-turn speech invalidation (TR-43).
+     constrain fresh-turn speech invalidation (TR-43). The same retention-threshold snapshot membership rule governs
+     speech-start and speech-resume suppression (TR-47): only a source voice that resolves, at cue receipt, to a
+     unique non-self current-scene character present in the snapshot may hold the session runtime (AI-002).
 36. Notable-observation and freshness signalling must never interrupt observation ingestion itself: ingestion is
     synchronous and atomic, and wake or delivery signalling happens only after the batch has committed.
 37. `ObservationDuplicatePolicy` must default to `Allow`, retaining every submitted observation. An observation that
@@ -205,12 +224,61 @@ title: Mind Component
     `true`, while exact self speech returns `false` through ordinal comparison with the observing character's exact
     full ID. A fresh observation upgrades the complete current accumulation — including preceding sub-threshold
     observations — to deliverable in FIFO order without depending on cumulative importance, and signals the session
-    runtime for immediate fresh-turn replacement as defined by AI-002. Attention membership must not gate
-    freshness.
+    runtime for immediate fresh-turn replacement as defined by AI-002. Attention membership must not gate freshness;
+    this all-hearer, attention-independent freshness is intended — attention gating applies only to start/resume
+    suppression cues (TR-47), never to completed-speech delivery.
 44. Mind's post-commit delivery signalling must carry delivery urgency — ordinary threshold-qualified delivery
     versus fresh-turn urgency — and whether an active `wait` owns the delivery, rather than a single
     notable-interruption signal. A claimed delivery must not be silently lost if asynchronous rendering fails:
     ownership is retained or restored, and no replacement request may be issued without its invalidating context.
+45. Completed speech segments must ingest as separate raw observations: each completed segment of a pause-delimited
+    speech group becomes its own immutable `ObservedSpeech` record carrying the generic grouping metadata —
+    `SpeechGroupID`, `SegmentIndex`, and `Continued` — copied unchanged from the percept (AI-006; segment identity
+    and lifecycle are normatively defined by SPCH-005 and SPCH-008). No committed record is mutated, replaced, or
+    rolled back when later segments of the same group arrive, and records never carry per-word or in-flight partial
+    text. Ungrouped speech — manual and AI voice publications — carries no group metadata.
+46. A transport-level duplicate completion presenting an already-ingested commit identity (TR-49) must be rejected
+    before timestamping: no second timeline entry, notable-accumulation entry, freshness delivery, or ingestion
+    notification. The identity gate precedes duplicate filtering, importance calculation, timestamping, mutation,
+    and notification, and does not alter the duplicate policy of observations that supply no commit identity —
+    including ungrouped speech.
+47. Mind must route the speech-start cue (`Started`), `SpeechResumed`, and non-published automatic terminal
+    settlements — `Blank`, `Failed`, and `Abandoned` — as generic transient lifecycle signals for source voices whose
+    publications its Hearing observes. Each carries only the source voice plus its immutable lifecycle key, never
+    text. Automatic signals carry real speech-group and segment metadata — a qualified onset carries its
+    `(SpeechGroupID, 0)` identity — while the manual start cue carries an opaque internal synthetic token because
+    manual completed speech remains publicly ungrouped; the token never becomes public grouping metadata. Start and
+    resume signals are attention-gated at cue receipt and source-generic: Mind forwards them to the session runtime
+    only when the source voice resolves, at cue receipt, to a unique non-self current-scene character present in
+    Mind's current attention snapshot at or above the retention threshold (TR-35; AI-006), never assuming the player.
+    Attention is sampled exactly once per cue; later attention changes must neither release nor retroactively create
+    a hold. Unattended, self, unattributable, and ambiguous sources create no hold. Mind forwards each signal exactly
+    once to the session runtime: `Started` and `SpeechResumed` register the matching invalidation expectation, while
+    a non-published settlement abandons it; a settlement matching no registered expectation is a no-op (AI-002). It
+    creates no percept, faculty input, observation, timeline
+    or notable-accumulation entry, attention effect, freshness delivery, wait effect, transcript, or a committed
+    observation notification. `Published` is not routed as a transient release: its matching completed text follows
+    ordinary perception and delivery. These signals are neither
+    ordinary nor fresh observations, so the ordinary-observation no-cancellation rule (UR-2) does not apply. SPCH-005
+    normatively defines publication, metadata, and node-lifetime terminality.
+48. Model-facing coalescing of a speech group is rendering, not timeline summarisation: the projection that joins
+    grouped segments into one synthetic utterance is owned by AI-003 and applied only when history, `wait`, or
+    injected-message rendering faces the model (AI-002); `history` counting applies to projected events, not raw
+    segment records. Mind must not merge, reorder, rewrite, or summarise raw timeline records when a group grows,
+    and must never expose the projection back into the timeline.
+49. Mind's identity-based duplicate suppression must operate through a generic, optional commit-identity contract
+    under `Mind.Observation`: any observation type may supply an immutable identity tuple, and Mind enforces
+    exact-once identity uniqueness atomically at ingestion — enforcement stays in Mind, never in perception. Mind's
+    generic ingestion must contain no modality-specific branch: the identity gate tests the supplied identity, not
+    concrete observation types. `ObservedSpeech` keeps its exact-once `(VoiceId, SpeechGroupID, SegmentIndex)`
+    semantics (TR-45) by supplying that tuple through this contract, with grouping metadata normatively defined by
+    AI-006, SPCH-005, SPCH-006, and SPCH-008.
+50. AgenticMind must orchestrate session delivery without interpreting concrete observation record types: it must
+    not cast or alias concrete observation records or read their feature payloads — for speech, no `VoiceId`,
+    `SpeechGroupID`, or `SegmentIndex` inspection in expectation matching or watchdog scans. Feature-specific
+    correlation belongs to session-scoped coordinators in the Mind.AI integration layer — for speech turns and
+    continuations, the coordinator pinned by AI-002 — which translate feature identity into generic runtime
+    operations. The TR-35 attended-speaker cue and TR-47 lifecycle-routing contracts are unchanged.
 
 ## In Scope
 
@@ -222,6 +290,11 @@ title: Mind Component
 - Contextual freshness evaluation and fresh-turn delivery signalling, independent of the importance threshold and
   attention membership.
 - Actor-relative observed speech, current-scene voice-ID attribution, and separately stored voice IDs.
+- Raw append-only ingestion of completed speech-segment observations with generic grouping metadata, transport
+  duplicate rejection through the generic observation commit-identity contract, and generic attention-gated
+  transient start/resume and non-published settlement routing.
+- Generic optional commit-identity contract for observation ingestion, with Mind-owned atomic exact-once enforcement.
+- AgenticMind delivery orchestration delegating feature-specific correlation to session-scoped Mind.AI coordinators.
 - Immediate percept intake, ordered asynchronous faculty interpretation, deterministic fan-out, and Mind-owned
   attention under AI-006.
 - Default-allow observation ingestion and opt-in latest-equivalent suppression before all ingestion effects.
@@ -232,7 +305,8 @@ title: Mind Component
 - Typed tool-context hand-off of Character-owned capabilities without Mind-owned voice authoring.
 - Session-start render-context construction.
 - Game-time `ObservedAt` stamping through the game-scoped game-time source.
-- Attended-speaker-finished cue for `wait` wake and `speak` unblocking.
+- Attended-speaker-finished cue for `wait` wake and `speak` unblocking, and attention-gated speech-start/resume
+  suppression routing into AI-002 holds.
 - Irreversible node-lifetime shutdown of intake, session activity, tools, and dispatcher-queued action work.
 
 ## Out Of Scope
@@ -241,15 +315,17 @@ title: Mind Component
 - Additional production tools beyond the AI-002 inventory.
 - Cancelling or reversing world actions already admitted.
 - Timeline summarisation, compaction, token budgeting, or persistence beyond the Mind node lifetime.
+- Timeline-level speech-group merging or record rewriting; grouped-utterance coalescing exists only as model-facing
+  rendering (AI-003), never as timeline mutation.
 - Automatic retry or backoff policy beyond existing failure containment.
 - Multi-agent orchestration and long-term relationship state.
 - Final tuning values for importance thresholds and wait durations.
 - Perception- or sensing-driven eye presentation changes, including direct gaze assignment. AI-007 alone is the
   separately composed post-attention consumer that may assign a look target; unchanged Vision presentation remains
   mandatory acceptance scope.
-- Attended-speaker-finished cueing on speech that cannot be attributed to a current-scene character; such speakers
-  never block `speak` or wake through the cue, while their accepted unknown speech observations still require a
-  fresh turn.
+- Attended-speaker-finished cueing and speech-start/resume suppression on speech that cannot be attributed to a
+  current-scene character; such speakers never block `speak`, wake through the cue, or hold the session runtime,
+  while their accepted unknown speech observations still require a fresh turn.
 - Gameplay policy for interrupting already-audible speech; playback hand-off commits speech and freshness must not
   cut it (AI-002).
 - Reliable speaker priority, addressee, audibility, or conversational-target metadata; attention membership and
@@ -279,6 +355,16 @@ title: Mind Component
 8. Acceptance verifies a fresh observation delivers the pending accumulation plus the fresh observation exactly once,
    wakes an active `wait` below the importance threshold, and that ordinary observations never cancel generation,
    tools, or speech.
+9. Acceptance verifies a speaker who pauses and continues is heard as one contiguous conversation: each completed
+   part is remembered exactly as observed, model-facing dialogue joins the parts into one utterance, and resumed
+   speech promptly stops stale reasoning without the NPC replying to a half-finished utterance. Acceptance also
+   verifies the hold's attention gating: an attended speaker's onset or resume holds the NPC's reaction, a
+   non-attended onset or resume causes no hold while completed speech still fresh-delivers, attention changes after
+   cue receipt neither release nor retroactively create a hold, and a non-player attended source holds exactly like
+   the player's voice would.
+10. Acceptance verifies blank, failed, and abandoned segment settlements — and a manual session ending without
+    committed text — release only the matching paused reaction, without an invented utterance, memory, attention
+    change, wait result, freshness effect, or transcript, and that a settlement matching no hold is a no-op.
 
 ### Technical Requirements
 
@@ -339,7 +425,8 @@ title: Mind Component
     published in snapshots are unchanged afterwards.
 23. Tests verify the attended-speaker-finished cue: a speaker present in the attention snapshot at or above the
     retention threshold wakes an active wait and unblocks a blocked speak on `SpeechEnded`; unattended or
-    unattributable voices never signal.
+    unattributable voices never signal. The same membership rule gates start/resume suppression forwarding (TR-47):
+    attended unique non-self sources hold, while unattended, self, unattributable, and ambiguous sources never do.
 24. Tests verify wake and delivery signalling occurs only after the committing batch settles and never interrupts
     observation ingestion itself.
 25. Tests verify the session prompt renders with a dictionary containing a mandatory `player`
@@ -368,6 +455,28 @@ title: Mind Component
 33. Tests verify fresh delivery is exact-once across threshold and fresh races, wait expiry races, and node exit;
     that node exit takes precedence over fresh invalidation and issues no replacement request; and that a disabled
     Mind retains urgency without waking, cancelling, or signalling the runner.
+34. Tests verify each completed speech segment ingests as its own immutable `ObservedSpeech` carrying the percept's
+    grouping metadata unchanged, that later segments never mutate, replace, or roll back earlier records, and that
+    manual and AI speech remain ungrouped.
+35. Tests verify a duplicate transport completion presenting an already-ingested commit identity is rejected before
+    timestamping with no timeline, accumulation, freshness, or notification effect — covering speech's
+    `(VoiceId, SpeechGroupID, SegmentIndex)` tuple supplied through the commit-identity contract — while
+    observations supplying no identity, including ungrouped speech, keep their ordinary duplicate policy.
+36. Tests verify start, resumed, and non-published terminal signals reach observing minds exactly once by their
+    lifecycle key — source voice plus segment metadata for automatic cues, source voice plus the opaque synthetic
+    token for the manual start cue — while creating no percept, faculty input, observation, timeline or accumulation
+    entry, attention, wait, freshness, transcript, or notification effect. Start and resume forwarding is
+    attention-gated once at cue receipt and source-generic: attended non-self characters hold, unattended, self,
+    unattributable, and ambiguous sources never do, and later attention changes neither release nor retroactively
+    create a hold. `Published` settles through ordinary completed-text delivery only, and the raw timeline remains
+     unmerged while model-facing rendering projects grouped segments (AI-003).
+37. Tests verify the commit-identity gate is generic: an arbitrary observation type supplying the contract's
+    identity tuple receives exact-once enforcement, and Mind's generic ingestion — including duplicate suppression —
+    contains no concrete observation-type branch or speech-specific check.
+38. Tests verify AgenticMind orchestrates without concrete observation-record dependency — no casting, aliasing, or
+    feature-payload inspection of concrete observation records in expectation matching, correlation, or watchdog
+    scans — while the session-scoped speech coordinator (AI-002) owns that correlation and the TR-35 cue and TR-47
+    routing contracts hold unchanged.
 
 ## References
 
@@ -391,6 +500,7 @@ title: Mind Component
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
+- [SPCH-008: Automatic Voice Detection](../../speech/008-automatic-voice-detection/index.md)
 - [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
 - [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [CORE-010: Main-Thread Dispatcher](../../core/010-main-thread-dispatcher/index.md)

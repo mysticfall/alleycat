@@ -164,7 +164,7 @@ public sealed class ICharacterTests
 
     private sealed class FakeHearing : IHearing
     {
-        public IReadOnlyList<Type> PerceptTypes => [typeof(SpeechPercept)];
+        public IReadOnlyList<Type> PerceptTypes { get; } = [typeof(SpeechPercept)];
 
         public event Action<IPercept>? Perceived;
 

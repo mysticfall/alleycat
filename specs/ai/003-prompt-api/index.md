@@ -38,10 +38,13 @@ control over how concrete observation types appear in chronological event histor
    without unconditionally including every scene character.
 8. Focused visual descriptions in event history identify the observed subject and expose the authored description to
    the NPC's agent.
-9. Relative-position observations in event history identify the observed subject and read as present-tense statements
+ 9. Relative-position observations in event history identify the observed subject and read as present-tense statements
    of where it stands relative to the observing NPC — how far away it is, whether ahead or behind and to which side —
    and of how it is facing relative to the NPC — facing it, back turned to it, or the NPC standing to its left or
    right — with every direction unambiguous about whose frame it is measured from.
+10. A speaker who pauses and continues is presented to the NPC as one utterance — the earlier text, the pause, and
+    the continuation joined into a single line of dialogue — identically in `wait` results, timeline history
+    (`history`) results, and injected messages, with no visible grouping identifiers and no duplicate partial lines.
 
 ## Technical Requirements
 
@@ -84,7 +87,8 @@ control over how concrete observation types appear in chronological event histor
     comparison performed in code, rendering the individually compiled template parsed from the matching authored
     section instead of composing fragments into one generated template source. It must not use global mutable partial
      registration, an observation visitor, or observation-owned formatting. It renders observation records for AI-002
-     `wait` results, timeline history (`history`) tool results, and injected messages.
+     `wait` results, timeline history (`history`) tool results, and injected messages. Grouped speech reaches these
+     paths as one projected event per speech group through the shared continuation projection (TR-33).
 15. Each observation record from the timeline snapshot must pass directly to the template compiler as the current
     context when its selected fragment renders. This must preserve the record's fragment-visible properties. Unknown
     concrete observations must render the fallback with the same record data.
@@ -157,8 +161,37 @@ control over how concrete observation types appear in chronological event histor
     relying on the generic fallback: present-tense standing position — the observed distance plus ahead/behind and
     left/right from the observing NPC's frame — and facing relation — the subject facing the NPC, its back turned to
     the NPC, or the NPC standing to the subject's left or right. Each direction must be worded unambiguously about
-    whose frame it is measured from, and the fragment renders no near or far clause. AI-006 owns the observation
-    contract.
+     whose frame it is measured from, and the fragment renders no near or far clause. AI-006 owns the observation
+     contract.
+33. One shared continuation projection must serve every model-facing rendering path — AI-002 injected messages,
+     `wait` results, and `history` results — identically:
+     - group together only raw `speech.observed` records whose source voice and `SpeechGroupID` match (grouping
+       metadata normatively defined by SPCH-005, SPCH-006, and SPCH-008);
+     - order grouped segments by `SegmentIndex`, never by transcription completion order;
+     - join the known nonblank segment texts with the exact separator `" … "` — one space, one ellipsis character,
+       one space — conveying the pause or hesitation;
+      - expose no group, segment, or voice identifiers to the model;
+      - own each projected event's identity and contributing-segment list (TR-35) as Prompting-defined correlation
+        metadata, never as model-facing wording;
+      - position the joined event at its latest contributing raw observation, so unrelated observations retain
+        defensible chronology; and
+     - render a group whose predecessor segment is missing as the available segment standalone, with no leading
+       ellipsis.
+     The projection is rendering only: raw timeline records remain separate and factual (AI-001). The projection
+     must never merge records whose source voice or actor attribution is inconsistent — such a group splits and
+     emits a diagnostic instead.
+34. `history(count)` must count projected events, not raw segment records: after continuation projection, one speech
+      group contributes one event regardless of how many segments it contains.
+35. The continuation projection must own its output identity: projected events carry a Prompting-owned event identity
+    and their contributing-segment correlation, and the projection's surface must not expose
+    `AgentSessionInjectionKey` or any other runner session-protocol type. Translation from projection-owned identity
+    into the runtime's injection keys happens only at the AI-002 session boundary. Model-facing rendering is
+    unchanged by this boundary: rendered text exposes no group, segment, or voice identifiers or tokens, and joining
+    and projected-event counting follow TR-33 and TR-34.
+36. Prompting is the model-facing speech renderer and intentionally keeps its concrete `ObservedSpeech`
+    interpretation — reading grouping metadata to group, order, and join segments (TR-33). That concreteness is
+    confined to rendering: it must not carry runner session-protocol types (TR-35), and projection logic must not
+    move into Mind's timeline (AI-001 TR-48).
 
 ## In Scope
 
@@ -166,6 +199,10 @@ control over how concrete observation types appear in chronological event histor
 - Separate prompt compilation and ordinary-context rendering phases.
 - Exact keyed event-history fragments, direct record rendering, and mandatory fallback rendering.
 - One actor-relative `speech.observed` fragment for every observed-speech perspective.
+- The shared continuation projection for grouped speech with projected-event counting, applied identically to
+  injected messages, `wait` results, and `history` results.
+- Prompting-owned projection event identity and contributing-segment correlation, translated to runtime injection
+  keys only at the AI-002 session boundary.
 - One authored `vision.description` fragment exposing visual subject identity and description.
 - One authored `vision.relative_position` fragment exposing subject identity with present-tense, unambiguous
   reciprocal relative-position wording.
@@ -183,6 +220,8 @@ control over how concrete observation types appear in chronological event histor
 ## Out Of Scope
 
 - Timeline summarisation, compaction, token budgeting, or persistence beyond node lifetime.
+- Timeline-level merging or mutation of raw segment records; the continuation projection is model-facing rendering
+  only (AI-001).
 - Alternative prompt writers beyond the default pseudo-XML writer.
 - Template-engine work outside what [TMPL-001](../../templating/001-templating-system/index.md) defines,
   localisation workflows, and editor preview tooling.
@@ -243,6 +282,20 @@ control over how concrete observation types appear in chronological event histor
     relative-position state in present-tense wording — standing position from the observing NPC's frame plus the
     reciprocal facing relation — that keeps every direction unambiguous about whose frame it uses and renders no near
     or far clause, in chronological `wait`, `history`, and injection output without falling back to generic wording.
+20. Projection tests verify two and three or more grouped segments render as one joined utterance ordered by
+    `SegmentIndex` despite out-of-order transcription completion, that unrelated observations between segments keep
+    their chronological position through latest-contributing-observation placement, and that a missing predecessor
+    renders the available segment standalone with no leading ellipsis.
+21. Projection tests verify no group, segment, or voice identifier reaches the model, that inconsistent source or
+    actor attribution splits the group with a diagnostic instead of merging, and that injected messages, `wait`
+    results, and `history` results use one identical projection.
+22. History tests verify `history(count)` counts projected events so one speech group counts once regardless of its
+    segment count.
+23. Projection tests verify Prompting owns the projected event identity and contributing-segment list, exposes no
+    runner session-protocol type such as `AgentSessionInjectionKey`, and leaves injection-key translation to the
+    AI-002 session boundary, while rendered output, `" … "` joining, ordering, and projected-event counting are
+    unchanged; concrete `ObservedSpeech` interpretation remains confined to Prompting as the model-facing speech
+    renderer.
 
 ## References
 

@@ -9,9 +9,11 @@ namespace AlleyCat.Core.Logging;
 /// Lightweight structured diagnostic logging for pipeline stages and latency measurements.
 /// </summary>
 /// <remarks>
-/// Every entry emits at trace level, so the configured level of the <c>AlleyCat.Pipeline</c> category is the single
-/// universal switch for pipeline diagnostics: opting the category into trace logging enables both console output and
-/// notification routing, while the shipped information default keeps both off.
+/// Stage, marker, and latency diagnostics emit at trace level under <c>AlleyCat.Pipeline</c>, whose configured level
+/// is their single universal switch: opting the category into trace logging enables both console output and
+/// notification routing, while the shipped debug default keeps both off. Feature subsystems own further child
+/// categories of the pipeline category — created through <see cref="CreateCategoryLogger" /> — whose configured
+/// levels independently govern their own diagnostics.
 /// </remarks>
 internal static class PipelineDebugLog
 {
@@ -103,12 +105,18 @@ internal static class PipelineDebugLog
         _logger = null;
     }
 
-    private static ILogger GetLogger() => _logger ??= CreateLogger();
+    private static ILogger GetLogger() => _logger ??= CreateCategoryLogger(CategoryName);
 
-    private static ILogger CreateLogger()
+    /// <summary>
+    /// Creates a logger for a pipeline diagnostics category — including child categories feature subsystems own — so
+    /// their diagnostics follow the same factory installation, category filtering, and notification routing as the
+    /// shared pipeline stages. The testing override takes precedence, exactly as for the parent category logger.
+    /// </summary>
+    /// <param name="categoryName">Full category name, for example a child of <c>AlleyCat.Pipeline</c>.</param>
+    internal static ILogger CreateCategoryLogger(string categoryName)
         => _loggerFactoryOverride is not null
-            ? _loggerFactoryOverride.CreateLogger(CategoryName)
-            : Game.Instance.GetRequiredService<ILoggerFactory>().CreateLogger(CategoryName);
+            ? _loggerFactoryOverride.CreateLogger(categoryName)
+            : Game.Instance.GetRequiredService<ILoggerFactory>().CreateLogger(categoryName);
 
     private static string FormatDetailSuffix(string? detail)
         => string.IsNullOrWhiteSpace(detail) ? string.Empty : $" ({detail})";

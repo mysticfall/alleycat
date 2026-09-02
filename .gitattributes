@@ -12,3 +12,4 @@
 *.material filter=lfs diff=lfs merge=lfs -text
 *.meshlib filter=lfs diff=lfs merge=lfs -text
 *.shape filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text

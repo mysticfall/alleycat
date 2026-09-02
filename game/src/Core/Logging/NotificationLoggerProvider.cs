@@ -7,10 +7,12 @@ namespace AlleyCat.Core.Logging;
 /// is available.
 /// </summary>
 /// <remarks>
-/// There is no separate notification switch: pipeline diagnostics emit at trace level, so the configured level of
-/// their log category acts as the single universal switch. The framework's category-level filter runs before entries
-/// reach this provider, which means an entry-carrying diagnostic arriving here has already been opted in by
-/// configuration, while the shipped information default keeps such entries filtered out entirely.
+/// There is no separate notification switch: pipeline diagnostics emit at trace level — and feature-owned child
+/// category diagnostics at their own diagnostic levels — so the configured level of each entry's log category acts as
+/// the single universal switch. The framework's category-level filter runs before entries reach this provider, which
+/// means an entry-carrying diagnostic arriving here has already been opted in by configuration — the shipped debug
+/// default for <c>AlleyCat.Pipeline</c> keeps trace diagnostics filtered out entirely, while shipped child categories
+/// admit their own notification-eligible entries by default.
 /// </remarks>
 public sealed class NotificationLoggerProvider(
     ILogNotificationSink notificationSink,

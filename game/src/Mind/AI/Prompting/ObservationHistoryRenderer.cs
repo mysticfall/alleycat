@@ -71,10 +71,29 @@ internal sealed class ObservationHistoryRenderer
     /// <summary>Renders the ordered observation records through their individually compiled templates.</summary>
     /// <param name="observations">Observation records in timeline order.</param>
     /// <returns>The rendered event-history text for the supplied records.</returns>
-    public async ValueTask<string> RenderAsync(IReadOnlyList<AgentObservation> observations)
+    public ValueTask<string> RenderAsync(IReadOnlyList<AgentObservation> observations)
+        => RenderAsync(observations, observations);
+
+    /// <summary>
+    /// Renders a selected window using the full timeline to expand any selected grouped speech into its complete,
+    /// currently-known model-facing utterance.
+    /// </summary>
+    public ValueTask<string> RenderAsync(
+        IReadOnlyList<AgentObservation> observations,
+        IReadOnlyList<AgentObservation> timeline)
+        => RenderProjectedAsync(ContinuationProjection.Project(timeline, observations));
+
+    /// <summary>Projects a timeline or selected timeline window for model-facing callers that need event counting.</summary>
+    internal static IReadOnlyList<ContinuationProjection.Event> Project(
+        IReadOnlyList<AgentObservation> timeline,
+        IReadOnlyList<AgentObservation>? selected = null)
+        => ContinuationProjection.Project(timeline, selected);
+
+    /// <summary>Renders pre-projected model events through their individually compiled templates.</summary>
+    internal async ValueTask<string> RenderProjectedAsync(IReadOnlyList<ContinuationProjection.Event> events)
     {
-        ArgumentNullException.ThrowIfNull(observations);
-        if (observations.Count == 0)
+        ArgumentNullException.ThrowIfNull(events);
+        if (events.Count == 0)
         {
             return string.Empty;
         }
@@ -84,8 +103,9 @@ internal sealed class ObservationHistoryRenderer
             [CharacterContextKey] = _character,
         };
         StringBuilder rendered = new();
-        foreach (AgentObservation observation in observations)
+        foreach (ContinuationProjection.Event @event in events)
         {
+            AgentObservation observation = @event.Observation;
             ArgumentNullException.ThrowIfNull(observation);
             ITemplate template = _fragments.TryGetValue(observation.TypeKey, out ITemplate? fragment)
                 ? fragment

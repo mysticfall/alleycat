@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Speech;
+using AlleyCat.Speech.Transcription;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -72,7 +73,16 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Contains("Voice = NodePath(\"Female/GeneralSkeleton/Head/Voice\")", sceneText, StringComparison.Ordinal);
         Assert.Contains("[node name=\"Voice\" type=\"Node3D\" parent=\"Female/GeneralSkeleton/Head\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("Transcriber = NodePath(\"../../../../OpenAITranscriber\")", sceneText, StringComparison.Ordinal);
+        Assert.Contains(
+            "uid=\"uid://cmo0rjfoojh7u\" path=\"res://src/Speech/Transcription/OpenAITranscriber.cs\"",
+            sceneText,
+            StringComparison.Ordinal);
+        Assert.Contains("metadata/_custom_type_script = \"uid://cmo0rjfoojh7u\"", sceneText, StringComparison.Ordinal);
         Assert.Contains("metadata/_custom_type_script = \"uid://dyffnsg0122vb\"", sceneText, StringComparison.Ordinal);
+        // The transcriber node pins only local input behaviour: backend host, model, and hints stay config-file-owned.
+        Assert.DoesNotContain("RESTEndpoint", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("WebSocketURI", sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hotwords", sceneText, StringComparison.Ordinal);
 
         Node player = LoadPackedScene(ReferenceFemalePlayerScenePath).Instantiate();
         try
@@ -83,6 +93,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Equal("reference_female_player", GetPropertyValue<string>(voice, "Id"));
             Assert.Same(transcriber, GetPropertyValue<Node>(voice, "Transcriber"));
             Assert.Equal(new NodePath("../../../../OpenAITranscriber"), voice.GetPathTo(transcriber));
+            Assert.Equal(VoiceInputMode.ButtonAndAutomatic, GetPropertyValue<VoiceInputMode>(transcriber, "InputMode"));
         }
         finally
         {

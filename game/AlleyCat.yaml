@@ -5,13 +5,14 @@
 # these shipped defaults, so a user file only needs to contain the values that
 # should change.
 
-# Speech-to-text backend settings.
+# Speech-to-text backend settings (OpenAI-SDK-compatible REST), read by the player template's OpenAITranscriber.
 STT:
-    Host: "http://localhost:9000/v1"
-    Model: whisper-1
+    Host: "http://localhost:8000/v1"
+    Model: small.en
+    ApiKey: ""
     Language: en
     Prompt: "Transcribe the player's speech clearly."
-    Temperature: 0.0
+    #Hotwords: "alleycat felis catus"          # Optional unusual-word recognition hints; blank or omitted disables them.
     Timeout: 30
 
 # Text-to-speech backend settings.
@@ -40,6 +41,8 @@ Logging:
         Default: Warning
         AlleyCat: Information
         AlleyCat.Pipeline: Debug
+        # Toggles the in-game "dispatching audio to STT" notification; set to None to disable it.
+        # AlleyCat.Pipeline.STT: Debug
         Microsoft: Warning
         Microsoft.Extensions.AI.LoggingChatClient: Trace
         System.ClientModel.Primitives.MessageLoggingPolicy: Warning

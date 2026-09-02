@@ -19,6 +19,7 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 
 1. NPCs notice non-self speech, including speech from an unknown speaker, and every accepted non-self speech
    observation immediately invalidates the observing NPC's stale reasoning as a fresh turn, regardless of attention.
+   Only transient start and resume suppression cues are attention-membership-gated, decided once at cue receipt.
 2. NPCs periodically notice visible subjects and retain relevant subjects in attention as that relevance decays.
 3. Recognised speakers and visible subjects can enter session prompt context when their attention reaches the
    configured threshold.
@@ -37,13 +38,20 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     does not flood the NPC's memory.
 11. When focus changes or clears while a description is still being produced, the NPC does not react to the stale
     description.
-12. When an NPC focuses on a subject, it promptly becomes aware of that subject's relative position — how far away the
-    subject is and in which direction it lies from the NPC and the NPC from it — without waiting for a polling
-    interval.
-13. While a subject stays in focus, the NPC notices material changes in its relative position — including changes
-    caused by the NPC's own movement or rotation — without flooding its memory with immaterial updates.
-14. Looking away and back at an unchanged subject creates no duplicate memory, while a subject whose relative position
-    materially changed in the meantime is noticed promptly on re-focus.
+ 12. When an NPC focuses on a subject, it promptly becomes aware of that subject's relative position — how far away the
+     subject is and in which direction it lies from the NPC and the NPC from it — without waiting for a polling
+     interval.
+ 13. While a subject stays in focus, the NPC notices material changes in its relative position — including changes
+     caused by the NPC's own movement or rotation — without flooding its memory with immaterial updates.
+ 14. Looking away and back at an unchanged subject creates no duplicate memory, while a subject whose relative position
+     materially changed in the meantime is noticed promptly on re-focus.
+15. A speaker who pauses and continues is perceived seamlessly: each completed part is attributed exactly as
+    continuous speech would be, and the pause itself creates no memory, attention change, or perceptible event.
+16. Speech-start, speech-resume, and blank, failed, and abandoned automatic segment settlements are textless
+     lifecycle routing, not speech perception: they produce no percept, observation, attention change, fresh turn,
+     wait effect, memory, or transcript. Attention membership at cue receipt alone decides which speakers' start and
+     resume cues may hold the NPC's reasoning; completed speech always reaches every hearing NPC as a fresh turn
+     regardless of attention.
 
 ## Technical Requirements
 
@@ -100,7 +108,7 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 
 14. `SpeechPercept`, `Hearing`, `IHearing`, and `IHasHearing` live directly in `AlleyCat.Speech`.
     `Hearing : Node, IHearing` owns voice-listener subscription and teardown; `IHearing : ISense` declares exactly
-    `SpeechPercept` and receives voice publications through `ReceiveVoice(string, IVoice)`.
+    `SpeechPercept` and receives completed voice publications through `ReceiveVoice(string, IVoice)`.
 15. Hearing rejects only null, empty, or whitespace-only transport speech publications. It must not filter publications
     by observer voice or source identity.
 16. For each accepted publication, Hearing snapshots the speech and raw local source voice `Id` into one immutable
@@ -190,9 +198,13 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     `current + (maximum - current) * contribution` without exceeding maximum.
 37. Attention decays lazily and linearly with elapsed game time on percept commit, queries, and snapshots. Entries
      below retention are evicted; every entry at or above the context threshold is eligible for context. Retention-level
-     snapshot presence is also the membership criterion for AI-002's attended-speaker determination — `speak` blocking
-     and `wait` waking — deliberately decoupled from the context threshold used for prompt-context eligibility.
-     Attention membership governs turn-taking only; it must not gate AI-001's fresh-turn delivery of non-self speech.
+     snapshot presence is also the membership criterion for AI-002's attended-speaker determination — `speak`
+     blocking, `wait` waking, and speech-start/resume suppression holds — deliberately decoupled from the context
+     threshold used for prompt-context eligibility. The suppression membership is sampled once at cue receipt and is
+     source-generic — the cueing voice must resolve to a unique non-self current-scene character, never assumed to
+     be the player — and later attention changes neither release nor retroactively create a hold (AI-001, AI-002).
+     Attention membership governs turn-taking and suppression cues only; it must not gate AI-001's fresh-turn
+     delivery of completed non-self speech.
 38. Maximum must be finite and positive; decay must be finite and non-negative; thresholds must be finite and satisfy
     `0 <= retention <= context <= maximum`. Settings validation must complete before activation or mutation.
 39. Attention snapshots are immutable identity/value sequences ordered by `FullId` using ordinal comparison. Attention
@@ -270,6 +282,26 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     transforms; the faculty must not add a Vision dependency for geometry (TR-1 dependency direction). VISION-001 owns
     the `ISpatial` contract, and AI-003 owns the `vision.relative_position` event-history fragment.
 
+### Continued Speech Metadata And Lifecycle Signalling
+
+53. `SpeechPerception` must copy the generic completed-speech grouping metadata — `SpeechGroupID`, `SegmentIndex`,
+    and `Continued`, normatively defined by SPCH-005, SPCH-006, and SPCH-008 — from each accepted `SpeechPercept`
+    onto its emitted `ObservedSpeech` unchanged, without interpreting, validating, or synthesising it. Grouping
+    metadata is generic: no player-specific perception or Mind API exists for it. It must not alter attribution,
+    self filtering (TR-25–TR-28), freshness, or attention semantics: a grouped segment follows exactly the ordinary
+    recognised, unknown, or self path. Ungrouped publications carry no grouping metadata.
+54. Speech-start cues (`Started`, automatic qualified onset and manual recording press alike), resumed speech
+     activity, and non-published automatic terminal settlements — `Blank`, `Failed`, and `Abandoned` — are transient
+     voice lifecycle signalling (SPCH-005, SPCH-008) routed to Mind's runtime cancellation and settlement path
+     (AI-001, AI-002). They must create no percept — no `IPercept` is published — faculty input, observation,
+     attention effect, freshness effect, wait effect, memory, transcript, or attention mutation. The manual start
+     cue carries an opaque internal synthetic token in place of group metadata; manual completed speech remains
+     publicly ungrouped. Start and resume routing is attention-membership-gated at cue receipt and source-generic
+     (AI-001, AI-002): never assumed to be the player, with attention sampled once. `Published` follows ordinary
+     completed speech perception only and never creates a duplicate transient release; completed-speech freshness
+     remains attention-independent. No partial, speculative, or in-flight transcript perception contract exists:
+     perception sees completed segments only.
+
 ## In Scope
 
 - Immutable percept families and the synchronous non-generic sense event bridge.
@@ -287,6 +319,9 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 - Attention contract namespace and immutable snapshot publication for AI-007's separately composed post-attention
   consumer; not gaze policy or target assignment.
 - Speech interpretation, transient visual-presence observations, and transition-driven focused visual descriptions.
+- Generic completed-speech grouping metadata propagated unchanged from `SpeechPercept` to `ObservedSpeech`.
+- Transient speech-start, resumed, and non-published terminal lifecycle signalling excluded from percepts,
+  observations, and attention.
 - Sense projection through `Character.Components` and approved dependency direction.
 - Mind attended-speaker voice-activity resolution through the established scene-character `IVoice` attribution
   precedent.
@@ -311,6 +346,8 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 - Numeric bearing or raw angular exposure on `ObservedRelativePosition` or in its event-history fragment.
 - Reintroducing `PerceptionResult`, faculty-constructed attention effects, or the cross-faculty all-or-nothing
   aggregate commit.
+- Player-facing microphone state indicators or utterance-progress UI (SPCH-008).
+- Partial or speculative in-flight speech percepts; perception consumes completed segments only (SPCH-008).
 
 ## Acceptance Criteria
 
@@ -335,12 +372,18 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 10. Acceptance verifies routine periodic awareness of visible subjects creates no memories and only refreshes
     attention, so sustained presence does not flood memory.
 11. Acceptance verifies a focus change or clear during description production creates no stale reaction or memory.
-12. Acceptance verifies an NPC perceives a focused subject's relative position — distance and reciprocal directions —
-    on the first process frame after focus attaches, without waiting a polling interval.
-13. Acceptance verifies material relative-position changes, including changes driven by the NPC's own motion, create
-    new memories while immaterial changes create none, so sustained focus does not flood memory.
-14. Acceptance verifies re-focusing an unchanged subject creates no duplicate memory, while a subject whose relative
-    position materially changed in the meantime is noticed promptly on re-focus.
+ 12. Acceptance verifies an NPC perceives a focused subject's relative position — distance and reciprocal directions —
+     on the first process frame after focus attaches, without waiting a polling interval.
+ 13. Acceptance verifies material relative-position changes, including changes driven by the NPC's own motion, create
+     new memories while immaterial changes create none, so sustained focus does not flood memory.
+ 14. Acceptance verifies re-focusing an unchanged subject creates no duplicate memory, while a subject whose relative
+      position materially changed in the meantime is noticed promptly on re-focus.
+15. Acceptance verifies a speaker who pauses and continues is attributed exactly as continuous speech would be, with
+    the pause itself creating no memory, attention change, or perceptible event.
+16. Acceptance verifies speech-start, resume, and blank, failed, and abandoned automatic terminal settlements create
+     no speech perception, observation, attention change, fresh turn, wait effect, memory, or transcript, and that
+     attention membership at cue receipt alone decides which start and resume cues may hold the NPC's reasoning
+     while completed speech stays all-hearer and attention-independent.
 
 ### Technical Requirements
 
@@ -390,9 +433,10 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
    `IVision.ClearLookTarget`; AI-007 alone consumes the published attention snapshot as the separately composed
    post-attention gaze consumer.
 16. Dependency checks verify Mind's attended-speaker resolution uses only current-scene characters' composed `IVoice`
-    via `ICharacter.TryGetVoice()`, consistent with the established `SpeechPerception` precedent and adding no new
-     dependency, and that attendance membership uses retention-threshold snapshot presence rather than the context
-     threshold.
+     via `ICharacter.TryGetVoice()`, consistent with the established `SpeechPerception` precedent and adding no new
+      dependency, and that attendance membership uses retention-threshold snapshot presence rather than the context
+      threshold. The same retention-level membership — sampled once at cue receipt — gates speech-start/resume
+      suppression (AI-001, AI-002).
 17. Transition tests verify an effective `VisualCue?` target change publishes one immutable previous/current percept,
     same-cue assignment publishes none, and clear publishes `current -> null` without transferring gaze policy to
     sensing or perception.
@@ -424,32 +468,42 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
     cancellation, and exit.
 27. Stale-description tests verify that a cue freed, reparented, or replaced during an asynchronous `Describe` await
     emits no observation, through post-await revalidation of the cue and subject.
-28. Faculty tests verify `RelativePositionPerception` derives from `PollingActiveLookPerception` and emits durable
-    `ObservedRelativePosition` observations with exact key `vision.relative_position` carrying the canonical subject
-    `FullId`, full-3D `Distance`, and reciprocal `SubjectDirection`/`ObserverDirection` classifications; that record
-    equivalence compares by subject and both direction classifications with `Distance` equal within a small
-    numerical-noise tolerance distinct from the `MinimumDistanceChange` material-change test; that importance is
-    finite and valid but not authored; and that the observation contributes no attention effects and never requires a
-    fresh reasoning turn.
-29. Validation tests verify `MinimumDistanceChange` is finite and non-negative, both angular thresholds are finite and
-    satisfy `0 <= FrontAngleThresholdDegrees <= BackAngleThresholdDegrees <= 180`, and invalid authored or runtime
-    values fail before activation, mirroring the `PollingActiveLookPerception` interval-validation pattern.
-30. Timing tests verify the first sample runs on the next process frame after subject attach without waiting for the
-    poll interval, later examinations follow the inherited polling cadence, and polling stops on clear, replacement,
-    cancellation, and exit without stale emission.
-31. Emission tests verify the subject's first-ever valid state is emitted; that afterwards only a distance change
-    reaching `MinimumDistanceChange` or a direction change emits; that the last emitted state persists per canonical
-    subject across focus cycles; and that an unchanged refocus emits nothing while a materially changed refocus emits
-    immediately.
-32. Geometry tests verify distance uses the full 3D origins; that directions classify ground-plane bearings against
-    each participant's forward using the front and back thresholds and the lateral side, with zero horizontal
-    separation classifying as `Front`; that observer-motion-driven changes behave identically to subject motion; and
-    that no sample or emission occurs while either participant fails to resolve to a valid in-tree `ISpatial`
-    provider.
-33. Composition and dependency tests verify shared male and female NPC role templates compose
-    `RelativePositionPerception` as a deterministic direct Mind child alongside the existing three faculties with
-    independently owned state, that player composition remains unchanged, and that classification helpers live with
-    the faculty without a Vision dependency.
+ 28. Faculty tests verify `RelativePositionPerception` derives from `PollingActiveLookPerception` and emits durable
+     `ObservedRelativePosition` observations with exact key `vision.relative_position` carrying the canonical subject
+     `FullId`, full-3D `Distance`, and reciprocal `SubjectDirection`/`ObserverDirection` classifications; that record
+     equivalence compares by subject and both direction classifications with `Distance` equal within a small
+     numerical-noise tolerance distinct from the `MinimumDistanceChange` material-change test; that importance is
+     finite and valid but not authored; and that the observation contributes no attention effects and never requires a
+     fresh reasoning turn.
+ 29. Validation tests verify `MinimumDistanceChange` is finite and non-negative, both angular thresholds are finite and
+     satisfy `0 <= FrontAngleThresholdDegrees <= BackAngleThresholdDegrees <= 180`, and invalid authored or runtime
+     values fail before activation, mirroring the `PollingActiveLookPerception` interval-validation pattern.
+ 30. Timing tests verify the first sample runs on the next process frame after subject attach without waiting for the
+     poll interval, later examinations follow the inherited polling cadence, and polling stops on clear, replacement,
+     cancellation, and exit without stale emission.
+ 31. Emission tests verify the subject's first-ever valid state is emitted; that afterwards only a distance change
+     reaching `MinimumDistanceChange` or a direction change emits; that the last emitted state persists per canonical
+     subject across focus cycles; and that an unchanged refocus emits nothing while a materially changed refocus emits
+     immediately.
+ 32. Geometry tests verify distance uses the full 3D origins; that directions classify ground-plane bearings against
+     each participant's forward using the front and back thresholds and the lateral side, with zero horizontal
+     separation classifying as `Front`; that observer-motion-driven changes behave identically to subject motion; and
+     that no sample or emission occurs while either participant fails to resolve to a valid in-tree `ISpatial`
+     provider.
+ 33. Composition and dependency tests verify shared male and female NPC role templates compose
+       `RelativePositionPerception` as a deterministic direct Mind child alongside the existing three faculties with
+       independently owned state, that player composition remains unchanged, and that classification helpers live with
+       the faculty without a Vision dependency.
+ 34. Metadata tests verify `SpeechPerception` copies `SpeechGroupID`, `SegmentIndex`, and `Continued` unchanged from
+      each accepted `SpeechPercept` to its `ObservedSpeech`, that ungrouped publications carry none, and that
+      attribution, self filtering, freshness, and attention semantics are unchanged by grouping.
+35. Transient-signal tests verify speech-start — automatic qualified onset and manual press alike — resumed speech
+     activity, and non-published terminal settlements reach Mind's runtime cancellation and settlement path while
+     creating no percept, faculty input, observation, attention, freshness, wait, memory, or transcript effect. They
+     verify the manual start cue's synthetic token never becomes public grouping metadata and that start/resume
+     routing is attention-membership-gated once at cue receipt, source-generic, and never player-assumed. They verify
+     `Published` has no duplicate transient release and that no in-flight or partial speech perception contract
+     exists.
 
 ## References
 
@@ -459,6 +513,7 @@ deterministic attention, ordered memory, existing speech history, and eye visibi
 - [VISION-001: Eyes](../../vision/001-eyes/index.md)
 - [SPCH-006: Hearing Component](../../speech/006-hearing/index.md)
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
+- [SPCH-008: Automatic Voice Detection](../../speech/008-automatic-voice-detection/index.md)
 - [CHAR-002: Character Root](../../character/002-character-root/index.md)
 - [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)

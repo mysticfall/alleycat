@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using AlleyCat.Mind.AI.Prompting;
 using Godot;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
 
@@ -35,18 +36,18 @@ public partial class HistoryTool : AgentTool
 
         AgentToolSession session = Session!;
         IReadOnlyList<AgentObservation> timeline = session.Mind.GetObservationTimelineSnapshot();
-        IEnumerable<AgentObservation> records = count is > 0
-            ? timeline.Skip(Math.Max(0, timeline.Count - count.Value))
-            : timeline;
-        IReadOnlyList<AgentObservation> selected = [.. records];
+        IReadOnlyList<ContinuationProjection.Event> projected = ObservationHistoryRenderer.Project(timeline);
+        IReadOnlyList<ContinuationProjection.Event> selected = count is > 0
+            ? [.. projected.Skip(Math.Max(0, projected.Count - count.Value))]
+            : projected;
         if (selected.Count == 0)
         {
             return new AgentToolResult("You remember no past events yet.");
         }
 
         string history = session.HistoryRenderer is { } renderer
-            ? await renderer.RenderAsync(selected)
-            : string.Join('\n', selected.Select(static observation => observation.TypeKey));
+            ? await renderer.RenderProjectedAsync(selected)
+            : string.Join('\n', selected.Select(static @event => @event.Observation.TypeKey));
         return new AgentToolResult(
             $"{selected.Count.ToString(CultureInfo.InvariantCulture)} past event(s), oldest first:\n{history}");
     }

@@ -5,7 +5,9 @@ using Godot;
 
 namespace AlleyCat.Speech;
 
-/// <summary>Hearing-modality-owned speech sense that snapshots accepted voice publications.</summary>
+/// <summary>
+/// Hearing-modality-owned speech sense that snapshots accepted completed speech without interpreting it.
+/// </summary>
 [GlobalClass]
 public partial class Hearing : Node, IHearing
 {
@@ -25,7 +27,10 @@ public partial class Hearing : Node, IHearing
     public override void _ExitTree() => RemoveFromGroup(IHearing.GroupName);
 
     /// <inheritdoc />
-    public void ReceiveVoice(string speech, IVoice source)
+    public void ReceiveVoice(string speech, IVoice source) => ReceiveVoice(speech, source, null);
+
+    /// <inheritdoc />
+    public void ReceiveVoice(string speech, IVoice source, SpeechSegmentMetadata? metadata)
     {
         ArgumentNullException.ThrowIfNull(source);
         if (string.IsNullOrWhiteSpace(speech))
@@ -33,6 +38,6 @@ public partial class Hearing : Node, IHearing
             return;
         }
 
-        Perceived?.Invoke(new SpeechPercept(speech, source.Id));
+        Perceived?.Invoke(new SpeechPercept(speech, source.Id, metadata));
     }
 }

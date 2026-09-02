@@ -57,6 +57,42 @@ public sealed class PerceptSensingIntegrationTests
         }
     }
 
+    /// <summary>Voice broadcasts grouped automatic segments through Hearing into an immutable percept snapshot.</summary>
+    [Fact]
+    public async Task Voice_GroupedSpeechPublication_ReachesHearingWithUnchangedImmutableMetadata()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var root = new Node { Name = "GroupedSpeechFixture" };
+        var voice = new PublishingTestVoice();
+        var hearing = new Hearing();
+        root.AddChild(voice);
+        root.AddChild(hearing);
+        AddToTree(tree, root);
+        await TestUtils.WaitForFramesAsync(tree, 2);
+
+        try
+        {
+            List<SpeechPercept> received = [];
+            hearing.Perceived += percept => received.Add(Assert.IsType<SpeechPercept>(percept));
+            var metadata = new SpeechSegmentMetadata("automatic-group", 1);
+
+            voice.PublishCompletedSpeech("  continued automatic segment  ", metadata);
+
+            SpeechPercept percept = Assert.Single(received);
+            Assert.Equal("continued automatic segment", percept.Content);
+            Assert.Equal(voice.Id, percept.SourceVoiceID);
+            Assert.Equal("automatic-group", percept.SpeechGroupID);
+            Assert.Equal(1, percept.SegmentIndex);
+            Assert.True(percept.Continued);
+            Assert.All(typeof(SpeechPercept).GetProperties(), property => Assert.False(property.CanWrite));
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
     /// <summary>Eyes emits one ordered identity snapshot per elapsed interval without delayed-frame catch-up.</summary>
     [Fact]
     public async Task Eyes_PeriodicSurvey_PublishesOneOrderedIdentityOnlySnapshotWithoutCatchUp()
@@ -311,6 +347,12 @@ public sealed class PerceptSensingIntegrationTests
 
         public ValueTask SpeakCancellableAsync(string speech, CancellationToken cancellationToken = default)
             => SpeakAsync(speech, cancellationToken);
+    }
+
+    private sealed partial class PublishingTestVoice : Voice
+    {
+        public void PublishCompletedSpeech(string speech, SpeechSegmentMetadata metadata)
+            => PublishSpeech(speech, metadata);
     }
 
     private sealed class TestCharacter(string id, IVoice voice) : ICharacter

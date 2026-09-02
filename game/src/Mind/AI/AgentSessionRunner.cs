@@ -1,5 +1,4 @@
 using System.ClientModel;
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -48,12 +47,19 @@ internal sealed class AgentSessionRunner
     private readonly TimeSpan[] _retryDelays;
     private readonly int _maxTransportRetries;
     private readonly IInvalidResponseRecoveryPolicy _invalidResponseRecoveryPolicy;
-    private readonly ConcurrentQueue<string> _pendingInjections = new();
     private readonly HashSet<string> _callIds = new(StringComparer.Ordinal);
-    private readonly Lock _freshInjectionGateLock = new();
+    private readonly Lock _stateLock = new();
     private TaskCompletionSource _freshInjectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private int _pendingFreshInjections;
-    private CancellationTokenSource? _phaseCancellation;
+    private readonly Dictionary<FreshInjectionExpectation, ExpectationState> _expectations = [];
+    private readonly List<PendingInjection> _nextUserTurn = [];
+    private readonly List<PendingInjection> _currentUserTurn = [];
+    private readonly Dictionary<AgentSessionInjectionKey, long> _acceptedRevisions = [];
+    private readonly Dictionary<AgentSessionInjectionKey, long> _reconciledRevisions = [];
+    private readonly List<ChatMessage> _acceptedTranscript = [];
+    private int _legacyFreshExpectationCount;
+    private long _nextExpectationId;
+    private long _invalidationEpoch;
+    private ActivePhaseState? _activePhase;
     private int _freshInvalidation;
     private volatile bool _ended;
 
@@ -103,7 +109,13 @@ internal sealed class AgentSessionRunner
             return;
         }
 
-        _pendingInjections.Enqueue(injectedMessage);
+        lock (_stateLock)
+        {
+            if (!_ended)
+            {
+                _nextUserTurn.Add(PendingInjection.Anonymous(injectedMessage));
+            }
+        }
     }
 
     /// <summary>
@@ -131,22 +143,57 @@ internal sealed class AgentSessionRunner
     /// other caller cancels the active phase co-operatively at once.
     /// </summary>
     public void InvalidateForFreshTurn(bool expectFreshInjection, bool cancelActivePhase)
+        => InvalidateForFreshTurnCore(expectFreshInjection, cancelActivePhase, freshSpeechKeys: null);
+
+    /// <summary>
+    /// Records a fresh-turn invalidation (AI-002 TR-40) whose active-phase cancellation is scoped by the fresh
+    /// delivery's speech keys (TR-26): an admitted arbitrated phase whose admission beat every supplied key is
+    /// never cancelled by the matching player-speech lifecycle, while an empty, absent, or only partially matching
+    /// key set is unrelated freshness and cancels with ordinary pre-hand-off authority. Keying never changes the
+    /// epoch, stale-batch latch, or rendering-barrier semantics.
+    /// </summary>
+    /// <param name="expectFreshInjection">Whether the caller will deliver the fresh payload through
+    /// <see cref="QueueFreshInjection"/> and release it through <see cref="AbandonFreshInjection"/>.</param>
+    /// <param name="freshSpeechKeys">Continuation keys of every pending speech hold the fresh window satisfies, or
+    /// null/empty when the window carries no matching speech lifecycle.</param>
+    internal void InvalidateForFreshTurn(
+        bool expectFreshInjection,
+        IReadOnlySet<AgentSessionContinuationKey>? freshSpeechKeys)
+        => InvalidateForFreshTurnCore(expectFreshInjection, cancelActivePhase: true, freshSpeechKeys);
+
+    private void InvalidateForFreshTurnCore(
+        bool expectFreshInjection,
+        bool cancelActivePhase,
+        IReadOnlySet<AgentSessionContinuationKey>? freshSpeechKeys)
     {
         if (_ended)
         {
             return;
         }
 
-        Volatile.Write(ref _freshInvalidation, 1);
-        if (expectFreshInjection)
+        bool cancel;
+        lock (_stateLock)
         {
-            lock (_freshInjectionGateLock)
+            if (_ended)
             {
-                ExpectFreshInjectionLocked();
+                return;
             }
+
+            AdvanceInvalidationLocked();
+            if (expectFreshInjection)
+            {
+                bool wasHeld = HasPendingFreshExpectationLocked();
+                _legacyFreshExpectationCount++;
+                if (!wasHeld)
+                {
+                    ResetFreshInjectionGateLocked();
+                }
+            }
+
+            cancel = cancelActivePhase && !IsProtectedByFreshSpeechKeysLocked(freshSpeechKeys);
         }
 
-        if (cancelActivePhase)
+        if (cancel)
         {
             CancelActivePhase();
         }
@@ -166,8 +213,16 @@ internal sealed class AgentSessionRunner
             return;
         }
 
-        _pendingInjections.Enqueue(injectedMessage);
-        ReleaseFreshInjectionExpectation();
+        lock (_stateLock)
+        {
+            if (_ended)
+            {
+                return;
+            }
+
+            _nextUserTurn.Add(PendingInjection.Anonymous(injectedMessage));
+            ReleaseLegacyFreshExpectationLocked();
+        }
     }
 
     /// <summary>
@@ -182,7 +237,179 @@ internal sealed class AgentSessionRunner
             return;
         }
 
-        ReleaseFreshInjectionExpectation();
+        lock (_stateLock)
+        {
+            if (!_ended)
+            {
+                ReleaseLegacyFreshExpectationLocked();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registers a keyed continuation barrier, invalidating the current phase before the matching rendered input is
+    /// known. The returned lease belongs to this runner and may settle exactly once.
+    /// </summary>
+    /// <remarks>
+    /// A cue that linearises after an admission-arbitrated submission was admitted does not cancel that phase
+    /// (AI-002 TR-25/26): its exact speech key is associated with the admitted phase so the protected submission
+    /// settles naturally, while every other phase — including an arbitrated submission still awaiting admission —
+    /// is cancelled co-operatively at once.
+    /// </remarks>
+    internal FreshInjectionExpectation RegisterSpeechContinuation(AgentSessionContinuationKey continuation)
+    {
+        if (continuation.Revision < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(continuation));
+        }
+
+        FreshInjectionExpectation expectation;
+        CancellationTokenSource? cancellationToFire = null;
+        lock (_stateLock)
+        {
+            expectation = new FreshInjectionExpectation(++_nextExpectationId, continuation);
+            if (_ended)
+            {
+                return expectation;
+            }
+
+            bool wasHeld = HasPendingFreshExpectationLocked();
+            _expectations.Add(expectation, ExpectationState.Pending);
+            AdvanceInvalidationLocked();
+            if (!wasHeld)
+            {
+                ResetFreshInjectionGateLocked();
+            }
+
+            if (_activePhase is { } phase)
+            {
+                if (phase.Admission == ToolPhaseAdmission.Admitted)
+                {
+                    // Admission completed before this cue linearised (AI-002 TR-56): the submission is protected
+                    // for its whole pipeline life, so the cue holds the next phase without cancelling it.
+                    _ = phase.ProtectedBySpeechKeys.Add(continuation);
+                }
+                else
+                {
+                    cancellationToFire = phase.Cancellation;
+                }
+            }
+        }
+
+        // Cancellation always happens outside the state lock (AI-002 TR-56 normative onset path).
+        if (cancellationToFire is not null)
+        {
+            TryCancelQuietly(cancellationToFire);
+        }
+
+        return expectation;
+    }
+
+    /// <summary>
+    /// Arbitrates the admission transaction of an admission-arbitrated tool phase (AI-002 TR-25/56, TR-62)
+    /// atomically under the state lock: admission is refused — committing nothing — while any attended cue hold is
+    /// pending or the session no longer owns a pending-arbitration phase; otherwise the caller's queue admission
+    /// commits inside this critical section and the active phase is marked admitted, so later matching cues protect
+    /// rather than cancel it.
+    /// </summary>
+    /// <param name="commit">Arbitrated pipeline's queue admission to run inside the lock; it must not throw.</param>
+    /// <returns>Whether the submission was admitted.</returns>
+    internal bool TryAdmitToolPhase(Action commit)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+
+        lock (_stateLock)
+        {
+            if (_ended
+                || _activePhase is not { Admission: ToolPhaseAdmission.Pending } arbitratedPhase
+                || HasPendingFreshExpectationLocked())
+            {
+                return false;
+            }
+
+            commit();
+            arbitratedPhase.Admission = ToolPhaseAdmission.Admitted;
+            return true;
+        }
+    }
+
+    /// <summary>Queues a generic injection, replacing a still-mutable keyed turn or reconciling accepted history.</summary>
+    internal void QueueOrReplaceInjection(AgentSessionInjection injection)
+    {
+        ArgumentNullException.ThrowIfNull(injection);
+        ValidateInjection(injection);
+        lock (_stateLock)
+        {
+            if (!_ended)
+            {
+                _ = QueueOrReplaceInjectionLocked(injection);
+            }
+        }
+    }
+
+    /// <summary>Settles an owned continuation lease only when the supplied injection covers its awaited revision.</summary>
+    internal void CompleteFreshExpectation(FreshInjectionExpectation expectation, AgentSessionInjection injection)
+    {
+        ArgumentNullException.ThrowIfNull(expectation);
+        ArgumentNullException.ThrowIfNull(injection);
+        ValidateInjection(injection);
+        lock (_stateLock)
+        {
+            if (_ended
+                || !_expectations.TryGetValue(expectation, out ExpectationState state)
+                || state != ExpectationState.Pending
+                || injection.Kind != AgentSessionInjectionKind.CurrentUserTurn
+                || injection.Key != expectation.Continuation.Key
+                || injection.Revision < expectation.Continuation.Revision)
+            {
+                return;
+            }
+
+            _ = QueueOrReplaceInjectionLocked(injection);
+            // The caller owns identity matching. A projection can cover several continuations, but each opaque lease
+            // must be settled explicitly so a later segment cannot release an unrelated outstanding hold merely
+            // because its model-facing revision is newer.
+            _expectations[expectation] = ExpectationState.Settled;
+
+            ReleaseFreshGateIfSettledLocked();
+        }
+    }
+
+    /// <summary>Abandons an owned lease without fabricating input; duplicate and foreign abandonment is harmless.</summary>
+    internal void AbandonFreshExpectation(FreshInjectionExpectation expectation)
+    {
+        ArgumentNullException.ThrowIfNull(expectation);
+        lock (_stateLock)
+        {
+            if (!_ended
+                && _expectations.TryGetValue(expectation, out ExpectationState state)
+                && state == ExpectationState.Pending)
+            {
+                _expectations[expectation] = ExpectationState.Abandoned;
+                ReleaseFreshGateIfSettledLocked();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Settles an owned continuation lease whose rendered observation text reached the model through a wait result
+    /// (AI-002 TR-57): the wait result is the sole delivery channel, so no replacement injection is queued, and the
+    /// fresh gate releases once every pending expectation has settled. Duplicate and foreign settlement is
+    /// harmless.
+    /// </summary>
+    internal void SettleFreshExpectationThroughWaitDelivery(FreshInjectionExpectation expectation)
+    {
+        ArgumentNullException.ThrowIfNull(expectation);
+        lock (_stateLock)
+        {
+            if (!_ended
+                && _expectations.TryGetValue(expectation, out ExpectationState state)
+                && state == ExpectationState.Pending)
+            {
+                _expectations[expectation] = ExpectationState.Settled;
+                ReleaseFreshGateIfSettledLocked();
+            }
+        }
     }
 
     /// <summary>
@@ -191,9 +418,30 @@ internal sealed class AgentSessionRunner
     /// </summary>
     private void CancelActivePhase()
     {
+        CancellationTokenSource? cancellation = ReadActivePhaseCancellation();
+        if (cancellation is not null)
+        {
+            TryCancelQuietly(cancellation);
+        }
+    }
+
+    /// <summary>
+    /// Reads the active phase's cancellation source under the state lock so cancellation itself always happens
+    /// outside it (AI-002 TR-56: the onset path takes only the runner state lock and cancels after releasing it).
+    /// </summary>
+    private CancellationTokenSource? ReadActivePhaseCancellation()
+    {
+        lock (_stateLock)
+        {
+            return _activePhase?.Cancellation;
+        }
+    }
+
+    private static void TryCancelQuietly(CancellationTokenSource cancellation)
+    {
         try
         {
-            Volatile.Read(ref _phaseCancellation)?.Cancel();
+            cancellation.Cancel();
         }
         catch (ObjectDisposedException)
         {
@@ -202,22 +450,82 @@ internal sealed class AgentSessionRunner
         }
     }
 
-    private void ExpectFreshInjectionLocked()
+    /// <summary>
+    /// Registers one active phase atomically under the state lock (AI-002 TR-56): registration and cue
+    /// linearisation become mutually exclusive, closing the write-then-observe race where a phase began after a
+    /// pending speech hold or fresh invalidation was recorded but before its cancellation source was observable.
+    /// A phase refuses to start while any pending expectation or stale latch blocks the session's next work.
+    /// </summary>
+    /// <returns>Whether the phase was registered; false means the caller must refuse to start it.</returns>
+    private bool TryBeginPhase(ActivePhaseState phase, CancellationToken lifetimeToken)
     {
-        if (_pendingFreshInjections++ == 0)
+        ArgumentNullException.ThrowIfNull(phase);
+        lock (_stateLock)
         {
-            _freshInjectionGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (lifetimeToken.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            if (_ended || Volatile.Read(ref _freshInvalidation) != 0 || HasPendingFreshExpectationLocked())
+            {
+                return false;
+            }
+
+            _activePhase = phase;
+            return true;
         }
     }
 
-    private void ReleaseFreshInjectionExpectation()
+    /// <summary>Detaches a completed phase; only the phase that is still registered is detached.</summary>
+    private void EndActivePhase(ActivePhaseState phase)
     {
-        lock (_freshInjectionGateLock)
+        lock (_stateLock)
         {
-            if (_pendingFreshInjections > 0 && --_pendingFreshInjections == 0)
+            if (ReferenceEquals(_activePhase, phase))
             {
-                _ = _freshInjectionGate.TrySetResult();
+                _activePhase = null;
             }
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the active phase is an admitted arbitrated submission protected by every key of the fresh
+    /// delivery (AI-002 TR-26/40): protection applies only to the matching player-speech lifecycle, so an absent,
+    /// empty, or partially matching key set is unrelated freshness and keeps ordinary cancellation authority.
+    /// </summary>
+    /// <remarks>Must be called while holding <see cref="_stateLock"/>.</remarks>
+    private bool IsProtectedByFreshSpeechKeysLocked(IReadOnlySet<AgentSessionContinuationKey>? freshSpeechKeys)
+        => _activePhase is { Admission: ToolPhaseAdmission.Admitted, ProtectedBySpeechKeys.Count: > 0 } phase
+            && freshSpeechKeys is { Count: > 0 }
+            && freshSpeechKeys.All(phase.ProtectedBySpeechKeys.Contains);
+
+    private void AdvanceInvalidationLocked()
+    {
+        _invalidationEpoch++;
+        Volatile.Write(ref _freshInvalidation, 1);
+    }
+
+    private bool HasPendingFreshExpectationLocked()
+        => _legacyFreshExpectationCount > 0 || _expectations.Values.Any(state => state == ExpectationState.Pending);
+
+    private void ResetFreshInjectionGateLocked()
+        => _freshInjectionGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private void ReleaseLegacyFreshExpectationLocked()
+    {
+        if (_legacyFreshExpectationCount > 0)
+        {
+            _legacyFreshExpectationCount--;
+            ReleaseFreshGateIfSettledLocked();
+        }
+    }
+
+    private void ReleaseFreshGateIfSettledLocked()
+    {
+        if (!HasPendingFreshExpectationLocked())
+        {
+            _ = _freshInjectionGate.TrySetResult();
         }
     }
 
@@ -228,9 +536,11 @@ internal sealed class AgentSessionRunner
     private async Task WaitForFreshInjectionsAsync(CancellationToken lifetimeToken)
     {
         Task gate;
-        lock (_freshInjectionGateLock)
+        lock (_stateLock)
         {
-            gate = _pendingFreshInjections > 0 ? _freshInjectionGate.Task : Task.CompletedTask;
+            gate = _legacyFreshExpectationCount > 0 || _expectations.Values.Any(state => state == ExpectationState.Pending)
+                ? _freshInjectionGate.Task
+                : Task.CompletedTask;
         }
 
         if (gate.IsCompleted)
@@ -249,7 +559,11 @@ internal sealed class AgentSessionRunner
     public async Task RunAsync(CancellationToken lifetimeToken)
     {
         // Session-scoped transient protocol state, discarded at session end (AI-002 TR-15).
-        List<ChatMessage> transcript = [.. _runInputMessages];
+        lock (_stateLock)
+        {
+            _acceptedTranscript.AddRange(_runInputMessages);
+        }
+
         int requestCount = 0;
         int consecutiveInvalidResponseCount = 0;
         _logger.LogInformation("Agent session starting with {ToolCount} tool(s).", _functions.Count);
@@ -257,19 +571,21 @@ internal sealed class AgentSessionRunner
         {
             while (!lifetimeToken.IsCancellationRequested)
             {
-                DrainPendingInjections(transcript);
                 while (Interlocked.Exchange(ref _freshInvalidation, 0) != 0)
                 {
                     // A fresh invalidation makes this boundary's request the replacement request (AI-002 TR-40):
                     // it waits behind every still-rendering fresh payload, then drains the coalesced injection
                     // before leaving. A second signal during the drain re-enters the loop.
                     await WaitForFreshInjectionsAsync(lifetimeToken);
-                    DrainPendingInjections(transcript);
                 }
 
                 requestCount++;
+                IReadOnlyList<ChatMessage> requestTranscript = PrepareRequestTranscript(out long requestEpoch);
 
-                ChatResponse? response = await RequestWithTransportRetryAsync(transcript, requestCount, lifetimeToken);
+                ChatResponse? response = await RequestWithTransportRetryAsync(
+                    requestTranscript,
+                    requestCount,
+                    lifetimeToken);
                 if (response is null)
                 {
                     // Interrupted mid-generation — by fresh-turn invalidation or lifetime — so partial assistant
@@ -301,7 +617,13 @@ internal sealed class AgentSessionRunner
 
                 // A response only resets the recovery streak after every shape, call-ID, and argument check passed.
                 consecutiveInvalidResponseCount = 0;
-                transcript.AddRange(response.Messages);
+                if (!TryAcceptResponse(response, requestEpoch, lifetimeToken))
+                {
+                    // Registration won while validation was running. The mutable turn remains available for its
+                    // replacement request and the response never reaches accepted history (AI-002 TR-59).
+                    continue;
+                }
+
                 List<AIContent> results = new(calls.Length);
                 foreach (FunctionCallContent call in calls)
                 {
@@ -322,7 +644,10 @@ internal sealed class AgentSessionRunner
                     results.Add(new FunctionResultContent(call.CallId, await InvokeToolAsync(call, lifetimeToken)));
                 }
 
-                transcript.Add(new ChatMessage(ChatRole.Tool, results));
+                lock (_stateLock)
+                {
+                    _acceptedTranscript.Add(new ChatMessage(ChatRole.Tool, results));
+                }
             }
 
             _logger.LogInformation("Agent session ended after {RequestCount} request(s).", requestCount);
@@ -334,8 +659,13 @@ internal sealed class AgentSessionRunner
         }
         finally
         {
-            _ended = true;
-            transcript.Clear();
+            lock (_stateLock)
+            {
+                _ended = true;
+                _nextUserTurn.Clear();
+                _currentUserTurn.Clear();
+                _acceptedTranscript.Clear();
+            }
         }
     }
 
@@ -345,7 +675,20 @@ internal sealed class AgentSessionRunner
         CancellationToken lifetimeToken)
     {
         var recoveryCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
-        Volatile.Write(ref _phaseCancellation, recoveryCancellation);
+        var phase = new ActivePhaseState(
+            AgentSessionPhaseKind.InvalidResponseBackoff,
+            toolName: null,
+            callId: null,
+            recoveryCancellation);
+        if (!TryBeginPhase(phase, lifetimeToken))
+        {
+            recoveryCancellation.Dispose();
+            lifetimeToken.ThrowIfCancellationRequested();
+            // Superseded by a pending hold or fresh invalidation before the backoff began (AI-002 TR-40 versus
+            // TR-43): recovery yields without consuming the invalid-response budget.
+            return false;
+        }
+
         try
         {
             lifetimeToken.ThrowIfCancellationRequested();
@@ -384,42 +727,44 @@ internal sealed class AgentSessionRunner
         }
         finally
         {
-            if (ReferenceEquals(Volatile.Read(ref _phaseCancellation), recoveryCancellation))
-            {
-                Volatile.Write(ref _phaseCancellation, null);
-            }
-
+            EndActivePhase(phase);
             recoveryCancellation.Dispose();
         }
     }
 
     private async Task<ChatResponse?> RequestWithTransportRetryAsync(
-        List<ChatMessage> transcript,
+        IReadOnlyList<ChatMessage> transcript,
         int requestCount,
         CancellationToken lifetimeToken)
     {
         for (int attempt = 0; ; attempt++)
         {
             lifetimeToken.ThrowIfCancellationRequested();
-            var phase = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
-            Volatile.Write(ref _phaseCancellation, phase);
+            var phaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+            var phase = new ActivePhaseState(
+                AgentSessionPhaseKind.ModelRequest,
+                toolName: null,
+                callId: null,
+                phaseCancellation);
+            if (!TryBeginPhase(phase, lifetimeToken))
+            {
+                phaseCancellation.Dispose();
+                lifetimeToken.ThrowIfCancellationRequested();
+                // A pending speech hold or fresh-turn invalidation superseded this attempt before or between
+                // transport retries (AI-002 TR-40/56 versus TR-43): abandon it — the loop boundary drains the
+                // fresh payload and issues the replacement request — without consuming the transport-retry budget.
+                _logger.LogDebug(
+                    "Agent session request {RequestCount} superseded by a fresh-turn invalidation.",
+                    requestCount);
+                return null;
+            }
+
             try
             {
-                if (Volatile.Read(ref _freshInvalidation) != 0)
-                {
-                    // A fresh-turn invalidation superseded this attempt before or between transport retries
-                    // (AI-002 TR-40 versus TR-43): abandon it — the loop boundary drains the fresh payload and
-                    // issues the replacement request — without consuming the transport-retry budget.
-                    _logger.LogDebug(
-                        "Agent session request {RequestCount} superseded by a fresh-turn invalidation.",
-                        requestCount);
-                    return null;
-                }
-
                 _logger.LogDebug("Agent session request {RequestCount} starting.", requestCount);
-                ChatResponse response = await _chatClient.GetResponseAsync(transcript, _chatOptions, phase.Token);
+                ChatResponse response = await _chatClient.GetResponseAsync(transcript, _chatOptions, phaseCancellation.Token);
                 lifetimeToken.ThrowIfCancellationRequested();
-                if (phase.IsCancellationRequested || Volatile.Read(ref _freshInvalidation) != 0)
+                if (phaseCancellation.IsCancellationRequested || Volatile.Read(ref _freshInvalidation) != 0)
                 {
                     // Cancelled generation — or a non-cooperative provider returning after invalidation — is
                     // discarded whole: the stale response is never validated, appended, or executed (AI-002 TR-40).
@@ -433,7 +778,7 @@ internal sealed class AgentSessionRunner
             {
                 throw;
             }
-            catch (OperationCanceledException) when (phase.Token.IsCancellationRequested)
+            catch (OperationCanceledException) when (phaseCancellation.Token.IsCancellationRequested)
             {
                 // Self-inflicted phase cancellation — issued only by a fresh-turn invalidation, always after the
                 // stale latch is set and always before its own cancellation can arrive — is the expected
@@ -442,7 +787,7 @@ internal sealed class AgentSessionRunner
                 _logger.LogDebug("Agent session request {RequestCount} interrupted.", requestCount);
                 return null;
             }
-            catch (Exception exception) when (attempt < _maxTransportRetries && IsTransientTransportFailure(exception, phase.Token))
+            catch (Exception exception) when (attempt < _maxTransportRetries && IsTransientTransportFailure(exception, phaseCancellation.Token))
             {
                 TimeSpan delay = _retryDelays[Math.Min(attempt, _retryDelays.Length - 1)];
                 _logger.LogWarning(
@@ -451,7 +796,23 @@ internal sealed class AgentSessionRunner
                     requestCount,
                     delay);
                 var retryCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
-                Volatile.Write(ref _phaseCancellation, retryCancellation);
+                var retryPhase = new ActivePhaseState(
+                    AgentSessionPhaseKind.TransportRetryBackoff,
+                    toolName: null,
+                    callId: null,
+                    retryCancellation);
+                if (!TryBeginPhase(retryPhase, lifetimeToken))
+                {
+                    retryCancellation.Dispose();
+                    lifetimeToken.ThrowIfCancellationRequested();
+                    // The pending hold or invalidation superseded the pending retry (AI-002 TR-40/56): the stale
+                    // request is never re-issued and the transport-retry budget is not consumed by it.
+                    _logger.LogDebug(
+                        "Agent session request {RequestCount} retry superseded by a fresh-turn invalidation.",
+                        requestCount);
+                    return null;
+                }
+
                 try
                 {
                     await Task.Delay(delay, retryCancellation.Token);
@@ -467,15 +828,11 @@ internal sealed class AgentSessionRunner
                 }
                 finally
                 {
-                    if (ReferenceEquals(Volatile.Read(ref _phaseCancellation), retryCancellation))
-                    {
-                        Volatile.Write(ref _phaseCancellation, null);
-                    }
-
+                    EndActivePhase(retryPhase);
                     retryCancellation.Dispose();
                 }
             }
-            catch (Exception exception) when (IsTransientTransportFailure(exception, phase.Token))
+            catch (Exception exception) when (IsTransientTransportFailure(exception, phaseCancellation.Token))
             {
                 // Retry exhaustion ends the session through the contained failure path (AI-002 TR-43): the failure
                 // is never surfaced to the agent as a tool result or transcript entry.
@@ -491,12 +848,8 @@ internal sealed class AgentSessionRunner
             }
             finally
             {
-                if (ReferenceEquals(Volatile.Read(ref _phaseCancellation), phase))
-                {
-                    Volatile.Write(ref _phaseCancellation, null);
-                }
-
-                phase.Dispose();
+                EndActivePhase(phase);
+                phaseCancellation.Dispose();
             }
         }
     }
@@ -506,12 +859,39 @@ internal sealed class AgentSessionRunner
         CancellationToken lifetimeToken)
     {
         AIFunction function = _functions[call.Name];
-        var phase = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
-        Volatile.Write(ref _phaseCancellation, phase);
+        var phaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+        // Whether this invocation executes under admission arbitration is decided by its composition-registered
+        // per-function phase policy alone (AI-002 TR-62) — never by inspecting the function's identity. An
+        // arbitrated invocation registers as a pending-admission phase (AI-002 TR-25/56; SPCH-005 TR-37): the
+        // submission's pipeline admission transaction admits exactly this phase, and a cue linearising first
+        // either cancels it here — tool selection alone stays ordinary cancellable work — or refuses that
+        // admission outright.
+        var phase = new ActivePhaseState(
+            AgentSessionPhaseKind.Tool,
+            function.Name,
+            call.CallId,
+            phaseCancellation,
+            function is PhasePolicyBoundFunction { Policy.AdmissionArbitrated: true }
+                ? ToolPhaseAdmission.Pending
+                : ToolPhaseAdmission.NotApplicable);
+
+        if (!TryBeginPhase(phase, lifetimeToken))
+        {
+            phaseCancellation.Dispose();
+            lifetimeToken.ThrowIfCancellationRequested();
+            // The originating response is stale (AI-002 TR-40/56): this call never starts and its assistant call
+            // ID still receives exactly one canonical cancellation result so the appended exchange stays
+            // protocol-valid.
+            _logger.LogDebug(
+                "Agent session tool '{ToolName}' skipped: its response batch was invalidated.",
+                call.Name);
+            return CancelledActionResult;
+        }
+
         try
         {
             _logger.LogDebug("Agent session tool '{ToolName}' starting.", function.Name);
-            return await function.InvokeAsync(new AIFunctionArguments(call.Arguments), phase.Token);
+            return await function.InvokeAsync(new AIFunctionArguments(call.Arguments), phaseCancellation.Token);
         }
         catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
         {
@@ -535,41 +915,215 @@ internal sealed class AgentSessionRunner
         finally
         {
             _logger.LogDebug("Agent session tool '{ToolName}' completed.", function.Name);
-            if (ReferenceEquals(Volatile.Read(ref _phaseCancellation), phase))
-            {
-                Volatile.Write(ref _phaseCancellation, null);
-            }
-
-            phase.Dispose();
+            EndActivePhase(phase);
+            phaseCancellation.Dispose();
         }
     }
 
     /// <summary>
-    /// Drains every pending payload in FIFO signalling order into exactly one injected user message (AI-002
-    /// TR-39/40): ordinary and fresh windows coalesce at the boundary, and the message precedes the next request.
+    /// Freezes the accepted transcript plus the current mutable user turn for one provider request. A keyed update
+    /// can still replace that turn until <see cref="TryAcceptResponse"/> linearises the assistant append.
     /// </summary>
-    private void DrainPendingInjections(List<ChatMessage> transcript)
+    private IReadOnlyList<ChatMessage> PrepareRequestTranscript(out long requestEpoch)
     {
-        if (_pendingInjections.IsEmpty)
+        lock (_stateLock)
         {
-            return;
+            if (_currentUserTurn.Count == 0 && _nextUserTurn.Count > 0)
+            {
+                _currentUserTurn.AddRange(_nextUserTurn);
+                _nextUserTurn.Clear();
+            }
+
+            List<ChatMessage> request = [.. _acceptedTranscript];
+            if (_currentUserTurn.Count > 0)
+            {
+                request.Add(new ChatMessage(ChatRole.User, RenderTurn(_currentUserTurn)));
+            }
+
+            requestEpoch = _invalidationEpoch;
+            return request;
+        }
+    }
+
+    /// <summary>
+    /// Atomically decides whether validated assistant output belongs to the request's epoch. If it does, the mutable
+    /// current user turn and assistant batch become append-only accepted history together (AI-002 TR-58/59).
+    /// </summary>
+    private bool TryAcceptResponse(ChatResponse response, long requestEpoch, CancellationToken lifetimeToken)
+    {
+        lock (_stateLock)
+        {
+            if (lifetimeToken.IsCancellationRequested || _ended || requestEpoch != _invalidationEpoch)
+            {
+                return false;
+            }
+
+            if (_currentUserTurn.Count > 0)
+            {
+                _acceptedTranscript.Add(new ChatMessage(ChatRole.User, RenderTurn(_currentUserTurn)));
+                foreach (PendingInjection injection in _currentUserTurn)
+                {
+                    if (injection.Key is AgentSessionInjectionKey key)
+                    {
+                        _acceptedRevisions[key] = injection.Revision;
+                    }
+                }
+
+                _currentUserTurn.Clear();
+            }
+
+            _acceptedTranscript.AddRange(response.Messages);
+            return true;
+        }
+    }
+
+    private bool QueueOrReplaceInjectionLocked(AgentSessionInjection injection)
+    {
+        bool hasAcceptedRevision = _acceptedRevisions.TryGetValue(injection.Key, out long acceptedRevision);
+        if (injection.Kind == AgentSessionInjectionKind.Reconciliation || hasAcceptedRevision)
+        {
+            if ((hasAcceptedRevision && injection.Revision <= acceptedRevision)
+                || (_reconciledRevisions.TryGetValue(injection.Key, out long reconciledRevision)
+                    && injection.Revision <= reconciledRevision))
+            {
+                return false;
+            }
+
+            _nextUserTurn.Add(PendingInjection.Reconciliation(injection));
+            _reconciledRevisions[injection.Key] = injection.Revision;
+            return true;
         }
 
-        List<string> payloads = [];
-        while (_pendingInjections.TryDequeue(out string? injectedMessage))
+        return TryReplaceMutableInjectionLocked(_currentUserTurn, injection, out bool replacedCurrent)
+            ? replacedCurrent
+            : ReplaceOrAppendMutableInjectionLocked(_nextUserTurn, injection);
+    }
+
+    private static bool TryReplaceMutableInjectionLocked(
+        List<PendingInjection> turn,
+        AgentSessionInjection injection,
+        out bool replaced)
+    {
+        for (int index = 0; index < turn.Count; index++)
         {
-            payloads.Add(injectedMessage);
+            PendingInjection existing = turn[index];
+            if (existing.Key != injection.Key)
+            {
+                continue;
+            }
+
+            replaced = injection.Revision > existing.Revision;
+            if (replaced)
+            {
+                turn[index] = PendingInjection.Keyed(injection);
+            }
+
+            return true;
         }
 
-        if (payloads.Count == 0)
+        replaced = false;
+        return false;
+    }
+
+    private static bool ReplaceOrAppendMutableInjectionLocked(
+        List<PendingInjection> turn,
+        AgentSessionInjection injection)
+    {
+        if (TryReplaceMutableInjectionLocked(turn, injection, out bool replaced))
         {
-            return;
+            return replaced;
         }
 
-        _logger.LogDebug(
-            "Agent session appending {PayloadCount} coalesced injected payload(s) before the next request.",
-            payloads.Count);
-        transcript.Add(new ChatMessage(ChatRole.User, string.Join("\n", payloads)));
+        turn.Add(PendingInjection.Keyed(injection));
+        return true;
+    }
+
+    private static string RenderTurn(List<PendingInjection> turn)
+        => string.Join("\n", turn.Select(injection => injection.Text));
+
+    private static void ValidateInjection(AgentSessionInjection injection)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(injection.Key.Source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(injection.Key.Turn);
+        ArgumentOutOfRangeException.ThrowIfNegative(injection.Revision);
+        ArgumentException.ThrowIfNullOrWhiteSpace(injection.RenderedText);
+    }
+
+    private enum ExpectationState
+    {
+        Pending,
+        Settled,
+        Abandoned,
+    }
+
+    /// <summary>Classifies one registered active phase of the session loop (AI-002 TR-56).</summary>
+    private enum AgentSessionPhaseKind
+    {
+        ModelRequest,
+        TransportRetryBackoff,
+        InvalidResponseBackoff,
+        Tool,
+    }
+
+    /// <summary>Admission state of an active tool phase under its composition-registered policy (AI-002 TR-25/26, TR-62).</summary>
+    private enum ToolPhaseAdmission
+    {
+        /// <summary>The phase's function was not composed with admission arbitration.</summary>
+        NotApplicable,
+
+        /// <summary>An arbitrated invocation whose pipeline admission transaction has not committed yet.</summary>
+        Pending,
+
+        /// <summary>An arbitrated submission whose pipeline queue admission committed before any matching cue.</summary>
+        Admitted,
+    }
+
+    /// <summary>
+    /// Lock-guarded active-phase state (AI-002 TR-56): every model request, retry or backoff delay, and tool
+    /// invocation registers itself under the runner's state lock, carrying its cancellation source, its admission
+    /// state under the composition-registered phase policy, and the speech keys whose cues its admission beat.
+    /// </summary>
+    private sealed class ActivePhaseState(
+        AgentSessionPhaseKind kind,
+        string? toolName,
+        string? callId,
+        CancellationTokenSource cancellation,
+        ToolPhaseAdmission admission = ToolPhaseAdmission.NotApplicable)
+    {
+        public AgentSessionPhaseKind Kind { get; } = kind;
+
+        public string? ToolName { get; } = toolName;
+
+        public string? CallId { get; } = callId;
+
+        public CancellationTokenSource Cancellation { get; } = cancellation;
+
+        public ToolPhaseAdmission Admission
+        {
+            get;
+            set;
+        } = admission;
+
+        /// <summary>Continuation keys whose attended cues linearised after admission, protecting this phase.</summary>
+        public HashSet<AgentSessionContinuationKey> ProtectedBySpeechKeys { get; } = [];
+    }
+
+    private readonly record struct PendingInjection(
+        AgentSessionInjectionKey? Key,
+        long Revision,
+        string Text)
+    {
+        public static PendingInjection Anonymous(string text) => new(null, 0, text);
+
+        public static PendingInjection Keyed(AgentSessionInjection injection)
+            => new(injection.Key, injection.Revision, injection.RenderedText);
+
+        public static PendingInjection Reconciliation(AgentSessionInjection injection)
+            => new(
+                injection.Key,
+                injection.Revision,
+                $"The input continued. Its complete current content is:\n{injection.RenderedText}\n"
+                + "Earlier responses or actions may already have occurred.");
     }
 
     private static IReadOnlyDictionary<string, AIFunction> ResolveFunctions(IList<AITool> productionTools)

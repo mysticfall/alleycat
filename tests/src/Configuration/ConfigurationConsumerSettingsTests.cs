@@ -21,7 +21,7 @@ public sealed class ConfigurationConsumerSettingsTests
             {
                 Host = " https://stt.example/v1 ",
                 Language = " en ",
-                Temperature = 0.25f,
+                Hotwords = "  alleycat felis catus  ",
                 Timeout = 12,
             },
             "typed-options");
@@ -29,8 +29,27 @@ public sealed class ConfigurationConsumerSettingsTests
         Assert.Equal("https://stt.example/v1", settings.Host);
         Assert.Equal("whisper-1", settings.Model);
         Assert.Equal("en", settings.Language);
-        Assert.Equal(0.25f, settings.Temperature);
+        Assert.Equal("alleycat felis catus", settings.Hotwords);
+        Assert.Null(settings.ApiKey);
+        Assert.Null(settings.Prompt);
         Assert.Equal(12, settings.TimeoutSeconds);
+    }
+
+    /// <summary>
+    /// Blank STT hint values normalise to null so the request omits them entirely.
+    /// </summary>
+    [Fact]
+    public void OpenAITranscriberSettings_LoadFromOptions_BlankHintsNormaliseToNull()
+    {
+        var settings = OpenAITranscriber.OpenAITranscriberSettings.Load(
+            new STTOptions
+            {
+                Host = "https://stt.example/v1",
+                Hotwords = " \t ",
+            },
+            "typed-options");
+
+        Assert.Null(settings.Hotwords);
     }
 
     /// <summary>

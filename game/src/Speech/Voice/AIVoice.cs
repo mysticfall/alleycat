@@ -13,7 +13,7 @@ namespace AlleyCat.Speech.Voice;
 /// Voice implementation that generates speech audio and hands it off to lip-sync playback.
 /// </summary>
 [GlobalClass]
-public partial class AIVoice : Voice
+public partial class AIVoice : Voice, IAdmissionCapableVoice
 {
     private const int ExpectedWaveFormatCode = 1;
     private const short ExpectedChannelCount = 1;
@@ -83,14 +83,34 @@ public partial class AIVoice : Voice
     public override ValueTask SpeakCancellableAsync(
         string speech,
         CancellationToken cancellationToken = default)
+        => SpeakCancellableAsync(speech, cancellationToken, admission: null);
+
+    /// <summary>
+    /// Submits speech as an explicitly cancellable submission whose queue admission is arbitrated against attended
+    /// start/resume suppression holds (SPCH-005 TR-37; AI-002 TR-25/56). Implements the optional voice admission
+    /// capability discovered through <see cref="IAdmissionCapableVoice" /> — never a concrete-voice cast.
+    /// </summary>
+    /// <param name="speech">Speech text to submit.</param>
+    /// <param name="cancellationToken">Caller-supplied cancellation observed through generation, conversion, and
+    /// preparation until playback hand-off.</param>
+    /// <param name="admission">Runner-owned admission transaction committing queue admission and protected state
+    /// atomically under the normative lock order.</param>
+    /// <returns>True when the submission was admitted and playback hand-off completed; false when a matching
+    /// attended cue linearised first, in which case nothing was admitted — no TTS request, queue item, hearing
+    /// event, or self-observation — and the caller reports its not-delivered outcome.</returns>
+    async ValueTask<bool> IAdmissionCapableVoice.SpeakCancellableAdmittedAsync(
+        string speech,
+        CancellationToken cancellationToken,
+        SpeechAdmissionTransaction admission)
     {
+        ArgumentNullException.ThrowIfNull(admission);
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
         var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        AdmittedSpeech item;
+        AdmittedSpeech? item;
         try
         {
-            item = AdmitSpeech(acceptedSpeech, turnCancellation, cancellationToken);
+            item = AdmitSpeech(acceptedSpeech, turnCancellation, cancellationToken, admission);
         }
         catch
         {
@@ -100,10 +120,19 @@ public partial class AIVoice : Voice
             throw;
         }
 
+        if (item is null)
+        {
+            // The attended cue won the arbitration (SPCH-005 TR-37): no queue item exists, so nothing further can
+            // settle and the caller surfaces its not-delivered result rather than throwing.
+            turnCancellation.Dispose();
+            return false;
+        }
+
         item.SetCancellationRegistration(cancellationToken.Register(
             () => HandleTurnCancellationRequested(item),
             useSynchronizationContext: false));
-        return new ValueTask(item.HandOffCompletion!.Task);
+        await new ValueTask(item.HandOffCompletion!.Task).ConfigureAwait(false);
+        return true;
     }
 
     /// <inheritdoc />
@@ -181,6 +210,34 @@ public partial class AIVoice : Voice
         }
     }
 
+    private ValueTask SpeakCancellableAsync(
+        string speech,
+        CancellationToken cancellationToken,
+        SpeechAdmissionTransaction? admission)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string acceptedSpeech = ValidateSubmission(speech);
+        var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        AdmittedSpeech? item;
+        try
+        {
+            item = AdmitSpeech(acceptedSpeech, turnCancellation, cancellationToken, admission);
+        }
+        catch
+        {
+            // Admission never committed, so the linked source would otherwise leak its registration on the
+            // caller-supplied token.
+            turnCancellation.Dispose();
+            throw;
+        }
+
+        Debug.Assert(item is not null, "Ordinary submissions are never refused admission.");
+        item.SetCancellationRegistration(cancellationToken.Register(
+            () => HandleTurnCancellationRequested(item),
+            useSynchronizationContext: false));
+        return new ValueTask(item.HandOffCompletion!.Task);
+    }
+
     /// <summary>
     /// Atomically admits a validated speech request as the next FIFO queue item and opens the speaking window.
     /// </summary>
@@ -188,18 +245,23 @@ public partial class AIVoice : Voice
     /// <param name="turnCancellation">Linked cancellation source for explicitly cancellable submissions, or null for
     /// ordinary admission-only submissions.</param>
     /// <param name="callerToken">Caller-supplied cancellation observed until admission commits.</param>
-    /// <returns>The admitted queue item.</returns>
-    private AdmittedSpeech AdmitSpeech(
+    /// <param name="admission">Runner-owned admission transaction (SPCH-005 TR-37), or null for ordinary
+    /// admission-only submissions. A gated submission commits its queue item inside the transaction — under this
+    /// submission lock first and then the agent-runner state lock — and returns null, committing nothing, when a
+    /// matching attended cue hold linearised first.</param>
+    /// <returns>The admitted queue item, or null when the admission transaction refused a gated submission.</returns>
+    private AdmittedSpeech? AdmitSpeech(
         string speech,
         CancellationTokenSource? turnCancellation,
-        CancellationToken callerToken)
+        CancellationToken callerToken,
+        SpeechAdmissionTransaction? admission = null)
     {
         AdmittedSpeech item = new(
             speech,
             turnCancellation,
             turnCancellation is null ? null : new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
             callerToken);
-        bool startPump;
+        bool startPump = false;
         lock (_submissionLock)
         {
             if (IsNodeLifetimeEnded)
@@ -214,16 +276,19 @@ public partial class AIVoice : Voice
             }
 
             callerToken.ThrowIfCancellationRequested();
-            _pendingSpeech.Enqueue(item);
-            _outstandingItems++;
-            startPump = !_pumpRunning;
-            _pumpRunning = true;
-            if (startPump)
+            if (admission is { } gate)
             {
-                _pumpSettlement = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                if (!gate.TryAdmit(() => AdmitItemLocked(item, ref startPump)))
+                {
+                    // The attended cue hold linearised first (SPCH-005 TR-37): no queue item, FIFO disturbance, or
+                    // window effect exists, so FIFO draining, window state, and teardown contracts are unaffected.
+                    return null;
+                }
             }
-
-            EnsurePlaybackCompletionSubscriptionLocked();
+            else
+            {
+                AdmitItemLocked(item, ref startPump);
+            }
         }
 
         OpenSpeakingWindow();
@@ -234,6 +299,22 @@ public partial class AIVoice : Voice
         }
 
         return item;
+    }
+
+    /// <summary>Enqueues one validated item under the submission lock: FIFO bookkeeping plus pump startup.</summary>
+    /// <remarks>Must be called while holding <see cref="_submissionLock"/>.</remarks>
+    private void AdmitItemLocked(AdmittedSpeech item, ref bool startPump)
+    {
+        _pendingSpeech.Enqueue(item);
+        _outstandingItems++;
+        startPump = !_pumpRunning;
+        _pumpRunning = true;
+        if (startPump)
+        {
+            _pumpSettlement = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        EnsurePlaybackCompletionSubscriptionLocked();
     }
 
     /// <summary>

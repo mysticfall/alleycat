@@ -30,7 +30,7 @@ internal static class OpenAIClientOptionsFactory
             {
                 LoggerFactory = loggerFactory,
                 // AI payload diagnostics belong to the turn-scoped LoggingChatClient. Keeping the
-                // shared SDK pipeline content-disabled also keeps STT and TTS bodies out of logs.
+                // shared SDK pipeline content-disabled also keeps subsystem request bodies out of logs.
                 EnableMessageContentLogging = false,
             },
         };

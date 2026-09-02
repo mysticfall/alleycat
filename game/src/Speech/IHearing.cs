@@ -19,4 +19,7 @@ public interface IHearing : ISense
     /// <param name="speech">Speech that was generated or handed off for playback.</param>
     /// <param name="source">Voice instance that emitted the speech event.</param>
     void ReceiveVoice(string speech, IVoice source);
+
+    /// <summary>Receives speech with optional generic automatic-segment identity.</summary>
+    void ReceiveVoice(string speech, IVoice source, SpeechSegmentMetadata? metadata) => ReceiveVoice(speech, source);
 }

@@ -7,9 +7,9 @@ title: Agent Runtime
 
 ## Requirement
 
- The system must execute each AgenticMind as one long-running agent session — an append-only transcript driven through
- a sequence of bounded, stateless provider requests — through which the NPC observes the scene, deliberates, and acts
- with tools.
+ The system must execute each AgenticMind as one long-running agent session — a transcript that is append-only after
+ each accepted response, driven through a sequence of bounded, stateless provider requests — through which the NPC
+ observes the scene, deliberates, and acts with tools.
 
 ## Goal
 
@@ -36,8 +36,11 @@ title: Agent Runtime
 5. The NPC must not talk over a speaker it attends to: speech submitted while such a speaker's speaking window is open
    waits until that window closes.
 6. When the NPC's speech is withdrawn before it becomes audible — because a fresh observation replaced the stale
-   turn — the NPC learns this through the speak result rather than an error, and may react. Speech that has become
-   audible is committed and is never cut by observation freshness.
+   turn, or because an attended speaker began or resumed speaking before the submission was admitted — the NPC
+   learns this through the speak result rather than an error, and may react. Speech successfully admitted into the
+   voice pipeline before an attended speaker's onset or resume cue arrives is protected: the matching suppression
+   never cuts it, and it settles naturally into audible, remembered speech. Speech that has become audible is
+   committed and is never cut by observation freshness; playback hand-off remains the point of no return.
 7. Spoken responses must use the NPC's character-owned in-world voice rather than normal chat text, and successful
    speech must be remembered exactly once as the NPC's own observed speech.
 8. Voice availability must constrain speech only, not whether the NPC can run the session or use other tools.
@@ -63,6 +66,18 @@ title: Agent Runtime
 18. A user can launch the game with the `--no-ai` user argument — passed after Godot's `--` separator — so NPCs keep
     perceiving, attending, and orienting while never contacting an AI provider: a playtesting mode with zero LLM
     traffic and a single clear notice that AI is disabled.
+19. When an observed speaker resumes after a brief pause, the NPC immediately stops any reaction built on the
+    incomplete utterance — before the continued words are transcribed — and its next request contains the complete
+    utterance as one message, so the NPC never replies to a half-finished sentence and never sees duplicate partial
+    messages. Reactions the NPC already committed remain visible and are explained to it as history.
+20. After a brief endpoint pause, the NPC can begin reacting to the spoken segment promptly, without waiting for
+    the longer continuation interval to elapse; if the speaker then continues, that early reaction is withdrawn
+    before it lands and is redone against the complete utterance.
+21. When an NPC's in-world voice does not implement the speech-admission capability, its speech follows ordinary
+    withdrawal semantics instead of admission arbitration: speech that is not yet audible is withdrawn silently —
+    reported through the speak result so the NPC may react — when a fresh turn or an attended speaker's onset or
+    resume invalidates it, while speech that has become audible stays committed and is never cut. This ordinary-voice
+    exception is intentional and specified, not a fault.
 
 ## Technical Requirements
 
@@ -73,8 +88,10 @@ title: Agent Runtime
 2. This iteration defines no session restart, re-anchoring, or re-prompting mechanism. A session ended by containment
    stays ended for the remainder of the Mind node's lifetime, while timeline ingestion and perception continue
    independently under AI-001.
-3. The session is an append-only transcript executed as a sequence of bounded, stateless provider requests: one
-   request, the tool calls it produced, and their results. No `end_turn`
+3. The session transcript is append-only after response acceptance and is executed as a sequence of bounded,
+   stateless provider requests: one request, the tool calls it produced, and their results. Before an assistant
+   response is accepted, a pending user-turn injection may be replaced under TR-56–TR-61; after acceptance, the
+   transcript only grows. No `end_turn`
    synthetic marker or similar completion protocol exists, and no `MaxModelRequests` or `MaxToolActions`
    bounds apply: the session is long-running.
 4. The runtime must build on the already-referenced `Microsoft.Agents.AI`
@@ -133,7 +150,7 @@ title: Agent Runtime
 14. After each successful batch, the runtime must append all assistant tool calls and the corresponding tool results
     to the transcript in order, then issue the next request by replaying the complete transcript. Only the system
     instruction, the optional bootstrap input message (TR-7), assistant tool calls, tool-result messages, and
-    injected messages (TR-39, TR-40) may enter the transcript;
+    injected messages (TR-39, TR-40, TR-58, TR-60) may enter the transcript;
     structured envelopes and ingested observations must not be exposed to the model beyond the tool-result message.
 15. The transcript is session-scoped transient protocol and must be discarded when the session ends. The Mind timeline
     under [AI-001](../001-mind/index.md) is the only durable memory.
@@ -156,7 +173,11 @@ title: Agent Runtime
     private. `ScenarioContext`
     ([AI-008](../008-scenario/index.md)) must expose only the typed `Character`, `SceneContext`, and nullable `Scenario`
     runtime bindings; concrete tool capabilities must come through `Character`. No invocation service bag, public
-    observation recorder, or sink may be exposed.
+    observation recorder, or sink may be exposed. The common tool-session binding is held to the same boundary: it
+    must expose no feature services, and concrete capabilities bind typed to their concrete tool only, at
+    composition — speech-admission arbitration to the `speak` tool, wait-delivery acknowledgement to the `wait`
+    tool — never through the shared session, a nullable capability bag, a service locator, or a keyed capability
+    dictionary.
 20. Tools must not mutate Mind directly. Tool-result ingestion must stamp every `ObservedAction`
     with the owning character's exact actor ID before contextual importance is calculated, preventing actor spoofing.
 21. A throwing, cancelled, malformed, wrong-shaped, or otherwise invalid tool result must contribute no observations.
@@ -172,7 +193,8 @@ title: Agent Runtime
     component query APIs, or act as a general service bag; concrete tools decide whether to consume typed Character
     traits or extensions, or use `ICharacter`'s CORE-003 `IServiceProvider`
     contract. Mind and `IMainThreadDispatcher` remain private to the common `AgentTool`
-    wrapper, and cancellation remains a per-invocation wrapper input.
+    wrapper, and cancellation remains a per-invocation wrapper input. This no-service-bag rule bounds every
+    session-scoped tool binding, not only `ScenarioContext` (TR-19).
 24. Before dispatcher submission or any world effect, the wrapper must verify that the context Character is the exact
     Character owned by the Mind boundary. An ownership mismatch must fail closed.
 
@@ -185,18 +207,33 @@ title: Agent Runtime
       weight or score. Voices whose speaker cannot be attributed to a current-scene character must not block; this is
       an accepted limitation of the attribution model. This blocking is the turn-taking guard and replaces the former
       turn-start speaking gate;
+    - arbitrate admission against attended start/resume suppression when the resolved voice implements the
+      SPCH-005 admission capability — otherwise the ordinary-voice fallback of TR-63 applies: the submission takes
+      the voice pipeline's
+      submission lock and then the agent-runner state lock — the normative order (TR-56). When a matching attended
+      start or resume hold linearised first, admission is refused with no TTS request, queue item, `IHearing` event,
+      or self-observation, and the tool returns the not-delivered result of TR-27 rather than throwing; when
+      admission completes first, the submission is protected for its whole pipeline life (TR-26, TR-40);
     - await the explicitly cancellable submission (SPCH-005 TR-25) through playback hand-off, passing a cancellation
-      token that covers session lifetime and fresh-turn invalidation to the configured character-owned
+      token that covers session lifetime and fresh-turn invalidation — except that a matching attended start or
+      resume hold must never cancel an admitted submission of a capability voice (TR-26, TR-63) — to the configured
+      character-owned
       `IVoice.SpeakAsync(...)`;
     - return exactly one actorless `ObservedSpeech` in its `AgentToolResult` at hand-off, not at admission; and
     - optionally return a transient model-facing acknowledgement.
-26. Playback hand-off, not admission, is the successful tool-action boundary. Failure or cancellation before hand-off
-    must produce no observed speech (silent abort, SPCH-005 TR-25); cancellation after hand-off does not retract the
-    committed item.
+26. Playback hand-off, not admission, is the successful tool-action boundary. Admission into the voice pipeline
+    (AIVoice queue admission, SPCH-005) is separately the protection boundary: a submission successfully admitted
+    before a matching attended start or resume cue linearises (TR-56) must settle naturally — TTS, playback hand-off,
+    self-observation, natural tool result — and the matching onset, resume, or completed-text invalidation must never
+    cancel it, while unrelated fresh observations and node-lifetime cancellation retain their ordinary pre-hand-off
+    cancellation. Failure or cancellation before hand-off must otherwise produce no observed speech (silent abort,
+    SPCH-005 TR-25); cancellation after hand-off does not retract the committed item.
 27. When fresh-turn invalidation withdraws a speak in flight before playback hand-off, the tool must return early
     with a result stating that the speech was not delivered; it must not throw. The explicitly cancellable
     pre-hand-off submission must be cancelled silently — no `SpeechFailed`, no `IHearing`
-    broadcast, no listener notification. Speech at or past playback hand-off is committed: freshness must not cut
+    broadcast, no listener notification. An admitted submission is withdrawn this way only by unrelated fresh
+    invalidation or node lifetime; the matching attended-source suppression never withdraws an admitted submission
+    (TR-25, TR-26). Speech at or past playback hand-off is committed: freshness must not cut
     audible speech or retract the committed item and its self-observation. Ordinary non-tool callers retain
     admission-only semantics (SPCH-005 TR-25).
 28. `SpeechTool` must resolve the raw `IVoice`
@@ -205,6 +242,15 @@ title: Agent Runtime
 29. The configured output voice must remain excluded from external listening so dispatched self-speech is not recorded
     a second time as perceived speech.
 30. Voice is a `SpeechTool` capability and must not be a generic session-runtime prerequisite.
+63. Admission arbitration applies only when the character's resolved voice implements the SPCH-005 admission
+    capability, and `SpeechTool` must resolve that capability through the authored voice projection (TR-28) without
+    depending on or casting to a concrete voice class. When the voice does not implement it, `SpeechTool` must
+    submit through the ordinary cancellable submission path (SPCH-005), and for that voice's speech only:
+    cue-first admission refusal (TR-25, TR-56) and admitted-submission protection (TR-26, TR-40) do not apply;
+    pre-hand-off withdrawal under any invalidation follows the ordinary silent-cancellation semantics of TR-27 —
+    no `IHearing` event, no self-observation, the not-delivered tool result; and speech at or past playback
+    hand-off remains committed and is never cut. This fallback is an intentional, specified suppression exception,
+    not a degradation or error.
 
 ### The `wait` Tool
 
@@ -236,7 +282,8 @@ title: Agent Runtime
 36. The timeline history tool — `history`, implemented by `HistoryTool` — must let the agent query the Mind's committed
     observation records under AI-001 without relying on provider message logs. It must be read-only, preserve timeline
     order, and render records through the AI-003 event-history contract (authored in the standalone
-    `game/prompts/event_history.md` fragment file).
+    `game/prompts/event_history.md` fragment file). Grouped speech reaches the result through the AI-003 continuation
+    projection, so the tool's count covers projected events rather than raw segment records.
 
 ### Timestamps
 
@@ -265,8 +312,17 @@ title: Agent Runtime
     - append the complete assistant tool calls with one result per call ID so the provider protocol remains valid,
       then append the fresh observation and the pending accumulation as one injected message (AI-003 event-history
       rendering) and issue a single fresh request replaying the complete transcript.
+    An admitted `speak` call — admission-arbitrated through its registered per-function phase policy (TR-62) — is
+    excepted from suppression-driven cancellation when — and only when — the
+    invalidation's speech key matches the attended-source hold its admission beat (TR-25, TR-26): the matching onset,
+    resume, or completed-text invalidation must not cancel it, and it settles with its natural result. The exception
+    is scoped to that matching key: unrelated fresh observations and node-lifetime cancellation retain ordinary
+    cancellation, every assistant tool-call ID still receives exactly one natural or canonical result, and unadmitted
+    speech withdraws under TR-27.
     Invalidation must persist across generation, response validation, and invalid-response recovery backoff until the
-    fresh request is issued.
+    fresh request is issued. For speech-group continuation, the completed segment's fresh observation follows this
+    path with its replacement payload and timing governed by TR-56–TR-61: the payload is the AI-003 continuation
+    projection of the complete utterance, and the request waits for the matching expectation to settle.
 41. When AI-001 commits observations, it must signal the session runtime with delivery urgency — ordinary versus
     fresh — and whether an active `wait` owns the delivery. The runtime applies TR-39 or TR-40 as applicable. A fresh
     observation arriving during an active `wait` must fulfil that wait through its normal completion mechanism —
@@ -274,6 +330,85 @@ title: Agent Runtime
     that delivery as an injected user message; freshness still invalidates the surrounding stale batch and skips its
     remaining calls. A fresh wake must never surface generic action-interrupted wording. Expected invalidation must
     not be reported as a backend failure and must not trigger transport retry.
+
+### Speech Start And Continuation Invalidation
+
+56. Fresh-invalidation expectations must be opaque, single-use, and keyed by the cueing speech identity — the source
+    voice plus its speech-group and segment identity for automatic cues, or the source voice plus the opaque internal
+    synthetic token for the manual start cue (SPCH-005, SPCH-008). A transient speech-start (`Started`) or
+    speech-resume signal that AI-001 attention-gated (AI-001 TR-47) registers one expectation, advances the session's
+    invalidation epoch, and immediately cancels the active phase: in-flight model generation, transport retry and
+    backoff, invalid-response recovery backoff, active `wait` calls, and cancellable pre-commit tool calls — except
+    a tool call protected by successful admission under its registered per-function phase policy (TR-62): today the
+    `speak` submission of a capability voice (TR-25, TR-26, TR-63). Start/resume cancellation must not consume
+    the transport-retry or invalid-response budgets (TR-43). Cancellation is best-effort: accepted responses and
+    committed tool effects remain causal history. Cue registration linearises under the agent-runner state lock, and
+    the normative lock order for submission-versus-cue arbitration is voice-submission lock first, then runner state
+    lock: when the cue linearises first, a racing speak submission is refused admission — no TTS request, queue item,
+    hearing event, or self-observation; when admission completes first, the submission is protected and the cue must
+    not cancel it. Cues AI-001 did not forward — unattended, self, unattributable, or ambiguous sources — register
+    nothing and cancel nothing, and duplicate cues for a key an expectation already covers are idempotent: no second
+    expectation, no second cancellation.
+57. While a registered expectation's settled text is unknown — continued or initial segment text — the runtime must
+    not issue the replacement request for the invalidated turn. It settles as completed only when matching rendered
+    observation text has been queued for the model — injected or returned through a `wait` — and as abandoned only on
+    an exactly once, identity-matched `Blank`, `Failed`, or `Abandoned` terminal settlement from SPCH-005. The match
+    is the source voice plus the immutable speech-group and segment metadata, or the synthetic token for a manual
+    start hold, whose completed publication settles it through ordinary delivery while remaining publicly ungrouped.
+    `Published` must not create a duplicate transient release: its completed text settles the expectation through
+    ordinary delivery. Abandonment injects no fabricated text and must not deadlock the runner: it clears the hold so
+    the session continues through ordinary paths, and a settlement matching no registered expectation abandons
+    nothing. A replacement request is issued only for a turn the cue actually interrupted; a runner that was idle
+    simply resumes waiting, with no fabricated replacement turn. Multiple expectations may coexist and settle
+    independently, and one coalesced rendered payload (AI-003 continuation projection) may release several
+    expectations when it contains each matching projected utterance. When a manual press pre-empts an open automatic
+    group (SPCH-005, SPCH-008), the automatic group's settlement releases the automatic hold before the manual start
+    cue's hold begins. Session teardown remains terminal and issues no replacement or lifecycle work (TR-44).
+58. Before an assistant response is accepted, the user turn is mutable and structurally keyed by the projected
+    speech-group identity — source voice plus `SpeechGroupID`, or the source voice plus the synthetic token for a
+    manual start hold. A newer projection for the same key replaces any earlier projected injection: the runtime
+    issues exactly one replacement request containing the complete
+    joined utterance (AI-003 continuation projection) and never duplicate partial user messages. After acceptance,
+    the transcript is append-only (TR-59, TR-60).
+59. An invalidation-epoch check immediately before appending the assistant response makes cue-versus-acceptance a
+    single deterministic winner: if the epoch advanced — a start or continuation expectation registered — the
+    response is discarded and the user turn stays mutable under TR-58; otherwise acceptance proceeds and the
+    transcript becomes append-only from that point. The check and the append form one atomic arbitration.
+60. After response acceptance — assistant response appended, tool calls and results committed, or `wait` results
+    returned — the transcript must never be rewritten. When later segments of the same speech group settle, the
+    runtime must append one explicit reconciliation input stating that the speaker continued, that their complete
+    utterance is the joined text (AI-003 continuation projection), and that earlier responses or actions may already
+    have occurred. Accepted content and committed effects are retained.
+61. The causal boundary at a suppression cue — attended start or resume — is normative:
+
+    | Phase At Cue | Behaviour |
+    | --- | --- |
+    | During model generation | Cancel and discard; hold, then replace the turn (TR-57, TR-58). |
+    | During response validation | The epoch arbitrates; the loser is discarded (TR-59). |
+    | After the assistant append | Never rewrite; reconcile once settled (TR-60). |
+    | During a tool batch | TR-40 cancellation rules with the admitted-speak exception; then reconcile (TR-60). |
+    | After a tool batch | Retain every result; reconcile (TR-60). |
+    | While a `wait` is active | Cancel the wait; restore its claim; deliver exactly once. |
+    | `wait` result already returned | Preserve it; reconcile later (TR-60). |
+    | Node-lifetime end | Terminal; no replacement or reconciliation (TR-44). |
+
+    The tool-batch row applies TR-40's protocol-safe cancellation — exactly one canonical cancellation
+    result for every unstarted call and natural results for calls that crossed their commit boundary — with the
+    TR-26 admitted-speak exception retaining a matching protected call's natural result, followed by
+    TR-60 reconciliation once the cueing speech settles. The wait rows restore any unreturned delivery claim so the
+    projected group is later delivered exactly once, with no duplicate injection.
+
+### Runner Generic-Phase Boundary
+
+62. The session runner must operate only on generic phase concepts — model request, transport retry and backoff,
+    invalid-response recovery, tool execution, admission-arbitrated tool execution, correlation keys, invalidation
+    epoch, and lifetime precedence — with per-function phase policy registered when session tools are composed. It
+    must not reference, match, or name any concrete production tool, function name, or tool type: whether a function
+    executes under admission arbitration is decided by its composition-time policy, never by the runner inspecting
+    function names. Feature-specific correlation stays outside the runner: for speech, the session-scoped
+    speech-turn/continuation coordinator at the AgenticMind composition boundary owns keyed expectations, settlement,
+    watchdog, and the translation from projected speech identity into these generic operations. The TR-56–TR-61
+    settlement, epoch, and reconciliation semantics are unchanged.
 
 ### Failure And Cancellation
 
@@ -343,16 +478,17 @@ title: Agent Runtime
 
 ## In Scope
 
-- One long-running agent session per AgenticMind: append-only transcript, bounded stateless requests, and no session
-  restart mechanism.
+- One long-running agent session per AgenticMind: append-only-after-acceptance transcript, bounded stateless
+  requests, and no session restart mechanism.
 - Once-per-session prompt compilation and rendering with on-demand render-context assembly and one session-captured
   scene snapshot.
 - Tool-only validation without completion markers or request and action bounds; full-transcript replay on every request.
 - The `speak`, `wait`, and timeline history (`history`) tool inventory, including the standard `AgentToolResult`
   contract.
 - `speak`
-  blocking turn-taking, pre-hand-off withdrawal on fresh-turn invalidation, playback hand-off as the success
-  boundary, and exactly-once observed-speech production.
+  blocking turn-taking, admission-versus-cue arbitration with refused-admission reporting, pre-hand-off withdrawal
+  on fresh-turn invalidation, playback hand-off as the success boundary, and exactly-once observed-speech
+  production.
 - `wait`
   notable-observation delivery, early finish on importance, fresh observations, and attended-speech end, and
   observe-not-sleep guidance.
@@ -360,10 +496,21 @@ title: Agent Runtime
 - The game-time convention for all time-sensitive tool results and the game-scoped game clock.
 - Ordinary boundary injection and fresh-turn invalidation for model generation and complete tool batches, including
   injected-message resumption and one protocol-valid result per stale call ID.
+- Speech-start and speech-continuation invalidation: attention-gated opaque single-use keyed expectations — automatic
+  segment identity or the manual synthetic token — with immediate cancellation, voice-pipeline admission arbitration
+  and admitted-speak protection, the hold until settled text, pre-acceptance mutable user-turn replacement, the
+  atomic response-acceptance epoch boundary, post-acceptance reconciliation inputs, and wait delivery-claim
+  restoration.
 - Tool errors as tool results, separate bounded transport retry and invalid-response recovery, and contained
   session-ending failure after the applicable budget is exhausted.
 - Trusted typed `ScenarioContext`
   binding, ownership verification, shared-dispatcher tool start, actor stamping, and atomic Mind hand-off.
+- Typed per-tool capability binding at composition — speech-admission arbitration to the `speak` tool and
+  wait-delivery acknowledgement to the `wait` tool — with no feature services on the common tool session.
+- Runner generic-phase operation with composition-registered per-function phase policy and no concrete tool
+  knowledge; session-scoped speech-turn/continuation correlation at the AgenticMind composition boundary.
+- The specified ordinary-voice fallback: no admission arbitration when the resolved voice lacks the SPCH-005
+  admission capability, with ordinary cancellable submission semantics instead.
 - Responses-default stateless transport and explicitly selected Chat Completions rollback.
 - Adoption of `Microsoft.Agents.AI` within the stated deviation boundary.
 - Development-only MEAI diagnostics and non-secret structural transport evidence with explicit gating.
@@ -381,6 +528,8 @@ title: Agent Runtime
   valid transcript through a fresh request.
 - Cancelling or reversing world actions already admitted; fresh-turn invalidation performs no rollback of committed
   effects.
+- Rewriting, editing, or reverting accepted transcript history or committed effects; continuation after acceptance
+  appends a reconciliation input only.
 - Gameplay policy for interrupting already-audible speech; playback hand-off commits speech.
 - Speaker priority, addressee, audibility, and conversational-target metadata for classifying observed speech;
   attention membership and name-text heuristics must not substitute for it.
@@ -412,8 +561,11 @@ title: Agent Runtime
    boundary, and that the `wait`
    tool description frames waiting as observation rather than passing time, including question-then-wait etiquette.
 4. Turn-taking coverage verifies an NPC does not begin speech while an attended speaker's window is open, that speech
-   withdrawn before playback hand-off by fresh-turn invalidation is reported through the speak result rather than an
-   error — allowing the NPC to react — and that audible speech is never cut by observation freshness.
+   withdrawn before playback hand-off by fresh-turn invalidation — or refused because an attended onset or resume won
+   the admission race — is reported through the speak result rather than an error — allowing the NPC to react — and
+   that audible speech is never cut by observation freshness. It also verifies both admission-race outcomes: speech
+   admitted before the cue completes naturally and is remembered, and speech refused at cue-first admission produces
+   no audible utterance.
 5. Speech and action coverage verifies character-owned in-world voice, exactly-once own observed speech, no false
    memory of failed or cancelled actions, and voice availability constraining speech only.
 6. Failure coverage verifies tool errors surface as tool results for the NPC to act on, while transport failures are
@@ -432,6 +584,15 @@ title: Agent Runtime
     ordinary important observations never cancel active reasoning, tools, or pending and committed speech.
 11. Acceptance verifies launching with `-- --no-ai` produces NPCs that still perceive and attend, exactly one
     Information notice naming the switch, and provably zero provider requests.
+12. Continuation coverage verifies an NPC never replies to a half-finished utterance: an attended speaker's onset or
+    resume stops stale reasoning before the continued text exists, the next request carries the complete utterance as
+    one message with no duplicate partial user messages, reaction after an endpoint pause remains prompt, and
+    already-committed reactions stay visible and are explained to the NPC through reconciliation. A non-attended
+    onset or resume causes no hold, and the speaker's completed speech still arrives as a fresh turn.
+13. Acceptance verifies the ordinary-voice fallback: an NPC whose voice lacks the admission capability has
+    non-audible speech withdrawn silently with a not-delivered speak result under fresh-turn or attended-onset
+    invalidation, audible speech stays committed, and capable voices retain refused-admission reporting and
+    admitted-speech protection unchanged.
 
 ### Technical Requirements
 
@@ -468,7 +629,10 @@ title: Agent Runtime
     exclusion, silent pre-hand-off withdrawal under fresh-turn invalidation, the non-throwing not-delivered result,
     the playback hand-off success boundary with no retraction and no freshness-driven cutting of audible speech,
     exactly one actor-stamped self-relative `ObservedSpeech`, self-listener exclusion, and resolution of the
-    Character-authored `IVoice` through the typed context.
+    Character-authored `IVoice` through the typed context. They verify both admission-arbitration winners under the
+    normative lock order: cue-first refusal issues no TTS request, queue item, hearing event, or self-observation and
+    returns the not-delivered result, while admission-first submissions stay protected through TTS, playback
+    hand-off, self-observation, and a natural tool result.
 11. Wait tests verify the default duration of 10 seconds, delivery of the notable window accumulated since the
     previous wait, early finish on the cumulative-importance threshold, on fresh observations below the threshold,
     and on the attended-speaker-finished cue, the elapsed-duration and game-timestamp result fields, FIFO delivery
@@ -486,7 +650,10 @@ title: Agent Runtime
     co-operative cancellation of the active call, canonical cancelled results for unstarted calls, and a retained
     real result only where a non-cooperative call crossed its commit boundary, without rollback; the complete
     assistant exchange precedes the fresh injected message; and expected invalidation produces no backend-failure
-    diagnostics or retry.
+    diagnostics or retry. They verify a matching attended-source onset, resume, or completed-text invalidation never
+    cancels an admitted speak — it settles naturally with its natural result — while an unrelated fresh observation
+    still withdraws an unhand-offed admitted submission under TR-27, and every assistant call ID retains exactly one
+    natural or canonical result.
 15. Failure tests verify tool errors are returned through tool results; transport failures use only the bounded
     transport-retry policy and are never surfaced to the agent; and invalid responses use only a separate bounded
     consecutive-invalid-response recovery policy. They verify a fresh request replays the last valid transcript after
@@ -511,6 +678,44 @@ title: Agent Runtime
     seam — that a fully-wired suppressed mind never calls `CreateChatClient` or issues requests, that the
     once-per-process notice guard holds across multiple suppressed minds, that timeline ingestion is unaffected, and
     that the gate-open control path starts sessions normally.
+21. Continuation tests verify expectations are opaque and single-use; that attended start and resume cues advance
+    the invalidation epoch and cancel generation, transport retry and invalid-response backoff, active waits, and
+    cancellable pre-commit tools — except protected admitted speak — without consuming either recovery budget; and
+    that accepted responses and committed effects remain causal history. They verify the attention gating is sampled
+    once at cue receipt and source-generic: non-attended, self, unattributable, and ambiguous cues register nothing
+    and cancel nothing, later attention changes neither release nor retroactively create a hold, and duplicate cues
+    are idempotent.
+22. Hold tests verify no replacement request for the invalidated turn escapes while settled text is unknown; that
+    an expectation completes when the matching rendered observation text is queued — including a manual start hold
+    settled by its source voice's ungrouped completed publication; that blank or failed
+    transcription, pre-emption, and teardown abandon it without fabricated text, placeholder input, or deadlock;
+    that `Blank`, `Failed`, and `Abandoned` settle only the exact matching keyed hold exactly once, that a settlement
+    matching no hold is a no-op, and that only an actually-interrupted turn is replayed while an idle runner resumes
+    waiting; that `Published` creates no duplicate release; that automatic pre-emption releases the automatic hold
+    before the manual hold begins; and that coexisting expectations settle independently while one coalesced
+    payload can release several.
+23. Turn tests verify a newer segment projection replaces the earlier projected injection for the same key before
+    acceptance as exactly one request containing the joined utterance with no duplicate partial user messages, that
+    the pre-append epoch check makes resume-versus-acceptance a single deterministic winner, and that acceptance
+    ends user-turn mutability.
+24. Boundary tests verify every causal-boundary row of TR-61 at start and resume cues alike — generation
+    cancel-and-replace, validation arbitration, post-append reconciliation with the exact continued-utterance wording,
+    tool cancellation with one canonical result per unstarted call, natural results for crossed-commit calls, and the
+    admitted-speak exception retaining a protected call's natural result, wait cancellation with claim restoration
+    and exactly-once later delivery of the projected group, preservation of returned wait results, and terminal
+    lifetime end without replacement or reconciliation.
+25. Architecture and behaviour tests verify the common tool session exposes no feature services:
+    speech-admission arbitration binds typed to the `speak` tool and wait-delivery acknowledgement binds typed to
+    the `wait` tool at composition, with no nullable capability bag, service locator, or keyed capability
+    dictionary on the shared session and no other tool observing either capability.
+26. Architecture tests verify the runner references no concrete production tool class, function name, or tool type:
+    admission-phase registration arrives through per-function policy registered at tool composition, and
+    speech-turn/continuation correlation lives in the session-scoped coordinator at the AgenticMind composition
+    boundary rather than in the runner.
+27. Fallback tests verify a voice without the admission capability: `SpeechTool` submits through the ordinary
+    cancellable path without casting to a concrete voice class, cues and fresh turns withdraw a pre-hand-off
+    submission silently with no `IHearing` event or self-observation and a not-delivered result, post-hand-off
+    speech remains committed, and capable-voice arbitration, protection, and refusal reporting are unchanged.
 
 ## References
 
@@ -540,6 +745,7 @@ title: Agent Runtime
 - [SPCH-005: Voice Component](../../speech/005-voice/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
+- [SPCH-008: Automatic Voice Detection](../../speech/008-automatic-voice-detection/index.md)
 - [SPCH-001: Wav2Arkit LipSync Player](../../speech/001-wav2arkit-lipsync-player/index.md)
 - [SPCH-002: Audio2Face LipSync Player](../../speech/002-audio2face-lipsync-player/index.md)
 - [CORE-002: Configuration API](../../core/002-configuration-api/index.md)

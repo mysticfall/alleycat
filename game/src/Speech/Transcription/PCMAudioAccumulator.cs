@@ -40,6 +40,20 @@ internal sealed class PCMAudioAccumulator
         return true;
     }
 
+    /// <summary>Appends one already-downmixed mono sample.</summary>
+    public bool AppendMonoFrame(float sample)
+    {
+        ObjectDisposedException.ThrowIf(_completed, this);
+        if (FrameCount >= MaximumFrames)
+        {
+            return false;
+        }
+
+        WriteSample(FrameCount * BytesPerFrame, SanitiseMono(sample));
+        FrameCount++;
+        return true;
+    }
+
     public int AppendInterleavedStereo(ReadOnlySpan<float> samples)
     {
         if (samples.Length % InputChannelCount != 0)
@@ -73,8 +87,10 @@ internal sealed class PCMAudioAccumulator
     private static float Downmix(float left, float right)
     {
         float mono = (left + right) * 0.5f;
-        return float.IsNaN(mono) ? 0f : Math.Clamp(mono, -1f, 1f);
+        return SanitiseMono(mono);
     }
+
+    private static float SanitiseMono(float sample) => float.IsNaN(sample) ? 0f : Math.Clamp(sample, -1f, 1f);
 
     private void WriteSample(int offset, float sample)
     {

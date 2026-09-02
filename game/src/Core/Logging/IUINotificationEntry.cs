@@ -4,8 +4,8 @@ namespace AlleyCat.Core.Logging;
 /// Marks a structured log entry state as eligible for routing to the in-game notification UI.
 /// </summary>
 /// <remarks>
-/// The log level is the single universal switch: entry-carrying diagnostics emit at trace level, so the configured
-/// level of their log category governs both console logging and notification routing.
+/// The log level is the single universal switch: entry-carrying diagnostics emit at a diagnostic level of their log
+/// category, so that category's configured level governs both console logging and notification routing.
 /// </remarks>
 public interface IUINotificationEntry
 {

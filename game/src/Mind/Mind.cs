@@ -10,6 +10,7 @@ using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
 using AlleyCat.Scene;
 using AlleyCat.Sense;
+using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
@@ -141,6 +142,12 @@ public abstract partial class Mind : Node
     /// wait owns the delivery instead of the signalled runtime (AI-002 TR-41).
     /// </summary>
     internal event Action<ObservationDeliverySignal>? ObservationDeliverySignalled;
+
+    /// <summary>
+    /// Occurs for textless external automatic-segment lifecycle transitions. These notifications intentionally bypass
+    /// perception, observation, attention, timeline, delivery, and wait processing.
+    /// </summary>
+    internal event Action<SpeechSegmentLifecycleNotification>? SpeechSegmentLifecycleNotified;
 
     /// <summary>
     /// Enables stimulus intake, timeline ingestion, and notable-observation delivery.
@@ -757,6 +764,9 @@ public abstract partial class Mind : Node
             {
                 voice.SpeechStarted -= OnVoiceSpeechStarted;
                 voice.SpeechEnded -= OnVoiceSpeechEnded;
+                voice.SpeechSegmentStarted -= OnVoiceSpeechSegmentStarted;
+                voice.SpeechResumed -= OnVoiceSpeechResumed;
+                voice.SpeechSegmentSettled -= OnVoiceSpeechSegmentSettled;
                 _ = _subscribedSpeechVoices.Remove(voice);
                 _ = _speechVoiceOwners.Remove(voice);
             }
@@ -767,6 +777,9 @@ public abstract partial class Mind : Node
                 {
                     entry.Key.SpeechStarted += OnVoiceSpeechStarted;
                     entry.Key.SpeechEnded += OnVoiceSpeechEnded;
+                    entry.Key.SpeechSegmentStarted += OnVoiceSpeechSegmentStarted;
+                    entry.Key.SpeechResumed += OnVoiceSpeechResumed;
+                    entry.Key.SpeechSegmentSettled += OnVoiceSpeechSegmentSettled;
                 }
 
                 _speechVoiceOwners[entry.Key] = entry.Value;
@@ -782,6 +795,9 @@ public abstract partial class Mind : Node
             {
                 voice.SpeechStarted -= OnVoiceSpeechStarted;
                 voice.SpeechEnded -= OnVoiceSpeechEnded;
+                voice.SpeechSegmentStarted -= OnVoiceSpeechSegmentStarted;
+                voice.SpeechResumed -= OnVoiceSpeechResumed;
+                voice.SpeechSegmentSettled -= OnVoiceSpeechSegmentSettled;
             }
 
             _subscribedSpeechVoices.Clear();
@@ -804,6 +820,89 @@ public abstract partial class Mind : Node
         // refresh; subscriptions re-align on the Godot thread without polling.
         _speechStartNotifications.Enqueue(voice);
         QueueSpeechSubscriptionEvaluation();
+    }
+
+    /// <summary>
+    /// Forwards a textless speech-start lifecycle cue for an attended external speaker.
+    /// </summary>
+    /// <remarks>
+    /// The cue is source-generic: the voice must resolve to a unique non-self current-scene character whose full ID
+    /// is present in the attention snapshot sampled once at cue receipt. Attention sampled after the cue never
+    /// creates a retroactive notification, and later attention changes never retract one already forwarded.
+    /// </remarks>
+    private void OnVoiceSpeechSegmentStarted(IVoice voice, SpeechSegmentMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(voice);
+        ArgumentNullException.ThrowIfNull(metadata);
+        if (IsNodeLifetimeEnded || !TryResolveAttendedSpeaker(voice))
+        {
+            return;
+        }
+
+        SpeechSegmentLifecycleNotified?.Invoke(new SpeechSegmentLifecycleNotification(
+            voice.Id,
+            metadata,
+            SpeechSegmentLifecycleTransition.Started));
+    }
+
+    private void OnVoiceSpeechResumed(IVoice voice, SpeechSegmentMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(voice);
+        ArgumentNullException.ThrowIfNull(metadata);
+        if (IsNodeLifetimeEnded || IsSelfSpeechVoice(voice) || !TryResolveAttendedSpeaker(voice))
+        {
+            return;
+        }
+
+        SpeechSegmentLifecycleNotified?.Invoke(new SpeechSegmentLifecycleNotification(
+            voice.Id,
+            metadata,
+            SpeechSegmentLifecycleTransition.Resumed));
+    }
+
+    private void OnVoiceSpeechSegmentSettled(IVoice voice, SpeechSegmentSettlement settlement)
+    {
+        ArgumentNullException.ThrowIfNull(voice);
+        ArgumentNullException.ThrowIfNull(settlement);
+        if (IsNodeLifetimeEnded
+            || IsSelfSpeechVoice(voice)
+            || !TryMapTerminalSpeechSettlement(settlement.Kind, out SpeechSegmentLifecycleTransition transition))
+        {
+            return;
+        }
+
+        SpeechSegmentLifecycleNotified?.Invoke(new SpeechSegmentLifecycleNotification(voice.Id, settlement.Metadata, transition));
+    }
+
+    private bool IsSelfSpeechVoice(IVoice voice)
+    {
+        ICharacter character = ResolveOwningCharacter();
+        return character.TryGetVoice(out IVoice? ownVoice)
+            && ownVoice is not null
+            && string.Equals(voice.Id, ownVoice.Id, StringComparison.Ordinal);
+    }
+
+    private static bool TryMapTerminalSpeechSettlement(
+        SpeechSegmentSettlementKind kind,
+        out SpeechSegmentLifecycleTransition transition)
+    {
+        switch (kind)
+        {
+            case SpeechSegmentSettlementKind.Blank:
+                transition = SpeechSegmentLifecycleTransition.Blank;
+                return true;
+            case SpeechSegmentSettlementKind.Failed:
+                transition = SpeechSegmentLifecycleTransition.Failed;
+                return true;
+            case SpeechSegmentSettlementKind.Abandoned:
+                transition = SpeechSegmentLifecycleTransition.Abandoned;
+                return true;
+            case SpeechSegmentSettlementKind.Published:
+                transition = default;
+                return false;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported speech segment settlement kind.");
+        }
     }
 
     private void QueueSpeechSubscriptionEvaluation()
@@ -985,11 +1084,39 @@ public abstract partial class Mind : Node
         IngestObservations([observation], context);
     }
 
+    /// <summary>
+    /// Generic exact-once commit-identity gate (AI-001 TR-49): an observation that supplies an immutable identity
+    /// tuple through the optional contract is suppressed when any earlier accepted or retained observation already
+    /// committed the same identity. Mind owns the atomic enforcement; perception never participates, and
+    /// observations that supply no identity are unaffected.
+    /// </summary>
+    private static bool HasCommittedIdentity(
+        ObservationCommitIdentity identity,
+        IReadOnlyList<AgentObservation> retained,
+        IReadOnlyList<AgentObservation> accepted)
+    {
+        foreach (AgentObservation candidate in accepted.Concat(retained))
+        {
+            if (candidate is IHasCommitIdentity { CommitIdentity: { } committed } && committed.Equals(identity))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool ShouldSuppressDuplicate(
         AgentObservation observation,
         IReadOnlyList<AgentObservation> retained,
         IReadOnlyList<AgentObservation> accepted)
     {
+        if (observation is IHasCommitIdentity { CommitIdentity: { } identity }
+            && HasCommittedIdentity(identity, retained, accepted))
+        {
+            return true;
+        }
+
         if (observation.DuplicatePolicy == ObservationDuplicatePolicy.Allow)
         {
             return false;
@@ -1308,6 +1435,28 @@ public abstract partial class Mind : Node
         lock (_observationStateLock)
         {
             return new ReadOnlyCollection<AgentObservation>([.. _observationTimeline]);
+        }
+    }
+
+    /// <summary>
+    /// Reports whether a committed timeline record still sits in the pending deliverable accumulation, so a
+    /// derived mind can distinguish speech awaiting its ordinary delivery from speech a delivery channel already
+    /// consumed (AI-001 TR-44; AI-002 TR-57 no-leaked-holds). Comparison is by record identity.
+    /// </summary>
+    internal bool ContainsPendingDeliveryObservation(AgentObservation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        lock (_observationStateLock)
+        {
+            foreach (PendingObservation pending in _notableAccumulation)
+            {
+                if (ReferenceEquals(pending.Observation, observation))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 

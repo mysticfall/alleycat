@@ -8,6 +8,7 @@ namespace AlleyCat.Tests.Core.Logging;
 /// <summary>
 /// Unit coverage for pipeline diagnostics routed through Microsoft.Extensions.Logging.
 /// </summary>
+[Collection(PipelineDiagnosticsCollection.Name)]
 public sealed class PipelineDebugLogTests : IDisposable
 {
     private readonly CapturingLoggerProvider _provider = new();
@@ -175,7 +176,7 @@ public sealed class PipelineDebugLogTests : IDisposable
     {
         PipelineDebugLog.LogOnlyLatency("STT recording stopped after", TimeSpan.FromMilliseconds(2100));
         PipelineDebugLog.LogOnlyLatency("STT completed in", TimeSpan.FromMilliseconds(1200), "42 chars");
-        PipelineDebugLog.LogOnlyLatency("STT request prepared in", TimeSpan.FromMilliseconds(1.2), "model whisper-1");
+        PipelineDebugLog.LogOnlyLatency("STT backend returned in", TimeSpan.FromMilliseconds(1.2), "model whisper-1");
         PipelineDebugLog.LogOnlyLatency("TTS backend returned in", TimeSpan.FromMilliseconds(900), "model tts-1");
         PipelineDebugLog.LogOnlyLatency("TTS backend stream completed in", TimeSpan.FromMilliseconds(900), "model tts-1");
         PipelineDebugLog.LogOnlyLatency("TTS audio parsed in", TimeSpan.FromMilliseconds(12), "44100 PCM bytes");
@@ -370,6 +371,12 @@ public sealed class PipelineDebugLogTests : IDisposable
             set;
         } = true;
 
+        public bool DebugEnabled
+        {
+            get;
+            set;
+        } = true;
+
         public IReadOnlyList<CapturedLogEntry> Entries => _entries;
 
         public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, this, _entries);
@@ -402,7 +409,9 @@ public sealed class PipelineDebugLogTests : IDisposable
             => null;
 
         public bool IsEnabled(LogLevel logLevel)
-            => logLevel is not LogLevel.None && (logLevel is not LogLevel.Trace || provider.TraceEnabled);
+            => logLevel is not LogLevel.None
+                && (logLevel is not LogLevel.Trace || provider.TraceEnabled)
+                && (logLevel is not LogLevel.Debug || provider.DebugEnabled);
 
         public void Log<TState>(
             LogLevel logLevel,

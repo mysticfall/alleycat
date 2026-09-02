@@ -54,6 +54,15 @@ public abstract partial class Voice : Node3D, IVoice
     /// <inheritdoc />
     public event Action<IVoice>? SpeechEnded;
 
+    /// <inheritdoc />
+    public event Action<IVoice, SpeechSegmentMetadata>? SpeechSegmentStarted;
+
+    /// <inheritdoc />
+    public event Action<IVoice, SpeechSegmentMetadata>? SpeechResumed;
+
+    /// <inheritdoc />
+    public event Action<IVoice, SpeechSegmentSettlement>? SpeechSegmentSettled;
+
     /// <summary>
     /// Indicates whether this voice has crossed its irreversible node-lifetime boundary.
     /// </summary>
@@ -228,6 +237,10 @@ public abstract partial class Voice : Node3D, IVoice
     /// Called after a speech request has completed its generation or playback handoff boundary.
     /// </summary>
     protected virtual void OnSpeechGenerated(string speech)
+        => PublishSpeech(speech, null);
+
+    /// <summary>Publishes completed speech without changing the speaking window.</summary>
+    protected void PublishSpeech(string speech, SpeechSegmentMetadata? metadata)
     {
         if (!IsInsideTree())
         {
@@ -244,9 +257,30 @@ public abstract partial class Voice : Node3D, IVoice
         {
             if (node is IHearing listener)
             {
-                listener.ReceiveVoice(speech, this);
+                listener.ReceiveVoice(speech, this, metadata);
             }
         }
+    }
+
+    /// <summary>Forwards a textless speech-start lifecycle transition without publishing speech.</summary>
+    protected void RaiseSpeechSegmentStarted(SpeechSegmentMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        SpeechSegmentStarted?.Invoke(this, metadata);
+    }
+
+    /// <summary>Forwards a textless automatic-resume lifecycle transition without publishing speech.</summary>
+    protected void RaiseSpeechResumed(SpeechSegmentMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        SpeechResumed?.Invoke(this, metadata);
+    }
+
+    /// <summary>Forwards a textless terminal automatic-segment outcome without publishing speech.</summary>
+    protected void RaiseSpeechSegmentSettled(SpeechSegmentSettlement settlement)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        SpeechSegmentSettled?.Invoke(this, settlement);
     }
 
     /// <summary>

@@ -65,9 +65,14 @@ internal sealed class NotificationLoggingFixture
     /// user configuration override. When false, the category stays at the default information floor, which keeps
     /// pipeline diagnostics — console and notification alike — switched off.
     /// </param>
+    /// <param name="sttCategoryLevel">
+    /// When not null, the level configured for the <c>AlleyCat.Pipeline.STT</c> child category — mirroring the
+    /// shipped YAML entry that toggles the STT dispatch notification, with <c>None</c> disabling it.
+    /// </param>
     public static async Task<NotificationLoggingFixture> CreateAsync(
         SceneTree sceneTree,
-        bool enablePipelineTraceLogging = true)
+        bool enablePipelineTraceLogging = true,
+        string? sttCategoryLevel = null)
     {
         Node? displacedGlobalRoot = sceneTree.Root.GetNodeOrNull<Node>("Global");
         if (displacedGlobalRoot is not null)
@@ -84,6 +89,11 @@ internal sealed class NotificationLoggingFixture
         if (enablePipelineTraceLogging)
         {
             configurationValues["Logging:LogLevel:AlleyCat.Pipeline"] = "Trace";
+        }
+
+        if (sttCategoryLevel is not null)
+        {
+            configurationValues["Logging:LogLevel:AlleyCat.Pipeline.STT"] = sttCategoryLevel;
         }
 
         ConfigurationBuilder configurationBuilder = new();

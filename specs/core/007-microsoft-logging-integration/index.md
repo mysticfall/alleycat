@@ -25,7 +25,14 @@ and can be extended without changing gameplay consumers.
    being serialised.
 6. Developers can opt in to transient in-game diagnostics notifications — for example pipeline latency measurements and
    markers — through a single logging-configuration switch that also governs console output for the same category; the
-   shipped default keeps both off, and ordinary error notifications are unchanged.
+   shipped `AlleyCat.Pipeline` level keeps both off, and ordinary error notifications are unchanged.
+7. When automatic voice detection cannot start, the player receives exactly one clear notification that automatic
+   voice detection is unavailable — naming the speech input that remains, for example manual push-to-talk — while the
+   full log record keeps the underlying failure detail for diagnosis.
+8. Developers can toggle any feature-owned pipeline diagnostic category — its console diagnostics and notification
+   toasts together — through that category's logging configuration alone, without affecting other pipeline
+   notifications or ordinary error notifications; the speech-to-text dispatch toast is the current instance
+   (SPCH-003).
 
 ## Technical Requirements
 
@@ -59,26 +66,56 @@ and can be extended without changing gameplay consumers.
     lifetime, `NotificationTimeoutSeconds`, defaulting to five seconds; the provider must pass it to the sink with
     entry-driven posts, while non-entry `Error`/`Critical` posts keep the sink's own three-second default.
 15. Notification-eligible pipeline diagnostics emit at `Trace` under their own diagnostics category, and that
-    category's configured level is the single universal switch for console logs and notification toasts alike. The
-    logging framework's level filter runs before providers, so an entry-carrying diagnostic reaching the notification
-    provider has already been opted in by configuration — for example
-    `Logging:LogLevel:AlleyCat.Pipeline: Trace` through a per-user `user://AlleyCat.yaml` override
-    enables both, while the shipped `Information` default filters such entries before any provider sees them, keeping
-    both off. No separate notification switch may supplement the level.
+     category's configured level is the single universal switch for console logs and notification toasts alike. The
+     logging framework's level filter runs before providers, so an entry-carrying diagnostic reaching the notification
+     provider has already been opted in by configuration — for example
+     `Logging:LogLevel:AlleyCat.Pipeline: Trace` through a per-user `user://AlleyCat.yaml` override
+     enables both, while the shipped level for `AlleyCat.Pipeline` sits above `Trace` and filters such entries
+     before any provider sees them, keeping both off. No separate notification switch may supplement the level.
 16. The shared pipeline diagnostic log must log under the `AlleyCat.Pipeline` category: latency and marker entries as
-    Trace entries carrying their notification-eligible state, and log-only latency variants that must never become
-    notifications. Notification eligibility is closed to four stage kinds — the STT backend return, the speak-tool
-    invocation marker, TTS audio generation, and TTS lip-sync preparation — so toasts track pipeline milestones rather
-    than micro-stages. Every other pipeline stage — STT recording stop, STT request preparation, STT completion, TTS
-    backend return, TTS stream completion, TTS audio parsing, and playback start — plus failures, high-frequency
-    micro-stages, and session-end measurements must use the log-only latency kind, which preserves identical console
-    coverage without notification eligibility. Notification-eligible latency entries may carry a notification detail
-    that the toast renders in place of the console detail — omitted keeps the console detail, a shortened value
-    replaces it, and an empty value omits the parenthesised suffix — while the console line always renders the full
-    detail, so shortened toasts never reduce console coverage.
+     Trace entries carrying their notification-eligible state, and log-only latency variants that must never become
+     notifications. Under `AlleyCat.Pipeline`, notification eligibility is closed to three stage kinds — the
+     speak-tool invocation marker, TTS audio generation, and TTS lip-sync preparation — so toasts track pipeline
+     milestones rather than micro-stages; feature-owned child categories (TR-19) may add further diagnostic
+     notification entries, owned and specified by their feature specs. Every other pipeline stage — STT recording
+     stop, STT request preparation, STT completion, STT backend return, TTS backend return, TTS stream completion,
+     TTS audio parsing, and playback start — plus failures, high-frequency micro-stages, and session-end
+     measurements must use the log-only latency kind, which preserves identical console coverage without
+     notification eligibility. Notification-eligible latency entries may carry a notification detail that the toast
+     renders in place of the console detail — omitted keeps the console detail, a shortened value replaces it, and
+     an empty value omits the parenthesised suffix — while the console line always renders the full detail, so
+     shortened toasts never reduce console coverage.
 17. The notification sink must accept posts from any thread. When configured with the shared `IMainThreadDispatcher`
     (CORE-010), posts must marshal onto the Godot main thread before touching UI nodes; delivery failures and
     dispatcher shutdown races must be contained and never escape through logging callers.
+18. When automatic voice detection fails to initialise — a Silero model load or inference failure — the game must emit
+    exactly one structured Warning whose log state implements `IUINotificationEntry` (TR-14). The entry's full log
+    output must carry the diagnostic detail: the configured input mode, the fixed model path
+     `game/models/silero/silero_vad.onnx`, the failure's exception details, and whether manual speech input remains
+     available. `ToNotificationText()` must return one concise player-facing text — for example "Automatic voice
+     detection is unavailable. Use push-to-talk." The entry must reach the UI through the notification logging
+     provider's structured-state path — relaxing that provider's default `Error` floor for this entry alone — never
+     through direct `PostNotification` or other notification-sink calls, and must neither duplicate toasts nor repeat
+     per frame. SPCH-008 normatively defines the automatic utterance lifecycle and its initialisation failure
+     conditions; this specification is normative for the warning's logging and notification routing.
+19. Diagnostic child categories under `AlleyCat.Pipeline` are a generic mechanism: the shared pipeline log provides
+     generic child-category logger creation, and any feature may define a child category for its own diagnostics.
+     The child category's configured level is the single switch for its entries — console logs and notification
+     toasts alike — because the logging framework's category-level filter runs before providers and before
+     structured notification routing, so a level that excludes an entry suppresses it entirely. Feature-specific
+     notification entries and their category registration live with the owning feature, not in Core: Core defines
+     and hosts only the generic logging and notification machinery — `IUINotificationEntry` (TR-14), providers,
+     sinks, and the shared parent-category mechanics. The speech-to-text instance — the `AlleyCat.Pipeline.STT`
+     child category and its dispatch marker — is normatively owned by SPCH-003.
+20. Within a feature-owned child category, notification eligibility is closed to the entries its feature spec
+     defines; every other entry remains an ordinary log-only entry that must never become a notification, and the
+     existing `Error`/`Critical` routing is unchanged. Configuring or changing a child category's level must not
+     alter the `AlleyCat.Pipeline` milestone kinds (TR-16) or any unrelated notification. Shipped defaults and
+     toggle wording for a feature's child category are owned by that feature's spec — SPCH-003 for
+     `AlleyCat.Pipeline.STT`.
+21. Core's own provider and eligibility tests must use neutral fixture entries that carry no feature-specific
+     categories or payload concepts; coverage of feature-owned categories and entries lives with the owning
+     feature's tests — SPCH-003 for `AlleyCat.Pipeline.STT` and its dispatch marker.
 
 ## In Scope
 
@@ -88,6 +125,11 @@ and can be extended without changing gameplay consumers.
 - Opt-in notification routing for `IUINotificationEntry` entry states through the notification logging provider,
   governed by the category's configured log level.
 - The shared `AlleyCat.Pipeline` pipeline diagnostic log with notification-eligible and log-only entry kinds.
+- The generic child-category mechanism under `AlleyCat.Pipeline`: feature-owned child categories whose configured
+  level alone toggles their diagnostic entries and toasts, with feature-specific entries and category registration
+  owned by their feature specs (SPCH-003 for the speech-to-text instance).
+- Automatic-voice-detection unavailability warning routed as structured state through the notification logging
+  provider.
 - Main-thread-marshalled, thread-safe notification sink posting through the shared dispatcher.
 - Unified core logging resolver for non-constructor-injected Godot objects.
 - Structured logging conventions for new and migrated diagnostics.
@@ -119,15 +161,29 @@ and can be extended without changing gameplay consumers.
     notification provider's minimum level — that the post carries the entry's `NotificationTimeoutSeconds` toast
     lifetime while non-entry `Error` posts keep the sink default, that ordinary entries below that level never post
     and never alter the `Error`/`Critical` routing, and that posting re-entrancy guarding is unchanged.
-12. Tests verify that pipeline latency and marker entries log as `Trace` under `AlleyCat.Pipeline`, that only the four
-    notification-eligible stage kinds post while every log-only latency variant keeps its console line without
-    posting, that a notification detail shortens or omits the toast suffix while the console line keeps the full
-    detail, and that a background-thread post reaches the notification UI through the shared main-thread dispatcher.
-    Configuration-driven coverage verifies that a `Trace` level override for the category alone enables console logs
-    and toasts together, with the shipped `Information` default keeping both off.
+12. Tests verify that pipeline latency and marker entries log as `Trace` under `AlleyCat.Pipeline`, that only the
+    notification-eligible milestone stage kinds (TR-16) post while every log-only latency variant keeps its console
+    line without posting, that a notification detail shortens or omits the toast suffix while the console line keeps
+    the full detail, and that a background-thread post reaches the notification UI through the shared main-thread
+    dispatcher. Configuration-driven coverage verifies that a `Trace` level override for the category alone enables
+    console logs and toasts together, with the shipped level above `Trace` keeping both off.
+13. Tests verify an automatic-voice-detection initialisation failure emits exactly one Warning entry whose state
+    implements `IUINotificationEntry`: the full log record carries the input mode, the fixed model path
+    `game/models/silero/silero_vad.onnx`, the exception details, and manual-input availability; the notification text
+    is the single concise unavailability message; the entry reaches the UI through the notification logging
+    provider's structured-state path despite the default `Error` floor, with no direct `PostNotification` or other
+    notification-sink calls, no duplicate toasts, and no per-frame repetition.
+14. Tests verify the generic child-category mechanism with neutral notification-entry fixtures carrying no
+    feature-specific categories or payload concepts: a child category's configured level alone admits or suppresses
+    its notification-eligible entries — console output and toast together — before structured notification
+    routing, and changing a child category's level leaves the `AlleyCat.Pipeline` milestone kinds and unrelated
+    notifications unchanged. Feature-owned instance coverage — the `AlleyCat.Pipeline.STT` dispatch marker's
+    exactly-once emission, metadata privacy, and shipped toggle default — is verified under the owning feature
+    (SPCH-003).
 
-**Traceability Map:** User Requirements 1-6 -> AC-2, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12; Technical
-Requirements 1-17 -> AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-10, AC-11, AC-12.
+**Traceability Map:** User Requirements 1-6 -> AC-2, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12; User Requirement 7
+-> AC-13; User Requirement 8 -> AC-14; Technical Requirements 1-17 -> AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8,
+AC-9, AC-10, AC-11, AC-12; Technical Requirement 18 -> AC-13; Technical Requirements 19-21 -> AC-14.
 
 ## References
 
@@ -142,6 +198,7 @@ Requirements 1-17 -> AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-10, AC-1
 - [CORE-010: Main-Thread Dispatcher](../010-main-thread-dispatcher/index.md)
 - [SPCH-003: Transcriber Component](../../speech/003-transcription/index.md)
 - [SPCH-004: Speech Generator Component](../../speech/004-speech-generation/index.md)
+- [SPCH-008: Automatic Voice Detection](../../speech/008-automatic-voice-detection/index.md)
 - [AI-001: Mind Component](../../ai/001-mind/index.md)
 - [AI-002: Agent Runtime](../../ai/002-agent-runtime/index.md)
 

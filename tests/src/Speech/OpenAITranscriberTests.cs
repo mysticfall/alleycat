@@ -2,10 +2,11 @@ using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using AlleyCat.Core.Configuration;
+using AlleyCat.Core.Logging;
 using AlleyCat.Speech.Transcription;
+using AlleyCat.Tests.Core.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OpenAI;
@@ -15,24 +16,38 @@ using Xunit;
 namespace AlleyCat.Tests.Speech;
 
 /// <summary>
-/// Unit coverage for OpenAI-compatible speech transcription helpers.
+/// Unit coverage for the consolidated OpenAI-compatible REST speech transcriber.
 /// </summary>
-public sealed class OpenAITranscriberTests
+[Collection(PipelineDiagnosticsCollection.Name)]
+public sealed class OpenAITranscriberTests : IDisposable
 {
+    private readonly CapturingLogProvider _logProvider = new();
+    private readonly ILoggerFactory _loggerFactory;
+
+    /// <summary>
+    /// Installs a capturing logger factory so the shared REST boundary can emit pipeline diagnostics in tests.
+    /// </summary>
+    public OpenAITranscriberTests()
+    {
+        _loggerFactory = new CapturingLoggerFactory(_logProvider);
+        PipelineDebugLog.SetLoggerFactoryForTesting(_loggerFactory);
+    }
+
+    /// <summary>
+    /// Clears the test logger override.
+    /// </summary>
+    public void Dispose()
+    {
+        PipelineDebugLog.SetLoggerFactoryForTesting(null);
+        _loggerFactory.Dispose();
+    }
     /// <summary>
     /// OpenAI-compatible backends without auth must still produce an SDK-safe credential value.
     /// </summary>
     [Fact]
     public void GetApiKeyOrDefault_ApiKeyMissing_UsesDummyCompatibleBackendKey()
     {
-        OpenAITranscriber.OpenAITranscriberSettings settings = new(
-            Host: "https://api.openai.com/v1",
-            ApiKey: null,
-            Model: "whisper-1",
-            Language: null,
-            Prompt: null,
-            Temperature: null,
-            TimeoutSeconds: null);
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings();
 
         string apiKey = settings.GetApiKeyOrDefault();
 
@@ -45,14 +60,7 @@ public sealed class OpenAITranscriberTests
     [Fact]
     public void CreateEndpointUri_FullEndpointConfig_PreservesConfiguredUri()
     {
-        OpenAITranscriber.OpenAITranscriberSettings settings = new(
-            Host: "https://api.openai.com/v1",
-            ApiKey: string.Empty,
-            Model: "whisper-1",
-            Language: null,
-            Prompt: null,
-            Temperature: null,
-            TimeoutSeconds: null);
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(host: "https://api.openai.com/v1");
 
         Uri endpoint = settings.CreateEndpointUri();
 
@@ -65,14 +73,7 @@ public sealed class OpenAITranscriberTests
     [Fact]
     public void CreateEndpointUri_HostOnlyConfig_Throws()
     {
-        OpenAITranscriber.OpenAITranscriberSettings settings = new(
-            Host: "api.openai.com",
-            ApiKey: string.Empty,
-            Model: "whisper-1",
-            Language: null,
-            Prompt: null,
-            Temperature: null,
-            TimeoutSeconds: null);
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(host: "api.openai.com");
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(settings.CreateEndpointUri);
 
@@ -85,40 +86,11 @@ public sealed class OpenAITranscriberTests
     [Fact]
     public void CreateEndpointUri_EndpointWithoutPath_Throws()
     {
-        OpenAITranscriber.OpenAITranscriberSettings settings = new(
-            Host: "https://api.openai.com",
-            ApiKey: string.Empty,
-            Model: "whisper-1",
-            Language: null,
-            Prompt: null,
-            Temperature: null,
-            TimeoutSeconds: null);
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(host: "https://api.openai.com");
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(settings.CreateEndpointUri);
 
         Assert.Contains("must include the API base path", ex.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// SDK transcription options must reflect the configured optional request fields.
-    /// </summary>
-    [Fact]
-    public void CreateTranscriptionOptions_WithConfiguredFields_MapsSdkOptions()
-    {
-        OpenAITranscriber.OpenAITranscriberSettings settings = new(
-            Host: "https://api.openai.com/v1",
-            ApiKey: string.Empty,
-            Model: "whisper-1",
-            Language: "en",
-            Prompt: "Transcribe clearly.",
-            Temperature: 0.35f,
-            TimeoutSeconds: 30);
-
-        AudioTranscriptionOptions options = OpenAITranscriber.CreateTranscriptionOptions(settings);
-
-        Assert.Equal("en", options.Language);
-        Assert.Equal("Transcribe clearly.", options.Prompt);
-        Assert.Equal(0.35f, options.Temperature);
     }
 
     /// <summary>
@@ -141,7 +113,7 @@ public sealed class OpenAITranscriberTests
             ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["ApiKey"] = "sk-user",
-                ["Temperature"] = "0.25",
+                ["Hotwords"] = "  felis catus  ",
             },
         };
 
@@ -154,7 +126,31 @@ public sealed class OpenAITranscriberTests
         Assert.Equal("whisper-1", settings.Model);
         Assert.Equal("Base prompt", settings.Prompt);
         Assert.Equal("sk-user", settings.ApiKey);
-        Assert.Equal(0.25f, settings.Temperature);
+        Assert.Equal("felis catus", settings.Hotwords);
+    }
+
+    /// <summary>
+    /// Blank or missing STT hint values must bind to null so the request omits them entirely.
+    /// </summary>
+    [Fact]
+    public void Load_BlankOrMissingHints_BindToNull()
+    {
+        Dictionary<string, IReadOnlyDictionary<string, string>> baseSections = new(StringComparer.Ordinal)
+        {
+            ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Host"] = "https://base.example/v1",
+                ["Hotwords"] = " \t ",
+            },
+        };
+
+        var settings = OpenAITranscriber.OpenAITranscriberSettings.Load(
+            CreateConfiguration(baseSections),
+            "blank-hints-config");
+
+        Assert.Null(settings.Hotwords);
+        Assert.Null(settings.Prompt);
+        Assert.Null(settings.Language);
     }
 
     /// <summary>
@@ -176,7 +172,7 @@ public sealed class OpenAITranscriberTests
             ["STT"] = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["ApiKey"] = "sk-user",
-                ["Temperature"] = "0.4",
+                ["Hotwords"] = "alleycat",
             },
         };
 
@@ -195,7 +191,7 @@ public sealed class OpenAITranscriberTests
         Assert.True(mergedLoaderCalled);
         Assert.Equal("https://base.example/v1", settings.Host);
         Assert.Equal("sk-user", settings.ApiKey);
-        Assert.Equal(0.4f, settings.Temperature);
+        Assert.Equal("alleycat", settings.Hotwords);
     }
 
     /// <summary>
@@ -230,127 +226,276 @@ public sealed class OpenAITranscriberTests
         Assert.Equal("https://custom.example/v1", settings.Host);
         Assert.Equal("whisper-custom", settings.Model);
         Assert.Null(settings.ApiKey);
-        Assert.Null(settings.Temperature);
+        Assert.Null(settings.Hotwords);
     }
 
     /// <summary>
-    /// Empty transcription payloads must fail fast instead of surfacing blank transcripts.
+    /// The multipart body must carry the file, model, every configured optional field — including the compatible
+    /// backend's native hotwords — and the plain-JSON response format, while the trimmed text settles the request.
     /// </summary>
     [Fact]
-    public void GetTranscriptionTextOrThrow_EmptyText_Throws()
+    public async Task TranscribeViaMultipartAsync_WithConfiguredFields_SendsNativeHotwordsAndTrimsText()
     {
-        AudioTranscription response = OpenAIAudioModelFactory.AudioTranscription(
-            text: string.Empty,
-            duration: null,
+        byte[] pcmData = [0x34, 0x12, 0x78, 0x56];
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(
             language: "en",
-            words: [],
-            segments: []);
-
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => OpenAITranscriber.GetTranscriptionTextOrThrow(response));
-
-        Assert.Contains("did not contain a non-empty 'text' field", ex.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// OpenAI request preparation must produce a rewound WAV stream and configured SDK options off the caller path.
-    /// </summary>
-    [Fact]
-    public void PrepareTranscriptionRequest_ConfiguredAudioAndSettings_CreatesUploadRequest()
-    {
-        RecordedAudioData recordedAudio = new([0x34, 0x12, 0x78, 0x56], sampleRate: 16000, channelCount: 1);
-        OpenAITranscriber.OpenAITranscriberSettings settings = new(
-            Host: "https://api.openai.com/v1",
-            ApiKey: string.Empty,
-            Model: "whisper-1",
-            Language: "en",
-            Prompt: "Transcribe clearly.",
-            Temperature: 0.35f,
-            TimeoutSeconds: 30);
-
-        using ILoggerFactory loggerFactory = new TestLoggerFactory();
-        using OpenAITranscriber.PreparedTranscriptionRequest request =
-            OpenAITranscriber.PrepareTranscriptionRequest(recordedAudio, settings, loggerFactory);
-        WaveFileStream wavStream = Assert.IsType<WaveFileStream>(request.WavStream);
-        Assert.True(MemoryMarshal.TryGetArray(recordedAudio.PCMData, out ArraySegment<byte> recordingSegment));
-        Assert.True(MemoryMarshal.TryGetArray(wavStream.PCMData, out ArraySegment<byte> streamSegment));
-        byte[] bytes = new byte[request.WavStream.Length];
-        _ = request.WavStream.Read(bytes);
-
-        Assert.NotNull(request.Client);
-        Assert.Equal(48, request.WavStream.Length);
-        Assert.Same(recordingSegment.Array, streamSegment.Array);
-        Assert.Equal((byte)'R', bytes[0]);
-        Assert.Equal((byte)'I', bytes[1]);
-        Assert.Equal((byte)'F', bytes[2]);
-        Assert.Equal((byte)'F', bytes[3]);
-        Assert.Equal("en", request.Options.Language);
-        Assert.Equal("Transcribe clearly.", request.Options.Prompt);
-        Assert.Equal(0.35f, request.Options.Temperature);
-
-        request.WavStream.Position = 0;
-        byte[] replay = new byte[request.WavStream.Length];
-        Assert.Equal(replay.Length, request.WavStream.Read(replay));
-        Assert.Equal(bytes, replay);
-    }
-
-    /// <summary>
-    /// Caller-owned arrays cannot mutate the PCM retained by the production recording/request route.
-    /// </summary>
-    [Fact]
-    public void PrepareTranscriptionRequest_PublicRecordingCopy_IsImmutableFromSource()
-    {
-        byte[] source = [0x34, 0x12];
-        RecordedAudioData recording = new(source, sampleRate: 16000, channelCount: 1);
-        source[0] = 0xff;
-        OpenAITranscriber.OpenAITranscriberSettings settings = new(
-            Host: "https://api.openai.com/v1",
-            ApiKey: null,
-            Model: "whisper-1",
-            Language: null,
-            Prompt: null,
-            Temperature: null,
-            TimeoutSeconds: null);
-
-        using ILoggerFactory loggerFactory = new TestLoggerFactory();
-        using OpenAITranscriber.PreparedTranscriptionRequest request =
-            OpenAITranscriber.PrepareTranscriptionRequest(recording, settings, loggerFactory);
-        request.WavStream.Position = WaveFileStream.HeaderLength;
-
-        Assert.Equal(0x34, request.WavStream.ReadByte());
-    }
-
-    /// <summary>
-    /// The pinned SDK must serialise and replay the complete composite WAV stream through its real multipart path.
-    /// </summary>
-    [Fact]
-    public async Task TranscribeAudioAsync_WaveFileStream_RetriesWithIdenticalMultipartWavBody()
-    {
-        byte[] pcmData = [0x34, 0x12, 0x78, 0x56, 0xbc, 0x9a];
-        using WaveFileStream expectedStream = new(pcmData, sampleRate: 16000, channelCount: 1);
-        byte[] expectedWave = new byte[expectedStream.Length];
-        Assert.Equal(expectedWave.Length, expectedStream.Read(expectedWave));
+            prompt: "Transcribe clearly.",
+            hotwords: "felis catus");
         using CapturingTranscriptionHandler handler = new();
         using HttpClient httpClient = new(handler);
-        OpenAIClientOptions clientOptions = new()
+        AudioClient client = CreateAudioClient(httpClient, retryPolicy: null);
+
+        string text = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            new RecordedAudioData(pcmData, sampleRate: 16000, channelCount: 1),
+            settings,
+            CancellationToken.None,
+            OpenAITranscriber.ManualDispatchSource);
+
+        Assert.Equal("synthetic transcript", text);
+        byte[] body = Assert.Single(handler.RequestBodies);
+        Assert.StartsWith("multipart/form-data; boundary=", Assert.Single(handler.ContentTypes));
+        Assert.Contains("name=model\r\n\r\nwhisper-1\r\n"u8, body);
+        Assert.Contains("name=language\r\n\r\nen\r\n"u8, body);
+        Assert.Contains("name=prompt\r\n\r\nTranscribe clearly.\r\n"u8, body);
+        Assert.Contains("name=hotwords\r\n\r\nfelis catus\r\n"u8, body);
+        Assert.Contains("name=response_format\r\n\r\njson\r\n"u8, body);
+        Assert.Equal(CreateExpectedWaveBytes(pcmData), ExtractFileContent(body));
+    }
+
+    /// <summary>
+    /// Blank optional fields must be omitted from the multipart body entirely.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeViaMultipartAsync_WithoutOptionalFields_OmitsThemFromBody()
+    {
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings();
+        using CapturingTranscriptionHandler handler = new();
+        using HttpClient httpClient = new(handler);
+        AudioClient client = CreateAudioClient(httpClient, retryPolicy: null);
+
+        string text = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            new RecordedAudioData([0x01, 0x00], sampleRate: 16000, channelCount: 1),
+            settings,
+            CancellationToken.None,
+            OpenAITranscriber.ManualDispatchSource);
+
+        Assert.Equal("synthetic transcript", text);
+        byte[] body = Assert.Single(handler.RequestBodies);
+        Assert.Contains("name=model\r\n\r\nwhisper-1\r\n"u8, body);
+        Assert.Contains("name=response_format\r\n\r\njson\r\n"u8, body);
+        Assert.DoesNotContain("name=language"u8, body);
+        Assert.DoesNotContain("name=prompt"u8, body);
+        Assert.DoesNotContain("name=hotwords"u8, body);
+    }
+
+    /// <summary>
+    /// A response without a string <c>text</c> field must fail clearly instead of surfacing a blank transcript.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeViaMultipartAsync_WhenResponseLacksTextField_Throws()
+    {
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings();
+        using CapturingTranscriptionHandler handler = new()
         {
-            Endpoint = new Uri("https://unit.test/v1"),
-            RetryPolicy = new ImmediateRetryPolicy(),
-            Transport = new HttpClientPipelineTransport(httpClient),
+            RespondWith = /*lang=json,strict*/ """{"duration": 1.0}""",
         };
-        AudioClient client = new("whisper-1", new ApiKeyCredential("unit-test-key"), clientOptions);
-        using WaveFileStream uploadStream = new(pcmData, sampleRate: 16000, channelCount: 1);
+        using HttpClient httpClient = new(handler);
+        AudioClient client = CreateAudioClient(httpClient, retryPolicy: null);
 
-        AudioTranscription transcription = await client.TranscribeAudioAsync(
-            uploadStream,
-            "alleycat-recording.wav",
-            new AudioTranscriptionOptions { Language = "en" });
+        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => OpenAITranscriber.TranscribeViaMultipartAsync(
+                client,
+                new RecordedAudioData([0x01, 0x00], sampleRate: 16000, channelCount: 1),
+                settings,
+                CancellationToken.None,
+                OpenAITranscriber.ManualDispatchSource));
 
-        Assert.Equal("synthetic transcript", transcription.Text);
+        Assert.Contains("did not contain a string 'text' field", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The SDK retry policy must replay the seekable WAV body: a retried request carries a byte-identical multipart
+    /// body, including its native hotwords, while the logical dispatch marker still emits exactly once.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeViaMultipartAsync_OnTransientFailure_RetriesWithIdenticalMultipartBody()
+    {
+        byte[] pcmData = [0x34, 0x12, 0x78, 0x56, 0xbc, 0x9a];
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(hotwords: "felis catus");
+        using CapturingTranscriptionHandler handler = new()
+        {
+            FailFirstAttemptWithRetryAfter = true,
+        };
+        using HttpClient httpClient = new(handler);
+        AudioClient client = CreateAudioClient(httpClient, new ImmediateRetryPolicy());
+
+        string text = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            new RecordedAudioData(pcmData, sampleRate: 16000, channelCount: 1),
+            settings,
+            CancellationToken.None,
+            OpenAITranscriber.ManualDispatchSource);
+
+        Assert.Equal("synthetic transcript", text);
         Assert.Equal(2, handler.RequestBodies.Count);
         Assert.Equal(handler.RequestBodies[0], handler.RequestBodies[1]);
         Assert.All(handler.ContentTypes, value => Assert.StartsWith("multipart/form-data; boundary=", value));
-        Assert.All(handler.RequestBodies, body => Assert.Equal(expectedWave, ExtractFileContent(body)));
+        Assert.All(handler.RequestBodies, body => Assert.Equal(CreateExpectedWaveBytes(pcmData), ExtractFileContent(body)));
+        Assert.All(handler.RequestBodies, body => Assert.Contains("name=hotwords\r\n\r\nfelis catus\r\n"u8, body));
+
+        // Two HTTP attempts settle one logical request, so the dispatch marker fires exactly once despite the retry.
+        CapturedLogEntry dispatchEntry = Assert.Single(_logProvider.Entries);
+        Assert.Equal("AlleyCat.Pipeline.STT", dispatchEntry.CategoryName);
+        Assert.Equal(LogLevel.Debug, dispatchEntry.Level);
+    }
+
+    /// <summary>
+    /// Cancellation must abandon the in-flight request through the shared request path.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeViaMultipartAsync_WhenCancelled_ThrowsOperationCanceled()
+    {
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings();
+        using CapturingTranscriptionHandler handler = new()
+        {
+            HoldUntilCancelled = true,
+        };
+        using HttpClient httpClient = new(handler);
+        AudioClient client = CreateAudioClient(httpClient, retryPolicy: null);
+        using CancellationTokenSource cancellation = new();
+
+        Task<string> request = OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            new RecordedAudioData([0x01, 0x00], sampleRate: 16000, channelCount: 1),
+            settings,
+            cancellation.Token,
+            OpenAITranscriber.ManualDispatchSource);
+        await handler.RequestEntered.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await request);
+    }
+
+    /// <summary>
+    /// Manual and automatic requests share one transport: successive requests through the same client and settings —
+    /// one without and one with a linked cancellation token — carry boundary-normalised identical multipart bodies
+    /// to one endpoint, and each logical request emits its own dispatch marker with the correct source mode.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeViaMultipartAsync_ManualAndAutomaticRequests_ShareOneTransport()
+    {
+        byte[] pcmData = [0x34, 0x12, 0x78, 0x56];
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(hotwords: "alleycat");
+        using CapturingTranscriptionHandler handler = new();
+        using HttpClient httpClient = new(handler);
+        AudioClient client = CreateAudioClient(httpClient, retryPolicy: null);
+        var recording = new RecordedAudioData(pcmData, sampleRate: 16000, channelCount: 1);
+
+        string manualText = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            recording,
+            settings,
+            CancellationToken.None,
+            OpenAITranscriber.ManualDispatchSource);
+        using var automaticCancellation = new CancellationTokenSource();
+        string automaticText = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            recording,
+            settings,
+            automaticCancellation.Token,
+            OpenAITranscriber.AutomaticDispatchSource);
+
+        Assert.Equal(manualText, automaticText);
+        Assert.Equal(2, handler.RequestBodies.Count);
+        Assert.Equal(
+            NormaliseBoundary(handler.RequestBodies[0], handler.ContentTypes[0]),
+            NormaliseBoundary(handler.RequestBodies[1], handler.ContentTypes[1]));
+        Assert.All(
+            handler.RequestUris,
+            uri => Assert.Equal("https://unit.test/v1/audio/transcriptions", uri.ToString()));
+
+        // One dispatch marker per logical request, labelled by the invoking source mode.
+        Assert.Equal(2, _logProvider.Entries.Count);
+        Assert.All(_logProvider.Entries, entry => Assert.Equal("AlleyCat.Pipeline.STT", entry.CategoryName));
+        Assert.Equal(
+            [OpenAITranscriber.ManualDispatchSource, OpenAITranscriber.AutomaticDispatchSource],
+            _logProvider.Entries.Select(entry => Assert.IsType<SttDispatchEntry>(entry.State).SourceMode));
+    }
+
+    /// <summary>
+    /// Each logical transcription request emits exactly one debug-level dispatch marker under the STT child
+    /// category, carrying only non-sensitive operational metadata — the source mode, the frame-derived duration,
+    /// and the PCM byte count.
+    /// </summary>
+    [Fact]
+    public async Task TranscribeViaMultipartAsync_EmitsExactlyOneSttDispatchMarkerWithOperationalMetadataOnly()
+    {
+        // 37,600 mono frames at 16 kHz = 2.35 seconds of PCM, 75,200 bytes.
+        byte[] pcmData = new byte[75200];
+        OpenAITranscriber.OpenAITranscriberSettings settings = CreateSettings(
+            prompt: "Transcribe clearly.",
+            hotwords: "felis catus");
+        using CapturingTranscriptionHandler handler = new();
+        using HttpClient httpClient = new(handler);
+        AudioClient client = CreateAudioClient(httpClient, retryPolicy: null);
+
+        string text = await OpenAITranscriber.TranscribeViaMultipartAsync(
+            client,
+            new RecordedAudioData(pcmData, sampleRate: 16000, channelCount: 1),
+            settings,
+            CancellationToken.None,
+            OpenAITranscriber.AutomaticDispatchSource);
+
+        Assert.Equal("synthetic transcript", text);
+        CapturedLogEntry entry = Assert.Single(_logProvider.Entries);
+        Assert.Equal("AlleyCat.Pipeline.STT", entry.CategoryName);
+        Assert.Equal(LogLevel.Debug, entry.Level);
+        Assert.Equal("Dispatching automatic audio to STT (2.35 seconds, 75200 PCM bytes)", entry.Message);
+
+        SttDispatchEntry dispatchEntry = Assert.IsType<SttDispatchEntry>(entry.State);
+        Assert.Equal(OpenAITranscriber.AutomaticDispatchSource, dispatchEntry.SourceMode);
+        Assert.Equal(TimeSpan.FromSeconds(2.35), dispatchEntry.Duration);
+        Assert.Equal(75200, dispatchEntry.PcmByteCount);
+
+        // The marker never carries transcript, prompt, hotword, model, credential, endpoint, or request-body content.
+        Assert.DoesNotContain("synthetic transcript", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Transcribe clearly.", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("felis catus", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("whisper-1", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("unit.test", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("unit-test-key", entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("multipart", entry.Message, StringComparison.Ordinal);
+    }
+
+    private static OpenAITranscriber.OpenAITranscriberSettings CreateSettings(
+        string host = "https://api.openai.com/v1",
+        string? language = null,
+        string? prompt = null,
+        string? hotwords = null)
+        => new(
+            Host: host,
+            ApiKey: string.Empty,
+            Model: "whisper-1",
+            Language: language,
+            Prompt: prompt,
+            Hotwords: hotwords,
+            TimeoutSeconds: null);
+
+    private static AudioClient CreateAudioClient(HttpClient httpClient, ClientRetryPolicy? retryPolicy)
+    {
+        OpenAIClientOptions clientOptions = new()
+        {
+            Endpoint = new Uri("https://unit.test/v1"),
+            Transport = new HttpClientPipelineTransport(httpClient),
+        };
+        if (retryPolicy is not null)
+        {
+            clientOptions.RetryPolicy = retryPolicy;
+        }
+
+        return new AudioClient("whisper-1", new ApiKeyCredential("unit-test-key"), clientOptions);
     }
 
     private static IConfiguration CreateConfiguration(
@@ -380,6 +525,21 @@ public sealed class OpenAITranscriberTests
         }
     }
 
+    private static byte[] CreateExpectedWaveBytes(byte[] pcmData)
+    {
+        using WaveFileStream expectedStream = new(pcmData, sampleRate: 16000, channelCount: 1);
+        byte[] expectedWave = new byte[expectedStream.Length];
+        Assert.Equal(expectedWave.Length, expectedStream.Read(expectedWave));
+        return expectedWave;
+    }
+
+    /// <summary>Replaces every generated boundary token with a fixed marker so independently generated bodies compare.</summary>
+    private static string NormaliseBoundary(byte[] body, string contentType)
+    {
+        string boundary = contentType.Split('=', 2)[1].Trim('"');
+        return System.Text.Encoding.UTF8.GetString(body).Replace(boundary, "boundary", StringComparison.Ordinal);
+    }
+
     private static byte[] ExtractFileContent(byte[] multipartBody)
     {
         ReadOnlySpan<byte> body = multipartBody;
@@ -398,42 +558,96 @@ public sealed class OpenAITranscriberTests
         return contentAndBoundary[..contentLength].ToArray();
     }
 
-    private sealed class TestLoggerFactory : ILoggerFactory
+    /// <summary>Captures every entry emitted through the pipeline diagnostics helper for dispatch-marker assertions.</summary>
+    private sealed class CapturingLogProvider : ILoggerProvider
     {
-        public void AddProvider(ILoggerProvider provider)
-            => ArgumentNullException.ThrowIfNull(provider);
+        private readonly Lock _lock = new();
+        private readonly List<CapturedLogEntry> _entries = [];
 
-        public ILogger CreateLogger(string categoryName)
-            => new TestLogger();
+        public IReadOnlyList<CapturedLogEntry> Entries
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return [.. _entries];
+                }
+            }
+        }
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, this);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(string categoryName, CapturingLogProvider provider) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull
+                => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel is not LogLevel.None;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                lock (provider._lock)
+                {
+                    provider._entries.Add(new CapturedLogEntry(categoryName, logLevel, formatter(state, exception), state));
+                }
+            }
+        }
+    }
+
+    private sealed record CapturedLogEntry(string CategoryName, LogLevel Level, string Message, object? State);
+
+    private sealed class CapturingLoggerFactory(CapturingLogProvider provider) : ILoggerFactory
+    {
+        public void AddProvider(ILoggerProvider loggerProvider)
+        {
+        }
+
+        public ILogger CreateLogger(string categoryName) => provider.CreateLogger(categoryName);
 
         public void Dispose()
         {
         }
     }
 
-    private sealed class TestLogger : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull
-            => null;
-
-        public bool IsEnabled(LogLevel logLevel)
-            => false;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-            => ArgumentNullException.ThrowIfNull(formatter);
-    }
-
     private sealed class CapturingTranscriptionHandler : HttpMessageHandler
     {
+        private readonly TaskCompletionSource _requestEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public List<byte[]> RequestBodies { get; } = [];
 
         public List<string> ContentTypes { get; } = [];
+
+        public List<Uri> RequestUris { get; } = [];
+
+        public bool FailFirstAttemptWithRetryAfter
+        {
+            get;
+            set;
+        }
+
+        public bool HoldUntilCancelled
+        {
+            get;
+            set;
+        }
+
+        public string RespondWith
+        {
+            get;
+            set;
+        } = /*lang=json,strict*/ """{"text": "  synthetic transcript  "}""";
+
+        public Task RequestEntered => _requestEntered.Task;
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -442,10 +656,17 @@ public sealed class OpenAITranscriberTests
             Assert.Equal(HttpMethod.Post, request.Method);
             Assert.Equal("https://unit.test/v1/audio/transcriptions", request.RequestUri?.ToString());
             Assert.NotNull(request.Content);
+            RequestUris.Add(request.RequestUri!);
             ContentTypes.Add(request.Content.Headers.ContentType?.ToString() ?? string.Empty);
             RequestBodies.Add(await request.Content.ReadAsByteArrayAsync(cancellationToken));
+            _ = _requestEntered.TrySetResult();
 
-            if (RequestBodies.Count == 1)
+            if (HoldUntilCancelled)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+
+            if (FailFirstAttemptWithRetryAfter && RequestBodies.Count == 1)
             {
                 HttpResponseMessage retryResponse = CreateJsonResponse(
                     HttpStatusCode.InternalServerError,
@@ -460,18 +681,22 @@ public sealed class OpenAITranscriberTests
                 return retryResponse;
             }
 
-            return CreateJsonResponse(
-                HttpStatusCode.OK,
-                new
-                {
-                    text = "synthetic transcript"
-                });
+            return CreateRawJsonResponse(HttpStatusCode.OK, RespondWith);
         }
 
         private static HttpResponseMessage CreateJsonResponse<T>(HttpStatusCode statusCode, T body)
         {
             ByteArrayContent content = new(JsonSerializer.SerializeToUtf8Bytes(body));
             content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            return new HttpResponseMessage(statusCode)
+            {
+                Content = content,
+            };
+        }
+
+        private static HttpResponseMessage CreateRawJsonResponse(HttpStatusCode statusCode, string json)
+        {
+            StringContent content = new(json, System.Text.Encoding.UTF8, "application/json");
             return new HttpResponseMessage(statusCode)
             {
                 Content = content,

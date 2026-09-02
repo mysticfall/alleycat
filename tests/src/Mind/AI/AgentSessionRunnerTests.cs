@@ -32,6 +32,7 @@ public sealed class AgentSessionRunnerTests
     /// Every request replays the complete ordered transcript and carries the strict tool-only options: required
     /// tool mode without a named function, no response format, and exactly the production tool inventory.
     /// </summary>
+    /// <summary>Registration cancels active generation and holds its replacement behind the owned lease.</summary>
     [Fact]
     public async Task RunAsync_ReplaysCompleteOrderedTranscriptWithToolOnlyOptionsOnEveryRequest()
     {
@@ -119,6 +120,7 @@ public sealed class AgentSessionRunnerTests
     /// The session is long-running: repeated valid batches never hit a model-request or action bound
     /// (AI-002 TR-3).
     /// </summary>
+    /// <summary>Foreign and insufficient completions leave an expectation's gate held.</summary>
     [Fact]
     public async Task RunAsync_WithRepeatedValidBatches_RunsIndefinitelyWithoutRequestBound()
     {
@@ -167,6 +169,7 @@ public sealed class AgentSessionRunnerTests
     /// A malformed response is discarded and a later valid response resumes the same session without replaying any
     /// assistant content or tool effects from the rejected batch.
     /// </summary>
+    /// <summary>Each independently awaited continuation must settle before replacement generation resumes.</summary>
     [Fact]
     public async Task RunAsync_WithInvalidThenValidResponse_ContinuesWithoutInvalidBatchEffects()
     {
@@ -195,6 +198,7 @@ public sealed class AgentSessionRunnerTests
     /// A fully valid response resets the consecutive-invalid streak, so separated malformed batches do not combine
     /// into an exhausted recovery budget.
     /// </summary>
+    /// <summary>A newer keyed projection replaces the still-mutable request input instead of appending to it.</summary>
     [Fact]
     public async Task RunAsync_WithValidResponseBetweenInvalidBatches_ResetsRecoveryStreak()
     {
@@ -221,6 +225,7 @@ public sealed class AgentSessionRunnerTests
     /// A bounded run of malformed batches ends through the contained session failure after the established three
     /// consecutive invalid-response limit.
     /// </summary>
+    /// <summary>Equal and older keyed projections cannot overwrite the latest mutable input.</summary>
     [Fact]
     public async Task RunAsync_WithConsecutiveInvalidResponses_ExhaustsRecoveryBudget()
     {
@@ -239,6 +244,7 @@ public sealed class AgentSessionRunnerTests
     /// The malformed-response budget is supplied by its own policy, rather than inheriting the transport retry
     /// count or its delays.
     /// </summary>
+    /// <summary>Invalidation that linearises during validation wins over the stale assistant append.</summary>
     [Fact]
     public async Task RunAsync_WithConfiguredInvalidResponseRecoveryPolicy_UsesIndependentBudget()
     {
@@ -262,6 +268,7 @@ public sealed class AgentSessionRunnerTests
     /// Call-ID validation is transactional: a duplicate ID in a rejected batch does not reserve either ID for the
     /// valid response that follows it.
     /// </summary>
+    /// <summary>Post-acceptance continuation appends one reconciliation while retaining accepted causal history.</summary>
     [Fact]
     public async Task RunAsync_WithInvalidDuplicateCallIDs_DoesNotConsumeBatchIDs()
     {
@@ -311,6 +318,7 @@ public sealed class AgentSessionRunnerTests
     /// Reasoning content before a valid call is tolerated and skipped during validation, while remaining transient
     /// session protocol rather than player-visible text (AI-002 TR-53).
     /// </summary>
+    /// <summary>Abandonment releases only its lease and does not invent model-facing input.</summary>
     [Fact]
     public async Task RunAsync_WithReasoningBeforeCall_ToleratesReasoningAndExecutesTheCall()
     {
@@ -477,7 +485,7 @@ public sealed class AgentSessionRunnerTests
             EndQuietly(lifetime));
         AgentSessionRunner runner = CreateRunner(
             client,
-            [AIFunctionFactory.Create(ThrowingSpeak, SpeakToolName)],
+            [AgentSessionPhasePolicy.AdmissionArbitration.Bind(AIFunctionFactory.Create(ThrowingSpeak, SpeakToolName))],
             []);
 
         await runner.RunAsync(lifetime.Token);
@@ -1075,6 +1083,238 @@ public sealed class AgentSessionRunnerTests
         Assert.Empty(client.Requests);
     }
 
+    /// <summary>Registration cancels active generation and holds replacement behind its owned lease.</summary>
+    [Fact]
+    public async Task RegisterSpeechContinuation_CancelsGenerationAndHoldsReplacementUntilCompletion()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started, cancelled),
+            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
+        await cancelled.Task;
+        _ = Assert.Single(client.Requests);
+
+        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Complete input."));
+        await runTask;
+
+        Assert.Equal("Complete input.", Assert.Single(client.Requests[1]).Text);
+    }
+
+    /// <summary>Foreign and insufficient completions leave an expectation's gate held.</summary>
+    [Fact]
+    public async Task CompleteFreshExpectation_RejectsWrongKeyAndInsufficientRevisionWithoutReleasingTheHold()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started, cancelled),
+            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 3));
+        AgentSessionRunner foreignRunner = CreateRunner(new ScriptedSessionClient(), [CreateSpeakFunction(_ => { })], []);
+        FreshInjectionExpectation foreign = foreignRunner.RegisterSpeechContinuation(Continuation("voice", "group", 3));
+        await cancelled.Task;
+        runner.CompleteFreshExpectation(foreign, Injection("voice", "group", 3, "Foreign lease."));
+        runner.CompleteFreshExpectation(expectation, Injection("other", "group", 3, "Wrong key."));
+        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Prior segment."));
+        _ = Assert.Single(client.Requests);
+
+        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 3, "Complete input."));
+        await runTask;
+
+        Assert.Equal("Complete input.", Assert.Single(client.Requests[1]).Text);
+    }
+
+    /// <summary>Each independently awaited continuation settles before replacement generation resumes.</summary>
+    [Fact]
+    public async Task CompleteFreshExpectation_TwoOutstandingLeasesRequireBothToSettle()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started, cancelled),
+            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        FreshInjectionExpectation first = runner.RegisterSpeechContinuation(Continuation("voice", "first", 1));
+        FreshInjectionExpectation second = runner.RegisterSpeechContinuation(Continuation("voice", "second", 1));
+        await cancelled.Task;
+        runner.CompleteFreshExpectation(first, Injection("voice", "first", 1, "First complete."));
+        _ = Assert.Single(client.Requests);
+
+        runner.CompleteFreshExpectation(second, Injection("voice", "second", 1, "Second complete."));
+        await runTask;
+
+        Assert.Equal("First complete.\nSecond complete.", Assert.Single(client.Requests[1]).Text);
+    }
+
+    /// <summary>
+    /// Two resumed segments from one group retain independent opaque leases. Completing the earlier segment's
+    /// projection must not release the later segment merely because its model-facing revision is newer.
+    /// </summary>
+    [Fact]
+    public async Task CompleteFreshExpectation_SameGroupLeasesRemainIndependent()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started, cancelled),
+            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        FreshInjectionExpectation first = runner.RegisterSpeechContinuation(Continuation("voice", "group", 1));
+        FreshInjectionExpectation second = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
+        await cancelled.Task;
+        runner.CompleteFreshExpectation(first, Injection("voice", "group", 9, "Joined input."));
+        _ = Assert.Single(client.Requests);
+
+        runner.CompleteFreshExpectation(second, Injection("voice", "group", 9, "Joined input."));
+        await runTask;
+
+        Assert.Equal("Joined input.", Assert.Single(client.Requests[1]).Text);
+    }
+
+    /// <summary>A newer keyed projection replaces the still-mutable request input instead of appending to it.</summary>
+    [Fact]
+    public async Task QueueOrReplaceInjection_BeforeAcceptanceUsesOnlyTheLatestKeyedRevision()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started),
+            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Partial input."));
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
+        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Joined complete input."));
+        await runTask;
+
+        Assert.Equal("Joined complete input.", Assert.Single(client.Requests[1]).Text);
+        Assert.DoesNotContain("Partial input.", client.Requests[1][0].Text);
+    }
+
+    /// <summary>Equal and older keyed projections cannot overwrite the latest mutable input.</summary>
+    [Fact]
+    public async Task QueueOrReplaceInjection_IgnoresStaleAndEqualRevisions()
+    {
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Partial input."));
+        runner.QueueOrReplaceInjection(Injection("voice", "group", 2, "Complete input."));
+        runner.QueueOrReplaceInjection(Injection("voice", "group", 2, "Equal revision."));
+        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Stale revision."));
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal("Complete input.", Assert.Single(client.Requests[0]).Text);
+    }
+
+    /// <summary>Invalidation that linearises during validation wins over the stale assistant append.</summary>
+    [Fact]
+    public async Task RegisterSpeechContinuation_DuringValidationDiscardsTheStaleAssistantResponse()
+    {
+        CancellationTokenSource lifetime = new();
+        AgentSessionRunner? runner = null;
+        FreshInjectionExpectation? expectation = null;
+        CallbackArguments arguments = new(
+            () =>
+            {
+                expectation = runner!.RegisterSpeechContinuation(Continuation("voice", "group", 2));
+                runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Joined input."));
+            },
+            new Dictionary<string, object?> { ["speech"] = "Never spoken" });
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("stale", SpeakToolName, arguments)),
+            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            EndQuietly(lifetime));
+        runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Partial input."));
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal([ChatRole.User], client.Requests[1].Select(message => message.Role));
+        Assert.Equal("Joined input.", client.Requests[1][0].Text);
+    }
+
+    /// <summary>Post-acceptance continuation appends reconciliation while retaining accepted causal history.</summary>
+    [Fact]
+    public async Task QueueOrReplaceInjection_AfterAcceptanceAppendsOneReconciliationWithoutRewritingHistory()
+    {
+        ControlledTool controlled = new();
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("controlled", ControlledTool.ToolName)),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [controlled.Function], []);
+        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Original input."));
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await controlled.Started.Task;
+        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
+        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Joined input."));
+        _ = controlled.Release.TrySetResult();
+        await runTask;
+
+        Assert.Equal("Original input.", client.Requests[1][0].Text);
+        Assert.Equal(
+            "The input continued. Its complete current content is:\nJoined input.\nEarlier responses or actions may already have occurred.",
+            client.Requests[1][3].Text);
+        _ = Assert.Single(client.Requests[1], message => message.Text?.StartsWith("The input continued.") == true);
+    }
+
+    /// <summary>Abandonment releases its lease and does not invent model-facing input.</summary>
+    [Fact]
+    public async Task AbandonFreshExpectation_InsertsNoTextAndReleasesTheReplacementWithoutDeadlock()
+    {
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started, cancelled),
+            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Existing input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 1));
+        await cancelled.Task;
+        runner.AbandonFreshExpectation(expectation);
+        runner.AbandonFreshExpectation(expectation);
+        await runTask;
+
+        Assert.Equal("Existing input.", Assert.Single(client.Requests[1]).Text);
+    }
+
     /// <summary>
     /// Transient transport failures — network, I/O, timeout, and retryable provider statuses — are retried
     /// transparently: never surfaced to the agent as a tool result or transcript entry (AI-002 TR-43).
@@ -1412,6 +1652,424 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
+    /// A cue that linearises while a speak submission is still pending cancels it — speak-tool selection alone
+    /// remains ordinary cancellable work — and the racing admission transaction is refused: its commit never runs,
+    /// so no queue item or generation exists, while the assistant call ID still receives exactly one protocol-valid
+    /// cancelled result and the replacement request stays held behind the cue's lease (AI-002 TR-25/26/56).
+    /// </summary>
+    [Fact]
+    public async Task SpeechAdmission_CueFirst_RefusesAdmissionCancelsPendingSpeakAndHoldsReplacement()
+    {
+        AgentSessionRunner? runner = null;
+        AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: false);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        runner = CreateRunner(client, [speak.Function], [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await speak.Started.Task;
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        await WaitForConditionAsync(() => speak.CancellationObserved && speak.Admitted.HasValue);
+
+        Assert.True(speak.CancellationObserved, "The pending speak phase must be cancelled by the cue.");
+        Assert.False(speak.Committed, "A cue-first arbitration must refuse the admission transaction's commit.");
+        Assert.False(speak.Admitted, "The gate must refuse admission while the cue hold is pending.");
+        Assert.False(speak.CompletedNaturally);
+
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        await runTask;
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            client.Requests[1].Select(message => message.Role));
+        FunctionResultContent result = Assert.IsType<FunctionResultContent>(
+            Assert.Single(client.Requests[1][2].Contents));
+        Assert.Equal("speak-call", result.CallId);
+        Assert.Equal("The action was cancelled before it completed.", result.Result?.ToString());
+        Assert.Equal("Joined player text.", client.Requests[1][3].Text);
+    }
+
+    /// <summary>
+    /// A submission whose admission commits before the cue is protected for its whole pipeline life: the cue
+    /// registers its hold and associates the speech key without cancelling the speak, which settles naturally,
+    /// while the replacement request waits behind the cue's lease (AI-002 TR-25/26/56).
+    /// </summary>
+    [Fact]
+    public async Task SpeechAdmission_AdmissionFirst_AssociatesProtectionAndSettlesNaturally()
+    {
+        AgentSessionRunner? runner = null;
+        AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: true);
+        AIFunction followUp = AIFunctionFactory.Create(() => "follow-up done", "follow_up_action");
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            Respond(CreateCall("after-call", "follow_up_action")),
+            EndQuietly(lifetime));
+        runner = CreateRunner(client, [speak.Function, followUp], [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await speak.Started.Task;
+        Assert.True(speak.Admitted, "The admission transaction must commit while no cue hold is pending.");
+        Assert.True(speak.Committed);
+
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        await Task.Delay(100);
+        Assert.False(
+            speak.CancellationObserved,
+            "A cue whose submission was admitted first must never cancel the protected speak.");
+        Assert.False(speak.CompletedNaturally);
+
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        _ = speak.Release.TrySetResult();
+        await runTask;
+
+        Assert.True(speak.CompletedNaturally, "The protected speak settles naturally after its release.");
+        Assert.Equal(3, client.Requests.Count);
+        FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
+            Assert.Single(client.Requests[1][2].Contents));
+        Assert.Equal("speak-call", speakResult.CallId);
+        Assert.Equal("spoken naturally", speakResult.Result?.ToString());
+        Assert.Contains("Joined player text.", client.Requests[1].Select(static message => message.Text));
+    }
+
+    /// <summary>
+    /// A speak-shaped tool that never reaches its admission transaction is still ordinary cancellable work: the
+    /// cue cancels it, its call ID receives the canonical cancelled result, and settling the hold releases the
+    /// replacement request (AI-002 TR-56).
+    /// </summary>
+    [Fact]
+    public async Task SpeechAdmission_SpeakSelectionAlone_RemainsCancellableByCue()
+    {
+        AgentSessionRunner? runner = null;
+        AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: false, attemptAdmissionOnCancel: false);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        runner = CreateRunner(client, [speak.Function], [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await speak.Started.Task;
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        await WaitForConditionAsync(() => speak.CancellationObserved);
+        Assert.Null(speak.Admitted);
+
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        await runTask;
+
+        FunctionResultContent result = Assert.IsType<FunctionResultContent>(
+            Assert.Single(client.Requests[1][2].Contents));
+        Assert.Equal("The action was cancelled before it completed.", result.Result?.ToString());
+    }
+
+    /// <summary>
+    /// Admission registration follows the composition-registered per-function phase policy, never the function
+    /// name (AI-002 TR-62): an arbitrary-named function bound with the admission-arbitration policy registers its
+    /// pending-admission phase and admits with no cue pending, while the literal speak function name without a
+    /// bound policy stays ordinary work whose admission transaction is unavailable.
+    /// </summary>
+    [Fact]
+    public async Task ToolPhaseAdmission_RegistersByCompositionPolicy_NeverByFunctionName()
+    {
+        AgentSessionRunner? arbitratedRunner = null;
+        AdmissionProbingTool arbitrated = new(() => arbitratedRunner!);
+        CancellationTokenSource arbitratedLifetime = new();
+        ScriptedSessionClient arbitratedClient = new(
+            Respond(CreateCall(
+                "arbitrary-call",
+                AdmissionProbingTool.ProbingToolName,
+                new Dictionary<string, object?> { ["speech"] = "Hi" })),
+            EndQuietly(arbitratedLifetime));
+        arbitratedRunner = CreateRunner(
+            arbitratedClient,
+            [AgentSessionPhasePolicy.AdmissionArbitration.Bind(arbitrated.Function)],
+            []);
+
+        await arbitratedRunner.RunAsync(arbitratedLifetime.Token);
+
+        Assert.True(
+            arbitrated.Admitted,
+            "A policy-bound function must register its pending-admission phase whatever its name.");
+        Assert.True(arbitrated.Committed, "The admission transaction must commit the arbitrated submission.");
+
+        AgentSessionRunner? unboundRunner = null;
+        AdmissionProbingTool unbound = new(() => unboundRunner!, SpeakToolName);
+        CancellationTokenSource unboundLifetime = new();
+        ScriptedSessionClient unboundClient = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hi" })),
+            EndQuietly(unboundLifetime));
+        unboundRunner = CreateRunner(unboundClient, [unbound.Function], []);
+
+        await unboundRunner.RunAsync(unboundLifetime.Token);
+
+        Assert.False(
+            unbound.Admitted,
+            "The speak function name alone must no longer register admission arbitration.");
+        Assert.False(unbound.Committed, "An unbound function's admission attempt must commit nothing.");
+    }
+
+    /// <summary>
+    /// A fresh invalidation whose speech keys are exactly the keys the admitted speak's admission beat never
+    /// cancels that speak — the matching completed-text delivery keeps it settling naturally — while the epoch,
+    /// rendering barrier, and replacement request proceed unchanged around it (AI-002 TR-26/40).
+    /// </summary>
+    [Fact]
+    public async Task SpeechAdmission_MatchingFreshInvalidation_NeverCancelsTheAdmittedSpeak()
+    {
+        AgentSessionRunner? runner = null;
+        AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: true);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        runner = CreateRunner(client, [speak.Function], [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await speak.Started.Task;
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+
+        runner.InvalidateForFreshTurn(
+            expectFreshInjection: true,
+            new HashSet<AgentSessionContinuationKey> { Continuation("player-voice", "group", 1) });
+        await Task.Delay(100);
+        Assert.False(
+            speak.CancellationObserved,
+            "The matching completed-text invalidation must not cancel the protected admitted speak.");
+
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        runner.QueueFreshInjection("Important scene events require your attention: something happened.");
+        _ = speak.Release.TrySetResult();
+        await runTask;
+
+        Assert.True(speak.CompletedNaturally);
+        Assert.Equal(2, client.Requests.Count);
+        FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
+            Assert.Single(client.Requests[1][2].Contents));
+        Assert.Equal("spoken naturally", speakResult.Result?.ToString());
+        Assert.Contains(
+            client.Requests[1],
+            message => message.Text?.Contains("Joined player text.", StringComparison.Ordinal) == true);
+    }
+
+    /// <summary>
+    /// A fresh invalidation carrying an unrelated — or absent — speech key withdraws an admitted speak that has
+    /// not crossed playback hand-off: protection applies only to the matching player-speech lifecycle (AI-002
+    /// TR-26/40).
+    /// </summary>
+    /// <param name="unrelatedKeyMode">0: absent keys, 1: empty key set, 2: another speaker's key.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task SpeechAdmission_UnrelatedFreshInvalidation_CancelsTheAdmittedSpeak(int unrelatedKeyMode)
+    {
+        IReadOnlySet<AgentSessionContinuationKey>? freshSpeechKeys;
+        switch (unrelatedKeyMode)
+        {
+            case 1:
+                HashSet<AgentSessionContinuationKey> empty = [];
+                freshSpeechKeys = empty;
+                break;
+            case 2:
+                HashSet<AgentSessionContinuationKey> otherSpeaker = [Continuation("other-voice", "group", 1)];
+                freshSpeechKeys = otherSpeaker;
+                break;
+            default:
+                freshSpeechKeys = null;
+                break;
+        }
+        AgentSessionRunner? runner = null;
+        AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: true);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        runner = CreateRunner(client, [speak.Function], [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await speak.Started.Task;
+        _ = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+
+        runner.InvalidateForFreshTurn(expectFreshInjection: true, freshSpeechKeys);
+        await WaitForConditionAsync(() => speak.CancellationObserved);
+        Assert.False(speak.CompletedNaturally, "Unrelated freshness must withdraw the unhand-offed submission.");
+
+        lifetime.Cancel();
+        await runTask;
+    }
+
+    /// <summary>
+    /// Node-lifetime cancellation remains terminal even against an admitted protected speak: the phase's
+    /// lifetime-linked token fires, the session ends quietly, and no replacement request is issued (AI-002 TR-44).
+    /// </summary>
+    [Fact]
+    public async Task SpeechAdmission_WhenLifetimeCancels_EndsAdmittedSpeakQuietly()
+    {
+        AgentSessionRunner? runner = null;
+        AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: true);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        runner = CreateRunner(client, [speak.Function], [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await speak.Started.Task;
+        _ = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        lifetime.Cancel();
+
+        await runTask;
+        await WaitForConditionAsync(() => speak.CancellationObserved);
+
+        _ = Assert.Single(client.Requests);
+        Assert.False(speak.CompletedNaturally);
+    }
+
+    /// <summary>
+    /// A cue arriving during the transport-retry delay supersedes the pending retry without consuming its budget:
+    /// the stale request is never re-issued, and settling the hold releases one replacement request (AI-002 TR-56
+    /// versus TR-43).
+    /// </summary>
+    [Fact]
+    public async Task RegisterSpeechContinuation_DuringTransportRetryDelay_SupersedesRetryWithoutConsumingBudget()
+    {
+        List<string> speech = [];
+        TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            FailStep(new HttpRequestException("connection reset")),
+            Respond(CreateCall(
+                "speak-call",
+                SpeakToolName,
+                new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(speech.Add)],
+            [new ChatMessage(ChatRole.User, "Run input.")],
+            retryDelays: [TimeSpan.FromMilliseconds(20)]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await WaitForAttemptsAsync(client, attemptCount: 1);
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        await Task.Delay(50);
+
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        await runTask;
+
+        Assert.Equal(["Hello"], speech);
+        // The failed attempt, the replacement request, and the final replay: no retry of the stale request.
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Single(client.Requests[1], client.Requests[0][0]);
+    }
+
+    /// <summary>
+    /// A cue arriving during invalid-response recovery backoff supersedes recovery without consuming its budget:
+    /// the streak is not carried forward and the replacement request follows the settled hold (AI-002 TR-56 versus
+    /// TR-43).
+    /// </summary>
+    [Fact]
+    public async Task RegisterSpeechContinuation_DuringInvalidResponseRecoveryBackoff_DoesNotConsumeRecoveryBudget()
+    {
+        var recoveryPolicy = new ObservingInvalidResponseRecoveryPolicy(consecutiveFailureBudget: 2);
+        using CancellationTokenSource lifetime = new();
+        ChatResponse invalid = new(new ChatMessage(ChatRole.Assistant, "ordinary text"));
+        ScriptedSessionClient client = new(
+            Respond(invalid),
+            Respond(invalid));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Run input.")],
+            invalidResponseRecoveryPolicy: recoveryPolicy);
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await recoveryPolicy.Started.Task;
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        await WaitForBackoffCallsAsync(recoveryPolicy, backoffCallCount: 2);
+        lifetime.Cancel();
+
+        await runTask;
+
+        // Backoff #2 for the replacement request's own invalid response proves the superseded streak never
+        // consumed the budget of two.
+        Assert.Equal(2, recoveryPolicy.BackoffCallCount);
+        Assert.Equal(2, client.Requests.Count);
+    }
+
+    /// <summary>
+    /// A cue cancels an active wait-shaped tool co-operatively — Mind's accumulation ownership is Mind-level state
+    /// the runner never touches — and the wait call ID still receives exactly one result before the held
+    /// replacement request (AI-002 TR-56/61).
+    /// </summary>
+    [Fact]
+    public async Task RegisterSpeechContinuation_DuringActiveWait_CancelsTheWaitToolWithOneResultPerCallID()
+    {
+        WaitLikeTool waitLike = new();
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("wait-call", WaitLikeTool.ToolName)),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [waitLike.Function],
+            [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await waitLike.Started.Task;
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        await WaitForConditionAsync(() => waitLike.ObservedCancellation);
+        Assert.False(waitLike.CompletedNaturally);
+
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        await runTask;
+
+        FunctionResultContent result = Assert.IsType<FunctionResultContent>(
+            Assert.Single(client.Requests[1][2].Contents));
+        Assert.Equal("wait-call", result.CallId);
+        Assert.Equal("The action was cancelled before it completed.", result.Result?.ToString());
+    }
+
+    /// <summary>
+    /// A non-cooperative provider response returned after a cue cancelled its generation is discarded whole: the
+    /// settled hold's replacement request carries only the joined utterance, never the stale call (AI-002 TR-56).
+    /// </summary>
+    [Fact]
+    public async Task RegisterSpeechContinuation_DuringGeneration_DiscardsTheLateResponse()
+    {
+        TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            HoldUntilReleasedStep(
+                requestStarted,
+                releaseGeneration,
+                CreateCall("late-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Never runs" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Run input.")]);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await requestStarted.Task;
+        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        _ = releaseGeneration.TrySetResult();
+        await runTask;
+
+        // The late stale response never entered the transcript: the replacement carries the run input and the
+        // joined utterance, and nothing else.
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(
+            ["Run input.", "Joined player text."],
+            client.Requests[1].Select(static message => message.Text));
+    }
+
+    /// <summary>
     /// Duplicate production function names and non-function tools are rejected before any request.
     /// </summary>
     [Fact]
@@ -1518,15 +2176,24 @@ public sealed class AgentSessionRunnerTests
             SpeakToolName,
             new Dictionary<string, object?> { ["speech"] = speech });
 
+    private static AgentSessionContinuationKey Continuation(string source, string turn, long revision)
+        => new(new AgentSessionInjectionKey(source, turn), revision);
+
+    private static AgentSessionInjection Injection(string source, string turn, long revision, string text)
+        => new(new AgentSessionInjectionKey(source, turn), revision, text);
+
     private static AIFunction CreateSpeakFunction(Action<string> action)
-        => AIFunctionFactory.Create(
-            (string speech) =>
-            {
-                action(speech);
-                return "Spoken.";
-            },
-            SpeakToolName,
-            "Speak aloud.");
+        // Composition registers the speak function's admission-arbitration policy (AI-002 TR-62), mirroring the
+        // AgenticMind wiring so the name alone never decides phase registration.
+        => AgentSessionPhasePolicy.AdmissionArbitration.Bind(
+            AIFunctionFactory.Create(
+                (string speech) =>
+                {
+                    action(speech);
+                    return "Spoken.";
+                },
+                SpeakToolName,
+                "Speak aloud."));
 
     private static string ThrowingSpeak(string speech)
         => throw new InvalidOperationException($"Sensitive tool detail: {speech}");
@@ -1642,6 +2309,16 @@ public sealed class AgentSessionRunnerTests
         Assert.Equal(backoffCallCount, policy.BackoffCallCount);
     }
 
+    private static async Task WaitForConditionAsync(Func<bool> condition)
+    {
+        for (int index = 0; index < 500 && !condition(); index++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(condition(), "The expected condition was not met within the polling budget.");
+    }
+
     /// <summary>
     /// Minimal response surface for <see cref="ClientResultException" /> status classification; only
     /// <see cref="Status" /> is consulted by the retry policy.
@@ -1675,6 +2352,72 @@ public sealed class AgentSessionRunnerTests
     private sealed class NonFunctionTool(string name) : AITool
     {
         public override string Name => name;
+    }
+
+    private sealed class CallbackArguments(Action callback, IDictionary<string, object?> inner)
+        : IDictionary<string, object?>
+    {
+        private bool _called;
+
+        public object? this[string key]
+        {
+            get
+            {
+                CallOnce();
+                return inner[key];
+            }
+            set
+            {
+                CallOnce();
+                inner[key] = value;
+            }
+        }
+
+        public ICollection<string> Keys => inner.Keys;
+
+        public ICollection<object?> Values => inner.Values;
+
+        public int Count => inner.Count;
+
+        public bool IsReadOnly => inner.IsReadOnly;
+
+        public void Add(string key, object? value) => inner.Add(key, value);
+
+        public void Add(KeyValuePair<string, object?> item) => inner.Add(item);
+
+        public void Clear() => inner.Clear();
+
+        public bool Contains(KeyValuePair<string, object?> item)
+            => inner.Contains(item);
+
+        public bool ContainsKey(string key) => inner.ContainsKey(key);
+
+        public void CopyTo(KeyValuePair<string, object?>[] array, int arrayIndex)
+            => inner.CopyTo(array, arrayIndex);
+
+        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
+        {
+            CallOnce();
+            return inner.GetEnumerator();
+        }
+
+        public bool Remove(string key) => inner.Remove(key);
+
+        public bool Remove(KeyValuePair<string, object?> item)
+            => inner.Remove(item);
+
+        public bool TryGetValue(string key, out object? value) => inner.TryGetValue(key, out value);
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        private void CallOnce()
+        {
+            if (!_called)
+            {
+                _called = true;
+                callback();
+            }
+        }
     }
     /// <summary>
     /// Deterministic in-flight tool whose completion the test controls: it completes naturally when released and
@@ -1780,6 +2523,130 @@ public sealed class AgentSessionRunnerTests
             await Commit.Task;
             Committed = true;
             return "committed result";
+        }
+    }
+
+    /// <summary>
+    /// Speak-shaped in-flight tool driving the runner's admission transaction deterministically (AI-002 TR-25/56):
+    /// it can block before or after attempting admission, records whether the transaction's commit ran, whether
+    /// admission was granted, and whether its phase token fired, and completes naturally only when released
+    /// without cancellation.
+    /// </summary>
+    private sealed class AdmissionSpeakTool(
+        Func<AgentSessionRunner> runnerResolver,
+        bool admitBeforeBlocking,
+        bool attemptAdmissionOnCancel = true)
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Committed
+        {
+            get;
+            private set;
+        }
+
+        public bool? Admitted
+        {
+            get;
+            private set;
+        }
+
+        public bool CancellationObserved
+        {
+            get;
+            private set;
+        }
+
+        public bool CompletedNaturally
+        {
+            get;
+            private set;
+        }
+
+        public AIFunction Function
+            // Composition registers the speak function's admission-arbitration policy (AI-002 TR-62).
+            => AgentSessionPhasePolicy.AdmissionArbitration.Bind(
+                AIFunctionFactory.Create(
+                    (string speech, CancellationToken cancellationToken) => InvokeAsync(speech, cancellationToken),
+                    SpeakToolName));
+
+        private async Task<string> InvokeAsync(string speech, CancellationToken cancellationToken)
+        {
+            _ = speech;
+            if (!admitBeforeBlocking)
+            {
+                _ = Started.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    CancellationObserved = true;
+                    if (attemptAdmissionOnCancel)
+                    {
+                        // The racing submission attempts the transaction while unwinding: a cue-first hold must
+                        // refuse it, committing nothing.
+                        Admitted = runnerResolver().TryAdmitToolPhase(() => Committed = true);
+                    }
+
+                    throw;
+                }
+            }
+
+            if (!admitBeforeBlocking || Admitted is null)
+            {
+                Admitted = runnerResolver().TryAdmitToolPhase(() => Committed = true);
+            }
+
+            _ = Started.TrySetResult();
+            try
+            {
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                CancellationObserved = true;
+                throw;
+            }
+
+            CompletedNaturally = true;
+            return "spoken naturally";
+        }
+    }
+
+    /// <summary>
+    /// Tool that attempts the runner's admission transaction exactly once while invoked, recording whether the
+    /// transaction was granted and whether its commit ran, for phase-policy registration coverage (AI-002 TR-62).
+    /// </summary>
+    private sealed class AdmissionProbingTool(Func<AgentSessionRunner> runnerResolver, string? toolName = null)
+    {
+        public const string ProbingToolName = "probe_arbitrated_action";
+
+        public bool? Admitted
+        {
+            get;
+            private set;
+        }
+
+        public bool Committed
+        {
+            get;
+            private set;
+        }
+
+        public AIFunction Function
+            => AIFunctionFactory.Create(
+                (string speech) => Invoke(speech),
+                toolName ?? ProbingToolName);
+
+        private string Invoke(string speech)
+        {
+            _ = speech;
+            Admitted = runnerResolver().TryAdmitToolPhase(() => Committed = true);
+            return "probed";
         }
     }
 

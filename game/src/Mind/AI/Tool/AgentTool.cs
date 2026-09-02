@@ -16,6 +16,11 @@ namespace AlleyCat.Mind.AI.Tool;
 /// Event-history renderer for on-demand observation rendering under the AI-003 contract, or null when unavailable.
 /// </param>
 /// <param name="Clock">Game clock backing every time-sensitive tool result, or null when unavailable.</param>
+/// <remarks>
+/// The common session exposes no feature services (AI-002 TR-19/23): concrete capabilities — speech-admission
+/// arbitration and wait-delivery acknowledgement — bind typed to their concrete tool at the AgenticMind
+/// composition boundary, never through this shared binding.
+/// </remarks>
 internal sealed record AgentToolSession(
     ScenarioContext Context,
     MindBase Mind,

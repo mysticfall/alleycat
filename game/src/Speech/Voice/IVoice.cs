@@ -29,6 +29,43 @@ public interface IVoice : IComponent, IIdentifiable
     /// </summary>
     event Action<IVoice>? SpeechEnded;
 
+    /// <summary>Raised for a textless speech-start lifecycle transition.</summary>
+    /// <remarks>
+    /// Automatic qualified onsets carry the real speech-group identity, while manual recording presses carry a
+    /// fresh opaque synthetic token, so listeners can track the pending segment before any text exists.
+    /// </remarks>
+    event Action<IVoice, SpeechSegmentMetadata>? SpeechSegmentStarted
+    {
+        add
+        {
+        }
+        remove
+        {
+        }
+    }
+
+    /// <summary>Raised for a textless automatic speech-resume lifecycle transition.</summary>
+    event Action<IVoice, SpeechSegmentMetadata>? SpeechResumed
+    {
+        add
+        {
+        }
+        remove
+        {
+        }
+    }
+
+    /// <summary>Raised for a textless terminal automatic-segment outcome.</summary>
+    event Action<IVoice, SpeechSegmentSettlement>? SpeechSegmentSettled
+    {
+        add
+        {
+        }
+        remove
+        {
+        }
+    }
+
     /// <inheritdoc />
     /// <summary>
     /// World-space position where this voice originates.

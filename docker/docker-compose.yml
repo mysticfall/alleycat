@@ -1,17 +1,18 @@
+name: alleycat
+
 services:
   whisper-api:
-    image: hwdsl2/whisper-server:cuda
+    image: hwdsl2/whisper-live-server:cuda
     container_name: alleycat-whisper-api
     ports:
-      - "9000:9000"
+      - "8000:8000"
     volumes:
-      - whisper-data:/var/lib/whisper
+      - whisper-data:/var/lib/whisper-live
     environment:
-      - WHISPER_MODEL=small.en
-      - WHISPER_DEVICE=auto
-      - WHISPER_COMPUTE_TYPE=float16
-      - WHISPER_API_KEY=
-      - HF_TOKEN=${HF_TOKEN}
+      - WHISPERLIVE_MODEL=small.en
+      - WHISPERLIVE_LANGUAGE=en
+      - WHISPERLIVE_API_KEY=
+      - WHISPERLIVE_DISABLE_USAGE_COUNTS=1
     deploy:
       resources:
         reservations:

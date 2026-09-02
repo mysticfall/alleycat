@@ -17,16 +17,39 @@ public partial class SpeechTool : AgentTool
     private const string CutShortBeforeSpokenMessage =
         "Your speech was cut short by another event before it could be spoken.";
 
+    /// <summary>Model-facing name of the production speak tool (AI-002 TR-16).</summary>
+    internal const string ProductionToolName = "speak";
+
     /// <summary>
     /// Creates a speech tool with the default model-facing metadata.
     /// </summary>
     public SpeechTool()
     {
-        ToolName = "speak";
+        ToolName = ProductionToolName;
         ToolDescription = "Speak the supplied text aloud through your voice. The text must contain only the spoken "
             + "words themselves — no emotes, stage directions, narration, or markup. Keep each utterance short, "
             + "around twenty words; for longer speech, split it and call this tool once per part. Speaking is "
             + "optional and repeatable.";
+    }
+
+    /// <summary>
+    /// Runner-owned admission arbitration typed-bound at the AgenticMind composition boundary (AI-002 TR-19/25/56),
+    /// or null when this tool was authored or constructed outside that composition — such instances keep the
+    /// ordinary cancellable submission path.
+    /// </summary>
+    internal ToolAdmissionBroker? Admission
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Creates a speech tool whose submissions arbitrate admission against the session runner's attended
+    /// start/resume holds (AI-002 TR-19/25/56).
+    /// </summary>
+    internal SpeechTool(ToolAdmissionBroker admission) : this()
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        Admission = admission;
     }
 
     /// <inheritdoc />
@@ -71,7 +94,26 @@ public partial class SpeechTool : AgentTool
         // playback nor withholds the self observation (AI-002 TR-27, SPCH-005 UR-14/TR-25).
         try
         {
-            await voice.SpeakCancellableAsync(acceptedSpeech, cancellationToken);
+            // TTS admission is arbitrated against attended start/resume holds (AI-002 TR-25/56; SPCH-005 TR-37):
+            // the transaction commits voice queue admission and the runner's protected state atomically, and a
+            // cue-first refusal admits nothing — no TTS request, queue item, hearing event, or self-observation —
+            // surfacing here through the non-throwing not-delivered result (AI-002 TR-27). The capability is
+            // discovered from the authored voice projection without any concrete-voice dependency (AI-002 TR-63),
+            // and a voice without it — or a tool composed without the session's admission arbitration — keeps the
+            // ordinary cancellable submission path with its ordinary silent pre-hand-off withdrawal semantics
+            // (SPCH-005 TR-38, AI-002 TR-63).
+            if (voice is IAdmissionCapableVoice capableVoice
+                && Admission?.TryCreateTransaction() is { } admission)
+            {
+                if (!await capableVoice.SpeakCancellableAdmittedAsync(acceptedSpeech, cancellationToken, admission))
+                {
+                    return new AgentToolResult(CutShortBeforeSpokenMessage);
+                }
+            }
+            else
+            {
+                await voice.SpeakCancellableAsync(acceptedSpeech, cancellationToken);
+            }
         }
         catch (OperationCanceledException) when (!mind.HasNodeLifetimeEnded)
         {

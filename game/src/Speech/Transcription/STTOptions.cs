@@ -51,9 +51,9 @@ public sealed class STTOptions
     }
 
     /// <summary>
-    /// Optional transcription sampling temperature.
+    /// Optional unusual-word recognition hints, sent natively by compatible backends.
     /// </summary>
-    public float? Temperature
+    public string? Hotwords
     {
         get;
         init;

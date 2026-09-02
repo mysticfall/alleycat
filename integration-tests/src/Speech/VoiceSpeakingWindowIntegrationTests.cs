@@ -515,6 +515,454 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
         }
     }
 
+    /// <summary>Automatic resume is forwarded as lifecycle metadata without a speech publication.</summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_AutomaticSpeechResumed_ForwardsLifecycleWithoutHearingPublication()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        Hearing hearing = new();
+        List<(IVoice Source, SpeechSegmentMetadata Metadata)> resumed = [];
+        List<SpeechPercept> percepts = [];
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        AddTestNode(sceneTree, hearing);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        hearing.Perceived += percept => percepts.Add(Assert.IsType<SpeechPercept>(percept));
+        voice.SpeechResumed += (source, metadata) => resumed.Add((source, metadata));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            transcriber.EmitAutomaticSpeechResumed("automatic-group", 1, continued: false);
+
+            (IVoice source, SpeechSegmentMetadata metadata) = Assert.Single(resumed);
+            Assert.Same(voice, source);
+            Assert.Equal("automatic-group", metadata.SpeechGroupID);
+            Assert.Equal(1, metadata.SegmentIndex);
+            Assert.True(metadata.Continued);
+            Assert.Empty(listener.Events);
+            Assert.Empty(percepts);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener, hearing);
+        }
+    }
+
+    /// <summary>
+    /// The automatic qualified onset raises the textless start cue with the real group identity before the
+    /// compatibility recording-started window event, without any hearing publication.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_AutomaticOnset_RaisesStartedWithGroupIdentityBeforeWindowEvent()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        List<string> order = [];
+        List<(IVoice Source, SpeechSegmentMetadata Metadata)> started = [];
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        voice.SpeechSegmentStarted += (source, metadata) =>
+        {
+            started.Add((source, metadata));
+            order.Add("segment-started");
+        };
+        voice.SpeechStarted += _ => order.Add("window-started");
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            transcriber.EmitAutomaticGroupOpened("automatic-group");
+            transcriber.EmitRecordingStarted();
+
+            (IVoice source, SpeechSegmentMetadata metadata) = Assert.Single(started);
+            Assert.Same(voice, source);
+            Assert.Equal("automatic-group", metadata.SpeechGroupID);
+            Assert.Equal(0, metadata.SegmentIndex);
+            Assert.False(metadata.Continued);
+            Assert.Equal(["segment-started", "window-started"], order);
+            Assert.True(voice.IsSpeaking);
+            Assert.Empty(listener.Events);
+            Assert.Null(listener.LastBroadcastMetadata);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
+    /// <summary>
+    /// A manual recording press raises the textless start cue with a fresh opaque synthetic token before the
+    /// window event; blank and failed completions each settle the pending token exactly once, and a manual
+    /// completion publishes ungrouped speech.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_ManualPress_RaisesSyntheticStartedAndSettlesBlankAndFailureOnce()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        List<string> order = [];
+        List<SpeechSegmentMetadata> started = [];
+        List<(IVoice Source, SpeechSegmentSettlement Settlement)> settlements = [];
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        voice.SpeechSegmentStarted += (_, metadata) =>
+        {
+            started.Add(metadata);
+            order.Add("segment-started");
+        };
+        voice.SpeechStarted += _ => order.Add("window-started");
+        voice.SpeechSegmentSettled += (source, settlement) => settlements.Add((source, settlement));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            transcriber.EmitRecordingStarted();
+            SpeechSegmentMetadata blankToken = Assert.Single(started);
+            Assert.False(string.IsNullOrWhiteSpace(blankToken.SpeechGroupID));
+            Assert.Equal(0, blankToken.SegmentIndex);
+            Assert.False(blankToken.Continued);
+            Assert.Equal(["segment-started", "window-started"], order);
+            Assert.True(voice.IsSpeaking);
+
+            transcriber.EmitTranscriptionCompleted("   ");
+            Assert.False(voice.IsSpeaking);
+            (IVoice source, SpeechSegmentSettlement settlement) = Assert.Single(settlements);
+            Assert.Same(voice, source);
+            Assert.Equal(SpeechSegmentSettlementKind.Blank, settlement.Kind);
+            Assert.Equal(blankToken, settlement.Metadata);
+            Assert.Empty(listener.Events);
+
+            transcriber.EmitRecordingStarted();
+            SpeechSegmentMetadata failedToken = Assert.Single(started, metadata => !Equals(metadata, blankToken));
+            Assert.NotEqual(blankToken.SpeechGroupID, failedToken.SpeechGroupID);
+
+            transcriber.EmitTranscriptionFailed("Backend unavailable");
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(2, settlements.Count);
+            Assert.Equal(SpeechSegmentSettlementKind.Failed, settlements[1].Settlement.Kind);
+            Assert.Equal(failedToken, settlements[1].Settlement.Metadata);
+
+            // A late duplicate failure for the settled manual session never settles a second time.
+            transcriber.EmitTranscriptionFailed("Late backend failure");
+            Assert.Equal(2, settlements.Count);
+            Assert.Empty(listener.Events);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
+    /// <summary>
+    /// A manual completion settles the pending synthetic token as Published and its broadcast stays ungrouped.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_ManualCompletion_SettlesSyntheticTokenAndPublishesUngroupedSpeech()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        List<string> order = [];
+        List<SpeechSegmentMetadata> started = [];
+        List<(IVoice Source, SpeechSegmentSettlement Settlement)> settlements = [];
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        voice.SpeechSegmentStarted += (_, metadata) => started.Add(metadata);
+        voice.SpeechSegmentSettled += (source, settlement) =>
+        {
+            settlements.Add((source, settlement));
+            order.Add($"settled:{settlement.Kind}");
+        };
+        listener.ActivityOrder = order;
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            transcriber.EmitRecordingStarted();
+            SpeechSegmentMetadata token = Assert.Single(started);
+
+            transcriber.EmitTranscriptionCompleted("Manual speech");
+
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(1, voice.SpeechGeneratedCallCount);
+            (IVoice source, SpeechSegmentSettlement settlement) = Assert.Single(settlements);
+            Assert.Same(voice, source);
+            Assert.Equal(SpeechSegmentSettlementKind.Published, settlement.Kind);
+            Assert.Equal(token, settlement.Metadata);
+            Assert.Equal(["broadcast", "settled:Published"], order);
+            _ = Assert.Single(listener.Events);
+            Assert.Equal("Manual speech", listener.Events[0].Speech);
+            Assert.Null(listener.LastBroadcastMetadata);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
+    /// <summary>
+    /// Manual pre-emption during an automatic group settles the automatic segment as abandoned before the manual
+    /// synthetic start cue, keeping one continuously open public speaking window.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_ManualPreemption_SettlesAutomaticAbandonedBeforeManualStarted()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        List<string> order = [];
+        List<string> startedTokens = [];
+        List<SpeechSegmentSettlement> settlements = [];
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        voice.SpeechSegmentStarted += (_, metadata) =>
+        {
+            startedTokens.Add(metadata.SpeechGroupID);
+            order.Add("segment-started");
+        };
+        voice.SpeechSegmentSettled += (_, settlement) =>
+        {
+            settlements.Add(settlement);
+            order.Add($"settled:{settlement.Kind}");
+        };
+        int startedCount = 0;
+        int endedCount = 0;
+        voice.SpeechStarted += _ => startedCount++;
+        voice.SpeechEnded += _ => endedCount++;
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            transcriber.EmitAutomaticGroupOpened("automatic-group");
+            transcriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(0, endedCount);
+
+            // A manual press first abandons the automatic group, then announces its own synthetic start.
+            transcriber.EmitAutomaticGroupAbandoned("automatic-group");
+            transcriber.EmitRecordingStarted();
+
+            Assert.Equal(["automatic-group"], startedTokens[..1]);
+            Assert.Equal(SpeechSegmentSettlementKind.Abandoned, Assert.Single(settlements).Kind);
+            Assert.Equal("automatic-group", settlements[0].Metadata.SpeechGroupID);
+            Assert.Equal(2, startedTokens.Count);
+            Assert.NotEqual("automatic-group", startedTokens[1]);
+            Assert.Equal(["segment-started", "settled:Abandoned", "segment-started"], order);
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(0, endedCount);
+            Assert.Empty(listener.Events);
+
+            transcriber.EmitTranscriptionCompleted("Manual speech");
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(1, endedCount);
+            Assert.Equal(
+                [SpeechSegmentSettlementKind.Abandoned, SpeechSegmentSettlementKind.Published],
+                settlements.Select(settlement => settlement.Kind));
+            Assert.Equal(startedTokens[1], settlements[1].Metadata.SpeechGroupID);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
+    /// <summary>
+    /// Transcriber teardown, replacement, and the explicit abandonment signal each settle a pending synthetic
+    /// token as abandoned exactly once, and a late manual outcome never settles a second time.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_TeardownSwapAndAbandonmentSignal_SettleManualTokenExactlyOnce()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        SignalFakeTranscriber replacementTranscriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        List<string> startedTokens = [];
+        List<SpeechSegmentSettlement> settlements = [];
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, replacementTranscriber);
+        AddTestNode(sceneTree, voice);
+        voice.SpeechSegmentStarted += (_, metadata) => startedTokens.Add(metadata.SpeechGroupID);
+        voice.SpeechSegmentSettled += (_, settlement) => settlements.Add(settlement);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            // The explicit abandonment signal settles the pending token and closes the silent stop's window.
+            transcriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+            transcriber.EmitRecordingAbandoned();
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(SpeechSegmentSettlementKind.Abandoned, Assert.Single(settlements).Kind);
+            Assert.Equal(startedTokens[0], settlements[0].Metadata.SpeechGroupID);
+
+            transcriber.EmitTranscriptionCompleted("late completion");
+            _ = Assert.Single(settlements);
+            Assert.Empty(voice.FailureErrors);
+
+            // Swapping the transcriber mid-recording settles the stale token before the new source takes over.
+            transcriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+            voice.Transcriber = replacementTranscriber;
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(2, settlements.Count);
+            Assert.Equal(SpeechSegmentSettlementKind.Abandoned, settlements[1].Kind);
+            Assert.Equal(startedTokens[1], settlements[1].Metadata.SpeechGroupID);
+
+            // The disconnected transcriber's late abandonment signal never settles the replacement's token.
+            transcriber.EmitRecordingAbandoned();
+            Assert.Equal(2, settlements.Count);
+
+            // Node teardown settles the replacement source's pending token exactly once.
+            replacementTranscriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+            voice.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(3, settlements.Count);
+            Assert.Equal(SpeechSegmentSettlementKind.Abandoned, settlements[2].Kind);
+            Assert.Equal(startedTokens[2], settlements[2].Metadata.SpeechGroupID);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, transcriber, replacementTranscriber);
+        }
+    }
+
+    /// <summary>
+    /// Automatic segment terminals remain textless lifecycle outcomes: publication settles after hearing, while
+    /// blank, failure, and manual-pre-emption abandonment settle exactly once without a hearing broadcast.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_AutomaticSegmentSettlements_AreTextlessAndExactlyOnce()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        List<(IVoice Source, SpeechSegmentSettlement Settlement)> settlements = [];
+        List<string> order = [];
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        listener.ActivityOrder = order;
+        voice.SpeechSegmentSettled += (source, settlement) =>
+        {
+            settlements.Add((source, settlement));
+            order.Add($"settled:{settlement.Kind}");
+        };
+        await WaitForFramesAsync(sceneTree, 2);
+
+        try
+        {
+            transcriber.EmitAutomaticGroupOpened("blank");
+            transcriber.EmitRecordingStarted();
+            transcriber.EmitAutomaticGroupClosed("blank", outcomesWerePublished: false);
+            transcriber.EmitAutomaticSegmentCompleted("  ", "blank", 0, continued: false);
+
+            transcriber.EmitAutomaticGroupOpened("failed");
+            transcriber.EmitRecordingStarted();
+            transcriber.EmitAutomaticGroupClosed("failed", outcomesWerePublished: false);
+            transcriber.EmitAutomaticSegmentFailed("backend unavailable", "failed", 0, continued: false);
+
+            transcriber.EmitAutomaticGroupOpened("abandoned");
+            transcriber.EmitRecordingStarted();
+            transcriber.EmitAutomaticGroupAbandoned("abandoned");
+            transcriber.EmitRecordingStarted(); // Manual pre-emption keeps the shared speaking window open.
+            transcriber.EmitTranscriptionCompleted("manual completion");
+
+            transcriber.EmitAutomaticGroupOpened("published");
+            transcriber.EmitRecordingStarted();
+            transcriber.EmitAutomaticGroupClosed("published", outcomesWerePublished: false);
+            transcriber.EmitAutomaticSegmentCompleted("published completion", "published", 0, continued: false);
+
+            // The manual pre-emption's synthetic token settles as Published after its ungrouped broadcast, between
+            // the automatic group outcomes.
+            string manualToken = settlements[3].Settlement.Metadata.SpeechGroupID;
+            Assert.NotEqual("abandoned", manualToken);
+            Assert.NotEqual("published", manualToken);
+            Assert.Equal(0, settlements[3].Settlement.Metadata.SegmentIndex);
+            Assert.Equal(
+                [
+                    SpeechSegmentSettlementKind.Blank,
+                    SpeechSegmentSettlementKind.Failed,
+                    SpeechSegmentSettlementKind.Abandoned,
+                    SpeechSegmentSettlementKind.Published,
+                    SpeechSegmentSettlementKind.Published,
+                ],
+                settlements.Select(entry => entry.Settlement.Kind));
+            Assert.Equal(
+                ["blank", "failed", "abandoned", manualToken, "published"],
+                settlements.Select(entry => entry.Settlement.Metadata.SpeechGroupID));
+            Assert.All(settlements, entry => Assert.Same(voice, entry.Source));
+            Assert.Equal(["broadcast", "settled:Published"], order.Skip(order.Count - 2));
+            Assert.Equal(["manual completion", "published completion"], listener.Events.Select(entry => entry.Speech));
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
     /// <summary>
     /// Transcription failures close the player voice window opened at recording start.
     /// </summary>
@@ -653,6 +1101,301 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
         finally
         {
             await DestroyFixtureAsync(sceneTree, voice, transcriber, replacementTranscriber);
+        }
+    }
+
+    /// <summary>
+    /// The automatic speaking window opens once at the automatic onset's ordinary recording-started signal, stays
+    /// continuously open across the utterance, and closes exactly once at the final transcript's broadcast.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_AutomaticUtterance_KeepsWindowOpenThroughUtteranceAndClosesOnceAtFinalBroadcast()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        OrderingVoiceListener ungroupedListener = new();
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        AddTestNode(sceneTree, ungroupedListener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        List<string> activityOrder = [];
+        int startedCount = 0;
+        int endedCount = 0;
+        voice.SpeechStarted += _ =>
+        {
+            startedCount++;
+            activityOrder.Add("started");
+        };
+        voice.SpeechEnded += _ => endedCount++;
+        listener.ActivityOrder = activityOrder;
+
+        try
+        {
+            // A locally qualified automatic onset emits the ordinary recording-started signal: it opens the same
+            // single public window the manual path uses.
+            transcriber.EmitRecordingStarted();
+
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(0, endedCount);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+            Assert.Empty(voice.FailureErrors);
+            Assert.Empty(listener.Events);
+            Assert.Empty(ungroupedListener.Events);
+
+            transcriber.EmitTranscriptionCompleted("Hello there again, everyone");
+
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(1, endedCount);
+            Assert.Equal(1, voice.SpeechGeneratedCallCount);
+            Assert.Equal(["started", "broadcast"], activityOrder);
+            Assert.True(listener.IsSpeakingAtBroadcast.HasValue, "The broadcast did not observe the speaking state.");
+            Assert.False(listener.IsSpeakingAtBroadcast.Value);
+            _ = Assert.Single(listener.Events);
+            Assert.Equal("Hello there again, everyone", listener.Events[0].Speech);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener, ungroupedListener);
+        }
+    }
+
+    /// <summary>
+    /// A blank automatic final transcript closes the speaking window silently: no broadcast, no failure, and no
+    /// completed-speech percept.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_BlankAutomaticFinal_ClosesWindowSilentlyWithoutBroadcast()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        int endedCount = 0;
+        voice.SpeechEnded += _ => endedCount++;
+
+        try
+        {
+            transcriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+
+            transcriber.EmitTranscriptionCompleted("   ");
+
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(1, endedCount);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+            Assert.Empty(voice.FailureErrors);
+            Assert.Empty(listener.Events);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
+    /// <summary>
+    /// An automatic finalisation failure closes the speaking window without notifying listeners.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_AutomaticFailure_ClosesWindowWithoutBroadcast()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        int endedCount = 0;
+        voice.SpeechEnded += _ => endedCount++;
+
+        try
+        {
+            transcriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+
+            transcriber.EmitTranscriptionFailed("Transcription backend unavailable");
+
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(1, endedCount);
+            Assert.Equal(0, voice.SpeechGeneratedCallCount);
+            Assert.Empty(listener.Events);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
+    /// <summary>
+    /// Player voice teardown during an in-flight automatic utterance closes the window its onset opened.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_TeardownDuringAutomaticUtterance_ClosesWindow()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        transcriber.EmitRecordingStarted();
+        Assert.True(voice.IsSpeaking);
+
+        voice.QueueFree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Assert.False(voice.IsSpeaking);
+        await DestroyFixtureAsync(sceneTree, transcriber);
+    }
+
+    /// <summary>
+    /// Manual preemption during an automatic utterance sustains exactly one public speaking window: the silent
+    /// automatic abandonment neither closes nor duplicates the window, and the manual session's completion closes it
+    /// exactly once.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_ManualPreemptionDuringAutomaticUtterance_SustainsSingleWindowUntilManualClose()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        int startedCount = 0;
+        int endedCount = 0;
+        voice.SpeechStarted += _ => startedCount++;
+        voice.SpeechEnded += _ => endedCount++;
+
+        try
+        {
+            transcriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(0, endedCount);
+
+            // A manual press abandons the automatic utterance without any public terminal for it: the window the
+            // automatic onset opened stays continuously open — the manual session's own recording-started signal is
+            // idempotent against it — and no second window opens. The abandoned utterance emits no aggregate
+            // (the transcriber suite covers that contract), so only the manual session settles the window.
+            transcriber.EmitRecordingStarted();
+
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(0, endedCount);
+
+            transcriber.EmitTranscriptionCompleted("Manual speech");
+
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(1, endedCount);
+            Assert.Equal(1, voice.SpeechGeneratedCallCount);
+            _ = Assert.Single(listener.Events);
+            Assert.Equal("Manual speech", listener.Events[0].Speech);
+            Assert.True(listener.IsSpeakingAtBroadcast.HasValue, "The broadcast did not observe the speaking state.");
+            Assert.False(listener.IsSpeakingAtBroadcast.Value);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
+        }
+    }
+
+    /// <summary>
+    /// Independently settling automatic groups publish their ordered structured results without allowing an older
+    /// group's completion to close the newer group's speaking window.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task PlayerVoice_OverlappingAutomaticGroups_KeepWindowOpenUntilEachGroupSettles()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        SignalFakeTranscriber transcriber = new();
+        WindowTestPlayerVoice voice = new()
+        {
+            Transcriber = transcriber,
+        };
+        OrderingVoiceListener listener = new();
+        AddTestNode(sceneTree, transcriber);
+        AddTestNode(sceneTree, voice);
+        AddTestNode(sceneTree, listener);
+        listener.AddToGroup(new StringName(IHearing.GroupName));
+        await WaitForFramesAsync(sceneTree, 2);
+
+        const string firstGroup = "first-group";
+        const string secondGroup = "second-group";
+        int endedCount = 0;
+        voice.SpeechEnded += _ => endedCount++;
+
+        try
+        {
+            transcriber.EmitAutomaticGroupOpened(firstGroup);
+            transcriber.EmitRecordingStarted();
+            transcriber.EmitAutomaticGroupOpened(secondGroup);
+            transcriber.EmitRecordingStarted();
+            Assert.True(voice.IsSpeaking);
+
+            transcriber.EmitAutomaticGroupClosed(firstGroup, outcomesWerePublished: false);
+            transcriber.EmitAutomaticSegmentCompleted("first", firstGroup, 0, continued: false);
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(0, endedCount);
+
+            transcriber.EmitAutomaticGroupClosed(secondGroup, outcomesWerePublished: false);
+            transcriber.EmitAutomaticSegmentCompleted("second", secondGroup, 0, continued: false);
+
+            Assert.False(voice.IsSpeaking);
+            Assert.Equal(1, endedCount);
+            Assert.Equal(["first", "second"], listener.Events.Select(entry => entry.Speech));
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, transcriber, listener);
         }
     }
 
@@ -830,7 +1573,8 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             => FailureErrors.Add(error);
     }
 
-    private sealed partial class WindowTestPlayerVoice : PlayerVoice
+    // Internal so the transcriber-side mid-session failure test can reuse this speaking-window fixture.
+    internal sealed partial class WindowTestPlayerVoice : PlayerVoice
     {
         public int SpeechGeneratedCallCount
         {
@@ -861,11 +1605,32 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
         public void EmitRecordingStarted()
             => _ = EmitSignal(SignalName.RecordingStarted);
 
+        public void EmitRecordingAbandoned()
+            => _ = EmitSignal(SignalName.RecordingAbandoned);
+
         public void EmitTranscriptionCompleted(string text)
             => _ = EmitSignal(SignalName.TranscriptionCompleted, text);
 
         public void EmitTranscriptionFailed(string error)
             => _ = EmitSignal(SignalName.TranscriptionFailed, error);
+
+        public void EmitAutomaticGroupOpened(string speechGroupID)
+            => _ = EmitSignal(SignalName.AutomaticGroupOpened, speechGroupID);
+
+        public void EmitAutomaticGroupClosed(string speechGroupID, bool outcomesWerePublished)
+            => _ = EmitSignal(SignalName.AutomaticGroupClosed, speechGroupID, outcomesWerePublished);
+
+        public void EmitAutomaticSegmentCompleted(string text, string speechGroupID, int segmentIndex, bool continued)
+            => _ = EmitSignal(SignalName.AutomaticSegmentCompleted, text, speechGroupID, segmentIndex, continued);
+
+        public void EmitAutomaticSegmentFailed(string error, string speechGroupID, int segmentIndex, bool continued)
+            => _ = EmitSignal(SignalName.AutomaticSegmentFailed, error, speechGroupID, segmentIndex, continued);
+
+        public void EmitAutomaticGroupAbandoned(string speechGroupID)
+            => _ = EmitSignal(SignalName.AutomaticGroupAbandoned, speechGroupID);
+
+        public void EmitAutomaticSpeechResumed(string speechGroupID, int segmentIndex, bool continued)
+            => _ = EmitSignal(SignalName.AutomaticSpeechResumed, speechGroupID, segmentIndex, continued);
     }
 
     private sealed partial class OrderingVoiceListener : Node, IHearing
@@ -884,6 +1649,12 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             private set;
         }
 
+        public SpeechSegmentMetadata? LastBroadcastMetadata
+        {
+            get;
+            private set;
+        }
+
         public IReadOnlyList<ListenerEvent> Events => _events;
 
         public IReadOnlyList<Type> PerceptTypes { get; } = [typeof(SpeechPercept)];
@@ -897,6 +1668,12 @@ public sealed partial class VoiceSpeakingWindowIntegrationTests
             IsSpeakingAtBroadcast = source.IsSpeaking;
             ActivityOrder?.Add("broadcast");
             _events.Add(new ListenerEvent(speech, source));
+        }
+
+        public void ReceiveVoice(string speech, IVoice source, SpeechSegmentMetadata? metadata)
+        {
+            LastBroadcastMetadata = metadata;
+            ReceiveVoice(speech, source);
         }
     }
 

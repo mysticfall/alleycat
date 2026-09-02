@@ -117,6 +117,9 @@
 - [SPCH-005: Voice Component](speech/005-voice/index.md)
 - [SPCH-006: Hearing Component](speech/006-hearing/index.md)
 - [SPCH-007: Supertonic Speech Generator Component](speech/007-supertonic-speech-generator/index.md)
+- [SPCH-008: Automatic Voice Detection](speech/008-automatic-voice-detection/index.md) — local Silero VAD with
+  pause-delimited segments: endpoint silence dispatches one whole-segment REST request (WhisperLive backend) and the
+  continuation gap closes the speech group; no streaming drafts.
 
 ## Testing
 

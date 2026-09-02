@@ -1,10 +1,13 @@
 using AlleyCat.Character;
 using AlleyCat.Core;
+using AlleyCat.Core.Content;
 using AlleyCat.Core.Time;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Mind;
 using AlleyCat.Mind.Attention;
 using AlleyCat.Mind.Observation;
 using AlleyCat.Mind.Perception;
+using AlleyCat.Scene;
 using AlleyCat.Sense;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Voice;
@@ -483,6 +486,366 @@ public sealed class PerceptionMindIntegrationTests
         }
     }
 
+    /// <summary>
+    /// Grouped hearing transport reaches raw speech observations intact, while duplicate group segments are rejected
+    /// before timestamps, importance, delivery, and timeline side effects; ungrouped repeated speech remains allowed.
+    /// </summary>
+    [Fact]
+    public async Task SpeechPerception_GroupedTransportIsImmutableAndDuplicateSegmentsSuppressBeforeIngestion()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var hearing = new Hearing();
+        var ownerVoice = new TestVoice { Id = "owner-voice" };
+        var source = new TestVoice { Id = "external-voice" };
+        var owner = new TestCharacter(hearing, ownerVoice);
+        var speaker = new TestCharacter(source) { Id = "speaker" };
+        var clock = new CountingGameClock { CurrentSeconds = 10d };
+        var mind = new TestMind(owner);
+        mind.SetGameClockLoaderForTesting(() => clock);
+        mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker]));
+        mind.AddChild(new SpeechPerception());
+        int deliveries = 0;
+        mind.DeliverySignalForTest(_ => deliveries++);
+        var root = new Node();
+        root.AddChild(hearing);
+        root.AddChild(ownerVoice);
+        root.AddChild(source);
+        root.AddChild(mind);
+        AddToTree(tree, root);
+        await TestUtils.WaitForFramesAsync(tree, 2);
+
+        try
+        {
+            var metadata = new SpeechSegmentMetadata("automatic-group", 1);
+            source.PublishCompletedSpeech("first grouped segment", metadata);
+            await mind.DrainPerceptionsForTestingAsync();
+
+            ObservedSpeech grouped = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Timeline));
+            Assert.Equal("external-voice", grouped.VoiceId);
+            Assert.Equal("automatic-group", grouped.SpeechGroupID);
+            Assert.Equal(1, grouped.SegmentIndex);
+            Assert.True(grouped.Continued);
+            Assert.Equal(10d, grouped.ObservedAt);
+            Assert.Equal(1, clock.ReadCount);
+            Assert.Equal(1, deliveries);
+            _ = Assert.Single(mind.TakeNotableForTest()!);
+
+            source.PublishCompletedSpeech("duplicate grouped segment", metadata);
+            await mind.DrainPerceptionsForTestingAsync();
+
+            _ = Assert.Single(mind.Timeline);
+            Assert.Equal(1, clock.ReadCount);
+            Assert.Equal(1, deliveries);
+            Assert.Null(mind.TakeNotableForTest());
+
+            source.PublishCompletedSpeech("equal ungrouped segment");
+            source.PublishCompletedSpeech("equal ungrouped segment");
+            await mind.DrainPerceptionsForTestingAsync();
+
+            ObservedSpeech[] ungrouped = [.. mind.Timeline.OfType<ObservedSpeech>().Skip(1)];
+            Assert.Equal(2, ungrouped.Length);
+            Assert.All(ungrouped, observation =>
+            {
+                Assert.Null(observation.SpeechGroupID);
+                Assert.Equal(0, observation.SegmentIndex);
+                Assert.False(observation.Continued);
+            });
+            Assert.Equal(3, clock.ReadCount);
+            Assert.Equal(2, deliveries);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
+    /// <summary>
+    /// The commit-identity gate is generic (AI-001 TR-49, AC-37): an arbitrary observation type supplying the
+    /// contract's identity tuple receives exact-once enforcement before every ingestion effect, while
+    /// identity-free observations keep the ordinary allow policy regardless of content.
+    /// </summary>
+    [Fact]
+    public async Task CommitIdentity_ArbitraryObservationTypeIsSuppressedExactlyOnceBeforeIngestionEffects()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var sense = new TestSense(typeof(FirstPercept));
+        var owner = new TestCharacter(sense);
+        var clock = new CountingGameClock { CurrentSeconds = 10d };
+        var mind = new TestMind(owner);
+        mind.SetGameClockLoaderForTesting(() => clock);
+        var root = new Node();
+        root.AddChild(mind);
+        AddToTree(tree, root);
+        await TestUtils.WaitForFramesAsync(tree, 2);
+
+        try
+        {
+            mind.ObserveForTest(new CommitIdentifiedObservation("stream-a", 4L, "first"));
+            mind.ObserveForTest(new CommitIdentifiedObservation("stream-a", 4L, "duplicate"));
+
+            _ = Assert.Single(mind.Timeline);
+            Assert.Equal(1, clock.ReadCount);
+            _ = Assert.Single(mind.Ingested);
+            _ = Assert.Single(mind.TakeNotableForTest()!);
+
+            mind.ObserveForTest(new CommitIdentifiedObservation("stream-a", 5L, "other turn"));
+            mind.ObserveForTest(new TestObservation("identity-free", 0f));
+            mind.ObserveForTest(new TestObservation("identity-free", 0f));
+
+            Assert.Equal(
+                ["stream-a:4:first", "stream-a:5:other turn", "identity-free", "identity-free"],
+                mind.Timeline.Select(static observation => observation switch
+                {
+                    CommitIdentifiedObservation identified => $"{identified.Stream}:{identified.Turn}:{identified.Value}",
+                    TestObservation test => test.Value,
+                    _ => observation.TypeKey,
+                }));
+            Assert.Equal(4, clock.ReadCount);
+            Assert.Equal(4, mind.Ingested.Count);
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
+    /// <summary>
+    /// External textless resume is transient and gated by source-generic attention, while exact-self activity never
+    /// crosses the Mind boundary.
+    /// </summary>
+    [Fact]
+    public async Task SpeechLifecycle_ResumeForwardsOnceWithoutPerceptionOrWaitEffectsAndRequiresAttention()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var hearing = new Hearing();
+        var ownerVoice = new TestVoice { Id = "owner-voice" };
+        var source = new TestVoice { Id = "external-voice" };
+        var strangerVoice = new TestVoice { Id = "stranger-voice" };
+        var owner = new TestCharacter(hearing, ownerVoice);
+        var speaker = new TestCharacter(source) { Id = "speaker" };
+        var stranger = new TestCharacter(strangerVoice) { Id = "stranger" };
+        var mind = new TestMind(owner);
+        mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker, stranger]));
+        mind.AddChild(new SpeechPerception());
+        int deliveries = 0;
+        mind.DeliverySignalForTest(_ => deliveries++);
+        List<SpeechPercept> percepts = [];
+        hearing.Perceived += percept => percepts.Add(Assert.IsType<SpeechPercept>(percept));
+        var root = new Node();
+        root.AddChild(hearing);
+        root.AddChild(ownerVoice);
+        root.AddChild(source);
+        root.AddChild(strangerVoice);
+        root.AddChild(mind);
+        AddToTree(tree, root);
+        await TestUtils.WaitForFramesAsync(tree, 2);
+
+        mind.AttentionDecayPerSecond = 0f;
+        mind.ReinforceAttentionForTest(((IIdentifiable)speaker).FullId);
+
+        using CancellationTokenSource cancellation = new();
+        try
+        {
+            Task<MindBase.WaitOutcome> wait = mind.WaitForNotableForTestAsync(TimeSpan.FromSeconds(5), cancellation.Token);
+            source.EmitSpeechResumed(new SpeechSegmentMetadata("automatic-group", 1));
+            strangerVoice.EmitSpeechResumed(new SpeechSegmentMetadata("stranger-group", 1));
+            ownerVoice.EmitSpeechResumed(new SpeechSegmentMetadata("self-group", 1));
+            await TestUtils.WaitForFramesAsync(tree, 2);
+
+            SpeechSegmentLifecycleNotification notification = Assert.Single(mind.LifecycleNotifications);
+            Assert.Equal("external-voice", notification.SourceVoiceID);
+            Assert.Equal("automatic-group", notification.Metadata.SpeechGroupID);
+            Assert.Equal(1, notification.Metadata.SegmentIndex);
+            Assert.Equal(SpeechSegmentLifecycleTransition.Resumed, notification.Transition);
+            Assert.False(wait.IsCompleted);
+            Assert.Empty(percepts);
+            Assert.Empty(mind.Timeline);
+            Assert.Empty(mind.Ingested);
+            Assert.Equal(0, deliveries);
+            Assert.Null(mind.TakeNotableForTest());
+        }
+        finally
+        {
+            cancellation.Cancel();
+            root.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
+    /// <summary>
+    /// The textless start cue forwards only for an attended external speaker, samples attention once at cue
+    /// receipt, and never creates percept, hearing, timeline, wait, or delivery effects on its own.
+    /// </summary>
+    [Fact]
+    public async Task SpeechLifecycle_StartedForwardsOnlyWhenAttendedAndSamplesAttentionAtCueReceipt()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var hearing = new Hearing();
+        var ownerVoice = new TestVoice { Id = "owner-voice" };
+        var source = new TestVoice { Id = "external-voice" };
+        var strangerVoice = new TestVoice { Id = "stranger-voice" };
+        var owner = new TestCharacter(hearing, ownerVoice);
+        var speaker = new TestCharacter(source) { Id = "speaker" };
+        var stranger = new TestCharacter(strangerVoice) { Id = "stranger" };
+        var mind = new TestMind(owner);
+        mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker, stranger]));
+        mind.AddChild(new SpeechPerception());
+        int deliveries = 0;
+        mind.DeliverySignalForTest(_ => deliveries++);
+        List<SpeechPercept> percepts = [];
+        hearing.Perceived += percept => percepts.Add(Assert.IsType<SpeechPercept>(percept));
+        var root = new Node();
+        root.AddChild(hearing);
+        root.AddChild(ownerVoice);
+        root.AddChild(source);
+        root.AddChild(strangerVoice);
+        root.AddChild(mind);
+        AddToTree(tree, root);
+        await TestUtils.WaitForFramesAsync(tree, 2);
+
+        mind.AttentionDecayPerSecond = 0f;
+        mind.ReinforceAttentionForTest(((IIdentifiable)speaker).FullId);
+
+        using CancellationTokenSource cancellation = new();
+        try
+        {
+            Task<MindBase.WaitOutcome> wait = mind.WaitForNotableForTestAsync(TimeSpan.FromSeconds(5), cancellation.Token);
+            source.EmitSpeechStarted(new SpeechSegmentMetadata("attended-group", 0));
+            strangerVoice.EmitSpeechStarted(new SpeechSegmentMetadata("stranger-group", 0));
+            ownerVoice.EmitSpeechStarted(new SpeechSegmentMetadata("self-group", 0));
+            await TestUtils.WaitForFramesAsync(tree, 2);
+
+            SpeechSegmentLifecycleNotification notification = Assert.Single(mind.LifecycleNotifications);
+            Assert.Equal("external-voice", notification.SourceVoiceID);
+            Assert.Equal("attended-group", notification.Metadata.SpeechGroupID);
+            Assert.Equal(0, notification.Metadata.SegmentIndex);
+            Assert.Equal(SpeechSegmentLifecycleTransition.Started, notification.Transition);
+            Assert.False(wait.IsCompleted);
+            Assert.Empty(percepts);
+            Assert.Empty(mind.Timeline);
+            Assert.Empty(mind.Ingested);
+            Assert.Equal(0, deliveries);
+            Assert.Null(mind.TakeNotableForTest());
+
+            // Attention gained after an unattended cue never creates a retroactive hold: the stranger's earlier
+            // group stays dropped while a fresh cue from the now-attended stranger forwards.
+            mind.ReinforceAttentionForTest(((IIdentifiable)stranger).FullId);
+            strangerVoice.EmitSpeechStarted(new SpeechSegmentMetadata("stranger-late", 0));
+            await TestUtils.WaitForFramesAsync(tree, 2);
+
+            Assert.Equal(
+                ["attended-group", "stranger-late"],
+                mind.LifecycleNotifications.Select(entry => entry.Metadata.SpeechGroupID));
+            Assert.Equal(2, mind.LifecycleNotifications.Count);
+            Assert.Empty(percepts);
+            Assert.Empty(mind.Timeline);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            root.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
+    /// <summary>Only textless terminal releases cross the transient lifecycle boundary; published speech does not.</summary>
+    [Fact]
+    public async Task SpeechLifecycle_TerminalSettlementsForwardOnceWithoutHearingOrTimelineEffects()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var hearing = new Hearing();
+        var ownerVoice = new TestVoice { Id = "owner-voice" };
+        var source = new TestVoice { Id = "external-voice" };
+        var owner = new TestCharacter(hearing, ownerVoice);
+        var speaker = new TestCharacter(source) { Id = "speaker" };
+        var mind = new TestMind(owner);
+        mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker]));
+        mind.AddChild(new SpeechPerception());
+        List<SpeechPercept> percepts = [];
+        hearing.Perceived += percept => percepts.Add(Assert.IsType<SpeechPercept>(percept));
+        var root = new Node();
+        root.AddChild(hearing);
+        root.AddChild(ownerVoice);
+        root.AddChild(source);
+        root.AddChild(mind);
+        AddToTree(tree, root);
+        await TestUtils.WaitForFramesAsync(tree, 2);
+
+        try
+        {
+            source.EmitSpeechSettlement("blank", 0, SpeechSegmentSettlementKind.Blank);
+            source.EmitSpeechSettlement("failed", 1, SpeechSegmentSettlementKind.Failed);
+            source.EmitSpeechSettlement("abandoned", 2, SpeechSegmentSettlementKind.Abandoned);
+            source.EmitSpeechSettlement("published", 3, SpeechSegmentSettlementKind.Published);
+
+            Assert.Equal(
+                [
+                    SpeechSegmentLifecycleTransition.Blank,
+                    SpeechSegmentLifecycleTransition.Failed,
+                    SpeechSegmentLifecycleTransition.Abandoned,
+                ],
+                mind.LifecycleNotifications.Select(notification => notification.Transition));
+            Assert.Equal(["blank", "failed", "abandoned"], mind.LifecycleNotifications.Select(notification => notification.Metadata.SpeechGroupID));
+            Assert.Empty(percepts);
+            Assert.Empty(mind.Timeline);
+            Assert.Empty(mind.Ingested);
+            Assert.Null(mind.TakeNotableForTest());
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
+    /// <summary>Voice replacement and Mind exit detach transient lifecycle subscriptions without duplication.</summary>
+    [Fact]
+    public async Task SpeechLifecycle_VoiceReplacementAndMindExitDetachSubscriptions()
+    {
+        SceneTree tree = TestUtils.GetSceneTree();
+        var ownerVoice = new TestVoice { Id = "owner-voice" };
+        var firstSource = new TestVoice { Id = "first-source" };
+        var replacementSource = new TestVoice { Id = "replacement-source" };
+        var owner = new TestCharacter(ownerVoice);
+        var speaker = new TestCharacter(firstSource) { Id = "speaker" };
+        var mind = new TestMind(owner);
+        mind.SetSceneContextLoaderForTesting(() => new TestSceneContext([owner, speaker]));
+        var root = new Node();
+        root.AddChild(ownerVoice);
+        root.AddChild(firstSource);
+        root.AddChild(replacementSource);
+        root.AddChild(mind);
+        AddToTree(tree, root);
+        await TestUtils.WaitForFramesAsync(tree, 2);
+
+        mind.AttentionDecayPerSecond = 0f;
+        mind.ReinforceAttentionForTest(((IIdentifiable)speaker).FullId);
+
+        try
+        {
+            firstSource.EmitSpeechResumed(new SpeechSegmentMetadata("first", 1));
+            speaker.RefreshComponents(replacementSource);
+            owner.RefreshComponents(ownerVoice);
+            await TestUtils.WaitForFramesAsync(tree, 2);
+
+            firstSource.EmitSpeechResumed(new SpeechSegmentMetadata("stale", 1));
+            replacementSource.EmitSpeechResumed(new SpeechSegmentMetadata("replacement", 1));
+            Assert.Equal(["first", "replacement"], mind.LifecycleNotifications.Select(notification => notification.Metadata.SpeechGroupID));
+
+            root.RemoveChild(mind);
+            replacementSource.EmitSpeechResumed(new SpeechSegmentMetadata("after-exit", 1));
+            Assert.Equal(2, mind.LifecycleNotifications.Count);
+            mind.QueueFree();
+        }
+        finally
+        {
+            root.QueueFree();
+            await TestUtils.WaitForFramesAsync(tree, 2);
+        }
+    }
+
     private static EquivalentObservation Equivalent(string scope, string value, Counter counter)
         => new(scope, value, () => counter.Value++);
 
@@ -597,9 +960,18 @@ public sealed class PerceptionMindIntegrationTests
         }
     }
 
-    private sealed partial class TestMind(ICharacter owner) : MindBase
+    private sealed partial class TestMind : MindBase
     {
+        private readonly ICharacter _owner;
+
+        public TestMind(ICharacter owner)
+        {
+            _owner = owner;
+            SpeechSegmentLifecycleNotified += LifecycleNotifications.Add;
+        }
+
         public List<AgentObservation> Ingested { get; } = [];
+        public List<SpeechSegmentLifecycleNotification> LifecycleNotifications { get; } = [];
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
         public void IngestToolObservationsForTest(IReadOnlyList<AgentObservation> observations)
             => IngestToolObservations(observations);
@@ -608,7 +980,11 @@ public sealed class PerceptionMindIntegrationTests
         public void ObserveForTest(AgentObservation observation) => Observe(observation);
         public IReadOnlyList<AgentObservation>? TakeNotableForTest()
             => TryClaimPendingObservationDelivery()?.Observations;
-        protected override ICharacter ResolveOwningCharacter() => owner;
+        public Task<WaitOutcome> WaitForNotableForTestAsync(TimeSpan maxWait, CancellationToken cancellationToken)
+            => WaitForNotableObservationsAsync(maxWait, cancellationToken);
+        public void ReinforceAttentionForTest(string fullId)
+            => ReinforceAttention(fullId, 1f, AttentionSettings.Create(1f, 0f, 0.05f, 0.25f));
+        protected override ICharacter ResolveOwningCharacter() => _owner;
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
     }
 
@@ -681,6 +1057,17 @@ public sealed class PerceptionMindIntegrationTests
             => throw new InvalidOperationException("expected fault");
     }
 
+    /// <summary>
+    /// Arbitrary non-speech observation supplying an identity tuple through the generic commit-identity contract
+    /// (AI-001 TR-49), proving the gate never depends on concrete observation types.
+    /// </summary>
+    private sealed record CommitIdentifiedObservation(string Stream, long Turn, string Value) : AgentObservation, IHasCommitIdentity
+    {
+        public ObservationCommitIdentity? CommitIdentity => new(Stream, Turn);
+        public override string TypeKey => "commit.test";
+        public override float CalculateImportance(ObservationContext context) => 1f;
+    }
+
     private sealed record AttentionObservation(string SubjectId, float Contribution) : AgentObservation
     {
         public override string TypeKey => "attention.test";
@@ -733,5 +1120,21 @@ public sealed class PerceptionMindIntegrationTests
     private sealed partial class TestVoice : Voice
     {
         public override void Speak(string speech) => base.Speak(speech);
+        public void PublishCompletedSpeech(string speech, SpeechSegmentMetadata? metadata = null) => PublishSpeech(speech, metadata);
+        public void EmitSpeechStarted(SpeechSegmentMetadata metadata) => RaiseSpeechSegmentStarted(metadata);
+
+        public void EmitSpeechResumed(SpeechSegmentMetadata metadata) => RaiseSpeechResumed(metadata);
+        public void EmitSpeechSettlement(string groupId, int segmentIndex, SpeechSegmentSettlementKind kind)
+            => RaiseSpeechSegmentSettled(new SpeechSegmentSettlement(new SpeechSegmentMetadata(groupId, segmentIndex), kind));
+    }
+
+    private sealed record TestSceneContext(IReadOnlyCollection<ICharacter> Characters) : ISceneContext
+    {
+        public ICharacter Player => throw new InvalidOperationException("The test scene has no player.");
+        public ContentContext Content => ContentContext.Default;
+        public IIdentifiable? Find(string fullId)
+            => Characters.FirstOrDefault(character => string.Equals(character.FullId, fullId, StringComparison.Ordinal));
+        public IIdentifiable Resolve(string fullId)
+            => Find(fullId) ?? throw new InvalidOperationException();
     }
 }
