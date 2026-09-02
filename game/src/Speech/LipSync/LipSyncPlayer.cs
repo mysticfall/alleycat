@@ -12,6 +12,7 @@ internal enum StreamingCancellationOrigin
 {
     ExplicitStop,
     DirectPlaybackReplacement,
+    AdmittedSuccessor,
     ReplacementAdmission,
     PreparationAbandoned,
     NodeTeardown,
@@ -79,9 +80,11 @@ public abstract partial class LipSyncPlayer : Node
     } = 0.1f;
 
     /// <summary>
-    /// Maximum time a replacement streaming preparation waits for the preceding stream's read loop to
-    /// settle after it is cancelled. This is deliberately shorter than ten seconds so an unavailable
-    /// backend is surfaced promptly rather than admitting overlapping streaming requests.
+    /// Maximum time a streaming preparation waits for the preceding stream's read loop to settle before
+    /// the next request may be admitted. Ordinary queued preparation waits for natural settlement (the
+    /// predecessor download finishing on its own) without cutting it; direct replacement cuts the
+    /// predecessor first and then waits for its settlement. This is deliberately shorter than ten seconds
+    /// so an unavailable backend is surfaced promptly rather than admitting overlapping streaming requests.
     /// </summary>
     [Export(PropertyHint.Range, "0.1,9.9,0.1")]
     public float StreamingReplacementSettlementTimeoutSeconds
@@ -460,7 +463,10 @@ public abstract partial class LipSyncPlayer : Node
             return;
         }
 
-        StopPlayback(resetWeights: true, clearFrames: true, StreamingCancellationOrigin.ReplacementAdmission);
+        // Direct callers cut their predecessor before reaching this hand-off, and queued callers wait for
+        // the predecessor's playback completion, so any session still attached here is cut purely because
+        // an admitted successor is starting.
+        StopPlayback(resetWeights: true, clearFrames: true, StreamingCancellationOrigin.AdmittedSuccessor);
         StartPlayback(playback);
     }
 
@@ -846,7 +852,7 @@ public abstract partial class LipSyncPlayer : Node
         StreamingPlaybackSession? session = null;
         try
         {
-            await SettlePredecessorStreamingSessionAsync(preparationToken);
+            await AwaitPredecessorStreamingSessionSettlementAsync(preparationToken);
             session = StartStreamingInferenceSession(speech, callerCancellation);
             _lastStreamingSession = session;
             await session.Buffer.StartupBufferReady.WaitAsync(preparationToken);
@@ -882,7 +888,7 @@ public abstract partial class LipSyncPlayer : Node
         StreamingPlaybackSession? session = null;
         try
         {
-            SettlePredecessorStreamingSessionAsync(CancellationToken.None).GetAwaiter().GetResult();
+            CutAndSettlePredecessorStreamingSessionAsync(CancellationToken.None).GetAwaiter().GetResult();
             session = StartStreamingInferenceSession(speech, externalCancellation: null);
             _lastStreamingSession = session;
             session.Buffer.StartupBufferReady.Wait();
@@ -953,7 +959,74 @@ public abstract partial class LipSyncPlayer : Node
         return session;
     }
 
-    private async Task SettlePredecessorStreamingSessionAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Waits for the predecessor streaming session's read loop to settle naturally before an ordinary
+    /// queued preparation may be admitted. The predecessor is never cancelled here: an active Audio2Face
+    /// stream must be allowed to finish its download, so queued successors queue behind it. A predecessor
+    /// whose inference already failed is logged and released rather than inherited by the successor.
+    /// </summary>
+    private async Task AwaitPredecessorStreamingSessionSettlementAsync(CancellationToken cancellationToken)
+    {
+        StreamingPlaybackSession? predecessor = _lastStreamingSession;
+        if (predecessor is null)
+        {
+            return;
+        }
+
+        if (!predecessor.ReadLoop.IsCompleted)
+        {
+            GetLogger().LogInformation(
+                "LipSyncPlayer waiting for the predecessor streaming session to settle naturally before admitting the queued successor request.");
+        }
+
+        var settlementTimeout = TimeSpan.FromSeconds(Mathf.Clamp(
+            StreamingReplacementSettlementTimeoutSeconds,
+            0.1f,
+            9.9f));
+        try
+        {
+            await predecessor.ReadLoop.WaitAsync(settlementTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            GetLogger().LogError(
+                "LipSyncPlayer refused queued streaming request because predecessor settlement exceeded {SettlementTimeoutSeconds:0.###} s.",
+                settlementTimeout.TotalSeconds);
+            const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session did not settle before the replacement deadline.";
+            QueuePlaybackError(message);
+            throw new TimeoutException(message, ex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            GetLogger().LogError(
+                "LipSyncPlayer refused queued streaming request because predecessor settlement failed unexpectedly with {FailureType}.",
+                ex.GetType().Name);
+            const string message = "LipSyncPlayer: Audio2Face backend unavailable because the predecessor streaming session failed while settling.";
+            QueuePlaybackError(message);
+            throw new InvalidOperationException(message, ex);
+        }
+
+        if (predecessor.Buffer.IsFaulted)
+        {
+            // The predecessor's inference failure belongs to that playback alone; the queued successor must
+            // still be admitted rather than inheriting the fault.
+            GetLogger().LogWarning(
+                "LipSyncPlayer predecessor streaming session settled with an inference failure of type {FailureType}; admitting the queued successor request anyway.",
+                predecessor.Buffer.Error?.GetType().Name ?? "Unknown");
+            return;
+        }
+
+        GetLogger().LogDebug(
+            "LipSyncPlayer predecessor streaming session settled before queued successor request admission.");
+    }
+
+    /// <summary>
+    /// Cuts the predecessor streaming session and waits for its settlement before a direct replacement
+    /// preparation may be admitted. Direct replacement is cut-first by design: the prior session must stop
+    /// owning its connection before the replacement request is sent, and a faulted predecessor still
+    /// refuses the replacement.
+    /// </summary>
+    private async Task CutAndSettlePredecessorStreamingSessionAsync(CancellationToken cancellationToken)
     {
         StreamingPlaybackSession? predecessor = _lastStreamingSession;
         if (predecessor is null)

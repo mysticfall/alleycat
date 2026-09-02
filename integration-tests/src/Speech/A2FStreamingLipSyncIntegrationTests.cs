@@ -373,6 +373,226 @@ public sealed partial class A2FStreamingLipSyncIntegrationTests
     }
 
     /// <summary>
+    /// Rapid ordinary queue progression: a successor prepared through the asynchronous path queues behind
+    /// the active stream's read loop until it settles naturally, so the predecessor download is never cut
+    /// and no replacement-admission cancellation is ever recorded.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_QueuedSuccessorPreparation_WaitsForPredecessorToSettleNaturally()
+    {
+        LipSyncPlayer.StreamingPlaybackSession? firstSession = null;
+        int secondRequestAdmittedBeforeFirstReadLoopSettled = 0;
+        ScriptedA2FServer server = new(
+            async session =>
+            {
+                await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+                if (session.RequestIndex == 2)
+                {
+                    for (int frameIndex = 0; frameIndex < 45; frameIndex++)
+                    {
+                        await session.SendFrameAsync(frameIndex, frameIndex / 45f);
+                    }
+
+                    await session.SendCompleteAsync(45);
+                    return;
+                }
+
+                // Slow predecessor stream: enough frames to open the startup gate immediately, then a
+                // trickle that keeps the read loop alive well after playback has started.
+                for (int frameIndex = 0; frameIndex < 8; frameIndex++)
+                {
+                    await session.SendFrameAsync(frameIndex, frameIndex / 60f);
+                }
+
+                session.MarkEvent("predecessor-gate-frames-sent");
+                for (int frameIndex = 8; frameIndex < 60; frameIndex++)
+                {
+                    await Task.Delay(35);
+                    await session.SendFrameAsync(frameIndex, frameIndex / 60f);
+                }
+
+                await session.SendCompleteAsync(60);
+                session.MarkEvent("predecessor-complete-sent");
+            },
+            requestIndex =>
+            {
+                if (requestIndex != 2)
+                {
+                    return;
+                }
+
+                if (firstSession is null || !firstSession.ReadLoop.IsCompleted)
+                {
+                    _ = Interlocked.Exchange(ref secondRequestAdmittedBeforeFirstReadLoopSettled, 1);
+                }
+            });
+
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl,
+            // The queued successor queues behind the whole natural settlement of the slow trickle, so the
+            // bounded-settlement deadline needs headroom beyond that trickle's duration.
+            player => player.StreamingReplacementSettlementTimeoutSeconds = 9.5f);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
+
+        try
+        {
+            SceneTree sceneTree = GetSceneTree();
+
+            Task<LipSyncPlayer.PreparedPlayback> firstPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 3.0));
+            Task firstFinished = await Task.WhenAny(firstPreparation, Task.Delay(4000));
+            Assert.Same(firstPreparation, firstFinished);
+            LipSyncPlayer.PreparedPlayback firstPlayback = await firstPreparation;
+            firstSession = firstPlayback.StreamingSession!;
+
+            int completedCount = 0;
+            fixture.Player.PlaybackCompleted += () => completedCount++;
+
+            fixture.Player.PlayPrepared(firstPlayback);
+            await WaitUntilAsync(sceneTree, () => fixture.Player.AppliedFrameCount > 0, maxFrames: 3000);
+
+            // The predecessor download is still running while its playback is active.
+            Assert.False(firstSession.ReadLoop.IsCompleted);
+            Assert.True(server.HasEvent("predecessor-gate-frames-sent"));
+
+            Task<LipSyncPlayer.PreparedPlayback> secondPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 1.5));
+
+            // While the predecessor read loop is still trickling, the queued successor must neither be
+            // admitted to the server nor complete its own preparation.
+            await WaitForFramesAsync(sceneTree, 15);
+            _ = Assert.Single(server.TransportAcceptedRequestIndexes);
+            Assert.False(secondPreparation.IsCompleted, "The queued successor must wait for natural predecessor settlement.");
+
+            // The predecessor settles naturally once its complete record arrives; it is never cancelled.
+            await WaitUntilAsync(sceneTree, () => firstSession.ReadLoop.IsCompleted, maxFrames: 3000);
+            Assert.True(server.HasEvent("predecessor-complete-sent"));
+            Assert.True(firstSession.Buffer.IsCompleted, "The predecessor stream must complete rather than be cut.");
+            Assert.Equal(60, firstSession.Buffer.DeclaredFrameCount);
+            Assert.False(firstSession.IsCancelled);
+            Assert.Null(firstSession.CancellationOrigin);
+
+            // Only after natural settlement may the queued successor's request reach the server.
+            await WaitUntilAsync(sceneTree, () => server.TransportAcceptedRequestIndexes.Count == 2, maxFrames: 3000);
+            Task secondFinished = await Task.WhenAny(secondPreparation, Task.Delay(4000));
+            Assert.Same(secondPreparation, secondFinished);
+            LipSyncPlayer.PreparedPlayback secondPlayback = await secondPreparation;
+
+            Assert.Equal(0, Volatile.Read(ref secondRequestAdmittedBeforeFirstReadLoopSettled));
+            Assert.All(
+                logger.Entries,
+                entry => Assert.DoesNotContain("ReplacementAdmission", entry.Message, StringComparison.Ordinal));
+
+            // Ordinary queue progression hands the successor over once the predecessor playback completes.
+            await WaitUntilAsync(sceneTree, () => completedCount == 1, maxFrames: 3000);
+            fixture.Player.PlayPrepared(secondPlayback);
+            await WaitUntilAsync(sceneTree, () => completedCount == 2, maxFrames: 3000);
+
+            Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
+            Assert.True(secondPlayback.StreamingSession!.Buffer.IsCompleted);
+            ScriptedA2FServer.ObservedRequest[] requests = [.. server.Requests];
+            Assert.Equal(2, requests.Length);
+            Assert.Equal(1, requests[0].RequestIndex);
+            Assert.Equal(2, requests[1].RequestIndex);
+            Assert.NotEqual(requests[0].StreamID, requests[1].StreamID);
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A predecessor whose stream fails server-side must not poison the next ordinary preparation: the
+    /// queued successor is still admitted, plays cleanly, and reports no inherited playback error.
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task A2FStreaming_WhenPredecessorStreamFails_QueuedSuccessorPreparationIsNotPoisoned()
+    {
+        ScriptedA2FServer server = new(async session =>
+        {
+            await session.SendMetadataAsync(StreamFps, ["jawOpen"]);
+            if (session.RequestIndex == 1)
+            {
+                for (int frameIndex = 0; frameIndex < 6; frameIndex++)
+                {
+                    await session.SendFrameAsync(frameIndex, frameIndex / 6f);
+                }
+
+                // Let playback start, then fail the stream by closing without the complete record.
+                await Task.Delay(300);
+                return;
+            }
+
+            for (int frameIndex = 0; frameIndex < 45; frameIndex++)
+            {
+                await session.SendFrameAsync(frameIndex, frameIndex / 45f);
+            }
+
+            await session.SendCompleteAsync(45);
+        });
+
+        await using StreamingPlaybackFixture fixture = await StreamingPlaybackFixture.CreateAsync(
+            GetSceneTree(),
+            server.BlendshapesUrl);
+        using RecordingDiagnosticsLogger logger = new();
+        using IDisposable playerLogger = fixture.Player.OverrideLoggerForTesting(logger);
+        using IDisposable streamingLogger = fixture.Player.OverrideStreamingLoggerForTesting(logger);
+
+        try
+        {
+            SceneTree sceneTree = GetSceneTree();
+
+            Task<LipSyncPlayer.PreparedPlayback> firstPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 1.0));
+            LipSyncPlayer.PreparedPlayback firstPlayback = await firstPreparation.WaitAsync(TimeSpan.FromSeconds(4));
+            LipSyncPlayer.StreamingPlaybackSession firstSession = firstPlayback.StreamingSession!;
+
+            int completedCount = 0;
+            fixture.Player.PlaybackCompleted += () => completedCount++;
+
+            fixture.Player.PlayPrepared(firstPlayback);
+            Assert.True(fixture.Player.IsAudioPlaying);
+
+            // The server-side failure faults the predecessor's own read loop and playback.
+            await WaitUntilAsync(sceneTree, () => firstSession.ReadLoop.IsCompleted, maxFrames: 3000);
+            Assert.True(firstSession.Buffer.IsFaulted);
+            await WaitUntilAsync(sceneTree, () => completedCount == 1, maxFrames: 3000);
+            Assert.Contains("streaming inference failed during playback", fixture.Player.PlaybackError, StringComparison.Ordinal);
+
+            // The next ordinary preparation is admitted anyway: the predecessor's fault is not inherited.
+            Task<LipSyncPlayer.PreparedPlayback> secondPreparation = fixture.Player.PreparePlaybackAsync(
+                CreateSilenceStream(seconds: 1.5));
+            LipSyncPlayer.PreparedPlayback secondPlayback = await secondPreparation.WaitAsync(TimeSpan.FromSeconds(4));
+            Assert.NotNull(secondPlayback.StreamingSession);
+            Assert.False(secondPlayback.StreamingSession!.Buffer.IsFaulted);
+            Assert.Equal(
+                1,
+                logger.Count("admitting the queued successor request anyway", LogLevel.Warning));
+
+            fixture.Player.PlayPrepared(secondPlayback);
+            await WaitUntilAsync(sceneTree, () => completedCount == 2, maxFrames: 3000);
+
+            Assert.True(string.IsNullOrWhiteSpace(fixture.Player.PlaybackError), fixture.Player.PlaybackError);
+            Assert.True(secondPlayback.StreamingSession.Buffer.IsCompleted);
+            ScriptedA2FServer.ObservedRequest[] requests = [.. server.Requests];
+            Assert.Equal(2, requests.Length);
+            Assert.NotEqual(requests[0].StreamID, requests[1].StreamID);
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+            server.Dispose();
+        }
+    }
+
+    /// <summary>
     /// A direct streaming <see cref="LipSyncPlayer.Play"/> replacement cuts the active playback before it
     /// waits for the predecessor reader, and its replacement request is not transport-accepted until that
     /// reader has settled.

@@ -536,6 +536,105 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
     }
 
     /// <summary>
+    /// Rapid multiline submissions keep strict FIFO request, generation, hand-off, and playback order through one
+    /// serial pipeline, with successor preparation overlapping active playback and no lip-sync cancellation from
+    /// ordinary queue progression (SPCH-005 TR-13, TR-30, TR-31).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakAsync_RapidMultilineSubmissions_ProcessFIFOWithoutLipSyncCancellation()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node root = new()
+        {
+            Name = "AIVoiceRapidFifoTestRoot",
+        };
+        FakeSpeechGenerator speechGenerator = new();
+        speechGenerator.EnqueueResult(
+            CreateWaveFileBytes([0x01, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+        speechGenerator.EnqueueResult(
+            CreateWaveFileBytes([0x02, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+        speechGenerator.EnqueueResult(
+            CreateWaveFileBytes([0x03, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+        speechGenerator.EnqueueResult(
+            CreateWaveFileBytes([0x04, 0x00], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+        AudioStreamPlayer3D audioPlayer = new();
+        Skeleton3D skeleton = new();
+        StubLipSyncPlayer lipSyncPlayer = new()
+        {
+            AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
+        };
+        TestAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+            UseRealLipSyncPreparation = true,
+        };
+
+        root.AddChild(speechGenerator);
+        root.AddChild(audioPlayer);
+        root.AddChild(skeleton);
+        root.AddChild(lipSyncPlayer);
+        root.AddChild(voice);
+        await AttachToRootAfterBootSettleAsync(sceneTree, root);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        int startedCount = 0;
+        int endedCount = 0;
+        voice.SpeechStarted += _ => startedCount++;
+        voice.SpeechEnded += _ => endedCount++;
+
+        try
+        {
+            Assert.True(lipSyncPlayer.IsInitialised, lipSyncPlayer.InitialisationError);
+
+            await voice.SpeakAsync("First line");
+            await voice.SpeakAsync("Second line");
+            await voice.SpeakAsync("Third line");
+            await voice.SpeakAsync("Fourth line");
+            Assert.True(voice.IsSpeaking);
+            Assert.Equal(1, startedCount);
+
+            await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == 1, 30);
+
+            // The successor generated and prepared in the background while the first line is still playing, but
+            // its playback hand-off stays gated until the first playback completes.
+            await WaitUntilAsync(
+                sceneTree,
+                () => speechGenerator.GenerateCallCount >= 2 && lipSyncPlayer.InferenceCallCount >= 2,
+                60);
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+
+            for (int line = 2; line <= 4; line++)
+            {
+                lipSyncPlayer.CompletePlaybackForTesting();
+                await WaitUntilAsync(sceneTree, () => voice.PlayGeneratedSpeechCallCount == line, 60);
+            }
+
+            lipSyncPlayer.CompletePlaybackForTesting();
+            await WaitUntilAsync(sceneTree, () => !voice.IsSpeaking, 30);
+
+            Assert.Equal(["First line", "Second line", "Third line", "Fourth line"], speechGenerator.RequestedTexts);
+            Assert.Equal([0x01, 0x02, 0x03, 0x04], voice.PlayedSpeechDataOrder.Select(data => data[0]));
+            Assert.Equal(4, voice.SpeechGeneratedCallCount);
+            Assert.Equal(1, startedCount);
+            Assert.Equal(1, endedCount);
+
+            // Ordinary queue progression never cancelled the lip-sync player: every line completed its inference,
+            // and no failure was surfaced.
+            Assert.Equal(4, lipSyncPlayer.InferenceCallCount);
+            Assert.Empty(voice.FailureErrors);
+            Assert.Equal(1, voice.MaximumConcurrentPipelines);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, voice, speechGenerator, lipSyncPlayer, audioPlayer, skeleton);
+        }
+    }
+
+    /// <summary>
     /// Failure of the first queued item emits failure and does not block the later FIFO item.
     /// </summary>
     [Fact]
@@ -703,6 +802,117 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         {
             await DestroyFixtureAsync(sceneTree, fixtureRoot);
             await loggingFixture.DestroyAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Caller cancellation of a queued sibling firing synchronously inside the predecessor's playback hand-off
+    /// window — after the commit is accepted but before the pipeline settles — must never cancel the committed
+    /// item's pipeline source: the committed streaming session finishes its download naturally, playback
+    /// completes with no starvation episode, the flushed siblings settle silently, and a fresh submission still
+    /// works afterwards (SPCH-005 TR-32, TR-39).
+    /// </summary>
+    [Fact]
+    [Headless]
+    public async Task SpeakCancellableAsync_WhenQueuedSiblingCancelledInsideHandOffWindow_NeverCutsCommittedPlaybackStream()
+    {
+        // 0.5 s of silence at a 30 fps inference rate covers the whole utterance without starving playback.
+        const int expectedFrameCount = 15;
+        SceneTree sceneTree = GetSceneTree();
+        Node root = new()
+        {
+            Name = "AIVoiceHandOffCancellationTestRoot",
+        };
+        FakeSpeechGenerator speechGenerator = new();
+        speechGenerator.EnqueueResult(
+            CreateWaveFileBytes(new byte[16000], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+        speechGenerator.EnqueueResult(
+            CreateWaveFileBytes(new byte[16000], sampleRate: 16000, channelCount: 1, bitsPerSample: 16));
+        AudioStreamPlayer3D audioPlayer = new();
+        Skeleton3D skeleton = new();
+        skeleton.AddChild(CreateJawOpenMeshInstance());
+        ScriptedStreamingLipSyncPlayer lipSyncPlayer = new()
+        {
+            AudioPlayer = audioPlayer,
+            Skeleton = skeleton,
+            // One buffered frame opens the startup gate, so preparation commits while the download is held open.
+            StreamingStartupBufferSeconds = 0f,
+        };
+        HandOffCancellationHookAIVoice voice = new()
+        {
+            SpeechGenerator = speechGenerator,
+            LipSyncPlayer = lipSyncPlayer,
+        };
+
+        root.AddChild(audioPlayer);
+        root.AddChild(skeleton);
+        root.AddChild(lipSyncPlayer);
+        root.AddChild(speechGenerator);
+        root.AddChild(voice);
+        await AttachToRootAfterBootSettleAsync(sceneTree, root);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        int completedCount = 0;
+        lipSyncPlayer.PlaybackCompleted += () => completedCount++;
+
+        try
+        {
+            Assert.True(lipSyncPlayer.IsInitialised, lipSyncPlayer.InitialisationError);
+
+            // The armed sibling cancellation fires synchronously inside the committed predecessor's hand-off
+            // window, on the committing Godot thread, while the predecessor's stream is still downloading; the
+            // scripted download then resumes still inside that window, before playback starts, so a fixed voice
+            // can never starve and a cut stream can never blame the release timing.
+            using CancellationTokenSource siblingCancellation = new();
+            voice.ArmSiblingCancellationAtNextHandOff(siblingCancellation);
+            voice.SiblingCancelledCallback = () => _ = lipSyncPlayer.DownloadRelease.TrySetResult();
+            await voice.SpeakAsync("committed predecessor");
+            ValueTask cancelledSibling = voice.SpeakCancellableAsync(
+                "cancelled queued sibling",
+                siblingCancellation.Token);
+            await voice.SpeakAsync("later stale sibling");
+
+            await WaitUntilAsync(sceneTree, () => voice.SiblingCancelledInsideHandOff.Task.IsCompleted, 30);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(cancelledSibling.AsTask);
+
+            // The flushed siblings settle silently: only the predecessor reached generation, playback, and
+            // publication, and no failure surfaced for the cancelled or the stale queued item.
+            await WaitForFramesAsync(sceneTree, 2);
+            Assert.Equal(["committed predecessor"], speechGenerator.RequestedTexts);
+            Assert.Equal(1, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(1, voice.SpeechGeneratedCallCount);
+            Assert.Empty(voice.FailureErrors);
+
+            // The committed playback completes naturally even though its download was still open when the
+            // sibling cancelled inside the hand-off window: the stream is never cut, every frame arrives, and
+            // playback never starves.
+            await WaitUntilAsync(sceneTree, () => completedCount == 1, 300);
+            await WaitUntilAsync(sceneTree, () => !voice.IsSpeaking, 30);
+
+            LipSyncPlayer.StreamingPlaybackSession committedSession = Assert.Single(voice.HandedOffSessions);
+            Assert.False(committedSession.IsCancelled, "A queued sibling's cancellation must never cut the committed stream.");
+            Assert.Null(committedSession.CancellationOrigin);
+            Assert.True(committedSession.Buffer.IsCompleted, "The committed stream must finish its download naturally.");
+            Assert.Equal(expectedFrameCount, committedSession.Buffer.FrameCount);
+            Assert.Equal(expectedFrameCount, committedSession.Buffer.DeclaredFrameCount);
+            Assert.True(lipSyncPlayer.AppliedFrameCount > 0);
+            Assert.Equal(0, lipSyncPlayer.StreamingStarvationEpisodeCount);
+            Assert.False(lipSyncPlayer.HasActiveStreamingSession);
+            Assert.True(string.IsNullOrWhiteSpace(lipSyncPlayer.PlaybackError), lipSyncPlayer.PlaybackError);
+
+            // A fresh submission after the flush still speaks through the same pipeline.
+            await voice.SpeakAsync("fresh after flush");
+            await WaitUntilAsync(sceneTree, () => completedCount == 2, 300);
+
+            Assert.Equal(["committed predecessor", "fresh after flush"], speechGenerator.RequestedTexts);
+            Assert.Equal(2, voice.PlayGeneratedSpeechCallCount);
+            Assert.Equal(2, voice.SpeechGeneratedCallCount);
+            Assert.Empty(voice.FailureErrors);
+            Assert.True(string.IsNullOrWhiteSpace(lipSyncPlayer.PlaybackError), lipSyncPlayer.PlaybackError);
+        }
+        finally
+        {
+            await DestroyFixtureAsync(sceneTree, root);
         }
     }
 
@@ -1430,8 +1640,132 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
         protected override void OnSpeechGenerated(string speech)
         {
             base.OnSpeechGenerated(speech);
-            LastGeneratedSpeech = speech;
             SpeechGeneratedCallCount++;
+        }
+    }
+
+    /// <summary>
+    /// Test voice that cancels an armed queued sibling's caller token synchronously inside the predecessor's
+    /// playback hand-off window — after the commit is accepted but before the pipeline settles — the exact
+    /// window where a queued sibling's cancellation must never reach the committed item's pipeline source
+    /// (SPCH-005 TR-32, TR-39).
+    /// </summary>
+    private sealed partial class HandOffCancellationHookAIVoice : AIVoice
+    {
+        private CancellationTokenSource? _armedSiblingCancellation;
+
+        /// <summary>Completes once the armed sibling cancellation fired inside the hand-off window.</summary>
+        public TaskCompletionSource SiblingCancelledInsideHandOff { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
+        /// Invoked synchronously after the armed sibling cancellation fired, still inside the hand-off window
+        /// and before playback starts, so the test can resume the predecessor's scripted download.
+        /// </summary>
+        public Action? SiblingCancelledCallback
+        {
+            get;
+            set;
+        }
+
+        public int PlayGeneratedSpeechCallCount
+        {
+            get;
+            private set;
+        }
+
+        public int SpeechGeneratedCallCount
+        {
+            get;
+            private set;
+        }
+
+        /// <summary>Streaming sessions handed off to playback, in hand-off order.</summary>
+        public List<LipSyncPlayer.StreamingPlaybackSession> HandedOffSessions { get; } = [];
+
+        public List<string> FailureErrors { get; } = [];
+
+        public void ArmSiblingCancellationAtNextHandOff(CancellationTokenSource cancellation)
+            => _armedSiblingCancellation = cancellation;
+
+        protected override void PlayGeneratedSpeech(LipSyncPlayer.PreparedPlayback preparedPlayback)
+        {
+            PlayGeneratedSpeechCallCount++;
+            CancellationTokenSource? armed = Interlocked.Exchange(ref _armedSiblingCancellation, null);
+            if (armed is not null)
+            {
+                // Synchronous on the committing thread: the commit has been accepted and the pipeline has not
+                // settled yet, so the cancellation lands exactly inside the hand-off race window.
+                armed.Cancel();
+                SiblingCancelledCallback?.Invoke();
+                _ = SiblingCancelledInsideHandOff.TrySetResult();
+            }
+
+            if (preparedPlayback.StreamingSession is { } session)
+            {
+                HandedOffSessions.Add(session);
+            }
+
+            base.PlayGeneratedSpeech(preparedPlayback);
+        }
+
+        protected override void OnSpeechGenerated(string speech)
+        {
+            base.OnSpeechGenerated(speech);
+            SpeechGeneratedCallCount++;
+        }
+
+        protected override void EmitSpeechFailedSignal(string error)
+            => FailureErrors.Add(error);
+    }
+
+    /// <summary>
+    /// Streaming lip-sync player with a scripted download: metadata and the startup-gate frame arrive
+    /// immediately, the download then holds open until released (or cancelled by its session), and the
+    /// remaining frames plus the complete record arrive only after that release — so the session is provably
+    /// still downloading when the voice commits its playback hand-off.
+    /// </summary>
+    private sealed partial class ScriptedStreamingLipSyncPlayer : LipSyncPlayer
+    {
+        public const float StreamFps = 30f;
+
+        public TaskCompletionSource DownloadRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override int BackendSampleRate => 16000;
+
+        protected override bool SupportsStreamingInference => true;
+
+        protected override void InitialiseBackend()
+        {
+        }
+
+        protected override LipSyncInferenceResult RunBackendInference(
+            AudioStreamWav speech,
+            CancellationToken cancellationToken)
+            => throw new NotSupportedException("The scripted streaming player only supports streaming inference.");
+
+        protected override void DisposeBackend()
+        {
+        }
+
+        internal override async Task RunBackendStreamingInferenceAsync(
+            AudioStreamWav speech,
+            StreamingFrameBuffer frameBuffer,
+            string streamID,
+            CancellationToken cancellationToken)
+        {
+            // Frames cover the playable duration so a released download never starves playback.
+            double durationSeconds = speech.Data.Length / (double)(speech.MixRate * sizeof(short));
+            int totalFrameCount = Math.Max(1, (int)Math.Ceiling(durationSeconds * StreamFps));
+
+            frameBuffer.SetMetadata(StreamFps, ["jawOpen"]);
+            frameBuffer.Append([0.5f]);
+            await DownloadRelease.Task.WaitAsync(cancellationToken);
+            for (int frameIndex = 1; frameIndex < totalFrameCount; frameIndex++)
+            {
+                frameBuffer.Append([frameIndex / (float)totalFrameCount]);
+            }
+
+            frameBuffer.MarkComplete(totalFrameCount);
         }
     }
 
@@ -1517,6 +1851,11 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             private set;
         }
 
+        /// <summary>
+        /// Ordered playable PCM payloads observed at each playback hand-off, for FIFO-order assertions.
+        /// </summary>
+        public List<byte[]> PlayedSpeechDataOrder { get; } = [];
+
         public List<string> FailureErrors { get; } = [];
 
         /// <summary>
@@ -1577,6 +1916,7 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             {
                 PlayGeneratedSpeechCallCount++;
                 LastPlayedSpeech = preparedPlayback.Speech;
+                PlayedSpeechDataOrder.Add(preparedPlayback.Speech.Data);
             }
             finally
             {

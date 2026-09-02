@@ -9,8 +9,9 @@ legacy_id: BODY-006
 ## Requirement
 
 Provide an abstract `Voice` component that represents an identifiable 3D speech origin, concrete `AIVoice` and
-`PlayerVoice` implementations, FIFO speech submission, speaking-activity state for turn-taking gates, and listener
-dispatch for generated voice events. For automatic player voice input (SPCH-008), `PlayerVoice` keeps one continuous
+`PlayerVoice` implementations, per-voice FIFO speech submission with queue-wide silent flush on explicit cut or
+pre-hand-off caller cancellation, speaking-activity state for turn-taking gates, and listener dispatch for generated
+voice events. For automatic player voice input (SPCH-008), `PlayerVoice` keeps one continuous
  speaking window across the automatic speech-group lifecycle — across endpoint pauses — publishes each settled segment
  through the ordinary speech path without closing the window while the group remains open or ordered segment outcomes
  remain unsettled, and closes the window only at full group settlement. Automatic segments also settle through a
@@ -23,7 +24,8 @@ dispatch for generated voice events. For automatic player voice input (SPCH-008)
 ## Goal
 
 Enable reliable character and player speech whose requests are admitted without waiting for playback, while preserving
-serial generation, spatial attribution, lip-sync, safe node-lifetime behaviour, and speaking-activity state that
+per-voice serial generation and inference, spatial attribution, lip-sync, safe node-lifetime behaviour, and
+speaking-activity state that
 supports Mind turn-taking and speech-ended wake cues under AI-002's session contracts, including deterministic
 admission-versus-onset arbitration for suppression protection. The component also carries the player-side
 speaking-window continuity and per-segment publication for automatic voice input (SPCH-008).
@@ -33,13 +35,18 @@ speaking-window continuity and per-segment publication for automatic voice input
 1. Players must hear AI-generated speech output with synchronised lip-sync when valid speech is requested.
 2. Speech requests made while AI voice generation is busy must queue in request order rather than being rejected. FIFO
    playback means the player hears every utterance complete and in order: a queued utterance must never audibly
-   interrupt or cut short its predecessor.
+   interrupt or cut short its predecessor. Production is FIFO and one at a time per voice — generation and lip-sync
+   inference each run a single request at a time for that voice — and an ordinary queued successor never cancels or
+   replaces its predecessor's generation or inference work; a successor's inference may run while the predecessor's
+   audio is still playing.
 3. A caller that successfully submits speech must not wait for generation or playback to finish.
 4. Blank speech, disabled output, and missing required configuration must fail clearly rather than report success.
 5. Cancellation before admission must cancel the request. After admission, an ordinary submission remains committed,
-   while an explicitly cancellable submission may be withdrawn only until playback hand-off.
-6. One failed speech item must not block later queued items, and failures must be logged without crashing or
-   desynchronising later playback.
+   while an explicitly cancellable submission may be withdrawn only until playback hand-off; withdrawal before
+   hand-off silently flushes the voice's queue (UR-24).
+6. One failed speech item — generation, conversion, preparation, or inference — must not block later queued items, and
+   failures must be logged without crashing or desynchronising later playback. A predecessor item's inference fault is
+   not inherited by the next queued item's preparation.
 7. Runtime toggling through `Enabled` must remain supported.
 8. Speech events must expose a stable voice `Id` and world-space `Origin` to listeners. The ID supports configured,
    operational attribution but is not authenticated provenance.
@@ -54,7 +61,8 @@ speaking-window continuity and per-segment publication for automatic voice input
     recording start, or qualified automatic onset (SPCH-008)) until its speaking window closes at the implementation's
     window boundary (TR-24), so no turn-taking gap exists between request and that boundary.
 14. Withdrawing an explicitly cancellable submission before playback hand-off must be silent: no error messaging, no
-    partial speech output, and no disruption to other speakers. Two later boundaries then govern retraction. Speech
+    partial speech output, and no disruption to other speakers. Withdrawal flushes the voice's queue (UR-24) while
+    committed playback plays to completion. Two later boundaries then govern retraction. Speech
     successfully admitted through the voice admission capability (TR-37) before a matching attended start or resume
     cue arrives (AI-002) is protected: the matching suppression never cuts it, and it settles naturally into audible,
     remembered speech.
@@ -84,6 +92,15 @@ speaking-window continuity and per-segment publication for automatic voice input
     the ordinary submission and cancellation rules of UR-5 and UR-14 — still withdrawable silently until playback
     hand-off — and is not arbitration-protected. This fallback is an intentional exception to suppression
     arbitration, which itself is unchanged for admission-capable voices.
+23. An explicit `CutSpeech` on a character stops that character's current speech immediately and silently discards
+    every pending and in-progress queued utterance already admitted to that voice — no error feedback, no partial
+    publication, no listener notification, no retry. Speech submitted afterwards starts a fresh queue.
+24. Upstream cancellation of a submitted utterance, observed before its playback hand-off, silently discards that
+    utterance and the rest of the voice's queue without cutting speech that has already started playing. Observed
+    after playback hand-off, it changes nothing: committed speech is never retracted or cut by its caller. Only an
+    explicit `CutSpeech` or removing the voice from the scene may intentionally stop committed playback.
+25. Queue flushes and cancellations are scoped per character: flushing one character's speech queue never affects
+    another character's speech, and different characters may produce and play speech concurrently.
 
 ## Technical Requirements
 
@@ -100,9 +117,9 @@ speaking-window continuity and per-segment publication for automatic voice input
 4. `SpeakAsync` must throw `ArgumentException` for blank speech and `InvalidOperationException` when voice output is
    disabled or required configuration is unavailable.
 5. Cancellation observed before admission must surface as cancellation and admit no work. Cancellation after
-    admission must not retract the committed queue item once playback hand-off has occurred; an explicitly
-    cancellable submission may abort silently before hand-off (TR-25). Playback hand-off is the irreversibility
-    boundary for cancellable work.
+     admission must not retract the committed queue item once playback hand-off has occurred; an explicitly
+     cancellable submission may abort before hand-off, silently flushing the voice's queue (TR-25, TR-32). Playback
+     hand-off is the irreversibility boundary for cancellable work.
 6. `Speak` must remain a safe, deliberately lossy compatibility API. It must perform synchronous validation where
    possible, initiate `SpeakAsync`, and explicitly observe and log or signal asynchronous faults so no task exception is
    abandoned.
@@ -124,9 +141,14 @@ speaking-window continuity and per-segment publication for automatic voice input
 12. `IHasVoice` must follow the component-holder trait pattern and expose `TryGetVoice(out IVoice? voice)` and
     `RequireVoice()` over `IComponentHolder`.
 13. `AIVoice` must admit valid requests atomically into one FIFO queue — subject to the suppression admission gate
-     (TR-37) — and drain it serially. At most one generation, conversion, lip-sync preparation, and playback hand-off
-     pipeline may run at a time. Production of the next utterance may overlap the current utterance's active playback,
-     and the hand-off itself is gated on active playback completion (TR-30).
+      (TR-37) — and drain it serially. At most one generation, conversion, lip-sync preparation, and playback hand-off
+      pipeline may run at a time per voice instance: generation keeps one request in flight per queue (SPCH-004) and
+      lip-sync inference runs one request at a time per voice player (SPCH-002). An ordinary queued successor must
+      never cancel or replace its predecessor's generation or inference work; its lip-sync inference begins only
+      after the predecessor's streaming read loop settles naturally (SPCH-002) and may run while the predecessor's
+      audio is still playing. Production of the next utterance may overlap the current utterance's active playback,
+      and the hand-off itself is gated on active playback completion (TR-30). Queue scope and flush are per instance
+      (TR-32, TR-40).
 14. Busy requests must queue in admission order. `AIVoice` must not reject a valid request merely because another item
     is active.
 15. For each admitted item, `AIVoice` must:
@@ -140,8 +162,10 @@ speaking-window continuity and per-segment publication for automatic voice input
     `AudioStreamWav.MixRate`, and perform no resampling; stereo and non-PCM-16 audio remain incompatible with no
     downmix support. Sample-rate normalisation for lip-sync inference is `LipSyncPlayer`'s responsibility
     (SPCH-001/SPCH-002), so a rate the lip-sync side cannot handle fails lip-sync only, not generation or conversion.
-17. Failure of an admitted item's generation, conversion, preparation, or hand-off must be logged and emit
-    `SpeechFailed`. It must not notify listeners and must not prevent later FIFO items from running.
+17. Failure of an admitted item's generation, conversion, preparation (including streaming inference), or hand-off
+     must be logged and emit `SpeechFailed`. It must not notify listeners and must not prevent later FIFO items from
+     running, and a predecessor item's inference fault must not be inherited by the next queued item's preparation
+     (SPCH-002).
 18. Voice or node teardown must settle active and queued submissions safely and prevent later callbacks from accessing
     freed Godot nodes. Expected teardown cancellation must not be reported as a generation failure.
 19. `PlayerVoice` must subscribe once to its exported `Transcriber.TranscriptionCompleted` source during `_Ready()`,
@@ -167,7 +191,8 @@ speaking-window continuity and per-segment publication for automatic voice input
     - the base sync path opens at admission and closes at the `OnSpeechGenerated` broadcast;
     - `AIVoice` opens at first FIFO admission and stays open continuously across queued items, closing at playback
       completion of the last queued item through the `LipSyncPlayer` playback-completed notification
-      (SPCH-001/SPCH-002), and also on item failure, effective cancellation, or node teardown;
+      (SPCH-001/SPCH-002), and also on item failure, effective cancellation, node teardown, or a queue flush that
+      leaves no committed playback running;
     - `PlayerVoice` opens once at the `RecordingStarted` signal — manual start or qualified automatic group onset
       (SPCH-008) — and stays continuously open across segment closures and continuation gaps, closing only at full
       group settlement per TR-33 — no manual recording, no open automatic group, and no unsettled automatic group —
@@ -176,10 +201,13 @@ speaking-window continuity and per-segment publication for automatic voice input
 25. An explicitly cancellable submission (for example a `SpeakAsync` overload accepting a caller-supplied
      cancellation token) must honour cancellation through generation, conversion, and preparation until playback
      hand-off, which remains the irreversibility boundary for the speak action and its self-observation (TR-26;
-     AI-002 TR-26). Pre-hand-off cancellation must abort silently: no
-      `SpeechFailed`, no `IHearing` broadcast, and no listener notification, and the speaking window closes.
-      Post-hand-off cancellation — including fresh-turn invalidation under AI-002 — must not retract or cut the
-      committed item. Suppression protection uses an earlier, separate boundary: successful queue admission through
+      AI-002 TR-26). Pre-hand-off cancellation must abort silently and flush the voice's queue (TR-32): the stale
+       submission's playback is refused and every pending or in-progress queued item is discarded as expected silent
+       cancellation — no `SpeechFailed`, no `IHearing` broadcast, no self-observation, no retry — while committed
+       playback is never cut by caller cancellation and plays to completion; the speaking window closes per TR-24.
+       Post-hand-off cancellation — including fresh-turn invalidation under AI-002 — is a no-op: it must not retract
+       or cut the committed item, cut playing audio, or cancel its stream (TR-39). Suppression protection uses an
+       earlier, separate boundary: successful queue admission through
       the voice admission capability (TR-37) — not speak-tool selection and not playback hand-off — is the protection
       boundary against attended player-onset suppression (AI-002 TR-25, TR-26, TR-56), and only for voices that
       provide the capability (TR-38). A submission admitted before the matching attended start or resume cue
@@ -218,18 +246,27 @@ speaking-window continuity and per-segment publication for automatic voice input
      lip-sync preparation of a queued utterance may proceed in the background while the predecessor utterance is still
      playing, but the playback hand-off must wait until the active playback session has raised its playback-completed
      notification (`LipSyncPlayer.PlaybackCompleted`, SPCH-001/SPCH-002). A queued utterance must never replace or
-     audibly cut its predecessor: FIFO order yields complete audible utterances in admission order.
+     audibly cut its predecessor: FIFO order yields complete audible utterances in admission order. Inference and
+     playback ordering are distinct: a successor's lip-sync inference is sequenced by the predecessor's streaming
+     read-loop completion (SPCH-002), while its audible playback is sequenced by the predecessor's playback
+     completion, so inference may be complete — and playback still waiting — while the predecessor is audibly
+     playing.
  31. The gating rule is an AIVoice orchestration concern only. `LipSyncPlayer.Play` and `LipSyncPlayer.PlayPrepared`
-     keep their direct-replacement semantics — stopping the active session and starting the new one — for direct
-     callers (SPCH-001/SPCH-002). This spec changes how `AIVoice` times its hand-off, not the `LipSyncPlayer`
-     contracts.
- 32. Gate release and waiting-item lifecycle:
-     - an explicit user- or system-initiated cut through `AIVoice.CutSpeech` releases the gate so a prepared successor
-       may start playback immediately; a cut does not raise the playback-completed notification (SPCH-001/SPCH-002),
-       so the gate must not keep waiting for one after a cut;
-     - cancellation of a prepared-but-waiting submission withdraws it silently under the pre-hand-off rules (TR-25)
-       with no effect on the active utterance, which plays to completion; and
-     - node teardown while an item waits at the gate must produce no late hand-off, `IHearing` broadcast, or listener
+      keep their direct-replacement semantics — stopping the active session and starting the new one — for direct
+      callers (SPCH-001/SPCH-002). This spec changes how `AIVoice` times its hand-off, not the `LipSyncPlayer`
+      contracts. Because `AIVoice` hands off only after predecessor playback completion, ordinary FIFO progression
+      never exercises the direct-replacement cut and produces no `DirectPlaybackReplacement` or `ReplacementAdmission`
+      cancellation origin (SPCH-002).
+ 32. Queue flush and waiting-item lifecycle:
+      - an explicit cut through `AIVoice.CutSpeech` stops the active playback immediately and silently flushes the
+        voice's queue: every pending and in-progress successor item — generating, converting, preparing, or prepared
+        and waiting at the playback gate — is discarded as expected silent cancellation, with no `SpeechFailed`, no
+        `IHearing` publication, no self-observation, and no retry; a cut does not raise the playback-completed
+        notification (SPCH-001/SPCH-002), so the gate must not keep waiting for one, and a later submission starts a
+        fresh queue generation;
+      - pre-hand-off caller cancellation flushes the same way through the guarded pipeline-cancellation callback
+        (TR-39) but never cuts committed playback: the active utterance, if any, plays to completion; and
+      - node teardown while items are queued must produce no late hand-off, `IHearing` broadcast, or listener
        notification (TR-18).
  33. The `PlayerVoice` speaking window opens once at the manual or qualified automatic `RecordingStarted` signal,
        stays continuously open across endpoint pauses and continuation gaps, and closes only at full group settlement:
@@ -290,16 +327,29 @@ speaking-window continuity and per-segment publication for automatic voice input
  38. A voice that does not implement the admission capability keeps the ordinary cancellable submission path: the
       caller submits through the ordinary `IVoice` cancellable submission (TR-25), and such speech is not
       arbitration-protected and is never refused at a cue. This fallback is an intentional, specified suppression
-      exception — admission arbitration and its cue-first refusal (TR-37) apply only through the capability — and
-      every other submission, cancellation, playback hand-off, and teardown contract is unchanged for such voices.
-      Capable-voice arbitration itself is unchanged.
+       exception — admission arbitration and its cue-first refusal (TR-37) apply only through the capability — and
+       every other submission, cancellation, playback hand-off, and teardown contract is unchanged for such voices.
+       Capable-voice arbitration itself is unchanged.
+ 39. `AIVoice` owns an independent pipeline cancellation source that is linked to no caller token. Caller cancellation
+      reaches the pipeline only through a guarded callback executed under the submission lock, linearised with the
+      playback hand-off: observed before the submission's hand-off commits, the item is marked stale, its playback is
+      refused, and the voice's queue is flushed (TR-32); observed after hand-off, the callback is a no-op that cuts
+      no playing audio and cancels no stream. Node teardown and the queue-flushing `CutSpeech` remain authoritative
+      and may intentionally stop committed playback.
+ 40. Queue scope is per `AIVoice` instance. Admission, FIFO draining, one-at-a-time generation and inference
+      ownership, and flush apply within a single voice's queue only: flushing or cancelling one voice never
+      discards, blocks, or cuts another voice's work, and distinct voices may run their pipelines concurrently.
 
 ## In Scope
 
 - Abstract `Voice` component identity, location, control, submission, compatibility, failure, and listener contracts.
 - Non-result `IVoice.SpeakAsync(...)` and safe lossy `Speak(...)` compatibility.
-- FIFO `AIVoice` admission, serial generation and preparation that may overlap active playback, and playback hand-off
-  gated on active playback completion (TR-30).
+- FIFO `AIVoice` admission, serial per-voice generation and preparation that may overlap active playback, and
+  playback hand-off gated on active playback completion (TR-30).
+- Per-voice one-at-a-time generation and lip-sync inference ownership, with ordinary successor preparation that never
+  cancels predecessor work (SPCH-002, SPCH-004).
+- Queue-wide silent flush on `CutSpeech` and pre-hand-off caller cancellation, with the guarded pipeline-cancellation
+  linearisation (TR-32, TR-39) and per-instance queue scope (TR-40).
 - Speaking-activity state, `SpeechStarted`/`SpeechEnded` typed events, and base-owned window plumbing.
 - Window boundary contracts per implementation, consuming the `LipSyncPlayer` playback-completed notification.
 - Explicitly cancellable submissions with playback hand-off as the irreversibility boundary.
@@ -323,9 +373,11 @@ speaking-window continuity and per-segment publication for automatic voice input
 ## Out Of Scope
 
 - Visual verification or runtime XR testing, which requires backend access.
-- Concurrent speech generation or concurrent audible playback; admission queues, production remains serial, and
-  background preparation overlapping active playback stays in scope through the gated hand-off (TR-30).
-- Cancelling or reversing speech work after playback hand-off.
+- Concurrent speech generation or concurrent audible playback within one voice's queue; admission queues, per-voice
+  production remains serial, and background preparation overlapping active playback stays in scope through the
+  gated hand-off (TR-30). Concurrent pipelines across distinct voice instances are in scope (TR-40).
+- Cancelling or reversing speech work after playback hand-off, except the authoritative node-teardown and `CutSpeech`
+  stops (TR-32, TR-39).
 - New live microphone capture or transcription mechanics beyond the existing `Transcriber` dependency
   (SPCH-003, SPCH-008).
 - Additional speech-generation implementations beyond `AIVoice` and `PlayerVoice`.
@@ -352,6 +404,7 @@ speaking-window continuity and per-segment publication for automatic voice input
 |                |                       | transaction under the normative lock order, and a cue-first |
 |                |                       | refusal produces no queue item and no speech side effects |
 |                |                       | (TR-37). Voices without it keep the ordinary path (TR-38). |
+| `CutSpeech()` | Method | `AIVoice` immediate stop that also silently flushes that voice's queue (TR-32). |
 | `Speak(string speech)` | `void` | Safe, lossy fire-and-forget compatibility initiator. |
 | `SpeechFailed(string error)` | Signal | Reports an admitted item's asynchronous production failure. |
 | `IsSpeaking` | `bool` | Observable speaking-window state; transitions owned by `Voice`. |
@@ -385,19 +438,22 @@ speaking-window continuity and per-segment publication for automatic voice input
    event, or self-observation.
 3. Complete an ordinary submission's `SpeakAsync` when admission commits, without awaiting generation or playback;
    complete the explicitly cancellable submission at playback hand-off (TR-25).
-4. Drain admitted items through one serial production pipeline, preparing the next utterance in the background while
-   the current utterance plays.
+4. Drain admitted items through one serial per-voice production pipeline — one generation and one lip-sync inference
+   in flight at a time — preparing the next utterance in the background while the current utterance plays, without
+   cancelling predecessor generation or inference work.
 5. Isolate each item's failure, emit diagnostics, and continue with the next queued item.
-6. Treat post-hand-off caller cancellation as non-retracting; honour explicitly cancellable submissions until
-   playback hand-off; withdraw a prepared-but-waiting submission cancelled at the gate silently without affecting the
-   active utterance.
+6. Treat post-hand-off caller cancellation as a no-op; honour explicitly cancellable submissions until playback
+   hand-off; withdraw a cancelled pre-hand-off submission by silently flushing the queue (TR-32) without cutting the
+   active utterance, which plays to completion.
 7. Settle the queue and active pipeline safely during node teardown, producing no late playback hand-off or listener
    notification from a waiting item.
 8. Open the speaking window at first FIFO admission and keep it open continuously across queued items.
-9. Close the window at playback completion of the last queued item, on item failure, on effective cancellation, and
-   during node teardown.
-10. Gate each playback hand-off on the active utterance's playback completion (TR-30), and release the gate
-    immediately when `CutSpeech` cuts the active utterance (TR-32).
+9. Close the window at playback completion of the last queued item, on item failure, on effective cancellation,
+   during node teardown, and when a queue flush leaves no committed playback running.
+10. Gate each playback hand-off on the active utterance's playback completion (TR-30); `CutSpeech` empties the queue
+    instead of releasing a waiting successor (TR-32).
+11. Keep admission, draining, cancellation, and flush scoped to this voice instance (TR-40): other voices' queues are
+    unaffected and may run concurrently.
 
 ## PlayerVoice Behaviour
 
@@ -436,14 +492,16 @@ speaking-window continuity and per-segment publication for automatic voice input
    `InvalidOperationException` before admission.
 4. Tests verify cancellation before admission admits no work and surfaces as cancellation, while cancellation after
    admission does not retract the item once playback hand-off has occurred; explicit pre-hand-off cancellation aborts
-   silently.
-5. Tests verify second and third busy submissions are admitted, processed FIFO, never create concurrent generation
-   pipelines, and play each utterance to completion before its successor starts, with no queued utterance audibly
-   cutting its predecessor.
+   silently and flushes the voice's queue (TR-32).
+5. Tests verify second and third busy submissions are admitted, processed FIFO, never create concurrent generation or
+   lip-sync inference pipelines within the voice, never cancel predecessor generation or inference work, and play
+   each utterance to completion before its successor starts, with no queued utterance audibly cutting its
+   predecessor.
 6. Tests verify an ordinary submission's `SpeakAsync` completes at admission without awaiting generation, playback
    hand-off, or playback, while the explicitly cancellable submission completes at playback hand-off (TR-25).
-7. Tests verify one item's generation, conversion, preparation, or hand-off failure logs and emits `SpeechFailed`, does
-   not notify listeners, and does not block the next item.
+7. Tests verify one item's generation, conversion, preparation (including streaming inference), or hand-off failure
+   logs and emits `SpeechFailed`, does not notify listeners, and does not block the next item; a predecessor item's
+   inference fault is not inherited by the next queued item's preparation.
 8. Tests verify compatibility `Speak` performs available synchronous validation and observes every asynchronous fault.
 9. Tests verify teardown settles active and queued work without later access to freed nodes or misleading failure
    diagnostics.
@@ -459,8 +517,8 @@ speaking-window continuity and per-segment publication for automatic voice input
     supports configured attribution without claiming authenticated provenance or rejecting a source that presents the
     same ID.
 14. Acceptance verifies both user-visible FIFO speech — complete utterances heard in order, never cut by a queued
-    successor — and failure isolation plus the validation, admission, serialisation, gated hand-off, cancellation,
-    listener, and node-lifetime contracts.
+    successor — and failure isolation plus the validation, admission, serialisation, gated hand-off, queue-flush,
+    per-instance isolation, cancellation, listener, and node-lifetime contracts.
 15. Tests verify `IVoice : IComponent, IIdentifiable`, mutable authored local `Id`, exact Type `voice`, canonical
     `voice:<id>` `FullId`, and ordinal semantic identity comparison without object-reference equality.
 16. Tests verify `IVoice` exposes `IsSpeaking` and typed `SpeechStarted`/`SpeechEnded` events (optionally mirrored as
@@ -471,13 +529,14 @@ speaking-window continuity and per-segment publication for automatic voice input
     window already closed.
 18. Tests verify window boundaries: the sync path opens at admission and closes at the post-generation broadcast;
      `AIVoice` opens at first admission, stays open across queued items, and closes at last-item playback completion,
-     on failure, on effective cancellation, and at teardown; `PlayerVoice` opens once at `RecordingStarted` (manual
+      on failure, on effective cancellation, at teardown, and when a queue flush leaves no committed playback
+      running; `PlayerVoice` opens once at `RecordingStarted` (manual
      start or qualified automatic group onset, SPCH-008), stays continuously open across segment closures and
      continuation gaps, and closes at full group settlement — no manual recording, no open automatic group, and no
      unsettled automatic group — or at teardown.
-19. Tests verify the explicitly cancellable path: pre-hand-off cancellation aborts silently with no `SpeechFailed`, no
-    `IHearing` broadcast, no listener notification, and a closed window; post-hand-off cancellation never retracts;
-    ordinary submissions keep admission-only semantics.
+19. Tests verify the explicitly cancellable path: pre-hand-off cancellation aborts silently — no `SpeechFailed`, no
+     `IHearing` broadcast, no listener notification — and flushes the voice's queue; post-hand-off cancellation never
+     retracts, cuts playing audio, or cancels streams; ordinary submissions keep admission-only semantics.
 20. Tests verify `PlayerVoice` subscribes to `Transcriber.RecordingStarted` (SPCH-003) once in `_Ready()`,
     unsubscribes in `_ExitTree()`, and opens and closes its speaking window accordingly.
 21. Tests verify the actor-stamped self-action observation commits at playback hand-off rather than at admission,
@@ -489,11 +548,13 @@ speaking-window continuity and per-segment publication for automatic voice input
     notification text keeps the frame count only; log-only request-receipt, parsing, and playback-start entries; and
     log-only failure latency — route through the shared pipeline diagnostic log without changing speech behaviour.
  24. Tests verify the gated hand-off: a successor utterance's playback does not start until the active playback session
-     raises its playback-completed notification, background preparation overlaps active playback, and an explicit
-     `CutSpeech` cut releases the gate so a prepared successor starts immediately.
- 25. Tests verify the waiting-item lifecycle at the gate: cancelling a prepared-but-waiting submission withdraws it
-     silently without disrupting the active utterance, which plays to completion, and node teardown while an item waits
-     produces no late hand-off, `IHearing` broadcast, or listener notification.
+      raises its playback-completed notification, background preparation overlaps active playback, and ordinary queue
+      progression never cancels predecessor generation, inference, or playback work (SPCH-002, SPCH-004).
+ 25. Tests verify the queue flush lifecycle: `CutSpeech` stops active playback immediately and silently discards every
+      queued item — no `SpeechFailed`, no `IHearing` publication, no self-observation, no retry — with later
+      submissions starting a fresh queue; cancelling a pre-hand-off submission flushes the same way without
+      disrupting committed playback, which plays to completion; and node teardown while items are queued produces no
+      late hand-off, `IHearing` broadcast, or listener notification.
  26. Tests verify the automatic speaking window opens once at the qualified-onset `RecordingStarted` signal, stays
       continuously open across endpoint pauses and continuation gaps including across manual preemption, and closes
       only at full group settlement — no manual recording, no open automatic group, and no unsettled automatic group —
@@ -535,8 +596,14 @@ speaking-window continuity and per-segment publication for automatic voice input
  34. Tests verify the non-capable fallback (TR-38, UR-22): a voice that does not implement the admission capability
       submits through the ordinary cancellable path — its speech is never refused at a cue and is not
       arbitration-protected — cue-first refusal and admission protection apply only through the capability, ordinary
-      pre-hand-off cancellation still withdraws such speech silently, and capable-voice arbitration under TR-37 and
-      AC-31 is unchanged.
+       pre-hand-off cancellation still withdraws such speech silently, and capable-voice arbitration under TR-37 and
+       AC-31 is unchanged.
+ 35. Tests verify the pipeline-cancellation linearisation (TR-39): caller cancellation is observed through the guarded
+      callback under the submission lock; observed before the item's hand-off, it marks the item stale, refuses its
+      playback, and flushes the queue, while observed after hand-off it is a no-op that cuts no playing audio and
+      cancels no stream — with only node teardown and `CutSpeech` authorised to stop committed playback.
+ 36. Tests verify queue scope is per voice instance (TR-40): flushing or cancelling one `AIVoice`'s queue never cuts,
+      discards, or blocks another voice's speech, and distinct voices produce and play speech concurrently.
 
 ## References
 

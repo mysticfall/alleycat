@@ -21,10 +21,29 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     private const string AudioFormatIncompatibleMessage = "Audio format incompatible";
 
     private readonly Lock _submissionLock = new();
-    private Queue<AdmittedSpeech> _pendingSpeech = [];
+    private readonly Queue<AdmittedSpeech> _pendingSpeech = [];
     private bool _pumpRunning;
     private TaskCompletionSource? _pumpSettlement;
     private int _outstandingItems;
+
+    /// <summary>
+    /// Identity of the current admitted FIFO queue generation (SPCH-005 TR-32, TR-39), incremented each time the
+    /// queue is flushed — through <see cref="CutSpeech" />, pre-hand-off caller cancellation, or node teardown —
+    /// so items admitted into a flushed generation are recognised as stale and their deferred hand-offs refused.
+    /// Submissions admitted after a flush start a fresh generation. Guarded by
+    /// <see cref="_submissionLock" />.
+    /// </summary>
+    private int _queueGeneration;
+
+    /// <summary>
+    /// Voice-owned pipeline cancellation source for the queue item currently being processed (SPCH-005 TR-39):
+    /// linked to no caller token — only the node lifetime — and cancelled exclusively by a queue-generation
+    /// flush, never by an ordinary queued successor. Created when the pump dequeues an item and retired at that
+    /// item's playback hand-off commit — or, for an item that never commits, by its pipeline's settlement —
+    /// so a flush can only ever cancel uncommitted in-flight work and never a committed playback's stream.
+    /// Guarded by <see cref="_submissionLock" />.
+    /// </summary>
+    private CancellationTokenSource? _activePipelineCancellation;
 
     /// <summary>
     /// Gate held by the utterance that has crossed its playback hand-off and has not yet raised
@@ -75,7 +94,7 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     {
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
-        _ = AdmitSpeech(acceptedSpeech, turnCancellation: null, cancellationToken);
+        _ = AdmitSpeech(acceptedSpeech, cancellable: false, cancellationToken);
         return ValueTask.CompletedTask;
     }
 
@@ -106,31 +125,15 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
         ArgumentNullException.ThrowIfNull(admission);
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
-        var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        AdmittedSpeech? item;
-        try
-        {
-            item = AdmitSpeech(acceptedSpeech, turnCancellation, cancellationToken, admission);
-        }
-        catch
-        {
-            // Admission never committed, so the linked source would otherwise leak its registration on the
-            // caller-supplied token.
-            turnCancellation.Dispose();
-            throw;
-        }
-
+        AdmittedSpeech? item = AdmitSpeech(acceptedSpeech, cancellable: true, cancellationToken, admission);
         if (item is null)
         {
             // The attended cue won the arbitration (SPCH-005 TR-37): no queue item exists, so nothing further can
             // settle and the caller surfaces its not-delivered result rather than throwing.
-            turnCancellation.Dispose();
             return false;
         }
 
-        item.SetCancellationRegistration(cancellationToken.Register(
-            () => HandleTurnCancellationRequested(item),
-            useSynchronizationContext: false));
+        RegisterTurnCancellationCallback(item, cancellationToken);
         await new ValueTask(item.HandOffCompletion!.Task).ConfigureAwait(false);
         return true;
     }
@@ -147,6 +150,10 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
             queuedItems = [.. _pendingSpeech];
             _pendingSpeech.Clear();
             _outstandingItems = 0;
+            // Teardown is an authoritative terminal flush: the in-flight pipeline source is already cancelled
+            // through its node-lifetime link, and the generation bump refuses any deferred hand-off that races
+            // with teardown (TR-18, TR-32).
+            _queueGeneration++;
             activePlaybackGate = _activePlaybackGate;
             _activePlaybackGate = null;
         }
@@ -169,15 +176,19 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     }
 
     /// <summary>
-    /// Cuts active playback immediately, halting audio and lip-sync, and settles the speaking window.
+    /// Cuts active playback immediately, halting audio and lip-sync, and silently flushes every pending and
+    /// in-progress queued utterance already admitted to this voice.
     /// </summary>
     /// <remarks>
     /// <para>
     /// This is the interruption-driven cut (SPCH-005 TR-32; the underlying stop/cut capability is defined in
     /// SPCH-001 and SPCH-002): the lip-sync player's stop does not raise
-    /// <see cref="LipSyncPlayer.PlaybackCompleted" />, so the speaking-window bookkeeping that the notification would
-    /// have performed is settled here exactly once. Queued FIFO submissions are not retracted; the window stays open
-    /// while any remain outstanding. Must be called on the Godot thread.
+    /// <see cref="LipSyncPlayer.PlaybackCompleted" />, so the playback gate and speaking-window bookkeeping the
+    /// notification would have performed are settled here exactly once. The whole admitted queue generation is
+    /// invalidated — queued items are discarded as expected silent cancellation, with no <c>SpeechFailed</c>,
+    /// no <see cref="IHearing" /> publication, no self-observation, and no retry — and speech submitted
+    /// afterwards starts a fresh queue generation. Unlike caller cancellation, a cut intentionally stops
+    /// committed playback. Must be called on the Godot thread.
     /// </para>
     /// <para>
     /// This capability is intentionally a concrete member rather than an <see cref="IVoice" /> default-interface
@@ -188,6 +199,8 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     /// </remarks>
     public void CutSpeech()
     {
+        List<AdmittedSpeech> discarded;
+        CancellationTokenSource? pipelineCancellation;
         bool closeWindow;
         lock (_submissionLock)
         {
@@ -196,13 +209,21 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
                 return;
             }
 
+            (discarded, pipelineCancellation) = FlushQueueLocked();
             // The lip-sync player's stop never raises PlaybackCompleted, so the gate must be released here: a
-            // prepared successor would otherwise wait forever for a notification that cannot arrive.
+            // flushed item would otherwise wait forever for a notification that cannot arrive, and the window
+            // must not stay pinned to a cut playback session.
             ReleaseActivePlaybackGateLocked();
-            closeWindow = _outstandingItems == 0;
+            closeWindow = _outstandingItems == 0 && _activePlaybackGate is null;
         }
 
+        CancelRetiredPipelineSource(pipelineCancellation);
         LipSyncPlayer?.Stop();
+
+        foreach (AdmittedSpeech item in discarded)
+        {
+            AbortAdmittedItemSilently(item);
+        }
 
         if (closeWindow)
         {
@@ -217,34 +238,40 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     {
         cancellationToken.ThrowIfCancellationRequested();
         string acceptedSpeech = ValidateSubmission(speech);
-        var turnCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        AdmittedSpeech? item;
-        try
-        {
-            item = AdmitSpeech(acceptedSpeech, turnCancellation, cancellationToken, admission);
-        }
-        catch
-        {
-            // Admission never committed, so the linked source would otherwise leak its registration on the
-            // caller-supplied token.
-            turnCancellation.Dispose();
-            throw;
-        }
-
+        AdmittedSpeech? item = AdmitSpeech(acceptedSpeech, cancellable: true, cancellationToken, admission);
         Debug.Assert(item is not null, "Ordinary submissions are never refused admission.");
+        RegisterTurnCancellationCallback(item!, cancellationToken);
+        return new ValueTask(item!.HandOffCompletion!.Task);
+    }
+
+    /// <summary>
+    /// Registers the guarded caller-cancellation callback for an admitted cancellable submission, invoking the
+    /// handler directly when cancellation already fired between admission and registration so the queue flush can
+    /// never be missed (SPCH-005 TR-39).
+    /// </summary>
+    /// <param name="item">Admitted item whose caller token is observed.</param>
+    /// <param name="cancellationToken">Caller-supplied cancellation token.</param>
+    private void RegisterTurnCancellationCallback(AdmittedSpeech item, CancellationToken cancellationToken)
+    {
         item.SetCancellationRegistration(cancellationToken.Register(
             () => HandleTurnCancellationRequested(item),
             useSynchronizationContext: false));
-        return new ValueTask(item.HandOffCompletion!.Task);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation raced the registration itself; the callback may not have observed it, so linearise
+            // the withdrawal here. The handler is idempotent, so a callback that already ran changes nothing.
+            HandleTurnCancellationRequested(item);
+        }
     }
 
     /// <summary>
     /// Atomically admits a validated speech request as the next FIFO queue item and opens the speaking window.
     /// </summary>
     /// <param name="speech">Validated speech text to admit.</param>
-    /// <param name="turnCancellation">Linked cancellation source for explicitly cancellable submissions, or null for
-    /// ordinary admission-only submissions.</param>
-    /// <param name="callerToken">Caller-supplied cancellation observed until admission commits.</param>
+    /// <param name="cancellable">Indicates an explicitly cancellable submission whose completion waits for
+    /// playback hand-off.</param>
+    /// <param name="callerToken">Caller-supplied cancellation observed until admission commits and, for
+    /// cancellable submissions, through the guarded callback until playback hand-off.</param>
     /// <param name="admission">Runner-owned admission transaction (SPCH-005 TR-37), or null for ordinary
     /// admission-only submissions. A gated submission commits its queue item inside the transaction — under this
     /// submission lock first and then the agent-runner state lock — and returns null, committing nothing, when a
@@ -252,16 +279,12 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     /// <returns>The admitted queue item, or null when the admission transaction refused a gated submission.</returns>
     private AdmittedSpeech? AdmitSpeech(
         string speech,
-        CancellationTokenSource? turnCancellation,
+        bool cancellable,
         CancellationToken callerToken,
         SpeechAdmissionTransaction? admission = null)
     {
-        AdmittedSpeech item = new(
-            speech,
-            turnCancellation,
-            turnCancellation is null ? null : new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
-            callerToken);
         bool startPump = false;
+        AdmittedSpeech? item;
         lock (_submissionLock)
         {
             if (IsNodeLifetimeEnded)
@@ -276,9 +299,15 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
             }
 
             callerToken.ThrowIfCancellationRequested();
+            AdmittedSpeech admitted = new(
+                speech,
+                _queueGeneration,
+                cancellable ? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) : null,
+                callerToken);
+            item = admitted;
             if (admission is { } gate)
             {
-                if (!gate.TryAdmit(() => AdmitItemLocked(item, ref startPump)))
+                if (!gate.TryAdmit(() => AdmitItemLocked(admitted, ref startPump)))
                 {
                     // The attended cue hold linearised first (SPCH-005 TR-37): no queue item, FIFO disturbance, or
                     // window effect exists, so FIFO draining, window state, and teardown contracts are unaffected.
@@ -287,7 +316,7 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
             }
             else
             {
-                AdmitItemLocked(item, ref startPump);
+                AdmitItemLocked(admitted, ref startPump);
             }
         }
 
@@ -407,47 +436,96 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     }
 
     /// <summary>
-    /// Handles caller cancellation of an explicitly cancellable submission before playback hand-off.
+    /// Handles caller cancellation of an explicitly cancellable submission, linearised against the playback
+    /// hand-off under the submission lock (SPCH-005 TR-25, TR-32, TR-39).
     /// </summary>
     /// <param name="item">Admitted item whose caller token was cancelled.</param>
+    /// <remarks>
+    /// <para>
+    /// Observed before the item's hand-off commits, the item is marked stale and the voice's whole queue
+    /// generation is flushed: every pending and in-progress item settles as expected silent cancellation while
+    /// committed playback is never cut and plays to completion. Observed after hand-off, the callback is a no-op
+    /// that cuts no playing audio, cancels no streaming session, and retracts no publication.
+    /// </para>
+    /// <para>
+    /// The callback may execute on the cancelling caller's thread; it stops no playback and touches no scene-tree
+    /// state, so no Godot main-thread marshalling is required on this path.</para>
+    /// </remarks>
     private void HandleTurnCancellationRequested(AdmittedSpeech item)
     {
-        bool removedFromQueue;
+        List<AdmittedSpeech> discarded;
+        CancellationTokenSource? pipelineCancellation;
         lock (_submissionLock)
         {
-            if (IsNodeLifetimeEnded || item.HandOffCommitted || item.Settled)
+            if (IsNodeLifetimeEnded || item.HandOffCommitted || item.Settled || item.Generation != _queueGeneration)
             {
+                // Post-hand-off cancellation is a no-op (TR-25/TR-39); a settled or stale item already belongs to
+                // a flushed generation and must not invalidate the fresh generation that followed it.
                 return;
             }
 
             item.CancelRequested = true;
-            removedFromQueue = RemoveQueuedItemLocked(item);
+            (discarded, pipelineCancellation) = FlushQueueLocked();
         }
 
-        item.TurnCancellation?.Cancel();
+        CancelRetiredPipelineSource(pipelineCancellation);
 
-        if (removedFromQueue)
+        foreach (AdmittedSpeech queuedItem in discarded)
         {
-            AbortAdmittedItemSilently(item);
+            AbortAdmittedItemSilently(queuedItem);
         }
 
-        // Items already dequeued observe the cancelled turn token at their next pipeline boundary, or the
-        // playback hand-off refusal check aborts them before committing.
+        // The cancelled item itself is either in the discarded list (still queued) or in flight, observing the
+        // cancelled pipeline source at its next boundary or the hand-off refusal before playback commits.
     }
 
-    private bool RemoveQueuedItemLocked(AdmittedSpeech item)
+    /// <summary>
+    /// Invalidates the current queue generation (SPCH-005 TR-32): every queued item is handed back for silent
+    /// settlement and the voice-owned pipeline source of uncommitted in-flight generation, preparation, and
+    /// lip-sync work is returned for cancellation by the caller. The source is null when the in-flight item
+    /// already committed its playback hand-off — committed playback is never cut by a flush. Later submissions
+    /// admit into a fresh generation.
+    /// </summary>
+    /// <remarks>
+    /// <para>Must be called while holding <see cref="_submissionLock" />.</para>
+    /// <para>The returned source must be cancelled only after the lock is released: cancellation callbacks and
+    /// awaited-work continuations must never run inline against held voice state.</para>
+    /// </remarks>
+    private (List<AdmittedSpeech> Discarded, CancellationTokenSource? PipelineCancellation) FlushQueueLocked()
     {
-        if (!_pendingSpeech.Contains(item))
-        {
-            return false;
-        }
-
-        _pendingSpeech = new Queue<AdmittedSpeech>(_pendingSpeech.Where(pending => !ReferenceEquals(pending, item)));
-        return true;
+        _queueGeneration++;
+        List<AdmittedSpeech> discarded = [.. _pendingSpeech];
+        _pendingSpeech.Clear();
+        return (discarded, _activePipelineCancellation);
     }
 
-    private static bool IsTurnCancellation(AdmittedSpeech item)
-        => item.CancelRequested || item.TurnCancellation is { IsCancellationRequested: true };
+    /// <summary>
+    /// Cancels a pipeline source retired by a queue flush, tolerating the concurrent settlement race.
+    /// </summary>
+    private static void CancelRetiredPipelineSource(CancellationTokenSource? pipelineCancellation)
+    {
+        if (pipelineCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            pipelineCancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The in-flight item settled concurrently and disposed its own source; there is no pipeline work
+            // left to cancel.
+        }
+    }
+
+    /// <summary>
+    /// Indicates an item's pipeline was withdrawn as expected silent cancellation: its own caller cancelled before
+    /// hand-off, or the queue generation it belonged to was flushed (SPCH-005 TR-32, TR-39).
+    /// </summary>
+    private static bool IsSilentWithdrawal(AdmittedSpeech item, CancellationToken pipelineCancellation)
+        => item.CancelRequested || item.Settled || pipelineCancellation.IsCancellationRequested;
 
     /// <summary>
     /// Silently aborts an explicitly cancellable submission without failure signalling or listener notification.
@@ -496,6 +574,7 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
         while (true)
         {
             AdmittedSpeech item;
+            CancellationTokenSource pipelineCancellationSource;
             lock (_submissionLock)
             {
                 if (IsNodeLifetimeEnded || _pendingSpeech.Count == 0)
@@ -509,19 +588,22 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
                 }
 
                 item = _pendingSpeech.Dequeue();
+                // The voice owns this pipeline source (TR-39): linked to the node lifetime only — never to a
+                // caller token — and cancelled exclusively when the item's queue generation is flushed.
+                pipelineCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(NodeLifetimeCancellationToken);
+                _activePipelineCancellation = pipelineCancellationSource;
             }
 
-            await ProcessAdmittedSpeechAsync(item);
+            await ProcessAdmittedSpeechAsync(item, pipelineCancellationSource);
         }
     }
 
-    private async Task ProcessAdmittedSpeechAsync(AdmittedSpeech item)
+    private async Task ProcessAdmittedSpeechAsync(
+        AdmittedSpeech item,
+        CancellationTokenSource pipelineCancellationSource)
     {
         Stopwatch totalStopwatch = PipelineDebugLog.StartTimer();
-        CancellationTokenSource? pipelineCancellationSource = item.TurnCancellation is null
-            ? null
-            : CancellationTokenSource.CreateLinkedTokenSource(NodeLifetimeCancellationToken, item.TurnCancellation.Token);
-        CancellationToken pipelineCancellation = pipelineCancellationSource?.Token ?? NodeLifetimeCancellationToken;
+        CancellationToken pipelineCancellation = pipelineCancellationSource.Token;
 
         try
         {
@@ -568,7 +650,7 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
             {
                 await DispatchDeferredGodotActionAsync(() =>
                 {
-                    CommitPlaybackHandOff(item, preparedPlayback);
+                    CommitPlaybackHandOff(item, preparedPlayback, pipelineCancellationSource);
                     mappedMeshCount = LipSyncPlayer?.MappedMeshCount ?? 0;
                 });
             }
@@ -593,8 +675,14 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
             item.DisposeCancellationRegistration();
             _ = item.HandOffCompletion?.TrySetCanceled(NodeLifetimeCancellationToken);
         }
-        catch (OperationCanceledException) when (IsTurnCancellation(item))
+        catch (OperationCanceledException) when (IsSilentWithdrawal(item, pipelineCancellation))
         {
+            AbortAdmittedItemSilently(item);
+        }
+        catch (Exception) when (IsSilentWithdrawal(item, pipelineCancellation))
+        {
+            // A backend fault racing the flush still settles silently: flushed work never surfaces a failure,
+            // a listener publication, or a retry (SPCH-005 TR-32).
             AbortAdmittedItemSilently(item);
         }
         catch (AudioConversionException ex)
@@ -609,7 +697,20 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
         }
         finally
         {
-            pipelineCancellationSource?.Dispose();
+            lock (_submissionLock)
+            {
+                // The identity guard tolerates the field having been retired earlier at the playback hand-off
+                // commit; this clear only covers pipelines that never committed.
+                if (ReferenceEquals(_activePipelineCancellation, pipelineCancellationSource))
+                {
+                    _activePipelineCancellation = null;
+                }
+            }
+
+            // Disposed only after the field is cleared under the lock, so a concurrent flush can no longer reach
+            // the source through voice state; disposal stays here so the token remains observable until the
+            // pipeline task truly ends.
+            pipelineCancellationSource.Dispose();
         }
     }
 
@@ -618,21 +719,40 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     /// </summary>
     /// <param name="item">Admitted item reaching playback hand-off.</param>
     /// <param name="preparedPlayback">Prepared speech stream and lip-sync inference data.</param>
-    private void CommitPlaybackHandOff(AdmittedSpeech item, LipSyncPlayer.PreparedPlayback preparedPlayback)
+    /// <param name="pipelineCancellationSource">Voice-owned pipeline source of this item's pipeline, retired here
+    /// when the commit is accepted so a later queue flush can never cancel committed playback's stream.</param>
+    private void CommitPlaybackHandOff(
+        AdmittedSpeech item,
+        LipSyncPlayer.PreparedPlayback preparedPlayback,
+        CancellationTokenSource pipelineCancellationSource)
     {
         NodeLifetimeCancellationToken.ThrowIfCancellationRequested();
 
         bool commit;
         lock (_submissionLock)
         {
-            commit = !item.CancelRequested;
+            // Linearised against the guarded cancellation callback (TR-39): cancellation observed first marked
+            // the item stale or flushed its queue generation, refusing playback; a hand-off that linearised first
+            // sets HandOffCommitted and makes any later caller cancellation a no-op.
+            commit = !item.CancelRequested && item.Generation == _queueGeneration;
             item.HandOffCommitted = commit;
+            if (commit && ReferenceEquals(_activePipelineCancellation, pipelineCancellationSource))
+            {
+                // The commit boundary retires the pipeline source (TR-32/TR-39): from here the item's playback
+                // is committed, so a queued sibling's cancellation flushing the generation must not reach this
+                // source and cut the committed stream mid-playback. CutSpeech stays authoritative for committed
+                // playback because it stops the lip-sync player explicitly rather than through this source, and
+                // disposal remains with the pipeline's settlement so the token stays observable until the
+                // pipeline task truly ends.
+                _activePipelineCancellation = null;
+            }
         }
 
         if (!commit)
         {
-            // The submission was cancelled while this hand-off was queued; abort before playback.
-            throw new OperationCanceledException(item.TurnCancellation?.Token ?? CancellationToken.None);
+            // The submission was cancelled, or its queue generation was flushed, while this hand-off was queued;
+            // abort before playback.
+            throw new OperationCanceledException(item.CallerToken);
         }
 
         // The successor gate is reserved before playback starts: a playback-completed notification raised
@@ -933,7 +1053,7 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
     /// </summary>
     private sealed class AdmittedSpeech(
         string text,
-        CancellationTokenSource? turnCancellation,
+        int generation,
         TaskCompletionSource? handOffCompletion,
         CancellationToken callerToken)
     {
@@ -945,9 +1065,11 @@ public partial class AIVoice : Voice, IAdmissionCapableVoice
         public string Text { get; } = text;
 
         /// <summary>
-        /// Linked turn-cancellation source for explicitly cancellable submissions; null for ordinary submissions.
+        /// Queue generation this item was admitted into; a flush invalidates it (SPCH-005 TR-32), so a mismatch
+        /// with the voice's current generation marks the item stale and refuses its deferred playback hand-off.
+        /// Guarded by the owning voice's submission lock.
         /// </summary>
-        public CancellationTokenSource? TurnCancellation { get; } = turnCancellation;
+        public int Generation { get; } = generation;
 
         /// <summary>
         /// Completion source settling when playback hand-off commits; null for ordinary submissions.

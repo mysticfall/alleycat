@@ -28,6 +28,13 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
    consumer can play or buffer partial audio safely.
 7. Developers can observe backend generation latency as opt-in pipeline
    diagnostics without affecting generation behaviour.
+8. A character's queued utterances are generated one at a time in request
+   order; a busy queue waits rather than rejects (orchestrated per voice by
+   SPCH-005).
+9. One character's speech generation never blocks another's: distinct
+   characters' voices may generate concurrently.
+10. Flushing or failing one character's speech work affects only that
+    character's pending queue; other characters' pending speech is untouched.
 
 ## Technical Requirements
 
@@ -52,7 +59,11 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 10. Godot signals and hooks for streamed chunks, completion, and failure must be
     dispatched on the Godot thread through the deferred action pattern.
 11. Enabled and single in-flight generation behaviour must apply to the streaming
-    dispatch path as well as the full-response path.
+    dispatch path as well as the full-response path. The single in-flight guard
+    is per generator instance and therefore per owning voice queue (SPCH-005):
+    at most one generation request runs at a time within one production queue,
+    while distinct voice-owned generators may run concurrently and must never
+    block one another.
 12. Configuration must bind/read subsystem-owned TTS options from CORE-006 `IConfiguration`, or build a local
     custom-path YAML configuration when an explicit path is supplied. Options include Host (full endpoint URL), ApiKey
     (optional API key), and additional API-supported properties.
@@ -61,6 +72,11 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 15. Backend latency must be recorded through the shared pipeline diagnostic log (CORE-007) as log-only Trace latency
     entries for backend return and stream completion under the `AlleyCat.Pipeline` category — opt-in console
     diagnostics without notification eligibility. These diagnostics must not change generation behaviour.
+16. Per-voice FIFO ownership, one-at-a-time generation, and flush boundaries are defined at the orchestrating voice
+    layer (SPCH-005). The `SpeechGenerator` backend API gains no queueing, ownership, or flush surface; generation
+    remains one in-flight per production queue (TR-11).
+17. A failed generation settles only its own request — logged failure plus the failure signal — and must not block or
+    fail the owning queue's later items (SPCH-005 failure isolation).
 
 ## In Scope
 
@@ -73,12 +89,15 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
 - Subsystem-owned configuration from CORE-006 `IConfiguration` or explicit custom-path YAML loading.
 - Raw backend audio output contract for streamed chunks and completion.
 - Backend latency diagnostics through the shared pipeline diagnostic log (CORE-007).
+- Per-production-queue single-in-flight generation with concurrency across distinct voice-owned queues.
+- Failure isolation between queued generation items.
 
 ## Out Of Scope
 
 - Speech-to-text (STT) or transcription.
 - Real-time streaming audio playback beyond exposing backend chunk events.
-- Multiple simultaneous generation sessions.
+- Multiple simultaneous generation sessions within one production queue; distinct voice-owned queues may generate
+  concurrently (TR-11).
 - Local-only TTS without network.
 - Non-OpenAI-compatible backend implementations beyond OpenAISpeechGenerator.
 - Audio preprocessing beyond API parameters.
@@ -100,9 +119,15 @@ SpeechGenerator with an OpenAI-compatible implementation as the initial backend.
    backend-output contract, with no generator-side parsing, resampling, or
    sample-rate normalisation.
 9. OpenAISpeechGenerator dispatch uses the OpenAI-compatible streaming speech API
-   while preserving Enabled and single in-flight behaviour.
+   while preserving Enabled and per-queue single in-flight behaviour (TR-11).
 10. Tests verify backend latency diagnostics route through the shared pipeline diagnostic log as log-only Trace
-     entries without notification eligibility and without changing generation behaviour.
+      entries without notification eligibility and without changing generation behaviour.
+11. Tests verify generation runs one request at a time per voice-owned queue in FIFO order, while distinct voice-owned
+      generators run concurrently without mutual blocking.
+12. Tests verify one item's generation failure settles only that item — logged with its failure signal — and the
+      queue's later items still generate.
+13. Acceptance confirms per-voice FIFO ownership and flush boundaries stay at the voice layer (SPCH-005) with no
+      `SpeechGenerator` backend API change for queueing, ownership, or flush.
 
 ## References
 

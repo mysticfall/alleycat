@@ -48,13 +48,20 @@ workflow when they opt in to startup probing.
     not distort or stall playback: the face holds its last pose while audio
     continues, and playback resumes when frames catch up. Diffusion-mode
     playback is unaffected by the streaming changes.
-12. Starting new speech during streamed playback cuts the predecessor's audio
-    and facial animation immediately. The replacement starts only after the
+12. Starting new speech directly on the player during streamed playback — a
+    direct `Play` or `PlayPrepared` call — cuts the predecessor's audio and
+    facial animation immediately. The replacement starts only after the
     predecessor stream has settled; if it cannot settle within the bounded
     admission window, the new speech fails visibly and is not retried
     automatically.
 13. Streaming diagnostics support contributor investigation without changing
     player-visible playback behaviour or exposing speech or player data.
+14. Speech queued behind an active utterance by a queueing orchestrator
+    (SPCH-005 `AIVoice`) is inferred without disturbing its predecessor: the
+    predecessor's stream is never cancelled by ordinary queue progression, lip
+    motion stays continuous across rapid successive utterances, and one
+    utterance's inference failure does not stop the next queued utterance from
+    being inferred.
 
 ## Technical Requirements
 
@@ -67,15 +74,18 @@ workflow when they opt in to startup probing.
 3. Returned frames are mapped into the `LipSyncPlayer` base class with audio
    synchronisation.
 4. Player exposes `Play(AudioStreamWav speech)` for manual playback initiation.
-5. Interruption and replacement-admission contract: If `Play` is called during
-   active playback, cut current audio and facial-frame application immediately,
-   then cancel its streaming download. Replacement admission is ordered and
-   bounded: the client invariant is **prior `ReadLoop` settled before
-   replacement request admission**. It waits only for a finite, configured
-   settlement window; if the predecessor cannot settle, the replacement sets
-   `PlaybackError`, fails through the visible caller/item failure path, makes no
-   replacement request, and receives no automatic retry. Ordinary non-streaming
-   `/blendshapes` requests need not be cancelled.
+5. Interruption and direct replacement-admission contract: if a direct caller
+   invokes `Play` or `PlayPrepared` during active playback, cut current audio
+   and facial-frame application immediately, then cancel the active streaming
+   download. Direct replacement admission is ordered and bounded: the client
+   invariant is **prior `ReadLoop` settled before replacement request
+   admission**. It waits only for a finite, configured settlement window; if
+   the predecessor cannot settle, the replacement sets `PlaybackError`, fails
+   through the visible caller/item failure path, makes no replacement request,
+   and receives no automatic retry. Ordinary non-streaming `/blendshapes`
+   requests need not be cancelled. This contract governs direct replacement
+   only; ordinary FIFO preparation by queueing orchestrators follows
+   requirement 29.
 6. Optional eye-rotation translation defines baseline subtraction, smoothing,
    directional mapping, and clamp rules.
 7. Model/mode compatibility and health probing behaviour are explicitly
@@ -198,6 +208,21 @@ workflow when they opt in to startup probing.
     outcomes. The standalone service owns any use of this header and its own
     observability; this specification does not prescribe service logging,
     configuration, or tests.
+29. Ordinary FIFO preparation sequencing: queueing orchestrators (SPCH-005
+    `AIVoice`) prepare successor utterances through `PreparePlaybackAsync` while
+    the predecessor utterance is still playing. On the streaming path, the
+    successor's inference request must wait until the predecessor streaming
+    session's `ReadLoop` has reached a terminal state naturally: the successor
+    must not cancel, cut, or truncate the predecessor's download, and ordinary
+    queue progression must record no `ReplacementAdmission` or
+    `DirectPlaybackReplacement` cancellation origin. Because the predecessor
+    read loop has already finished, the successor's inference may begin while
+    the predecessor's audio is still audibly playing from its buffered frames;
+    playback ordering and gating remain the orchestrator's concern (SPCH-005
+    TR-30). Predecessor inference faults are isolated to the predecessor item:
+    a faulted read loop settles through that item's own failure path and must
+    not refuse, fault, or delay the successor's preparation, which proceeds
+    normally.
 
 ## In Scope
 
@@ -211,7 +236,10 @@ workflow when they opt in to startup probing.
 - Shared-base audio format validation and inference-input normalisation.
 - Interruption handling for active playback.
 - Streaming playback gate, starvation hold, stream cancellation on stop, and
-  timeout and bounded ordered replacement-admission contracts.
+  timeout and bounded ordered direct replacement-admission contracts.
+- Ordinary FIFO preparation sequencing for queueing orchestrators: natural
+  read-loop succession without replacement cancellation, and predecessor-fault
+  isolation for successor preparation (SPCH-005).
 - Client-owned, low-volume streaming diagnostics, including the correlation
   header, required client events, and privacy boundaries.
 - Standalone-service integration boundary and service-owned observability.
@@ -222,8 +250,8 @@ workflow when they opt in to startup probing.
 ## Out Of Scope
 
 - Production-grade latency budgets or recovery policies beyond the required
-  bounded replacement-failure and disconnect-handling contracts. Live-smoke
-  timing assertions are feasibility bounds, not latency budgets.
+  bounded direct-replacement-failure and disconnect-handling contracts.
+  Live-smoke timing assertions are feasibility bounds, not latency budgets.
 - Live microphone capture or real-time audio input pipelines.
 - Dialogue system integration or runtime model switching.
 - Animation polish and expressive-quality acceptance criteria.
@@ -244,10 +272,11 @@ workflow when they opt in to startup probing.
    (batch and streaming) are explicitly defined.
 4. Manual playback contract: Playback triggers via `Play(AudioStreamWav)`, not
    auto-started in `_Ready()`.
-5. User interruption outcome: Calling `Play` during active streamed playback
-   cuts current audio and facial animation immediately. The replacement begins
-   only after bounded, ordered admission; if the predecessor cannot settle, the
-   new speech fails visibly without an automatic retry.
+5. User interruption outcome: a direct `Play` or `PlayPrepared` call during
+   active streamed playback cuts current audio and facial animation
+   immediately. The replacement begins only after bounded, ordered admission;
+   if the predecessor cannot settle, the new speech fails visibly without an
+   automatic retry.
 6. Eye-rotation translation behaviour and fallback handling are defined.
 7. Default startup succeeds without blocking or logging a connection-refused
    initialisation error when the Audio2Face backend is not running.
@@ -278,14 +307,14 @@ workflow when they opt in to startup probing.
     output after audio completion is discarded without `PlaybackError` or an
     artificial failure. Final session counters and the incomplete-buffer summary
     remain available where applicable.
-16. Streaming interruption and replacement admission: tests verify `Stop()`
-    cancels the in-flight download; the read loop settles; the server observes
-    the client abort; no `PlaybackCompleted` fires for the cut session; and the
-    buffer never reports complete. Tests also verify rapid `Play()` calls cut
-    the predecessor immediately, admit a replacement request only after the
-    prior `ReadLoop` settles, and replay cleanly. When settlement exceeds the
-    bounded admission window, tests verify a visible new-speech failure, no
-    automatic retry, and no replacement request.
+16. Streaming interruption and direct replacement admission: tests verify
+    `Stop()` cancels the in-flight download; the read loop settles; the server
+    observes the client abort; no `PlaybackCompleted` fires for the cut
+    session; and the buffer never reports complete. Tests also verify rapid
+    direct `Play()` calls cut the predecessor immediately, admit a replacement
+    request only after the prior `ReadLoop` settles, and replay cleanly. When
+    settlement exceeds the bounded admission window, tests verify a visible
+    new-speech failure, no automatic retry, and no replacement request.
 17. Mid-playback stream failure: tests verify a stream that closes without the
     complete record sets `PlaybackError` with a clear message, raises
     `PlaybackCompleted` once, and stops playback without hanging.
@@ -310,19 +339,19 @@ workflow when they opt in to startup probing.
     consistently sized frames.
 22. Acceptance verifies both layers: user-visible early audio, interruption,
     and starvation behaviour, and the endpoint, gate, mode-routing, timeout,
-    failure, opt-in, replacement-admission, server-disconnect, warm-service, and
-    client-diagnostics contracts.
+    failure, opt-in, direct replacement-admission, ordinary FIFO sequencing,
+    server-disconnect, warm-service, and client-diagnostics contracts.
 23. Service-boundary validation confirms that AlleyCat consumes the published
     HTTP and NDJSON contracts without prescribing the current standalone
     `~/workspace/audio2face-api-server` service's internal observability,
     configuration, or test coverage. The obsolete SDK-nested server is not valid
     integration evidence.
 24. AlleyCat validation verifies its client boundary independently: unit and
-    integration tests prove immediate cut and the ordered-admission invariant,
-    including no replacement request after failed predecessor settlement. The
-    flagged live-container smoke test consumes the standalone service and
-    verifies the warm-service first-record target; it does not substitute for
-    standalone service verification owned by that service.
+    integration tests prove immediate cut and the direct ordered-admission
+    invariant, including no replacement request after failed predecessor
+    settlement. The flagged live-container smoke test consumes the standalone
+    service and verifies the warm-service first-record target; it does not
+    substitute for standalone service verification owned by that service.
 25. Diagnostics validation verifies both layers and code/spec alignment:
     diagnostics do not change player-visible behaviour and do not expose
     payloads, waveforms, query parameters, player data, or other speech content.
@@ -330,6 +359,15 @@ workflow when they opt in to startup probing.
     streaming request includes the opaque `X-Client-Stream-Id` header, and client
     diagnostics cover every required client event. This acceptance does not
     prescribe standalone-service logging, configuration, or test coverage.
+26. Ordinary FIFO sequencing: tests verify a queue-originated successor's
+    streaming request is admitted only after the predecessor read loop settles
+    naturally — no cancellation is issued and no `ReplacementAdmission` or
+    `DirectPlaybackReplacement` origin is recorded — that its inference may
+    begin while predecessor audio is still playing, that a predecessor
+    inference fault fails only the predecessor item while the successor
+    prepares and plays normally, and that rapid successive queued utterances
+    keep lip motion continuous with no starvation episode induced by successor
+    preparation.
 
 ## References
 
