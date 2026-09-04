@@ -19,6 +19,9 @@ specifications wiki, with each spec acting as the source of truth for planning a
 - Keep tuning values flexible where appropriate (for example thresholds and curves), while still defining implementation
   structure, boundaries, and required validation contracts.
 - Acceptance criteria must verify both requirement layers.
+- Never retain superseded code or documentation for "historical provenance": delete it or rewrite it to describe
+  only the current contract — git history is the archive. This applies to specifications, code comments, tests,
+  and asset metadata alike.
 
 ## Project Structure
 
