@@ -21,7 +21,8 @@ architecture, contributor model, and actuator abstraction before adding constrai
 
 1. Player hand movement must remain unchanged when no target contributors are active.
 2. Head target movement must remain unchanged except for routing through the shared pipeline.
-3. XR controller position must remain the authoritative source intent for player hands.
+3. The globally committed XR hand-pose source must remain the authoritative source intent for player hands, with
+   controller as the default and fallback source.
 4. Pipeline must expose source target, requested/constrained target, realised target, and
    feedback reason or error for debugging.
 5. A no-op contributor must be insertable without changing pipeline output.
@@ -93,8 +94,8 @@ architecture, contributor model, and actuator abstraction before adding constrai
    contributors are active.
 2. User Requirement 2 validated: head target path runs through the pipeline and keeps the head solve target
    aligned with the actuated head target.
-3. User Requirement 3 validated: XR controller remains source intent, unchanged from current
-   implementation.
+3. User Requirement 3 validated: the globally committed XR hand-pose source (controller default/fallback; optical per
+   XR-002 when committed) remains source intent, unchanged from the current implementation in controller mode.
 4. User Requirement 4 validated: pipeline exposes source, requested, realised, and feedback
    through debug interface.
 5. User Requirement 5 validated: no-op contributor insertion produces identical output.
@@ -123,3 +124,4 @@ architecture, contributor model, and actuator abstraction before adding constrai
 - [DynamicPhysicalRig Implementation](@game/src/Rigging/Physics/DynamicPhysicalRig.cs)
 - [IK Implementation Notes](../implementation-notes.md)
 - [IK-002: Arm And Shoulder IK System](../002-arm-shoulder-ik/index.md)
+- [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)

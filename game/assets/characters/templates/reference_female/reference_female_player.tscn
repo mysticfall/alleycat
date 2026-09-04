@@ -1,6 +1,8 @@
 [gd_scene format=3 uid="uid://jlhxmgxicdex"]
 
 [ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_edvvb"]
+[ext_resource type="Script" uid="uid://b70dso4dgqj6f" path="res://src/XR/HandTracking/OpticalFingerTrackingModifier.cs" id="4_maq48"]
+[ext_resource type="Resource" path="res://assets/xr/calibration/fingers_calibration_quest3.tres" id="5_3ka35"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
 [ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/templates/ik/vrik.tscn" id="7_2a5tg"]
 [ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
@@ -38,6 +40,27 @@ influence = 1.0
 script = ExtResource("5_hipmod")
 StateMachine = NodePath("../../../VRIK/PoseStateMachine")
 metadata/_custom_type_script = "uid://bfa76a86uhk1m"
+
+[node name="OpticalFingerTrackingModifier" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" index="30" unique_id=1092275997]
+unique_name_in_owner = false
+process_mode = 0
+process_priority = 0
+process_physics_priority = 0
+process_thread_group = 0
+physics_interpolation_mode = 0
+auto_translate_mode = 0
+editor_description = ""
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+rotation_edit_mode = 0
+rotation_order = 2
+top_level = false
+visible = true
+visibility_parent = NodePath("")
+active = true
+influence = 1.0
+script = ExtResource("4_maq48")
+CalibrationProfile = ExtResource("5_3ka35")
+metadata/_custom_type_script = "uid://b70dso4dgqj6f"
 
 [node name="VRIK" parent="." index="1" unique_id=485776476 node_paths=PackedStringArray("PoseStateMachine", "Viewpoint", "HeadIKTarget", "HeadIKSolveTarget", "RightHandIKTarget", "LeftHandIKTarget", "RightFootIKTarget", "LeftFootIKTarget", "PhysicalRig", "HeadFallbackIntentProvider", "RightHandFallbackIntentProvider", "LeftHandFallbackIntentProvider", "RightFootFallbackIntentProvider", "LeftFootFallbackIntentProvider", "HeadModifierGroup", "RightHandModifierGroup", "LeftHandModifierGroup", "RightFootModifierGroup", "LeftFootModifierGroup") instance=ExtResource("7_2a5tg")]
 PoseStateMachine = NodePath("PoseStateMachine")

@@ -6,6 +6,7 @@ using AlleyCat.Interaction.Hands;
 using AlleyCat.Rigging;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
+using AlleyCat.XR.HandTracking;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -319,12 +320,15 @@ public sealed class PlayerControllerGrabInputIntegrationTests
 
     private sealed class FakeXRRuntime : IXRRuntime
     {
+        private readonly XRControllerHandTracking _handTracking;
+
         public FakeXRRuntime()
         {
             OriginNode = new Node3D();
             CameraNode = new Camera3D();
             RightControllerNode = new FakeXRHandController();
             LeftControllerNode = new FakeXRHandController();
+            _handTracking = new XRControllerHandTracking(RightControllerNode, LeftControllerNode);
         }
 
         public IXROrigin Origin => new FakeXROrigin(OriginNode);
@@ -335,8 +339,16 @@ public sealed class PlayerControllerGrabInputIntegrationTests
 
         public IXRHandController LeftHandController => LeftControllerNode;
 
+        public XRHandTrackingMode HandTrackingMode => XRHandTrackingMode.Controller;
+
+        public IXRHandJointProvider OpticalHandJoints => XREmptyHandJointProvider.Instance;
+
+        public IXRHandPoseSource GetHandPoseSource(LimbSide side) => _handTracking.GetHandPoseSource(side);
+
 #pragma warning disable CS0067
         public event Action? PoseRecentered;
+
+        public event Action? HandTrackingModeChanged;
 #pragma warning restore CS0067
 
         public Node3D OriginNode

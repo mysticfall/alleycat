@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://djamb77looxqd"]
 
-[ext_resource type="Script" uid="uid://yv0ybhel16nx" path="res://src/XR/Mock/MockXRHandControllerNode.cs" id="1_67sf0"]
-[ext_resource type="Script" uid="uid://cpw4pbjcrwex4" path="res://src/XR/Mock/MockXRCameraNode.cs" id="1_qivnm"]
-[ext_resource type="Script" uid="uid://n6yev308glgw" path="res://src/XR/Mock/MockXRRuntimeNode.cs" id="1_xjl7o"]
+[ext_resource type="Script" path="res://src/XR/Mock/MockXRHandControllerNode.cs" id="1_67sf0" uid="uid://yv0ybhel16nx"]
+[ext_resource type="Script" path="res://src/XR/Mock/MockXRCameraNode.cs" id="1_qivnm" uid="uid://cpw4pbjcrwex4"]
+[ext_resource type="Script" path="res://src/XR/Mock/MockXRRuntimeNode.cs" id="1_xjl7o" uid="uid://n6yev308glgw"]
 
 [node name="Origin" type="Node3D" unique_id=402881029]
-process_mode = 4
+process_mode = 3
 script = ExtResource("1_xjl7o")
 metadata/_custom_type_script = "uid://n6yev308glgw"
 
@@ -29,3 +29,15 @@ metadata/_custom_type_script = "uid://yv0ybhel16nx"
 
 [node name="HandPosition" type="Node3D" parent="LeftController" unique_id=67106830]
 transform = Transform3D(-0.05551585, -0.7472793, 0.6621871, -0.69837934, -0.44491664, -0.5606389, 0.7135722, -0.49358213, -0.4971841, 0, 0, 0.080010474)
+
+[node name="RightOpticalHand" type="Node3D" parent="." unique_id=1875414303]
+
+[node name="WristAnchor" type="Node3D" parent="RightOpticalHand" unique_id=197561872]
+
+[node name="OpticalHandAnchor" type="Node3D" parent="RightOpticalHand/WristAnchor" unique_id=1894335804]
+
+[node name="LeftOpticalHand" type="Node3D" parent="." unique_id=609029288]
+
+[node name="WristAnchor" type="Node3D" parent="LeftOpticalHand" unique_id=1525962532]
+
+[node name="OpticalHandAnchor" type="Node3D" parent="LeftOpticalHand/WristAnchor" unique_id=2026147696]

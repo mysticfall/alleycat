@@ -13,13 +13,16 @@ baseline pole-target prediction.
 
 ## Goal
 
-Allow players to shift the elbow bend-plane direction by rotating their hand controllers, without altering the
-elbow bend angle. The correction must be smooth, deterministic, and gracefully degenerate when the hand is near the
-shoulder.
+Allow players to shift the elbow bend-plane direction by rotating the selected active hand-target rotation source — a
+hand controller, or the tracked wrist in optical mode
+([XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)), which drives the same elbow correction
+— without altering the elbow bend angle. The correction must be smooth, deterministic, and gracefully degenerate when
+the hand is near the shoulder.
 
 ## User Requirements
 
-1. Rotating a hand controller around its longitudinal axis shifts the elbow bend-plane direction on the same arm.
+1. Rotating the selected active hand-target rotation source around its longitudinal axis — a hand controller, or the
+   tracked wrist in optical mode (XR-002) — shifts the elbow bend-plane direction on the same arm.
 2. The elbow bend angle is unaffected by the hand-rotation correction.
 3. The correction is disabled when `HandRotationWeight` is set to zero.
 

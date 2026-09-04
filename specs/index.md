@@ -50,6 +50,7 @@
 ## XR
 
 - [XR-001: XRManager](xr/001-xr-manager/index.md)
+- [XR-002: Optical Hand Tracking](xr/002-optical-hand-tracking/index.md)
 
 ## Character
 

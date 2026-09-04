@@ -11,7 +11,7 @@
 [ext_resource type="Resource" uid="uid://cbgjs7yax6mtd" path="res://assets/characters/ik/pose/kneeling_to_all_fours_transition.tres" id="9_obhfn"]
 [ext_resource type="Resource" uid="uid://c2ecgvou6y8e5" path="res://assets/characters/ik/pose/all_fours_to_standing_transition.tres" id="10_n0xia"]
 [ext_resource type="Script" uid="uid://bs7wqkhs0vmpi" path="res://src/IK/XRHeadTargetIntentProvider.cs" id="11_qwxeq"]
-[ext_resource type="Script" uid="uid://b4sqrh01qb30h" path="res://src/IK/XRControllerTargetProvider.cs" id="12_vd2w6"]
+[ext_resource type="Script" uid="uid://dyg6a5uu0a76j" path="res://src/IK/XRHandPoseTargetProvider.cs" id="12_vd2w6"]
 [ext_resource type="Script" uid="uid://cycxrw4g6pnl6" path="res://src/IK/AnimationSynchronizedFootTargetProvider.cs" id="13_wiypf"]
 [ext_resource type="Script" uid="uid://bdxl0giwm3sg1" path="res://src/IK/HandGrabTargetProvider.cs" id="14_ys8sr"]
 
@@ -34,12 +34,12 @@ metadata/_custom_type_script = "uid://bs7wqkhs0vmpi"
 
 [node name="RightHandFallbackIntentProvider" type="Node" parent="." unique_id=242143700]
 script = ExtResource("12_vd2w6")
-metadata/_custom_type_script = "uid://b4sqrh01qb30h"
+metadata/_custom_type_script = "uid://dyg6a5uu0a76j"
 
 [node name="LeftHandFallbackIntentProvider" type="Node" parent="." unique_id=25253155]
 script = ExtResource("12_vd2w6")
 Side = 0
-metadata/_custom_type_script = "uid://b4sqrh01qb30h"
+metadata/_custom_type_script = "uid://dyg6a5uu0a76j"
 
 [node name="RightFootFallbackIntentProvider" type="Node" parent="." unique_id=1284619862]
 script = ExtResource("13_wiypf")

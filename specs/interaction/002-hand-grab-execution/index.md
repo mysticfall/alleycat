@@ -28,7 +28,8 @@ Provide a grab execution system that:
 - Commits the grab only after the hand reaches/settles at the target.
 - Parents the grabbed object to a hand bone via BoneAttachment3D nodes.
 - Applies hand pose animation from the grab point's candidate.
-- Maintains hand mobility (IK follows controller/default provider) while held.
+- Maintains hand mobility (IK follows the globally selected XR hand-pose source/default
+  provider) while held.
 - Releases held object and restores all involved subsystems to initial states.
 - Supports separate authored position and rotation offsets per animation/grab point.
 - Provides an authoring workflow to position an item on a character hand.
@@ -38,8 +39,8 @@ Provide a grab execution system that:
 1. On grab press, the item stays in place while the hand moves to the
    selected grab point.
 2. The grab commits only after the hand reaches/settles at the target.
-3. While held, the hand remains mobile and follows normal controller or
-   default provider motion.
+3. While held, the hand remains mobile and follows the globally selected XR hand-pose
+   source (or default provider motion).
 4. The held item follows the hand during all movements.
 5. Both left and right hand pose animations work while holding.
 6. Grabbables and grab points support authored position and rotation offsets
@@ -152,8 +153,8 @@ Provide a grab execution system that:
 
     **Movable grabbables** (e.g. ball, prop):
     - On commit, hand parents the object to the hand bone (BoneAttachment3D).
-    - After parenting, clear the hand grab target provider override so normal or
-      controller tracking resumes.
+    - After parenting, clear the hand grab target provider override so normal tracking from
+      the globally selected XR hand-pose source resumes.
     - The hand becomes mobile; the parented object follows the hand bone.
     - The hand pose from the grab point's animation is maintained.
 
@@ -167,7 +168,8 @@ Provide a grab execution system that:
       remains locked to the grab point.
 
 27. For both mobility types, releasing clears the grab point and returns the IK
-    target to default (e.g., controller position) via smooth interpolation.
+    target to default (the globally selected XR hand-pose source, for example controller
+    position) via smooth interpolation.
 
 ### Parenting And Hand Bone
 
@@ -341,7 +343,8 @@ Provide a grab execution system that:
 |    |                   | to the selected grab point. |
 | 2  | User              | Grab commits only after the hand reaches and settles at target. |
 | 3  | User              | While holding a `Movable` grabbable, the hand remains mobile and |
-|    |                   | follows normal controller or default provider motion. |
+|    |                   | follows the globally selected XR hand-pose source (or default |
+|    |                   | provider motion). |
 | 4  | User              | While holding a `Movable` grabbable, the held item follows the |
 |    |                   | hand through all movements. |
 | 5  | User              | While holding an `Immovable` grabbable, the hand stays constrained |
@@ -438,5 +441,6 @@ Provide a grab execution system that:
 - [INTR-003: Hands](../003-hands/index.md)
 - [IK-002: Arm And Shoulder IK System](../../ik/002-arm-shoulder-ik/index.md)
 - [IK Implementation Notes](../../ik/implementation-notes.md)
+- [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
 - `game/src/Interaction/` (implementation namespace)

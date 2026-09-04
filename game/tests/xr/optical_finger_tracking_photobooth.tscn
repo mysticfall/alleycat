@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://bxo2t0handph01"]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/photobooth.tscn" uid="uid://6b8las20aee4" id="1_p2trt"]
+[ext_resource type="PackedScene" path="res://assets/characters/reference/ally_player.tscn" uid="uid://c1rexm45hq1rf" id="2_rx1gs"]
+[ext_resource type="Script" path="res://src/Character/Character.cs" uid="uid://bh2t1kkfwpvbf" id="3_70686"]
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/camera_rig.tscn" uid="uid://utn2mx2dm0vl" id="4_d7y36"]
+[ext_resource type="Script" path="res://scripts/photobooth/camera_rig.gd" uid="uid://dxxg2ed4pj3mr" id="5_7xmgv"]
+[ext_resource type="PackedScene" path="res://assets/markers/debug_marker.tscn" uid="uid://h1r8aegpc4i6" id="6_aacli"]
+[ext_resource type="Script" path="res://scripts/photobooth/debug_marker.gd" uid="uid://c4bxtowcrevfl" id="7_f4pu6"]
+
+[node name="Photobooth" unique_id=406188165 instance=ExtResource("1_p2trt")]
+
+[node name="Player" type="CharacterBody3D" parent="Subject" parent_id_path=PackedInt32Array(1460378833) index="0" unique_id=619146847 node_paths=PackedStringArray("AuthoredVisualCues") groups=["Player"] instance=ExtResource("2_rx1gs")]
+script = ExtResource("3_70686")
+Id = "reference_player"
+AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
+metadata/_custom_type_script = "uid://bh2t1kkfwpvbf"
+
+[node name="RightHandCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("4_d7y36")]
+transform = Transform3D(-0.9922779, -0.026310403, 0.12121215, 0, 0.9772434, 0.2121212, -0.12403476, 0.2104832, -0.969697, 0.34, 1.16, -0.92)
+script = ExtResource("5_7xmgv")
+image_size = Vector2(640, 640)
+orthogonal_scale = 0.28
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="LeftHandCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=2008969467 instance=ExtResource("4_d7y36")]
+transform = Transform3D(-0.9922779, 0.026310403, -0.12121215, 0, 0.9772434, 0.2121212, 0.12403476, 0.2104832, -0.969697, -0.34, 1.16, -0.92)
+script = ExtResource("5_7xmgv")
+image_size = Vector2(640, 640)
+orthogonal_scale = 0.28
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="RightHandRest" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=1247060835 instance=ExtResource("6_aacli")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.26, 1.02, -0.28)
+visible = false
+script = ExtResource("7_f4pu6")
+label_text = "RightHandRest"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="LeftHandRest" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=1707128937 instance=ExtResource("6_aacli")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.26, 1.02, -0.28)
+visible = false
+script = ExtResource("7_f4pu6")
+label_text = "LeftHandRest"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"

@@ -125,12 +125,15 @@ Child guidance under [IK: VRIK System](index.md).
 **Technical Contract:**
 
 1. XR hand-controller fallback behaviour moves into an `IKTargetIntentProvider` subclass.
-2. `XRControllerTargetProvider` extends `IKTargetIntentProvider` and derives target
-   transform from XR controller state.
+2. `XRHandPoseTargetProvider` extends `IKTargetIntentProvider` and derives its target transform from the per-side
+   runtime hand-pose source (`IXRHandPoseSource`, XR-002). The controller is the default committed hand-pose source;
+   when the global hand-pose mode commits `Optical` (XR-002), the provider transparently serves the calibrated
+   optical wrist — with freeze-on-loss retention — at the same fallback-source seam without changing the provider
+   contract. It supersedes the earlier controller-only `XRControllerTargetProvider` seam, which was removed.
 3. `PlayerVRIK` exposes optional fallback intent provider properties (for example
    `LeftHandFallbackIntentProvider`, `RightHandFallbackIntentProvider`, `HeadFallbackIntentProvider`).
-4. `XRControllerTargetProvider` exposes a `LimbSide` property and resolves the corresponding
-   XR controller hand-position node through XR services instead of receiving controller nodes
+4. `XRHandPoseTargetProvider` exposes a `LimbSide` property and resolves the corresponding
+   runtime hand-pose source through XR services instead of receiving controller nodes
    from `PlayerVRIK`.
 5. The `ally_player.tscn` scene wires fallback providers to the appropriate character IK properties
    and assigns each provider side explicitly.
@@ -138,7 +141,7 @@ Child guidance under [IK: VRIK System](index.md).
    distribute XR runtime or `XRManager` to XR fallback providers.
 7. **XR target providers resolve required XR services themselves** via the global service
    resolution (see [CORE-004: Global Service Resolution](../core/004-global-service-resolution/index.md)).
-   For example, `XRControllerTargetProvider` resolves `XRManager` via
+   For example, `XRHandPoseTargetProvider` resolves `XRManager` via
    `Game.Instance.GetService<XRManager>()` rather than receiving it as a constructor argument.
 8. When no provider is assigned, the fallback provider is used if available; otherwise
    the character IK uses a safe idle state.
@@ -163,7 +166,8 @@ Child guidance under [IK: VRIK System](index.md).
 - **Influence gating:** When provider desired influence is 0, all corresponding side
   effects must be disabled.
 - **XR fallback:** With fallback provider wired in `ally_player.tscn`, the system behaves as
-  if the XR controller is the source when no custom provider overrides it.
+  if the selected active XR hand-pose source (controller by default; optical per XR-002 when
+  committed) is the source when no custom provider overrides it.
 - **Scene wiring:** `ally_player.tscn` must populate per-limb modifier groups so provider
   influence gates direct solvers and side-effect modifiers without duplicate per-limb exports.
 - **Side resolution:** XR fallback providers must prove left/right controller selection from
@@ -195,10 +199,11 @@ Child guidance under [IK: VRIK System](index.md).
 - @specs/ik/003-leg-feet-ik/index.md
 - @specs/core/004-global-service-resolution/index.md
 - @specs/xr/001-xr-manager/index.md
+- @specs/xr/002-optical-hand-tracking/index.md
 - @game/src/IK/CharacterIK.cs
 - @game/src/IK/PlayerVRIK.cs
 - @game/src/IK/PlayerVRIKStartupBinder.cs
 - @game/src/IK/IKTargetIntentProvider.cs
-- @game/src/IK/XRControllerTargetProvider.cs
+- @game/src/IK/XRHandPoseTargetProvider.cs
 - Godot 4.6 documentation —
   [TwoBoneIK3D](https://docs.godotengine.org/en/stable/classes/class_twoboneik3d.html)

@@ -33,8 +33,8 @@ Provide a reusable hand component system that:
 - Discovers and grabs IGrabbable objects within configured range.
 - Moves the hand to the grab point via IK without moving the item.
 - Commits the grab only after the hand settles at the target.
-- Maintains hand mobility while holding (grab override released; hand follows
-  controller, held item follows via hand-bone parenting).
+- Maintains hand mobility while holding (grab override released; hand follows the globally
+  selected XR hand-pose source, held item follows via hand-bone parenting).
 - Manages held object lifecycle and release restoration.
 - Supports separate authored `GrabPointPositionOffsetFromHand` and `GrabPointRotationOffsetFromHand` per grab point
   or animation.
@@ -53,8 +53,8 @@ Provide a reusable hand component system that:
 7. On grab press, the item stays in place while the hand moves to the selected
    grab point via IK.
 8. The grab commits only after the hand reaches and settles at the target.
-9. While holding, the hand remains mobile and follows normal controller or default
-   provider motion; the held item follows the hand.
+9. While holding, the hand remains mobile and follows the globally selected XR hand-pose
+   source (or default provider motion); the held item follows the hand.
 10. Both left and right hand pose animations must work while holding and visibly
     and effectively affect their own finger bones, not the opposite hand.
 11. Grab points support separate authored `GrabPointPositionOffsetFromHand`
@@ -126,9 +126,9 @@ Provide a reusable hand component system that:
         applies grab-pose animation from the candidate's `Animation` resource
         via `HandPoseController.SetHandPose`. The resource is validated as
         Godot `Animation` before application.
-11. While holding, the grab override is released and normal controller or
-     default provider tracking resumes; the hand follows controller motion
-     and the parented held item follows the hand.
+11. While holding, the grab override is released and normal tracking from the globally
+      selected XR hand-pose source resumes; the hand follows that source and the parented
+      held item follows the hand.
 12. `CurrentGrabbed` reflects the held object or null when empty.
 13. Expose a `DebugGrabOutput: bool` exported property to enable diagnostic
      notifications; when enabled, the hand posts concise state updates through
@@ -149,8 +149,15 @@ Provide a reusable hand component system that:
      collider, and lower-arm proxy collider to prevent erratic motion.
 17. Collision exceptions are removed and physics state is restored on release.
 18. Hand component exposes `HeldCollisionTarget: CollisionObject3D` property for
-     collision proxy attachment; detailed collision proxy implementation is
-     specified in INTR-002 (Hand Grab Execution).
+    collision proxy attachment; detailed collision proxy implementation is
+    specified in INTR-002 (Hand Grab Execution).
+
+> **Optical Hand-Pose Override:** while the optical hand-pose mode is active
+> ([XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)),
+> optical tracking fully overrides the authored finger poses above for presentation, without
+> mutating hand-pose state or AnimationTree state. Authored finger poses immediately regain
+> authority when optical mode exits; outside optical mode this specification remains
+> authoritative unchanged.
 
 ## In Scope
 
@@ -214,8 +221,8 @@ Provide a reusable hand component system that:
 | 14 | User              | On grab press, the item stays in place while the hand moves |
 |    |                   | to the grab point via IK. |
 | 15 | User              | Grab commits only after the hand settles at the target. |
-| 16 | User              | While holding, the hand remains mobile and follows controller |
-|    |                   | motion; held item follows the hand. |
+| 16 | User              | While holding, the hand remains mobile and follows the globally |
+|    |                   | selected XR hand-pose source; held item follows the hand. |
 | 17 | User              | Both left and right hand pose animations work while holding. |
 | 18 | User              | Release drops held object and restores all involved |
 |    |                   | subsystems to initial states. |
@@ -223,9 +230,9 @@ Provide a reusable hand component system that:
 |    |                   | with physics suspended while held and restored on release. |
 | 20 | Technical         | `Grab()` initiates approach phase; commit is deferred until IK |
 |    |                   | settles. |
-| 21 | Technical         | While holding, grab override is released and normal controller |
-|    |                   | tracking resumes; hand follows controller and held item follows |
-|    |                   | the hand via parenting. |
+| 21 | Technical         | While holding, grab override is released and normal tracking from |
+|    |                   | the globally selected XR hand-pose source resumes; hand follows that |
+|    |                   | source and held item follows the hand via parenting. |
 | 22 | Technical         | `CurrentGrabbed` reflects the held object or null when empty. |
 | 23 | Technical         | `Release()` restores physics state for physical objects. |
 | 24 | User              | Debug output when enabled reveals grab candidate, state, provider |
@@ -255,6 +262,7 @@ Provide a reusable hand component system that:
 - [INTR-001-A: Spherical Grab Point](../../interaction/001-grabbable/spherical-grab-point.md)
 - [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
 - [CTRL-002: Hand Grab Input](../../ctrl/002-hand-grab-input/index.md)
+- [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
 - [Character Skeleton Profile](../../character/001-character-skeleton/index.md)
 - `game/src/Rigging/LimbSide.cs`
 - `game/src/Interaction/Hands/IHand.cs`

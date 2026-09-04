@@ -3,6 +3,7 @@ using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK.Pose;
 using AlleyCat.Rigging.Installation;
+using AlleyCat.XR.HandTracking;
 using Godot;
 
 namespace AlleyCat.IK;
@@ -119,6 +120,7 @@ public partial class PlayerRigInstaller : CharacterIKSubsystemInstaller
         try
         {
             OrderHipReconciliationModifier(context.Skeleton);
+            OrderOpticalFingerTrackingModifier(context.Skeleton);
             PoseStateMachine poseStateMachine = ResolveIKNode(context.TargetRoot) is PlayerVRIK playerVRIK && playerVRIK.PoseStateMachine is not null
                 ? playerVRIK.PoseStateMachine
                 : throw new InvalidOperationException("Player rig installer could not resolve template-authored pose state machine after VRIK validation.");
@@ -161,6 +163,60 @@ public partial class PlayerRigInstaller : CharacterIKSubsystemInstaller
         {
             skeleton.MoveChild(hipModifier, desiredIndex);
         }
+    }
+
+    private static void OrderOpticalFingerTrackingModifier(Skeleton3D skeleton)
+    {
+        OpticalFingerTrackingModifier fingerModifier = FindSingleDirectChild<OpticalFingerTrackingModifier>(skeleton)
+            ?? throw new InvalidOperationException(
+                "Player rig installer requires exactly one template-authored optical finger tracking modifier under the skeleton.");
+
+        ValidateFingerBoneTopology(skeleton);
+        ValidateOpticalFingerCalibration(fingerModifier);
+
+        // Optical finger retargeting runs last so no later whole-body modifier can overwrite the tracked fingers
+        // (XR-002 TR15).
+        int desiredIndex = skeleton.GetChildCount() - 1;
+        if (fingerModifier.GetIndex() != desiredIndex)
+        {
+            skeleton.MoveChild(fingerModifier, desiredIndex);
+        }
+    }
+
+    private static void ValidateFingerBoneTopology(Skeleton3D skeleton)
+    {
+        List<string>? missingBones = null;
+        foreach (string boneName in OpticalFingerTrackingModifier.CanonicalFingerBoneNames)
+        {
+            if (skeleton.FindBone(boneName) < 0)
+            {
+                (missingBones ??= []).Add(boneName);
+            }
+        }
+
+        if (missingBones is not null)
+        {
+            throw new InvalidOperationException(
+                $"Player rig installer could not resolve {missingBones.Count} canonical finger bones on " +
+                $"'{skeleton.GetPath()}': {string.Join(", ", missingBones)}.");
+        }
+    }
+
+    private static void ValidateOpticalFingerCalibration(OpticalFingerTrackingModifier modifier)
+    {
+        OpticalFingerTrackingCalibrationProfile profile = modifier.CalibrationProfile
+            ?? throw new InvalidOperationException(
+                "Player rig installer requires the optical finger tracking modifier to reference a calibration profile.");
+        var resolved =
+            new ResolvedOpticalFingerCalibration[OpticalFingerTrackingCalibrationProfile.RecordCount];
+        bool[] valid = new bool[OpticalFingerTrackingCalibrationProfile.RecordCount];
+        var resolvedMetacarpal = new ResolvedThumbMetacarpalCalibration[2];
+        if (!profile.TryResolve(resolved, valid, resolvedMetacarpal, out string validationError))
+        {
+            throw new InvalidOperationException(
+                $"Player rig installer requires a complete valid 30-record optical finger calibration profile: {validationError}.");
+        }
+
     }
 
     private static T? FindSingleDescendant<T>(Node node, bool required = true)

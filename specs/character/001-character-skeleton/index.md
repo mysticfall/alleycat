@@ -154,10 +154,19 @@ authored template contents without requiring generators to know internal node pl
 47. Asset renames must preserve existing Godot UIDs so UID-backed scene and resource references remain valid.
 48. `Actors` membership is attached at the lowest shared male/female character bases.
     Higher role templates and concrete character scenes must not add redundant compensation.
+49. The portable character contract defines the canonical finger-bone set as exactly 15 finger bones per side
+    following `SkeletonProfileHumanoid`: thumb metacarpal/proximal/distal plus index, middle, ring, and little
+    proximal/intermediate/distal, with `Left`/`Right` prefixes. The contract has no palm, fingertip, or non-thumb
+    metacarpal destination bones.
+50. The player role template owns the optical finger-retargeting modifier topology
+    ([XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)); base and NPC templates do not
+    include it.
 
 ## In Scope
 
 - Canonical humanoid skeleton-profile definition and hierarchy.
+- Canonical finger-bone set (15 per side, 30 total) and player-template ownership of the optical finger-retargeting
+  modifier (XR-002).
 - Reference character profile resource alignment.
 - Normative bone naming for dependent systems.
 - Portable character contract specifying required node structure and interfaces.
@@ -287,6 +296,9 @@ authored template contents without requiring generators to know internal node pl
     - Tests verify `TemplateBaseline` does not contribute inherited values to local target-scene override detection.
     - Renamed assets preserve Godot UIDs, and UID-backed references continue to resolve.
     - Character-card context and `Actors` membership are present at the lowest shared male/female bases only.
+    - The portable contract's finger-bone set is exactly the 30 canonical `SkeletonProfileHumanoid` finger bones
+      (15 per side), with no palm, fingertip, or non-thumb metacarpal destination bones, and the optical finger
+      modifier topology exists only in the player template (XR-002).
 
 ## References
 
@@ -309,5 +321,6 @@ authored template contents without requiring generators to know internal node pl
 - @game/assets/testing/mirror_room/mirror_room.tscn
 - [CORE-005: Scene Installer System](../../core/005-scene-installer-system/index.md)
 - [CORE-009: Identifiable Identity](../../core/009-identifiable-identity/index.md)
+- [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
 - [CHAR-002: Character Root](../002-character-root/index.md)
 - [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)

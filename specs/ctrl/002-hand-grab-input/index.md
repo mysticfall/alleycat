@@ -76,6 +76,9 @@ Provide a hand grab input system that:
 - Haptic feedback on grab attempt or success.
 - Visual feedback (e.g., highlight valid grabbables).
 - Grab input for non-XR input sources (keyboard, gamepad).
+- Gesture- or optical-pose-based grab input. The optical hand-pose mode
+  ([XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md))
+  adds no gesture/grab input; gesture-to-grab triggering is deferred future work under XR-002.
 - Network replication of input events.
 - IK settling detection (handled by the hand component or IK system).
 
@@ -105,6 +108,7 @@ Provide a hand grab input system that:
 - [CTRL: Player Character Control System](../index.md)
 - [CTRL-001: Locomotion](../001-locomotion/index.md)
 - [XR-001: XRManager](../../xr/001-xr-manager/index.md)
+- [XR-002: Optical Hand Tracking](../../xr/002-optical-hand-tracking/index.md)
 - [INTR-003: Hands](../../interaction/003-hands/index.md)
 - [INTR-002: Hand Grab Execution](../../interaction/002-hand-grab-execution/index.md)
 - `game/src/Control/` (implementation namespace)

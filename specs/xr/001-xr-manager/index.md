@@ -33,15 +33,18 @@ testable without hardware.
    `IXRRuntime`.
 2. Runtime selection must use exported packed scenes and instantiate exactly
    one runtime root.
-3. Runtime-agnostic abstractions must remain the integration surface for
-   downstream systems.
+3. Runtime-agnostic abstractions must remain the integration surface for downstream systems, including the global
+   hand-pose mode (`Controller`/`Optical`) and per-side hand-pose sources defined in
+   [XR-002: Optical Hand Tracking](../002-optical-hand-tracking/index.md).
 4. Startup state and lifecycle signals must support late subscribers.
-5. Mock runtime must expose deterministic hooks for integration tests.
+5. Mock runtime must expose deterministic hooks for integration tests, including committed hand-pose mode transitions
+   and per-side hand-pose source samples as required by XR-002.
 
 ## In Scope
 
 - XR startup orchestration and runtime-scene selection.
-- Runtime abstraction contracts for origin, camera, and hand controllers.
+- Runtime abstraction contracts for origin, camera, hand controllers, and the global hand-pose mode with per-side
+  hand-pose sources.
 - Startup state and signal contracts.
 - Mock runtime hooks for deterministic testing.
 
@@ -59,11 +62,13 @@ testable without hardware.
    interfaces.
 3. Runtime selection is configurable via exported packed scenes.
 4. Late subscribers can read initialisation state after `_Ready`.
-5. Mock runtime supports deterministic integration tests without hardware.
+5. Mock runtime supports deterministic integration tests without hardware, including the hand-pose mode behaviour
+   required by XR-002.
 
 ## References
 
 - @game/src/XR/XRManager.cs
 - @game/src/XR/XRManagerAbstractions.cs
 - @game/src/XR/Mock/MockXRRuntimeNode.cs
+- [XR-002: Optical Hand Tracking](../002-optical-hand-tracking/index.md)
 - [CORE-001: Global Singleton](../../core/001-global-scene/index.md)

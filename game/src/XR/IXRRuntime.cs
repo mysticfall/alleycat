@@ -1,3 +1,5 @@
+using AlleyCat.Rigging;
+using AlleyCat.XR.HandTracking;
 using Godot;
 
 namespace AlleyCat.XR;
@@ -40,9 +42,37 @@ public interface IXRRuntime
     }
 
     /// <summary>
+    /// Gets the committed global hand-pose mode shared by both hands (XR-002 TR1, TR27).
+    /// </summary>
+    XRHandTrackingMode HandTrackingMode
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Gets the optical hand-joint provider consumed by the finger retargeting modifier (XR-002 TR28).
+    /// </summary>
+    IXRHandJointProvider OpticalHandJoints
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Gets the per-side hand-pose source selected by the committed global hand-pose mode (XR-002 TR27).
+    /// </summary>
+    /// <param name="side">Limb side of the hand.</param>
+    /// <returns>The hand-pose source for the requested side.</returns>
+    IXRHandPoseSource GetHandPoseSource(LimbSide side);
+
+    /// <summary>
     /// Raised when the runtime reports pose recentering.
     /// </summary>
     event Action? PoseRecentered;
+
+    /// <summary>
+    /// Raised when the committed global hand-pose mode changes.
+    /// </summary>
+    event Action? HandTrackingModeChanged;
 
     /// <summary>
     /// Initialises the runtime using the given UI viewport and refresh-rate cap.

@@ -8,12 +8,14 @@ using System.Reflection;
 using System.Text.Json;
 using AlleyCat.Core.Logging;
 using AlleyCat.IntegrationTests.Support;
+using AlleyCat.Rigging;
 using AlleyCat.Sense;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Transcription;
 using AlleyCat.Speech.Voice;
 using AlleyCat.UI;
 using AlleyCat.XR;
+using AlleyCat.XR.HandTracking;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -3304,12 +3306,15 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
 
     private sealed class FakeXRRuntime : IXRRuntime
     {
+        private readonly XRControllerHandTracking _handTracking;
+
         public FakeXRRuntime()
         {
             OriginNode = new Node3D();
             CameraNode = new Camera3D();
             LeftControllerNode = new FakeXRHandController();
             RightControllerNode = new FakeXRHandController();
+            _handTracking = new XRControllerHandTracking(RightControllerNode, LeftControllerNode);
         }
 
         public IXROrigin Origin => new FakeXROrigin(OriginNode);
@@ -3320,8 +3325,16 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
 
         public IXRHandController LeftHandController => LeftControllerNode;
 
+        public XRHandTrackingMode HandTrackingMode => XRHandTrackingMode.Controller;
+
+        public IXRHandJointProvider OpticalHandJoints => XREmptyHandJointProvider.Instance;
+
+        public IXRHandPoseSource GetHandPoseSource(LimbSide side) => _handTracking.GetHandPoseSource(side);
+
 #pragma warning disable CS0067
         public event Action? PoseRecentered;
+
+        public event Action? HandTrackingModeChanged;
 #pragma warning restore CS0067
 
         public Node3D OriginNode

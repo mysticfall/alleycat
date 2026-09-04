@@ -1,0 +1,193 @@
+[gd_resource type="Resource" script_class="OpticalFingerTrackingCalibrationProfile" format=3 uid="uid://hukam1khitbm"]
+
+[ext_resource type="Script" uid="uid://d4c7d6rg8f3qx" path="res://src/XR/HandTracking/OpticalFingerTrackingCalibrationEntry.cs" id="1_bb707"]
+[ext_resource type="Script" uid="uid://cd7wq7gvl2b18" path="res://src/XR/HandTracking/OpticalFingerTrackingCalibrationProfile.cs" id="2_tvl1y"]
+
+[sub_resource type="Resource" id="Resource_tlm0"]
+script = ExtResource("1_bb707")
+Joint = 1
+SourceNeutral = Quaternion(-0.079947028, 0.5618452, 0.402148143, 0.718481256)
+DestinationNeutral = Quaternion(-0.214186761, 0.673887254, 0.214186761, 0.673887254)
+
+[sub_resource type="Resource" id="Resource_tlp0"]
+script = ExtResource("1_bb707")
+Joint = 2
+SourceNeutral = Quaternion(0.16066605, -0.082452026, -0.055896017, 0.981969307)
+DestinationNeutral = Quaternion(0, 0, 0, 1)
+
+[sub_resource type="Resource" id="Resource_tld0"]
+script = ExtResource("1_bb707")
+Joint = 3
+SourceNeutral = Quaternion(-0.105460033, 0.084218027, 0.068658022, 0.988469312)
+DestinationNeutral = Quaternion(0, 0, 0, 1)
+
+[sub_resource type="Resource" id="Resource_80a1h"]
+script = ExtResource("1_bb707")
+SourceNeutral = Quaternion(0.183761645, 0.020114948, -0.109258861, 0.976672692)
+
+[sub_resource type="Resource" id="Resource_lb1y3"]
+script = ExtResource("1_bb707")
+Joint = 6
+SourceNeutral = Quaternion(0.003242671, -0.025568779, -0.006858143, 0.999644281)
+
+[sub_resource type="Resource" id="Resource_y5ccu"]
+script = ExtResource("1_bb707")
+Joint = 7
+SourceNeutral = Quaternion(-0.025892004, -0.016465727, -0.026737638, 0.999171448)
+
+[sub_resource type="Resource" id="Resource_5jf3r"]
+script = ExtResource("1_bb707")
+Joint = 9
+SourceNeutral = Quaternion(0.261092265, -0.026238159, -0.081508925, 0.961508546)
+
+[sub_resource type="Resource" id="Resource_svko7"]
+script = ExtResource("1_bb707")
+Joint = 10
+SourceNeutral = Quaternion(-0.001756608, -0.011414507, -0.004352703, 0.999923836)
+
+[sub_resource type="Resource" id="Resource_8f3l5"]
+script = ExtResource("1_bb707")
+Joint = 11
+SourceNeutral = Quaternion(-0.059239228, -0.037404361, -0.002833273, 0.997538771)
+
+[sub_resource type="Resource" id="Resource_e7ill"]
+script = ExtResource("1_bb707")
+Joint = 13
+SourceNeutral = Quaternion(0.224532459, -0.064318007, -0.063592417, 0.970259951)
+
+[sub_resource type="Resource" id="Resource_g2xoc"]
+script = ExtResource("1_bb707")
+Joint = 14
+SourceNeutral = Quaternion(0.005500336, -0.033803354, -0.002770696, 0.999409527)
+
+[sub_resource type="Resource" id="Resource_ttymf"]
+script = ExtResource("1_bb707")
+Joint = 15
+SourceNeutral = Quaternion(-0.009264074, -0.003896694, 0.029607039, 0.999511088)
+
+[sub_resource type="Resource" id="Resource_2skhe"]
+script = ExtResource("1_bb707")
+Joint = 17
+SourceNeutral = Quaternion(0.144475515, 0.094214467, 0.064075222, 0.982926664)
+
+[sub_resource type="Resource" id="Resource_dj5i5"]
+script = ExtResource("1_bb707")
+Joint = 18
+SourceNeutral = Quaternion(0.015157515, -0.040090018, -0.042108551, 0.998193323)
+
+[sub_resource type="Resource" id="Resource_gfuox"]
+script = ExtResource("1_bb707")
+Joint = 19
+SourceNeutral = Quaternion(0.001357210, 0.000917888, 0.049402216, 0.998777621)
+
+[sub_resource type="Resource" id="Resource_trm0"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 1
+SourceNeutral = Quaternion(-0.006335003, -0.589948267, -0.461939209, 0.6622183)
+DestinationNeutral = Quaternion(-0.214186761, -0.673887254, -0.214186761, 0.673887254)
+
+[sub_resource type="Resource" id="Resource_trp0"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 2
+SourceNeutral = Quaternion(0.245730042, 0.081178014, 0.047528008, 0.964763165)
+DestinationNeutral = Quaternion(0, 0, 0, 1)
+
+[sub_resource type="Resource" id="Resource_trd0"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 3
+SourceNeutral = Quaternion(-0.043338015, -0.083254029, -0.063860022, 0.993535344)
+DestinationNeutral = Quaternion(0, 0, 0, 1)
+
+[sub_resource type="Resource" id="Resource_f8dot"]
+script = ExtResource("1_bb707")
+Side = 1
+SourceNeutral = Quaternion(0.240030753, -0.019368532, 0.091644959, 0.966235633)
+
+[sub_resource type="Resource" id="Resource_icrr4"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 6
+SourceNeutral = Quaternion(0.004036845, 0.025799219, 0.007094232, 0.999633821)
+
+[sub_resource type="Resource" id="Resource_o1oq0"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 7
+SourceNeutral = Quaternion(-0.027432040, 0.016350422, 0.026457625, 0.999139700)
+
+[sub_resource type="Resource" id="Resource_4p23l"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 9
+SourceNeutral = Quaternion(0.303707296, 0.030253133, 0.083450549, 0.948621438)
+
+[sub_resource type="Resource" id="Resource_jyb3m"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 10
+SourceNeutral = Quaternion(-0.001689492, 0.011366728, 0.004200596, 0.999925146)
+
+[sub_resource type="Resource" id="Resource_j3kvl"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 11
+SourceNeutral = Quaternion(-0.057345190, 0.037602572, 0.003317672, 0.997640501)
+
+[sub_resource type="Resource" id="Resource_cespy"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 13
+SourceNeutral = Quaternion(0.272604421, 0.067725959, 0.063601906, 0.957629794)
+
+[sub_resource type="Resource" id="Resource_ev3o5"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 14
+SourceNeutral = Quaternion(0.005467540, 0.033466948, 0.002876236, 0.999420731)
+
+[sub_resource type="Resource" id="Resource_cydb7"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 15
+SourceNeutral = Quaternion(-0.017550459, 0.003737272, -0.029237573, 0.999411416)
+
+[sub_resource type="Resource" id="Resource_65buo"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 17
+SourceNeutral = Quaternion(0.227606673, -0.092609343, -0.043664544, 0.968355369)
+
+[sub_resource type="Resource" id="Resource_jpfyt"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 18
+SourceNeutral = Quaternion(-0.012834835, 0.037494415, 0.043034932, 0.998287248)
+
+[sub_resource type="Resource" id="Resource_u856n"]
+script = ExtResource("1_bb707")
+Side = 1
+Joint = 19
+SourceNeutral = Quaternion(-0.010758433, -0.001114397, -0.049043396, 0.998738084)
+
+[resource]
+script = ExtResource("2_tvl1y")
+SchemaVersion = "2"
+ProfileVersion = "quest3-wivrn-reference-female-v2"
+ReferenceRig = "reference-female"
+Headset = "Quest 3"
+Runtime = "WiVRn 26.6.2/OpenXR"
+SourceCaptureID = "reference-female-quest3-wivrn-authored-thumb-axes-v1"
+Provenance = "Semantic profile provenance: reference-female Quest 3/WiVRn profile with authored-animation thumb axes. Source-neutral values, authored destination-neutral compatibility metadata, and metacarpal correspondence values are fixed runtime inputs."
+MetacarpalCorrespondenceProvenance = "Per-side metacarpal correspondence records: Q0 neutral anchors, K_meta swing gains, and shared directional response thresholds are fixed authored runtime inputs; no runtime fitting path."
+LeftMetacarpalNeutralAnchor = Quaternion(-0.1273963451385498, 0.019958913326263428, 0.25467225909233093, 0.9583913087844849)
+LeftMetacarpalSwingGain = 2.0
+RightMetacarpalNeutralAnchor = Quaternion(-0.10855846107006073, 0.020310375839471817, -0.15915964543819427, 0.9810559153556824)
+RightMetacarpalSwingGain = 2.25
+MetacarpalHingeGateStart = 0.4
+MetacarpalHingeGateEnd = 0.625
+MetacarpalBendGateStart = 0.05
+MetacarpalBendGateEnd = 0.15
+Entries = [SubResource("Resource_tlm0"), SubResource("Resource_tlp0"), SubResource("Resource_tld0"), SubResource("Resource_80a1h"), SubResource("Resource_lb1y3"), SubResource("Resource_y5ccu"), SubResource("Resource_5jf3r"), SubResource("Resource_svko7"), SubResource("Resource_8f3l5"), SubResource("Resource_e7ill"), SubResource("Resource_g2xoc"), SubResource("Resource_ttymf"), SubResource("Resource_2skhe"), SubResource("Resource_dj5i5"), SubResource("Resource_gfuox"), SubResource("Resource_trm0"), SubResource("Resource_trp0"), SubResource("Resource_trd0"), SubResource("Resource_f8dot"), SubResource("Resource_icrr4"), SubResource("Resource_o1oq0"), SubResource("Resource_4p23l"), SubResource("Resource_jyb3m"), SubResource("Resource_j3kvl"), SubResource("Resource_cespy"), SubResource("Resource_ev3o5"), SubResource("Resource_cydb7"), SubResource("Resource_65buo"), SubResource("Resource_jpfyt"), SubResource("Resource_u856n")]

@@ -1,8 +1,12 @@
 using AlleyCat.Common;
 using AlleyCat.Core;
+using AlleyCat.Core.Logging;
+using AlleyCat.Rigging;
 using AlleyCat.Testing;
+using AlleyCat.XR.HandTracking;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.XR;
 
@@ -27,6 +31,12 @@ public partial class XRManager : Node, IServiceRegistrar
     public delegate void PoseRecenteredEventHandler();
 
     /// <summary>
+    /// Emitted when the committed global hand-pose mode changes (XR-002 TR27).
+    /// </summary>
+    [Signal]
+    public delegate void HandTrackingModeChangedEventHandler();
+
+    /// <summary>
     /// Runtime scene used for normal OpenXR execution.
     /// </summary>
     [Export]
@@ -48,6 +58,32 @@ public partial class XRManager : Node, IServiceRegistrar
     /// Active XR runtime instance.
     /// </summary>
     public IXRRuntime Runtime { get; protected internal set; } = null!;
+
+    /// <summary>
+    /// Committed global hand-pose mode forwarded from the active runtime; controller before initialisation
+    /// (XR-002 TR1, TR27).
+    /// </summary>
+    public XRHandTrackingMode HandTrackingMode
+        => Runtime is { } runtime ? runtime.HandTrackingMode : XRHandTrackingMode.Controller;
+
+    /// <summary>
+    /// Optical hand-joint provider forwarded from the active runtime (XR-002 TR28).
+    /// </summary>
+    public IXRHandJointProvider OpticalHandJoints
+        => Runtime is { } runtime
+            ? runtime.OpticalHandJoints
+            : throw new InvalidOperationException("XR runtime is not initialised.");
+
+    /// <summary>
+    /// Gets the per-side hand-pose source forwarded from the active runtime (XR-002 TR27).
+    /// </summary>
+    /// <param name="side">Limb side of the hand.</param>
+    /// <returns>The hand-pose source for the requested side.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the XR runtime is not initialised.</exception>
+    public IXRHandPoseSource GetHandPoseSource(LimbSide side)
+        => Runtime is { } runtime
+            ? runtime.GetHandPoseSource(side)
+            : throw new InvalidOperationException("XR runtime is not initialised.");
 
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection services)
@@ -104,10 +140,20 @@ public partial class XRManager : Node, IServiceRegistrar
                   ?? throw new InvalidOperationException($"XR runtime root '{runtimeNode.GetType().FullName}' must implement IXRRuntime.");
 
         Runtime.PoseRecentered += EmitPoseRecenteredSignal;
+        Runtime.HandTrackingModeChanged += OnRuntimeHandTrackingModeChanged;
 
         bool initialised = Runtime.Initialise(this.RequireNode<SubViewport>("SubViewport"), MaximumRefreshRate);
         InitialisationAttempted = true;
         InitialisationSucceeded = initialised;
+
+        if (GameLoggerResolver.TryResolve(out ILogger<XRManager>? logger) && logger is not null)
+        {
+            logger.LogInformation(
+                "XR runtime {RuntimeType} initialised with hand-pose mode {HandTrackingMode}.",
+                Runtime.GetType().Name,
+                Runtime.HandTrackingMode);
+        }
+
         _ = EmitSignal(SignalName.Initialised, initialised);
     }
 
@@ -119,8 +165,21 @@ public partial class XRManager : Node, IServiceRegistrar
         if (Runtime is not null)
         {
             Runtime.PoseRecentered -= EmitPoseRecenteredSignal;
+            Runtime.HandTrackingModeChanged -= OnRuntimeHandTrackingModeChanged;
         }
     }
 
     private void EmitPoseRecenteredSignal() => _ = EmitSignal(SignalName.PoseRecentered);
+
+    private void OnRuntimeHandTrackingModeChanged()
+    {
+        XRHandTrackingMode mode = Runtime.HandTrackingMode;
+
+        if (GameLoggerResolver.TryResolve(out ILogger<XRManager>? logger) && logger is not null)
+        {
+            logger.LogInformation("XR hand-pose mode committed to {HandTrackingMode}.", mode);
+        }
+
+        _ = EmitSignal(SignalName.HandTrackingModeChanged);
+    }
 }

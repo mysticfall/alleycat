@@ -6,7 +6,7 @@
 [ext_resource type="Script" uid="uid://bkdutbkqpelq8" path="res://src/XR/OpenXR/OpenXRHandControllerNode.cs" id="1_22d6f"]
 
 [node name="Origin" type="XROrigin3D" unique_id=2070622317]
-process_mode = 4
+process_mode = 3
 script = ExtResource("1_4of4h")
 metadata/_custom_type_script = "uid://dv076impllmml"
 
@@ -45,3 +45,19 @@ radius = 5.0
 central_horizontal_angle = 1.0471976
 upper_vertical_angle = 0.34906584
 lower_vertical_angle = 0.34906584
+
+[node name="RightOpticalHand" type="XRNode3D" parent="." unique_id=1715289767]
+tracker = &"/user/hand_tracker/right"
+show_when_tracked = true
+
+[node name="WristAnchor" type="Node3D" parent="RightOpticalHand" unique_id=173073467]
+
+[node name="OpticalHandAnchor" type="Node3D" parent="RightOpticalHand/WristAnchor" unique_id=926548181]
+
+[node name="LeftOpticalHand" type="XRNode3D" parent="." unique_id=1414105294]
+tracker = &"/user/hand_tracker/left"
+show_when_tracked = true
+
+[node name="WristAnchor" type="Node3D" parent="LeftOpticalHand" unique_id=2110470471]
+
+[node name="OpticalHandAnchor" type="Node3D" parent="LeftOpticalHand/WristAnchor" unique_id=1273075786]

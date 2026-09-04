@@ -34,6 +34,12 @@ public partial class OpenXRHandControllerNode : XRController3D, IXRHandControlle
     /// <inheritdoc />
     public Node3D ControllerNode => this;
 
+    /// <summary>
+    /// Gets whether the controller tracker is currently registered, active, and receiving pose tracking data
+    /// (XR-002 per-side observation input).
+    /// </summary>
+    public bool HasCurrentTrackingData => GetIsActive() && GetHasTrackingData();
+
     /// <inheritdoc />
     public Node3D HandPositionNode
         => HandPositionNodeResolved

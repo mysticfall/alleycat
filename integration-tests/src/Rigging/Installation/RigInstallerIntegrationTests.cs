@@ -6,6 +6,7 @@ using AlleyCat.IK.Pose;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.TestFramework;
+using AlleyCat.XR.HandTracking;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -71,6 +72,7 @@ public sealed class RigInstallerIntegrationTests
         "LeftLegTwoBoneIKController",
         "CopyRightFootRotation",
         "CopyLeftFootRotation",
+        "OpticalFingerTrackingModifier",
     ];
 
     /// <summary>
@@ -674,6 +676,114 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
+    /// The optical finger retargeting modifier is player-template-only topology: exactly one instance under
+    /// the actual skeleton in the player template, none in the base or NPC templates (XR-002 TR16, AC21).
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void OpticalFingerModifier_IsPlayerTemplateOnlyTopology()
+    {
+        using Node playerTemplate = LoadPackedScene(ReferenceFemalePlayerTemplatePath).Instantiate();
+        Skeleton3D playerSkeleton = playerTemplate.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+
+        Assert.Equal(1, CountDirectChildren(playerSkeleton, "OpticalFingerTrackingModifier"));
+        _ = Assert.IsType<OpticalFingerTrackingModifier>(
+            playerSkeleton.GetNode("OpticalFingerTrackingModifier"),
+            exactMatch: false);
+
+        using Node baseTemplate = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
+        Skeleton3D baseSkeleton = baseTemplate.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+
+        Assert.Equal(0, CountDirectChildren(baseSkeleton, "OpticalFingerTrackingModifier"));
+
+        using Node npcTemplate = LoadPackedScene(ReferenceFemaleNpcTemplatePath).Instantiate();
+
+        Assert.Null(FindDescendantOpticalFingerModifier(npcTemplate));
+
+        // No XRHandModifier3D, plugin, or generated hand-mesh markers were introduced by the edit.
+        foreach (string templatePath in new[]
+                 {
+                     ReferenceFemalePlayerTemplatePath,
+                     ReferenceFemaleScenePath,
+                     ReferenceFemaleNpcTemplatePath,
+                 })
+        {
+            string templateText = ReadProjectFile(templatePath);
+            Assert.DoesNotContain("XRHandModifier3D", templateText, StringComparison.Ordinal);
+            AssertNoEmbeddedMeshData(templateText);
+        }
+    }
+
+    /// <summary>
+    /// Runtime player installation installs exactly one optical finger modifier under the actual target
+    /// skeleton, ordered after both VRIK hand-copy modifiers and last overall, and stays idempotent
+    /// (XR-002 TR15, AC20).
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void PlayerScene_RuntimeInstaller_InstallsOpticalFingerModifierUnderSkeletonOrderedLast()
+    {
+        using Node playerRoot = LoadPackedScene(PlayerScenePath).Instantiate();
+        object initialResult = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller"), playerRoot);
+
+        AssertLoadedInstallSucceeded(initialResult);
+
+        Skeleton3D skeleton = playerRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+        OpticalFingerTrackingModifier fingerModifier = Assert.IsType<OpticalFingerTrackingModifier>(
+            skeleton.GetNode("OpticalFingerTrackingModifier"),
+            exactMatch: false);
+
+        Assert.Same(skeleton, fingerModifier.GetParent());
+        Assert.Equal(1, CountDirectChildren(skeleton, "OpticalFingerTrackingModifier"));
+
+        Node rightHandCopy = skeleton.GetNode("RightHandCopyRotation");
+        Node leftHandCopy = skeleton.GetNode("LeftHandCopyRotation");
+
+        Assert.True(
+            fingerModifier.GetIndex() > rightHandCopy.GetIndex(),
+            "Optical finger modifier must execute after RightHandCopyRotation.");
+        Assert.True(
+            fingerModifier.GetIndex() > leftHandCopy.GetIndex(),
+            "Optical finger modifier must execute after LeftHandCopyRotation.");
+
+        foreach (Node child in skeleton.GetChildren())
+        {
+            if (child is SkeletonModifier3D other && other != fingerModifier)
+            {
+                Assert.True(
+                    other.GetIndex() < fingerModifier.GetIndex(),
+                    $"Optical finger modifier must be the last skeleton modifier; '{other.Name}' currently runs after it.");
+            }
+        }
+
+        AssertModifierOrder(skeleton);
+
+        // Re-running the install must not duplicate or displace the modifier.
+        object repeatResult = InvokeLoadedInstaller(playerRoot.GetNode("PlayerCharacterInstaller"), playerRoot);
+
+        AssertLoadedInstallSucceeded(repeatResult);
+        Assert.Equal(1, CountDirectChildren(skeleton, "OpticalFingerTrackingModifier"));
+        AssertModifierOrder(skeleton);
+    }
+
+    /// <summary>
+    /// The optical finger modifier resolves its destination bones through the parent skeleton instead of
+    /// hard-coded template topology paths.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void OpticalFingerModifier_Source_UsesParentSkeletonWithoutHardCodedTemplatePaths()
+    {
+        string modifierSource = ReadProjectFile("res://src/XR/HandTracking/OpticalFingerTrackingModifier.cs");
+        string playerRigSource = ReadProjectFile("res://src/IK/PlayerRigInstaller.cs");
+
+        Assert.DoesNotContain("Female/GeneralSkeleton", modifierSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("XRHandModifier3D", modifierSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetNode", modifierSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"OpticalFingerTrackingModifier\"", playerRigSource, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Player rig installation fails fast when its required animation runtime dependency is missing.
     /// </summary>
     [Headless]
@@ -1230,6 +1340,24 @@ public sealed class RigInstallerIntegrationTests
             Assert.True(index > previousIndex, $"Modifier '{modifierName}' should appear after previous IK modifier.");
             previousIndex = index;
         }
+    }
+
+    private static OpticalFingerTrackingModifier? FindDescendantOpticalFingerModifier(Node node)
+    {
+        foreach (Node child in node.GetChildren())
+        {
+            if (child is OpticalFingerTrackingModifier modifier)
+            {
+                return modifier;
+            }
+
+            if (FindDescendantOpticalFingerModifier(child) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
     }
 
     private static void AssertRuntimeRoleSceneUsesTemplateInstaller(

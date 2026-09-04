@@ -4,6 +4,7 @@ using AlleyCat.IK.Pose;
 using AlleyCat.Rigging;
 using AlleyCat.TestFramework;
 using AlleyCat.XR;
+using AlleyCat.XR.HandTracking;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -326,6 +327,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         Node player = LoadPackedScene(PlayerScenePath).Instantiate();
         root.AddChild(player);
 
+        // The integration runner starts test bodies inside TestRuntimeRunner._Ready, where scene-tree
+        // attachment does not propagate until the first process frame; wait one frame before attaching so the
+        // fallback providers can resolve XR services from the attached TestGame.
+        await WaitForNextFrameAsync(sceneTree);
         sceneTree.Root.AddChild(root);
 
         try
@@ -357,8 +362,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Assert.Equal((long)LimbSide.Right, rightFallback.Get("Side").AsInt64());
             Assert.Equal((long)LimbSide.Left, leftFallback.Get("Side").AsInt64());
 
-            SetScriptProperty(rightFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), rightSource);
-            SetScriptProperty(leftFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), leftSource);
             SetScriptField(playerVRIK, "_isBound", true);
 
             Transform3D rightTargetTransform = new(Basis.Identity, rightHandTarget.GlobalPosition + new Vector3(0.01f, 0.0f, 0.0f));
@@ -375,13 +378,21 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             InvokeScriptVoidMethod(playerVRIK, nameof(PlayerVRIK._PhysicsProcess), 1.0d / 60.0d);
             await WaitForPhysicsFramesAsync(sceneTree, 2);
 
-            GodotObject configuredRightSource = GetGodotNodeProperty(rightFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), "resolved_source_node")
-                ?? throw new Xunit.Sdk.XunitException("Expected right XR fallback source to resolve to a node.");
-            GodotObject configuredLeftSource = GetGodotNodeProperty(leftFallback, nameof(XRControllerTargetProvider.ResolvedSourceNode), "resolved_source_node")
-                ?? throw new Xunit.Sdk.XunitException("Expected left XR fallback source to resolve to a node.");
+            // The fallback providers resolve the per-side hand-pose source through XR services automatically; in the
+            // default controller mode the live controller hand-position anchors author the wrist intent (XR-002 TR8).
+            XRHandPoseTargetProvider rightFallbackProvider
+                = Assert.IsAssignableFrom<XRHandPoseTargetProvider>(rightFallback);
+            XRHandPoseTargetProvider leftFallbackProvider
+                = Assert.IsAssignableFrom<XRHandPoseTargetProvider>(leftFallback);
 
-            Assert.Equal(rightSource.GetInstanceId(), configuredRightSource.GetInstanceId());
-            Assert.Equal(leftSource.GetInstanceId(), configuredLeftSource.GetInstanceId());
+            Assert.NotNull(rightFallbackProvider.ResolvedSource);
+            Assert.NotNull(leftFallbackProvider.ResolvedSource);
+            Assert.Equal(XRHandTrackingMode.Controller, rightFallbackProvider.ResolvedSource!.SelectedMode);
+            Assert.Equal(XRHandTrackingMode.Controller, leftFallbackProvider.ResolvedSource!.SelectedMode);
+            Assert.True(rightFallbackProvider.ResolvedSource.TryGetCalibratedWristTransform(out Transform3D rightWrist));
+            Assert.True(leftFallbackProvider.ResolvedSource!.TryGetCalibratedWristTransform(out Transform3D leftWrist));
+            AssertTransformApproximately(rightSource.GlobalTransform, rightWrist);
+            AssertTransformApproximately(leftSource.GlobalTransform, leftWrist);
             AssertIntentApproximately(rightTargetTransform, 1.0f, rightIntent);
             AssertIntentApproximately(leftTargetTransform, 1.0f, leftIntent);
         }
@@ -573,8 +584,20 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Assert.Null(fixture.PlayerVRIK.LeftHandIKTargetIntentProvider);
             Assert.Equal(LimbSide.Right, fixture.RightHandFallbackIntentProvider.Side);
             Assert.Equal(LimbSide.Left, fixture.LeftHandFallbackIntentProvider.Side);
-            Assert.Same(fixture.RightHandController.HandPositionNode, fixture.RightHandFallbackIntentProvider.ResolvedSourceNode);
-            Assert.Same(fixture.LeftHandController.HandPositionNode, fixture.LeftHandFallbackIntentProvider.ResolvedSourceNode);
+
+            // Controller mode keeps resolving the live controller hand-position anchors as the wrist intent
+            // (XR-002 TR8), replacing the old controller-node source seam with the mode-selected hand-pose source.
+            IKTargetIntent rightFallbackIntent = fixture.RightHandFallbackIntentProvider.GetTargetIntent();
+            IKTargetIntent leftFallbackIntent = fixture.LeftHandFallbackIntentProvider.GetTargetIntent();
+
+            Assert.Equal(1.0f, rightFallbackIntent.DesiredInfluence);
+            Assert.Equal(1.0f, leftFallbackIntent.DesiredInfluence);
+            AssertTransformApproximately(
+                fixture.RightHandController.HandPositionNode.GlobalTransform,
+                rightFallbackIntent.WorldTransform);
+            AssertTransformApproximately(
+                fixture.LeftHandController.HandPositionNode.GlobalTransform,
+                leftFallbackIntent.WorldTransform);
         }
         finally
         {
@@ -2143,7 +2166,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         playerVRIK.AddChild(headFallbackIntentProvider);
         playerVRIK.HeadFallbackIntentProvider = headFallbackIntentProvider;
 
-        XRControllerTargetProvider rightHandFallbackIntentProvider = new()
+        XRHandPoseTargetProvider rightHandFallbackIntentProvider = new()
         {
             Name = "RightHandFallbackIntentProvider",
             Side = LimbSide.Right,
@@ -2151,7 +2174,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         playerVRIK.AddChild(rightHandFallbackIntentProvider);
         playerVRIK.RightHandFallbackIntentProvider = rightHandFallbackIntentProvider;
 
-        XRControllerTargetProvider leftHandFallbackIntentProvider = new()
+        XRHandPoseTargetProvider leftHandFallbackIntentProvider = new()
         {
             Name = "LeftHandFallbackIntentProvider",
             Side = LimbSide.Left,
@@ -2733,8 +2756,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         SkeletonModifier3D rightFootModifier,
         SkeletonModifier3D leftFootModifier,
         XRHeadTargetIntentProvider headFallbackIntentProvider,
-        XRControllerTargetProvider rightHandFallbackIntentProvider,
-        XRControllerTargetProvider leftHandFallbackIntentProvider,
+        XRHandPoseTargetProvider rightHandFallbackIntentProvider,
+        XRHandPoseTargetProvider leftHandFallbackIntentProvider,
         TestXROrigin origin,
         TestXRCamera camera,
         TestXRHandController rightHandController,
@@ -2772,9 +2795,9 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         public XRHeadTargetIntentProvider HeadFallbackIntentProvider { get; } = headFallbackIntentProvider;
 
-        public XRControllerTargetProvider RightHandFallbackIntentProvider { get; } = rightHandFallbackIntentProvider;
+        public XRHandPoseTargetProvider RightHandFallbackIntentProvider { get; } = rightHandFallbackIntentProvider;
 
-        public XRControllerTargetProvider LeftHandFallbackIntentProvider { get; } = leftHandFallbackIntentProvider;
+        public XRHandPoseTargetProvider LeftHandFallbackIntentProvider { get; } = leftHandFallbackIntentProvider;
 
         public TestXROrigin Origin { get; } = origin;
 
@@ -3041,6 +3064,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         IXRHandController rightHandController,
         IXRHandController leftHandController) : IXRRuntime
     {
+        private readonly XRControllerHandTracking _handTracking = new(rightHandController, leftHandController);
+
         public IXROrigin Origin => origin;
 
         public IXRCamera Camera => camera;
@@ -3049,7 +3074,23 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         public IXRHandController LeftHandController => leftHandController;
 
+        public XRHandTrackingMode HandTrackingMode => XRHandTrackingMode.Controller;
+
+        public IXRHandJointProvider OpticalHandJoints => XREmptyHandJointProvider.Instance;
+
+        public IXRHandPoseSource GetHandPoseSource(LimbSide side) => _handTracking.GetHandPoseSource(side);
+
         public event Action? PoseRecentered
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
+        public event Action? HandTrackingModeChanged
         {
             add
             {

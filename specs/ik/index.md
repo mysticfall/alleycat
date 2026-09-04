@@ -45,12 +45,18 @@ reusable character IK for NPCs and player-specific XR integration.
 | Level | Input | Expected Outcome |
 |-------|-------|------------------|
 | 1 | Headset + left/right controllers | Robust upper-body control with stable full-body pose approximation. |
-| 2 | Level 1 + hand tracking | Improved hand/arm intent interpretation. Must degrade to Level 1. |
+| 2 | Level 1 + optical hand tracking | Optical wrist drives hand targets; finger-only presentation. |
 | 3 | Level 1 + body tracking | Improved whole-body pose fidelity. Must degrade to lower levels. |
+
+Level 2 delivery ([XR-002: Optical Hand Tracking](../xr/002-optical-hand-tracking/index.md)): the optical wrist drives
+hand targets through the existing target pipeline, optical presentation is finger-only, VRIK retains wrist/arm
+intent, and delivery must degrade to Level 1.
 
 ## Runtime Integration Boundary
 
 - XR runtime contracts are defined in [XR-001: XRManager](../xr/001-xr-manager/index.md).
+- The global hand-pose mode and optical hand-pose sources are defined in
+  [XR-002: Optical Hand Tracking](../xr/002-optical-hand-tracking/index.md).
 - Character IK runtime bridge is defined in [IK Implementation Notes](implementation-notes.md).
 - Player XR integration layer is defined in [IK Implementation Notes](implementation-notes.md).
 - IK component behaviour is defined by child IK specifications.
