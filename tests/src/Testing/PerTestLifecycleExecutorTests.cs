@@ -100,9 +100,36 @@ public sealed class PerTestLifecycleExecutorTests
         Assert.Equal(0, StaticLifecycleProbe.DisposeCallCount);
     }
 
+    /// <summary>
+    /// Verifies repeated executions construct a fresh fixture instance and run the full lifecycle each time,
+    /// underpinning safe reuse of a session process across tests.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_ConstructsFreshInstance_AndRunsFullLifecycle_PerInvocation()
+    {
+        LifecycleProbe.Reset();
+        MethodInfo method = typeof(LifecycleProbe).GetMethod(nameof(LifecycleProbe.Pass))!;
+
+        PerTestLifecycleExecutionResult first = await PerTestLifecycleExecutor.ExecuteAsync(method);
+        PerTestLifecycleExecutionResult second = await PerTestLifecycleExecutor.ExecuteAsync(method);
+        PerTestLifecycleExecutionResult third = await PerTestLifecycleExecutor.ExecuteAsync(method);
+
+        Assert.True(first.Passed);
+        Assert.True(second.Passed);
+        Assert.True(third.Passed);
+
+        Assert.Equal(3, LifecycleProbe.Instances.Count);
+        Assert.Equal(3, LifecycleProbe.Instances.Distinct().Count());
+
+        string[] expectedSequence = ["constructor", "initialize", "test", "xunit-dispose", "async-dispose", "dispose"];
+        Assert.Equal([.. expectedSequence, .. expectedSequence, .. expectedSequence], LifecycleProbe.Events);
+    }
+
     private sealed class LifecycleProbe : IAsyncLifetime, IAsyncDisposable, IDisposable
     {
         public static List<string> Events { get; } = [];
+
+        public static List<LifecycleProbe> Instances { get; } = [];
 
         public static bool ThrowFromTest
         {
@@ -119,11 +146,13 @@ public sealed class PerTestLifecycleExecutorTests
         public LifecycleProbe()
         {
             Events.Add("constructor");
+            Instances.Add(this);
         }
 
         public static void Reset()
         {
             Events.Clear();
+            Instances.Clear();
             ThrowFromTest = false;
             ThrowFromXunitDisposeAsync = false;
         }

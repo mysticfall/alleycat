@@ -103,7 +103,8 @@ title: Agent Runtime
 
 55. The exact user argument `--no-ai` — passed among the user args after Godot's `--` separator — must suppress every
     agent session process-wide. The switch is a plain presence check over the process's command-line user arguments
-    (`OS.GetCmdlineUserArgs()`) with no precedence interaction with `--integration-run-fact` or `--integration-probe`;
+    (`OS.GetCmdlineUserArgs()`) with no precedence interaction with `--integration-test-session` or
+    `--integration-probe`;
     it resolves lazily on first access and is memoised once per process. The gate point is an early return in
     `AgenticMind.StartSession()` before `PrepareSessionAsync()`, so prompt compilation, scenario resolution, and
     chat-client creation never run and provider-configuration failures are not logged for suppressed minds. The

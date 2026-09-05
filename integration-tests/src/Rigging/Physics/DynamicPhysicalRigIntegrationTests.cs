@@ -1014,15 +1014,31 @@ public sealed class DynamicPhysicalRigIntegrationTests
             AnimatableBody3D rightUpperArmProxy = FindGeneratedProxyBody(fixture.Rig, "RightUpperArm");
             AnimatableBody3D chestProxy = FindGeneratedProxyBody(fixture.Rig, "Chest");
 
-            AssertBodyHasCollisionException(rightHand, rightHandProxy);
-            AssertBodyHasCollisionException(rightHand, rightLowerArmProxy);
+            AssertBodiesHaveMutualCollisionException(rightHand, rightHandProxy);
+            AssertBodiesHaveMutualCollisionException(rightHand, rightLowerArmProxy);
             AssertBodyDoesNotHaveCollisionException(rightHand, rightUpperArmProxy);
             AssertBodyDoesNotHaveCollisionException(rightHand, chestProxy);
 
-            Transform3D handProxyApproach = BuildApproachTransform(rightHandProxy.GlobalTransform, new Vector3(0.12f, 0.0f, 0.0f));
-            bool ownHandCollisionBlocked = rightHand.TestMove(handProxyApproach, new Vector3(-0.08f, 0.0f, 0.0f));
+            AssertPhysicsShapeQueryExcludesBodyWithHandCollisionExceptions(rightHand, rightHandProxy);
+            AssertPhysicsShapeQueryExcludesBodyWithHandCollisionExceptions(rightHand, rightLowerArmProxy);
 
-            Assert.False(ownHandCollisionBlocked, "Right-hand motion tests should ignore the generated proxy for the same hand.");
+            AssertPhysicsShapeQueryDetectsBodyAfterRemovingHandCollisionException(rightHand, rightHandProxy);
+            AssertPhysicsShapeQueryDetectsBodyAfterRemovingHandCollisionException(rightHand, rightLowerArmProxy);
+
+            StaticBody3D externalObstacle = CreateExternalObstacle(rightHandProxy.GlobalPosition + (Vector3.Up * 3.0f));
+            fixture.Root.AddChild(externalObstacle);
+            await WaitForPhysicsFramesAsync(sceneTree, 2);
+            try
+            {
+                AssertCollisionLayersCanInteract(rightHand, externalObstacle);
+                AssertPhysicsShapeQueryDetectsNonExcludedBody(rightHand, externalObstacle);
+            }
+            finally
+            {
+                externalObstacle.QueueFree();
+                await WaitForNextFrameAsync(sceneTree);
+            }
+
         }
         finally
         {
@@ -1408,8 +1424,67 @@ public sealed class DynamicPhysicalRigIntegrationTests
         Assert.True((other.CollisionMask & source.CollisionLayer) != 0, $"{other.Name} mask should include {source.Name} layer.");
     }
 
-    private static Transform3D BuildApproachTransform(Transform3D targetTransform, Vector3 offset)
-        => new(targetTransform.Basis, targetTransform.Origin + offset);
+    private static void AssertPhysicsShapeQueryExcludesBodyWithHandCollisionExceptions(
+        AnimatableBody3D handTarget,
+        PhysicsBody3D excludedBody)
+    {
+        Assert.False(
+            PhysicsShapeQueryDetectsBody(handTarget, excludedBody),
+            $"Live physics query should not detect hand-excluded body '{excludedBody.Name}'.");
+    }
+
+    private static void AssertPhysicsShapeQueryDetectsBodyAfterRemovingHandCollisionException(
+        AnimatableBody3D handTarget,
+        PhysicsBody3D expectedBody)
+    {
+        handTarget.RemoveCollisionExceptionWith(expectedBody);
+        expectedBody.RemoveCollisionExceptionWith(handTarget);
+        try
+        {
+            AssertPhysicsShapeQueryDetectsNonExcludedBody(handTarget, expectedBody);
+        }
+        finally
+        {
+            handTarget.AddCollisionExceptionWith(expectedBody);
+            expectedBody.AddCollisionExceptionWith(handTarget);
+        }
+    }
+
+    private static void AssertPhysicsShapeQueryDetectsNonExcludedBody(AnimatableBody3D handTarget, PhysicsBody3D expectedBody)
+    {
+        Assert.True(
+            PhysicsShapeQueryDetectsBody(handTarget, expectedBody),
+            $"Live physics query should detect non-excluded body '{expectedBody.Name}'.");
+    }
+
+    private static bool PhysicsShapeQueryDetectsBody(AnimatableBody3D handTarget, PhysicsBody3D expectedBody)
+    {
+        CollisionShape3D expectedShape = Assert.IsAssignableFrom<CollisionShape3D>(expectedBody.GetChild(0));
+        PhysicsShapeQueryParameters3D query = new()
+        {
+            Shape = new BoxShape3D { Size = new Vector3(0.01f, 0.01f, 0.01f) },
+            Transform = ResolveNodeGlobalTransform(expectedShape),
+            CollisionMask = handTarget.CollisionMask,
+            CollideWithBodies = true,
+            CollideWithAreas = false,
+            Exclude = BuildPhysicsShapeQueryExclusions(handTarget),
+        };
+        Godot.Collections.Array<Godot.Collections.Dictionary> intersections = handTarget.GetWorld3D().DirectSpaceState.IntersectShape(query);
+
+        return intersections.Any(intersection => ReferenceEquals(intersection["collider"].AsGodotObject(), expectedBody));
+    }
+
+    private static Godot.Collections.Array<Rid> BuildPhysicsShapeQueryExclusions(PhysicsBody3D handTarget)
+    {
+        Godot.Collections.Array<Rid> exclusions = [handTarget.GetRid()];
+
+        foreach (PhysicsBody3D collisionException in handTarget.GetCollisionExceptions())
+        {
+            exclusions.Add(collisionException.GetRid());
+        }
+
+        return exclusions;
+    }
 
     private static StaticBody3D CreateExternalObstacle(Vector3 position)
     {
@@ -2472,6 +2547,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 LeftHandIKTarget = leftHandTarget,
                 PhysicalRig = rig,
             };
+            playerVRIK.SetPhysicsProcess(false);
             configurePlayerVRIK?.Invoke(playerVRIK);
             player.AddChild(playerVRIK);
 
@@ -2524,6 +2600,7 @@ public sealed class DynamicPhysicalRigIntegrationTests
                 new TestXRCamera(cameraNode));
 
             Assert.True(bound);
+            playerVRIK.SetPhysicsProcess(false);
             await WaitForPhysicsFramesAsync(sceneTree, 4);
 
             return new RuntimeFixture(root, player, playerVRIK, rig, headTarget, rightHandTarget, leftHandTarget, rightHandPosition);

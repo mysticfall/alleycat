@@ -39,14 +39,14 @@ public sealed class RuntimeContextTests
     }
 
     /// <summary>
-    /// Ensures run-fact arguments are accepted as fallback integration-test signals.
+    /// Ensures session arguments are accepted as fallback integration-test signals.
     /// </summary>
     [Fact]
-    public void IsIntegrationTest_ReturnsTrue_WhenRunFactArgumentIsPresent()
+    public void IsIntegrationTest_ReturnsTrue_WhenSessionArgumentIsPresent()
     {
         bool result = RuntimeContext.IsIntegrationTest(
             explicitContext: null,
-            commandLineArguments: ["godot-mono", "--", "--integration-run-fact"]);
+            commandLineArguments: ["godot-mono", "--", "--integration-test-session"]);
 
         Assert.True(result);
     }

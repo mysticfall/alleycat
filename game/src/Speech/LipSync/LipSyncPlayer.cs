@@ -336,7 +336,8 @@ public abstract partial class LipSyncPlayer : Node
         }
 
         _audioWasObservedPlaying = true;
-        _playbackTimeSeconds = AudioPlayer.GetPlaybackPosition() + AudioServer.GetTimeSinceLastMix();
+        double observedPlaybackTimeSeconds = AudioPlayer.GetPlaybackPosition() + AudioServer.GetTimeSinceLastMix();
+        _playbackTimeSeconds = AdvancePlaybackClock(_playbackTimeSeconds, observedPlaybackTimeSeconds);
 
         int targetFrameIndex = Mathf.FloorToInt((float)(_playbackTimeSeconds * _outputFps * PlaybackSpeed));
         if (targetFrameIndex >= availableFrames)
@@ -1202,6 +1203,19 @@ public abstract partial class LipSyncPlayer : Node
         int bytesPerSecond = checked(speech.MixRate * channelCount * sizeof(short));
         return bytesPerSecond > 0 ? speech.Data.Length / (double)bytesPerSecond : 0d;
     }
+
+    /// <summary>
+    /// Advances the audio-clock estimate without allowing a later mixer observation to rewind pose playback.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AudioServer.GetTimeSinceLastMix"/> resets at each mixer boundary. During audio start-up,
+    /// its sum with the player-reported position can therefore be lower than a prior process-frame sample.
+    /// Rewinding the frame cursor would reapply an earlier pose after a terminal stream frame.
+    /// </remarks>
+    internal static double AdvancePlaybackClock(double previousPlaybackTimeSeconds, double observedPlaybackTimeSeconds)
+        => double.IsFinite(observedPlaybackTimeSeconds)
+            ? Math.Max(previousPlaybackTimeSeconds, observedPlaybackTimeSeconds)
+            : previousPlaybackTimeSeconds;
 
     private void CompletePreparation()
     {

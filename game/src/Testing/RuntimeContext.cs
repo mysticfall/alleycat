@@ -22,7 +22,7 @@ public static class RuntimeContext
     public const string IntegrationTestContextValue = "integration-test";
 
     private const string ProbeCommandArg = "--integration-probe";
-    private const string RunFactCommandArg = "--integration-run-fact";
+    private const string SessionCommandArg = "--integration-test-session";
 
     /// <summary>
     /// Returns <c>true</c> when the current process is running integration tests.
@@ -64,7 +64,7 @@ public static class RuntimeContext
         {
             string argument = commandLineArguments[index];
             if (string.Equals(argument, ProbeCommandArg, StringComparison.Ordinal)
-                || string.Equals(argument, RunFactCommandArg, StringComparison.Ordinal))
+                || string.Equals(argument, SessionCommandArg, StringComparison.Ordinal))
             {
                 return true;
             }

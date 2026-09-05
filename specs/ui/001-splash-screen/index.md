@@ -27,7 +27,8 @@ Provide a predictable branded startup transition that cleanly hands control to t
 4. Instantiated splash must be added as a child of the UI SubViewport.
 5. Splash must be skipped when `--skip-splash` is passed as a user argument after Godot's `--` separator (for example
    `godot-mono --path game -- --skip-splash`), resolved from `OS.GetCmdlineUserArgs()` without breaking the startup
-   flow, matching how the game's other custom user-arg switches (`--no-ai`, `--integration-run-fact`) are resolved.
+   flow, matching how the game's other custom user-arg switches (`--no-ai`, `--integration-test-session`) are
+   resolved.
    The flag must not activate when passed before the `--` separator.
 
 ## In Scope

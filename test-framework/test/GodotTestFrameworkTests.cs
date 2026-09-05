@@ -1,7 +1,4 @@
-using System.Diagnostics;
 using System.Reflection;
-using System.Text.Json;
-using System.Threading.Channels;
 using Xunit;
 
 namespace AlleyCat.TestFramework.Tests;
@@ -11,7 +8,6 @@ namespace AlleyCat.TestFramework.Tests;
 /// </summary>
 public sealed class GodotTestFrameworkTests
 {
-    private const string ResultMarkerPrefix = "ALLEYCAT_INTEGRATION_TEST_RESULT:";
     private const string ProbeSuccessMarker = "ALLEYCAT_INTEGRATION_PROBE_SUCCESS";
     private const string ImportPreflightEnvironmentVariable = "ALLEYCAT_INTEGRATION_IMPORT_PREFLIGHT";
     private static readonly Type _godotTestFrameworkType = typeof(TestingPlatformBuilderHook).Assembly
@@ -84,7 +80,7 @@ public sealed class GodotTestFrameworkTests
     public void IsSupportedFactMethod_OnlyAcceptsParameterlessFactMethods()
     {
         MethodInfo supportedMethod = typeof(GodotTestFrameworkTests)
-            .GetMethod(nameof(BuildStructuredErrorMessage_UsesFallbackMessage_WhenNoDetailsAreProvided))!;
+            .GetMethod(nameof(ResolveGodotBinaryPath_ReturnsDefault_WhenEnvironmentVariableIsUnset))!;
         MethodInfo parameterisedFactMethod = typeof(GodotTestFrameworkTests)
             .GetMethod(nameof(ResolveTimeout_UsesPositiveConfiguredValue_OtherwiseFallsBack))!;
         MethodInfo nonFactMethod = typeof(GodotTestFrameworkTests)
@@ -97,186 +93,6 @@ public sealed class GodotTestFrameworkTests
         Assert.True(isSupported);
         Assert.False(isParameterisedSupported);
         Assert.False(isNonFactSupported);
-    }
-
-    /// <summary>
-    /// Ensures the parser consumes the most recent structured run-fact line.
-    /// </summary>
-    [Fact]
-    public void TryParseStructuredRunFactResult_ParsesTheLastStructuredResultLine()
-    {
-        string failedPayload = JsonSerializer.Serialize(new
-        {
-            Outcome = "failed",
-            Message = "first",
-            Stack = "trace-1"
-        });
-        string passedPayload = JsonSerializer.Serialize(new
-        {
-            Outcome = "passed",
-            Message = (string?)null,
-            Stack = (string?)null
-        });
-
-        string[] outputLines =
-        [
-            "non-structured-line",
-            ResultMarkerPrefix + failedPayload,
-            ResultMarkerPrefix + passedPayload,
-        ];
-
-        object? parsedResult = InvokePrivateStatic<object?>("TryParseStructuredRunFactResult", (object)outputLines);
-
-        Assert.NotNull(parsedResult);
-        Assert.Equal("passed", ReadStructuredResultProperty(parsedResult!, "Outcome"));
-        Assert.Null(ReadStructuredResultProperty(parsedResult!, "Message"));
-        Assert.Null(ReadStructuredResultProperty(parsedResult!, "Stack"));
-    }
-
-    /// <summary>
-    /// Ensures malformed structured run-fact payloads are rejected.
-    /// </summary>
-    [Fact]
-    public void TryParseStructuredRunFactResult_ReturnsNull_WhenStructuredPayloadIsInvalidJson()
-    {
-        string[] outputLines =
-        [
-            $"{ResultMarkerPrefix}{{not-valid-json}}",
-        ];
-
-        object? parsedResult = InvokePrivateStatic<object?>("TryParseStructuredRunFactResult", (object)outputLines);
-
-        Assert.Null(parsedResult);
-    }
-
-    /// <summary>
-    /// Ensures malformed newer payloads do not prevent parsing an older valid structured result.
-    /// </summary>
-    [Fact]
-    public void TryParseStructuredRunFactResult_FallsBackToOlderValidPayload_WhenNewestPayloadIsInvalidJson()
-    {
-        string failedPayload = JsonSerializer.Serialize(new
-        {
-            Outcome = "failed",
-            Message = "first-valid",
-            Stack = "trace-1"
-        });
-
-        string[] outputLines =
-        [
-            ResultMarkerPrefix + failedPayload,
-            "non-structured noise",
-            $"{ResultMarkerPrefix}{{invalid-json}}",
-        ];
-
-        object? parsedResult = InvokePrivateStatic<object?>("TryParseStructuredRunFactResult", (object)outputLines);
-
-        Assert.NotNull(parsedResult);
-        Assert.Equal("failed", ReadStructuredResultProperty(parsedResult!, "Outcome"));
-        Assert.Equal("first-valid", ReadStructuredResultProperty(parsedResult!, "Message"));
-        Assert.Equal("trace-1", ReadStructuredResultProperty(parsedResult!, "Stack"));
-    }
-
-    /// <summary>
-    /// Ensures a newer <c>null</c> payload does not hide an older valid structured result.
-    /// </summary>
-    [Fact]
-    public void TryParseStructuredRunFactResult_FallsBackToOlderValidPayload_WhenNewestPayloadDeserialisesToNull()
-    {
-        string passedPayload = JsonSerializer.Serialize(new
-        {
-            Outcome = "passed",
-            Message = (string?)null,
-            Stack = (string?)null,
-        });
-
-        string[] outputLines =
-        [
-            ResultMarkerPrefix + passedPayload,
-            "noise",
-            ResultMarkerPrefix + "null",
-        ];
-
-        object? parsedResult = InvokePrivateStatic<object?>("TryParseStructuredRunFactResult", (object)outputLines);
-
-        Assert.NotNull(parsedResult);
-        Assert.Equal("passed", ReadStructuredResultProperty(parsedResult!, "Outcome"));
-        Assert.Null(ReadStructuredResultProperty(parsedResult!, "Message"));
-        Assert.Null(ReadStructuredResultProperty(parsedResult!, "Stack"));
-    }
-
-    /// <summary>
-    /// Ensures message and stack values are combined into one failure string.
-    /// </summary>
-    [Fact]
-    public void BuildStructuredErrorMessage_CombinesMessageAndStack_WhenBothArePresent()
-    {
-        object structuredResult = CreateStructuredResult("failed", "Assertion failed", "stack trace");
-
-        string message = InvokePrivateStatic<string>("BuildStructuredErrorMessage", structuredResult);
-
-        Assert.Equal($"Assertion failed{Environment.NewLine}stack trace", message);
-    }
-
-    /// <summary>
-    /// Ensures a fallback failure message is returned when no details are present.
-    /// </summary>
-    [Fact]
-    public void BuildStructuredErrorMessage_UsesFallbackMessage_WhenNoDetailsAreProvided()
-    {
-        object structuredResult = CreateStructuredResult("failed", " ", "\t");
-
-        string message = InvokePrivateStatic<string>("BuildStructuredErrorMessage", structuredResult);
-
-        Assert.Equal("Godot run-fact reported an unknown failure.", message);
-    }
-
-    /// <summary>
-    /// Ensures structured test failures take precedence over timeout wrappers.
-    /// </summary>
-    [Fact]
-    public void BuildRunFactExecutionResult_ReturnsFailedOutcome_WhenStructuredFailureWasEmittedBeforeTimeout()
-    {
-        string failedPayload = JsonSerializer.Serialize(new
-        {
-            Outcome = "failed",
-            Message = "boom",
-            Stack = "trace"
-        });
-
-        object runResult = CreateGodotProcessRunResult(
-            exitCode: null,
-            stdOut: [ResultMarkerPrefix + failedPayload],
-            stdErr: [],
-            failureException: new TimeoutException("Godot process timed out after 120000ms."));
-
-        object executionResult = InvokePrivateStatic<object>("BuildRunFactExecutionResult", runResult);
-
-        Assert.Equal("Failed", ReadStructuredResultProperty(executionResult, "Outcome")?.ToString());
-        var capturedError = ReadStructuredResultProperty(executionResult, "Error") as Exception;
-        Assert.NotNull(capturedError);
-        Assert.Equal($"boom{Environment.NewLine}trace", capturedError.Message);
-    }
-
-    /// <summary>
-    /// Ensures run-fact early-exit detection only uses structured result lines.
-    /// </summary>
-    [Fact]
-    public void IsRunFactEarlyExitSignalLine_RecognisesOnlyStructuredResultLines()
-    {
-        bool structuredResultMatch = InvokePrivateStatic<bool>(
-            "IsRunFactEarlyExitSignalLine",
-            $"{ResultMarkerPrefix}{{}}");
-        bool godotErrorMatch = InvokePrivateStatic<bool>(
-            "IsRunFactEarlyExitSignalLine",
-            "ERROR: test runtime fault");
-        bool nonSignalMatch = InvokePrivateStatic<bool>(
-            "IsRunFactEarlyExitSignalLine",
-            "INFO: unrelated line");
-
-        Assert.True(structuredResultMatch);
-        Assert.False(godotErrorMatch);
-        Assert.False(nonSignalMatch);
     }
 
     /// <summary>
@@ -395,89 +211,6 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
-    /// Ensures process execution short-circuits once a structured run-fact line is emitted.
-    /// </summary>
-    [Fact]
-    public void RunGodotProcessAsync_CompletesEarly_WhenStructuredRunFactResultLineIsObserved()
-    {
-        const int timeoutMs = 4_000;
-
-        var fakeProcess = FakeGodotProcess.Create(
-            outputEvents:
-            [
-                new FakeOutputEvent(TimeSpan.FromMilliseconds(20), Stream: FakeOutputStream.StdOut, Line: "boot"),
-                new FakeOutputEvent(TimeSpan.FromMilliseconds(60), Stream: FakeOutputStream.StdOut, Line: ResultMarkerPrefix + JsonSerializer.Serialize(new
-                {
-                    Outcome = "failed",
-                    Message = "boom",
-                    Stack = (string?)null,
-                })),
-            ],
-            naturalExitDelay: TimeSpan.FromSeconds(5));
-
-        object framework = CreateFrameworkInstance(new FakeGodotProcessFactory(fakeProcess));
-
-        var stopwatch = Stopwatch.StartNew();
-#pragma warning disable xUnit1031
-        object runResult = InvokePrivateInstanceAsync<object>(
-                framework,
-                "RunGodotProcessAsync",
-                (IReadOnlyList<string>)["--ignored"],
-                timeoutMs,
-                CancellationToken.None,
-                new Func<string, bool>(line => line.StartsWith(ResultMarkerPrefix, StringComparison.Ordinal)))
-            .GetAwaiter()
-            .GetResult();
-#pragma warning restore xUnit1031
-        stopwatch.Stop();
-
-        Assert.True(
-            stopwatch.Elapsed < TimeSpan.FromMilliseconds(timeoutMs),
-            $"Expected early completion before timeout, elapsed {stopwatch.Elapsed.TotalMilliseconds}ms.");
-        Assert.Null(ReadStructuredResultProperty(runResult, "FailureException") as Exception);
-        Assert.True(fakeProcess.KillCalled);
-    }
-
-    /// <summary>
-    /// Ensures generic Godot ERROR lines do not trigger run-fact early exit.
-    /// </summary>
-    [Fact]
-    public void RunGodotProcessAsync_DoesNotCompleteEarly_WhenOnlyGodotErrorLineIsObserved()
-    {
-        const int timeoutMs = 4_000;
-
-        var fakeProcess = FakeGodotProcess.Create(
-            outputEvents:
-            [
-                new FakeOutputEvent(TimeSpan.FromMilliseconds(30), Stream: FakeOutputStream.StdErr, Line: "ERROR: simulated runtime fault"),
-            ],
-            naturalExitDelay: TimeSpan.FromMilliseconds(250));
-
-        object framework = CreateFrameworkInstance(new FakeGodotProcessFactory(fakeProcess));
-
-        var stopwatch = Stopwatch.StartNew();
-#pragma warning disable xUnit1031
-        object runResult = InvokePrivateInstanceAsync<object>(
-                framework,
-                "RunGodotProcessAsync",
-                (IReadOnlyList<string>)["--ignored"],
-                timeoutMs,
-                CancellationToken.None,
-                new Func<string, bool>(line => InvokePrivateStatic<bool>("IsRunFactEarlyExitSignalLine", line)))
-            .GetAwaiter()
-            .GetResult();
-#pragma warning restore xUnit1031
-        stopwatch.Stop();
-
-        Assert.True(
-            stopwatch.Elapsed >= TimeSpan.FromMilliseconds(250),
-            $"Expected execution to wait for natural process exit, elapsed {stopwatch.Elapsed.TotalMilliseconds}ms.");
-        Assert.Null(ReadStructuredResultProperty(runResult, "FailureException") as Exception);
-        Assert.False(fakeProcess.KillCalled);
-        Assert.Contains("ERROR: simulated runtime fault", (IReadOnlyList<string>)ReadStructuredResultProperty(runResult, "StdErr")!);
-    }
-
-    /// <summary>
     /// Ensures headless mode defaults to <c>false</c> when no attribute is present.
     /// </summary>
     [Fact]
@@ -548,81 +281,54 @@ public sealed class GodotTestFrameworkTests
     }
 
     /// <summary>
-    /// Ensures <c>--headless</c> is excluded when no attribute is present and no CLI override is set.
+    /// Ensures <c>--headless</c> is excluded for windowed sessions when no attribute or override is present.
     /// </summary>
     [Fact]
-    public void CreateRunFactArguments_ExcludesHeadless_WhenNoAttributeAndNoOverride()
+    public void CreateSessionArguments_ExcludesHeadless_WhenWindowedModeIsRequested()
     {
         object framework = CreateFrameworkInstance(headlessOverride: false);
-        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
-            .GetMethod(nameof(HeadlessFixtureNoAttribute.TestMethod))!;
 
-        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateSessionArguments", false);
 
         Assert.DoesNotContain("--headless", args);
+        Assert.Contains(GodotSessionProtocol.SessionCommandArg, args);
     }
 
     /// <summary>
-    /// Ensures <c>--headless</c> is included when the <c>--headless</c> CLI override is set.
+    /// Ensures <c>--headless</c> is included for headless sessions.
     /// </summary>
     [Fact]
-    public void CreateRunFactArguments_IncludesHeadless_WhenHeadlessOverrideIsSet()
+    public void CreateSessionArguments_IncludesHeadless_WhenHeadlessModeIsRequested()
     {
-        object framework = CreateFrameworkInstance(headlessOverride: true);
-        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
-            .GetMethod(nameof(HeadlessFixtureNoAttribute.TestMethod))!;
+        object framework = CreateFrameworkInstance(headlessOverride: false);
 
-        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateSessionArguments", true);
 
         Assert.Contains("--headless", args);
     }
 
     /// <summary>
-    /// Ensures <c>--headless</c> is excluded when the method explicitly sets <c>[Headless(false)]</c>.
+    /// Ensures session launches always disable XR and point at the game project and test assembly.
     /// </summary>
     [Fact]
-    public void CreateRunFactArguments_ExcludesHeadless_WhenMethodHasHeadlessFalse()
+    public void CreateSessionArguments_IncludesXrModeOffGamePathAndProbeAssembly()
     {
         object framework = CreateFrameworkInstance(headlessOverride: false);
-        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
-            .GetMethod(nameof(HeadlessFixtureNoAttribute.NonHeadlessMethod))!;
 
-        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
-
-        Assert.DoesNotContain("--headless", args);
-    }
-
-    /// <summary>
-    /// Ensures the CLI <c>--headless</c> override takes precedence over a method-level
-    /// <c>[Headless(false)]</c> attribute.
-    /// </summary>
-    [Fact]
-    public void CreateRunFactArguments_OverridesMethodAttribute_WhenHeadlessOverrideIsSet()
-    {
-        object framework = CreateFrameworkInstance(headlessOverride: true);
-        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
-            .GetMethod(nameof(HeadlessFixtureNoAttribute.NonHeadlessMethod))!;
-
-        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
-
-        Assert.Contains("--headless", args);
-    }
-
-    /// <summary>
-    /// Ensures <c>--xr-mode off</c> is always included regardless of headless settings.
-    /// </summary>
-    [Fact]
-    public void CreateRunFactArguments_IncludesXrModeOff_RegardlessOfHeadlessMode()
-    {
-        object framework = CreateFrameworkInstance(headlessOverride: true);
-        MethodInfo method = typeof(HeadlessFixtureNoAttribute)
-            .GetMethod(nameof(HeadlessFixtureNoAttribute.TestMethod))!;
-
-        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateRunFactArguments", method);
+        IReadOnlyList<string> args = InvokePrivateInstance<IReadOnlyList<string>>(framework, "CreateSessionArguments", true);
 
         int xrModeIndex = args.ToList().IndexOf("--xr-mode");
         Assert.True(xrModeIndex >= 0, "Expected --xr-mode in arguments.");
         Assert.Equal("off", args[xrModeIndex + 1]);
+
+        int pathIndex = args.ToList().IndexOf("--path");
+        Assert.True(pathIndex >= 0, "Expected --path in arguments.");
+        Assert.Equal("game", args[pathIndex + 1]);
+
+        int sessionIndex = args.ToList().IndexOf(GodotSessionProtocol.SessionCommandArg);
+        Assert.True(sessionIndex >= 0, "Expected the session command argument.");
+        Assert.Equal("--probe-assembly", args[sessionIndex + 1]);
+        Assert.Equal(Assembly.GetExecutingAssembly().Location, args[sessionIndex + 2]);
     }
 
     private static object CreateFrameworkInstance(object? processFactory = null)
@@ -653,134 +359,11 @@ public sealed class GodotTestFrameworkTests
         return constructor.Invoke([Assembly.GetExecutingAssembly(), selector, processFactory, headlessOverride]);
     }
 
-    private sealed class FakeGodotProcessFactory(params FakeGodotProcess[] processes) : GodotTestFramework.IGodotProcessFactory
+    private static FakeGodotProcess CreateSuccessfulProbeProcess()
     {
-        private readonly Queue<FakeGodotProcess> _processes = new(processes);
-
-        public IReadOnlyList<IReadOnlyList<string>> Invocations => _invocations;
-
-        private List<IReadOnlyList<string>> _invocations { get; } = [];
-
-        public GodotTestFramework.IGodotProcess Create(IReadOnlyList<string> commandLineArguments)
-        {
-            _invocations.Add([.. commandLineArguments]);
-            return _processes.Dequeue();
-        }
-    }
-
-    private enum FakeOutputStream
-    {
-        StdOut,
-        StdErr,
-    }
-
-    private sealed record FakeOutputEvent(TimeSpan Delay, FakeOutputStream Stream, string Line);
-
-    private sealed class FakeGodotProcess : GodotTestFramework.IGodotProcess
-    {
-        private readonly Channel<string> _stdOutChannel = Channel.CreateUnbounded<string>();
-        private readonly Channel<string> _stdErrChannel = Channel.CreateUnbounded<string>();
-        private readonly IReadOnlyList<FakeOutputEvent> _outputEvents;
-        private readonly TimeSpan _naturalExitDelay;
-        private readonly TaskCompletionSource _exitTaskSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly CancellationTokenSource _lifetimeCancellationTokenSource = new();
-
-        private FakeGodotProcess(IReadOnlyList<FakeOutputEvent> outputEvents, TimeSpan naturalExitDelay)
-        {
-            _outputEvents = outputEvents;
-            _naturalExitDelay = naturalExitDelay;
-        }
-
-        public bool KillCalled
-        {
-            get; private set;
-        }
-
-        public bool HasExited => _exitTaskSource.Task.IsCompleted;
-
-        public int ExitCode
-        {
-            get; private set;
-        }
-
-        public static FakeGodotProcess Create(IReadOnlyList<FakeOutputEvent> outputEvents, TimeSpan naturalExitDelay)
-            => new(outputEvents, naturalExitDelay);
-
-        public bool Start()
-        {
-            _ = RunLifecycleAsync();
-            return true;
-        }
-
-        public async Task WaitForExitAsync(CancellationToken cancellationToken) => await _exitTaskSource.Task.WaitAsync(cancellationToken);
-
-        public async Task<string?> ReadStandardOutputLineAsync(CancellationToken cancellationToken)
-        {
-            return await _stdOutChannel.Reader.WaitToReadAsync(cancellationToken)
-                ? await _stdOutChannel.Reader.ReadAsync(cancellationToken)
-                : null;
-        }
-
-        public async Task<string?> ReadStandardErrorLineAsync(CancellationToken cancellationToken)
-        {
-            return await _stdErrChannel.Reader.WaitToReadAsync(cancellationToken)
-                ? await _stdErrChannel.Reader.ReadAsync(cancellationToken)
-                : null;
-        }
-
-        public void Kill(bool entireProcessTree)
-        {
-            if (HasExited)
-            {
-                return;
-            }
-
-            KillCalled = true;
-            _lifetimeCancellationTokenSource.Cancel();
-            Complete(exitCode: -1);
-        }
-
-        public void Dispose()
-        {
-            _lifetimeCancellationTokenSource.Cancel();
-            Complete(exitCode: ExitCode);
-            _lifetimeCancellationTokenSource.Dispose();
-        }
-
-        private async Task RunLifecycleAsync()
-        {
-            try
-            {
-                foreach (FakeOutputEvent outputEvent in _outputEvents)
-                {
-                    await Task.Delay(outputEvent.Delay, _lifetimeCancellationTokenSource.Token);
-                    Channel<string> channel = outputEvent.Stream == FakeOutputStream.StdOut
-                        ? _stdOutChannel
-                        : _stdErrChannel;
-                    await channel.Writer.WriteAsync(outputEvent.Line, _lifetimeCancellationTokenSource.Token);
-                }
-
-                await Task.Delay(_naturalExitDelay, _lifetimeCancellationTokenSource.Token);
-                Complete(exitCode: 0);
-            }
-            catch (OperationCanceledException)
-            {
-                Complete(exitCode: -1);
-            }
-        }
-
-        private void Complete(int exitCode)
-        {
-            if (HasExited)
-            {
-                return;
-            }
-
-            ExitCode = exitCode;
-            _ = _stdOutChannel.Writer.TryComplete();
-            _ = _stdErrChannel.Writer.TryComplete();
-            _ = _exitTaskSource.TrySetResult();
-        }
+        return FakeGodotProcess.Create(
+            outputEvents: [new FakeOutputEvent(TimeSpan.Zero, Stream: FakeOutputStream.StdOut, Line: ProbeSuccessMarker)],
+            naturalExitDelay: TimeSpan.Zero);
     }
 
     private static T InvokePrivateStatic<T>(string methodName, params object?[] args)
@@ -790,13 +373,6 @@ public sealed class GodotTestFrameworkTests
 
         object? result = method.Invoke(null, args);
         return (T)result!;
-    }
-
-    private static FakeGodotProcess CreateSuccessfulProbeProcess()
-    {
-        return FakeGodotProcess.Create(
-            outputEvents: [new FakeOutputEvent(TimeSpan.Zero, Stream: FakeOutputStream.StdOut, Line: ProbeSuccessMarker)],
-            naturalExitDelay: TimeSpan.Zero);
     }
 
     private static async Task<T> InvokePrivateInstanceAsync<T>(object instance, string methodName, params object?[] args)
@@ -822,35 +398,6 @@ public sealed class GodotTestFrameworkTests
             .Single(candidate => candidate.Name == methodName && candidate.GetParameters().Length == args.Length);
 
         return (T)method.Invoke(instance, args)!;
-    }
-
-    private static object CreateStructuredResult(string outcome, string? message, string? stack)
-    {
-        Type structuredResultType = _godotTestFrameworkType.GetNestedType("StructuredRunFactResult", BindingFlags.NonPublic)
-            ?? throw new MissingMemberException(_godotTestFrameworkType.FullName, "StructuredRunFactResult");
-
-        return Activator.CreateInstance(structuredResultType, outcome, message, stack)
-            ?? throw new InvalidOperationException("Failed to construct structured result instance.");
-    }
-
-    private static object CreateGodotProcessRunResult(
-        int? exitCode,
-        IReadOnlyList<string> stdOut,
-        IReadOnlyList<string> stdErr,
-        Exception? failureException)
-    {
-        Type runResultType = _godotTestFrameworkType.GetNestedType("GodotProcessRunResult", BindingFlags.NonPublic)
-            ?? throw new MissingMemberException(_godotTestFrameworkType.FullName, "GodotProcessRunResult");
-
-        return Activator.CreateInstance(runResultType, exitCode, stdOut, stdErr, failureException)
-            ?? throw new InvalidOperationException("Failed to construct process run result instance.");
-    }
-
-    private static object? ReadStructuredResultProperty(object structuredResult, string propertyName)
-    {
-        PropertyInfo property = structuredResult.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)
-            ?? throw new MissingMemberException(structuredResult.GetType().FullName, propertyName);
-        return property.GetValue(structuredResult);
     }
 
     private static void HelperMethodWithoutTestAttribute()
@@ -901,5 +448,4 @@ public sealed class GodotTestFrameworkTests
         {
         }
     }
-
 }

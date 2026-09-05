@@ -31,7 +31,7 @@ public sealed class AgentSessionSuppressionTests
     public void ContainsSuppressionSwitch_WithOtherUserArguments_ReturnsFalse()
     {
         Assert.False(AgentSessionSuppression.ContainsSuppressionSwitch(
-            ["--integration-run-fact", "--probe-assembly", "/tmp/assembly.dll", "--output-dir", "x"]));
+            ["--integration-test-session", "--probe-assembly", "/tmp/assembly.dll", "--output-dir", "x"]));
     }
 
     /// <summary>
@@ -43,7 +43,7 @@ public sealed class AgentSessionSuppressionTests
     [InlineData(4)]
     public void ContainsSuppressionSwitch_InAnyArgumentPosition_ReturnsTrue(int switchIndex)
     {
-        string[] args = ["--integration-run-fact", "foo", "--output-dir", "x", "--verbose"];
+        string[] args = ["--integration-test-session", "foo", "--output-dir", "x", "--verbose"];
         args[switchIndex] = AgentSessionSuppression.NoAISwitch;
 
         Assert.True(AgentSessionSuppression.ContainsSuppressionSwitch(args));

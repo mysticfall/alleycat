@@ -442,16 +442,11 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         root.AddChild(playerNode);
         playerNode.AddChild(playerVRIK);
 
-        root._EnterTree();
         sceneTree.Root.AddChild(root);
 
         try
         {
-            await WaitForFramesAsync(sceneTree, 2);
-            if (!binder.ReadyCalled)
-            {
-                binder._Ready();
-            }
+            await WaitForReadyAsync(binder);
 
             xrManager.EmitInitialisedResult(succeeded: false);
             binder._Process(1.0d / 60.0d);
@@ -504,23 +499,18 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         root.AddChild(playerNode);
         playerNode.AddChild(playerVRIK);
 
-        root._EnterTree();
         sceneTree.Root.AddChild(root);
 
         try
         {
-            await WaitForFramesAsync(sceneTree, 2);
+            await WaitForReadyAsync(playerVRIK);
             xrManager.EmitInitialisedResult(succeeded: true);
             await WaitForFramesAsync(sceneTree, 2);
 
             Assert.True(xrManager.InitialisationAttempted);
             Assert.True(xrManager.InitialisationSucceeded);
             root.AddChild(binder);
-            await WaitForNextFrameAsync(sceneTree);
-            if (!binder.ReadyCalled)
-            {
-                binder._Ready();
-            }
+            await WaitForReadyAsync(binder);
 
             binder._Process(1.0d / 60.0d);
             await WaitForFramesAsync(sceneTree, 2);
@@ -546,7 +536,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            fixture.PlayerVRIK._Ready();
             bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
@@ -570,7 +559,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            fixture.PlayerVRIK._Ready();
             bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
@@ -704,7 +692,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            fixture.PlayerVRIK._Ready();
             bool bound = fixture.PlayerVRIK.BindToXRRuntime(fixture.Origin, fixture.Camera);
 
             Assert.True(bound);
@@ -829,6 +816,9 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             AssertTransformApproximately(expectedFollowPose, fixture.HeadIKSolveTarget.Transform);
 
             SetHeadBoneGlobalPose(fixture.Skeleton, fixture.HeadBoneIndex, expectedFollowPose);
+            fixture.Skeleton.ProcessMode = Node.ProcessModeEnum.Inherit;
+            await WaitForNextFrameAsync(sceneTree);
+            fixture.Skeleton.ProcessMode = Node.ProcessModeEnum.Disabled;
             Transform3D originBeforeCompensation = fixture.Origin.GlobalTransform;
 
             InvokeOnEndStage(fixture.PlayerVRIK, 1.0d / 60.0d);
@@ -1000,7 +990,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
                 observation.ExpectedRealisedTarget,
                 fixture.VRIK.RightHandTargetPipelineDebugState.RealisedTarget);
             Assert.Equal(observation.ExpectedFeedback.Reason, fixture.VRIK.RightHandTargetPipelineDebugState.Feedback.Reason);
-            Assert.Equal(1UL, fixture.VRIK.PhysicsActuatorTickCount);
+            Assert.Equal(fixture.PhysicsActuatorTickBaseline + 1UL, fixture.VRIK.PhysicsActuatorTickCount);
             AssertTargetEnabled(fixture.RightHandIKTarget, 16u, 32u);
         }
         finally
@@ -1046,7 +1036,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
                 observation.ExpectedRealisedTarget,
                 fixture.VRIK.LeftHandTargetPipelineDebugState.RealisedTarget);
             Assert.Equal(observation.ExpectedFeedback.Reason, fixture.VRIK.LeftHandTargetPipelineDebugState.Feedback.Reason);
-            Assert.Equal(1UL, fixture.VRIK.PhysicsActuatorTickCount);
+            Assert.Equal(fixture.PhysicsActuatorTickBaseline + 1UL, fixture.VRIK.PhysicsActuatorTickCount);
             AssertTargetEnabled(fixture.LeftHandIKTarget, 64u, 128u);
         }
         finally
@@ -1377,7 +1367,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            fixture.PlayerVRIK._Ready();
             fixture.PlayerVRIK.RightHandFallbackIntentProvider = null;
             fixture.PlayerVRIK.LeftHandFallbackIntentProvider = null;
             fixture.RightHandIKTarget.Transform = new Transform3D(
@@ -1771,14 +1760,13 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            fixture.VRIK._Ready();
             fixture.RightHandIKTarget.GlobalTransform = Transform3D.Identity;
             fixture.VRIK._PhysicsProcess(1.0d / 60.0d);
 
             AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.RightHandIKTarget.Transform);
             Assert.True(fixture.RightHandModifier.Active);
             Assert.Equal(1.0f, fixture.RightHandModifier.Influence);
-            Assert.Equal(1UL, fixture.VRIK.PhysicsActuatorTickCount);
+            Assert.Equal(fixture.PhysicsActuatorTickBaseline + 1UL, fixture.VRIK.PhysicsActuatorTickCount);
         }
         finally
         {
@@ -1808,7 +1796,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            fixture.VRIK._Ready();
             fixture.HeadIKTarget.GlobalTransform = Transform3D.Identity;
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
 
@@ -1866,7 +1853,6 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         try
         {
-            fixture.VRIK._Ready();
             fixture.FootSyncController._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
@@ -1887,11 +1873,12 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
                 0.0f);
             fixture.RightFootIKTarget.GlobalTransform = provider.TargetIntent.WorldTransform;
             fixture.FootSyncController._ProcessModificationWithDelta(1.0d / 60.0d);
+            Transform3D liveFootSyncFallback = fixture.RightFootIKTarget.GlobalTransform;
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
             consumer._ProcessModificationWithDelta(1.0d / 60.0d);
 
-            AssertVectorApproximately(Vector3.Zero, fixture.RightFootIKTarget.GlobalPosition);
+            AssertTransformApproximately(liveFootSyncFallback, fixture.RightFootIKTarget.GlobalTransform);
             AssertTransformApproximately(fixture.RightFootIKTarget.Transform, consumer.ConsumedLocalTransform);
             Assert.False(fixture.RightFootModifier.Active);
             Assert.Equal(0.0f, fixture.RightFootModifier.Influence);
@@ -1919,10 +1906,11 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             fixture.VRIK.RightFootIKTarget = fixture.RightFootIKTarget;
             fixture.RightFootIKTarget.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(5.0f, 5.0f, 5.0f));
             fixture.FootSyncController._ProcessModificationWithDelta(1.0d / 60.0d);
+            Transform3D liveFootSyncFallback = fixture.RightFootIKTarget.GlobalTransform;
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
 
-            AssertVectorApproximately(Vector3.Zero, fixture.RightFootIKTarget.GlobalPosition);
+            AssertTransformApproximately(liveFootSyncFallback, fixture.RightFootIKTarget.GlobalTransform);
             Assert.True(fixture.FootSyncController.Active);
             Assert.Equal(1.0f, fixture.FootSyncController.Influence);
             Assert.False(fixture.RightFootModifier.Active);
@@ -2198,15 +2186,17 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         playerVRIK.AddChild(leftFootFallbackIntentProvider);
         playerVRIK.LeftFootFallbackIntentProvider = leftFootFallbackIntentProvider;
 
-        root._EnterTree();
         sceneTree.Root.AddChild(root);
-        await WaitForFramesAsync(sceneTree, 2);
-
-        if (skeleton.GetNodeOrNull("CharacterIKBeginStage") is null)
-        {
-            playerVRIK._Ready();
-            await WaitForNextFrameAsync(sceneTree);
-        }
+        await WaitForReadyAsync(playerVRIK);
+        await WaitForStageModifiersAsync(sceneTree, playerVRIK, skeleton);
+        playerVRIK.SetPhysicsProcess(false);
+        skeleton.ProcessMode = Node.ProcessModeEnum.Disabled;
+        RestoreEnabledTarget(headIKTarget);
+        RestoreEnabledTarget(headIKSolveTarget);
+        RestoreEnabledTarget(rightHandIKTarget);
+        RestoreEnabledTarget(leftHandIKTarget);
+        RestoreEnabledTarget(rightFootIKTarget);
+        RestoreEnabledTarget(leftFootIKTarget);
 
         return new VrikFixture(
             root,
@@ -2436,14 +2426,26 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         characterIK.AddChild(ikTargets);
         root.AddChild(characterIK);
 
+        characterIK.SetPhysicsProcess(false);
         sceneTree.Root.AddChild(root);
-        await WaitForFramesAsync(sceneTree, 2);
-
-        if (skeleton.GetNodeOrNull("CharacterIKBeginStage") is null)
-        {
-            characterIK._Ready();
-            await WaitForNextFrameAsync(sceneTree);
-        }
+        await WaitForReadyAsync(characterIK);
+        await WaitForStageModifiersAsync(sceneTree, characterIK, skeleton);
+        NormaliseActivityGates(
+            characterIK,
+            headIKTarget,
+            headIKSolveTarget,
+            rightHandIKTarget,
+            leftHandIKTarget,
+            rightFootIKTarget,
+            leftFootIKTarget);
+        characterIK.SetPhysicsProcess(false);
+        skeleton.ProcessMode = Node.ProcessModeEnum.Disabled;
+        RestoreEnabledTarget(headIKTarget, 4u, 8u);
+        RestoreEnabledTarget(headIKSolveTarget);
+        RestoreEnabledTarget(rightHandIKTarget, 16u, 32u);
+        RestoreEnabledTarget(leftHandIKTarget, 64u, 128u);
+        RestoreEnabledTarget(rightFootIKTarget);
+        RestoreEnabledTarget(leftFootIKTarget);
 
         SkeletonModifier3D vrikBeginStage = Assert.IsType<SkeletonModifier3D>(
             skeleton.GetNodeOrNull("CharacterIKBeginStage"),
@@ -2455,6 +2457,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         return new CharacterIKFixture<TCharacterIK>(
             root,
             characterIK,
+            characterIK.PhysicsActuatorTickCount,
             skeleton,
             rightFootBoneIndex,
             headIKTarget,
@@ -2479,6 +2482,109 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
                             ?? throw new InvalidOperationException("CharacterIK.OnBeginStage was not found.");
 
         _ = method.Invoke(characterIK, [delta]);
+    }
+
+    private static async Task WaitForReadyAsync(Node node)
+    {
+        Assert.True(node.IsInsideTree(), $"Expected '{node.Name}' to be attached to the live SceneTree.");
+        if (!node.IsNodeReady())
+        {
+            _ = await node.ToSignal(node, Node.SignalName.Ready);
+        }
+
+        Assert.True(node.IsNodeReady(), $"Expected '{node.Name}' to complete its ready lifecycle.");
+    }
+
+    private static async Task WaitForStageModifiersAsync(SceneTree sceneTree, CharacterIK characterIK, Skeleton3D skeleton)
+    {
+        for (int attempt = 0; attempt < 10; attempt++)
+        {
+            if (skeleton.GetNodeOrNull("CharacterIKBeginStage") is not null
+                && skeleton.GetNodeOrNull("CharacterIKFootProviderStage") is not null)
+            {
+                return;
+            }
+
+            await WaitForPhysicsFramesAsync(sceneTree, 1);
+        }
+
+        throw new Xunit.Sdk.XunitException($"{characterIK.Name} did not establish its runtime IK stages while attached to the live SceneTree.");
+    }
+
+    private static void NormaliseActivityGates(
+        CharacterIK characterIK,
+        Node3D headTarget,
+        Node3D headSolveTarget,
+        Node3D rightHandTarget,
+        Node3D leftHandTarget,
+        Node3D rightFootTarget,
+        Node3D leftFootTarget)
+    {
+        Transform3D headTransform = headTarget.Transform;
+        Transform3D headSolveTransform = headSolveTarget.Transform;
+        Transform3D rightHandTransform = rightHandTarget.Transform;
+        Transform3D leftHandTransform = leftHandTarget.Transform;
+        Transform3D rightFootTransform = rightFootTarget.Transform;
+        Transform3D leftFootTransform = leftFootTarget.Transform;
+        TestIKTargetIntentProvider activeProvider = new()
+        {
+            TargetIntent = new IKTargetIntent(Transform3D.Identity, 1.0f),
+        };
+
+        characterIK.HeadTargetIntentProvider = activeProvider;
+        characterIK.RightHandIKTargetIntentProvider = activeProvider;
+        characterIK.LeftHandIKTargetIntentProvider = activeProvider;
+        characterIK.RightFootTargetIntentProvider = activeProvider;
+        characterIK.LeftFootTargetIntentProvider = activeProvider;
+        InvokeOnBeginStage(characterIK, 1.0d / 60.0d);
+        InvokeUpdatePhysicalActuators(characterIK, 1.0d / 60.0d);
+        InvokeOnFootProviderStage(characterIK, 1.0d / 60.0d);
+
+        characterIK.HeadTargetIntentProvider = null;
+        characterIK.RightHandIKTargetIntentProvider = null;
+        characterIK.LeftHandIKTargetIntentProvider = null;
+        characterIK.RightFootTargetIntentProvider = null;
+        characterIK.LeftFootTargetIntentProvider = null;
+        headTarget.Transform = headTransform;
+        headSolveTarget.Transform = headSolveTransform;
+        rightHandTarget.Transform = rightHandTransform;
+        leftHandTarget.Transform = leftHandTransform;
+        rightFootTarget.Transform = rightFootTransform;
+        leftFootTarget.Transform = leftFootTransform;
+    }
+
+    private static void RestoreEnabledTarget(Node3D target, uint? collisionLayer = null, uint? collisionMask = null)
+    {
+        target.ProcessMode = Node.ProcessModeEnum.Inherit;
+        if (target is CollisionObject3D collisionObject)
+        {
+            if (collisionLayer is uint layer)
+            {
+                collisionObject.CollisionLayer = layer;
+            }
+
+            if (collisionMask is uint mask)
+            {
+                collisionObject.CollisionMask = mask;
+            }
+        }
+
+        SetCollisionShapesDisabled(target, disabled: false);
+    }
+
+    private static void SetCollisionShapesDisabled(Node node, bool disabled)
+    {
+        int childCount = node.GetChildCount();
+        for (int i = 0; i < childCount; i++)
+        {
+            Node child = node.GetChild(i);
+            if (child is CollisionShape3D collisionShape)
+            {
+                collisionShape.Disabled = disabled;
+            }
+
+            SetCollisionShapesDisabled(child, disabled);
+        }
     }
 
     private static void InvokeOnFootProviderStage(CharacterIK characterIK, double delta)
@@ -2820,6 +2926,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     private sealed class CharacterIKFixture<TCharacterIK>(
         Node3D root,
         TCharacterIK characterIK,
+        ulong physicsActuatorTickBaseline,
         Skeleton3D skeleton,
         int rightFootBoneIndex,
         CharacterBody3D headIKTarget,
@@ -2839,6 +2946,8 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         public Node3D Root { get; } = root;
 
         public TCharacterIK VRIK { get; } = characterIK;
+
+        public ulong PhysicsActuatorTickBaseline { get; } = physicsActuatorTickBaseline;
 
         public Skeleton3D Skeleton { get; } = skeleton;
 

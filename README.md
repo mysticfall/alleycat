@@ -40,6 +40,11 @@ Every commit then runs:
 - `dotnet format --verify-no-changes AlleyCat.sln`
 - `dotnet build AlleyCat.sln -warnaserror`
 
+## 🧪 Integration Testing
+
+See the [Integration-Test Contributor Guide](specs/testing/001-test-framework/contributor-guide.md) for integration-test
+quick start, filtering, diagnostics, recovery, and execution-mode requirements.
+
 ## 🎮 Game CLI Options
 
 Custom game options are passed as user arguments after Godot's `--` separator, for example
@@ -49,7 +54,7 @@ Custom game options are passed as user arguments after Godot's `--` separator, f
 | ------ | ----------- |
 | `-- --skip-splash` | Skips the splash screen at startup. |
 | `-- --no-ai` | Suppresses all Mind agent sessions. NPCs keep perceiving and attending, but make no LLM requests. |
-| `-- --integration-run-fact <args>` | Runs a single integration test fact, used by the integration test framework. |
+| `-- --integration-test-session <args>` | Runs a persistent integration test session used by the test framework. |
 | `-- --integration-probe <args>` | Integration test assembly/type discovery probe used by the test framework. |
 
 ---

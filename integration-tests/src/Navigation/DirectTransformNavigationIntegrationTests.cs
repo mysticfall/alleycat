@@ -391,13 +391,14 @@ public sealed partial class DirectTransformNavigationIntegrationTests
             inspectedFallback[^1] = new Vector3(99.0f, 0.0f, 99.0f);
             Assert.Equal(acceptedTerminal, rig.Navigation.CurrentPath[^1]);
 
+            ScriptedDirectTransformNavigation scripted = Assert.IsType<ScriptedDirectTransformNavigation>(rig.Navigation);
+            scripted.SetPath([], 0);
             NavigationMotionIntent fallback = rig.Navigation.Poll(GetWorldTransform(rig.Target));
             Assert.True(fallback.HasValidSample);
             Assert.True(rig.Navigation.UsedAcceptedPathFallbackForLastPoll);
             Assert.Equal(0.0f, fallback.TravelledPathDistance);
             AssertDirectionClose(Vector3.Forward, fallback.DesiredFacingDirection);
 
-            ScriptedDirectTransformNavigation scripted = Assert.IsType<ScriptedDirectTransformNavigation>(rig.Navigation);
             scripted.SetPath([Vector3.Zero, destination.Origin], 1);
             NavigationMotionIntent published = rig.Navigation.Poll(GetWorldTransform(rig.Target));
 
@@ -866,12 +867,13 @@ public sealed partial class DirectTransformNavigationIntegrationTests
             Transform3D acceptedDestination = FacingTransform(Vector3.Forward, new Vector3(1.5f, 0.0f, 0.0f));
             Assert.Equal(NavigationDestinationResult.Accepted, rig.Navigation.SetDestination(acceptedDestination));
             NavigationMotionIntent acceptedIntent = await PollUntilValidAsync(sceneTree, rig);
-            Vector3 acceptedTargetPosition = rig.Navigation.TargetPosition;
-            Vector3[] acceptedPath = [.. rig.Navigation.CurrentPath];
-            int acceptedPathIndex = rig.Navigation.CurrentPathIndex;
 
             rig.Navigation.SetNavigationMap(unavailableMap);
             Assert.Equal(0U, NavigationServer3D.MapGetIterationId(unavailableMap));
+            await WaitForPhysicsFramesAsync(sceneTree, 1);
+            Vector3 acceptedTargetPosition = rig.Navigation.TargetPosition;
+            Vector3[] acceptedPath = [.. rig.Navigation.CurrentPath];
+            int acceptedPathIndex = rig.Navigation.CurrentPathIndex;
             Transform3D replacement = FacingTransform(Vector3.Left, new Vector3(2.0f, 0.0f, 0.0f));
 
             NavigationDestinationResult result = rig.Navigation.SetDestination(replacement);
@@ -1099,6 +1101,7 @@ public sealed partial class DirectTransformNavigationIntegrationTests
         await WaitForNextFrameAsync(sceneTree);
         BindCustomNavigationMap(rig);
         await WaitForNavigationMapAsync(sceneTree, rig);
+        rig.Navigation.SetPhysicsProcess(false);
         return rig;
     }
 

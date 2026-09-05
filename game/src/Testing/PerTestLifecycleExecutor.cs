@@ -54,7 +54,7 @@ public static class PerTestLifecycleExecutor
     }
 
     /// <summary>
-    /// Builds run-fact failure details where the test-body exception remains primary.
+    /// Builds failure details where the test-body exception remains primary.
     /// </summary>
     public static (string Message, string? StackTrace) BuildFailureDiagnostics(PerTestLifecycleExecutionResult result)
     {
