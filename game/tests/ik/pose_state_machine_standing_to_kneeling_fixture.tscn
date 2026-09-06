@@ -1,0 +1,221 @@
+[gd_scene format=3 uid="uid://bmdu24ljtaolc"]
+
+[ext_resource type="Script" uid="uid://dq8mx4eet2kcv" path="res://src/IK/Pose/PoseStateMachineMarkerDriver.cs" id="1_oqrv7"]
+[ext_resource type="Resource" uid="uid://byk1qyey80254" path="res://assets/characters/ik/pose/standing_pose_state.tres" id="2_mxxd8"]
+[ext_resource type="Resource" uid="uid://b0ajquunweskg" path="res://assets/characters/ik/pose/kneeling_pose_state.tres" id="3_w62ci"]
+[ext_resource type="Resource" uid="uid://bmch0c48icbrn" path="res://assets/characters/ik/pose/standing_to_kneeling_transition.tres" id="4_306p3"]
+[ext_resource type="Resource" uid="uid://drkyc2pa7vma6" path="res://assets/characters/ik/pose/kneeling_to_standing_transition.tres" id="5_ox38f"]
+
+[sub_resource type="Animation" id="Animation_mh0ae"]
+length = 1.6666666
+loop_mode = 1
+tracks/0/type = "rotation_3d"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("../Skeleton:LeftUpperLeg")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1)
+tracks/1/type = "rotation_3d"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("../Skeleton:LeftLowerLeg")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat32Array(0, 1, 0.19866933, 0, 0, 0.9800666)
+tracks/2/type = "rotation_3d"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("../Skeleton:LeftFoot")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1)
+
+[sub_resource type="Animation" id="Animation_jayrp"]
+length = 0.2
+loop_mode = 1
+tracks/0/type = "rotation_3d"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("../Skeleton:LeftUpperLeg")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1)
+tracks/1/type = "rotation_3d"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("../Skeleton:LeftLowerLeg")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat32Array(0, 1, 0.5646425, 0, 0, 0.8253356)
+tracks/2/type = "rotation_3d"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("../Skeleton:LeftFoot")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1)
+
+[sub_resource type="Animation" id="Animation_5ewdn"]
+length = 0.2
+tracks/0/type = "rotation_3d"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("../Skeleton:LeftUpperLeg")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1)
+tracks/1/type = "rotation_3d"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("../Skeleton:LeftLowerLeg")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = PackedFloat32Array(0, 1, 0.5646425, 0, 0, 0.8253356)
+tracks/2/type = "rotation_3d"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("../Skeleton:LeftFoot")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = PackedFloat32Array(0, 1, 0, 0, 0, 1)
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_tiwmr"]
+_data = {
+&"Crouch": SubResource("Animation_mh0ae"),
+&"Kneel": SubResource("Animation_jayrp"),
+&"KneelEnter": SubResource("Animation_5ewdn")
+}
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_oop3n"]
+animation = &"Kneel"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_fpr1l"]
+animation = &"KneelEnter"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_b4rra"]
+animation = &"KneelEnter"
+
+[sub_resource type="AnimationNodeAnimation" id="AnimationNodeAnimation_n0lnd"]
+animation = &"Crouch"
+
+[sub_resource type="AnimationNodeTimeSeek" id="AnimationNodeTimeSeek_pwut6"]
+
+[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_qpglm"]
+nodes/Animation/node = SubResource("AnimationNodeAnimation_n0lnd")
+nodes/Animation/position = Vector2(0, 0)
+nodes/TimeSeek/node = SubResource("AnimationNodeTimeSeek_pwut6")
+nodes/TimeSeek/position = Vector2(160, 0)
+node_connections = [&"output", 0, &"TimeSeek", &"TimeSeek", 0, &"Animation"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_873kw"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_qfdco"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_xqyq5"]
+advance_mode = 2
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_a3rpv"]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_tiqki"]
+advance_mode = 2
+
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_ty33m"]
+states/Kneeling/node = SubResource("AnimationNodeAnimation_oop3n")
+states/Kneeling/position = Vector2(360, 0)
+states/KneelingEnter/node = SubResource("AnimationNodeAnimation_fpr1l")
+states/KneelingEnter/position = Vector2(180, 0)
+states/KneelingExit/node = SubResource("AnimationNodeAnimation_b4rra")
+states/KneelingExit/position = Vector2(180, 120)
+states/StandingCrouching/node = SubResource("AnimationNodeBlendTree_qpglm")
+states/StandingCrouching/position = Vector2(0, 0)
+transitions = ["Start", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_873kw"), "StandingCrouching", "KneelingEnter", SubResource("AnimationNodeStateMachineTransition_qfdco"), "KneelingEnter", "Kneeling", SubResource("AnimationNodeStateMachineTransition_xqyq5"), "Kneeling", "KneelingExit", SubResource("AnimationNodeStateMachineTransition_a3rpv"), "KneelingExit", "StandingCrouching", SubResource("AnimationNodeStateMachineTransition_tiqki")]
+
+[sub_resource type="AnimationNodeBlendTree" id="AnimationNodeBlendTree_7nni1"]
+nodes/States/node = SubResource("AnimationNodeStateMachine_ty33m")
+nodes/States/position = Vector2(0, 0)
+node_connections = [&"output", 0, &"States"]
+
+[node name="StandingToKneelingFixture" type="Node3D" unique_id=410276267]
+
+[node name="Skeleton" type="Skeleton3D" parent="." unique_id=420509709]
+bones/0/name = "Hips"
+bones/0/parent = -1
+bones/0/rest = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+bones/0/enabled = true
+bones/0/position = Vector3(0, 0, 0)
+bones/0/rotation = Quaternion(0, 0, 0, 1)
+bones/0/scale = Vector3(1, 1, 1)
+bones/1/name = "Head"
+bones/1/parent = 0
+bones/1/rest = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+bones/1/enabled = true
+bones/1/position = Vector3(0, 0, 0)
+bones/1/rotation = Quaternion(0, 0, 0, 1)
+bones/1/scale = Vector3(1, 1, 1)
+bones/2/name = "LeftUpperLeg"
+bones/2/parent = 0
+bones/2/rest = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, -0.4, 0)
+bones/2/enabled = true
+bones/2/position = Vector3(0, 0, 0)
+bones/2/rotation = Quaternion(0, 0, 0, 1)
+bones/2/scale = Vector3(1, 1, 1)
+bones/3/name = "LeftLowerLeg"
+bones/3/parent = 2
+bones/3/rest = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.45, 0)
+bones/3/enabled = true
+bones/3/position = Vector3(0, 0, 0)
+bones/3/rotation = Quaternion(0, 0, 0, 1)
+bones/3/scale = Vector3(1, 1, 1)
+bones/4/name = "LeftFoot"
+bones/4/parent = 3
+bones/4/rest = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.45, 0)
+bones/4/enabled = true
+bones/4/position = Vector3(0, 0, 0)
+bones/4/rotation = Quaternion(0, 0, 0, 1)
+bones/4/scale = Vector3(1, 1, 1)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=785837958]
+libraries/ = SubResource("AnimationLibrary_tiwmr")
+
+[node name="AnimationTree" type="AnimationTree" parent="." unique_id=328233217]
+tree_root = SubResource("AnimationNodeBlendTree_7nni1")
+anim_player = NodePath("../AnimationPlayer")
+parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0
+
+[node name="Targets" type="Node3D" parent="." unique_id=1911833455]
+
+[node name="HeadRest" type="Marker3D" parent="Targets" unique_id=2013477885]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.49, 0)
+
+[node name="LeftHand" type="Marker3D" parent="Targets" unique_id=337533703]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.22, 1.16, 0.12)
+
+[node name="RightHand" type="Marker3D" parent="Targets" unique_id=1438221710]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.22, 1.16, 0.12)
+
+[node name="LeftFoot" type="Marker3D" parent="Targets" unique_id=542489080]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.12, 0, 0)
+
+[node name="RightFoot" type="Marker3D" parent="Targets" unique_id=624822618]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.12, 0, 0)
+
+[node name="Scenarios" type="Node3D" parent="." unique_id=2046866269]
+
+[node name="Standing" type="Marker3D" parent="Scenarios" unique_id=1210222402]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.53, 0)
+
+[node name="CrouchMidwayForward" type="Marker3D" parent="Scenarios" unique_id=696544589]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.22, 0.16)
+
+[node name="KneelForward" type="Marker3D" parent="Scenarios" unique_id=916661327]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0.91, 0.16)
+
+[node name="PoseStateMachineDriver" type="Node3D" parent="." unique_id=391893575 node_paths=PackedStringArray("AnimationTree", "Skeleton")]
+script = ExtResource("1_oqrv7")
+States = [ExtResource("2_mxxd8"), ExtResource("3_w62ci")]
+Transitions = [ExtResource("4_306p3"), ExtResource("5_ox38f")]
+AnimationTree = NodePath("../AnimationTree")
+Skeleton = NodePath("../Skeleton")
+HeadTargetRestTransform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 1.49, 0)
+metadata/_custom_type_script = "uid://dq8mx4eet2kcv"

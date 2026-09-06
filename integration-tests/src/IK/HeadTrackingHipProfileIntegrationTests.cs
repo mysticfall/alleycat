@@ -12,20 +12,19 @@ namespace AlleyCat.IntegrationTests.IK;
 public sealed class HeadTrackingHipProfileIntegrationTests
 {
     private const string VerificationScenePath = "res://tests/ik/head_tracking_hip_profile_test.tscn";
-    private const string SubjectPath = "Subject/Female";
+    private const string SubjectPath = "Subject";
     private const string DriverPath = "PoseStateMachineDriver";
-    private const string HipModifierPath = "Subject/Female/Female/GeneralSkeleton/HipReconciliationModifier";
+    private const string HipModifierPath = "Subject/Skeleton/HipReconciliationModifier";
     private const string ScenarioMarkersRootPath = "Markers/PoseStateMachine/Scenarios";
     private const string HeadRestMarkerPath = "Markers/PoseStateMachine/RestHeadTarget";
     private const string LeftHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestLeft";
     private const string RightHandRestMarkerPath = "Markers/PoseStateMachine/HandTargetRestRight";
-    private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
-    private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
-    private const string HeadIKTargetPath = "Subject/Female/IKTargets/Head";
-    private const string HeadIKSolveTargetPath = "Subject/Female/IKTargets/HeadSolve";
-    private const string SkeletonPath = "Subject/Female/Female/GeneralSkeleton";
-    private const string ViewpointPath = "Subject/Female/Female/GeneralSkeleton/Head/Viewpoint";
-    private const string AnimationTreePath = "Subject/Female/AnimationTree";
+    private const string LeftFootTargetPath = "Subject/Targets/LeftFoot";
+    private const string RightFootTargetPath = "Subject/Targets/RightFoot";
+    private const string HeadIKTargetPath = "Subject/Targets/Head";
+    private const string HeadIKSolveTargetPath = "Subject/Targets/HeadSolve";
+    private const string SkeletonPath = "Subject/Skeleton";
+    private const string ViewpointPath = "Subject/Targets/HeadSolve/Viewpoint";
     private const float MinimumVerticalHipDropMetres = 0.15f;
     private const float MinimumVerticalVsStoopHipDropDeltaMetres = 0.07f;
     private const float MaximumVerticalForwardHipTravelMetres = 0.08f;
@@ -62,15 +61,15 @@ public sealed class HeadTrackingHipProfileIntegrationTests
         await PrepareVerificationSceneAsync(sceneTree, sceneRoot);
 
         Node3D subject = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(SubjectPath), exactMatch: false);
-        Assert.Equal("Female", subject.Name);
-
-        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
-        Node hipModifier = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(HipModifierPath), exactMatch: false);
+        PoseStateMachineMarkerDriver driver = Assert.IsType<PoseStateMachineMarkerDriver>(
+            sceneRoot.GetNodeOrNull(DriverPath),
+            exactMatch: false);
+        HipReconciliationModifier hipModifier = Assert.IsType<HipReconciliationModifier>(
+            sceneRoot.GetNodeOrNull(HipModifierPath),
+            exactMatch: false);
         Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
-        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
 
-        hipModifier.Set("StateMachine", driver.Call("GetDrivenStateMachine"));
-        Assert.NotNull(animationTree);
+        Assert.Same(driver.GetDrivenStateMachine(), hipModifier.StateMachine);
 
         int hipsIndex = RequireBoneIndex(skeleton, "Hips");
 
@@ -87,13 +86,8 @@ public sealed class HeadTrackingHipProfileIntegrationTests
         Assert.Equal("Standing", leanBack.StateId);
         Assert.Equal("Standing", crouchThenStoop.StateId);
 
-        // The viewpoint must follow the scenario marker that drives the head solve target. The
-        // corrected character templates use viewpoint-node semantics for head calibration; measuring
-        // the Head bone origin instead under-counts forward travel when the head rotates around the
-        // eye/viewpoint offset. This remains the binding regression guard: if the runner (or the
-        // integration test) forgets to drive IKTargets/HeadSolve with the scenario transform, the
-        // viewpoint will stay anchored to its rest location and every scenario delta will collapse
-        // to zero.
+        // The fixture viewpoint is a child of the downstream head solve target. This keeps the
+        // marker-to-solve hand-off observable without introducing a full-character pipeline.
         AssertViewpointFollowsMarkerDelta(standing, verticalCrouch, "VerticalCrouchStrong");
         AssertViewpointFollowsMarkerDelta(standing, stoopForward, "StoopForward");
         AssertViewpointFollowsMarkerDelta(standing, leanBack, "LeanBack");
@@ -115,9 +109,8 @@ public sealed class HeadTrackingHipProfileIntegrationTests
             $"Vertical crouch should remain mostly vertical rather than drifting strongly forward. " +
             $"Observed forward hip travel={verticalForwardHipTravel:F4} m.");
 
-        // Convert world-space head positions into the subject's local frame so that forward/back
-        // sign is independent of the subject's world orientation. The photobooth subject faces
-        // -Z in world, so local -Z corresponds to the character's forward direction.
+        // Convert world-space head positions into the minimal subject's local frame so forward/back
+        // sign is independent of the subject's world orientation. Its local -Z is forward.
         Transform3D subjectInverse = subject.GlobalTransform.AffineInverse();
         Vector3 standingHeadLocal = subjectInverse * standing.ViewpointWorldPosition;
         Vector3 stoopHeadLocal = subjectInverse * stoopForward.ViewpointWorldPosition;
@@ -172,7 +165,9 @@ public sealed class HeadTrackingHipProfileIntegrationTests
             ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
         await PrepareVerificationSceneAsync(sceneTree, sceneRoot);
 
-        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
+        PoseStateMachineMarkerDriver driver = Assert.IsType<PoseStateMachineMarkerDriver>(
+            sceneRoot.GetNodeOrNull(DriverPath),
+            exactMatch: false);
         Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
         int hipsIndex = RequireBoneIndex(skeleton, "Hips");
 
@@ -216,9 +211,8 @@ public sealed class HeadTrackingHipProfileIntegrationTests
             markerDeltaLength > 1e-3f,
             $"Test setup expected scenario '{scenarioName}' marker to differ from standing marker.");
 
-        // If the head IK target is not being driven by the scenario marker, the viewpoint stays near
-        // its rest location and the projected follow-through collapses towards zero. A live
-        // IK-driven viewpoint follows the marker direction by a large fraction of the marker delta.
+        // If the fixture head solve target is not driven by the scenario marker, the viewpoint
+        // stays near its rest location and the projected follow-through collapses towards zero.
         float projection = viewpointDelta.Dot(markerDelta) / markerDeltaLength;
         float followFraction = projection / markerDeltaLength;
 
@@ -231,41 +225,24 @@ public sealed class HeadTrackingHipProfileIntegrationTests
 
     private static async Task PrepareVerificationSceneAsync(SceneTree sceneTree, Node sceneRoot)
     {
-        Node characterRoot = sceneRoot.GetNode(SubjectPath);
-        EnsureCharacterRuntimeInstalled(characterRoot);
         await WaitForFramesAsync(sceneTree, 2);
 
-        Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
-        AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
-        Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
-        EnsureHipReconciliationModifier(skeleton);
+        PoseStateMachineMarkerDriver driver = Assert.IsType<PoseStateMachineMarkerDriver>(
+            sceneRoot.GetNodeOrNull(DriverPath),
+            exactMatch: false);
+        HipReconciliationModifier hipModifier = Assert.IsType<HipReconciliationModifier>(
+            sceneRoot.GetNodeOrNull(HipModifierPath),
+            exactMatch: false);
 
-        driver.Set("AnimationTree", animationTree);
-        driver.Set("Skeleton", skeleton);
-        _ = driver.GetType().GetMethod("_Ready")?.Invoke(driver, []);
-
-        Assert.True((bool)driver.Call("IsAnimationTreeBound"), "Expected marker driver to bind AnimationTree after runtime installation.");
-    }
-
-    private static void EnsureHipReconciliationModifier(Skeleton3D skeleton)
-    {
-        if (skeleton.GetNodeOrNull("HipReconciliationModifier") is not null)
-        {
-            return;
-        }
-
-        HipReconciliationModifier modifier = new()
-        {
-            Name = "HipReconciliationModifier",
-            Active = true,
-        };
-        skeleton.AddChild(modifier);
+        hipModifier.StateMachine = driver.GetDrivenStateMachine();
+        Assert.Equal("Standing", driver.GetCurrentStateId().ToString());
+        Assert.Same(driver.GetDrivenStateMachine(), hipModifier.StateMachine);
     }
 
     private static async Task<ScenarioSnapshot> ApplyScenarioAndCaptureAsync(
         SceneTree sceneTree,
         Node sceneRoot,
-        Node driver,
+        PoseStateMachineMarkerDriver driver,
         Skeleton3D skeleton,
         string scenarioName,
         int hipsIndex)
@@ -277,13 +254,13 @@ public sealed class HeadTrackingHipProfileIntegrationTests
         _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
 
         return new ScenarioSnapshot(
-            ((StringName)driver.Call("GetCurrentStateId")).ToString(),
+            driver.GetCurrentStateId().ToString(),
             ResolveBoneWorldPosition(skeleton, hipsIndex),
             viewpoint.GlobalPosition,
             markerWorldPosition);
     }
 
-    private static Vector3 TickScenario(Node sceneRoot, Node driver, string scenarioName)
+    private static Vector3 TickScenario(Node sceneRoot, PoseStateMachineMarkerDriver driver, string scenarioName)
     {
         Node3D scenariosRoot = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(ScenarioMarkersRootPath), exactMatch: false);
         Node3D scenarioNode = Assert.IsType<Node3D>(
@@ -297,14 +274,12 @@ public sealed class HeadTrackingHipProfileIntegrationTests
         Node3D headIKTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadIKTargetPath), exactMatch: false);
         Node3D headIKSolveTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HeadIKSolveTargetPath), exactMatch: false);
 
-        // Drive both the authored head target and the downstream solve target with the scenario
-        // marker transform. CharacterIK copies IKTargets/Head into IKTargets/HeadSolve at the
-        // skeleton modifier stage boundary, while the marker driver only updates pose state input.
+        // Drive both the authored head target and its direct fixture solve target with the scenario
+        // marker transform. The fixture intentionally represents only this target hand-off.
         headIKTarget.GlobalTransform = scenarioNode.GlobalTransform;
         headIKSolveTarget.GlobalTransform = scenarioNode.GlobalTransform;
 
-        _ = driver.Call(
-            "TickPoseTargets",
+        driver.TickPoseTargets(
             scenarioNode.GlobalTransform,
             leftHandRestMarker.GlobalTransform,
             rightHandRestMarker.GlobalTransform,
