@@ -7,7 +7,11 @@ using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
 using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Provider;
+using AlleyCat.Mind.AI.SceneStatus;
 using AlleyCat.Mind.AI.Tool;
+using AlleyCat.Mind.AI.Watch;
+using AlleyCat.Mind.Attention;
+using AlleyCat.Mind.Observation;
 using AlleyCat.Scene;
 using AlleyCat.Templating;
 using Godot;
@@ -36,13 +40,11 @@ public partial class AgenticMind : MindBase
     private static readonly IReadOnlyDictionary<string, object?> _emptyRenderContext =
         new ReadOnlyDictionary<string, object?>(new Dictionary<string, object?>());
 
-    private readonly Lock _observationDeliveryChainLock = new();
     private readonly SpeechTurnContinuationCoordinator _speechContinuations;
     private Func<AIDiagnosticsSettings> _diagnosticsSettingsLoader = AIDiagnosticsSettings.LoadOrDefault;
     private IReadOnlyDictionary<string, object?> _latestRenderContext = _emptyRenderContext;
-    private Task _observationDeliveryChain = Task.CompletedTask;
     private volatile AgentSessionRunner? _activeRunner;
-    private volatile ObservationHistoryRenderer? _activeHistoryRenderer;
+    private WatchRegistry? _boundWatchRegistry;
     private volatile bool _sessionStarted;
 
     /// <summary>Occurs after an observation has been committed to this Mind's timeline.</summary>
@@ -73,12 +75,11 @@ public partial class AgenticMind : MindBase
     }
 
     /// <summary>
-    /// Godot resource path to the authored standalone event-history file feeding the on-demand observation-history
-    /// renderer for wait results, history results, and interruption injections (AI-003 TR-12), or empty when the
-    /// default fallback-only contract applies.
+    /// Editor-authored current-scene-status stack compiled and validated at session start, then rendered from a fresh
+    /// typed snapshot at each later logical request boundary.
     /// </summary>
-    [Export(PropertyHint.File, "*.md")]
-    public string EventHistoryPath { get; set; } = string.Empty;
+    [Export]
+    public PromptStack CurrentSceneStatus { get; set; } = new();
 
     /// <summary>
     /// Backend factory used to create the session's chat client.
@@ -202,6 +203,7 @@ public partial class AgenticMind : MindBase
             ObservationDeliverySignalled -= HandleObservationDeliverySignalled;
             SpeechSegmentLifecycleNotified -= HandleSpeechSegmentLifecycleNotified;
             _speechContinuations.ClearContinuationExpectations();
+            EndWatchSession();
         }
     }
 
@@ -216,6 +218,8 @@ public partial class AgenticMind : MindBase
             ?? throw new InvalidOperationException("AgenticMind requires a configured ClientProvider.");
         PromptStack systemInstruction = SystemInstruction
             ?? throw new InvalidOperationException("AgenticMind requires a configured SystemInstruction prompt stack.");
+        PromptStack currentSceneStatus = CurrentSceneStatus
+            ?? throw new InvalidOperationException("AgenticMind requires a configured CurrentSceneStatus prompt stack.");
 
         cancellationToken.ThrowIfCancellationRequested();
         ISceneContext scene = GetCurrentSceneContext();
@@ -223,7 +227,7 @@ public partial class AgenticMind : MindBase
 
         // Phase 1: core render context — every reserved key except 'scenario', including the unconditional player
         // context (AI-001 TR-25). Observations never enter the dictionary: they reach the model exclusively
-        // through tool results and interruption injections.
+        // through tool results and per-request event-timeline context.
         Dictionary<string, object?> coreContext = CreateCoreRenderContext(
             character,
             scene,
@@ -238,15 +242,18 @@ public partial class AgenticMind : MindBase
 
         PromptSectionBuildContext buildContext = new(Game.Instance, scene, character);
         ITemplate template = await systemInstruction.CompileAsync(buildContext, cancellationToken);
+        var statusProjectors = SceneStatusProjectorRegistry.Discover(this);
+        CompiledSceneStatusPrompt compiledCurrentSceneStatus = await currentSceneStatus.CompileSceneStatusAsync(
+            buildContext,
+            statusProjectors,
+            cancellationToken);
+        statusProjectors.ValidateProjections(CreateCurrentSceneStatusBuildContext(), currentSceneStatus.Sections ?? []);
         string instructions = await RenderAndPublishSystemInstruction(template, renderContext);
 
         IMainThreadDispatcher dispatcher = Game.Instance.GetRequiredService<IMainThreadDispatcher>();
         IGameClock clock = GameClock;
-        ObservationHistoryRenderer historyRenderer = CreateSessionHistoryRenderer(renderContext);
-        _activeHistoryRenderer = historyRenderer;
         ToolAdmissionBroker toolAdmission = new();
-        AgentWaitDeliveryNotifier waitDelivery = new(HandleWaitDeliveredObservations);
-        List<AITool> tools = CreateSessionTools(sessionContext, dispatcher, historyRenderer, clock, toolAdmission, waitDelivery);
+        List<AITool> tools = CreateSessionTools(sessionContext, dispatcher, clock, toolAdmission);
         var invalidResponseRecoveryPolicy = new InvalidResponseRecoveryPolicy(
             InvalidResponseRecoveryBudget,
             [.. InvalidResponseRecoveryBackoffSeconds.Select(static seconds => TimeSpan.FromSeconds(seconds))]);
@@ -266,7 +273,7 @@ public partial class AgenticMind : MindBase
             diagnosticsSettings.EnableReasoningLogging,
             invalidResponseRecoveryPolicy,
             toolAdmission,
-            waitDelivery);
+            compiledCurrentSceneStatus);
     }
 
     /// <summary>
@@ -282,7 +289,8 @@ public partial class AgenticMind : MindBase
             AllowMultipleToolCalls,
             GameLoggerResolver.ResolveRequired<AgenticMind>(),
             session.EnableReasoningLogging,
-            invalidResponseRecoveryPolicy: session.InvalidResponseRecoveryPolicy);
+            invalidResponseRecoveryPolicy: session.InvalidResponseRecoveryPolicy,
+            requestContextSource: new MindRequestContextSource(this, session, _speechContinuations));
         session.ToolAdmission.AttachRunner(runner);
         _activeRunner = runner;
         try
@@ -297,17 +305,9 @@ public partial class AgenticMind : MindBase
 
     /// <summary>
     /// Bridges Mind's urgency-aware delivery signal into the session runtime (AI-001 TR-44, AI-002 TR-39/40/41).
-    /// Ordinary unowned windows are claimed, rendered, and queued as boundary injections without cancelling
-    /// anything; fresh unowned windows whose claim is still unknown record their invalidation immediately —
-    /// cancelling the stale generation or batch first — and then queue their payload behind the runner's rendering
-    /// barrier; fresh unowned windows while a cue hold is pending defer the invalidation to the delivery itself,
-    /// where the claimed window's contents decide — scoped by exact speech key — whether an admitted protected
-    /// speak keeps settling naturally or unrelated freshness cancels it (AI-002 TR-26/40). Wait-owned fresh windows
-    /// skip injection entirely, because the wait result is the sole delivery channel, while still recording the
-    /// stale latch without cancelling the wait itself so it completes naturally with its delivery and the batch's
-    /// remaining calls are skipped. Windows are claimed, rendered, and queued serially in signal order so pending
-    /// payloads coalesce in FIFO order, and a window that fails to render is abandoned back to Mind so its
-    /// observations are never silently lost.
+    /// Scheduling is deliberately payload-free: every event remains in Mind's persistent timeline and is rendered
+    /// only by the canonical request-context source. Freshness alone invalidates stale work; ordinary pressure waits
+    /// for the session's next natural request boundary and clears only after context confirmation.
     /// </summary>
     private void HandleObservationDeliverySignalled(ObservationDeliverySignal signal)
     {
@@ -319,37 +319,25 @@ public partial class AgenticMind : MindBase
         AgentSessionRunner? runner = _activeRunner;
         if (runner is null)
         {
-            // Before the session's runner exists — or after it ended — nothing can be invalidated or injected:
-            // Mind retains the unclaimed window (AI-001 TR-44) for the next wait or delivery claim.
+            // Before the session's runner exists — or after it ended — nothing can be invalidated. Mind retains
+            // its scheduling pressure until a valid provider response confirms a future request context.
             return;
         }
 
-        if (signal.WaitOwned)
+        if (signal.Urgency is ObservationDeliveryUrgency.Fresh)
         {
-            if (signal.Urgency is ObservationDeliveryUrgency.Fresh)
+            // A wait owns its normal completion and therefore is not cancelled. The following replacement request
+            // rematerialises the timeline instead of receiving a rendered observation payload.
+            IReadOnlySet<SpeechContinuationKey> readyContinuations = _speechContinuations.GetReadyContinuationKeys();
+            if (!signal.WaitOwned && readyContinuations.Count > 0)
             {
-                // The woken wait delivers the window through its own result (AI-002 TR-41): no injected
-                // duplication, and the wait — the active phase — is never cancelled, because it must complete
-                // naturally with its delivery. The stale latch still invalidates the surrounding batch: its
-                // remaining calls are skipped before the forced next request proceeds behind the wait's natural
-                // result.
-                runner.InvalidateForFreshTurn(expectFreshInjection: false, cancelActivePhase: false);
+                runner.InvalidateForFreshTurn(readyContinuations);
             }
-
-            return;
+            else
+            {
+                runner.InvalidateForFreshTurn(cancelActivePhase: !signal.WaitOwned);
+            }
         }
-
-        bool fresh = signal.Urgency is ObservationDeliveryUrgency.Fresh;
-        bool deferScopedInvalidation = fresh && _speechContinuations.HasContinuationExpectations();
-        if (fresh && !deferScopedInvalidation)
-        {
-            // Cancel the stale generation or batch immediately (AI-002 TR-40); the rendering barrier keeps the
-            // replacement request behind the fresh payload queued by the delivery below. No protection can apply
-            // — no cue hold is pending — so the delivery's window cannot contain a matching speech lifecycle.
-            runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        }
-
-        EnqueueObservationDelivery(runner, freshBarrierHeld: fresh && !deferScopedInvalidation);
     }
 
     private void HandleSpeechSegmentLifecycleNotified(SpeechSegmentLifecycleNotification notification)
@@ -362,327 +350,19 @@ public partial class AgenticMind : MindBase
         _speechContinuations.HandleLifecycleNotification(notification);
     }
 
-    /// <summary>
-    /// Serialises observation deliveries end-to-end in signal order: claims, renders, and payload queueing run as
-    /// one chain so concurrently signalled windows coalesce in FIFO order (AI-002 TR-39/40).
-    /// </summary>
-    /// <param name="runner">Session runner receiving the delivery.</param>
-    /// <param name="freshBarrierHeld">Whether the signal already created a legacy fresh-rendering barrier this
-    /// delivery must release when it claims no payload of its own.</param>
-    private void EnqueueObservationDelivery(AgentSessionRunner runner, bool freshBarrierHeld)
-    {
-        lock (_observationDeliveryChainLock)
-        {
-            _observationDeliveryChain = _observationDeliveryChain.ContinueWith(
-                static (_, state) => ((Func<Task>)state!)(),
-                () => DeliverPendingObservationWindowAsync(runner, freshBarrierHeld),
-                CancellationToken.None,
-                TaskContinuationOptions.None,
-                TaskScheduler.Default).Unwrap();
-        }
-    }
-
-    /// <summary>
-    /// Claims, renders, and queues every currently deliverable observation window (AI-001 TR-44, AI-002 TR-39/40):
-    /// a fresh claim queues through the runner's rendering barrier while an ordinary claim queues as a plain
-    /// boundary injection. A fresh claim that no signal-time invalidation covers — because a cue hold was pending
-    /// when the signal fired, so the scoped decision had to wait for the claimed contents — is invalidated here:
-    /// the exact continuation keys this window satisfies protect an admitted speak whose admission beat every one
-    /// of them, while unrelated freshness cancels with ordinary authority (AI-002 TR-26/40). A claim that cannot
-    /// render is abandoned — restoring the window to Mind so scheduling pressure is never silently lost — and
-    /// releases any fresh barrier so the replacement request is never blocked on a lost payload. The delivery never
-    /// throws; failures surface through contained Error-level logging.
-    /// </summary>
-    private async Task DeliverPendingObservationWindowAsync(AgentSessionRunner runner, bool freshBarrierHeld)
-    {
-        ObservationDeliveryClaim? claim = null;
-        bool payloadQueued = false;
-        bool releaseFreshBarrier = freshBarrierHeld;
-        List<FreshInjectionExpectation> matchedExpectations = [];
-        try
-        {
-            claim = TryClaimPendingObservationDelivery();
-            if (claim is null || claim.Observations.Count == 0)
-            {
-                // Another delivery or an active wait owns the window: a fresh signal's rendering barrier is
-                // released because no payload will arrive through injection.
-                if (releaseFreshBarrier)
-                {
-                    runner.AbandonFreshInjection();
-                }
-
-                return;
-            }
-
-            ObservationHistoryRenderer renderer = _activeHistoryRenderer
-                ?? throw new InvalidOperationException(
-                    "AgenticMind has no active observation history renderer; a notable observation summary cannot be "
-                    + "rendered without an initialised ObservationHistoryRenderer.");
-            IReadOnlyList<ContinuationProjection.Event> projected = ObservationHistoryRenderer.Project(
-                GetObservationTimelineSnapshot(),
-                claim.Observations);
-            List<ContinuationProjection.Event> keyedEvents = [];
-            List<ContinuationProjection.Event> voiceCompletedEvents = [];
-            List<ContinuationProjection.Event> unkeyed = [];
-            foreach (ContinuationProjection.Event @event in projected)
-            {
-                if (@event.Correlation is null)
-                {
-                    IReadOnlyList<FreshInjectionExpectation> voiceExpectations =
-                        _speechContinuations.GetVoiceCompletionExpectations(@event.Observation);
-                    if (voiceExpectations.Count > 0)
-                    {
-                        // Manual ungrouped speech correlates to the pending synthetic token for its source voice:
-                        // the expectation's own key carries the token, so the rendered text completes the hold like
-                        // a grouped delivery instead of duplicating into the anonymous summary.
-                        voiceCompletedEvents.Add(@event);
-                        matchedExpectations.AddRange(voiceExpectations);
-                    }
-                    else
-                    {
-                        unkeyed.Add(@event);
-                    }
-
-                    continue;
-                }
-
-                keyedEvents.Add(@event);
-                matchedExpectations.AddRange(_speechContinuations.GetMatchingContinuationExpectations(@event));
-            }
-
-            if (claim.Urgency is ObservationDeliveryUrgency.Fresh && !freshBarrierHeld)
-            {
-                // The window carries fresh content no signal-time invalidation covers: invalidate here, where the
-                // claimed contents are known, with the scoped cancellation decision (AI-002 TR-26/40). The exact
-                // continuation keys this window satisfies are the matching player-speech lifecycle; an empty set is
-                // unrelated freshness with ordinary cancellation authority.
-                HashSet<AgentSessionContinuationKey> freshSpeechKeys =
-                    [.. matchedExpectations.Select(static expectation => expectation.Continuation)];
-                runner.InvalidateForFreshTurn(expectFreshInjection: true, freshSpeechKeys);
-                releaseFreshBarrier = true;
-            }
-
-            List<(ContinuationProjection.Event Event, string Text, IReadOnlyList<FreshInjectionExpectation> Expectations)> keyed = [];
-            foreach (ContinuationProjection.Event @event in keyedEvents)
-            {
-                keyed.Add(
-                    (@event,
-                        await RenderNotableSummaryAsync(renderer, [@event]),
-                        _speechContinuations.GetMatchingContinuationExpectations(@event)));
-            }
-
-            List<(ContinuationProjection.Event Event, string Text)> voiceCompleted = [];
-            foreach (ContinuationProjection.Event @event in voiceCompletedEvents)
-            {
-                voiceCompleted.Add((@event, await RenderNotableSummaryAsync(renderer, [@event])));
-            }
-
-            string? unkeyedSummary = unkeyed.Count > 0
-                ? await RenderNotableSummaryAsync(renderer, unkeyed)
-                : null;
-            foreach ((ContinuationProjection.Event @event, string text, IReadOnlyList<FreshInjectionExpectation> expectations) in keyed)
-            {
-                AgentSessionInjection injection = new(
-                    SpeechTurnContinuationCoordinator.CreateSessionInjectionKey(@event),
-                    @event.Revision,
-                    text);
-                if (expectations.Count == 0)
-                {
-                    runner.QueueOrReplaceInjection(injection);
-                }
-                else
-                {
-                    foreach (FreshInjectionExpectation expectation in expectations)
-                    {
-                        runner.CompleteFreshExpectation(expectation, injection);
-                    }
-
-                    _speechContinuations.RemoveContinuationExpectations(expectations);
-                }
-            }
-
-            foreach ((ContinuationProjection.Event @event, string text) in voiceCompleted)
-            {
-                IReadOnlyList<FreshInjectionExpectation> expectations =
-                    _speechContinuations.GetVoiceCompletionExpectations(@event.Observation);
-                foreach (FreshInjectionExpectation expectation in expectations)
-                {
-                    // The synthetic token lives in the expectation's continuation key, so the delivered ungrouped
-                    // speech completes its hold as a keyed replacement turn exactly like a grouped delivery.
-                    runner.CompleteFreshExpectation(
-                        expectation,
-                        new AgentSessionInjection(expectation.Continuation.Key, @event.Revision, text));
-                }
-
-                _speechContinuations.RemoveContinuationExpectations(expectations);
-            }
-
-            if (unkeyedSummary is not null)
-            {
-                if (releaseFreshBarrier)
-                {
-                    runner.QueueFreshInjection(unkeyedSummary);
-                }
-                else
-                {
-                    runner.QueueInjection(unkeyedSummary);
-                }
-            }
-            else if (releaseFreshBarrier)
-            {
-                // Keyed projections own the visible input; only release the compatibility rendering barrier.
-                runner.AbandonFreshInjection();
-            }
-
-            payloadQueued = true;
-            CompleteObservationDelivery(claim);
-            _speechContinuations.ReleaseSettledContinuationHolds();
-        }
-        catch (Exception exception)
-        {
-            if (claim is not null && claim.Observations.Count > 0 && !payloadQueued)
-            {
-                // Rendering or queueing failed before the payload was queued: restore the claimed window so it
-                // stays deliverable (AI-001 TR-44). A payload that already reached the queue cannot be
-                // un-delivered, so its window is never restored on top of the queued copy.
-                AbandonObservationDelivery(claim);
-                releaseFreshBarrier = claim.Urgency is ObservationDeliveryUrgency.Fresh;
-            }
-
-            foreach (FreshInjectionExpectation expectation in matchedExpectations)
-            {
-                runner.AbandonFreshExpectation(expectation);
-            }
-
-            _speechContinuations.RemoveContinuationExpectations(matchedExpectations);
-
-            if (releaseFreshBarrier)
-            {
-                runner.AbandonFreshInjection();
-            }
-
-            LogObservationDeliveryFailure(exception);
-        }
-    }
-
-    /// <summary>
-    /// Correlates one wait-delivered observation window with pending keyed speech holds (AI-002 TR-57): the wait
-    /// result is the sole delivery channel for its window, so every matching lease settles without a duplicate
-    /// injected replacement — its rendered observation text reached the model through the tool result.
-    /// </summary>
-    private void HandleWaitDeliveredObservations(IReadOnlyList<AgentObservation> delivered)
-    {
-        if (IsNodeLifetimeEnded || delivered.Count == 0)
-        {
-            return;
-        }
-
-        AgentSessionRunner? runner = _activeRunner;
-        if (runner is null || !_speechContinuations.HasContinuationExpectations())
-        {
-            return;
-        }
-
-        try
-        {
-            IReadOnlyList<ContinuationProjection.Event> projected = ObservationHistoryRenderer.Project(
-                GetObservationTimelineSnapshot(),
-                delivered);
-            List<FreshInjectionExpectation> matched = [];
-            foreach (ContinuationProjection.Event @event in projected)
-            {
-                if (@event.Correlation is null)
-                {
-                    matched.AddRange(_speechContinuations.GetVoiceCompletionExpectations(@event.Observation));
-                }
-                else
-                {
-                    matched.AddRange(_speechContinuations.GetMatchingContinuationExpectations(@event));
-                }
-            }
-
-            foreach (FreshInjectionExpectation expectation in matched)
-            {
-                runner.SettleFreshExpectationThroughWaitDelivery(expectation);
-            }
-
-            _speechContinuations.RemoveContinuationExpectations(matched);
-            _speechContinuations.ReleaseSettledContinuationHolds();
-        }
-        catch (Exception exception)
-        {
-            LogObservationDeliveryFailure(exception);
-        }
-    }
-
-    private static void LogObservationDeliveryFailure(Exception exception)
-    {
-        if (GameLoggerResolver.TryResolve(out ILogger<AgenticMind>? logger) && logger is not null)
-        {
-            logger.LogError(
-                exception,
-                "Delivering the pending observation window failed; its ownership was restored to Mind.");
-        }
-    }
-
-    private static async Task<string> RenderNotableSummaryAsync(
-        ObservationHistoryRenderer renderer,
-        IReadOnlyList<ContinuationProjection.Event> projected)
-        => $"Important scene events require your attention:\n{await renderer.RenderProjectedAsync(projected)}";
-
-    private ObservationHistoryRenderer CreateSessionHistoryRenderer(
-        IReadOnlyDictionary<string, object?> renderContext)
-        => ObservationHistoryRenderer.Create(
-            LoadEventHistoryDocument(),
-            Game.Instance.GetRequiredService<ITemplateCompiler>(),
-            renderContext["character"] as ICharacter
-                ?? throw new InvalidOperationException(
-                    "The session render context is missing the owning character."));
-
-    /// <summary>
-    /// Loads and parses the configured event-history file once at session start, or returns null when no file is
-    /// configured so the default fallback-only contract applies (AI-003 TR-12).
-    /// </summary>
-    private EventHistoryDocument? LoadEventHistoryDocument()
-    {
-        if (string.IsNullOrWhiteSpace(EventHistoryPath))
-        {
-            return null;
-        }
-
-        using var file = Godot.FileAccess.Open(EventHistoryPath, Godot.FileAccess.ModeFlags.Read);
-        if (file is null)
-        {
-            Error error = Godot.FileAccess.GetOpenError();
-            throw new InvalidOperationException(
-                $"Could not read the event-history file '{EventHistoryPath}'. Godot FileAccess error: {error}.");
-        }
-
-        try
-        {
-            return EventHistoryDocument.Parse(file.GetAsText());
-        }
-        catch (InvalidOperationException exception)
-        {
-            throw new InvalidOperationException(
-                $"Invalid event-history authoring in '{EventHistoryPath}'.", exception);
-        }
-    }
-
     private List<AITool> CreateSessionTools(
         ScenarioContext context,
         IMainThreadDispatcher dispatcher,
-        ObservationHistoryRenderer historyRenderer,
         IGameClock clock,
-        ToolAdmissionBroker toolAdmission,
-        AgentWaitDeliveryNotifier waitDelivery)
+        ToolAdmissionBroker toolAdmission)
     {
         // Concrete capabilities bind typed to their concrete tool here at composition (AI-002 TR-19):
-        // speech-admission arbitration reaches only the speak tool and wait-delivery acknowledgement only the wait
-        // tool, never the common session binding.
+        // Speech-admission arbitration reaches only the speak tool; canonical request context owns all observation
+        // delivery rather than the common tool session.
         SpeechTool speechTool = new(toolAdmission);
-        WaitTool waitTool = new(waitDelivery);
-        AgentToolSession sessionServices = new(context, this, historyRenderer, clock);
+        WaitTool waitTool = new();
+        AgentToolSession sessionServices = new(context, this, clock);
+        WatchRegistry? watchRegistry = DiscoverWatchRegistry();
         // Composition registers the speak tool's per-function phase policy (AI-002 TR-62): its invocation phase
         // executes under admission arbitration, and the runner consults only this generic descriptor — never a
         // concrete tool, function name, or tool type. The production inventory is available without scene-authored
@@ -693,7 +373,17 @@ public partial class AgenticMind : MindBase
                 speechTool.CreateFunction(context, this, dispatcher, sessionServices)),
             waitTool.CreateFunction(context, this, dispatcher, sessionServices),
             new HistoryTool().CreateFunction(context, this, dispatcher, sessionServices),
+            new UnwatchTool(watchRegistry).CreateFunction(context, this, dispatcher, sessionServices),
         ];
+        if (watchRegistry is not null)
+        {
+            IReadOnlyList<AITool> watchTools = watchRegistry.BindSessionAndCreateTools(
+                context,
+                this,
+                dispatcher);
+            _boundWatchRegistry = watchRegistry;
+            functions.AddRange(watchTools);
+        }
         foreach (AgentTool? extra in Tools)
         {
             if (extra is not null)
@@ -703,6 +393,34 @@ public partial class AgenticMind : MindBase
         }
 
         return functions;
+    }
+
+    private WatchRegistry? DiscoverWatchRegistry()
+    {
+        WatchRegistry[] registries = [.. GetChildren().OfType<WatchRegistry>()];
+        return registries.Length switch
+        {
+            0 => null,
+            1 => registries[0],
+            _ => throw new InvalidOperationException("AgenticMind supports exactly one direct-child WatchRegistry."),
+        };
+    }
+
+    private void EndWatchSession()
+    {
+        WatchRegistry? registry = Interlocked.Exchange(ref _boundWatchRegistry, null);
+        registry?.EndSession();
+    }
+
+    /// <inheritdoc />
+    protected override IEnumerable<IObservationLifetimePolicy> CreateLifetimePolicies()
+        => [.. base.CreateLifetimePolicies(), new NeverExpireObservationLifetimePolicy<ObservedProximityTransition>(eventEligible: true)];
+
+    /// <inheritdoc />
+    protected override void OnNodeLifetimeEnding()
+    {
+        EndWatchSession();
+        base.OnNodeLifetimeEnding();
     }
 
     internal static IReadOnlyDictionary<string, object?> CreateRenderContext(
@@ -727,7 +445,7 @@ public partial class AgenticMind : MindBase
     /// <see cref="ICharacter" /> instances, whose template surface the curated member-access policy seals to exactly
     /// <c>FullId</c>, so sensitive character members stay unreachable from templates by construction. Observations
     /// are never placed in the dictionary (AI-001 TR-25): they reach the model exclusively through AI-002 tool
-    /// results and interruption injections.
+    /// results and per-request event-timeline context.
     /// </remarks>
     internal static Dictionary<string, object?> CreateCoreRenderContext(
         ICharacter character,
@@ -863,10 +581,130 @@ public partial class AgenticMind : MindBase
         return instructions;
     }
 
+    /// <summary>
+    /// Captures fresh request-scoped scene state without touching the session-fixed scenario context or scenario.
+    /// </summary>
+    internal SceneStatusBuildContext CreateCurrentSceneStatusBuildContext()
+    {
+        ProcessRetainedObservationExpiry();
+        ISceneContext scene = GetCurrentSceneContext();
+        ICharacter character = ResolveOwningCharacter();
+        AttentionSnapshot attention = GetAttentionSnapshot();
+        IReadOnlyList<AcceptedObservationEntry> retainedLog = GetRetainedObservationSnapshot();
+        IReadOnlyList<AcceptedObservationEntry> eventTimeline = GetPersistentEventTimelineSnapshot();
+        double timestamp = GameClock.NowSeconds;
+        return new SceneStatusBuildContext(character, scene, attention, retainedLog, eventTimeline, timestamp);
+    }
+
+    /// <summary>
+    /// Renders the session-start compiled current-scene-status stack with a fresh typed snapshot. This deliberately
+    /// leaves request attachment to the subsequent AgentSessionRunner integration task.
+    /// </summary>
+    internal Task<string> RenderCurrentSceneStatusAsync(
+        AgentSession session,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return session.CurrentSceneStatus.RenderAsync(CreateCurrentSceneStatusBuildContext(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Composes Mind-specific event history and scene status into the generic runner request-context boundary.
+    /// The source owns the confirmed event watermark; it never exposes Mind, projectors, observations, or tools to
+    /// <see cref="AgentSessionRunner" />.
+    /// </summary>
+    private sealed class MindRequestContextSource(
+        AgenticMind mind,
+        AgentSession session,
+        SpeechTurnContinuationCoordinator continuations) : IAgentRequestContextSource
+    {
+        private readonly Lock _watermarkLock = new();
+        private long _confirmedEventSequenceID;
+
+        public async ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                await continuations.WaitForPresentationEligibilityAsync(cancellationToken);
+                IReadOnlyList<AcceptedObservationEntry> timeline = mind.GetPersistentEventTimelineSnapshot();
+                long eventWatermark = timeline.Count == 0 ? 0 : timeline[^1].SequenceID;
+                if (!continuations.TryPresentThrough(eventWatermark, timeline))
+                {
+                    // A lifecycle cue was registered between eligibility sampling and timeline capture. It belongs
+                    // to the same request boundary, so wait for its committed event before rendering anything.
+                    continue;
+                }
+
+                IReadOnlyList<AcceptedObservationEntry> accepted = mind.GetAcceptedObservationLogSnapshot();
+                long confirmed;
+                lock (_watermarkLock)
+                {
+                    confirmed = _confirmedEventSequenceID;
+                }
+
+                List<AcceptedObservationEntry> established = [];
+                List<AcceptedObservationEntry> newlyObserved = [];
+                foreach (AcceptedObservationEntry entry in timeline)
+                {
+                    (entry.SequenceID <= confirmed ? established : newlyObserved).Add(entry);
+                }
+
+                string establishedText = await RenderTimelineAsync(established, timeline);
+                string newText = await RenderTimelineAsync(newlyObserved, timeline);
+                string sceneStatus = await mind.RenderCurrentSceneStatusAsync(session, cancellationToken);
+                long schedulingWatermark = accepted.Count == 0 ? 0 : accepted[^1].SequenceID;
+                var confirmation = new Confirmation(eventWatermark, schedulingWatermark);
+                return new AgentRequestContext(
+                    [
+                        new ChatMessage(ChatRole.User, BuildTimelineMessage(establishedText, newText)),
+                        new ChatMessage(ChatRole.User, sceneStatus),
+                    ],
+                    confirmation);
+            }
+        }
+
+        public void Confirm(object? confirmation)
+        {
+            if (confirmation is not Confirmation snapshot)
+            {
+                return;
+            }
+
+            lock (_watermarkLock)
+            {
+                _confirmedEventSequenceID = Math.Max(_confirmedEventSequenceID, snapshot.EventSequenceID);
+            }
+
+            mind.ConfirmProviderRequestContext(snapshot.SchedulingSequenceID);
+            continuations.ConfirmThrough(snapshot.EventSequenceID);
+        }
+
+        public void Discard(object? confirmation)
+        {
+            if (confirmation is Confirmation snapshot)
+            {
+                continuations.DiscardPresentation(snapshot.EventSequenceID);
+            }
+        }
+
+        private async Task<string> RenderTimelineAsync(
+            IReadOnlyList<AcceptedObservationEntry> entries,
+            IReadOnlyList<AcceptedObservationEntry> completeTimeline)
+            => entries.Count == 0
+                ? "(none)"
+                : await new ObservationHistoryRenderer(session.Context.Character).RenderAsync(entries, completeTimeline);
+
+        private static string BuildTimelineMessage(string established, string newlyObserved)
+            => $"Established Event History:\n{established}\n--- New Since Your Previous Response ---\n{newlyObserved}";
+
+        private readonly record struct Confirmation(long EventSequenceID, long SchedulingSequenceID);
+    }
+
     /// <inheritdoc />
     protected override void OnObservationIngested(AgentObservation observation)
     {
         base.OnObservationIngested(observation);
+        _speechContinuations.NotifyObservationAccepted(observation);
         ObservationCommitted?.Invoke(observation);
     }
 
@@ -895,22 +733,6 @@ public partial class AgenticMind : MindBase
         _diagnosticsSettingsLoader = diagnosticsSettingsLoader;
     }
 
-    /// <summary>Replaces or clears the active observation-history renderer for fault and guard fixtures.</summary>
-    internal void SetActiveHistoryRendererForTesting(ObservationHistoryRenderer? historyRenderer)
-        => _activeHistoryRenderer = historyRenderer;
-
-    /// <summary>
-    /// Waits for every observation delivery queued when this method is called, so integration fixtures can
-    /// synchronise release of a held session boundary with its already-rendered injection.
-    /// </summary>
-    internal Task WaitForPendingObservationDeliveriesForTestingAsync()
-    {
-        lock (_observationDeliveryChainLock)
-        {
-            return _observationDeliveryChain;
-        }
-    }
-
     /// <summary>
     /// Prepared session state captured once at session start (AI-002 TR-5/6): the trusted binding, the rendered
     /// system instruction, the session-owner bootstrap input message, the decorated chat client, the bound
@@ -925,5 +747,5 @@ public partial class AgenticMind : MindBase
         bool EnableReasoningLogging,
         IInvalidResponseRecoveryPolicy InvalidResponseRecoveryPolicy,
         ToolAdmissionBroker ToolAdmission,
-        AgentWaitDeliveryNotifier WaitDelivery);
+        CompiledSceneStatusPrompt CurrentSceneStatus);
 }

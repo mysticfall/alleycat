@@ -22,24 +22,22 @@ public sealed class AgenticMindTests
     /// Speech observations own their default scheduling significance without Mind-specific configuration.
     /// </summary>
     [Fact]
-    public void ObservedSpeech_RecognisedSpeakerRetainsIdentityAndProvenance()
+    public void ObservedSpeech_RecognisedSpeakerRetainsSemanticIdentity()
     {
-        ObservedSpeech observation = new("char:speaker", "microphone-7", "hello");
+        ObservedSpeech observation = new("char:speaker", "hello");
 
-        Assert.Equal("microphone-7", observation.VoiceId);
         Assert.Equal("char:speaker", observation.ActorId);
         Assert.Equal("hello", observation.Content);
     }
 
     /// <summary>
-    /// Speech observations retain a null recognition result separately from raw voice provenance.
+    /// Speech observations retain an unknown recognition result without leaking voice provenance.
     /// </summary>
     [Fact]
-    public void ObservedSpeech_WhenUnrecognised_RetainsRawVoiceIDSeparately()
+    public void ObservedSpeech_WhenUnrecognised_RetainsSemanticFallback()
     {
-        ObservedSpeech observation = new(null, "microphone-7", "hello");
+        ObservedSpeech observation = new(null, "hello");
 
-        Assert.Equal("microphone-7", observation.VoiceId);
         Assert.Null(observation.ActorId);
         Assert.Equal("hello", observation.Content);
     }
@@ -160,7 +158,7 @@ public sealed class AgenticMindTests
         Assert.Same(result["character"], characters["char:owner"]);
         Assert.All(characters.Values, value => _ = Assert.IsAssignableFrom<ICharacter>(value));
         // Observations never enter the render dictionary (AI-001 TR-25): they reach the model exclusively through
-        // AI-002 tool results and interruption injections.
+        // AI-002 tool results and per-request event-timeline context.
         Assert.False(result.ContainsKey("observations"));
         // The player is not attention-eligible here, so 'characters' omits it while the unconditional 'player' key
         // carries the raw player character.

@@ -21,7 +21,7 @@ internal static class ContinuationProjection
     /// Prompting-owned correlation identity for one projected grouped-speech event: the contributing group's
     /// source voice, speech-group identity, and contributing segment indexes. Correlation metadata only
     /// (AI-003 TR-33/35) — never model-facing wording, never rendered, and never a runner session-protocol type;
-    /// the runtime consumption boundary translates it into injection keys.
+    /// the runtime consumption boundary translates it into opaque continuation identities.
     /// </summary>
     internal sealed record SpeechGroupCorrelation(
         string SourceVoiceID,
@@ -33,20 +33,34 @@ internal static class ContinuationProjection
         IReadOnlyList<AgentObservation>? selected = null)
     {
         ArgumentNullException.ThrowIfNull(timeline);
-        HashSet<AgentObservation> selectedRecords = new(ReferenceEqualityComparer.Instance);
-        if (selected is not null)
-        {
-            selectedRecords.UnionWith(selected);
-        }
+        return Project(
+            [.. timeline.Select((observation, index) => new Entry(observation, index, selected is null || selected.Contains(observation), null))]);
+    }
 
+    /// <summary>Projects accepted timeline entries while retaining their ingestion-only speech transport privately.</summary>
+    public static IReadOnlyList<Event> Project(
+        IReadOnlyList<AcceptedObservationEntry> timeline,
+        IReadOnlyList<AcceptedObservationEntry>? selected = null)
+    {
+        ArgumentNullException.ThrowIfNull(timeline);
+        return Project(
+            [.. timeline.Select((entry, index) => new Entry(
+                entry.Payload,
+                index,
+                selected is null || selected.Contains(entry),
+                entry.SpeechTransport))]);
+    }
+
+    private static IReadOnlyList<Event> Project(IReadOnlyList<Entry> timeline)
+    {
         Dictionary<GroupIdentity, List<Entry>> groups = [];
         List<Entry> standalone = [];
 
         for (int index = 0; index < timeline.Count; index++)
         {
-            AgentObservation observation = timeline[index] ?? throw new ArgumentException("Timeline contains a null observation.", nameof(timeline));
-            Entry entry = new(observation, index, selected is null || selectedRecords.Contains(observation));
-            if (observation is ObservedSpeech speech && TryGetGroupIdentity(speech, out GroupIdentity identity))
+            Entry entry = timeline[index];
+            AgentObservation observation = entry.Observation ?? throw new ArgumentException("Timeline contains a null observation.", nameof(timeline));
+            if (observation is ObservedSpeech && TryGetGroupIdentity(entry, out GroupIdentity identity))
             {
                 if (!groups.TryGetValue(identity, out List<Entry>? entries))
                 {
@@ -94,17 +108,17 @@ internal static class ContinuationProjection
             string content = string.Join(
                 " … ",
                 entries
-                    .OrderBy(static entry => ((ObservedSpeech)entry.Observation).SegmentIndex)
+                    .OrderBy(static entry => entry.SpeechTransport!.SegmentIndex)
                     .Select(static entry => ((ObservedSpeech)entry.Observation).Content)
                     .Where(static content => !string.IsNullOrWhiteSpace(content)));
             projected.Add(new Event(
-                new ObservedSpeech(first.ActorId, null, content, null) { ObservedAt = latest.Observation.ObservedAt },
+                new ObservedSpeech(first.ActorId, content) { ObservedAt = latest.Observation.ObservedAt },
                 latest.Position + 1,
                 latest.Position + 1,
                 new SpeechGroupCorrelation(
                     identity.SourceVoiceID,
                     identity.SpeechGroupID,
-                    entries.Select(static entry => ((ObservedSpeech)entry.Observation).SegmentIndex).ToHashSet())));
+                    entries.Select(static entry => entry.SpeechTransport!.SegmentIndex).ToHashSet())));
         }
 
         return [.. projected.OrderBy(static entry => entry.Position)];
@@ -112,19 +126,17 @@ internal static class ContinuationProjection
 
     private static Event CreateStandalone(Entry entry)
     {
-        // Ungrouped speech keeps its raw voice provenance so downstream consumers can correlate the standalone
-        // event to its source voice, while grouped speech carries that identity in its correlation instead.
         AgentObservation observation = entry.Observation is ObservedSpeech speech
-            ? new ObservedSpeech(speech.ActorId, speech.VoiceId, speech.Content, null) { ObservedAt = speech.ObservedAt }
+            ? new ObservedSpeech(speech.ActorId, speech.Content) { ObservedAt = speech.ObservedAt }
             : entry.Observation;
         return new Event(observation, entry.Position + 1, entry.Position + 1, Correlation: null);
     }
 
-    private static bool TryGetGroupIdentity(ObservedSpeech speech, out GroupIdentity identity)
+    private static bool TryGetGroupIdentity(Entry entry, out GroupIdentity identity)
     {
-        if (speech.HasValidSpeechSegmentIdentity)
+        if (entry.SpeechTransport is { HasGroupedSegmentIdentity: true } transport)
         {
-            identity = new GroupIdentity(speech.VoiceId!, speech.SpeechGroupID!);
+            identity = new GroupIdentity(transport.SourceVoiceID, transport.SpeechGroupID!);
             return true;
         }
 
@@ -142,7 +154,11 @@ internal static class ContinuationProjection
 
     private readonly record struct GroupIdentity(string SourceVoiceID, string SpeechGroupID);
 
-    private sealed record Entry(AgentObservation Observation, long Position, bool Selected);
+    private sealed record Entry(
+        AgentObservation Observation,
+        long Position,
+        bool Selected,
+        SpeechObservationTransport? SpeechTransport);
 
     private sealed class ContinuationProjectionLog
     {

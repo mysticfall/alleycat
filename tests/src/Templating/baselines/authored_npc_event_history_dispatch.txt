@@ -1,7 +1,0 @@
-I said: Self line. (at 100.2s game time)
-Heard char:rin say: Known line. (at 7200.0s game time)
-Heard an unknown speaker say: Unknown line.
-Heard CHAR:TEST_CHARACTER say: Case-distinct line. (at 864000.0s game time)
-Observed char:coat: A weathered red coat. (at 900000.0s game time)
-I observe char:rin 1.4 m to my left; they are facing me. (at 900100.0s game time)
-((Received world.changed event.)) (at 300.6s game time)

@@ -194,7 +194,10 @@ public sealed partial class ScenarioIntegrationTests
         }
     }
 
-    /// <summary>Session start captures a fresh scene snapshot before querying the manager exactly once.</summary>
+    /// <summary>
+    /// Session start captures a fixed scenario snapshot before querying the manager exactly once, then uses a second
+    /// fresh snapshot to validate current-scene status wiring.
+    /// </summary>
     [Fact]
     public async Task SessionStart_CapturesFreshSnapshotThenQueriesManagerOnceWithCoreContext()
     {
@@ -219,7 +222,7 @@ public sealed partial class ScenarioIntegrationTests
         {
             _ = await mind.RunSessionStartForTestAsync();
 
-            Assert.Equal(1, sceneProvider.CaptureCount);
+            Assert.Equal(2, sceneProvider.CaptureCount);
             Assert.Equal([1], manager.SceneCaptureCountsAtQuery);
 
             // The core context handed to the manager excludes the scenario key; keys were captured at call time
@@ -632,13 +635,10 @@ public sealed partial class ScenarioIntegrationTests
         Assert.NotNull(stack);
 
         // The shared generic NPC prompt stack carries exactly the mind.md file section, essential lore, character
-        // lore, and the scenario section — no event-history section (AI-003 TR-23/24).
+        // lore, and the scenario section.
         Assert.Equal(
             ["Instructions", "Lore", "Characters", "Scenario"],
             stack.Sections.Select(section => section.Name));
-        Assert.DoesNotContain(
-            stack.Sections,
-            section => section.GetType().Name.Contains("EventHistory", StringComparison.Ordinal));
         PromptSection scenarioSection = Assert.IsType<FilePromptSection>(stack.Sections[3]);
         var fileSection = (FilePromptSection)scenarioSection;
         Assert.Equal("res://prompts/scenario.md", fileSection.FilePath);

@@ -196,7 +196,6 @@ public sealed class PerceptionCompositionIntegrationTests
             Assert.Equal("external_test_voice", publishedPercept.SourceVoiceID);
             ObservedSpeech committedObservation = Assert.Single(committed);
             Assert.Equal("runtime activation evidence", committedObservation.Content);
-            Assert.Equal("external_test_voice", committedObservation.VoiceId);
 
             vadim.RefreshComponents();
             hearing.ReceiveVoice("second runtime activation evidence", new TestVoice("external_test_voice"));

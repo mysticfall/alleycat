@@ -28,7 +28,7 @@ public sealed record ObservedVisualPresence : Observation
     public override string TypeKey => TypeKeyValue;
 
     /// <inheritdoc />
-    public override ObservationRetention Retention => ObservationRetention.Transient;
+    public override bool IsAttentionOnly => true;
 
     /// <summary>
     /// Calculates this observation's scheduling importance. Transient observations bypass importance and prompt

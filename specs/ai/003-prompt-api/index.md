@@ -1,320 +1,112 @@
 ---
 id: AI-003
 title: Prompt API
-domain: AI
-status: draft
 ---
 
-# AI-003: Prompt API
+# Prompt API
 
 ## Requirement
 
-Provide an authorable prompt-composition API that compiles ordered sections into the sole system instruction of an
-NPC's agent session, and an authorable event-history contract that renders observation records on demand for tool
-results and injected messages.
+Provide authorable static-instruction and current-scene-status contracts plus canonical, type-owned event rendering for
+each AgenticMind session.
 
 ## Goal
 
-Keep prompt construction separate from template rendering while giving content authors deterministic, privacy-safe
-control over how concrete observation types appear in chronological event history.
+Keep static guidance stable while presenting fresh typed scene state and causally watermarked event history on every
+logical provider request.
 
 ## User Requirements
 
-1. Content authors can compose a prompt from ordered, named inline, file-backed, and lore sections.
-2. Content authors can define exact event-history wording for known observation types and mandatory safe wording for
-   unknown types, including one actor-relative observed-speech fragment.
-3. An NPC receives its observation history through on-demand renderings — `wait` results, timeline history (`history`)
-   tool results, and injected messages — presented in chronological order with authored wording, rather than
-   through the session system instruction.
-4. Speech history distinguishes the NPC, a recognised other character, and an unknown speaker without exposing raw
-   voice provenance as recognised identity or rendered wording.
-5. Shared NPC prompt assets keep the session prompt cross-cutting — identity, session frame, and lore — without
-   per-tool mechanics or observation history.
-6. Shared guidance teaches the NPC only cross-cutting session conduct: act through tools, and read the game-time
-   seconds carried by tool results. Per-tool mechanics and etiquette — using `wait` to observe the scene rather than
-   to pass time, and waiting a reasonable duration after asking another character a question before assuming refusal
-   and reacting — are carried by the respective tool descriptions.
-7. The session prompt includes the NPC and all currently resolvable characters meeting its attention threshold,
-   without unconditionally including every scene character.
-8. Focused visual descriptions in event history identify the observed subject and expose the authored description to
-   the NPC's agent.
- 9. Relative-position observations in event history identify the observed subject and read as present-tense statements
-   of where it stands relative to the observing NPC — how far away it is, whether ahead or behind and to which side —
-   and of how it is facing relative to the NPC — facing it, back turned to it, or the NPC standing to its left or
-   right — with every direction unambiguous about whose frame it is measured from.
-10. A speaker who pauses and continues is presented to the NPC as one utterance — the earlier text, the pause, and
-    the continuation joined into a single line of dialogue — identically in `wait` results, timeline history
-    (`history`) results, and injected messages, with no visible grouping identifiers and no duplicate partial lines.
+1. Authors can provide one stable system instruction and a separately authored, fresh current-scene status.
+2. NPCs see current attended characters and active watches in current scene status without changing their fixed
+   scenario.
+3. Event history uses the canonical text owned by each observation type. Unknown types receive safe fallback text that
+   discloses only their `TypeKey`.
+4. An NPC's prompt does not expose raw voice provenance or scheduling-only data as observation text.
 
 ## Technical Requirements
 
-1. Prompt API types must live under `AlleyCat.Mind.AI.Prompting` and use Godot `Resource` types for `PromptStack` and
-   prompt sections.
-2. `PromptSection` must be abstract, expose a `Name`, and define one public asynchronous content method equivalent to
-   `GetContentAsync(PromptSectionBuildContext buildContext, CancellationToken cancellationToken)`.
-3. `PromptSectionBuildContext` must contain required `Services`, current `ISceneContext Scene`, and owning
-   `ICharacter Character`. It must not contain observations, lore-query state, or template render context.
-4. Prompt construction and template rendering must remain separate phases. Runtime observation records must be
-   supplied only at render time — never compiled into section content — and must never enter the session-start render
-   dictionary: observations reach the model exclusively through AI-002 tool results, `wait` results, and injected
-   messages.
-5. `TextPromptSection` and `FilePromptSection` must contribute their authored text through the asynchronous build
-   contract without altering content.
-6. `PromptStack` must expose an ordered array of `PromptSection` resources and asynchronous compilation through
-   build-context services.
-7. Compilation must resolve `IPromptWriter` and `ITemplateCompiler`, write `Sections ?? []` in authored order, trim the
-   complete source, and return the compiler's `ITemplate`. The stack must not cache rendered output or mutable context.
-8. `IPromptWriter` must asynchronously serialise the ordered sections. `PseudoXmlPromptWriter` must remain the default
-   startup-registered implementation and delegate section content generation to each section.
-9. `PseudoXmlPromptWriter` must reject null collections, null entries, and blank section names with clear authoring
-   errors. It must wrap content in matching authored-name tags, replacing only `<`, `>`, and `/` with `_` in tag names.
-10. Prompt content, including slashes and multiline output, must otherwise remain unchanged. Formatting must remain in
-    `IPromptWriter`, not `PromptStack`.
-11. The API must reuse `AlleyCat.Templating.ITemplate` and `ITemplateCompiler` rather than define competing
-    abstractions.
-12. Event history must be authored as one standalone Liquid file, `game/prompts/event_history.md` — not a
-     `PromptSection` and not part of the session-start prompt stack — configured as an authored file path consumed by
-     the renderer. The file uses HTML-comment delimiter lines:
-    - `<!-- event-history: <TypeKey> -->` opens the fragment section for that exact, case-sensitive `TypeKey`;
-    - `<!-- event-history: fallback -->` opens the mandatory fallback section; and
-    - section content excludes the delimiter lines.
-    The parser converts each section into a standalone template source, and every parsed section compiles individually
-    at session start; no template syntax may be generated at runtime (TMPL-001 TR-13).
-13. Event-history parsing must fail clearly, naming the offending section, for a blank `TypeKey`, an unknown `TypeKey`
-    matching no known observation type, a duplicate exact `TypeKey`, a missing or blank fallback section, or text
-    outside any section.
-14. Event history must select each concrete observation's fragment at render time by exact, case-sensitive `TypeKey`
-    comparison performed in code, rendering the individually compiled template parsed from the matching authored
-    section instead of composing fragments into one generated template source. It must not use global mutable partial
-     registration, an observation visitor, or observation-owned formatting. It renders observation records for AI-002
-     `wait` results, timeline history (`history`) tool results, and injected messages. Grouped speech reaches these
-     paths as one projected event per speech group through the shared continuation projection (TR-33).
-15. Each observation record from the timeline snapshot must pass directly to the template compiler as the current
-    context when its selected fragment renders. This must preserve the record's fragment-visible properties. Unknown
-    concrete observations must render the fallback with the same record data.
-16. The fallback must keep terse wording identifying the unmatched observation type and may append the same game-time
-    label; it must still never render raw voice provenance.
-17. The shared event-history file must define exactly one actor-relative fragment section for `ObservedSpeech`, keyed
-     by the exact `speech.observed` key. Separate heard-speech and self-spoken sections or semantic keys must not be
-    authored.
-18. The observed-speech fragment must compare `ObservedAction.ActorId` with the owning `ICharacter.FullId` to render
-    owning-character speech as self speech, a recognised other actor by character identity, and an absent or unknown
-    actor with privacy-safe wording.
-19. Raw `VoiceId` provenance must never be rendered by the observed-speech fragment or used as fallback identity
-    wording.
-20. Exactly once per agent session, at session start, AgenticMind must assemble the render context on demand, compile
-     the configured `PromptStack`, and render the template with the exact top-level read-only dictionary returned. The
-     dictionary defines exactly these keys:
-     - `character`: the owner's curated `ICharacter` value;
-     - `characters`: curated `ICharacter` values keyed and inserted in ordinal order by exact canonical
-       `Character.FullId` — the owner plus every attention-eligible character under AI-006, which may omit the
-       player;
-     - `player`: the mandatory, unconditional player `ICharacter` value under
-       [SCN-001](../../scene/001-scene-context-api/index.md), resolved via `ISceneContext.Player`, never
-       attention-gated; and
-     - `scenario`: the current scenario under [AI-008](../008-scenario/index.md) two-phase sealing — the scenario
-       record or null.
-     The dictionary defines no `observations` key.
-21. The session prompt must render with the exact dictionary returned by `CreateRenderContext`; nothing is re-rendered,
-     refreshed, or frozen later in the session. Where authored content is unchanged, rendered session prompts must
-     remain byte-identical to the established golden baselines. Mid-session observation access flows through the AI-002
-     `wait` and timeline history paths rather than through re-rendered prompts.
-22. The rendered stack must become the session's sole system instruction under AI-002. No observation-summary user
-     message or re-rendered instruction may supplement it.
-23. The shared generic NPC prompt stack must not contain an event-history section. Event-history authoring lives in
-     the standalone `game/prompts/event_history.md` fragment file consumed by the renderer (TR-12); the stack carries
-    only static guidance and lore.
-24. Male and female NPC role templates must reference one shared generic prompt stack containing the `mind.md` file
-     section — context-driven identity and the tool-call-only frame, game-time literacy, and subject references —
-     essential lore, character lore, and the scenario section ([AI-008](../008-scenario/index.md)).
-25. Shared session guidance must cover only cross-cutting material: identity and the tool-call-only frame, game-time
-     timestamp literacy — tool results report game-time seconds since the game began — and subject references. It must
-     not request ordinary assistant text or a terminal response schema. Per-tool mechanics and etiquette live solely in
-     the respective tool descriptions (`ToolDescription` exports): `speak` optional and never terminal; `wait` framed
-     as the way to observe the scene — the NPC receives no updates about important scene events without it — rather
-     than a way to pass time, including question-then-wait etiquette; and memory recall through the timeline history
-     tool.
-26. AI-002 is normative for the tool inventory and the tool-only session protocol; the shared guidance here must stay
-     aligned with it.
-27. AgenticMind owns provider, prompt compilation, render-context construction, and tool orchestration. It must
-     consume Mind's committed observations and attention eligibility without interpreting incoming percepts,
-     subscribing to senses, or owning perception faculties.
-28. Each `Observation` record in the timeline snapshot exposes an `ObservedAt` timestamp in game-time seconds from
-     the game-scoped game-time source (AI-002), stamped exactly once at ingestion by the owning Mind. The timestamp is a
-     fragment-visible record property, nullable when the record was not ingested through Mind.
-29. Event-history entries may render an absolute game-time label derived from the record's `ObservedAt` game-time
-     seconds; authored fragments conventionally guard the label with a conditional so unstamped records render without
-     a label. Relative-time labels are not available to authored fragments: deriving one would require either a `now`
-     top-level context key (forbidden by AC-17) or a game-time-aware extension of TMPL-001's `ago` helper (out of
-     scope; see [TMPL-001](../../templating/001-templating-system/index.md)). The label must not leak voice provenance
-     or other private payloads.
-30. Character values reach authored templates as raw `ICharacter` values whose template surface is curated by the
-    member-access policy owned by [TMPL-001](../../templating/001-templating-system/index.md) (character contract in
-    [CHAR-002](../../character/002-character-root/index.md)): templates can read exactly the canonical `FullId`, and
-     live component state, such as voice configuration, is unreachable from templates by construction, preserving
-     prompt determinism and hygiene.
-31. The shared event-history file must define an authored fragment for the exact `vision.description` key. It must
-    expose the `ObservedVisualDescription` subject `FullId` and description to the agent rather than relying on the
-    generic fallback.
-32. The shared event-history file must define an authored fragment for the exact `vision.relative_position` key. It
-    must expose the `ObservedRelativePosition` subject `FullId` and relative-position state to the agent rather than
-    relying on the generic fallback: present-tense standing position — the observed distance plus ahead/behind and
-    left/right from the observing NPC's frame — and facing relation — the subject facing the NPC, its back turned to
-    the NPC, or the NPC standing to the subject's left or right. Each direction must be worded unambiguously about
-     whose frame it is measured from, and the fragment renders no near or far clause. AI-006 owns the observation
-     contract.
-33. One shared continuation projection must serve every model-facing rendering path — AI-002 injected messages,
-     `wait` results, and `history` results — identically:
-     - group together only raw `speech.observed` records whose source voice and `SpeechGroupID` match (grouping
-       metadata normatively defined by SPCH-005, SPCH-006, and SPCH-008);
-     - order grouped segments by `SegmentIndex`, never by transcription completion order;
-     - join the known nonblank segment texts with the exact separator `" … "` — one space, one ellipsis character,
-       one space — conveying the pause or hesitation;
-      - expose no group, segment, or voice identifiers to the model;
-      - own each projected event's identity and contributing-segment list (TR-35) as Prompting-defined correlation
-        metadata, never as model-facing wording;
-      - position the joined event at its latest contributing raw observation, so unrelated observations retain
-        defensible chronology; and
-     - render a group whose predecessor segment is missing as the available segment standalone, with no leading
-       ellipsis.
-     The projection is rendering only: raw timeline records remain separate and factual (AI-001). The projection
-     must never merge records whose source voice or actor attribution is inconsistent — such a group splits and
-     emits a diagnostic instead.
-34. `history(count)` must count projected events, not raw segment records: after continuation projection, one speech
-      group contributes one event regardless of how many segments it contains.
-35. The continuation projection must own its output identity: projected events carry a Prompting-owned event identity
-    and their contributing-segment correlation, and the projection's surface must not expose
-    `AgentSessionInjectionKey` or any other runner session-protocol type. Translation from projection-owned identity
-    into the runtime's injection keys happens only at the AI-002 session boundary. Model-facing rendering is
-    unchanged by this boundary: rendered text exposes no group, segment, or voice identifiers or tokens, and joining
-    and projected-event counting follow TR-33 and TR-34.
-36. Prompting is the model-facing speech renderer and intentionally keeps its concrete `ObservedSpeech`
-    interpretation — reading grouping metadata to group, order, and join segments (TR-33). That concreteness is
-    confined to rendering: it must not carry runner session-protocol types (TR-35), and projection logic must not
-    move into Mind's timeline (AI-001 TR-48).
+### Static Instruction And Scene Status
+
+1. `SystemInstruction` remains an exported `PromptStack`, compiled, validated, and rendered once at session start. It is
+   the sole static system instruction and contains no dynamic scene or observation content.
+2. `CurrentSceneStatus` is a second exported `PromptStack`. It is compiled and validated at session start, then rendered
+   freshly for each logical provider request.
+3. Mind discovers `ISceneStatusProjector` direct children in scene order. Each projector has a stable identifier and
+   produces a typed immutable projection from current Mind state. Duplicate IDs, missing required projectors, invalid
+   projection data, or invalid stack wiring fail session start clearly.
+4. `ProjectionPromptSection` binds an explicitly typed projector root. It must reject an unavailable, wrongly typed, or
+   otherwise invalid root rather than silently rendering unrelated data.
+5. Initial current-scene projections include attended characters and active watches. Future projectors must use the same
+   typed, immutable, stable-ID contract.
+6. Static instruction rendering uses the session-fixed render context, including `ScenarioContext` and scenario. Fresh
+   current-scene snapshots must not mutate, replace, or re-resolve either session-fixed value.
+
+### Event Timeline Rendering
+
+7. Event-history rendering is separate from both prompt stacks. It projects the selected persistent event timeline,
+   invokes each observation's canonical renderer with owner context, and joins entries with exactly one newline for
+   AI-002's per-request timeline message and the `history` tool.
+8. Event text is owned by the concrete `Observation`, using AI-001's public framing method, type-owned body, safe
+   `TypeKey`-only base fallback, and shared timestamp suffix. No `event_history.md` asset, event-history parser,
+   fragment catalogue, `EventHistoryPath`, or authored `TypeKey` dispatch exists.
+9. Speech rendering remains actor-relative and must not render raw `VoiceId` or continuation transport metadata.
+   `ContinuationProjection` remains responsible only for speech-segment grouping, ordering, correlation, and
+   latest-event placement; projected speech uses the same observation-owned rendering contract.
+10. Event rendering receives only the event records selected by its caller: AI-002's watermark rules for the canonical
+    per-request timeline message, or `history`'s selected persistent-timeline snapshot for on-demand recall. Prompt
+    stacks must not accept observations as general render-context values.
+11. `history` is a read-only query of the persistent event timeline. Calling it must neither ingest nor enqueue an
+    observation, nor advance any request-context or timeline watermark. Automatic event text reaches the model only
+    through AI-002's canonical per-request timeline message; `history` is the intentional explicit-recall exception.
 
 ## In Scope
 
-- Ordered prompt composition and asynchronous section building.
-- Separate prompt compilation and ordinary-context rendering phases.
-- Exact keyed event-history fragments, direct record rendering, and mandatory fallback rendering.
-- One actor-relative `speech.observed` fragment for every observed-speech perspective.
-- The shared continuation projection for grouped speech with projected-event counting, applied identically to
-  injected messages, `wait` results, and `history` results.
-- Prompting-owned projection event identity and contributing-segment correlation, translated to runtime injection
-  keys only at the AI-002 session boundary.
-- One authored `vision.description` fragment exposing visual subject identity and description.
-- One authored `vision.relative_position` fragment exposing subject identity with present-tense, unambiguous
-  reciprocal relative-position wording.
-- Session-start `CreateRenderContext` assembly and exact-context rendering for the session system instruction.
-- Shared generic NPC prompt-stack authoring: `mind.md` file section, lore, and scenario, with no event-history
-  section in the stack.
-- AI-006 attention-filtered character context without prompt-owned scanning or attention policy.
-- Cross-cutting session guidance aligned with AI-002: tool-call-only frame and game-time timestamp literacy, with
-  per-tool mechanics and etiquette carried by tool descriptions.
-- On-demand event-history rendering through the standalone `game/prompts/event_history.md` fragment file for AI-002
-  `wait` results, timeline history tool results, and injected messages.
-- Default pseudo-XML prompt writer and existing templating-system integration.
-- AgenticMind's prompt/render/tool boundary from AI-006, excluding incoming percept interpretation.
+- Two exported prompt stacks: static `SystemInstruction` and fresh `CurrentSceneStatus`.
+- Typed, immutable direct-child scene-status projection and strict section wiring.
+- Type-owned canonical event-timeline rendering, safe fallback, and shared timestamp framing.
+- Session-fixed scenario context and fresh request-scene snapshot separation.
 
 ## Out Of Scope
 
-- Timeline summarisation, compaction, token budgeting, or persistence beyond node lifetime.
-- Timeline-level merging or mutation of raw segment records; the continuation projection is model-facing rendering
-  only (AI-001).
-- Alternative prompt writers beyond the default pseudo-XML writer.
-- Template-engine work outside what [TMPL-001](../../templating/001-templating-system/index.md) defines,
-  localisation workflows, and editor preview tooling.
-- Global mutable event-fragment registration.
-- Static-versus-dynamic prompt-section enforcement in the type system.
-- Detailed lore querying and retrieval behaviour, which is specified by AI-004.
+- Expressions, additional watch types, planner agent behaviour, compaction, and broader perception changes.
+- Prompt-editor preview tooling and final authored prose tuning.
+- Custom event-text templates and content-pack overrides. This deferral does not prohibit a future customisation layer.
 
 ## Acceptance Criteria
 
-1. Authors can create ordered prompt stacks containing inline, file-backed, and lore sections; the shared generic NPC
-   stack contains no event-history section.
-2. Prompt build tests verify typed build context, asynchronous authored-order writing, trimming, service resolution, and
-   compiler delegation without placing observations or render context in `PromptSectionBuildContext`.
-3. Writer tests verify matching pseudo-XML tags, existing lax authored names, replacement of only `<`, `>`, and `/` in
-   tag names, exact content preservation, and clear invalid-authoring failures.
-4. Exactly once per agent session, AgenticMind assembles the render context on demand, compiles its prompt stack, and
-     renders with its exact top-level read-only dictionary: `character`, a mandatory unconditional `player` value
-     under SCN-001, deterministic attention-eligible `characters` — curated `ICharacter` values keyed and inserted in
-     ordinal order by exact `FullId`, which may omit the player — and the current `scenario` under AI-008. The
-     dictionary defines no `observations` key, and its character entries expose exactly `FullId`. No later request
-     re-renders or supplements the instruction, and unchanged authored content renders byte-identically to the
-     established golden baselines.
-5. Capturing-client tests verify the rendered stack is the session's sole system instruction and no observation-summary
-   user message or re-rendered instruction accompanies it.
-6. Event-history tests cover self speech, recognised-other speech, unknown speech, empty history, chronological
-   ordering, and multiline fragment output through one exact `speech.observed` fragment.
-7. Event-history tests verify exact case-sensitive dispatch and clear parsing failures — naming the offending section
-   — for blank, unknown, and duplicate exact keys, a missing or blank fallback section, and text outside any section.
-8. Event-history tests verify exact `TypeKey` dispatch and pass each timeline observation record directly to the
-    template compiler as the fragment context, preserving record property visibility. Unknown concrete observations
-    render the fallback with the same record data, without reflection property projection, global mutable partials, a
-    visitor, or observation-owned text rendering.
-9. Observed-speech rendering compares `ActorId` with the owning character and never renders raw `VoiceId` provenance as
-   wording or proof of identity.
-10. Male and female NPC role templates use one shared prompt stack containing the `mind.md` file section, lore, and
-    scenario; asset tests verify the stack contains no event-history section and that event history is authored in the
-    standalone `game/prompts/event_history.md` fragment file.
-11. Tests verify shared session guidance covers only cross-cutting material — identity and the tool-call-only frame,
-    game-time timestamp literacy, subject references — without requesting ordinary assistant text or a terminal
-    response schema, and that per-tool framing is carried by tool descriptions: `speak` optional and never terminal;
-    `wait` as scene observation rather than passing time, including question-then-wait etiquette before assuming
-    refusal; and history recall.
-12. Tests verify the session guidance stays aligned with the AI-002 tool inventory and tool-only session protocol.
-13. Acceptance verifies both author-visible composition behaviour and the compilation, actor-relative rendering,
-     privacy, ordering, and runtime integration contracts.
-14. Tests verify session rendering includes self and every currently resolvable attention-eligible character, omits
-     ineligible or unresolved subjects, and does not trigger a second scan or prompt-owned attention update.
-15. Tests verify AgenticMind uses Mind-owned observations and attention eligibility without sense subscriptions,
-     percept-type dispatch, perception faculties, or incoming sensory interpretation.
-16. Event-history tests verify absolute game-time labels render for stamped observations from `ObservedAt` game-time
-    seconds, and unstamped observations render no label, without changing exact TypeKey dispatch, chronological
-    ordering, privacy, or the exact render-context dictionary contract (no new top-level key).
-17. Tests verify the prompt API adds no top-level `now` key to the render context; absolute labels derive from the
-     game-scoped game-time source.
-18. Event-history tests verify the exact `vision.description` fragment renders the subject `FullId` and description in
-    chronological `wait`, `history`, and injection output without falling back to generic wording.
-19. Event-history tests verify the exact `vision.relative_position` fragment renders the subject `FullId` and
-    relative-position state in present-tense wording — standing position from the observing NPC's frame plus the
-    reciprocal facing relation — that keeps every direction unambiguous about whose frame it uses and renders no near
-    or far clause, in chronological `wait`, `history`, and injection output without falling back to generic wording.
-20. Projection tests verify two and three or more grouped segments render as one joined utterance ordered by
-    `SegmentIndex` despite out-of-order transcription completion, that unrelated observations between segments keep
-    their chronological position through latest-contributing-observation placement, and that a missing predecessor
-    renders the available segment standalone with no leading ellipsis.
-21. Projection tests verify no group, segment, or voice identifier reaches the model, that inconsistent source or
-    actor attribution splits the group with a diagnostic instead of merging, and that injected messages, `wait`
-    results, and `history` results use one identical projection.
-22. History tests verify `history(count)` counts projected events so one speech group counts once regardless of its
-    segment count.
-23. Projection tests verify Prompting owns the projected event identity and contributing-segment list, exposes no
-    runner session-protocol type such as `AgentSessionInjectionKey`, and leaves injection-key translation to the
-    AI-002 session boundary, while rendered output, `" … "` joining, ordering, and projected-event counting are
-    unchanged; concrete `ObservedSpeech` interpretation remains confined to Prompting as the model-facing speech
-    renderer.
+### User Requirements
+
+1. Acceptance shows an NPC receives stable guidance alongside fresh attended-character and active-watch status on each
+   request without its scenario changing mid-session.
+2. Acceptance shows event wording is supplied by each observation type, and an unknown future observation type has
+   safe fallback wording that exposes no payload fields.
+3. Acceptance shows speech text remains actor-relative without exposing raw voice provenance or continuation metadata.
+
+### Technical Requirements
+
+1. Tests verify static instruction compilation, validation, and rendering occur once, while `CurrentSceneStatus`
+   compiles
+   and validates at session start but renders once per logical request.
+2. Tests verify direct-child projector stable IDs, typed immutable output, deterministic discovery, and clear failure
+   for
+   duplicate, missing, invalid, or wrongly typed wiring.
+3. Tests verify `ProjectionPromptSection` binds only its declared typed root.
+4. Tests verify initial attended-character and active-watch projections and that fresh snapshots never mutate
+   session-fixed
+   `ScenarioContext` or scenario.
+5. Tests verify event rendering invokes observation-owned canonical text, applies exactly one newline between entries,
+   and has no standalone event-history asset or parser, `EventHistoryPath`, fragment catalogue, authored `TypeKey`
+   dispatch, or `ObservedWatchOutcome` requirement.
+6. Tests verify continuation projection preserves segment grouping, ordering, correlation, and latest-event placement
+   while projected speech uses canonical observation-owned text.
+7. Tests verify `history` reads its selected persistent-timeline snapshot without ingesting or enqueuing an observation
+   or advancing a request-context or timeline watermark. They also verify automatic event text reaches the model only
+   through AI-002's canonical per-request timeline message, with `history` as the explicit-recall exception.
 
 ## References
 
-### Related Specifications
-
 - [AI-001: Mind Component](../001-mind/index.md)
 - [AI-002: Agent Runtime](../002-agent-runtime/index.md)
-- [AI-004: Lore And Backstory Source Compilation](../004-lore-backstory/index.md)
 - [AI-006: Percept-Based Sensing And Attention](../006-character-perception-and-attention/index.md)
-- [AI-008: Scenario](../008-scenario/index.md)
-- [TMPL-001: Templating System](../../templating/001-templating-system/index.md)
-- [SCN-001: Scene Context API](../../scene/001-scene-context-api/index.md)
-- [CHAR-002: Character Root](../../character/002-character-root/index.md)
-- [AI System](../index.md)
-
-### Implementation
-
-- `game/src/Mind/AI/Prompting/`
-- `game/prompts/event_history.md`
-- `game/src/Templating/ITemplate.cs`
-- `game/src/Templating/ITemplateCompiler.cs`
-- `game/assets/characters/prompts/generic_npc_prompt_stack.tres`
+- [AI-010: Agent Watches](../010-agent-watches/index.md)

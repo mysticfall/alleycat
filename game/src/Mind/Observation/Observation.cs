@@ -1,30 +1,8 @@
+using System.Globalization;
 using AlleyCat.Character;
 using AlleyCat.Mind.Attention;
 
 namespace AlleyCat.Mind.Observation;
-
-/// <summary>Controls whether equivalent retained observations are accepted.</summary>
-public enum ObservationDuplicatePolicy
-{
-    /// <summary>Retains every observation.</summary>
-    Allow,
-
-    /// <summary>Suppresses an observation equivalent to the latest retained observation in its scope.</summary>
-    IgnoreEquivalent,
-}
-
-/// <summary>Controls how Mind commits an observation.</summary>
-public enum ObservationRetention
-{
-    /// <summary>The observation ingests through the ordinary timeline and prompt-history path.</summary>
-    Durable,
-
-    /// <summary>
-    /// The observation applies its attention effects only and leaves no durable record, history entry, or prompt
-    /// participation.
-    /// </summary>
-    Transient,
-}
 
 /// <summary>
 /// Context available when an observation calculates its scheduling importance.
@@ -37,19 +15,15 @@ public sealed record ObservationContext(ICharacter Character);
 /// </summary>
 public abstract record Observation
 {
-    /// <summary>Gets duplicate handling for this observation. Retention is the default.</summary>
-    public virtual ObservationDuplicatePolicy DuplicatePolicy => ObservationDuplicatePolicy.Allow;
-
-    /// <summary>Gets the stable ordinal scope used by opt-in duplicate handling.</summary>
-    public virtual string? DuplicateScope => null;
-
     /// <summary>
-    /// Gets how Mind commits this observation; durable ingestion is the default.
+    /// Gets whether this observation is attention-only and therefore bypasses acceptance, retention, scheduling, and
+    /// event history. Lifetime policies govern every accepted observation; this flag exists solely for the initial
+    /// visual-presence path.
     /// </summary>
-    public virtual ObservationRetention Retention => ObservationRetention.Durable;
+    public virtual bool IsAttentionOnly => false;
 
     /// <summary>
-    /// Exact, case-sensitive semantic key used for authored prompt dispatch.
+    /// Exact, case-sensitive semantic key identifying this observation's semantic type.
     /// </summary>
     public abstract string TypeKey
     {
@@ -65,6 +39,31 @@ public abstract record Observation
     {
         get;
         init;
+    }
+
+    /// <summary>
+    /// Renders canonical model-facing text for this observation from the owning character's perspective.
+    /// </summary>
+    /// <remarks>
+    /// The fallback intentionally uses only <see cref="TypeKey"/> so a future observation cannot accidentally
+    /// disclose arbitrary payload data before it supplies its own rendering body.
+    /// </remarks>
+    public string Render(ICharacter character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        string body = RenderBody(character);
+        return ObservedAt is { } observedAt
+            ? $"{body} (at {observedAt.ToString("F1", CultureInfo.InvariantCulture)}s game time)"
+            : body;
+    }
+
+    /// <summary>
+    /// Renders this observation's canonical text without the common event-time suffix.
+    /// </summary>
+    protected virtual string RenderBody(ICharacter character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        return $"((Received {TypeKey} event.))";
     }
 
     /// <summary>

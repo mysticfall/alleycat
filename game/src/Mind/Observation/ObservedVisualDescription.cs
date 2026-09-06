@@ -30,12 +30,6 @@ public sealed record ObservedVisualDescription : Observation
     /// <inheritdoc />
     public override string TypeKey => TypeKeyValue;
 
-    /// <inheritdoc />
-    public override ObservationDuplicatePolicy DuplicatePolicy => ObservationDuplicatePolicy.IgnoreEquivalent;
-
-    /// <inheritdoc />
-    public override string DuplicateScope => SubjectId;
-
     /// <summary>
     /// Calculates this observation's scheduling importance. The returned value is provisional tuning and
     /// deliberately not normative; later tuning passes may replace it.

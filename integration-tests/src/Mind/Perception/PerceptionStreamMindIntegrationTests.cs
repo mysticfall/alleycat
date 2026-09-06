@@ -134,12 +134,11 @@ public sealed class PerceptionStreamMindIntegrationTests
     }
 
     /// <summary>
-    /// Transient observations apply attention atomically and nothing else: no stamp, duplicate history, timeline
-    /// entry, notable accumulation, or ingestion notification, with duplicate contributions compounding in order
-    /// (AI-001 TR-41, AI-006 TR-24/35).
+    /// Visual presence alone is attention-only. Legacy retention declarations do not bypass policy-owned acceptance:
+    /// an undeclared observation receives the fallback retained/event policy (AI-001 TR-2/3; AI-006 TR-3).
     /// </summary>
     [Fact]
-    public async Task TransientObservations_ApplyAttentionOnlyWithoutStampHistoryTimelineOrNotification()
+    public async Task VisualPresence_IsAttentionOnlyWhileLegacyRetentionDoesNotBypassPolicyAcceptance()
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var owner = new TestCharacter();
@@ -166,7 +165,6 @@ public sealed class PerceptionStreamMindIntegrationTests
             Assert.Null(presence.ObservedAt);
             Assert.Empty(mind.Timeline);
             Assert.Empty(mind.Ingested);
-            Assert.Null(mind.TakeNotableForTest());
             Assert.Equal(0, notableSignals);
             Assert.Equal(0, clock.ReadCount);
             KeyValuePair<string, float> attentionEntry = Assert.Single(mind.GetAttentionSnapshot().Values);
@@ -177,19 +175,6 @@ public sealed class PerceptionStreamMindIntegrationTests
             await mind.DrainPerceptionsForTestingAsync();
             Assert.Equal(0.4375f, mind.GetAttention("char:subject"));
             Assert.Empty(mind.Timeline);
-
-            faculty.EmitForTest(new ScopedObservation("scope", "same", ObservationRetention.Transient));
-            await mind.DrainPerceptionsForTestingAsync();
-            Assert.Empty(mind.Timeline);
-            Assert.Equal(0, clock.ReadCount);
-
-            faculty.EmitForTest(new ScopedObservation("scope", "same", ObservationRetention.Durable));
-            await mind.DrainPerceptionsForTestingAsync();
-            ScopedObservation durable = Assert.IsType<ScopedObservation>(Assert.Single(mind.Timeline));
-            Assert.Equal(ObservationRetention.Durable, durable.Retention);
-            Assert.Equal(10d, durable.ObservedAt);
-            Assert.Equal(1, clock.ReadCount);
-            _ = Assert.Single(mind.Ingested);
         }
         finally
         {
@@ -311,8 +296,6 @@ public sealed class PerceptionStreamMindIntegrationTests
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
         public void DeliverySignalForTest(Action<ObservationDeliverySignal> handler)
             => ObservationDeliverySignalled += handler;
-        public IReadOnlyList<AgentObservation>? TakeNotableForTest()
-            => TryClaimPendingObservationDelivery()?.Observations;
         protected override ICharacter ResolveOwningCharacter() => owner;
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
     }
@@ -352,19 +335,5 @@ public sealed class PerceptionStreamMindIntegrationTests
         public override float CalculateImportance(ObservationContext context) => 0f;
 
         public override IReadOnlyList<AttentionEffect> GetAttentionEffects(ObservationContext context) => Effects;
-    }
-
-    private sealed record ScopedObservation(string Scope, string Value, ObservationRetention RetentionMode)
-        : AgentObservation
-    {
-        public override ObservationDuplicatePolicy DuplicatePolicy => ObservationDuplicatePolicy.IgnoreEquivalent;
-        public override string DuplicateScope => Scope;
-        public override ObservationRetention Retention => RetentionMode;
-        public override string TypeKey => "scoped.test";
-        public override float CalculateImportance(ObservationContext context) => 0f;
-        public override bool IsSemanticallyEquivalentTo(AgentObservation other)
-            => other is ScopedObservation scoped
-                && string.Equals(Scope, scoped.Scope, StringComparison.Ordinal)
-                && string.Equals(Value, scoped.Value, StringComparison.Ordinal);
     }
 }

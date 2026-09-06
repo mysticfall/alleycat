@@ -1,8 +1,11 @@
 using System.Collections;
 using System.Reflection;
 using AlleyCat.Mind.AI.Prompting;
+using AlleyCat.Mind.AI.SceneStatus;
+using AlleyCat.Mind.AI.Watch;
 using AlleyCat.Speech;
 using AlleyCat.Speech.Transcription;
+using AlleyCat.Templating;
 using AlleyCat.TestFramework;
 using Godot;
 using Xunit;
@@ -21,6 +24,7 @@ public sealed class CharacterSceneOwnershipIntegrationTests
     private const string ReferenceFemaleNpcScenePath = "res://assets/characters/templates/reference_female/reference_female_npc.tscn";
     private const string ReferenceFemaleBaseScenePath = "res://assets/characters/templates/reference_female/reference_female_base.tscn";
     private const string ReferenceMaleBaseScenePath = "res://assets/characters/templates/reference_male/reference_male_base.tscn";
+    private const string CurrentScenePromptPath = "res://assets/characters/prompts/current_scene.tres";
     private const string AgenticMindTypeName = "AlleyCat.Mind.AI.AgenticMind";
     private const string AIVoiceTypeName = "AlleyCat.Speech.Voice.AIVoice";
     private const string A2FLipSyncPlayerTypeName = "AlleyCat.Speech.LipSync.A2FLipSyncPlayer";
@@ -41,6 +45,44 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         AssertReferenceFemalePlayerVoice();
         AssertNpcVoiceAndSharedMindPrompt();
         AssertCharacterBaseTemplatesDoNotAuthorContextSources();
+    }
+
+    /// <summary>
+    /// The authored active-watches projection exposes only stable generic watch identifiers.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CurrentSceneActiveWatches_RenderGenericDetailsOnlyWhenPopulated()
+    {
+        PromptStack currentSceneStatus = Assert.IsType<PromptStack>(
+            ResourceLoader.Load(CurrentScenePromptPath),
+            exactMatch: false);
+        ProjectionPromptSection activeWatchesSection = Assert.IsType<ProjectionPromptSection>(
+            currentSceneStatus.Sections[1],
+            exactMatch: false);
+        IRootedTemplate template = Assert.IsAssignableFrom<IRootedTemplate>(
+            new FluidTemplateCompiler().Compile(activeWatchesSection.TemplateSource));
+
+        string populated = await template.RenderRootedAsync(
+            new ActiveWatchesSceneStatus(
+            [
+                new WatchStatusSnapshot(
+                    "w17",
+                    "proximity",
+                    "char:ally",
+                    new ProximityWatchStatus("Inside", null)),
+            ]),
+            new Dictionary<string, object?>());
+        string empty = await template.RenderRootedAsync(
+            new ActiveWatchesSceneStatus([]),
+            new Dictionary<string, object?>());
+
+        Assert.Equal("- WatchId: w17, ConditionId: proximity, SubjectId: char:ally\n", populated);
+        Assert.Equal(string.Empty, empty);
+        Assert.DoesNotContain("watch.Status", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("State", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Evidence", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("proximity", activeWatchesSection.TemplateSource, StringComparison.Ordinal);
     }
 
     private static void AssertReferencePlayerSceneDoesNotSerialiseConversationNodes()
@@ -117,13 +159,15 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Contains("uid=\"uid://dvw63im28183y\" path=\"res://assets/characters/prompts/generic_npc_prompt_stack.tres\"", maleSceneText, StringComparison.Ordinal);
         Assert.Contains("SystemInstruction = ExtResource(\"9_beijb\")", sceneText, StringComparison.Ordinal);
         Assert.Contains(
-            "EventHistoryPath = \"res://prompts/event_history.md\"",
+            "path=\"res://assets/characters/prompts/current_scene.tres\"",
             sceneText,
             StringComparison.Ordinal);
         Assert.Contains(
-            "EventHistoryPath = \"res://prompts/event_history.md\"",
+            "path=\"res://assets/characters/prompts/current_scene.tres\"",
             maleSceneText,
             StringComparison.Ordinal);
+        Assert.Contains("CurrentSceneStatus = ExtResource(\"18_current_scene_status\")", sceneText, StringComparison.Ordinal);
+        Assert.Contains("CurrentSceneStatus = ExtResource(\"18_current_scene_status\")", maleSceneText, StringComparison.Ordinal);
         // The production tool inventory is created internally by AgenticMind without scene authoring (AI-002
         // TR-16): neither template authors tool resources.
         Assert.DoesNotContain("SpeechTool.cs", sceneText, StringComparison.Ordinal);
@@ -182,9 +226,8 @@ public sealed class CharacterSceneOwnershipIntegrationTests
             Assert.Same(
                 GetRequiredPropertyValue(mind, "SystemInstruction"),
                 GetRequiredPropertyValue(maleMind, "SystemInstruction"));
-            Assert.Equal(
-                "res://prompts/event_history.md",
-                GetPropertyValue<string>(maleMind, "EventHistoryPath"));
+            AssertNpcCurrentSceneStatus(mind, femaleNpc);
+            AssertNpcCurrentSceneStatus(maleMind, maleNpc);
         }
         finally
         {
@@ -235,32 +278,49 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         Assert.Equal("AlleyCat.Mind.AI.Prompting.FilePromptSection", scenarioSection.GetType().FullName);
         Assert.Equal("res://prompts/scenario.md", GetPropertyValue<string>(scenarioSection, "FilePath"));
         Assert.Equal("Scenario", GetPropertyValue<string>(scenarioSection, "Name"));
-        // The shared generic NPC prompt stack contains no event-history section (AI-003 TR-23).
-        Assert.DoesNotContain(
-            orderedSections,
-            section => section.GetType().FullName == "AlleyCat.Mind.AI.Prompting.EventHistory");
-
-        // Event history is authored as the standalone fragment file wired by path on AgenticMind (AI-003 TR-12).
-        string eventHistoryPath = GetPropertyValue<string>(mind, "EventHistoryPath");
-        Assert.Equal("res://prompts/event_history.md", eventHistoryPath);
-        string eventHistory = ReadResourceText(eventHistoryPath);
-        Assert.Contains("<!-- event-history: speech.observed -->", eventHistory, StringComparison.Ordinal);
-        Assert.Contains("<!-- event-history: fallback -->", eventHistory, StringComparison.Ordinal);
-        Assert.Contains("{% if ActorId != blank %}", eventHistory, StringComparison.Ordinal);
-        Assert.Contains("ActorId == character.FullId", eventHistory, StringComparison.Ordinal);
-        Assert.Contains("I said: {{ Content }}", eventHistory, StringComparison.Ordinal);
-        Assert.Contains("Heard {{ ActorId }} say: {{ Content }}", eventHistory, StringComparison.Ordinal);
-        Assert.Contains("Heard an unknown speaker say: {{ Content }}", eventHistory, StringComparison.Ordinal);
-        Assert.DoesNotContain("VoiceId", eventHistory, StringComparison.Ordinal);
-        Assert.Equal(
-            "((Received {{ TypeKey }} event.)){% if ObservedAt != blank %} (at {{ nf(ObservedAt, 1) }}s game time){% endif %}\n",
-            GetEventHistoryFallbackSource(eventHistory));
-        Assert.DoesNotContain("VoiceId", GetEventHistoryFallbackSource(eventHistory), StringComparison.Ordinal);
-
         // The production tool inventory (speak, wait, history) is created internally without scene authoring
         // (AI-002 TR-16): authored tools remain an extension point and are empty in the shared templates.
         IEnumerable tools = Assert.IsAssignableFrom<IEnumerable>(GetRequiredPropertyValue(mind, "Tools"));
         Assert.Empty(tools.Cast<object>());
+    }
+
+    private static void AssertNpcCurrentSceneStatus(Node mind, Node npc)
+    {
+        PromptStack currentSceneStatus = Assert.IsType<PromptStack>(
+            GetRequiredPropertyValue(mind, "CurrentSceneStatus"),
+            exactMatch: false);
+        Assert.Equal(2, currentSceneStatus.Sections.Count());
+        ProjectionPromptSection projectionSection = Assert.IsType<ProjectionPromptSection>(currentSceneStatus.Sections[0], exactMatch: false);
+        Assert.Equal("Attended Characters", projectionSection.Name);
+        Assert.Equal(AttendedCharacterSceneStatusProjector.ProjectorIDValue, projectionSection.ProjectorID);
+        Assert.Equal(typeof(AttendedCharactersSceneStatus).FullName, projectionSection.RootTypeName);
+        Assert.Contains("{{ attended.FullId }}", projectionSection.TemplateSource, StringComparison.Ordinal);
+        Assert.Contains("attended.RelativePosition.Distance", projectionSection.TemplateSource, StringComparison.Ordinal);
+        Assert.Contains("attended.VisualDescription", projectionSection.TemplateSource, StringComparison.Ordinal);
+
+        AttendedCharacterSceneStatusProjector projector = Assert.IsType<AttendedCharacterSceneStatusProjector>(
+            npc.GetNodeOrNull("Mind/AttendedCharacterSceneStatusProjector"),
+            exactMatch: false);
+        Assert.Equal(AttendedCharacterSceneStatusProjector.ProjectorIDValue, projector.ProjectorID);
+
+        ProjectionPromptSection watchSection = Assert.IsType<ProjectionPromptSection>(currentSceneStatus.Sections[1], exactMatch: false);
+        Assert.Equal("Active Watches", watchSection.Name);
+        Assert.Equal(WatchSceneStatusProjector.ProjectorIDValue, watchSection.ProjectorID);
+        Assert.Equal(typeof(ActiveWatchesSceneStatus).FullName, watchSection.RootTypeName);
+        Assert.Contains("{{ watch.WatchId }}", watchSection.TemplateSource, StringComparison.Ordinal);
+        Assert.Contains("{{ watch.ConditionId }}", watchSection.TemplateSource, StringComparison.Ordinal);
+        Assert.Contains("{{ watch.SubjectId }}", watchSection.TemplateSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("watch.Status", watchSection.TemplateSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("State", watchSection.TemplateSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Evidence", watchSection.TemplateSource, StringComparison.Ordinal);
+        WatchRegistry registry = Assert.IsType<WatchRegistry>(npc.GetNodeOrNull("Mind/WatchRegistry"), exactMatch: false);
+        _ = Assert.Single(registry.Conditions);
+        _ = Assert.IsType<ProximityWatchTool>(registry.Conditions[0], exactMatch: false);
+        WatchSceneStatusProjector watchProjector = Assert.IsType<WatchSceneStatusProjector>(
+            npc.GetNodeOrNull("Mind/WatchSceneStatusProjector"),
+            exactMatch: false);
+        Assert.Equal(WatchSceneStatusProjector.ProjectorIDValue, watchProjector.ProjectorID);
+        Assert.Same(registry, watchProjector.Registry);
     }
 
     private static Node RequireScriptedNode(Node root, string path, string expectedTypeName)
@@ -296,16 +356,6 @@ public sealed class CharacterSceneOwnershipIntegrationTests
         object? value = source.GetType().GetProperty(propertyName)?.GetValue(source);
         return value ?? throw new Xunit.Sdk.XunitException(
             $"Expected property '{propertyName}' on '{source.GetType().FullName}' to be present and non-null.");
-    }
-
-    private static string GetEventHistoryFallbackSource(string eventHistoryFileText)
-    {
-        const string fallbackDelimiter = "<!-- event-history: fallback -->\n";
-        int delimiterEnd = eventHistoryFileText.IndexOf(fallbackDelimiter, StringComparison.Ordinal);
-        Assert.True(
-            delimiterEnd >= 0,
-            "Expected the authored event-history file to contain a fallback section.");
-        return eventHistoryFileText[(delimiterEnd + fallbackDelimiter.Length)..];
     }
 
     private static string ReadResourceText(string path)

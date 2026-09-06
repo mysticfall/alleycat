@@ -22,28 +22,7 @@ public partial class WaitTool : AgentTool
         ToolDescription = "Watch the scene for what happens next. This is how you receive updates about important "
             + "scene events — without waiting, nothing new reaches you. Waiting is observation, not idling: after "
             + "asking another character a question, wait a reasonable duration for their answer before assuming "
-            + "refusal. Returns the notable observations that arrived while waiting, how long you waited, and the "
-            + "current game time.";
-    }
-
-    /// <summary>
-    /// Wait-delivery acknowledgement typed-bound at the AgenticMind composition boundary (AI-002 TR-19/41/57), or
-    /// null when this tool was authored or constructed outside that composition — such instances deliver their
-    /// window without runner correlation.
-    /// </summary>
-    internal AgentWaitDeliveryNotifier? Delivery
-    {
-        get;
-    }
-
-    /// <summary>
-    /// Creates a wait tool whose delivered observation windows are acknowledged to the session runtime so pending
-    /// keyed speech holds settle without a duplicate injected replacement (AI-002 TR-41/57).
-    /// </summary>
-    internal WaitTool(AgentWaitDeliveryNotifier delivery) : this()
-    {
-        ArgumentNullException.ThrowIfNull(delivery);
-        Delivery = delivery;
+            + "refusal. Returns why the wait ended, how long you waited, and the current game time.";
     }
 
     /// <inheritdoc />
@@ -69,42 +48,24 @@ public partial class WaitTool : AgentTool
         double finishedAtSeconds = clock.NowSeconds;
         double elapsedSeconds = Math.Max(0d, finishedAtSeconds - startedAtSeconds);
 
-        // The wait result is its window's sole delivery channel (AI-002 TR-41): report the delivered window so
-        // the session runtime settles any pending keyed speech hold whose text reached the model this way, with no
-        // duplicate injected replacement (AI-002 TR-57).
-        Delivery?.NotifyDelivered(outcome.Delivered);
-
-        return new AgentToolResult(
-            await ComposeResultMessageAsync(session, outcome, elapsedSeconds, finishedAtSeconds));
+        return new AgentToolResult(ComposeResultMessage(outcome, elapsedSeconds, finishedAtSeconds));
     }
 
-    private static async ValueTask<string> ComposeResultMessageAsync(
-        AgentToolSession session,
+    private static string ComposeResultMessage(
         MindBase.WaitOutcome outcome,
         double elapsedSeconds,
         double finishedAtSeconds)
     {
         string elapsed = elapsedSeconds.ToString("F1", CultureInfo.InvariantCulture);
         string now = finishedAtSeconds.ToString("F1", CultureInfo.InvariantCulture);
-        if (outcome.Delivered.Count == 0)
+        string reason = outcome.Wake switch
         {
-            return outcome.Wake == MindBase.ObservationWaitWake.AttendedSpeakerFinished
-                ? $"Waited {elapsed} seconds. An attended speaker finished speaking. Current game time: {now}s. Nothing notable happened."
-                : $"Waited {elapsed} seconds. Current game time: {now}s. Nothing notable happened.";
-        }
-
-        string history = session.HistoryRenderer is { } renderer
-            ? await renderer.RenderAsync(outcome.Delivered, session.Mind.GetObservationTimelineSnapshot())
-            : string.Join('\n', outcome.Delivered.Select(static observation => observation.TypeKey));
-        // A fresh wake fulfils the wait normally and this result is its sole delivery channel (AI-002 TR-32/41):
-        // the wording states what arrived — never a generic interrupted-action notice.
-        string lead = outcome.Wake == MindBase.ObservationWaitWake.FreshObservation
-            ? "Fresh events arrived that need your attention. "
-            : outcome.Wake == MindBase.ObservationWaitWake.AttendedSpeakerFinished
-                ? "An attended speaker finished speaking. "
-                : string.Empty;
-        return $"Waited {elapsed} seconds. Current game time: {now}s. "
-            + lead
-            + $"Notable observations:\n{history}";
+            MindBase.ObservationWaitWake.FreshObservation => "fresh event",
+            MindBase.ObservationWaitWake.ThresholdCrossed => "importance threshold",
+            MindBase.ObservationWaitWake.AttendedSpeakerFinished => "attended speaker finished",
+            MindBase.ObservationWaitWake.QuietExpiry => "timeout",
+            _ => throw new ArgumentOutOfRangeException(nameof(outcome)),
+        };
+        return $"Wait ended: {reason}. Elapsed game time: {elapsed} seconds. Current game time: {now}s.";
     }
 }

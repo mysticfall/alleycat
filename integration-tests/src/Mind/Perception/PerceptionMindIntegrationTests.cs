@@ -288,7 +288,7 @@ public sealed class PerceptionMindIntegrationTests
 
     /// <inheritdoc/>
     [Fact]
-    public async Task DuplicatePolicy_DefaultsToAllowAndSuppressesOnlyLatestEquivalentSameScopeBeforeImportance()
+    public async Task LifetimePolicies_DefaultToAcceptUnknownTypesAndOwnVisualEvidenceSuppression()
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var sense = new TestSense(typeof(FirstPercept));
@@ -316,9 +316,11 @@ public sealed class PerceptionMindIntegrationTests
             sense.Publish(new FirstPercept("batch"));
             await mind.DrainPerceptionsForTestingAsync();
 
-            Assert.Equal(["allowed", "allowed", "a:same", "b:same", "A:same"], Values(mind.Timeline));
-            Assert.Equal(3, importanceCounter.Value);
-            Assert.Equal(5, mind.Ingested.Count);
+            // The legacy duplicate members on arbitrary types are ignored. Undeclared types receive the fallback
+            // policy, while concrete visual evidence uses its own registered policy.
+            Assert.Equal(["allowed", "allowed", "a:same", "a:same", "b:same", "A:same"], Values(mind.Timeline));
+            Assert.Equal(4, importanceCounter.Value);
+            Assert.Equal(6, mind.Ingested.Count);
 
             faculty.Observations =
             [
@@ -329,9 +331,11 @@ public sealed class PerceptionMindIntegrationTests
             sense.Publish(new FirstPercept("latest"));
             await mind.DrainPerceptionsForTestingAsync();
 
-            Assert.Equal(["allowed", "allowed", "a:same", "b:same", "A:same", "a:different", "a:same"], Values(mind.Timeline));
-            Assert.Equal(5, importanceCounter.Value);
-            Assert.Equal(7, mind.Ingested.Count);
+            Assert.Equal(
+                ["allowed", "allowed", "a:same", "a:same", "b:same", "A:same", "a:same", "a:different", "a:same"],
+                Values(mind.Timeline));
+            Assert.Equal(7, importanceCounter.Value);
+            Assert.Equal(9, mind.Ingested.Count);
 
             faculty.Observations =
             [
@@ -340,9 +344,11 @@ public sealed class PerceptionMindIntegrationTests
             ];
             sense.Publish(new FirstPercept("rollback"));
             await mind.DrainPerceptionsForTestingAsync();
-            Assert.Equal(7, mind.Timeline.Count);
-            Assert.Equal(5, importanceCounter.Value);
-            Assert.Equal(7, mind.Ingested.Count);
+            // Faculty emissions are independently queued, so the valid first emission commits before the following
+            // invalid one is contained. The malformed observation itself has no acceptance effects.
+            Assert.Equal(10, mind.Timeline.Count);
+            Assert.Equal(8, importanceCounter.Value);
+            Assert.Equal(10, mind.Ingested.Count);
 
             faculty.Observations =
             [
@@ -354,19 +360,22 @@ public sealed class PerceptionMindIntegrationTests
             sense.Publish(new FirstPercept("visual-batch"));
             await mind.DrainPerceptionsForTestingAsync();
 
+            Assert.Empty(mind.Timeline.OfType<ObservedVisualDescription>());
             Assert.Equal(
-                [("char:a", "same"), ("char:a", "different"), ("char:b", "same")],
-                mind.Timeline.OfType<ObservedVisualDescription>().Select(item => (item.SubjectId, item.Description)));
+                [("char:a", "different"), ("char:b", "same")],
+                mind.Retained.OfType<ObservedVisualDescription>().Select(item => (item.SubjectId, item.Description)));
 
             faculty.Observations = [new ObservedVisualDescription("char:a", "different")];
             sense.Publish(new FirstPercept("visual-latest-equivalent"));
             await mind.DrainPerceptionsForTestingAsync();
-            Assert.Equal(3, mind.Timeline.OfType<ObservedVisualDescription>().Count());
+            Assert.Equal(2, mind.Retained.OfType<ObservedVisualDescription>().Count());
 
             faculty.Observations = [new ObservedVisualDescription("char:a", "same")];
             sense.Publish(new FirstPercept("visual-latest-different"));
             await mind.DrainPerceptionsForTestingAsync();
-            Assert.Equal(4, mind.Timeline.OfType<ObservedVisualDescription>().Count());
+            Assert.Equal(
+                [("char:b", "same"), ("char:a", "same")],
+                mind.Retained.OfType<ObservedVisualDescription>().Select(item => (item.SubjectId, item.Description)));
         }
         finally
         {
@@ -376,8 +385,9 @@ public sealed class PerceptionMindIntegrationTests
     }
 
     /// <summary>
-    /// Direct, tool-result, and perception intake share duplicate staging before every ingestion side effect.
-    /// Tool observations are actor-stamped before semantic comparison (AI-001 TR-37–39).
+    /// Direct, tool-result, and perception intake share policy-owned duplicate staging before every ingestion side
+    /// effect. Tool observations are actor-stamped before semantic comparison, while scheduling claims carry no
+    /// observation payload (AI-001 TR-37–39; AI-002 TR-7/8).
     /// </summary>
     [Fact]
     public async Task DuplicatePolicy_AllIngestionRoutesSuppressBeforeImportanceTimestampMutationAndNotification()
@@ -402,7 +412,6 @@ public sealed class PerceptionMindIntegrationTests
         try
         {
             mind.ObserveForTest(EquivalentAction(ownerFullId, "direct", "same", importanceCounter));
-            _ = Assert.Single(mind.TakeNotableForTest()!);
 
             mind.ObserveForTest(EquivalentAction(ownerFullId, "direct", "same", importanceCounter) with
             {
@@ -410,11 +419,10 @@ public sealed class PerceptionMindIntegrationTests
             });
 
             Assert.Equal(1, importanceCounter.Value);
-            Assert.Equal(1, clock.ReadCount);
+            Assert.Equal(2, clock.ReadCount);
             Assert.Equal(1, notableSignals);
             _ = Assert.Single(mind.Timeline);
             _ = Assert.Single(mind.Ingested);
-            Assert.Null(mind.TakeNotableForTest());
 
             mind.IngestToolObservationsForTest(
             [
@@ -425,11 +433,10 @@ public sealed class PerceptionMindIntegrationTests
             EquivalentActionObservation toolObservation = Assert.IsType<EquivalentActionObservation>(mind.Timeline[1]);
             Assert.Equal(ownerFullId, toolObservation.ActorId);
             Assert.Equal(2, importanceCounter.Value);
-            Assert.Equal(2, clock.ReadCount);
-            Assert.Equal(2, notableSignals);
+            Assert.Equal(3, clock.ReadCount);
+            Assert.Equal(1, notableSignals);
             Assert.Equal(2, mind.Timeline.Count);
             Assert.Equal(2, mind.Ingested.Count);
-            _ = Assert.Single(mind.TakeNotableForTest()!);
 
             faculty.Observations =
             [
@@ -440,12 +447,11 @@ public sealed class PerceptionMindIntegrationTests
             await mind.DrainPerceptionsForTestingAsync();
 
             Assert.Equal(3, importanceCounter.Value);
-            Assert.Equal(3, clock.ReadCount);
-            Assert.Equal(3, notableSignals);
+            Assert.Equal(5, clock.ReadCount);
+            Assert.Equal(1, notableSignals);
             Assert.Equal(3, mind.Timeline.Count);
             Assert.Equal(3, mind.Ingested.Count);
             Assert.All(mind.Timeline, observation => Assert.Equal(10d, observation.ObservedAt));
-            _ = Assert.Single(mind.TakeNotableForTest()!);
         }
         finally
         {
@@ -487,8 +493,8 @@ public sealed class PerceptionMindIntegrationTests
     }
 
     /// <summary>
-    /// Grouped hearing transport reaches raw speech observations intact, while duplicate group segments are rejected
-    /// before timestamps, importance, delivery, and timeline side effects; ungrouped repeated speech remains allowed.
+    /// Grouped hearing transport remains private to Mind ingestion while duplicate group segments are rejected before
+    /// timestamps, importance, delivery, and timeline side effects; ungrouped repeated speech remains allowed.
     /// </summary>
     [Fact]
     public async Task SpeechPerception_GroupedTransportIsImmutableAndDuplicateSegmentsSuppressBeforeIngestion()
@@ -521,14 +527,9 @@ public sealed class PerceptionMindIntegrationTests
             await mind.DrainPerceptionsForTestingAsync();
 
             ObservedSpeech grouped = Assert.IsType<ObservedSpeech>(Assert.Single(mind.Timeline));
-            Assert.Equal("external-voice", grouped.VoiceId);
-            Assert.Equal("automatic-group", grouped.SpeechGroupID);
-            Assert.Equal(1, grouped.SegmentIndex);
-            Assert.True(grouped.Continued);
             Assert.Equal(10d, grouped.ObservedAt);
             Assert.Equal(1, clock.ReadCount);
             Assert.Equal(1, deliveries);
-            _ = Assert.Single(mind.TakeNotableForTest()!);
 
             source.PublishCompletedSpeech("duplicate grouped segment", metadata);
             await mind.DrainPerceptionsForTestingAsync();
@@ -536,7 +537,6 @@ public sealed class PerceptionMindIntegrationTests
             _ = Assert.Single(mind.Timeline);
             Assert.Equal(1, clock.ReadCount);
             Assert.Equal(1, deliveries);
-            Assert.Null(mind.TakeNotableForTest());
 
             source.PublishCompletedSpeech("equal ungrouped segment");
             source.PublishCompletedSpeech("equal ungrouped segment");
@@ -544,14 +544,10 @@ public sealed class PerceptionMindIntegrationTests
 
             ObservedSpeech[] ungrouped = [.. mind.Timeline.OfType<ObservedSpeech>().Skip(1)];
             Assert.Equal(2, ungrouped.Length);
-            Assert.All(ungrouped, observation =>
-            {
-                Assert.Null(observation.SpeechGroupID);
-                Assert.Equal(0, observation.SegmentIndex);
-                Assert.False(observation.Continued);
-            });
             Assert.Equal(3, clock.ReadCount);
-            Assert.Equal(2, deliveries);
+            // Scheduling pressure remains pending until a provider response confirms its request snapshot, so it
+            // does not signal another payload-free delivery merely because later speech was accepted.
+            Assert.Equal(1, deliveries);
         }
         finally
         {
@@ -587,7 +583,6 @@ public sealed class PerceptionMindIntegrationTests
             _ = Assert.Single(mind.Timeline);
             Assert.Equal(1, clock.ReadCount);
             _ = Assert.Single(mind.Ingested);
-            _ = Assert.Single(mind.TakeNotableForTest()!);
 
             mind.ObserveForTest(new CommitIdentifiedObservation("stream-a", 5L, "other turn"));
             mind.ObserveForTest(new TestObservation("identity-free", 0f));
@@ -664,7 +659,6 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Empty(mind.Timeline);
             Assert.Empty(mind.Ingested);
             Assert.Equal(0, deliveries);
-            Assert.Null(mind.TakeNotableForTest());
         }
         finally
         {
@@ -727,7 +721,6 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Empty(mind.Timeline);
             Assert.Empty(mind.Ingested);
             Assert.Equal(0, deliveries);
-            Assert.Null(mind.TakeNotableForTest());
 
             // Attention gained after an unattended cue never creates a retroactive hold: the stranger's earlier
             // group stays dropped while a fresh cue from the now-attended stranger forwards.
@@ -791,7 +784,6 @@ public sealed class PerceptionMindIntegrationTests
             Assert.Empty(percepts);
             Assert.Empty(mind.Timeline);
             Assert.Empty(mind.Ingested);
-            Assert.Null(mind.TakeNotableForTest());
         }
         finally
         {
@@ -973,18 +965,20 @@ public sealed class PerceptionMindIntegrationTests
         public List<AgentObservation> Ingested { get; } = [];
         public List<SpeechSegmentLifecycleNotification> LifecycleNotifications { get; } = [];
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
+        public IReadOnlyList<AgentObservation> Retained =>
+            [.. GetRetainedObservationSnapshot().Select(static entry => entry.Payload)];
         public void IngestToolObservationsForTest(IReadOnlyList<AgentObservation> observations)
             => IngestToolObservations(observations);
         public void DeliverySignalForTest(Action<ObservationDeliverySignal> handler)
             => ObservationDeliverySignalled += handler;
         public void ObserveForTest(AgentObservation observation) => Observe(observation);
-        public IReadOnlyList<AgentObservation>? TakeNotableForTest()
-            => TryClaimPendingObservationDelivery()?.Observations;
         public Task<WaitOutcome> WaitForNotableForTestAsync(TimeSpan maxWait, CancellationToken cancellationToken)
             => WaitForNotableObservationsAsync(maxWait, cancellationToken);
         public void ReinforceAttentionForTest(string fullId)
             => ReinforceAttention(fullId, 1f, AttentionSettings.Create(1f, 0f, 0.05f, 0.25f));
         protected override ICharacter ResolveOwningCharacter() => _owner;
+        protected override IEnumerable<IObservationLifetimePolicy> CreateLifetimePolicies()
+            => [.. base.CreateLifetimePolicies(), new EquivalentActionLifetimePolicy()];
         protected override void OnObservationIngested(AgentObservation observation) => Ingested.Add(observation);
     }
 
@@ -1039,7 +1033,7 @@ public sealed class PerceptionMindIntegrationTests
             PerceptionContext context,
             CancellationToken cancellationToken)
         {
-            Emit(new ObservedSpeech(null, percept.SourceVoiceID, percept.Content));
+            Emit(new ObservedSpeech(null, percept.Content));
             return ValueTask.CompletedTask;
         }
     }
@@ -1082,8 +1076,6 @@ public sealed class PerceptionMindIntegrationTests
         string Value,
         Action ImportanceCalculated) : AgentObservation
     {
-        public override ObservationDuplicatePolicy DuplicatePolicy => ObservationDuplicatePolicy.IgnoreEquivalent;
-        public override string DuplicateScope => Scope;
         public override string TypeKey => "equivalent.test";
         public override float CalculateImportance(ObservationContext context)
         {
@@ -1102,8 +1094,6 @@ public sealed class PerceptionMindIntegrationTests
         string Value,
         Action ImportanceCalculated) : ObservedAction(ActorId)
     {
-        public override ObservationDuplicatePolicy DuplicatePolicy => ObservationDuplicatePolicy.IgnoreEquivalent;
-        public override string DuplicateScope => Scope;
         public override string TypeKey => "equivalent.action.test";
         public override float CalculateImportance(ObservationContext context)
         {
@@ -1115,6 +1105,39 @@ public sealed class PerceptionMindIntegrationTests
                 && string.Equals(ActorId, equivalent.ActorId, StringComparison.Ordinal)
                 && string.Equals(Scope, equivalent.Scope, StringComparison.Ordinal)
                 && string.Equals(Value, equivalent.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>Test-only policy proving source-neutral ingestion delegates duplicate semantics to policy ownership.</summary>
+    private sealed class EquivalentActionLifetimePolicy : IObservationLifetimePolicy
+    {
+        public Type DeclaredConcreteType => typeof(EquivalentActionObservation);
+
+        public ObservationLifetimePolicyDecision Evaluate(
+            AgentObservation candidate,
+            IReadOnlyList<AcceptedObservationEntry> activeEntries,
+            double observedAtSeconds)
+        {
+            _ = observedAtSeconds;
+            EquivalentActionObservation action = Assert.IsType<EquivalentActionObservation>(candidate);
+            return activeEntries.Any(entry => action.IsSemanticallyEquivalentTo(entry.Payload))
+                ? ObservationLifetimePolicyDecision.Suppressed
+                : ObservationLifetimePolicyDecision.Accept;
+        }
+
+        public bool IsEventEligible(AgentObservation observation)
+        {
+            ArgumentNullException.ThrowIfNull(observation);
+            return true;
+        }
+
+        public bool HasFiniteLifetime => false;
+
+        public bool IsExpired(AcceptedObservationEntry entry, double nowSeconds)
+        {
+            ArgumentNullException.ThrowIfNull(entry);
+            _ = nowSeconds;
+            return false;
+        }
     }
 
     private sealed partial class TestVoice : Voice

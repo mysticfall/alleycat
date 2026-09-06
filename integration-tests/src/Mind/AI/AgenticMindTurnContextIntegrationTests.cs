@@ -13,15 +13,15 @@ using Xunit;
 
 namespace AlleyCat.IntegrationTests.Mind.AI;
 
-/// <summary>Session coverage for the single captured scene-context boundary.</summary>
+/// <summary>Session coverage for fixed tool bindings and fresh request-scene context boundaries.</summary>
 public sealed partial class AgenticMindTurnContextIntegrationTests
 {
     /// <summary>
-    /// A session captures one fixed-membership snapshot at session start and shares it through prompt
-    /// construction, rendering, and trusted tool binding while retaining live references to its characters.
+    /// A session captures one fixed-membership snapshot for static prompt construction and trusted tool binding,
+    /// while status validation and every logical request receive distinct fresh scene snapshots.
     /// </summary>
     [Fact]
-    public async Task Session_CapturesOneSceneSnapshotAndSharesExactReferenceAcrossConsumers()
+    public async Task Session_KeepsToolBindingFixedWhileRequestSceneSnapshotsRemainFresh()
     {
         var owner = new TestCharacter("owner", "before");
         var newcomer = new TestCharacter("newcomer", "new");
@@ -44,9 +44,15 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
             await mind.RunSessionForTestAsync(clientProvider.SessionCancellation.Token);
 
             SceneContext capturedScene = Assert.IsType<SceneContext>(section.CapturedScene);
-            Assert.Equal(1, sceneProvider.CaptureCount);
-            // Render-context assembly resolves identities through this same snapshot but never calls back into the
-            // characters (AI-001 AC-T18): prompt construction and trusted tool binding remain the snapshot consumers.
+            // The first capture remains fixed for static prompt construction and trusted tools. One validation
+            // snapshot and one snapshot per logical request must remain fresh and independent (AI-002 TR-4; AI-003
+            // TR-6).
+            Assert.Equal(4, sceneProvider.CaptureCount);
+            Assert.Same(capturedScene, sceneProvider.Captured[0]);
+            Assert.All(sceneProvider.Captured.Skip(1), snapshot => Assert.NotSame(capturedScene, snapshot));
+            Assert.All(
+                sceneProvider.Captured.Skip(1),
+                snapshot => Assert.Contains(newcomer, snapshot.Characters));
             Assert.Same(capturedScene, tool.CapturedContext!.SceneContext);
             Assert.Same(owner, tool.CapturedContext.Character);
             Assert.Equal("after", owner.State);
@@ -75,6 +81,8 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
 
     private sealed class CountingSceneProvider(List<ICharacter> liveMembership)
     {
+        public List<SceneContext> Captured { get; } = [];
+
         public int CaptureCount
         {
             get; private set;
@@ -83,7 +91,9 @@ public sealed partial class AgenticMindTurnContextIntegrationTests
         public ISceneContext GetCurrent()
         {
             CaptureCount++;
-            return new SceneContext(liveMembership);
+            var captured = new SceneContext(liveMembership);
+            Captured.Add(captured);
+            return captured;
         }
     }
 

@@ -100,6 +100,10 @@ public sealed class MirrorRoomVisualSurveyRuntimeIntegrationTests
             await TestUtils.WaitForFramesAsync(tree, 8);
             await TestUtils.WaitForPhysicsFramesAsync(tree, 4);
 
+            Node player = mirrorRoom.GetNode("Actors/Player");
+            Assert.Same(player, Assert.Single(tree.GetNodesInGroup("Actors"), node => node == player));
+            Assert.Same(player, Assert.Single(tree.GetNodesInGroup("VisualSubjects"), node => node == player));
+
             EyesBehaviour playerEyes = mirrorRoom.GetNode<EyesBehaviour>("Actors/Player/Eyes");
             EyesBehaviour vadimEyes = mirrorRoom.GetNode<EyesBehaviour>("Actors/Vadim/Eyes");
             playerEyes.HorizontalSensingHalfAngleDegrees = 180f;

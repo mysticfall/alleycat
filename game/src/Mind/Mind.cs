@@ -21,8 +21,8 @@ namespace AlleyCat.Mind;
 
 /// <summary>
 /// Abstract base for NPC mind-like components that serially interpret percepts, commit faculty-emitted observations
-/// as independent atomic units, maintain an ordered observation timeline, and accumulate notable observations for
-/// delivery to the NPC's agent session.
+/// as independent atomic units, own accepted observation-log retention and event history, and accumulate notable
+/// scheduling metadata for delivery to the NPC's agent session.
 /// </summary>
 [GlobalClass]
 public abstract partial class Mind : Node
@@ -106,7 +106,12 @@ public abstract partial class Mind : Node
     private readonly Lock _perceptionQueueLock = new();
     private readonly Lock _deferredGodotActionsLock = new();
     private readonly Lock _speechVoiceSubscriptionLock = new();
-    private readonly List<AgentObservation> _observationTimeline = [];
+    private readonly List<AcceptedObservationEntry> _acceptedObservationLog = [];
+    private readonly List<AcceptedObservationEntry> _persistentEventTimeline = [];
+    private readonly HashSet<ObservationCommitIdentity> _committedObservationIdentities = [];
+    private readonly Dictionary<long, int> _acceptedObservationLogIndices = [];
+    private readonly Dictionary<long, AcceptedObservationEntry> _activeRetainedEntries = [];
+    private readonly Dictionary<long, AcceptedObservationEntry> _expiringRetainedEntries = [];
     private readonly List<PendingObservation> _notableAccumulation = [];
     private readonly CancellationTokenSource _nodeLifetimeCancellation = new();
     private readonly AttentionPolicy _attention = new(GetStopwatchSeconds);
@@ -133,6 +138,8 @@ public abstract partial class Mind : Node
     private Task _perceptionDrainTask = Task.CompletedTask;
     private Action? _beforePerceptionEnqueueForTesting;
     private ILogger<Mind>? _logger;
+    private ObservationLifetimePolicyRegistry? _lifetimePolicies;
+    private long _nextObservationSequenceID = 1;
     [SuppressMessage("Style", "IDE0032:Use auto property", Justification = "Enabled setter controls delivery.")]
     private bool _enabled = true;
 
@@ -142,6 +149,12 @@ public abstract partial class Mind : Node
     /// wait owns the delivery instead of the signalled runtime (AI-002 TR-41).
     /// </summary>
     internal event Action<ObservationDeliverySignal>? ObservationDeliverySignalled;
+
+    /// <summary>
+    /// Occurs after an atomic accepted batch changes active retained evidence. Removals are retention maintenance only:
+    /// they never create a semantic observation, event timeline entry, scheduling pressure, or model message.
+    /// </summary>
+    internal event Action<RetainedObservationChange>? RetainedObservationChanged;
 
     /// <summary>
     /// Occurs for textless external automatic-segment lifecycle transitions. These notifications intentionally bypass
@@ -230,6 +243,7 @@ public abstract partial class Mind : Node
         }
 
         Volatile.Write(ref _cachedOwningCharacter, ResolveOwningCharacter());
+        _ = EnsureLifetimePolicies();
         _logger = GameLoggerResolver.ResolveRequired<Mind>();
         SubscribeToComponentProjectionRefreshes();
     }
@@ -249,6 +263,16 @@ public abstract partial class Mind : Node
             ActivatePerceptions();
         }
         RefreshSpeechVoiceSubscriptions();
+    }
+
+    /// <inheritdoc />
+    public override void _Process(double delta)
+    {
+        _ = delta;
+        if (!IsNodeLifetimeEnded)
+        {
+            ProcessRetainedObservationExpiry();
+        }
     }
 
     /// <inheritdoc />
@@ -319,7 +343,31 @@ public abstract partial class Mind : Node
     /// Trivial faculty observation intake (AI-006 TR-22/23): validates and enqueues one observation work item without
     /// interpreting, committing, or blocking the emitting faculty.
     /// </summary>
-    private void OnFacultyObserved(AgentObservation observation)
+    private void OnFacultyObserved(AgentObservation observation) => EnqueueObservation(observation);
+
+    /// <summary>Accepts a faculty emission while retaining its non-semantic transport at the Mind boundary.</summary>
+    private void OnFacultyEmission(ObservationEmission emission)
+        => EnqueueObservation(emission.Observation, isStillCurrent: null, emission.SpeechTransport);
+
+    /// <summary>
+    /// Source-neutral, non-blocking observation intake seam. Producers enqueue only; Mind serialises interpretation and
+    /// acceptance on its existing work queue. This is intentionally internal until future source registries bind it.
+    /// </summary>
+    internal void EnqueueObservation(AgentObservation observation)
+        => EnqueueObservation(observation, isStillCurrent: null, speechTransport: null);
+
+    /// <summary>
+    /// Source-neutral, non-blocking observation intake with an optional source-lifetime admission guard. The guard is
+    /// evaluated only when serial processing reaches the item, so a source that has ended after enqueue cannot create
+    /// a deferred semantic observation.
+    /// </summary>
+    internal void EnqueueObservation(AgentObservation observation, Func<bool>? isStillCurrent)
+        => EnqueueObservation(observation, isStillCurrent, speechTransport: null);
+
+    private void EnqueueObservation(
+        AgentObservation observation,
+        Func<bool>? isStillCurrent,
+        SpeechObservationTransport? speechTransport)
     {
         ArgumentNullException.ThrowIfNull(observation);
         if (IsNodeLifetimeEnded || !Enabled)
@@ -327,7 +375,7 @@ public abstract partial class Mind : Node
             return;
         }
 
-        EnqueuePerceptionWork(new QueuedObservation(observation));
+        EnqueuePerceptionWork(new QueuedObservation(observation, isStillCurrent, speechTransport));
     }
 
     /// <summary>
@@ -444,6 +492,10 @@ public abstract partial class Mind : Node
     {
         CancellationToken cancellationToken = NodeLifetimeCancellationToken;
         ThrowIfPerceptionLifetimeEnded(cancellationToken);
+        if (queued.IsStillCurrent is not null && !queued.IsStillCurrent())
+        {
+            return ValueTask.CompletedTask;
+        }
 
         AgentObservation observation = queued.Observation;
         var context = new ObservationContext(ResolveOwningCharacter());
@@ -458,7 +510,7 @@ public abstract partial class Mind : Node
 
         ThrowIfPerceptionLifetimeEnded(cancellationToken);
         AttentionSettings attentionSettings = CreateAttentionSettings();
-        if (observation.Retention == ObservationRetention.Transient)
+        if (observation.IsAttentionOnly)
         {
             // Transient observations apply attention atomically and nothing else: no stamp, duplicate filtering,
             // timeline entry, notable accumulation, or notification (AI-001 TR-41, AI-006 TR-35).
@@ -476,7 +528,11 @@ public abstract partial class Mind : Node
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        IngestObservations([observation], context, beforeCommit: () => ApplyAttentionEffectsLocked(effects, attentionSettings));
+        IngestObservations(
+            [observation],
+            context,
+            beforeCommit: () => ApplyAttentionEffectsLocked(effects, attentionSettings),
+            speechTransports: [queued.SpeechTransport]);
         return ValueTask.CompletedTask;
     }
 
@@ -593,7 +649,14 @@ public abstract partial class Mind : Node
         UnsubscribeFromFaculties();
         foreach (IPerception faculty in faculties)
         {
-            faculty.Observed += OnFacultyObserved;
+            if (faculty is PerceptionNode node)
+            {
+                node.ObservationEmitted += OnFacultyEmission;
+            }
+            else
+            {
+                faculty.Observed += OnFacultyObserved;
+            }
             _observedFaculties.Add(faculty);
         }
 
@@ -673,7 +736,14 @@ public abstract partial class Mind : Node
     {
         foreach (IPerception faculty in _observedFaculties)
         {
-            faculty.Observed -= OnFacultyObserved;
+            if (faculty is PerceptionNode node)
+            {
+                node.ObservationEmitted -= OnFacultyEmission;
+            }
+            else
+            {
+                faculty.Observed -= OnFacultyObserved;
+            }
         }
 
         _observedFaculties.Clear();
@@ -1085,74 +1155,20 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Generic exact-once commit-identity gate (AI-001 TR-49): an observation that supplies an immutable identity
-    /// tuple through the optional contract is suppressed when any earlier accepted or retained observation already
-    /// committed the same identity. Mind owns the atomic enforcement; perception never participates, and
-    /// observations that supply no identity are unaffected.
+    /// Creates the configured concrete-type lifetime policies. Undeclared runtime types deliberately resolve to the
+    /// registry's never-expiring, event-eligible fallback rather than requiring a Mind type switch.
     /// </summary>
-    private static bool HasCommittedIdentity(
-        ObservationCommitIdentity identity,
-        IReadOnlyList<AgentObservation> retained,
-        IReadOnlyList<AgentObservation> accepted)
+    protected virtual IEnumerable<IObservationLifetimePolicy> CreateLifetimePolicies()
+        => InitialObservationLifetimePolicies.Create();
+
+    /// <summary>Validates configured policies once for the Mind node lifetime.</summary>
+    private ObservationLifetimePolicyRegistry EnsureLifetimePolicies()
     {
-        foreach (AgentObservation candidate in accepted.Concat(retained))
+        lock (_observationStateLock)
         {
-            if (candidate is IHasCommitIdentity { CommitIdentity: { } committed } && committed.Equals(identity))
-            {
-                return true;
-            }
+            _lifetimePolicies ??= new ObservationLifetimePolicyRegistry(CreateLifetimePolicies());
+            return _lifetimePolicies;
         }
-
-        return false;
-    }
-
-    private static bool ShouldSuppressDuplicate(
-        AgentObservation observation,
-        IReadOnlyList<AgentObservation> retained,
-        IReadOnlyList<AgentObservation> accepted)
-    {
-        if (observation is IHasCommitIdentity { CommitIdentity: { } identity }
-            && HasCommittedIdentity(identity, retained, accepted))
-        {
-            return true;
-        }
-
-        if (observation.DuplicatePolicy == ObservationDuplicatePolicy.Allow)
-        {
-            return false;
-        }
-
-        if (observation.DuplicatePolicy != ObservationDuplicatePolicy.IgnoreEquivalent)
-        {
-            throw new InvalidOperationException(
-                $"Observation '{observation.GetType().FullName}' declares unsupported duplicate policy '{observation.DuplicatePolicy}'.");
-        }
-
-        string scope = observation.DuplicateScope
-            ?? throw new InvalidOperationException(
-                $"Observation '{observation.GetType().FullName}' must declare a duplicate scope when ignoring equivalents.");
-        Type concreteType = observation.GetType();
-        for (int index = accepted.Count - 1; index >= 0; index--)
-        {
-            AgentObservation candidate = accepted[index];
-            if (candidate.GetType() == concreteType
-                && string.Equals(candidate.DuplicateScope, scope, StringComparison.Ordinal))
-            {
-                return observation.IsSemanticallyEquivalentTo(candidate);
-            }
-        }
-
-        for (int index = retained.Count - 1; index >= 0; index--)
-        {
-            AgentObservation candidate = retained[index];
-            if (candidate.GetType() == concreteType
-                && string.Equals(candidate.DuplicateScope, scope, StringComparison.Ordinal))
-            {
-                return observation.IsSemanticallyEquivalentTo(candidate);
-            }
-        }
-
-        return false;
     }
 
     private AttentionSettings CreateAttentionSettings()
@@ -1217,13 +1233,19 @@ public abstract partial class Mind : Node
         IReadOnlyList<AgentObservation> observations,
         ObservationContext context,
         Action? beforeCommit = null,
-        bool throwWhenLifetimeEnded = false)
+        bool throwWhenLifetimeEnded = false,
+        IReadOnlyList<SpeechObservationTransport?>? speechTransports = null)
     {
         ArgumentNullException.ThrowIfNull(observations);
         ArgumentNullException.ThrowIfNull(context);
+        if (speechTransports is not null && speechTransports.Count != observations.Count)
+        {
+            throw new ArgumentException("Speech transport count must match observation count.", nameof(speechTransports));
+        }
 
-        ObservationDeliveryUrgency? signalledUrgency;
-        var stampedObservations = new List<AgentObservation>();
+        ObservationDeliveryUrgency? signalledUrgency = null;
+        List<AgentObservation> stampedObservations = [];
+        List<RetainedObservationChange> retentionChanges = [];
 
         lock (_observationStateLock)
         {
@@ -1237,51 +1259,143 @@ public abstract partial class Mind : Node
                 return;
             }
 
-            var acceptedObservations = new List<AgentObservation>(observations.Count);
+            ObservationLifetimePolicyRegistry policies = EnsureLifetimePolicies();
+            // A replayed commit identity is rejected before a clock sample, policy evaluation, scheduling, or any
+            // retained-state mutation. Apart from preserving exact-once acceptance, this keeps an all-duplicate
+            // submission observationally inert to its caller.
+            if (observations.Select((observation, index) => GetCommitIdentity(observation, speechTransports?[index])).All(identity => identity is not null
+                && _committedObservationIdentities.Contains(identity)))
+            {
+                return;
+            }
+
+            double observedAt = GameClock.NowSeconds;
+            List<AcceptedObservationEntry> activeEntries =
+            [
+                .. _activeRetainedEntries.Values.Where(entry =>
+                    !policies.Resolve(entry.Payload.GetType()).IsExpired(entry, observedAt)),
+            ];
+            HashSet<ObservationCommitIdentity> stagedCommitIdentities = [.. _committedObservationIdentities];
+            List<StagedAcceptance> accepted = [];
+            long nextSequenceID = _nextObservationSequenceID;
+
             for (int index = 0; index < observations.Count; index++)
             {
                 AgentObservation observation = observations[index]
                     ?? throw new ArgumentException($"Observation at index {index} cannot be null.", nameof(observations));
-                if (!ShouldSuppressDuplicate(observation, _observationTimeline, acceptedObservations))
+                SpeechObservationTransport? speechTransport = speechTransports?[index];
+                ObservationCommitIdentity? commitIdentity = GetCommitIdentity(observation, speechTransport);
+                if (commitIdentity is not null && stagedCommitIdentities.Contains(commitIdentity))
                 {
-                    acceptedObservations.Add(observation);
+                    continue;
+                }
+
+                IObservationLifetimePolicy policy = policies.Resolve(observation.GetType());
+                ObservationLifetimePolicyDecision decision = policy.Evaluate(observation, activeEntries, observedAt);
+                if (decision.Suppress)
+                {
+                    continue;
+                }
+
+                ValidateSupersessionDecision(decision, activeEntries, policy, observation);
+
+                // Scheduling is evaluated exactly once only after policy acceptance and before any state mutation.
+                bool requiresFreshTurn = observation.RequiresFreshTurn(context);
+                var scheduling = new ObservationSchedulingMetadata(
+                    CalculateAndValidateImportance(observation, context),
+                    requiresFreshTurn);
+                AgentObservation stampedObservation = observation with
+                {
+                    ObservedAt = observedAt,
+                };
+                var entry = new AcceptedObservationEntry(
+                    nextSequenceID++,
+                    observedAt,
+                    stampedObservation,
+                    scheduling,
+                    IsRetained: true)
+                {
+                    SpeechTransport = speechTransport,
+                };
+                accepted.Add(new StagedAcceptance(
+                    entry,
+                    policy.IsEventEligible(stampedObservation),
+                    policy.HasFiniteLifetime));
+                _ = activeEntries.RemoveAll(entry => decision.SupersededSequenceIDs.Contains(entry.SequenceID));
+                activeEntries.Add(entry);
+                if (commitIdentity is not null)
+                {
+                    _ = stagedCommitIdentities.Add(commitIdentity);
                 }
             }
 
-            // Staged evaluation (AI-001 TR-42): importance and freshness are each calculated exactly once for every
-            // accepted observation, before timestamping, mutation, or commitment. Rejected duplicates contribute
-            // neither importance nor freshness.
-            var pending = new PendingObservation[acceptedObservations.Count];
-            for (int index = 0; index < acceptedObservations.Count; index++)
+            var finalActiveIDs = activeEntries.Select(static entry => entry.SequenceID).ToHashSet();
+            if (accepted.Count > 0)
             {
-                AgentObservation observation = acceptedObservations[index];
-                bool requiresFreshTurn = observation.RequiresFreshTurn(context);
-                pending[index] = new PendingObservation(
-                    observation,
-                    CalculateAndValidateImportance(observation, context),
-                    requiresFreshTurn);
+                beforeCommit?.Invoke();
             }
 
-            beforeCommit?.Invoke();
-            ObservationDeliveryUrgency? urgencyBefore = PendingDeliveryUrgencyLocked();
-            double? stamp = pending.Length > 0 ? GameClock.NowSeconds : null;
-            foreach (PendingObservation pendingObservation in pending)
+            List<AcceptedObservationEntry> removed = [];
+            foreach (AcceptedObservationEntry current in _activeRetainedEntries.Values.ToArray())
             {
-                AgentObservation stampedObservation = pendingObservation.Observation with
+                if (!finalActiveIDs.Contains(current.SequenceID))
                 {
-                    ObservedAt = stamp
+                    AcceptedObservationEntry inactive = current with
+                    {
+                        IsRetained = false,
+                    };
+                    _acceptedObservationLog[_acceptedObservationLogIndices[current.SequenceID]] = inactive;
+                    _ = _activeRetainedEntries.Remove(current.SequenceID);
+                    _ = _expiringRetainedEntries.Remove(current.SequenceID);
+                    removed.Add(inactive);
+                }
+            }
+
+            List<AcceptedObservationEntry> committedEntries = [];
+            foreach (StagedAcceptance staged in accepted)
+            {
+                AcceptedObservationEntry entry = staged.Entry with
+                {
+                    IsRetained = finalActiveIDs.Contains(staged.Entry.SequenceID),
                 };
-                _observationTimeline.Add(stampedObservation);
-                _notableAccumulation.Add(pendingObservation with
+                _acceptedObservationLogIndices.Add(entry.SequenceID, _acceptedObservationLog.Count);
+                _acceptedObservationLog.Add(entry);
+                committedEntries.Add(entry);
+                if (entry.IsRetained)
                 {
-                    Observation = stampedObservation
-                });
-                _cumulativeNotableImportance += pendingObservation.Importance;
-                stampedObservations.Add(stampedObservation);
+                    _activeRetainedEntries.Add(entry.SequenceID, entry);
+                    if (staged.HasFiniteLifetime)
+                    {
+                        _expiringRetainedEntries.Add(entry.SequenceID, entry);
+                    }
+                }
+
+                if (staged.IsEventEligible)
+                {
+                    _persistentEventTimeline.Add(entry);
+                }
+            }
+
+            if (accepted.Count > 0)
+            {
+                _nextObservationSequenceID = nextSequenceID;
+                _committedObservationIdentities.Clear();
+                _committedObservationIdentities.UnionWith(stagedCommitIdentities);
+            }
+
+            ObservationDeliveryUrgency? urgencyBefore = PendingDeliveryUrgencyLocked();
+            foreach (AcceptedObservationEntry entry in committedEntries)
+            {
+                _notableAccumulation.Add(new PendingObservation(
+                    entry.SequenceID,
+                    entry.Scheduling.Importance,
+                    entry.Scheduling.RequiresFreshTurn));
+                _cumulativeNotableImportance += entry.Scheduling.Importance;
+                stampedObservations.Add(entry.Payload);
 
                 // Freshness upgrades the complete current accumulation — including preceding sub-threshold
                 // observations — to deliverable regardless of cumulative importance (AI-001 TR-43).
-                _freshUrgencyPending |= pendingObservation.RequiresFreshTurn;
+                _freshUrgencyPending |= entry.Scheduling.RequiresFreshTurn;
                 if (!_notablePending && _cumulativeNotableImportance >= EffectiveObservationImportanceThreshold)
                 {
                     _notablePending = true;
@@ -1292,6 +1406,12 @@ public abstract partial class Mind : Node
             signalledUrgency = urgencyAfter is { } urgency && (urgencyBefore is not { } before || urgency > before)
                 ? urgency
                 : null;
+            retentionChanges.AddRange(removed.Select(static entry => new RetainedObservationChange(
+                RetainedObservationChangeKind.Removed,
+                entry)));
+            retentionChanges.AddRange(committedEntries
+                .Where(static entry => entry.IsRetained)
+                .Select(static entry => new RetainedObservationChange(RetainedObservationChangeKind.Added, entry)));
         }
 
         foreach (AgentObservation observation in stampedObservations)
@@ -1304,11 +1424,19 @@ public abstract partial class Mind : Node
             OnObservationIngested(observation);
         }
 
+        NotifyRetainedObservationChanges(retentionChanges);
+
         if (signalledUrgency is { } deliveryUrgency)
         {
             SignalObservationDelivery(deliveryUrgency);
         }
     }
+
+    private static ObservationCommitIdentity? GetCommitIdentity(
+        AgentObservation observation,
+        SpeechObservationTransport? speechTransport)
+        => speechTransport?.CommitIdentity
+            ?? (observation as IHasCommitIdentity)?.CommitIdentity;
 
     /// <summary>
     /// Delivers one urgency upgrade after its committing batch has settled (AI-001 TR-35/44): an active wait is
@@ -1355,71 +1483,6 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Claims the pending deliverable observation window when no wait is active and delivery is enabled,
-    /// transferring delivery ownership atomically (AI-001 TR-44): exactly one consumer — a claim or a wait — owns
-    /// each observation batch. The claim is completed once its observations are safely queued for rendering, or
-    /// abandoned to restore the window.
-    /// </summary>
-    /// <returns>The claimed delivery window in FIFO ingestion order with its urgency, or null when nothing is
-    /// deliverable, a wait owns delivery, delivery is paused while disabled (AI-001 TR-5), or the node lifetime has
-    /// ended.</returns>
-    internal ObservationDeliveryClaim? TryClaimPendingObservationDelivery()
-    {
-        lock (_observationStateLock)
-        {
-            if (IsNodeLifetimeEnded || !_enabled || _activeWait is not null || PendingDeliveryUrgencyLocked() is null)
-            {
-                return null;
-            }
-
-            ObservationDeliveryClaim claim = new(
-                [.. _notableAccumulation],
-                _freshUrgencyPending ? ObservationDeliveryUrgency.Fresh : ObservationDeliveryUrgency.Ordinary);
-            ResetNotableAccumulationLocked();
-            return claim;
-        }
-    }
-
-    /// <summary>
-    /// Finalises one claimed delivery after its observations are safely queued for rendering (AI-001 TR-44): the
-    /// claim releases ownership and its observations are not deliverable again.
-    /// </summary>
-    internal void CompleteObservationDelivery(ObservationDeliveryClaim claim)
-    {
-        ArgumentNullException.ThrowIfNull(claim);
-        lock (_observationStateLock)
-        {
-            claim.MarkSettled();
-        }
-    }
-
-    /// <summary>
-    /// Restores an undelivered claim to the front of the pending accumulation in FIFO order (AI-001 TR-44): a
-    /// failed rendering never silently loses its observations — they stay deliverable for the next wait or claim.
-    /// Restoring never re-signals; the next urgency upgrade or wait call delivers the restored window.
-    /// </summary>
-    internal void AbandonObservationDelivery(ObservationDeliveryClaim claim)
-    {
-        ArgumentNullException.ThrowIfNull(claim);
-        lock (_observationStateLock)
-        {
-            if (IsNodeLifetimeEnded || !claim.TryMarkAbandoned())
-            {
-                return;
-            }
-
-            _notableAccumulation.InsertRange(0, claim.Records);
-            _cumulativeNotableImportance += claim.TotalImportance;
-            if (_cumulativeNotableImportance >= EffectiveObservationImportanceThreshold)
-            {
-                _notablePending = true;
-            }
-
-            _freshUrgencyPending |= claim.HasFreshRecords;
-        }
-    }
-
-    /// <summary>
     /// Notifies derived minds after a successfully committed observation.
     /// </summary>
     protected virtual void OnObservationIngested(AgentObservation observation)
@@ -1427,54 +1490,180 @@ public abstract partial class Mind : Node
     }
 
     /// <summary>
-    /// Gets an atomic, top-level read-only copy of the complete node-lifetime observation timeline membership and order.
-    /// Observation records are passed directly under the producer immutability convention.
+    /// Gets an atomic immutable snapshot of every accepted observation-log entry, including entries no longer retained.
+    /// </summary>
+    internal IReadOnlyList<AcceptedObservationEntry> GetAcceptedObservationLogSnapshot()
+    {
+        lock (_observationStateLock)
+        {
+            return new ReadOnlyCollection<AcceptedObservationEntry>([.. _acceptedObservationLog]);
+        }
+    }
+
+    /// <summary>
+    /// Gets an atomic immutable snapshot of active retained evidence only, in original acceptance order.
+    /// </summary>
+    internal IReadOnlyList<AcceptedObservationEntry> GetRetainedObservationSnapshot()
+    {
+        lock (_observationStateLock)
+        {
+            return new ReadOnlyCollection<AcceptedObservationEntry>(
+                [.. _acceptedObservationLog.Where(static entry => entry.IsRetained)]);
+        }
+    }
+
+    /// <summary>
+    /// Gets an atomic immutable snapshot of persistent event-eligible entries. Unlike retained evidence this timeline
+    /// never retracts entries after supersession or expiry.
+    /// </summary>
+    internal IReadOnlyList<AcceptedObservationEntry> GetPersistentEventTimelineSnapshot()
+    {
+        lock (_observationStateLock)
+        {
+            return new ReadOnlyCollection<AcceptedObservationEntry>([.. _persistentEventTimeline]);
+        }
+    }
+
+    /// <summary>
+    /// Confirms scheduling work represented by a successfully accepted provider request. Entries accepted after the
+    /// request's snapshot remain pending, so a racing observation is never silently consumed.
+    /// </summary>
+    internal void ConfirmProviderRequestContext(long schedulingSequenceID)
+    {
+        lock (_observationStateLock)
+        {
+            if (IsNodeLifetimeEnded || schedulingSequenceID <= 0 || _notableAccumulation.Count == 0)
+            {
+                return;
+            }
+
+            _ = _notableAccumulation.RemoveAll(entry => entry.SequenceID <= schedulingSequenceID);
+            _cumulativeNotableImportance = _notableAccumulation.Sum(static entry => entry.Importance);
+            _freshUrgencyPending = _notableAccumulation.Any(static entry => entry.RequiresFreshTurn);
+            _notablePending = _cumulativeNotableImportance >= EffectiveObservationImportanceThreshold;
+        }
+    }
+
+    /// <summary>
+    /// Compatibility snapshot for legacy timeline consumers. It deliberately maps only to the persistent event
+    /// timeline; new consumers must use one of the explicitly named log, retained, or event APIs above.
     /// </summary>
     internal IReadOnlyList<AgentObservation> GetObservationTimelineSnapshot()
     {
         lock (_observationStateLock)
         {
-            return new ReadOnlyCollection<AgentObservation>([.. _observationTimeline]);
+            return new ReadOnlyCollection<AgentObservation>(
+                [.. _persistentEventTimeline.Select(static entry => entry.Payload)]);
         }
     }
 
     /// <summary>
-    /// Reports whether a committed timeline record still sits in the pending deliverable accumulation, so a
-    /// derived mind can distinguish speech awaiting its ordinary delivery from speech a delivery channel already
-    /// consumed (AI-001 TR-44; AI-002 TR-57 no-leaked-holds). Comparison is by record identity.
+    /// Removes expired active retained evidence using a single game-time sample. This performs retention maintenance
+    /// only: it never appends an observation or event, changes scheduling, or invokes observation-ingested hooks.
     /// </summary>
-    internal bool ContainsPendingDeliveryObservation(AgentObservation observation)
+    internal void ProcessRetainedObservationExpiry()
     {
-        ArgumentNullException.ThrowIfNull(observation);
+        List<RetainedObservationChange>? changes = null;
         lock (_observationStateLock)
         {
-            foreach (PendingObservation pending in _notableAccumulation)
+            if (IsNodeLifetimeEnded)
             {
-                if (ReferenceEquals(pending.Observation, observation))
-                {
-                    return true;
-                }
+                return;
             }
 
-            return false;
+            if (_expiringRetainedEntries.Count == 0)
+            {
+                return;
+            }
+
+            ObservationLifetimePolicyRegistry policies = EnsureLifetimePolicies();
+            double now = GameClock.NowSeconds;
+            List<long>? expiredSequenceIDs = null;
+            foreach (KeyValuePair<long, AcceptedObservationEntry> retained in _expiringRetainedEntries)
+            {
+                AcceptedObservationEntry current = retained.Value;
+                if (!policies.Resolve(current.Payload.GetType()).IsExpired(current, now))
+                {
+                    continue;
+                }
+
+                (expiredSequenceIDs ??= []).Add(retained.Key);
+            }
+
+            if (expiredSequenceIDs is not null)
+            {
+                changes = [];
+                foreach (long sequenceID in expiredSequenceIDs)
+                {
+                    AcceptedObservationEntry current = _activeRetainedEntries[sequenceID];
+                    AcceptedObservationEntry expired = current with
+                    {
+                        IsRetained = false,
+                    };
+                    _acceptedObservationLog[_acceptedObservationLogIndices[sequenceID]] = expired;
+                    _ = _activeRetainedEntries.Remove(sequenceID);
+                    _ = _expiringRetainedEntries.Remove(sequenceID);
+                    changes.Add(new RetainedObservationChange(RetainedObservationChangeKind.Removed, expired));
+                }
+            }
+        }
+
+        if (changes is not null)
+        {
+            NotifyRetainedObservationChanges(changes);
+        }
+    }
+
+    private static void ValidateSupersessionDecision(
+        ObservationLifetimePolicyDecision decision,
+        IReadOnlyList<AcceptedObservationEntry> activeEntries,
+        IObservationLifetimePolicy policy,
+        AgentObservation observation)
+    {
+        if (decision.Suppress && decision.SupersededSequenceIDs.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"Observation lifetime policy '{policy.GetType().FullName}' suppressed '{observation.GetType().FullName}' "
+                + "while also selecting retained entries for supersession.");
+        }
+
+        var activeIDs = activeEntries.Select(static entry => entry.SequenceID).ToHashSet();
+        var selectedIDs = new HashSet<long>();
+        foreach (long sequenceID in decision.SupersededSequenceIDs)
+        {
+            if (!activeIDs.Contains(sequenceID) || !selectedIDs.Add(sequenceID))
+            {
+                throw new InvalidOperationException(
+                    $"Observation lifetime policy '{policy.GetType().FullName}' selected invalid retained sequence ID "
+                    + $"'{sequenceID}' while accepting '{observation.GetType().FullName}'.");
+            }
+        }
+    }
+
+    private void NotifyRetainedObservationChanges(IReadOnlyList<RetainedObservationChange> changes)
+    {
+        foreach (RetainedObservationChange change in changes)
+        {
+            if (IsNodeLifetimeEnded)
+            {
+                return;
+            }
+
+            RetainedObservationChanged?.Invoke(change);
         }
     }
 
     /// <summary>
-    /// Waits for the pending observation accumulation, completing early when accumulated importance reaches the
-    /// configured threshold, when a fresh observation arrives regardless of importance, or when an attended speaker
-    /// finishes speaking, and otherwise after <paramref name="maxWait"/> (AI-001 TR-6/7/43, AI-002 TR-31–33).
+    /// Waits for scheduling pressure, completing early when accumulated importance reaches the configured threshold,
+    /// when a fresh observation arrives regardless of importance, or when an attended speaker finishes speaking,
+    /// and otherwise after <paramref name="maxWait"/>. Waiting is never an event-delivery or cursor-advancement
+    /// channel; only a later accepted provider context clears pressure (AI-002 TR-7–9).
     /// </summary>
     /// <param name="maxWait">Maximum duration of one wait before quiet expiry.</param>
     /// <param name="cancellationToken">Cancellation that abandons the wait; node-lifetime cancellation is terminal
     /// and never surfaces a normal wait result (AI-001 TR-19). A wait already woken through its normal completion
     /// mechanism still delivers its window when this token is cancelled afterwards (AI-002 TR-41).</param>
-    /// <returns>
-    /// The observations its delivery window owns in FIFO ingestion order — the accumulation since the previous wait
-    /// completion plus any sub-threshold predecessors a fresh observation upgraded — and the wake reason. Quiet
-    /// expiry of an ordinary accumulation returns nothing: sub-threshold observations stay recorded in the timeline
-    /// and reachable through the history tool.
-    /// </returns>
+    /// <returns>The scheduling wake reason. Event text remains exclusively in the request-context timeline.</returns>
     internal async Task<WaitOutcome> WaitForNotableObservationsAsync(TimeSpan maxWait, CancellationToken cancellationToken)
     {
         TimeSpan boundedWait = maxWait >= TimeSpan.Zero ? maxWait : MaxObservationWait;
@@ -1498,12 +1687,9 @@ public abstract partial class Mind : Node
 
             if (PendingDeliveryUrgencyLocked() is { } heldUrgency)
             {
-                // An already-deliverable window — held ordinary threshold or retained fresh urgency — is delivered
-                // immediately by this wait call (AI-001 TR-6, TR-43).
-                List<AgentObservation> held = [.. _notableAccumulation.Select(static entry => entry.Observation)];
-                ResetNotableAccumulationLocked();
+                // Existing pressure wakes immediately but remains pending. The following provider request presents
+                // its context and only local response acceptance consumes it; a wait never advances that cursor.
                 return new WaitOutcome(
-                    held,
                     heldUrgency == ObservationDeliveryUrgency.Fresh
                         ? ObservationWaitWake.FreshObservation
                         : ObservationWaitWake.ThresholdCrossed);
@@ -1513,7 +1699,6 @@ public abstract partial class Mind : Node
         }
 
         ObservationWaitWake wake = ObservationWaitWake.QuietExpiry;
-        List<AgentObservation> delivered = [];
         bool wokenByCompletion = false;
         try
         {
@@ -1543,39 +1728,19 @@ public abstract partial class Mind : Node
 
                 if (wokenByCompletion || !waitToken.IsCancellationRequested)
                 {
-                    // A wait that was woken completed through its normal mechanism and owns its window (AI-002
-                    // TR-41): it delivers the complete accumulation even when the external token was cancelled
-                    // after the wake — a wait-owned fresh signal invalidates the surrounding batch without
-                    // cancelling the wait — so only a wait that never woke treats cancellation as "never
-                    // completed" and retains its accumulation. The window covers observations since the previous
-                    // wait completion (AI-001 TR-6): any wait completion, early or quiet, starts a fresh
-                    // accumulation window. Quiet expiry returns only what is already deliverable and never
-                    // promotes sub-threshold observations — except that a pending fresh window, including one
-                    // racing this completion, is delivered with fresh urgency rather than reset (TR-43).
+                    // Resolve the current highest-priority pressure at the completion boundary. This lets pressure
+                    // that arrived alongside an attended-speaker cue win over it without clearing any cursor.
                     if (_freshUrgencyPending || _notablePending)
                     {
-                        if (_freshUrgencyPending)
-                        {
-                            wake = ObservationWaitWake.FreshObservation;
-                        }
-
-                        delivered = [.. _notableAccumulation.Select(static entry => entry.Observation)];
+                        wake = _freshUrgencyPending
+                            ? ObservationWaitWake.FreshObservation
+                            : ObservationWaitWake.ThresholdCrossed;
                     }
-
-                    ResetNotableAccumulationLocked();
                 }
             }
         }
 
-        return new WaitOutcome(delivered, wake);
-    }
-
-    private void ResetNotableAccumulationLocked()
-    {
-        _notableAccumulation.Clear();
-        _cumulativeNotableImportance = 0f;
-        _notablePending = false;
-        _freshUrgencyPending = false;
+        return new WaitOutcome(wake);
     }
 
     /// <summary>Gets the current pending delivery urgency, or null while the accumulation is not deliverable.</summary>
@@ -1611,11 +1776,17 @@ public abstract partial class Mind : Node
 
     private static double GetStopwatchSeconds() => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
 
-    /// <summary>One staged accumulation entry with its once-evaluated importance and freshness (AI-001 TR-42).</summary>
+    /// <summary>One payload-free staged scheduling entry with once-evaluated importance and freshness.</summary>
     internal readonly record struct PendingObservation(
-        AgentObservation Observation,
+        long SequenceID,
         float Importance,
         bool RequiresFreshTurn);
+
+    /// <summary>One policy-accepted entry staged until the complete batch can commit atomically.</summary>
+    private readonly record struct StagedAcceptance(
+        AcceptedObservationEntry Entry,
+        bool IsEventEligible,
+        bool HasFiniteLifetime);
 
     /// <summary>
     /// One serialisable unit of perception work: either a percept fan-out or an observation awaiting atomic commit,
@@ -1625,66 +1796,12 @@ public abstract partial class Mind : Node
 
     private sealed record QueuedPercept(IPercept Percept, IPerception[] Faculties) : PerceptionWork;
 
-    private sealed record QueuedObservation(AgentObservation Observation) : PerceptionWork;
+    private sealed record QueuedObservation(
+        AgentObservation Observation,
+        Func<bool>? IsStillCurrent,
+        SpeechObservationTransport? SpeechTransport) : PerceptionWork;
 
-    /// <summary>
-    /// Ownership token for one claimed pending observation window (AI-001 TR-44): delivery ownership transfers only
-    /// through Mind's claim API, and an abandoned — undelivered — claim restores its observations instead of losing
-    /// them.
-    /// </summary>
-    internal sealed class ObservationDeliveryClaim
-    {
-        private int _settled;
-
-        internal ObservationDeliveryClaim(IReadOnlyList<PendingObservation> records, ObservationDeliveryUrgency urgency)
-        {
-            Records = records;
-            Urgency = urgency;
-            Observations = [.. records.Select(static record => record.Observation)];
-            TotalImportance = records.Sum(static record => record.Importance);
-            HasFreshRecords = records.Any(static record => record.RequiresFreshTurn);
-        }
-
-        /// <summary>Claimed observations in FIFO ingestion order.</summary>
-        public IReadOnlyList<AgentObservation> Observations
-        {
-            get;
-        }
-
-        /// <summary>Delivery urgency of the claimed window; fresh urgency dominates ordinary threshold delivery.</summary>
-        public ObservationDeliveryUrgency Urgency
-        {
-            get;
-        }
-
-        internal IReadOnlyList<PendingObservation> Records
-        {
-            get;
-        }
-
-        internal float TotalImportance
-        {
-            get;
-        }
-
-        internal bool HasFreshRecords
-        {
-            get;
-        }
-
-        /// <summary>Marks the claim settled after its delivery completed; later settlement attempts are no-ops.</summary>
-        internal void MarkSettled() => Interlocked.Exchange(ref _settled, 1);
-
-        /// <summary>Attempts to settle the claim as abandoned; only the first settlement restores ownership.</summary>
-        internal bool TryMarkAbandoned() => Interlocked.Exchange(ref _settled, 1) == 0;
-    }
-
-    /// <summary>
-    /// Outcome of one observation wait: the observations its delivery window owns and the wake reason that
-    /// completed it.
-    /// </summary>
-    /// <param name="Delivered">Delivered observations in FIFO ingestion order; empty on ordinary quiet expiry.</param>
-    /// <param name="Wake">Reason the wait completed: quiet expiry, attended-speaker cue, threshold crossing, or a
-    /// fresh observation that upgraded the complete accumulation.</param>
-    internal readonly record struct WaitOutcome(IReadOnlyList<AgentObservation> Delivered, ObservationWaitWake Wake);
+    /// <summary>Outcome of one observation wait, carrying scheduling reason only.</summary>
+    /// <param name="Wake">Reason the wait completed: fresh event, threshold, attended-speaker cue, or timeout.</param>
+    internal readonly record struct WaitOutcome(ObservationWaitWake Wake);
 }

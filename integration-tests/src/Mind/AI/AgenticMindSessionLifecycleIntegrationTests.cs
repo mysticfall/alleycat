@@ -14,7 +14,6 @@ using AlleyCat.Speech;
 using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.LipSync;
 using AlleyCat.Speech.Voice;
-using AlleyCat.Templating;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
 using Godot;
@@ -23,13 +22,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
 using AgentObservation = AlleyCat.Mind.Observation.Observation;
-using MindBase = AlleyCat.Mind.Mind;
 
 namespace AlleyCat.IntegrationTests.Mind.AI;
 
 /// <summary>
 /// Godot-runtime coverage for the AgenticMind session lifecycle: fire-and-forget start with containment, the
-/// urgency-aware observation-delivery bridge — ordinary boundary injection versus fresh-turn invalidation, and
+/// urgency-aware scheduling bridge — ordinary pressure versus fresh-turn invalidation, and
 /// wait-owned fresh delivery through the wait's natural result — and node-exit cancellation of generation and tool
 /// work.
 /// </summary>
@@ -85,12 +83,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// An ordinary notable signal during held generation never cancels the request: the generation completes, its
-    /// tool batch executes, and the rendered notable summary lands as one injected user message at the next natural
-    /// request boundary without any extra model request (AI-001 TR-6, AI-002 TR-39).
+    /// An ordinary notable signal during held generation never cancels the request. The next natural request renders
+    /// it only in the canonical event-timeline prefix, with no scheduling payload (AI-002 TR-7–10).
     /// </summary>
     [Fact]
-    public async Task NotableSignal_DuringGeneration_CompletesGenerationAndInjectsAtNextBoundary()
+    public async Task NotableSignal_DuringGeneration_CompletesGenerationAndRendersAtNextContextBoundary()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         TestCharacter owner = new();
@@ -104,9 +101,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            // The authored fragment proves the injection carries genuinely rendered record content instead of a
-            // count-only summary.
-            EventHistoryPath = "res://assets/testing/prompts/test_event_history_lifecycle.md",
             ClientProvider = clientProvider,
             Tools = [tool],
             ObservationImportanceThreshold = 1f,
@@ -127,15 +121,14 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => tool.CapturedContexts.Count == 1);
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             IReadOnlyList<ChatMessage> nextRequest = clientProvider.Requests[1];
-            // The naturally-next request replays the completed exchange and then the injected notable summary,
-            // whose text must be the exact rendered event-history fragment output (AI-002 TR-7/39).
+            // The naturally-next request puts its newly rendered event timeline and current scene ahead of bootstrap
+            // and the accepted replay. Scheduling contributed no observation payload (AI-002 TR-2/7–10).
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
                 nextRequest.Select(message => message.Role));
-            ChatMessage injected = nextRequest[3];
-            Assert.Equal(AgenticMind.SessionBootstrapInput, nextRequest[0].Text);
-            Assert.Equal("Important scene events require your attention:\n- bridge\n", injected.Text);
-            Assert.DoesNotContain("notable observation(s)", injected.Text, StringComparison.Ordinal);
+            Assert.Contains("--- New Since Your Previous Response ---", nextRequest[0].Text, StringComparison.Ordinal);
+            Assert.Contains("- bridge", nextRequest[0].Text, StringComparison.Ordinal);
+            Assert.Equal(AgenticMind.SessionBootstrapInput, nextRequest[2].Text);
 
             // Node exit ends the held second request quietly.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -154,9 +147,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// Non-self observed speech during held generation requires a fresh turn immediately: the stale request is
-    /// cancelled at once and replaced by a single fresh request whose injected user message carries the rendered
-    /// speech observation (AI-001 TR-43, AI-002 TR-40).
+    /// Non-self observed speech during held generation requires a fresh turn immediately. Its replacement request
+    /// carries the rendered speech only in its event-timeline message (AI-001 TR-7, AI-002 TR-2/7–10).
     /// </summary>
     [Fact]
     public async Task ExternalSpeech_DuringGeneration_InvalidatesStaleGenerationImmediately()
@@ -171,7 +163,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            EventHistoryPath = "res://prompts/event_history.md",
             ClientProvider = clientProvider,
             ObservationImportanceThreshold = 1f,
         };
@@ -181,22 +172,19 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "voice-1", "You there?"));
+            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?"));
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
             IReadOnlyList<ChatMessage> freshRequest = clientProvider.Requests[1];
-            // The fresh replacement request carries the bootstrap input followed by exactly one injected user
-            // message with the rendered heard-speech record (AI-002 TR-7/40).
+            // The fresh replacement request starts with canonical timeline and scene messages, then bootstrap. It
+            // contains no scheduling payload (AI-002 TR-2/7–10).
             Assert.Equal(
-                [ChatRole.User, ChatRole.User],
+                [ChatRole.User, ChatRole.User, ChatRole.User],
                 freshRequest.Select(message => message.Role));
-            Assert.Equal(AgenticMind.SessionBootstrapInput, freshRequest[0].Text);
-            Assert.StartsWith(
-                "Important scene events require your attention:",
-                freshRequest[1].Text,
-                StringComparison.Ordinal);
-            Assert.Contains("Heard char:someone-else say: You there?", freshRequest[1].Text, StringComparison.Ordinal);
+            Assert.Contains("--- New Since Your Previous Response ---", freshRequest[0].Text, StringComparison.Ordinal);
+            Assert.Contains("Heard char:someone-else say: You there?", freshRequest[0].Text, StringComparison.Ordinal);
+            Assert.Equal(AgenticMind.SessionBootstrapInput, freshRequest[2].Text);
 
             // Node exit ends the held replacement request quietly.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -253,7 +241,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             _ = Assert.Single(clientProvider.Requests);
             Assert.Empty(percepts);
             Assert.Empty(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
 
             // Other-group, other-index, and Published are all non-matching lifecycle traffic. They must not
             // release the active continued segment before text has completed.
@@ -271,11 +258,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
-            ChatMessage joined = Assert.Single(
-                replacement,
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
-            Assert.Contains("Heard char:speaker say: late prefix … continued text", joined.Text, StringComparison.Ordinal);
-            Assert.Equal(1, CountOccurrences(joined.Text, "late prefix … continued text"));
+            Assert.Equal([ChatRole.User, ChatRole.User, ChatRole.User], replacement.Select(static message => message.Role));
+            ChatMessage timeline = replacement[0];
+            Assert.Contains("Heard char:speaker say: late prefix … continued text", timeline.Text, StringComparison.Ordinal);
+            Assert.Equal(1, CountOccurrences(timeline.Text, "late prefix … continued text"));
             Assert.Equal(
                 ["late prefix", "continued text"],
                 mind.GetTimelineForTest().OfType<ObservedSpeech>().Select(speech => speech.Content));
@@ -332,7 +318,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             _ = Assert.Single(clientProvider.Requests);
             Assert.Empty(percepts);
             Assert.Empty(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
 
             // Other-group traffic and the published settlement are non-matching: they must not release the pending
             // onset before text has completed.
@@ -347,9 +332,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
-            ChatMessage joined = Assert.Single(
-                replacement,
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+            ChatMessage joined = GetEventTimelineMessage(replacement);
             Assert.Contains("Heard char:speaker say: onset text", joined.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(joined.Text, "Heard char:speaker say: onset text"));
         }
@@ -403,10 +386,9 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // would keep the replacement request held behind the rendering barrier.
             source.EmitSpeechSettlement(new SpeechSegmentMetadata("onset-group", 0), SpeechSegmentSettlementKind.Blank);
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
-            Assert.Equal([ChatRole.User], clientProvider.Requests[1].Select(message => message.Role));
-            Assert.Equal(AgenticMind.SessionBootstrapInput, clientProvider.Requests[1][0].Text);
+            Assert.Equal([ChatRole.User, ChatRole.User, ChatRole.User], clientProvider.Requests[1].Select(message => message.Role));
+            Assert.Equal(AgenticMind.SessionBootstrapInput, clientProvider.Requests[1][2].Text);
             Assert.Empty(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
         }
         finally
         {
@@ -463,16 +445,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
-            ChatMessage delivered = Assert.Single(
-                replacement,
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+            ChatMessage delivered = GetEventTimelineMessage(replacement);
             Assert.Contains("Heard char:speaker say: manual speech", delivered.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(delivered.Text, "Heard char:speaker say: manual speech"));
 
             ObservedSpeech ungrouped = Assert.IsType<ObservedSpeech>(Assert.Single(mind.GetTimelineForTest()));
-            Assert.Null(ungrouped.SpeechGroupID);
-            Assert.Equal(0, ungrouped.SegmentIndex);
-            Assert.False(ungrouped.Continued);
         }
         finally
         {
@@ -486,7 +463,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// A start cue that arrives after its group's completed speech already committed and its delivery was consumed
     /// cannot settle through delivery: the settled-hold watchdog releases the lease textlessly on the cue's own
-    /// sweep, so the runner issues its next model request with no further settlement cue and without re-injecting
+    /// sweep, so the runner issues its next model request with no further settlement cue and without duplicating
     /// the already-delivered speech (AI-002 TR-57 liveness).
     /// </summary>
     [Fact]
@@ -529,14 +506,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => mind.GetTimelineForTest().Count == 1);
 
             IReadOnlyList<ChatMessage> delivered = clientProvider.Requests[1];
-            ChatMessage heard = Assert.Single(
-                delivered,
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+            ChatMessage heard = GetEventTimelineMessage(delivered);
             Assert.Contains("Heard char:speaker say: late text", heard.Text, StringComparison.Ordinal);
             ObservedSpeech committed = Assert.IsType<ObservedSpeech>(Assert.Single(mind.GetTimelineForTest()));
             Assert.Equal("late text", committed.Content);
-            Assert.Equal("late-group", committed.SpeechGroupID);
-            Assert.Null(mind.TryClaimDeliveryForTest());
 
             // The onset cue now arrives for speech that already committed and left the deliverable window. No
             // settlement and no further completed speech follows: only the watchdog's sweep can release the hold.
@@ -544,18 +517,15 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 3);
 
             // The next model request replays the cancelled request's mutable turn exactly once — bootstrap plus
-            // one heard-speech turn — with no fabricated re-injection for the group and nothing left claimable.
+            // one heard-speech turn — with no fabricated duplicate for the group.
             IReadOnlyList<ChatMessage> swept = clientProvider.Requests[2];
             Assert.Equal(
-                [ChatRole.User, ChatRole.User],
+                [ChatRole.User, ChatRole.User, ChatRole.User],
                 swept.Select(message => message.Role));
-            Assert.Equal(AgenticMind.SessionBootstrapInput, swept[0].Text);
-            ChatMessage replayed = Assert.Single(
-                swept,
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+            Assert.Equal(AgenticMind.SessionBootstrapInput, swept[2].Text);
+            ChatMessage replayed = GetEventTimelineMessage(swept);
             Assert.Equal(1, CountOccurrences(replayed.Text, "Heard char:speaker say: late text"));
             _ = Assert.Single(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
         }
         finally
         {
@@ -568,7 +538,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// A cue from a speaker the Mind does not attend registers nothing and cancels nothing: generation and the
-    /// tool batch continue through the cue, no hold or claimable window appears, and the speaker's completed
+    /// tool batch continue through the cue, no hold appears, and the speaker's completed
     /// speech still arrives later as an ordinary all-hearer fresh turn (AI-001 TR-47, AI-002 TR-56).
     /// </summary>
     [Fact]
@@ -603,7 +573,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            EventHistoryPath = "res://prompts/event_history.md",
             ClientProvider = clientProvider,
             ObservationImportanceThreshold = 1f,
         };
@@ -622,7 +591,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.False(clientProvider.EndedByCancellation());
             _ = Assert.Single(clientProvider.Requests);
             Assert.Empty(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
 
             // Generation and its tool batch complete normally through the cue.
             _ = releaseGeneration.TrySetResult();
@@ -635,9 +603,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 3);
 
-            ChatMessage joined = Assert.Single(
-                clientProvider.Requests[2],
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+            ChatMessage joined = GetEventTimelineMessage(clientProvider.Requests[2]);
             Assert.Contains("Heard char:speaker say: unattended words", joined.Text, StringComparison.Ordinal);
         }
         finally
@@ -756,8 +722,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             _ = Assert.Single(clientProviderB.Requests);
             Assert.Empty(attendedMindA.GetTimelineForTest());
             Assert.Empty(attendedMindB.GetTimelineForTest());
-            Assert.Null(attendedMindA.TryClaimDeliveryForTest());
-            Assert.Null(attendedMindB.TryClaimDeliveryForTest());
             Assert.Empty(perceptsA);
             Assert.Empty(perceptsB);
 
@@ -770,7 +734,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.False(clientProviderC.EndedByCancellation());
             _ = Assert.Single(continuingTool.CapturedContexts);
             Assert.Empty(unattendedMindC.GetTimelineForTest());
-            Assert.Null(unattendedMindC.TryClaimDeliveryForTest());
             Assert.Empty(perceptsC);
 
             // Completed speech is attention-independent all-hearer freshness: every Mind — attended or not —
@@ -789,7 +752,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             {
                 ChatMessage joined = Assert.Single(
                     clientProvider.Requests[replacementIndex],
-                    message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                    message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
                 Assert.Contains("Heard char:speaker say: shared room words", joined.Text, StringComparison.Ordinal);
                 Assert.Equal(1, CountOccurrences(joined.Text, "Heard char:speaker say: shared room words"));
             }
@@ -901,7 +864,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 speakResult.Result?.ToString());
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
         }
         finally
@@ -995,7 +958,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Equal("Spoken through the configured voice.", speakResult.Result?.ToString());
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
             _ = Assert.Single(percepts, percept => percept.Content == "player words");
         }
@@ -1094,7 +1057,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 speakResult.Result?.ToString());
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
             Assert.Contains("Heard char:unrelated say: unrelated chatter", joined.Text, StringComparison.Ordinal);
         }
@@ -1173,7 +1136,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 speakResult.Result?.ToString());
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("Heard char:speaker say: player words", joined.Text, StringComparison.Ordinal);
         }
         finally
@@ -1308,7 +1271,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.True(clientProvider.EndedByCancellation());
             _ = Assert.Single(clientProvider.Requests);
             Assert.Empty(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
         }
         finally
         {
@@ -1382,7 +1344,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             ChatMessage joined = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("first continuation … second continuation", joined.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(joined.Text, "first continuation … second continuation"));
         }
@@ -1397,11 +1359,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// Once a prefix has reached accepted transcript history with an assistant call and tool result, a later
-    /// continuation is appended as one reconciliation turn. The accepted exchange is retained unchanged
+    /// continuation appears through the event-timeline tail. The accepted exchange is retained unchanged
     /// (AI-002 TR-58/59).
     /// </summary>
     [Fact]
-    public async Task GroupedContinuation_AfterAcceptedPrefix_ReconcilesWithoutRewritingAcceptedExchange()
+    public async Task GroupedContinuation_AfterAcceptedPrefix_RendersWithoutRewritingAcceptedExchange()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         Hearing hearing = new();
@@ -1446,15 +1408,18 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 5);
 
-            IReadOnlyList<ChatMessage> reconciled = clientProvider.Requests[4];
+            IReadOnlyList<ChatMessage> continuedRequest = clientProvider.Requests[4];
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
-                reconciled.Select(message => message.Role));
-            Assert.Contains("accepted prefix", reconciled[3].Text, StringComparison.Ordinal);
-            _ = Assert.IsType<FunctionCallContent>(Assert.Single(reconciled[4].Contents));
-            _ = Assert.IsType<FunctionResultContent>(Assert.Single(reconciled[5].Contents));
-            Assert.Contains("accepted prefix … later continuation", reconciled[6].Text, StringComparison.Ordinal);
-            Assert.Equal(1, CountOccurrences(reconciled[6].Text, "accepted prefix … later continuation"));
+                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool],
+                continuedRequest.Select(message => message.Role));
+            ChatMessage eventTimeline = GetEventTimelineMessage(continuedRequest);
+            Assert.Contains("accepted prefix … later continuation", eventTimeline.Text, StringComparison.Ordinal);
+            string newHistory = eventTimeline.Text[(eventTimeline.Text.IndexOf(
+                "--- New Since Your Previous Response ---", StringComparison.Ordinal)
+                + "--- New Since Your Previous Response ---".Length)..];
+            Assert.Equal(1, CountOccurrences(newHistory, "accepted prefix … later continuation"));
+            _ = Assert.IsType<FunctionCallContent>(Assert.Single(continuedRequest[5].Contents));
+            _ = Assert.IsType<FunctionResultContent>(Assert.Single(continuedRequest[6].Contents));
         }
         finally
         {
@@ -1469,7 +1434,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// <summary>
     /// A resume cancels a still-active wait with the canonical result. Its later grouped completion is delivered
     /// exactly once as projected text, while an already accepted wait result remains immutable when it is later
-    /// reconciled (AI-002 TR-40/41/58).
+    /// rendered in a later request (AI-002 TR-40/41/58).
     /// </summary>
     [Fact]
     public async Task GroupedContinuation_ActiveAndAcceptedWaitsPreserveCanonicalOwnershipAndReconciliation()
@@ -1510,17 +1475,16 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
 
             IReadOnlyList<ChatMessage> afterCancelledWait = clientProvider.Requests[1];
-            FunctionResultContent cancelled = Assert.IsType<FunctionResultContent>(Assert.Single(afterCancelledWait[2].Contents));
+            FunctionResultContent cancelled = Assert.IsType<FunctionResultContent>(Assert.Single(afterCancelledWait[4].Contents));
             Assert.Equal("The action was cancelled before it completed.", cancelled.Result?.ToString());
             ChatMessage delivery = Assert.Single(
                 afterCancelledWait,
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("wait prefix … wait continuation", delivery.Text, StringComparison.Ordinal);
             Assert.Equal(1, CountOccurrences(delivery.Text, "wait prefix … wait continuation"));
-            Assert.Null(mind.TryClaimDeliveryForTest());
 
             // The second wait consumes a prefix naturally. Its tool result is accepted history before the resumed
-            // segment arrives, so the later projected utterance must be a new reconciliation, not a rewrite.
+            // segment arrives, so the later projected utterance must be a new event-timeline entry, not a rewrite.
             await WaitUntilAsync(sceneTree, () => mind.HasActiveObservationWait);
             source.PublishCompletedSpeech("accepted wait prefix", new SpeechSegmentMetadata("accepted-wait", 0));
             await mind.DrainPerceptionsForTestAsync();
@@ -1530,16 +1494,17 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await mind.DrainPerceptionsForTestAsync();
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 4);
 
-            IReadOnlyList<ChatMessage> reconciled = clientProvider.Requests[3];
-            FunctionResultContent acceptedWait = Assert.Single(
-                reconciled.SelectMany(static message => message.Contents).OfType<FunctionResultContent>(),
-                result => result.Result?.ToString()?.Contains("accepted wait prefix", StringComparison.Ordinal) == true);
-            Assert.Contains("accepted wait prefix", acceptedWait.Result?.ToString(), StringComparison.Ordinal);
-            ChatMessage reconciliation = Assert.Single(
-                reconciled,
-                message => message.Role == ChatRole.User
-                    && message.Text.Contains("accepted wait prefix … accepted wait continuation", StringComparison.Ordinal));
-            Assert.Equal(1, CountOccurrences(reconciliation.Text, "accepted wait prefix … accepted wait continuation"));
+            IReadOnlyList<ChatMessage> continuedRequest = clientProvider.Requests[3];
+            IReadOnlyList<FunctionResultContent> waitResults = [.. continuedRequest
+                .SelectMany(static message => message.Contents)
+                .OfType<FunctionResultContent>()];
+            Assert.NotEmpty(waitResults);
+            Assert.All(
+                waitResults,
+                result => Assert.DoesNotContain("accepted wait prefix", result.Result?.ToString(), StringComparison.Ordinal));
+            ChatMessage eventTimeline = GetEventTimelineMessage(continuedRequest);
+            Assert.Contains("accepted wait prefix … accepted wait continuation", eventTimeline.Text, StringComparison.Ordinal);
+            Assert.Equal(1, CountOccurrences(eventTimeline.Text, "accepted wait prefix … accepted wait continuation"));
         }
         finally
         {
@@ -1587,7 +1552,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
             ChatMessage delivered = Assert.Single(
                 clientProvider.Requests[1],
-                message => message.Role == ChatRole.User && message.Text != AgenticMind.SessionBootstrapInput);
+                message => message.Role == ChatRole.User && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
             Assert.Contains("ordinary external speech", delivered.Text, StringComparison.Ordinal);
             _ = Assert.Single(mind.GetTimelineForTest().OfType<ObservedSpeech>());
         }
@@ -1604,7 +1569,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     /// External non-self speech observed mid-wait fulfils the wait through its normal completion mechanism: the
     /// wait's own tool result carries the fresh speech plus its preceding FIFO accumulation — never generic
     /// action-interrupted wording — the batch's trailing call is skipped with the canonical cancellation result,
-    /// no duplicate injected message exists for the wait-owned window, and exactly one replacement request
+    /// no duplicate observation text exists for the wait-owned window, and exactly one replacement request
     /// follows (AI-001 TR-43, AI-002 TR-40/41).
     /// </summary>
     [Fact]
@@ -1622,7 +1587,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            EventHistoryPath = "res://prompts/event_history.md",
             ClientProvider = clientProvider,
             Tools = [tool],
             AllowMultipleToolCalls = true,
@@ -1641,33 +1605,36 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             // speech upgrades the complete window to fresh urgency and wakes the wait through its normal
             // completion mechanism.
             mind.ObserveForTest(new RouteObservation("world.before-speech"));
-            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "voice-1", "You there?"));
+            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?"));
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             await TestUtils.WaitForFramesAsync(sceneTree, 4);
 
             // Exactly one replacement request replays the complete exchange: bootstrap input, the validated
-            // batch's assistant calls, and one protocol-valid tool-result message — with no injected user message
+            // batch's assistant calls, and one protocol-valid tool-result message — with no extra event message
             // duplicating the wait-owned window.
             IReadOnlyList<ChatMessage> replacement = clientProvider.Requests[1];
             Assert.Equal(2, clientProvider.Requests.Count);
             Assert.Equal(
-                [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+                [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
                 replacement.Select(message => message.Role));
 
-            FunctionResultContent waitResult = Assert.IsType<FunctionResultContent>(replacement[2].Contents[0]);
-            FunctionResultContent trailingResult = Assert.IsType<FunctionResultContent>(replacement[2].Contents[1]);
+            FunctionResultContent waitResult = Assert.IsType<FunctionResultContent>(replacement[4].Contents[0]);
+            FunctionResultContent trailingResult = Assert.IsType<FunctionResultContent>(replacement[4].Contents[1]);
             string waitText = waitResult.Result?.ToString() ?? string.Empty;
 
-            // The wait result is its window's sole delivery channel: the fresh speech arrives with its preceding
-            // accumulation in FIFO order and the fresh-wake lead — never an empty or interrupted notice.
+            // The wait result reports scheduling metadata only; the canonical event-timeline message owns all
+            // model-visible event text in FIFO order.
             Assert.Equal("wait-call", waitResult.CallId);
-            Assert.Contains("Fresh events arrived", waitText, StringComparison.Ordinal);
-            int preceding = waitText.IndexOf("((Received world.before-speech event.))", StringComparison.Ordinal);
-            int speech = waitText.IndexOf("Heard char:someone-else say: You there?", StringComparison.Ordinal);
+            Assert.Contains("Wait ended: fresh event.", waitText, StringComparison.Ordinal);
+            Assert.DoesNotContain("world.before-speech", waitText, StringComparison.Ordinal);
+            Assert.DoesNotContain("You there?", waitText, StringComparison.Ordinal);
+            ChatMessage eventTimeline = GetEventTimelineMessage(replacement);
+            int preceding = eventTimeline.Text.IndexOf("((Received world.before-speech event.))", StringComparison.Ordinal);
+            int speech = eventTimeline.Text.IndexOf("Heard char:someone-else say: You there?", StringComparison.Ordinal);
             Assert.True(
                 preceding >= 0 && speech > preceding,
-                $"The wait result must deliver the accumulation before the speech in FIFO order: '{waitText}'");
+                $"The canonical event timeline must order the accumulation before the speech: '{eventTimeline.Text}'");
 
             // No generic action-interrupted wording anywhere in the exchange: the wait reports its natural
             // delivery, and the canonical cancelled result appears exactly once — only for the never-started
@@ -1682,9 +1649,8 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
                 result => result.Result?.ToString()?.Contains("cancelled before it completed", StringComparison.Ordinal) == true
                     && result.CallId == "trailing-call");
 
-            // The wait consumed its window: nothing stays claimable for a duplicate injected delivery.
+            // The wait completed naturally and retains no payload-delivery state.
             Assert.False(mind.HasActiveObservationWait);
-            Assert.Null(mind.TryClaimDeliveryForTest());
 
             // Node exit ends the held replacement request quietly without issuing another request.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -1702,11 +1668,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// An ordinary visual description at its provisional importance during held generation is delivered without
-    /// cancellation, rendered through the production-authored NPC event-history document in accumulation order at
-    /// the next natural boundary, and without falling back to generic event wording (AI-002 TR-39, AI-003 AC-18).
+    /// cancellation and rendered through its type-owned safe fallback in accumulation order at the next natural
+    /// boundary (AI-002 TR-39).
     /// </summary>
     [Fact]
-    public async Task NotableVisualDescription_DuringGeneration_UsesAuthoredFragmentChronologically()
+    public async Task NotableVisualDescription_DuringGeneration_UsesTypeOwnedFallbackChronologically()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         TestCharacter owner = new();
@@ -1724,7 +1690,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            EventHistoryPath = "res://prompts/event_history.md",
             ClientProvider = clientProvider,
             Tools = [tool],
             ObservationImportanceThreshold = visualDescriptionDeliveryThreshold,
@@ -1737,29 +1702,15 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             mind.ObserveForTest(new RouteObservation("world.changed"));
             mind.ObserveForTest(new ObservedVisualDescription("char:coat", "A weathered red coat."));
-            // The render-and-queue chain runs on the thread pool, so settle it rather than assuming four frames
-            // complete it before releasing the held tool response.
-            await mind.WaitForPendingObservationDeliveriesForTestingAsync();
-
             // The visual description crossed the threshold as an ordinary delivery: the generation still holds.
             _ = Assert.Single(clientProvider.Requests);
             _ = releaseGeneration.TrySetResult();
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
-            ChatMessage injected = clientProvider.Requests[1][3];
-            int preceding = injected.Text.IndexOf("((Received world.changed event.))", StringComparison.Ordinal);
-            int visual = injected.Text.IndexOf(
-                "Observed char:coat: A weathered red coat.",
-                StringComparison.Ordinal);
-
-            Assert.Equal(ChatRole.User, injected.Role);
-            Assert.True(
-                preceding >= 0 && visual > preceding,
-                "The authored visual description must follow the earlier accumulated event.");
-            Assert.DoesNotContain(
-                "((Received vision.description event.))",
-                injected.Text,
-                StringComparison.Ordinal);
+            ChatMessage eventTimeline = GetEventTimelineMessage(clientProvider.Requests[1]);
+            Assert.Contains("((Received world.changed event.))", eventTimeline.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain("weathered red coat", eventTimeline.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain("vision.description", eventTimeline.Text, StringComparison.Ordinal);
 
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
             await WaitUntilAsync(sceneTree, clientProvider.EndedByCancellation);
@@ -1767,8 +1718,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             IReadOnlyList<AgentObservation> timeline = mind.GetTimelineForTest();
             Assert.Collection(
                 timeline,
-                observation => Assert.IsType<RouteObservation>(observation),
-                observation => Assert.IsType<ObservedVisualDescription>(observation));
+                observation => Assert.IsType<RouteObservation>(observation));
         }
         finally
         {
@@ -1780,13 +1730,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// A failed ordinary notable-summary render is a hard, contained failure: the fault surfaces exactly once
-    /// through Error logging with the full exception, no injection reaches the backend, the held generation
-    /// continues, and the window's delivery ownership is restored to Mind rather than silently lost (AI-001 TR-44,
-    /// AI-002 TR-39).
+    /// An ordinary notable signal during generation leaves the held request untouched until the next request
+    /// boundary materialises its canonical context.
     /// </summary>
     [Fact]
-    public async Task NotableSignal_RenderFailure_RetainsSchedulingOwnershipWithoutInjecting()
+    public async Task NotableSignal_DuringGeneration_DoesNotAffectActiveRequest()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         using RecordingLoggerProvider loggerProvider = new();
@@ -1808,25 +1756,16 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.SetActiveHistoryRendererForTesting(CreateThrowingHistoryRenderer());
             mind.ObserveForTest(new TestObservation(1f, "bridge"));
 
-            await WaitUntilAsync(sceneTree, () => loggerProvider.Entries.Any(entry =>
-                entry.Level == LogLevel.Error
-                && entry.Exception?.GetBaseException().Message.Contains(
-                    FaultingRenderMessage, StringComparison.Ordinal) == true));
             await TestUtils.WaitForFramesAsync(sceneTree, 6);
 
-            // The render fault is contained as exactly one Error entry, and no second request ever leaves: the
-            // injection was not queued and the session continues on its original request.
-            _ = Assert.Single(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
+            // Delivery scheduling is payload-free and cannot send a second request while the original generation
+            // remains active.
+            Assert.DoesNotContain(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
             _ = Assert.Single(clientProvider.Requests);
 
-            // The abandoned window stays claimable: scheduling ownership was restored, never silently lost.
-            MindBase.ObservationDeliveryClaim? restored = mind.TryClaimDeliveryForTest();
-            Assert.NotNull(restored);
-            Assert.Equal(["bridge"], ClaimValues(restored));
-            mind.CompleteDeliveryForTest(restored);
+            // Canonical context consumes scheduling pressure only after response confirmation.
 
             // Node exit ends the still-held generation quietly.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -1842,12 +1781,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// A missing active renderer during an ordinary notable signal trips the hard guard: the fault surfaces
-    /// through Error logging as an <see cref="InvalidOperationException" /> naming the missing renderer, nothing is
-    /// injected, and the window's ownership is restored to Mind (AI-001 TR-44, AI-002 TR-39).
+    /// A second ordinary notable signal during generation likewise leaves the active request intact.
     /// </summary>
     [Fact]
-    public async Task NotableSignal_WithoutActiveHistoryRenderer_RestoresOwnershipAndNeverInjects()
+    public async Task RepeatedNotableSignals_DuringGeneration_DoNotAffectActiveRequest()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         using RecordingLoggerProvider loggerProvider = new();
@@ -1869,25 +1806,15 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.SetActiveHistoryRendererForTesting(null);
             mind.ObserveForTest(new TestObservation(1f, "bridge"));
 
-            await WaitUntilAsync(sceneTree, () => loggerProvider.Entries.Any(entry =>
-                entry.Level == LogLevel.Error
-                && entry.Exception?.GetBaseException() is InvalidOperationException invalidOperationException
-                && invalidOperationException.Message.Contains(
-                    "ObservationHistoryRenderer", StringComparison.Ordinal)));
             await TestUtils.WaitForFramesAsync(sceneTree, 6);
 
-            // The guard fault is contained as exactly one Error entry, and no second request ever leaves.
-            _ = Assert.Single(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
+            // The active request's canonical context was already materialised and cannot gain a second request.
+            Assert.DoesNotContain(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
             _ = Assert.Single(clientProvider.Requests);
 
-            // The abandoned window stays claimable: scheduling ownership was restored, never silently lost.
-            MindBase.ObservationDeliveryClaim? restored = mind.TryClaimDeliveryForTest();
-            Assert.NotNull(restored);
-            Assert.Equal(["bridge"], ClaimValues(restored));
-            mind.CompleteDeliveryForTest(restored);
+            // Canonical context consumes scheduling pressure only after response confirmation.
 
             // Node exit ends the still-held generation quietly.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -1903,12 +1830,11 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     }
 
     /// <summary>
-    /// A failed fresh-speech render still invalidates the stale generation, but the replacement request proceeds
-    /// without an injected message: the rendering barrier is released, and the fresh window — with its fresh
-    /// urgency — is restored to Mind instead of being silently lost (AI-001 TR-43/44, AI-002 TR-40).
+    /// A fresh speech event invalidates stale generation and the replacement request materialises canonical timeline
+    /// context without an out-of-band payload (AI-001 TR-43/44, AI-002 TR-40).
     /// </summary>
     [Fact]
-    public async Task FreshSpeech_RenderFailure_SupersedesGenerationWithoutPayloadAndRetainsOwnership()
+    public async Task FreshSpeech_SupersedesGenerationThroughCanonicalContext()
     {
         SceneTree sceneTree = TestUtils.GetSceneTree();
         using RecordingLoggerProvider loggerProvider = new();
@@ -1931,28 +1857,19 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         try
         {
             await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            mind.SetActiveHistoryRendererForTesting(CreateThrowingHistoryRenderer());
-            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "voice-1", "You there?"));
+            mind.ObserveForTest(new ObservedSpeech("char:someone-else", "You there?"));
 
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
-            await WaitUntilAsync(sceneTree, () => loggerProvider.Entries.Any(entry =>
-                entry.Level == LogLevel.Error
-                && entry.Exception?.GetBaseException().Message.Contains(
-                    FaultingRenderMessage, StringComparison.Ordinal) == true));
             await TestUtils.WaitForFramesAsync(sceneTree, 6);
 
-            // The stale generation was invalidated and replaced, but the replacement carries no injected message:
-            // the fresh payload never rendered.
+            // The stale generation was invalidated and replaced, but the replacement carries no extra event message:
+            // the canonical event context is materialised at the replacement boundary instead of at delivery time.
             Assert.Equal(
-                [ChatRole.User],
+                [ChatRole.User, ChatRole.User, ChatRole.User],
                 clientProvider.Requests[1].Select(message => message.Role));
-            _ = Assert.Single(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
+            Assert.DoesNotContain(loggerProvider.Entries, entry => entry.Level == LogLevel.Error);
 
-            // The fresh window stays claimable with its fresh urgency: ownership was restored, never lost.
-            MindBase.ObservationDeliveryClaim? restored = mind.TryClaimDeliveryForTest();
-            Assert.NotNull(restored);
-            Assert.Equal(MindBase.ObservationDeliveryUrgency.Fresh, restored.Urgency);
-            mind.CompleteDeliveryForTest(restored);
+            // The fresh event stays in the persistent timeline until context confirmation.
 
             // Node exit ends the still-held replacement request quietly.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -1968,7 +1885,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
     /// <summary>
     /// An ordinary pending window followed by a fresh observation coalesces in FIFO order into exactly one
-    /// injected user message on the single fresh replacement request (AI-002 TR-39/40).
+    /// event-timeline message on the single fresh replacement request (AI-002 TR-7–10, TR-40).
     /// </summary>
     [Fact]
     public async Task OrdinaryAndFreshObservations_CoalesceFIFOIntoOneFreshReplacementRequest()
@@ -1983,7 +1900,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         TestAgenticMind mind = new(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            EventHistoryPath = "res://assets/testing/prompts/test_event_history_lifecycle.md",
             ClientProvider = clientProvider,
             ObservationImportanceThreshold = 1f,
         };
@@ -2000,15 +1916,16 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count >= 2);
             IReadOnlyList<ChatMessage> freshRequest = clientProvider.Requests[1];
             Assert.Equal(
-                [ChatRole.User, ChatRole.User],
+                [ChatRole.User, ChatRole.User, ChatRole.User],
                 freshRequest.Select(message => message.Role));
-            // Both windows coalesced into the single injected user message in FIFO order: the ordinary event's
-            // rendered record precedes the fresh event's record inside the one message.
-            int ordinary = freshRequest[1].Text.IndexOf("- ordinary-event", StringComparison.Ordinal);
-            int fresh = freshRequest[1].Text.IndexOf("- fresh-event", StringComparison.Ordinal);
+            // Both windows are present in the canonical event-timeline message in FIFO order: the ordinary event's
+            // rendered record precedes the fresh event's record inside the new-history tail.
+            ChatMessage eventTimeline = GetEventTimelineMessage(freshRequest);
+            int ordinary = eventTimeline.Text.IndexOf("- ordinary-event", StringComparison.Ordinal);
+            int fresh = eventTimeline.Text.IndexOf("- fresh-event", StringComparison.Ordinal);
             Assert.True(
                 ordinary >= 0 && fresh > ordinary,
-                $"The coalesced injection must render both windows in FIFO order: '{freshRequest[1].Text}'");
+                $"The canonical event timeline must render both windows in FIFO order: '{eventTimeline.Text}'");
 
             // Node exit ends the held replacement request quietly.
             (sceneTree.CurrentScene ?? sceneTree.Root).RemoveChild(mind);
@@ -2159,7 +2076,7 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             Assert.Empty(tool.CapturedContexts);
             Assert.All(
                 clientProvider.Requests,
-                request => Assert.Equal([ChatRole.User], request.Select(message => message.Role)));
+                request => Assert.Equal([ChatRole.User, ChatRole.User, ChatRole.User], request.Select(message => message.Role)));
             _ = Assert.Single(
                 loggerProvider.Entries,
                 entry => entry.Level == LogLevel.Error && entry.Exception is AgentSessionException);
@@ -2172,8 +2089,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             player.Free();
         }
     }
-
-    private const string FaultingRenderMessage = "Synthetic event-history template render failure.";
 
     private static TestAgenticMind CreateVoiceRoutedMind(
         TestCharacter owner,
@@ -2204,7 +2119,6 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         var mind = new TestAgenticMind(owner)
         {
             SystemInstruction = new PromptStack { Sections = [new TextPromptSection { Text = "static", Name = "Static" }] },
-            EventHistoryPath = "res://prompts/event_history.md",
             ClientProvider = clientProvider,
             Tools = [.. tools],
             ObservationImportanceThreshold = 1f,
@@ -2303,14 +2217,12 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
             await TestUtils.WaitForFramesAsync(sceneTree, 3);
             _ = Assert.Single(clientProvider.Requests);
             Assert.Empty(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
 
             source.EmitSpeechSettlement(new SpeechSegmentMetadata("other-terminal", 1), settlement);
             await WaitUntilAsync(sceneTree, () => clientProvider.Requests.Count == 2);
-            Assert.Equal([ChatRole.User], clientProvider.Requests[1].Select(message => message.Role));
-            Assert.Equal(AgenticMind.SessionBootstrapInput, clientProvider.Requests[1][0].Text);
+            Assert.Equal([ChatRole.User, ChatRole.User, ChatRole.User], clientProvider.Requests[1].Select(message => message.Role));
+            Assert.Equal(AgenticMind.SessionBootstrapInput, clientProvider.Requests[1][2].Text);
             Assert.Empty(mind.GetTimelineForTest());
-            Assert.Null(mind.TryClaimDeliveryForTest());
         }
         finally
         {
@@ -2334,39 +2246,14 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
         return count;
     }
 
-    /// <summary>
-    /// Builds a session renderer whose every compiled template faults at render time, standing in for an
-    /// authoring or engine failure inside the event-history contract.
-    /// </summary>
-    private static ObservationHistoryRenderer CreateThrowingHistoryRenderer()
-        => ObservationHistoryRenderer.Create(
-            eventHistory: null,
-            new FaultingTemplateCompiler(),
-            new TestCharacter());
-
-    private sealed class FaultingTemplateCompiler : ITemplateCompiler
-    {
-        public ITemplate Compile(string source)
-        {
-            _ = source;
-            return new FaultingTemplate();
-        }
-
-        private sealed class FaultingTemplate : IRootedTemplate
-        {
-            public ValueTask<string> RenderAsync(IReadOnlyDictionary<string, object?> context)
-                => throw new InvalidOperationException(FaultingRenderMessage);
-
-            public ValueTask<string> RenderRootedAsync(object root, IReadOnlyDictionary<string, object?> namedValues)
-                => throw new InvalidOperationException(FaultingRenderMessage);
-        }
-    }
+    private static ChatMessage GetEventTimelineMessage(IReadOnlyList<ChatMessage> request)
+        => Assert.Single(
+            request,
+            static message => message.Role == ChatRole.User
+                && message.Text.StartsWith("Established Event History:", StringComparison.Ordinal));
 
     private static IReadOnlyList<string> TimelineValues(TestAgenticMind mind)
         => [.. mind.GetTimelineForTest().Cast<TestObservation>().Select(static observation => observation.Value)];
-
-    private static IReadOnlyList<string> ClaimValues(MindBase.ObservationDeliveryClaim claim)
-        => [.. claim.Observations.Cast<TestObservation>().Select(static observation => observation.Value)];
 
     private static async Task WaitUntilAsync(SceneTree sceneTree, Func<bool> predicate, int maxFrames = 300)
     {
@@ -2381,6 +2268,12 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
     private sealed record TestObservation(float Importance, string Value, bool Fresh = false) : AgentObservation
     {
         public override string TypeKey => ObservedSpeech.TypeKeyValue;
+
+        protected override string RenderBody(ICharacter character)
+        {
+            ArgumentNullException.ThrowIfNull(character);
+            return $"- {Value}";
+        }
 
         public override float CalculateImportance(ObservationContext context) => Importance;
 
@@ -2400,15 +2293,10 @@ public sealed partial class AgenticMindSessionLifecycleIntegrationTests
 
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
 
-        public ObservationDeliveryClaim? TryClaimDeliveryForTest() => TryClaimPendingObservationDelivery();
-
         public Task DrainPerceptionsForTestAsync() => DrainPerceptionsForTestingAsync();
 
         public void ReinforceAttentionForTest(string fullId)
             => ReinforceAttention(fullId, 1f, AttentionSettings.Create(1f, 0f, 0.05f, 0.25f));
-
-        public void CompleteDeliveryForTest(ObservationDeliveryClaim claim)
-            => CompleteObservationDelivery(claim);
 
         protected override ICharacter ResolveOwningCharacter() => owner;
     }

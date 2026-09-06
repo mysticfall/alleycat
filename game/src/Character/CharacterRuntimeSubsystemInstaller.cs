@@ -55,6 +55,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         {
             Character targetCharacter = ValidateCharacterHub(context.TargetRoot);
             Character templateCharacter = ValidateTemplateCharacterHub(context.TemplateRoot);
+            VisualCue[] targetAuthoredVisualCues = targetCharacter.AuthoredVisualCues;
 
             TemplateSceneReferenceRebaser.CopyExportedPropertyValues(
                 templateCharacter,
@@ -64,6 +65,13 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
                 this,
                 failOnUnresolved: true,
                 targetSceneOverrides: context.TargetSceneOverrides);
+            if (targetAuthoredVisualCues.Length > 0)
+            {
+                // A final character scene can instance the shared base as its root. Godot then reports the base path
+                // as SceneFilePath, so local final-scene overrides are unavailable to TargetSceneOverrides. Preserve
+                // the already-resolved target cues rather than replacing their character-specific overrides.
+                targetCharacter.AuthoredVisualCues = targetAuthoredVisualCues;
+            }
             if (templateCharacter.IsInGroup(_actorsGroupName))
             {
                 targetCharacter.AddToGroup(_actorsGroupName, persistent: true);
@@ -78,6 +86,11 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 
             AnimationTree animationTree = FindSingleDescendant<AnimationTree>(context.TargetRoot)
                 ?? throw new InvalidOperationException("Character runtime subsystem installer requires an authored AnimationTree copied from the role template.");
+            AnimationTree? templateAnimationTree = FindSingleDescendant<AnimationTree>(context.TemplateRoot, required: false);
+            if (templateAnimationTree?.TreeRoot is AnimationRootNode templateTreeRoot)
+            {
+                animationTree.TreeRoot = templateTreeRoot;
+            }
             AnimationPlayer animationPlayer = FindSingleDescendant<AnimationPlayer>(context.TargetRoot)
                 ?? throw new InvalidOperationException("Character runtime subsystem installer requires an authored AnimationPlayer copied from the role template.");
 

@@ -28,6 +28,7 @@
 - [AI-007: Attention-Driven Gaze Target Selection](ai/007-attention-gaze-target-selection/index.md)
 - [AI-008: Scenario](ai/008-scenario/index.md)
 - [AI-009: Attention-Driven Head Orientation](ai/009-attention-head-orientation/index.md)
+- [AI-010: Agent Watches](ai/010-agent-watches/index.md)
 
 ## Navigation
 

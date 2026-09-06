@@ -3,6 +3,7 @@ using AlleyCat.Character;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
 using AlleyCat.Core.Threading;
+using AlleyCat.Core.Time;
 using AlleyCat.Mind.AI;
 using AlleyCat.Mind.AI.Tool;
 using AlleyCat.Mind.Observation;
@@ -91,6 +92,89 @@ public sealed partial class MindSchedulingIntegrationTests
     }
 
     /// <summary>
+    /// Accepted-log history, active retained evidence, and persistent event history have independent memberships;
+    /// supersession and expiry only change retained evidence (AI-001).
+    /// </summary>
+    [Fact]
+    public void ObservationLog_RetainsIndependentPersistentEventsAcrossSupersessionAndExpiry()
+    {
+        var clock = new TestGameClock
+        {
+            Now = 10d,
+        };
+        TestMind mind = new()
+        {
+            Enabled = false,
+        };
+        mind.SetClockForTest(clock);
+        List<RetainedObservationChange> changes = [];
+        mind.SubscribeRetainedChanges(changes.Add);
+
+        mind.ObserveForTest(new ObservedVisualDescription("char:subject", "red coat"));
+        clock.Now = 11d;
+        mind.ObserveForTest(new ObservedVisualDescription("char:subject", "blue coat"));
+        mind.ObserveForTest(new ObservedRelativePosition(
+            "char:subject",
+            1f,
+            RelativeDirection.Front,
+            RelativeDirection.Front));
+        mind.ObserveForTest(new ObservedSpeech("char:other", "Hello"));
+
+        IReadOnlyList<AcceptedObservationEntry> log = mind.GetAcceptedLogForTest();
+        Assert.Equal([1L, 2L, 3L, 4L], log.Select(static entry => entry.SequenceID));
+        Assert.Equal([false, true, true, true], log.Select(static entry => entry.IsRetained));
+        Assert.Equal([2L, 3L, 4L], mind.GetRetainedForTest().Select(static entry => entry.SequenceID));
+        Assert.Equal([4L], mind.GetPersistentEventsForTest().Select(static entry => entry.SequenceID));
+        Assert.Equal(["speech.observed"], mind.GetTimelineForTest().Select(static observation => observation.TypeKey));
+
+        clock.Now = 13d;
+        mind.ProcessRetentionExpiryForTest();
+
+        Assert.Equal([2L, 4L], mind.GetRetainedForTest().Select(static entry => entry.SequenceID));
+        Assert.Equal([4L], mind.GetPersistentEventsForTest().Select(static entry => entry.SequenceID));
+        Assert.Equal(
+            [
+                RetainedObservationChangeKind.Added,
+                RetainedObservationChangeKind.Removed,
+                RetainedObservationChangeKind.Added,
+                RetainedObservationChangeKind.Added,
+                RetainedObservationChangeKind.Added,
+                RetainedObservationChangeKind.Removed,
+            ],
+            changes.Select(static change => change.Kind));
+        mind.Free();
+    }
+
+    /// <summary>Event-timeline membership survives supersession and expiry of event-eligible retained entries.</summary>
+    [Fact]
+    public void PersistentEventTimeline_DoesNotRetractExpiredRetainedEvent()
+    {
+        var clock = new TestGameClock
+        {
+            Now = 10d,
+        };
+        var mind = new ExpiringEventMind
+        {
+            Enabled = false,
+        };
+        mind.SetClockForTest(clock);
+        mind.ObserveForTest(new ExpiringEventObservation());
+        clock.Now = 10.5d;
+        mind.ObserveForTest(new ExpiringEventObservation());
+
+        Assert.Equal([2L], mind.GetRetainedForTest().Select(static entry => entry.SequenceID));
+        Assert.Equal([1L, 2L], mind.GetPersistentEventsForTest().Select(static entry => entry.SequenceID));
+
+        clock.Now = 11.5d;
+        mind.ProcessRetentionExpiryForTest();
+
+        Assert.Equal([false, false], mind.GetAcceptedLogForTest().Select(static entry => entry.IsRetained));
+        Assert.Empty(mind.GetRetainedForTest());
+        Assert.Equal([1L, 2L], mind.GetPersistentEventsForTest().Select(static entry => entry.SequenceID));
+        mind.Free();
+    }
+
+    /// <summary>
     /// Tool wrappers await envelopes, project only messages, stamp actors, and preserve ordered atomic ingestion.
     /// </summary>
     [Fact]
@@ -110,7 +194,7 @@ public sealed partial class MindSchedulingIntegrationTests
         ToolHost.Complete(new AgentToolResult(
             "model acknowledgement",
             [
-                new ObservedSpeech("spoofed-actor", "raw-self-device", "first"),
+                new ObservedSpeech("spoofed-actor", "first"),
                 new TestObservation(1f, "second"),
             ]));
         object? projected = await invocation;
@@ -122,7 +206,6 @@ public sealed partial class MindSchedulingIntegrationTests
             {
                 ObservedSpeech speech = Assert.IsType<ObservedSpeech>(item);
                 Assert.Equal("char:scheduling_owner", speech.ActorId);
-                Assert.Equal("raw-self-device", speech.VoiceId);
             },
             item => Assert.Equal("second", Assert.IsType<TestObservation>(item).Value));
         mind.Free();
@@ -159,7 +242,7 @@ public sealed partial class MindSchedulingIntegrationTests
         mind.Free();
     }
 
-    private sealed partial class TestMind : MindBase
+    private partial class TestMind : MindBase
     {
         private readonly TestCharacter _character = new();
 
@@ -168,6 +251,18 @@ public sealed partial class MindSchedulingIntegrationTests
         public void ObserveForTest(AgentObservation observation) => Observe(observation);
 
         public IReadOnlyList<AgentObservation> GetTimelineForTest() => GetObservationTimelineSnapshot();
+
+        public IReadOnlyList<AcceptedObservationEntry> GetAcceptedLogForTest() => GetAcceptedObservationLogSnapshot();
+
+        public IReadOnlyList<AcceptedObservationEntry> GetRetainedForTest() => GetRetainedObservationSnapshot();
+
+        public IReadOnlyList<AcceptedObservationEntry> GetPersistentEventsForTest() => GetPersistentEventTimelineSnapshot();
+
+        public void ProcessRetentionExpiryForTest() => ProcessRetainedObservationExpiry();
+
+        public void SetClockForTest(IGameClock clock) => SetGameClockLoaderForTesting(() => clock);
+
+        public void SubscribeRetainedChanges(Action<RetainedObservationChange> handler) => RetainedObservationChanged += handler;
 
         protected override ICharacter ResolveOwningCharacter() => _character;
     }
@@ -231,6 +326,50 @@ public sealed partial class MindSchedulingIntegrationTests
         public override string TypeKey => "test.scheduling";
 
         public override float CalculateImportance(ObservationContext context) => Importance;
+    }
+
+    private sealed record ExpiringEventObservation : AgentObservation
+    {
+        public override string TypeKey => "test.expiring_event";
+
+        public override float CalculateImportance(ObservationContext context) => 0f;
+    }
+
+    private sealed class ExpiringEventMind : TestMind
+    {
+        protected override IEnumerable<IObservationLifetimePolicy> CreateLifetimePolicies()
+            => [new ExpiringEventPolicy()];
+    }
+
+    private sealed class ExpiringEventPolicy : IObservationLifetimePolicy
+    {
+        public Type DeclaredConcreteType => typeof(ExpiringEventObservation);
+
+        public bool HasFiniteLifetime => true;
+
+        public ObservationLifetimePolicyDecision Evaluate(
+            AgentObservation candidate,
+            IReadOnlyList<AcceptedObservationEntry> activeEntries,
+            double observedAtSeconds)
+            => activeEntries.Count == 0
+                ? ObservationLifetimePolicyDecision.Accept
+                : new ObservationLifetimePolicyDecision(
+                    false,
+                    [.. activeEntries.Select(static entry => entry.SequenceID)]);
+
+        public bool IsEventEligible(AgentObservation observation) => true;
+
+        public bool IsExpired(AcceptedObservationEntry entry, double nowSeconds) => nowSeconds >= entry.ObservedAt + 1d;
+    }
+
+    private sealed class TestGameClock : IGameClock
+    {
+        public double Now
+        {
+            get; set;
+        }
+
+        public double NowSeconds => Now;
     }
 
     private sealed class TestCharacter : ICharacter

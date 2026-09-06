@@ -10,7 +10,7 @@ namespace AlleyCat.Tests.Mind.AI;
 
 /// <summary>
 /// Tests the long-running agent-session protocol — transcript replay, whole-batch validation, ordinary boundary
-/// injection, fresh-turn invalidation, transport retry, and contained failure — without a network backend.
+/// fresh-turn invalidation, transport retry, and contained failure — without a network backend.
 /// </summary>
 public sealed class AgentSessionRunnerTests
 {
@@ -28,11 +28,243 @@ public sealed class AgentSessionRunnerTests
     private static readonly IInvalidResponseRecoveryPolicy _immediateInvalidResponseRecoveryPolicy =
         new InvalidResponseRecoveryPolicy(InvalidResponseRecoveryPolicy.DefaultConsecutiveFailureBudget, [TimeSpan.Zero]);
 
+    /// <summary>Canonical request context precedes bootstrap input and accepted transcript replay.</summary>
+    /// <summary>Fresh batch cancellation preserves the canonical result protocol and accepted context.</summary>
+    [Fact]
+    public async Task RunAsync_OrdersCanonicalPrefixBeforeBootstrapAndAcceptedTranscript()
+    {
+        using CancellationTokenSource lifetime = new();
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(["timeline:0", "scene:0", "Bootstrap"], client.Requests[0].Select(Text));
+        Assert.Equal(
+            [ChatRole.User, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+            client.Requests[1].Select(static message => message.Role));
+        Assert.Equal(["timeline:1", "scene:1", "Bootstrap", null, null], client.Requests[1].Select(Text));
+        Assert.Equal([0], context.Confirmed);
+        Assert.Equal([1], context.Discarded);
+    }
+
+    /// <summary>Transport retries reuse one immutable logical-request context materialisation.</summary>
+    [Fact]
+    public async Task RunAsync_TransportRetryReusesOneMaterialisationByteIdentically()
+    {
+        using CancellationTokenSource lifetime = new();
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            FailStep(new HttpRequestException("reset")),
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            retryDelays: [TimeSpan.Zero],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(2, context.MaterialisationCount);
+        Assert.Equal(client.Requests[0].Select(Text), client.Requests[1].Select(Text));
+        Assert.Equal([0], context.Confirmed);
+        Assert.Equal([1], context.Discarded);
+    }
+
+    /// <summary>Invalid responses discard their context snapshots before recovery rematerialises.</summary>
+    [Fact]
+    public async Task RunAsync_InvalidResponseRematerialisesAndNeverConfirmsTheInvalidSnapshot()
+    {
+        using CancellationTokenSource lifetime = new();
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            Respond(new ChatResponse(new ChatMessage(ChatRole.Assistant, "not a tool call"))),
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Equal(3, context.MaterialisationCount);
+        Assert.Equal([0, 2], context.Discarded);
+        Assert.Equal([1], context.Confirmed);
+        Assert.Equal("timeline:1", Text(client.Requests[1][0]));
+    }
+
+    /// <summary>Fresh replacement discards stale context without fabricating observation text.</summary>
+    [Fact]
+    public async Task RunAsync_FreshReplacementRematerialisesWithoutObservationText()
+    {
+        using CancellationTokenSource lifetime = new();
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            HoldUntilCancelledStep(started, cancelled),
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        runner.InvalidateForFreshTurn();
+        await cancelled.Task;
+        await runTask;
+
+        Assert.Equal([0, 2], context.Discarded);
+        Assert.Equal([1], context.Confirmed);
+        Assert.Equal(["timeline:1", "scene:1", "Bootstrap"], client.Requests[1].Take(3).Select(Text));
+    }
+
+    /// <summary>Stale provider output has no tool or request-context acceptance effect.</summary>
+    [Fact]
+    public async Task RunAsync_StaleResponseIsDiscardedWithoutConfirmationOrToolEffect()
+    {
+        using CancellationTokenSource lifetime = new();
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        List<string> spoken = [];
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            HoldUntilReleasedStep(
+                started,
+                release,
+                CreateCall("late", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Never" })),
+            Respond(CreateCall("fresh", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(spoken.Add)],
+            [new ChatMessage(ChatRole.User, "Bootstrap")],
+            requestContextSource: context);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        runner.InvalidateForFreshTurn();
+        _ = release.TrySetResult();
+        await runTask;
+
+        Assert.Equal(["Hello"], spoken);
+        Assert.Equal([0, 2], context.Discarded);
+        Assert.Equal([1], context.Confirmed);
+    }
+
+    /// <summary>Invalid tool responses cause neither tool effects nor request-context confirmation.</summary>
+    [Fact]
+    public async Task RunAsync_InvalidToolShapeHasNoEffectOrConfirmation()
+    {
+        using CancellationTokenSource lifetime = new();
+        List<string> spoken = [];
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(
+            Respond(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text"))),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(spoken.Add)],
+            [],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.Empty(spoken);
+        Assert.Empty(context.Confirmed);
+        Assert.Equal([0, 1], context.Discarded);
+    }
+
+    /// <summary>Fresh batch cancellation preserves the canonical result protocol and accepted context.</summary>
+    [Fact]
+    public async Task RunAsync_FreshInvalidationSkipsRemainingValidatedCallsWithCanonicalResults()
+    {
+        using CancellationTokenSource lifetime = new();
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        AIFunction first = AIFunctionFactory.Create(async (CancellationToken cancellationToken) =>
+        {
+            _ = started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return "unreachable";
+        }, "first");
+        bool secondCalled = false;
+        AIFunction second = AIFunctionFactory.Create(() =>
+        {
+            secondCalled = true;
+            return "unreachable";
+        }, "second");
+        ChatMessage batch = new(
+            ChatRole.Assistant,
+            [
+                new FunctionCallContent("first-call", "first", new Dictionary<string, object?>()),
+                new FunctionCallContent("second-call", "second", new Dictionary<string, object?>()),
+            ]);
+        var context = new RecordingContextSource();
+        ScriptedSessionClient client = new(Respond(batch), EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [first, second],
+            [],
+            allowMultipleToolCalls: true,
+            requestContextSource: context);
+
+        Task runTask = runner.RunAsync(lifetime.Token);
+        await started.Task;
+        runner.InvalidateForFreshTurn();
+        await runTask;
+
+        Assert.False(secondCalled);
+        ChatMessage replay = client.Requests[1][^1];
+        Assert.Equal(ChatRole.Tool, replay.Role);
+        Assert.All(replay.Contents.OfType<FunctionResultContent>(), result =>
+            Assert.Equal("The action was cancelled before it completed.", result.Result?.ToString()));
+        Assert.Equal([0], context.Confirmed);
+        Assert.Equal([1], context.Discarded);
+    }
+
+    /// <summary>Continuation presentation settles only on a locally accepted provider response.</summary>
+    [Fact]
+    public async Task RunAsync_ValidResponseSettlesPresentedContinuationOnlyAfterAcceptance()
+    {
+        using CancellationTokenSource lifetime = new();
+        var context = new ContinuationContextSource();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(
+            client,
+            [CreateSpeakFunction(_ => { })],
+            [],
+            requestContextSource: context);
+
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.True(context.Presented);
+        Assert.True(context.Settled);
+        Assert.Equal(1, context.ConfirmCount);
+        Assert.Equal(1, context.DiscardCount);
+    }
+
     /// <summary>
     /// Every request replays the complete ordered transcript and carries the strict tool-only options: required
     /// tool mode without a named function, no response format, and exactly the production tool inventory.
     /// </summary>
     /// <summary>Registration cancels active generation and holds its replacement behind the owned lease.</summary>
+    /// <summary>Continuation presentation settles only on a locally accepted provider response.</summary>
     [Fact]
     public async Task RunAsync_ReplaysCompleteOrderedTranscriptWithToolOnlyOptionsOnEveryRequest()
     {
@@ -268,7 +500,6 @@ public sealed class AgentSessionRunnerTests
     /// Call-ID validation is transactional: a duplicate ID in a rejected batch does not reserve either ID for the
     /// valid response that follows it.
     /// </summary>
-    /// <summary>Post-acceptance continuation appends one reconciliation while retaining accepted causal history.</summary>
     [Fact]
     public async Task RunAsync_WithInvalidDuplicateCallIDs_DoesNotConsumeBatchIDs()
     {
@@ -498,127 +729,13 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// An ordinary notable observation during model generation never cancels the in-flight request: the response
-    /// and its tools complete naturally, and exactly one injected user message lands in the naturally-next request
-    /// (AI-002 TR-39).
-    /// </summary>
-    [Fact]
-    public async Task QueueInjection_DuringGeneration_CompletesResponseAndToolsAndInjectsAtNextBoundary()
-    {
-        const string injected = "Important scene events require your attention: something happened.";
-        List<string> speech = [];
-        TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            HoldUntilReleasedStep(
-                requestStarted,
-                releaseGeneration,
-                CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(
-            client,
-            [CreateSpeakFunction(speech.Add)],
-            [new ChatMessage(ChatRole.User, "Run input.")]);
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await requestStarted.Task;
-        runner.QueueInjection(injected);
-        _ = releaseGeneration.TrySetResult();
-        await runTask;
-
-        // No cancellation: the response validated, its tool ran, and no extra request left the session.
-        Assert.Equal(["Hello"], speech);
-        Assert.Equal(2, client.Requests.Count);
-        Assert.Equal(
-            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
-            client.Requests[1].Select(message => message.Role));
-        Assert.Equal("Run input.", client.Requests[1][0].Text);
-        Assert.Equal(injected, client.Requests[1][3].Text);
-    }
-
-    /// <summary>
-    /// An ordinary notable observation during a tool invocation never cancels the tool: it completes naturally
-    /// with its real result, and the injected message still lands before the next request (AI-002 TR-39).
-    /// </summary>
-    [Fact]
-    public async Task QueueInjection_DuringToolPhase_CompletesTheToolNaturallyAndInjectsAtNextBoundary()
-    {
-        const string injected = "Important scene events require your attention: something happened.";
-        ControlledTool controlled = new();
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            Respond(CreateCall("controlled-call", ControlledTool.ToolName)),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(
-            client,
-            [controlled.Function],
-            [new ChatMessage(ChatRole.User, "Run input.")]);
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await controlled.Started.Task;
-        runner.QueueInjection(injected);
-        Assert.False(controlled.Completed);
-        _ = controlled.Release.TrySetResult();
-        await runTask;
-
-        Assert.True(controlled.Completed, "An ordinary injection must never cancel an in-flight tool.");
-        Assert.Equal(2, client.Requests.Count);
-        Assert.Equal(
-            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
-            client.Requests[1].Select(message => message.Role));
-        FunctionResultContent result = Assert.IsType<FunctionResultContent>(
-            Assert.Single(client.Requests[1][2].Contents));
-        Assert.Equal("controlled-call", result.CallId);
-        Assert.Equal("controlled result", result.Result?.ToString());
-        Assert.Equal(injected, client.Requests[1][3].Text);
-    }
-
-    /// <summary>
-    /// Multiple ordinary payloads queued during one generation coalesce in FIFO order into exactly one injected
-    /// user message, and the session issues no request beyond its normal next request (AI-002 TR-39).
-    /// </summary>
-    [Fact]
-    public async Task QueueInjection_MultipleOrdinaryPayloads_CoalesceFIFOIntoOneInjectedMessage()
-    {
-        List<string> speech = [];
-        TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            HoldUntilReleasedStep(
-                requestStarted,
-                releaseGeneration,
-                CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(
-            client,
-            [CreateSpeakFunction(speech.Add)],
-            [new ChatMessage(ChatRole.User, "Run input.")]);
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await requestStarted.Task;
-        runner.QueueInjection("first notice");
-        runner.QueueInjection("second notice");
-        _ = releaseGeneration.TrySetResult();
-        await runTask;
-
-        Assert.Equal(2, client.Requests.Count);
-        Assert.Equal(
-            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
-            client.Requests[1].Select(message => message.Role));
-        Assert.Equal("first notice\nsecond notice", client.Requests[1][3].Text);
-    }
-
-    /// <summary>
     /// A fresh observation during model generation cancels the in-flight request, discards partial assistant
-    /// output, appends the injected user message, and resumes with a fresh request replaying the complete
+    /// output and resumes with a fresh request replaying the complete
     /// transcript (AI-002 TR-40).
     /// </summary>
     [Fact]
-    public async Task InvalidateForFreshTurn_DuringGeneration_CancelsRequestDiscardsPartialsAndInjectsBeforeFreshRequest()
+    public async Task InvalidateForFreshTurn_DuringGeneration_CancelsRequestDiscardsPartialsAndRematerialisesContext()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         List<string> speech = [];
         TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationTokenSource lifetime = new();
@@ -636,33 +753,28 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await requestStarted.Task;
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.QueueFreshInjection(injected);
+        runner.InvalidateForFreshTurn();
         await runTask;
 
         Assert.Equal(["Hello"], speech);
         Assert.Equal(3, client.Requests.Count);
-        // The fresh request carries the run input plus the injected message; the cancelled attempt left nothing.
-        Assert.Equal(
-            [ChatRole.User, ChatRole.User],
-            client.Requests[1].Select(message => message.Role));
+        // The fresh request carries no fabricated event text; its context is rematerialised by the caller.
+        Assert.Equal([ChatRole.User], client.Requests[1].Select(message => message.Role));
         Assert.Equal("Run input.", client.Requests[1][0].Text);
-        Assert.Equal(injected, client.Requests[1][1].Text);
         // The final request replays the complete transcript including the post-interruption exchange.
         Assert.Equal(
-            [ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
             client.Requests[2].Select(message => message.Role));
     }
 
     /// <summary>
     /// A non-cooperative provider that returns a valid-looking response after its generation was invalidated has
     /// that late response discarded whole: it is never validated or executed, and the fresh request carries only
-    /// the injection (AI-002 TR-40).
+    /// rematerialised canonical context (AI-002 TR-40).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringGeneration_DiscardsAResponseReturnedAfterCancellation()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         List<string> speech = [];
         TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -684,16 +796,13 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await requestStarted.Task;
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.QueueFreshInjection(injected);
+        runner.InvalidateForFreshTurn();
         _ = releaseGeneration.TrySetResult();
         await runTask;
 
         Assert.Equal(["Hello"], speech);
         Assert.Equal(3, client.Requests.Count);
-        Assert.Equal(
-            ["Run input.", injected],
-            client.Requests[1].Select(message => message.Text));
+        Assert.Equal(["Run input."], client.Requests[1].Select(message => message.Text));
     }
 
     /// <summary>
@@ -703,15 +812,13 @@ public sealed class AgentSessionRunnerTests
     [Fact]
     public async Task InvalidateForFreshTurn_WhenCancelledGenerationReturnsInvalidResponse_DiscardsItBeforeRecovery()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         List<string> speech = [];
         CancellationTokenSource lifetime = new();
         AgentSessionRunner? runner = null;
         ScriptedSessionClient client = new(
             _ =>
             {
-                runner!.InvalidateForFreshTurn(expectFreshInjection: true);
-                runner.QueueFreshInjection(injected);
+                runner!.InvalidateForFreshTurn();
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ordinary text")));
             },
             Respond(CreateCall(
@@ -728,22 +835,19 @@ public sealed class AgentSessionRunnerTests
 
         Assert.Equal(["Hello"], speech);
         Assert.Equal(3, client.Requests.Count);
-        Assert.Equal(
-            ["Run input.", injected],
-            client.Requests[1].Select(message => message.Text));
+        Assert.Equal(["Run input."], client.Requests[1].Select(message => message.Text));
     }
 
     /// <summary>
     /// Fresh invalidation during the first call of a validated multi-call batch cancels that call co-operatively,
     /// never invokes the remaining calls, and appends the complete assistant exchange with exactly one
     /// protocol-valid result per call ID — every result without a natural outcome carries the canonical
-    /// cancellation wording — followed by the injected message before the single replacement request
+    /// cancellation wording — followed by one payload-free replacement request
     /// (AI-002 TR-40).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringFirstCallOfMultiCallBatch_CancelsCallSkipsRemainingAndSynthesisesOneResultPerCallID()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         List<string> actions = [];
         ControlledTool controlled = new();
         AIFunction second = AIFunctionFactory.Create(() => actions.Add("second"), "second_action");
@@ -765,15 +869,14 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await controlled.Started.Task;
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.QueueFreshInjection(injected);
+        runner.InvalidateForFreshTurn();
         await runTask;
 
         Assert.Empty(actions);
         Assert.False(controlled.Completed, "The active call must be cancelled co-operatively.");
         Assert.Equal(2, client.Requests.Count);
         Assert.Equal(
-            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
             client.Requests[1].Select(message => message.Role));
         FunctionResultContent firstResult = Assert.IsType<FunctionResultContent>(client.Requests[1][2].Contents[0]);
         FunctionResultContent secondResult = Assert.IsType<FunctionResultContent>(client.Requests[1][2].Contents[1]);
@@ -781,7 +884,6 @@ public sealed class AgentSessionRunnerTests
         Assert.Equal("second-call", secondResult.CallId);
         Assert.Equal("The action was cancelled before it completed.", firstResult.Result?.ToString());
         Assert.Equal("The action was cancelled before it completed.", secondResult.Result?.ToString());
-        Assert.Equal(injected, client.Requests[1][3].Text);
     }
 
     /// <summary>
@@ -791,7 +893,6 @@ public sealed class AgentSessionRunnerTests
     [Fact]
     public async Task InvalidateForFreshTurn_InTheInterCallGap_NeverStartsTheNextCall()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         List<string> actions = [];
         TaskCompletionSource firstStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource releaseFirst = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -822,15 +923,14 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await firstStarted.Task;
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.QueueFreshInjection(injected);
+        runner.InvalidateForFreshTurn();
         _ = releaseFirst.TrySetResult();
         await runTask;
 
         Assert.Empty(actions);
         Assert.Equal(2, client.Requests.Count);
         Assert.Equal(
-            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
             client.Requests[1].Select(message => message.Role));
         FunctionResultContent firstResult = Assert.IsType<FunctionResultContent>(client.Requests[1][2].Contents[0]);
         FunctionResultContent secondResult = Assert.IsType<FunctionResultContent>(client.Requests[1][2].Contents[1]);
@@ -847,7 +947,6 @@ public sealed class AgentSessionRunnerTests
     [Fact]
     public async Task InvalidateForFreshTurn_AfterCommittedEffects_RetainsTheCommittedNaturalResult()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         List<string> actions = [];
         CommittingTool committing = new();
         AIFunction second = AIFunctionFactory.Create(() => actions.Add("second"), "second_action");
@@ -869,8 +968,7 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await committing.Started.Task;
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.QueueFreshInjection(injected);
+        runner.InvalidateForFreshTurn();
         _ = committing.Commit.TrySetResult();
         await runTask;
 
@@ -893,7 +991,6 @@ public sealed class AgentSessionRunnerTests
     [Fact]
     public async Task InvalidateForFreshTurn_RacingToolCompletion_ProducesExactlyOneResultWithoutDuplicateInvocation()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         List<string> actions = [];
         AgentSessionRunner? runner = null;
         int invocations = 0;
@@ -902,8 +999,7 @@ public sealed class AgentSessionRunnerTests
             {
                 invocations++;
                 // The fresh invalidation lands as the tool's final act — exactly at its completion boundary.
-                runner!.InvalidateForFreshTurn(expectFreshInjection: true);
-                runner.QueueFreshInjection(injected);
+                runner!.InvalidateForFreshTurn();
                 return "natural race result";
             },
             "racing_action");
@@ -930,20 +1026,19 @@ public sealed class AgentSessionRunnerTests
         Assert.Empty(actions);
         Assert.Equal(2, client.Requests.Count);
         Assert.Equal(
-            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
             client.Requests[1].Select(message => message.Role));
         Assert.Equal(2, client.Requests[1][2].Contents.Count);
         FunctionResultContent racingResult = Assert.IsType<FunctionResultContent>(client.Requests[1][2].Contents[0]);
         Assert.Equal("race-call", racingResult.CallId);
         Assert.Equal("natural race result", racingResult.Result?.ToString());
-        Assert.Equal(injected, client.Requests[1][3].Text);
     }
 
     /// <summary>
     /// A wait-owned fresh invalidation — signalled while the wait is the in-flight active phase — records the stale
     /// latch without cancelling that phase: the wait completes naturally with its delivery, the batch's remaining
     /// calls are skipped with canonical cancellation results, and the single replacement request carries the
-    /// wait's natural result without any injected duplicate (AI-002 TR-40/41).
+    /// wait's natural result without duplicated observation text (AI-002 TR-40/41).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_WithoutCancellingActivePhase_CompletesWaitNaturallyAndSkipsRemainingCalls()
@@ -970,7 +1065,7 @@ public sealed class AgentSessionRunnerTests
         Task runTask = runner.RunAsync(lifetime.Token);
         await waitLike.Started.Task;
         // The wait-owned fresh signal arrives mid-wait: the stale latch is recorded without cancelling the wait.
-        runner.InvalidateForFreshTurn(expectFreshInjection: false, cancelActivePhase: false);
+        runner.InvalidateForFreshTurn(cancelActivePhase: false);
         _ = waitLike.Release.TrySetResult();
         await runTask;
 
@@ -978,7 +1073,7 @@ public sealed class AgentSessionRunnerTests
         Assert.False(waitLike.ObservedCancellation, "A wait-owned fresh invalidation must not cancel the active phase token.");
         Assert.Empty(actions);
         Assert.Equal(2, client.Requests.Count);
-        // The replacement request replays the exchange with the wait's natural result and no injected duplicate.
+        // The replacement request replays the exchange with the wait's natural result and no duplicated event text.
         Assert.Equal(
             [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
             client.Requests[1].Select(message => message.Role));
@@ -991,43 +1086,7 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// Pending ordinary and fresh payloads coalesce in FIFO order into exactly one injected user message carried
-    /// by the single fresh replacement request (AI-002 TR-39/40).
-    /// </summary>
-    [Fact]
-    public async Task PendingOrdinaryAndFreshPayloads_CoalesceFIFOIntoOneInjectedMessageOnTheFreshRequest()
-    {
-        List<string> speech = [];
-        TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            HoldUntilCancelledStep(requestStarted),
-            Respond(CreateCall(
-                "speak-call",
-                SpeakToolName,
-                new Dictionary<string, object?> { ["speech"] = "Hello" })),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(
-            client,
-            [CreateSpeakFunction(speech.Add)],
-            [new ChatMessage(ChatRole.User, "Run input.")]);
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await requestStarted.Task;
-        runner.QueueInjection("ordinary notice");
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.QueueFreshInjection("fresh notice");
-        await runTask;
-
-        Assert.Equal(3, client.Requests.Count);
-        Assert.Equal(
-            [ChatRole.User, ChatRole.User],
-            client.Requests[1].Select(message => message.Role));
-        Assert.Equal("ordinary notice\nfresh notice", client.Requests[1][1].Text);
-    }
-
-    /// <summary>
-    /// Node-lifetime cancellation racing a fresh invalidation wins: the rendering barrier observes it, the session
+    /// Node-lifetime cancellation racing a fresh invalidation wins: the session
     /// ends quietly, and no replacement request is issued (AI-002 TR-44 versus TR-40).
     /// </summary>
     [Fact]
@@ -1040,7 +1099,7 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await requestStarted.Task;
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
+        runner.InvalidateForFreshTurn();
         lifetime.Cancel();
         await runTask;
 
@@ -1048,249 +1107,114 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// Queuing or invalidating after the session ended is a quiet no-op.
+    /// Invalidating after the session ended is a quiet no-op.
     /// </summary>
     [Fact]
-    public async Task QueueInjection_AfterSessionEnded_IsAQuietNoOp()
+    public async Task InvalidateForFreshTurn_AfterSessionEnded_IsAQuietNoOp()
     {
         CancellationTokenSource lifetime = new();
         ScriptedSessionClient client = new(EndQuietly(lifetime));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
 
         await runner.RunAsync(lifetime.Token);
-        runner.QueueInjection("late notice");
-        runner.QueueFreshInjection("late notice");
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.AbandonFreshInjection();
+        runner.InvalidateForFreshTurn();
 
         _ = Assert.Single(client.Requests);
     }
 
-    /// <summary>
-    /// Queueing an injected message — ordinary or fresh — requires a nonblank payload.
-    /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void QueueInjection_WithBlankMessage_FailsClearly(string? message)
-    {
-        ScriptedSessionClient client = new();
-        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
-
-        _ = Assert.ThrowsAny<ArgumentException>(() => runner.QueueInjection(message!));
-        _ = Assert.ThrowsAny<ArgumentException>(() => runner.QueueFreshInjection(message!));
-        Assert.Empty(client.Requests);
-    }
-
-    /// <summary>Registration cancels active generation and holds replacement behind its owned lease.</summary>
+    /// <summary>Registration is correlation-only; canonical context owns request admission and speech delivery.</summary>
     [Fact]
-    public async Task RegisterSpeechContinuation_CancelsGenerationAndHoldsReplacementUntilCompletion()
+    public async Task RegisterSpeechContinuation_DoesNotInterruptGenerationOrAddModelInput()
     {
         TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationTokenSource lifetime = new();
         ScriptedSessionClient client = new(
-            HoldUntilCancelledStep(started, cancelled),
-            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            HoldUntilReleasedStep(started, release, CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
             EndQuietly(lifetime));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await started.Task;
-        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
-        await cancelled.Task;
+        runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
         _ = Assert.Single(client.Requests);
-
-        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Complete input."));
+        _ = release.TrySetResult();
         await runTask;
 
-        Assert.Equal("Complete input.", Assert.Single(client.Requests[1]).Text);
+        Assert.Equal(2, client.Requests.Count);
+        Assert.DoesNotContain(client.Requests[1], static message => message.Role == ChatRole.User);
     }
 
-    /// <summary>Foreign and insufficient completions leave an expectation's gate held.</summary>
+    /// <summary>Continuation identities still reject negative revisions before they reach correlation state.</summary>
     [Fact]
-    public async Task CompleteFreshExpectation_RejectsWrongKeyAndInsufficientRevisionWithoutReleasingTheHold()
+    public Task RegisterSpeechContinuation_RejectsNegativeRevision()
     {
-        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        AgentSessionRunner runner = CreateRunner(new ScriptedSessionClient(), [CreateSpeakFunction(_ => { })], []);
+
+        _ = Assert.Throws<ArgumentOutOfRangeException>(
+            () => runner.RegisterSpeechContinuation(Continuation("voice", "group", -1)));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Several correlation registrations are independent and create no mutable model input.</summary>
+    [Fact]
+    public async Task RegisterSpeechContinuation_MultipleRegistrationsDoNotFabricateInput()
+    {
         CancellationTokenSource lifetime = new();
         ScriptedSessionClient client = new(
-            HoldUntilCancelledStep(started, cancelled),
-            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
             EndQuietly(lifetime));
         AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
 
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await started.Task;
-        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 3));
-        AgentSessionRunner foreignRunner = CreateRunner(new ScriptedSessionClient(), [CreateSpeakFunction(_ => { })], []);
-        FreshInjectionExpectation foreign = foreignRunner.RegisterSpeechContinuation(Continuation("voice", "group", 3));
-        await cancelled.Task;
-        runner.CompleteFreshExpectation(foreign, Injection("voice", "group", 3, "Foreign lease."));
-        runner.CompleteFreshExpectation(expectation, Injection("other", "group", 3, "Wrong key."));
-        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Prior segment."));
-        _ = Assert.Single(client.Requests);
-
-        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 3, "Complete input."));
-        await runTask;
-
-        Assert.Equal("Complete input.", Assert.Single(client.Requests[1]).Text);
-    }
-
-    /// <summary>Each independently awaited continuation settles before replacement generation resumes.</summary>
-    [Fact]
-    public async Task CompleteFreshExpectation_TwoOutstandingLeasesRequireBothToSettle()
-    {
-        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            HoldUntilCancelledStep(started, cancelled),
-            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await started.Task;
-        FreshInjectionExpectation first = runner.RegisterSpeechContinuation(Continuation("voice", "first", 1));
-        FreshInjectionExpectation second = runner.RegisterSpeechContinuation(Continuation("voice", "second", 1));
-        await cancelled.Task;
-        runner.CompleteFreshExpectation(first, Injection("voice", "first", 1, "First complete."));
-        _ = Assert.Single(client.Requests);
-
-        runner.CompleteFreshExpectation(second, Injection("voice", "second", 1, "Second complete."));
-        await runTask;
-
-        Assert.Equal("First complete.\nSecond complete.", Assert.Single(client.Requests[1]).Text);
-    }
-
-    /// <summary>
-    /// Two resumed segments from one group retain independent opaque leases. Completing the earlier segment's
-    /// projection must not release the later segment merely because its model-facing revision is newer.
-    /// </summary>
-    [Fact]
-    public async Task CompleteFreshExpectation_SameGroupLeasesRemainIndependent()
-    {
-        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            HoldUntilCancelledStep(started, cancelled),
-            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await started.Task;
-        FreshInjectionExpectation first = runner.RegisterSpeechContinuation(Continuation("voice", "group", 1));
-        FreshInjectionExpectation second = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
-        await cancelled.Task;
-        runner.CompleteFreshExpectation(first, Injection("voice", "group", 9, "Joined input."));
-        _ = Assert.Single(client.Requests);
-
-        runner.CompleteFreshExpectation(second, Injection("voice", "group", 9, "Joined input."));
-        await runTask;
-
-        Assert.Equal("Joined input.", Assert.Single(client.Requests[1]).Text);
-    }
-
-    /// <summary>A newer keyed projection replaces the still-mutable request input instead of appending to it.</summary>
-    [Fact]
-    public async Task QueueOrReplaceInjection_BeforeAcceptanceUsesOnlyTheLatestKeyedRevision()
-    {
-        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            HoldUntilCancelledStep(started),
-            Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
-        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Partial input."));
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await started.Task;
-        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
-        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Joined complete input."));
-        await runTask;
-
-        Assert.Equal("Joined complete input.", Assert.Single(client.Requests[1]).Text);
-        Assert.DoesNotContain("Partial input.", client.Requests[1][0].Text);
-    }
-
-    /// <summary>Equal and older keyed projections cannot overwrite the latest mutable input.</summary>
-    [Fact]
-    public async Task QueueOrReplaceInjection_IgnoresStaleAndEqualRevisions()
-    {
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
-        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Partial input."));
-        runner.QueueOrReplaceInjection(Injection("voice", "group", 2, "Complete input."));
-        runner.QueueOrReplaceInjection(Injection("voice", "group", 2, "Equal revision."));
-        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Stale revision."));
-
+        runner.RegisterSpeechContinuation(Continuation("voice", "first", 1));
+        runner.RegisterSpeechContinuation(Continuation("voice", "second", 1));
         await runner.RunAsync(lifetime.Token);
 
-        Assert.Equal("Complete input.", Assert.Single(client.Requests[0]).Text);
+        Assert.DoesNotContain(client.Requests.SelectMany(static request => request), static message => message.Role == ChatRole.User);
     }
 
-    /// <summary>Invalidation that linearises during validation wins over the stale assistant append.</summary>
+    /// <summary>
+    /// Re-registering a grouped continuation remains correlation-only even for a later segment revision.
+    /// </summary>
     [Fact]
-    public async Task RegisterSpeechContinuation_DuringValidationDiscardsTheStaleAssistantResponse()
+    public async Task RegisterSpeechContinuation_SameGroupSegmentsDoNotAddModelInput()
+    {
+        CancellationTokenSource lifetime = new();
+        ScriptedSessionClient client = new(
+            Respond(CreateCall("speak-call", SpeakToolName, new Dictionary<string, object?> { ["speech"] = "Hello" })),
+            EndQuietly(lifetime));
+        AgentSessionRunner runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
+
+        runner.RegisterSpeechContinuation(Continuation("voice", "group", 1));
+        runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
+        await runner.RunAsync(lifetime.Token);
+
+        Assert.DoesNotContain(client.Requests.SelectMany(static request => request), static message => message.Role == ChatRole.User);
+    }
+
+    /// <summary>Fresh invalidation that linearises during validation wins over the stale assistant append.</summary>
+    [Fact]
+    public async Task InvalidateForFreshTurn_DuringValidationDiscardsTheStaleAssistantResponse()
     {
         CancellationTokenSource lifetime = new();
         AgentSessionRunner? runner = null;
-        FreshInjectionExpectation? expectation = null;
         CallbackArguments arguments = new(
-            () =>
-            {
-                expectation = runner!.RegisterSpeechContinuation(Continuation("voice", "group", 2));
-                runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Joined input."));
-            },
+            () => runner!.InvalidateForFreshTurn(),
             new Dictionary<string, object?> { ["speech"] = "Never spoken" });
         ScriptedSessionClient client = new(
             Respond(CreateCall("stale", SpeakToolName, arguments)),
             Respond(new ChatMessage(ChatRole.Assistant, [ValidSpeakCall("replacement", "Hello")])),
             EndQuietly(lifetime));
         runner = CreateRunner(client, [CreateSpeakFunction(_ => { })], []);
-        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Partial input."));
 
         await runner.RunAsync(lifetime.Token);
 
-        Assert.Equal([ChatRole.User], client.Requests[1].Select(message => message.Role));
-        Assert.Equal("Joined input.", client.Requests[1][0].Text);
+        Assert.Empty(client.Requests[1]);
     }
 
-    /// <summary>Post-acceptance continuation appends reconciliation while retaining accepted causal history.</summary>
+    /// <summary>A payload-free fresh replacement preserves accepted model input without fabricating text.</summary>
     [Fact]
-    public async Task QueueOrReplaceInjection_AfterAcceptanceAppendsOneReconciliationWithoutRewritingHistory()
-    {
-        ControlledTool controlled = new();
-        CancellationTokenSource lifetime = new();
-        ScriptedSessionClient client = new(
-            Respond(CreateCall("controlled", ControlledTool.ToolName)),
-            EndQuietly(lifetime));
-        AgentSessionRunner runner = CreateRunner(client, [controlled.Function], []);
-        runner.QueueOrReplaceInjection(Injection("voice", "group", 1, "Original input."));
-
-        Task runTask = runner.RunAsync(lifetime.Token);
-        await controlled.Started.Task;
-        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 2));
-        runner.CompleteFreshExpectation(expectation, Injection("voice", "group", 2, "Joined input."));
-        _ = controlled.Release.TrySetResult();
-        await runTask;
-
-        Assert.Equal("Original input.", client.Requests[1][0].Text);
-        Assert.Equal(
-            "The input continued. Its complete current content is:\nJoined input.\nEarlier responses or actions may already have occurred.",
-            client.Requests[1][3].Text);
-        _ = Assert.Single(client.Requests[1], message => message.Text?.StartsWith("The input continued.") == true);
-    }
-
-    /// <summary>Abandonment releases its lease and does not invent model-facing input.</summary>
-    [Fact]
-    public async Task AbandonFreshExpectation_InsertsNoTextAndReleasesTheReplacementWithoutDeadlock()
+    public async Task InvalidateForFreshTurn_WithoutPayloadPreservesExistingModelInput()
     {
         TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1306,10 +1230,8 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await started.Task;
-        FreshInjectionExpectation expectation = runner.RegisterSpeechContinuation(Continuation("voice", "group", 1));
+        runner.InvalidateForFreshTurn();
         await cancelled.Task;
-        runner.AbandonFreshExpectation(expectation);
-        runner.AbandonFreshExpectation(expectation);
         await runTask;
 
         Assert.Equal("Existing input.", Assert.Single(client.Requests[1]).Text);
@@ -1358,7 +1280,7 @@ public sealed class AgentSessionRunnerTests
     /// <summary>
     /// A provider timeout — a task cancellation on a linked token that is not the phase token — is classified as a
     /// transient transport failure, never as an expected interruption: the retry logs a transient warning, never
-    /// takes the interruption path, and lands no injected message (AI-002 TR-43 versus TR-41).
+    /// takes the interruption path, and adds no event text (AI-002 TR-43 versus TR-41).
     /// </summary>
     [Fact]
     public async Task RunAsync_WhenProviderTimeoutRecovers_RetriesAsTransientFailureWithoutInterruptionSemantics()
@@ -1384,7 +1306,7 @@ public sealed class AgentSessionRunnerTests
 
         Assert.Equal(["Hello"], speech);
         Assert.Equal(3, client.Requests.Count);
-        // The retry replayed the identical transcript: no interruption semantics landed an injected message.
+        // The retry replayed the identical transcript: no interruption semantics added event text.
         Assert.Single(client.Requests[1], client.Requests[0][0]);
         Assert.Contains(loggerFactory.Entries, entry =>
             entry.Level == LogLevel.Warning
@@ -1582,12 +1504,11 @@ public sealed class AgentSessionRunnerTests
     /// A fresh invalidation during invalid-response backoff supersedes recovery without consuming its budget: the
     /// streak from the superseded response is not carried forward, so the replacement request's own invalid
     /// response still receives a full backoff before any exhaustion, and the replacement request carries the fresh
-    /// injection instead of a recovery request (AI-002 TR-40 versus TR-43).
+    /// replacement request instead of a recovery request (AI-002 TR-40 versus TR-43).
     /// </summary>
     [Fact]
     public async Task InvalidateForFreshTurn_DuringInvalidResponseRecoveryBackoff_DoesNotConsumeRecoveryBudget()
     {
-        const string injected = "Important scene events require your attention: something happened.";
         var recoveryPolicy = new ObservingInvalidResponseRecoveryPolicy(consecutiveFailureBudget: 2);
         using CancellationTokenSource lifetime = new();
         ChatResponse invalid = new(new ChatMessage(ChatRole.Assistant, "ordinary text"));
@@ -1601,8 +1522,7 @@ public sealed class AgentSessionRunnerTests
             invalidResponseRecoveryPolicy: recoveryPolicy);
         Task runTask = runner.RunAsync(lifetime.Token);
         await recoveryPolicy.Started.Task;
-        runner.InvalidateForFreshTurn(expectFreshInjection: true);
-        runner.QueueFreshInjection(injected);
+        runner.InvalidateForFreshTurn();
         await WaitForBackoffCallsAsync(recoveryPolicy, backoffCallCount: 2);
         lifetime.Cancel();
 
@@ -1612,9 +1532,7 @@ public sealed class AgentSessionRunnerTests
         // consumed the budget of two: consumption would have exhausted recovery before a second backoff.
         Assert.Equal(2, recoveryPolicy.BackoffCallCount);
         Assert.Equal(2, client.Requests.Count);
-        Assert.Equal(
-            ["Run input.", injected],
-            client.Requests[1].Select(message => message.Text));
+        Assert.Equal(["Run input."], client.Requests[1].Select(message => message.Text));
     }
 
     /// <summary>
@@ -1642,7 +1560,7 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await WaitForAttemptsAsync(client, attemptCount: 1);
-        runner.InvalidateForFreshTurn(expectFreshInjection: false);
+        runner.InvalidateForFreshTurn();
         await runTask;
 
         Assert.Equal(["Hello"], speech);
@@ -1652,13 +1570,12 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// A cue that linearises while a speak submission is still pending cancels it — speak-tool selection alone
+    /// Freshness that linearises while a speak submission is still pending cancels it — speak-tool selection alone
     /// remains ordinary cancellable work — and the racing admission transaction is refused: its commit never runs,
-    /// so no queue item or generation exists, while the assistant call ID still receives exactly one protocol-valid
-    /// cancelled result and the replacement request stays held behind the cue's lease (AI-002 TR-25/26/56).
+    /// while the assistant call ID still receives exactly one protocol-valid cancelled result (AI-002 TR-25/26/56).
     /// </summary>
     [Fact]
-    public async Task SpeechAdmission_CueFirst_RefusesAdmissionCancelsPendingSpeakAndHoldsReplacement()
+    public async Task SpeechAdmission_FreshnessFirst_RefusesAdmissionAndCancelsPendingSpeak()
     {
         AgentSessionRunner? runner = null;
         AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: false);
@@ -1670,7 +1587,7 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await speak.Started.Task;
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.InvalidateForFreshTurn();
         await WaitForConditionAsync(() => speak.CancellationObserved && speak.Admitted.HasValue);
 
         Assert.True(speak.CancellationObserved, "The pending speak phase must be cancelled by the cue.");
@@ -1678,24 +1595,21 @@ public sealed class AgentSessionRunnerTests
         Assert.False(speak.Admitted, "The gate must refuse admission while the cue hold is pending.");
         Assert.False(speak.CompletedNaturally);
 
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
         await runTask;
 
         Assert.Equal(2, client.Requests.Count);
         Assert.Equal(
-            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.User],
+            [ChatRole.User, ChatRole.Assistant, ChatRole.Tool],
             client.Requests[1].Select(message => message.Role));
         FunctionResultContent result = Assert.IsType<FunctionResultContent>(
             Assert.Single(client.Requests[1][2].Contents));
         Assert.Equal("speak-call", result.CallId);
         Assert.Equal("The action was cancelled before it completed.", result.Result?.ToString());
-        Assert.Equal("Joined player text.", client.Requests[1][3].Text);
     }
 
     /// <summary>
-    /// A submission whose admission commits before the cue is protected for its whole pipeline life: the cue
-    /// registers its hold and associates the speech key without cancelling the speak, which settles naturally,
-    /// while the replacement request waits behind the cue's lease (AI-002 TR-25/26/56).
+    /// A submission whose admission commits before continuation registration settles naturally; canonical request
+    /// context owns the speech delivery, so registration itself neither adds model input nor invalidates a request.
     /// </summary>
     [Fact]
     public async Task SpeechAdmission_AdmissionFirst_AssociatesProtectionAndSettlesNaturally()
@@ -1715,14 +1629,13 @@ public sealed class AgentSessionRunnerTests
         Assert.True(speak.Admitted, "The admission transaction must commit while no cue hold is pending.");
         Assert.True(speak.Committed);
 
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
         await Task.Delay(100);
         Assert.False(
             speak.CancellationObserved,
             "A cue whose submission was admitted first must never cancel the protected speak.");
         Assert.False(speak.CompletedNaturally);
 
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
         _ = speak.Release.TrySetResult();
         await runTask;
 
@@ -1732,16 +1645,15 @@ public sealed class AgentSessionRunnerTests
             Assert.Single(client.Requests[1][2].Contents));
         Assert.Equal("speak-call", speakResult.CallId);
         Assert.Equal("spoken naturally", speakResult.Result?.ToString());
-        Assert.Contains("Joined player text.", client.Requests[1].Select(static message => message.Text));
+        Assert.DoesNotContain(client.Requests[1], static message => message.Role == ChatRole.User && message.Text is not "Run input.");
     }
 
     /// <summary>
-    /// A speak-shaped tool that never reaches its admission transaction is still ordinary cancellable work: the
-    /// cue cancels it, its call ID receives the canonical cancelled result, and settling the hold releases the
-    /// replacement request (AI-002 TR-56).
+    /// A speak-shaped tool that never reaches its admission transaction is still ordinary cancellable work: fresh
+    /// invalidation cancels it and its call ID receives the canonical cancelled result (AI-002 TR-56).
     /// </summary>
     [Fact]
-    public async Task SpeechAdmission_SpeakSelectionAlone_RemainsCancellableByCue()
+    public async Task SpeechAdmission_SpeakSelectionAlone_RemainsCancellableByFreshness()
     {
         AgentSessionRunner? runner = null;
         AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: false, attemptAdmissionOnCancel: false);
@@ -1753,11 +1665,10 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await speak.Started.Task;
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.InvalidateForFreshTurn();
         await WaitForConditionAsync(() => speak.CancellationObserved);
         Assert.Null(speak.Admitted);
 
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
         await runTask;
 
         FunctionResultContent result = Assert.IsType<FunctionResultContent>(
@@ -1812,12 +1723,11 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// A fresh invalidation whose speech keys are exactly the keys the admitted speak's admission beat never
-    /// cancels that speak — the matching completed-text delivery keeps it settling naturally — while the epoch,
-    /// rendering barrier, and replacement request proceed unchanged around it (AI-002 TR-26/40).
+    /// Runner-only speech-key registration does not protect an admitted speak: canonical request context owns
+    /// continuation admission, so direct freshness still cancels the runner phase (AI-002 TR-26/40).
     /// </summary>
     [Fact]
-    public async Task SpeechAdmission_MatchingFreshInvalidation_NeverCancelsTheAdmittedSpeak()
+    public async Task SpeechAdmission_DirectFreshInvalidationCancelsTheAdmittedSpeak()
     {
         AgentSessionRunner? runner = null;
         AdmissionSpeakTool speak = new(() => runner!, admitBeforeBlocking: true);
@@ -1829,29 +1739,16 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await speak.Started.Task;
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
-
         runner.InvalidateForFreshTurn(
-            expectFreshInjection: true,
-            new HashSet<AgentSessionContinuationKey> { Continuation("player-voice", "group", 1) });
-        await Task.Delay(100);
-        Assert.False(
-            speak.CancellationObserved,
-            "The matching completed-text invalidation must not cancel the protected admitted speak.");
-
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
-        runner.QueueFreshInjection("Important scene events require your attention: something happened.");
-        _ = speak.Release.TrySetResult();
+            new HashSet<SpeechContinuationKey> { Continuation("player-voice", "group", 1) });
+        await WaitForConditionAsync(() => speak.CancellationObserved);
         await runTask;
 
-        Assert.True(speak.CompletedNaturally);
+        Assert.False(speak.CompletedNaturally);
         Assert.Equal(2, client.Requests.Count);
         FunctionResultContent speakResult = Assert.IsType<FunctionResultContent>(
             Assert.Single(client.Requests[1][2].Contents));
-        Assert.Equal("spoken naturally", speakResult.Result?.ToString());
-        Assert.Contains(
-            client.Requests[1],
-            message => message.Text?.Contains("Joined player text.", StringComparison.Ordinal) == true);
+        Assert.Equal("The action was cancelled before it completed.", speakResult.Result?.ToString());
     }
 
     /// <summary>
@@ -1866,15 +1763,15 @@ public sealed class AgentSessionRunnerTests
     [InlineData(2)]
     public async Task SpeechAdmission_UnrelatedFreshInvalidation_CancelsTheAdmittedSpeak(int unrelatedKeyMode)
     {
-        IReadOnlySet<AgentSessionContinuationKey>? freshSpeechKeys;
+        IReadOnlySet<SpeechContinuationKey>? freshSpeechKeys;
         switch (unrelatedKeyMode)
         {
             case 1:
-                HashSet<AgentSessionContinuationKey> empty = [];
+                HashSet<SpeechContinuationKey> empty = [];
                 freshSpeechKeys = empty;
                 break;
             case 2:
-                HashSet<AgentSessionContinuationKey> otherSpeaker = [Continuation("other-voice", "group", 1)];
+                HashSet<SpeechContinuationKey> otherSpeaker = [Continuation("other-voice", "group", 1)];
                 freshSpeechKeys = otherSpeaker;
                 break;
             default:
@@ -1891,9 +1788,9 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await speak.Started.Task;
-        _ = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
 
-        runner.InvalidateForFreshTurn(expectFreshInjection: true, freshSpeechKeys);
+        runner.InvalidateForFreshTurn(freshSpeechKeys);
         await WaitForConditionAsync(() => speak.CancellationObserved);
         Assert.False(speak.CompletedNaturally, "Unrelated freshness must withdraw the unhand-offed submission.");
 
@@ -1918,7 +1815,7 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await speak.Started.Task;
-        _ = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
         lifetime.Cancel();
 
         await runTask;
@@ -1929,12 +1826,12 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// A cue arriving during the transport-retry delay supersedes the pending retry without consuming its budget:
-    /// the stale request is never re-issued, and settling the hold releases one replacement request (AI-002 TR-56
+    /// Fresh invalidation during the transport-retry delay supersedes the pending retry without consuming its budget:
+    /// the stale request is never re-issued and the replacement request needs no observation payload (AI-002 TR-40
     /// versus TR-43).
     /// </summary>
     [Fact]
-    public async Task RegisterSpeechContinuation_DuringTransportRetryDelay_SupersedesRetryWithoutConsumingBudget()
+    public async Task InvalidateForFreshTurn_DuringTransportRetryDelay_SupersedesRetryWithoutConsumingBudget()
     {
         List<string> speech = [];
         TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1954,10 +1851,9 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await WaitForAttemptsAsync(client, attemptCount: 1);
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.InvalidateForFreshTurn();
         await Task.Delay(50);
 
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
         await runTask;
 
         Assert.Equal(["Hello"], speech);
@@ -1967,12 +1863,12 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// A cue arriving during invalid-response recovery backoff supersedes recovery without consuming its budget:
+    /// Fresh invalidation during invalid-response recovery backoff supersedes recovery without consuming its budget:
     /// the streak is not carried forward and the replacement request follows the settled hold (AI-002 TR-56 versus
     /// TR-43).
     /// </summary>
     [Fact]
-    public async Task RegisterSpeechContinuation_DuringInvalidResponseRecoveryBackoff_DoesNotConsumeRecoveryBudget()
+    public async Task InvalidateForFreshTurn_DuringInvalidResponseRecoveryBackoff_WithoutPayloadDoesNotConsumeRecoveryBudget()
     {
         var recoveryPolicy = new ObservingInvalidResponseRecoveryPolicy(consecutiveFailureBudget: 2);
         using CancellationTokenSource lifetime = new();
@@ -1987,8 +1883,7 @@ public sealed class AgentSessionRunnerTests
             invalidResponseRecoveryPolicy: recoveryPolicy);
         Task runTask = runner.RunAsync(lifetime.Token);
         await recoveryPolicy.Started.Task;
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        runner.InvalidateForFreshTurn();
         await WaitForBackoffCallsAsync(recoveryPolicy, backoffCallCount: 2);
         lifetime.Cancel();
 
@@ -2001,12 +1896,12 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// A cue cancels an active wait-shaped tool co-operatively — Mind's accumulation ownership is Mind-level state
-    /// the runner never touches — and the wait call ID still receives exactly one result before the held
-    /// replacement request (AI-002 TR-56/61).
+    /// Fresh invalidation cancels an active wait-shaped tool co-operatively — Mind's accumulation ownership is
+    /// Mind-level state the runner never touches — and the wait call ID still receives exactly one result before
+    /// the payload-free replacement request (AI-002 TR-40/61).
     /// </summary>
     [Fact]
-    public async Task RegisterSpeechContinuation_DuringActiveWait_CancelsTheWaitToolWithOneResultPerCallID()
+    public async Task InvalidateForFreshTurn_DuringActiveWait_CancelsTheWaitToolWithOneResultPerCallID()
     {
         WaitLikeTool waitLike = new();
         CancellationTokenSource lifetime = new();
@@ -2020,11 +1915,10 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await waitLike.Started.Task;
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
+        runner.InvalidateForFreshTurn();
         await WaitForConditionAsync(() => waitLike.ObservedCancellation);
         Assert.False(waitLike.CompletedNaturally);
 
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
         await runTask;
 
         FunctionResultContent result = Assert.IsType<FunctionResultContent>(
@@ -2034,11 +1928,11 @@ public sealed class AgentSessionRunnerTests
     }
 
     /// <summary>
-    /// A non-cooperative provider response returned after a cue cancelled its generation is discarded whole: the
-    /// settled hold's replacement request carries only the joined utterance, never the stale call (AI-002 TR-56).
+    /// A non-cooperative provider response returned after fresh invalidation is discarded whole: the replacement
+    /// request replays only accepted history and never the stale call (AI-002 TR-40).
     /// </summary>
     [Fact]
-    public async Task RegisterSpeechContinuation_DuringGeneration_DiscardsTheLateResponse()
+    public async Task InvalidateForFreshTurn_DuringGeneration_DiscardsTheLateResponse()
     {
         TaskCompletionSource requestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         TaskCompletionSource releaseGeneration = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2056,16 +1950,14 @@ public sealed class AgentSessionRunnerTests
 
         Task runTask = runner.RunAsync(lifetime.Token);
         await requestStarted.Task;
-        FreshInjectionExpectation cue = runner.RegisterSpeechContinuation(Continuation("player-voice", "group", 1));
-        runner.CompleteFreshExpectation(cue, Injection("player-voice", "group", 1, "Joined player text."));
+        runner.InvalidateForFreshTurn();
         _ = releaseGeneration.TrySetResult();
         await runTask;
 
-        // The late stale response never entered the transcript: the replacement carries the run input and the
-        // joined utterance, and nothing else.
+        // The late stale response never entered the transcript: the replacement carries only prior accepted input.
         Assert.Equal(2, client.Requests.Count);
         Assert.Equal(
-            ["Run input.", "Joined player text."],
+            ["Run input."],
             client.Requests[1].Select(static message => message.Text));
     }
 
@@ -2176,11 +2068,8 @@ public sealed class AgentSessionRunnerTests
             SpeakToolName,
             new Dictionary<string, object?> { ["speech"] = speech });
 
-    private static AgentSessionContinuationKey Continuation(string source, string turn, long revision)
-        => new(new AgentSessionInjectionKey(source, turn), revision);
-
-    private static AgentSessionInjection Injection(string source, string turn, long revision, string text)
-        => new(new AgentSessionInjectionKey(source, turn), revision, text);
+    private static SpeechContinuationKey Continuation(string source, string turn, long revision)
+        => new(source, turn, checked((int)revision));
 
     private static AIFunction CreateSpeakFunction(Action<string> action)
         // Composition registers the speak function's admission-arbitration policy (AI-002 TR-62), mirroring the
@@ -2205,6 +2094,9 @@ public sealed class AgentSessionRunnerTests
         => new(
             ChatRole.Assistant,
             [new FunctionCallContent(callId, name, arguments ?? new Dictionary<string, object?>())]);
+
+    private static string? Text(ChatMessage message)
+        => message.Contents.OfType<TextContent>().SingleOrDefault()?.Text;
 
     private static Func<CancellationToken, Task<ChatResponse>> Respond(ChatMessage message)
         => _ => Task.FromResult(new ChatResponse(message));
@@ -2277,7 +2169,8 @@ public sealed class AgentSessionRunnerTests
         ILogger? logger = null,
         bool enableReasoningLogging = true,
         IReadOnlyList<TimeSpan>? retryDelays = null,
-        IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null)
+        IInvalidResponseRecoveryPolicy? invalidResponseRecoveryPolicy = null,
+        IAgentRequestContextSource? requestContextSource = null)
         => new(
             client,
             Instructions,
@@ -2287,7 +2180,8 @@ public sealed class AgentSessionRunnerTests
             logger ?? NullLogger.Instance,
             enableReasoningLogging,
             retryDelays,
-            invalidResponseRecoveryPolicy ?? _immediateInvalidResponseRecoveryPolicy);
+            invalidResponseRecoveryPolicy ?? _immediateInvalidResponseRecoveryPolicy,
+            requestContextSource);
 
     private static async Task WaitForAttemptsAsync(ScriptedSessionClient client, int attemptCount)
     {
@@ -2421,7 +2315,7 @@ public sealed class AgentSessionRunnerTests
     }
     /// <summary>
     /// Deterministic in-flight tool whose completion the test controls: it completes naturally when released and
-    /// co-operatively cancels when its token fires, so an invalidation or injection can be signalled while the
+    /// co-operatively cancels when its token fires, so an invalidation can be signalled while the
     /// tool is provably executing.
     /// </summary>
     private sealed class ControlledTool
@@ -2685,6 +2579,90 @@ public sealed class AgentSessionRunnerTests
             }
         }
     }
+
+    private sealed class RecordingContextSource : IAgentRequestContextSource
+    {
+        public int MaterialisationCount
+        {
+            get;
+            private set;
+        }
+
+        public List<int> Confirmed
+        {
+            get;
+        } = [];
+
+        public List<int> Discarded
+        {
+            get;
+        } = [];
+
+        public ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int index = MaterialisationCount++;
+            return ValueTask.FromResult(new AgentRequestContext(
+                [
+                    new ChatMessage(ChatRole.User, $"timeline:{index}"),
+                    new ChatMessage(ChatRole.User, $"scene:{index}"),
+                ],
+                index));
+        }
+
+        public void Confirm(object? confirmation) => Confirmed.Add(Assert.IsType<int>(confirmation));
+
+        public void Discard(object? confirmation) => Discarded.Add(Assert.IsType<int>(confirmation));
+    }
+
+    private sealed class ContinuationContextSource : IAgentRequestContextSource
+    {
+        private bool _awaitingConfirmation;
+
+        public bool Presented => _awaitingConfirmation || Settled;
+
+        public bool Settled
+        {
+            get;
+            private set;
+        }
+
+        public int ConfirmCount
+        {
+            get;
+            private set;
+        }
+
+        public int DiscardCount
+        {
+            get;
+            private set;
+        }
+
+        public ValueTask<AgentRequestContext> MaterialiseAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _awaitingConfirmation = true;
+            return ValueTask.FromResult(new AgentRequestContext([], new object()));
+        }
+
+        public void Confirm(object? confirmation)
+        {
+            Assert.NotNull(confirmation);
+            Assert.True(_awaitingConfirmation);
+            _awaitingConfirmation = false;
+            Settled = true;
+            ConfirmCount++;
+        }
+
+        public void Discard(object? confirmation)
+        {
+            Assert.NotNull(confirmation);
+            _awaitingConfirmation = false;
+            DiscardCount++;
+        }
+    }
+
     private sealed class ScriptedSessionClient(params Func<CancellationToken, Task<ChatResponse>>[] steps)
         : IChatClient
     {

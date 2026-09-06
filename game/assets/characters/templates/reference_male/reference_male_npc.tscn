@@ -16,6 +16,14 @@
 [ext_resource type="Script" uid="uid://bxv46b4g0jcnq" path="res://src/Mind/Perception/VisualSurveyPerception.cs" id="15_visual_perception"]
 [ext_resource type="Script" uid="uid://bja302idxebx6" path="res://src/Mind/Perception/VisualDescriptionPerception.cs" id="16_visual_description_perception"]
 [ext_resource type="Script" uid="uid://c84drh32xjhfh" path="res://src/Mind/Perception/RelativePositionPerception.cs" id="17_relative_position_perception"]
+[ext_resource type="Resource" uid="uid://b4j2nqhwnkrxw" path="res://assets/characters/prompts/current_scene.tres" id="18_current_scene_status"]
+[ext_resource type="Script" uid="uid://cg8pra7o1b3y7" path="res://src/Mind/AI/SceneStatus/AttendedCharacterSceneStatusProjector.cs" id="19_attended_status_projector"]
+[ext_resource type="Script" uid="uid://c4auc3ftyuxiy" path="res://src/Mind/AI/Watch/WatchRegistry.cs" id="20_watch_registry"]
+[ext_resource type="Script" uid="uid://dmrfkirffuot1" path="res://src/Mind/AI/Watch/ProximityWatchTool.cs" id="21_proximity_watch_tool"]
+[ext_resource type="Script" uid="uid://cd3tvaw7tff12" path="res://src/Mind/AI/SceneStatus/WatchSceneStatusProjector.cs" id="22_watch_status_projector"]
+
+[sub_resource type="Resource" id="ProximityWatchTool_default"]
+script = ExtResource("21_proximity_watch_tool")
 
 [node name="Male" unique_id=504240789 node_paths=PackedStringArray("Voice", "Navigation", "Hearing") instance=ExtResource("1_p3faa")]
 Voice = NodePath("Male/GeneralSkeleton/Head/Voice")
@@ -83,7 +91,7 @@ metadata/_custom_type_script = "uid://bdxl0giwm3sg1"
 [node name="Mind" type="Node" parent="." index="8" unique_id=2028818158]
 script = ExtResource("7_dvj2u")
 SystemInstruction = ExtResource("9_e0v3v")
-EventHistoryPath = "res://prompts/event_history.md"
+CurrentSceneStatus = ExtResource("18_current_scene_status")
 metadata/_custom_type_script = "uid://hadsjgek6b2p"
 
 [node name="SpeechPerception" type="Node" parent="Mind"]
@@ -101,6 +109,22 @@ metadata/_custom_type_script = "uid://bja302idxebx6"
 [node name="RelativePositionPerception" type="Node" parent="Mind"]
 script = ExtResource("17_relative_position_perception")
 metadata/_custom_type_script = "uid://c84drh32xjhfh"
+
+[node name="AttendedCharacterSceneStatusProjector" type="Node" parent="Mind"]
+script = ExtResource("19_attended_status_projector")
+ProjectorID = "attended-characters"
+metadata/_custom_type_script = "uid://cg8pra7o1b3y7"
+
+[node name="WatchRegistry" type="Node" parent="Mind"]
+script = ExtResource("20_watch_registry")
+Conditions = [SubResource("ProximityWatchTool_default")]
+metadata/_custom_type_script = "uid://c4auc3ftyuxiy"
+
+[node name="WatchSceneStatusProjector" type="Node" parent="Mind" node_paths=PackedStringArray("Registry")]
+script = ExtResource("22_watch_status_projector")
+ProjectorID = "active-watches"
+Registry = NodePath("../WatchRegistry")
+metadata/_custom_type_script = "uid://cd3tvaw7tff12"
 
 [node name="AttentionGazeTargetSelector" type="Node" parent="Mind"]
 script = ExtResource("attention_gaze_selector_1")

@@ -69,20 +69,32 @@ public sealed class ObservedRelativePositionTests
         Assert.Equal(ObservedRelativePosition.TypeKeyValue, observation.TypeKey);
     }
 
-    /// <summary>Relative positions suppress equivalent duplicates within each subject's scope.</summary>
+    /// <summary>Relative-position policy owns equivalent suppression and subject-scoped supersession.</summary>
     [Fact]
-    public void DuplicateContract_SuppressesEquivalentsScopedToSubject()
+    public void LifetimePolicy_SuppressesEquivalentsAndScopesSupersessionToSubject()
     {
+        var policy = new RelativePositionObservationLifetimePolicy();
         ObservedRelativePosition observation = CreateObservation();
         var otherSubject = new ObservedRelativePosition(
             "char:other",
             2.5f,
             RelativeDirection.Front,
             RelativeDirection.Back);
+        var changed = new ObservedRelativePosition(
+            "char:subject",
+            3f,
+            RelativeDirection.Front,
+            RelativeDirection.Back);
+        var retained = new AcceptedObservationEntry(
+            17,
+            10d,
+            observation,
+            new ObservationSchedulingMetadata(0.1f, false),
+            IsRetained: true);
 
-        Assert.Equal(ObservationDuplicatePolicy.IgnoreEquivalent, observation.DuplicatePolicy);
-        Assert.Equal("char:subject", observation.DuplicateScope);
-        Assert.Equal("char:other", otherSubject.DuplicateScope);
+        Assert.True(policy.Evaluate(observation, [retained], 11d).Suppress);
+        Assert.False(policy.Evaluate(otherSubject, [retained], 11d).Suppress);
+        Assert.Equal([17L], policy.Evaluate(changed, [retained], 11d).SupersededSequenceIDs);
     }
 
     /// <summary>

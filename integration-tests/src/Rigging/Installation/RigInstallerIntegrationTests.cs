@@ -509,17 +509,22 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
-    /// The player scene delegates player-specific runtime setup to templates instead of baking runtime nodes itself.
+    /// The player scene inherits common character capabilities from the shared female base and delegates only
+    /// player-specific runtime setup to templates.
     /// </summary>
     [Headless]
     [Fact]
-    public void PlayerSceneAsset_DoesNotSerialiseBakedPlayerIKSetup()
+    public void PlayerSceneAsset_InheritsSharedFemaleBaseAndDoesNotSerialiseBakedPlayerIKSetup()
     {
         string playerSceneText = ReadProjectFile(PlayerScenePath);
 
         Assert.Contains("[node name=\"Player\"", playerSceneText, StringComparison.Ordinal);
-        Assert.Contains("groups=[\"Player\"]", playerSceneText, StringComparison.Ordinal);
+        Assert.Contains(ReferenceFemaleScenePath, playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReferenceFemaleModelScenePath, playerSceneText, StringComparison.Ordinal);
         Assert.Contains("player_installer.tscn", playerSceneText, StringComparison.Ordinal);
+        Assert.Contains("groups=[\"Player\"]", playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("groups=[\"Actors\"", playerSceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("groups=[\"VisualSubjects\"", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain(ReferenceFemalePlayerTemplatePath, playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("PlayerController", playerSceneText, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenAITranscriber", playerSceneText, StringComparison.Ordinal);
@@ -551,6 +556,11 @@ public sealed class RigInstallerIntegrationTests
         {
             Assert.DoesNotContain(forbiddenMarker, playerSceneText, StringComparison.Ordinal);
         }
+
+        using Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+        string[] groupNames = [.. player.GetGroups().Select(group => group.ToString()).OrderBy(group => group, StringComparer.Ordinal)];
+
+        Assert.Equal(["Actors", "Player", "VisualSubjects"], groupNames);
     }
 
     /// <summary>

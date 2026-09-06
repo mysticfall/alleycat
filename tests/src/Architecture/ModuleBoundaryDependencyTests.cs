@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using AlleyCat.Core.Time;
 using AlleyCat.Mind.AI;
-using AlleyCat.Mind.AI.Prompting;
 using AlleyCat.Mind.AI.Tool;
 using Xunit;
 using MindBase = AlleyCat.Mind.Mind;
@@ -38,10 +37,9 @@ public sealed class ModuleBoundaryDependencyTests
 
     /// <summary>
     /// Prompting owns the projected event identity and must not expose runner session-protocol types (AI-003
-    /// TR-35/36): projection output carries the Prompting-owned <c>SpeechGroupCorrelation</c> only, and
-    /// translation into <c>AgentSessionInjectionKey</c> happens solely at the AI-002 session boundary. Matching
-    /// rule: ordinal substring for the runner-protocol type-name roots — <c>AgentSessionInjection</c> covers the
-    /// key, kind, and record variants — across every <c>*.cs</c> file under <c>game/src/Mind/AI/Prompting/</c>;
+    /// TR-35/36): projection output carries the Prompting-owned <c>SpeechGroupCorrelation</c> only. Matching
+    /// rule: ordinal substring for the runner-protocol continuation identity across every <c>*.cs</c> file under
+    /// <c>game/src/Mind/AI/Prompting/</c>;
     /// unqualified use through parent-namespace resolution is caught the same as imported or qualified use.
     /// </summary>
     [Fact]
@@ -51,9 +49,7 @@ public sealed class ModuleBoundaryDependencyTests
             "Prompting must not expose runner session-protocol types (AI-003 TR-35/36).",
             RequireSourceTree("game", "src", "Mind", "AI", "Prompting"),
             StringComparison.Ordinal,
-            "AgentSessionInjection",
-            "AgentSessionContinuationKey",
-            "FreshInjectionExpectation",
+            "SpeechContinuationKey",
             "AgentSessionRunner");
     }
 
@@ -90,7 +86,7 @@ public sealed class ModuleBoundaryDependencyTests
     }
 
     /// <summary>
-    /// The common tool session binds only the shared tuple (Context, Mind, HistoryRenderer, Clock) and carries no
+    /// The common tool session binds only the shared tuple (Context, Mind, Clock) and carries no
     /// feature services (AI-002 TR-19/23): speech-admission arbitration and wait-delivery acknowledgement bind
     /// typed to their concrete tools at the AgenticMind composition boundary instead. Matching rule: reflection
     /// shape assertion — the exact public instance property set and constructor signature of
@@ -106,14 +102,13 @@ public sealed class ModuleBoundaryDependencyTests
         {
             [nameof(AgentToolSession.Context)] = typeof(ScenarioContext),
             [nameof(AgentToolSession.Mind)] = typeof(MindBase),
-            [nameof(AgentToolSession.HistoryRenderer)] = typeof(ObservationHistoryRenderer),
             [nameof(AgentToolSession.Clock)] = typeof(IGameClock),
         };
 
         string[] actualPropertyNames = [.. session.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(static property => property.Name)
             .OrderBy(static name => name, StringComparer.Ordinal)];
-        Assert.Equal(["Clock", "Context", "HistoryRenderer", "Mind"], actualPropertyNames);
+        Assert.Equal(["Clock", "Context", "Mind"], actualPropertyNames);
 
         foreach ((string name, Type propertyType) in expectedServices)
         {
@@ -127,8 +122,25 @@ public sealed class ModuleBoundaryDependencyTests
 
         ParameterInfo[] parameters = Assert.Single(session.GetConstructors()).GetParameters();
         Assert.Equal(
-            [typeof(ScenarioContext), typeof(MindBase), typeof(ObservationHistoryRenderer), typeof(IGameClock)],
+            [typeof(ScenarioContext), typeof(MindBase), typeof(IGameClock)],
             parameters.Select(static parameter => parameter.ParameterType));
+    }
+
+    /// <summary>
+    /// WatchRegistry forwards generic retained-observation changes and snapshots only; condition-specific evidence
+    /// selection and transitions remain entirely within their concrete watch runtime.
+    /// </summary>
+    [Fact]
+    public void WatchRegistry_DoesNotInterpretConditionSpecificEvidence()
+    {
+        AssertSourcesContainNoTokens(
+            "WatchRegistry must not dispatch concrete condition evidence or outcomes.",
+            [RequireSourceFile("game", "src", "Mind", "AI", "Watch", "WatchRegistry.cs")],
+            StringComparison.Ordinal,
+            "ObservedRelativePosition",
+            "ProximityWatch",
+            "RelativePositionEvidence",
+            "ObservedProximityTransition");
     }
 
     /// <summary>

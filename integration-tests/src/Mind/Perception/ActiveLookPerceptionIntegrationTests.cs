@@ -189,14 +189,14 @@ public sealed class ActiveLookPerceptionIntegrationTests
                 new LookTargetChangedPercept(staleCue, freshCue), CreateContext(), CancellationToken.None);
             await mind.DrainPerceptionsForTestingAsync();
 
-            ObservedVisualDescription committed = Assert.IsType<ObservedVisualDescription>(Assert.Single(mind.Timeline));
+            ObservedVisualDescription committed = Assert.IsType<ObservedVisualDescription>(Assert.Single(mind.Retained));
             Assert.Equal("test:fresh", committed.SubjectId);
             Assert.Equal("fresh description", committed.Description);
 
             describeCompletion.SetResult("stale description");
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stale);
             await mind.DrainPerceptionsForTestingAsync();
-            _ = Assert.Single(mind.Timeline);
+            _ = Assert.Single(mind.Retained);
         }
         finally
         {
@@ -244,6 +244,8 @@ public sealed class ActiveLookPerceptionIntegrationTests
     private sealed partial class TestMind(ICharacter owner) : MindBase
     {
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
+        public IReadOnlyList<AgentObservation> Retained =>
+            [.. GetRetainedObservationSnapshot().Select(static entry => entry.Payload)];
         protected override ICharacter ResolveOwningCharacter() => owner;
     }
 

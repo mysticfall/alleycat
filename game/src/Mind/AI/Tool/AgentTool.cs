@@ -1,6 +1,5 @@
 using AlleyCat.Core.Threading;
 using AlleyCat.Core.Time;
-using AlleyCat.Mind.AI.Prompting;
 using Godot;
 using Microsoft.Extensions.AI;
 using MindBase = AlleyCat.Mind.Mind;
@@ -12,19 +11,14 @@ namespace AlleyCat.Mind.AI.Tool;
 /// </summary>
 /// <param name="Context">Trusted session binding captured once at session start.</param>
 /// <param name="Mind">Mind boundary owning the session's timeline, waits, and attended-speaker cues.</param>
-/// <param name="HistoryRenderer">
-/// Event-history renderer for on-demand observation rendering under the AI-003 contract, or null when unavailable.
-/// </param>
 /// <param name="Clock">Game clock backing every time-sensitive tool result, or null when unavailable.</param>
 /// <remarks>
-/// The common session exposes no feature services (AI-002 TR-19/23): concrete capabilities — speech-admission
-/// arbitration and wait-delivery acknowledgement — bind typed to their concrete tool at the AgenticMind
-/// composition boundary, never through this shared binding.
+/// The common session exposes no feature services (AI-002 TR-19/23): speech-admission arbitration binds typed to
+/// its concrete tool at the AgenticMind composition boundary, never through this shared binding.
 /// </remarks>
 internal sealed record AgentToolSession(
     ScenarioContext Context,
     MindBase Mind,
-    ObservationHistoryRenderer? HistoryRenderer,
     IGameClock? Clock);
 
 /// <summary>
@@ -85,7 +79,7 @@ public abstract partial class AgentTool : Resource
         AgentToolSession? sessionServices)
     {
         Delegate method;
-        Session = sessionServices ?? new AgentToolSession(context, mind, HistoryRenderer: null, Clock: null);
+        Session = sessionServices ?? new AgentToolSession(context, mind, Clock: null);
         try
         {
             method = CreateDelegate();

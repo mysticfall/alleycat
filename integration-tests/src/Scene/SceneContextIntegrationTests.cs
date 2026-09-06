@@ -17,6 +17,8 @@ namespace AlleyCat.IntegrationTests.Scene;
 /// </summary>
 public sealed class SceneContextIntegrationTests
 {
+    private const string MirrorRoomScenePath = "res://assets/testing/mirror_room/mirror_room.tscn";
+
     /// <summary>
     /// Shared character bases provide Actors discovery and surface each role's canonical identity as the raw
     /// character templates receive.
@@ -48,6 +50,35 @@ public sealed class SceneContextIntegrationTests
             {
                 character.QueueFree();
             }
+        }
+    }
+
+    /// <summary>
+    /// The Mirror Room's player is discoverable before deferred role installation can run.
+    /// </summary>
+    [Fact]
+    public async Task MirrorRoom_ImmediatelyResolvesAuthoredPlayerFromActorsMembership()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node mirrorRoom = ResourceLoader.Load<PackedScene>(MirrorRoomScenePath).Instantiate();
+        (sceneTree.CurrentScene ?? sceneTree.Root).AddChild(mirrorRoom);
+
+        try
+        {
+            CharacterHub player = mirrorRoom.GetNode<CharacterHub>("Actors/Player");
+            ISceneContext context = new SceneContextProvider(mirrorRoom).GetCurrent();
+
+            Assert.True(player.IsInGroup("Actors"));
+            Assert.True(player.IsInGroup("VisualSubjects"));
+            Assert.Equal(2, context.Characters.Count);
+            ICharacter resolvedPlayer = Assert.Single(context.Characters, character => ReferenceEquals(character, player));
+            Assert.Same(player, resolvedPlayer);
+            Assert.Same(player, context.Player);
+        }
+        finally
+        {
+            mirrorRoom.QueueFree();
+            await WaitForFramesAsync(sceneTree, 2);
         }
     }
 

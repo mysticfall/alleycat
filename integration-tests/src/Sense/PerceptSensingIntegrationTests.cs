@@ -225,7 +225,6 @@ public sealed class PerceptSensingIntegrationTests
         await perception.PerceiveAsync(new SpeechPercept("unknown", "missing"), CreateContext(observer, [recognised]), CancellationToken.None);
         ObservedSpeech unknownSpeech = Assert.IsType<ObservedSpeech>(Assert.Single(emissions));
         Assert.Null(unknownSpeech.ActorId);
-        Assert.Equal("missing", unknownSpeech.VoiceId);
         Assert.Equal("unknown", unknownSpeech.Content);
         Assert.Empty(unknownSpeech.GetAttentionEffects(new ObservationContext(observer)));
 
@@ -268,7 +267,6 @@ public sealed class PerceptSensingIntegrationTests
         {
             ObservedVisualPresence presence = Assert.IsType<ObservedVisualPresence>(emission);
             Assert.Equal("vision.presence", presence.TypeKey);
-            Assert.Equal(ObservationRetention.Transient, presence.Retention);
             Assert.Equal(expectedSubjectId, presence.SubjectId);
             AttentionEffect effect = Assert.Single(presence.GetAttentionEffects(context));
             Assert.Equal(expectedSubjectId, effect.SubjectFullId);

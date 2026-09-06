@@ -27,13 +27,13 @@ public sealed partial class SpeechPerception : Perception<SpeechPercept>
         }
 
         ICharacter? recognised = ResolveRecognisedCharacter(percept.SourceVoiceID, context);
-        Emit(new ObservedSpeech(
-            recognised?.FullId,
-            percept.SourceVoiceID,
-            percept.Content,
-            percept.SpeechGroupID,
-            percept.SegmentIndex,
-            percept.Continued));
+        Emit(
+            new ObservedSpeech(recognised?.FullId, percept.Content),
+            new SpeechObservationTransport(
+                percept.SourceVoiceID,
+                percept.SpeechGroupID,
+                percept.SegmentIndex,
+                percept.Continued));
         return ValueTask.CompletedTask;
     }
 

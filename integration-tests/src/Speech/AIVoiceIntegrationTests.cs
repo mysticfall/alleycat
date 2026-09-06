@@ -1176,9 +1176,6 @@ public sealed partial class AIVoiceIntegrationTests : IDisposable
             Assert.All(
                 acceptedMind.Timeline.Cast<ObservedSpeech>(),
                 observation => Assert.Equal(((IIdentifiable)acceptedMind.Owner).FullId, observation.ActorId));
-            Assert.All(
-                acceptedMind.Timeline.Cast<ObservedSpeech>(),
-                observation => Assert.Null(observation.VoiceId));
             Assert.Empty(disabledMind.Timeline);
             await WaitUntilAsync(sceneTree, () => voice.SpeechGeneratedCallCount == 2, 30);
             // The cancelled item did reach generation before its withdrawal, but never playback hand-off.

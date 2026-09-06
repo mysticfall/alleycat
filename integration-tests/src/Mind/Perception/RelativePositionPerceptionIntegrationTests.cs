@@ -717,11 +717,11 @@ public sealed class RelativePositionPerceptionIntegrationTests
     }
 
     /// <summary>
-    /// Emissions commit through the owning Mind as durable timeline entries with the exact type key
-    /// <c>vision.relative_position</c> (AI-006 TR-46).
+    /// Emissions commit through the owning Mind as retained current-scene evidence, rather than persistent events,
+    /// with the exact type key <c>vision.relative_position</c> (AI-006 TR-46).
     /// </summary>
     [Fact]
-    public async Task Emissions_CommitThroughMind_AsDurableRelativePositionObservations()
+    public async Task Emissions_CommitThroughMind_AsRetainedRelativePositionEvidence()
     {
         SceneTree tree = TestUtils.GetSceneTree();
         var root = new Node3D();
@@ -755,20 +755,19 @@ public sealed class RelativePositionPerceptionIntegrationTests
             perception._Process(0.2d);
 
             await mind.DrainPerceptionsForTestingAsync();
-            ObservedRelativePosition[] committed = [.. mind.Timeline.OfType<ObservedRelativePosition>()];
-            Assert.Equal(2, committed.Length);
-            Assert.All(committed, observation => Assert.Equal("vision.relative_position", observation.TypeKey));
+            Assert.Empty(mind.Timeline);
+            ObservedRelativePosition[] accepted =
+                [.. mind.Accepted.Select(static entry => entry.Payload).OfType<ObservedRelativePosition>()];
+            ObservedRelativePosition retained = Assert.IsType<ObservedRelativePosition>(Assert.Single(mind.Retained));
+            Assert.Equal(2, accepted.Length);
+            Assert.All(accepted, observation => Assert.Equal("vision.relative_position", observation.TypeKey));
             Assert.Equal(ObservedRelativePosition.TypeKeyValue, "vision.relative_position");
-            Assert.Equal(["test:subject", "test:subject"], committed.Select(observation => observation.SubjectId));
-            Assert.Equal(2f, committed[0].Distance, 5);
-            Assert.Equal(3f, committed[1].Distance, 5);
-            Assert.All(
-                committed,
-                observation =>
-                {
-                    Assert.Equal(RelativeDirection.Front, observation.SubjectDirection);
-                    Assert.Equal(RelativeDirection.Back, observation.ObserverDirection);
-                });
+            Assert.Equal(["test:subject", "test:subject"], accepted.Select(observation => observation.SubjectId));
+            Assert.Equal(2f, accepted[0].Distance, 5);
+            Assert.Equal(3f, accepted[1].Distance, 5);
+            Assert.Equal(3f, retained.Distance, 5);
+            Assert.Equal(RelativeDirection.Front, retained.SubjectDirection);
+            Assert.Equal(RelativeDirection.Back, retained.ObserverDirection);
             perception.QueueFree();
         }
         finally
@@ -848,6 +847,9 @@ public sealed class RelativePositionPerceptionIntegrationTests
     private sealed partial class TestMind(ICharacter owner) : MindBase
     {
         public IReadOnlyList<AgentObservation> Timeline => GetObservationTimelineSnapshot();
+        public IReadOnlyList<AcceptedObservationEntry> Accepted => GetAcceptedObservationLogSnapshot();
+        public IReadOnlyList<AgentObservation> Retained =>
+            [.. GetRetainedObservationSnapshot().Select(static entry => entry.Payload)];
         protected override ICharacter ResolveOwningCharacter() => owner;
     }
 }

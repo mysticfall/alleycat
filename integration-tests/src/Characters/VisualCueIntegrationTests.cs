@@ -2,9 +2,11 @@ using AlleyCat.Character;
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Core.Content;
+using AlleyCat.Core.Installer;
 using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
 using AlleyCat.Rigging;
+using AlleyCat.Rigging.Installation;
 using AlleyCat.Scene;
 using AlleyCat.Speech.Voice;
 using AlleyCat.Vision;
@@ -40,6 +42,40 @@ public sealed class VisualCueIntegrationTests
     {
         AssertBaseTemplateCue(ReferenceFemaleBaseScenePath);
         AssertBaseTemplateCue(ReferenceMaleBaseScenePath);
+    }
+
+    /// <summary>
+    /// Ally NPC inherits shared character membership and cue ownership from the female base while retaining its
+    /// identity and appearance override above the NPC role installer.
+    /// </summary>
+    [Fact]
+    public void AllyNpcScene_InheritsFemaleBaseAndRetainsOverriddenBodyCue()
+    {
+        string sceneText = Godot.FileAccess.GetFileAsString(AllyNPCScenePath);
+        Assert.Contains(ReferenceFemaleBaseScenePath, sceneText, StringComparison.Ordinal);
+        Assert.DoesNotContain("reference_female.blend", sceneText, StringComparison.Ordinal);
+        Assert.Contains("npc_installer.tscn", sceneText, StringComparison.Ordinal);
+
+        CharacterHub character = Assert.IsType<CharacterHub>(LoadPackedScene(AllyNPCScenePath).Instantiate(), exactMatch: false);
+        try
+        {
+            Assert.Equal("ally", character.Id);
+            Assert.True(character.IsInGroup("Actors"));
+            Assert.True(character.IsInGroup("VisualSubjects"));
+            _ = Assert.IsType<AnimationTree>(character.GetNode("AnimationTree"), exactMatch: false);
+            _ = Assert.IsType<AnimationPlayer>(character.GetNode("AnimationPlayer"), exactMatch: false);
+            Assert.NotNull(character.GetNodeOrNull("NPCCharacterInstaller"));
+
+            StaticVisualCue cue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
+            Assert.Equal("body", cue.ID);
+            Assert.Equal(AllyDescription, cue.Description);
+            _ = Assert.IsType<SphereVisualBounds>(cue.Bounds, exactMatch: false);
+            Assert.Same(cue, Assert.Single(FindDescendants<StaticVisualCue>(character)));
+        }
+        finally
+        {
+            character.QueueFree();
+        }
     }
 
     /// <summary>
@@ -261,7 +297,7 @@ public sealed class VisualCueIntegrationTests
         CharacterHub character = Assert.IsType<CharacterHub>(LoadPackedScene(scenePath).Instantiate(), exactMatch: false);
         try
         {
-            EnsureCharacterRuntimeInstalled(character);
+            ForceInstallCharacterRuntime(character);
 
             Assert.True(character.IsInGroup("VisualSubjects"));
             StaticVisualCue authoredCue = Assert.IsType<StaticVisualCue>(Assert.Single(character.AuthoredVisualCues), exactMatch: false);
@@ -295,6 +331,18 @@ public sealed class VisualCueIntegrationTests
         {
             character.Free();
         }
+    }
+
+    private static void ForceInstallCharacterRuntime(Node characterRoot)
+    {
+        RigRoleTemplateSceneInstaller installer = Assert.IsType<RigRoleTemplateSceneInstaller>(
+            characterRoot.GetNodeOrNull("PlayerCharacterInstaller")
+                ?? characterRoot.GetNodeOrNull("NPCCharacterInstaller")
+                ?? characterRoot.GetNodeOrNull("BaseCharacterInstaller"),
+            exactMatch: false);
+        SceneInstallationResult result = installer.Install(new SceneInstallationContext(characterRoot));
+
+        Assert.True(result.Succeeded, string.Join('\n', result.Errors));
     }
 
     private static StaticVisualCue CreateCue(string id, float prominence)

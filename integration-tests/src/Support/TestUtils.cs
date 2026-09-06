@@ -91,8 +91,10 @@ public static class TestUtils
     /// </summary>
     public static void EnsureCharacterRuntimeInstalled(Node characterRoot)
     {
-        if (characterRoot.GetNodeOrNull("AnimationTree") is not null
-            && characterRoot.GetNodeOrNull("Female/GeneralSkeleton") is not null)
+        if (characterRoot is AlleyCat.Character.Character character
+            && (character.HasComponentProjection
+                || characterRoot.GetNodeOrNull("VRIK") is not null
+                || characterRoot.GetNodeOrNull("CharacterIK") is not null))
         {
             return;
         }

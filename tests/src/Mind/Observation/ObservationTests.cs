@@ -19,32 +19,46 @@ public sealed class ObservationTests
     [Fact]
     public void ObservedSpeech_UsesUnifiedStableTypeKey()
     {
-        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello");
+        var observation = new ObservedSpeech("char:character", "Hello");
 
         Assert.Equal("speech.observed", observation.TypeKey);
         Assert.Equal("char:character", observation.ActorId);
-        Assert.Equal("raw-voice", observation.VoiceId);
         Assert.Equal("Hello", observation.Content);
     }
 
-    /// <summary>Grouped completed speech retains immutable source and segment identity transport.</summary>
+    /// <summary>Canonical rendering is type-owned, actor-relative, and never exposes speech transport metadata.</summary>
     [Fact]
-    public void ObservedSpeech_GroupedMetadata_IsImmutableAndDefaultsRemainUngrouped()
+    public void Render_UsesSafeFallbackAndActorRelativeSpeech()
     {
-        var grouped = new ObservedSpeech("char:character", "raw-voice", "Hello", "group-1", 2, continued: true);
-        var ungrouped = new ObservedSpeech("char:character", "raw-voice", "Hello");
+        FakeCharacter owner = new()
+        {
+            Id = "owner",
+        };
+        var fallback = new DefaultObservation
+        {
+            ObservedAt = 10.25d,
+        };
+        var self = new ObservedSpeech("char:owner", "Hello");
+        var recognised = new ObservedSpeech("char:other", "Hi");
+        var unknown = new ObservedSpeech(null, "Who is there?");
 
-        Assert.Equal("group-1", grouped.SpeechGroupID);
-        Assert.Equal(2, grouped.SegmentIndex);
-        Assert.True(grouped.Continued);
-        Assert.All(
-            typeof(ObservedSpeech).GetProperties().Where(property => property.Name is nameof(ObservedSpeech.SpeechGroupID)
-                or nameof(ObservedSpeech.SegmentIndex)
-                or nameof(ObservedSpeech.Continued)),
-            property => Assert.False(property.CanWrite));
-        Assert.Null(ungrouped.SpeechGroupID);
-        Assert.Equal(0, ungrouped.SegmentIndex);
-        Assert.False(ungrouped.Continued);
+        Assert.Equal("((Received test.default event.)) (at 10.2s game time)", fallback.Render(owner));
+        Assert.Equal("I said: Hello", self.Render(owner));
+        Assert.Equal("Heard char:other say: Hi", recognised.Render(owner));
+        string unknownText = unknown.Render(owner);
+        Assert.Equal("Heard an unknown speaker say: Who is there?", unknownText);
+        Assert.DoesNotContain("VoiceId", unknownText, StringComparison.Ordinal);
+    }
+
+    /// <summary>Speech payloads expose semantic fields only; private transport is absent from their public API.</summary>
+    [Fact]
+    public void ObservedSpeech_DoesNotExposeTransportMetadata()
+    {
+        string[] formerMembers = ["VoiceId", "SpeechGroupID", "SegmentIndex", "Continued", "CommitIdentity"];
+
+        Assert.All(formerMembers, member => Assert.Null(typeof(ObservedSpeech).GetProperty(member)));
+        Assert.NotNull(typeof(ObservedSpeech).GetProperty(nameof(ObservedSpeech.ActorId)));
+        Assert.NotNull(typeof(ObservedSpeech).GetProperty(nameof(ObservedSpeech.Content)));
     }
 
     /// <summary>
@@ -78,26 +92,6 @@ public sealed class ObservationTests
     }
 
     /// <summary>
-    /// Grouped speech supplies its exact-once (VoiceId, SpeechGroupID, SegmentIndex) commit identity through the
-    /// generic contract, while ungrouped, manual, and inconsistent-continuation speech claim none (AI-001
-    /// TR-45/49).
-    /// </summary>
-    [Fact]
-    public void ObservedSpeech_CommitIdentity_GroupedSegmentSuppliesTupleUngroupedClaimsNone()
-    {
-        var grouped = new ObservedSpeech("char:speaker", "voice-1", "Hello", "group-1", 1, continued: true);
-        var ungrouped = new ObservedSpeech("char:speaker", "voice-1", "Hello");
-        var inconsistentContinuation = new ObservedSpeech("char:speaker", "voice-1", "Hello", "group-1", 0, continued: true);
-        var missingVoice = new ObservedSpeech(null, null, "Hello", "group-1", 0);
-
-        Assert.NotNull(grouped.CommitIdentity);
-        Assert.Equal(["voice-1", "group-1", 1], grouped.CommitIdentity!.Components);
-        Assert.Null(ungrouped.CommitIdentity);
-        Assert.Null(inconsistentContinuation.CommitIdentity);
-        Assert.Null(missingVoice.CommitIdentity);
-    }
-
-    /// <summary>
     /// Importance uses exact actor-to-owner identity while unknown and external speech remain important.
     /// </summary>
     [Theory]
@@ -113,10 +107,9 @@ public sealed class ObservationTests
         {
             Id = "owner"
         };
-        var observation = new ObservedSpeech(actorId, "private-device", "Hello");
+        var observation = new ObservedSpeech(actorId, "Hello");
 
         Assert.Equal(expected, observation.CalculateImportance(new ObservationContext(owner)));
-        Assert.Equal("private-device", observation.VoiceId);
     }
 
     /// <summary>
@@ -157,7 +150,7 @@ public sealed class ObservationTests
             Id = "owner"
         };
         ObservationContext context = new(owner);
-        var observation = new ObservedSpeech(actorId, "private-device", "Hello");
+        var observation = new ObservedSpeech(actorId, "Hello");
 
         Assert.Equal(expected, observation.RequiresFreshTurn(context));
         Assert.Equal(expected ? 1f : 0f, observation.CalculateImportance(context));
@@ -175,7 +168,7 @@ public sealed class ObservationTests
         {
             Id = "owner"
         };
-        var observation = new ObservedSpeech(actorId, "private-device", "Hello");
+        var observation = new ObservedSpeech(actorId, "Hello");
 
         Assert.True(observation.RequiresFreshTurn(new ObservationContext(owner)));
     }
@@ -186,7 +179,7 @@ public sealed class ObservationTests
     [Fact]
     public void ObservedAt_DefaultsToNull()
     {
-        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello");
+        var observation = new ObservedSpeech("char:character", "Hello");
 
         Assert.Null(observation.ObservedAt);
     }
@@ -198,7 +191,7 @@ public sealed class ObservationTests
     public void ObservedAt_IsSettableThroughObjectInitialiser()
     {
         const double stamp = 128.5d;
-        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello")
+        var observation = new ObservedSpeech("char:character", "Hello")
         {
             ObservedAt = stamp
         };
@@ -213,7 +206,7 @@ public sealed class ObservationTests
     public void ObservedAt_IsPreservedThroughWithCloning()
     {
         const double stamp = 128.5d;
-        var observation = new ObservedSpeech("char:character", "raw-voice", "Hello")
+        var observation = new ObservedSpeech("char:character", "Hello")
         {
             ObservedAt = stamp
         };
@@ -227,18 +220,17 @@ public sealed class ObservationTests
         Assert.Equal(stamp, clone.ObservedAt);
     }
 
-    /// <summary>Existing observations retain duplicates unless they explicitly opt into suppression.</summary>
+    /// <summary>Ordinary observations are accepted unless an external lifetime policy says otherwise.</summary>
     [Fact]
-    public void DuplicateContract_DefaultsToAllowWithoutScopeOrSemanticEquivalence()
+    public void Observation_DefaultsToAcceptedRetention()
     {
-        var first = new ObservedSpeech("char:character", "raw-voice", "Hello") { ObservedAt = 1d };
+        var first = new ObservedSpeech("char:character", "Hello") { ObservedAt = 1d };
         ObservedSpeech second = first with
         {
             ObservedAt = 2d
         };
 
-        Assert.Equal(ObservationDuplicatePolicy.Allow, first.DuplicatePolicy);
-        Assert.Null(first.DuplicateScope);
+        Assert.False(first.IsAttentionOnly);
         Assert.False(first.IsSemanticallyEquivalentTo(second));
     }
 
@@ -250,7 +242,7 @@ public sealed class ObservationTests
         {
             Id = "owner"
         };
-        var observation = new ObservedSpeech("char:speaker", "speaker-voice", "Hello");
+        var observation = new ObservedSpeech("char:speaker", "Hello");
 
         AttentionEffect effect = Assert.Single(observation.GetAttentionEffects(new ObservationContext(owner)));
 
@@ -266,8 +258,8 @@ public sealed class ObservationTests
         {
             Id = "owner"
         };
-        var self = new ObservedSpeech("char:owner", "private-device", "Hello");
-        var unknown = new ObservedSpeech(null, "private-device", "Hello");
+        var self = new ObservedSpeech("char:owner", "Hello");
+        var unknown = new ObservedSpeech(null, "Hello");
 
         Assert.Empty(self.GetAttentionEffects(new ObservationContext(owner)));
         Assert.Empty(unknown.GetAttentionEffects(new ObservationContext(owner)));
@@ -285,7 +277,7 @@ public sealed class ObservationTests
 
         Assert.Equal("char:subject", presence.SubjectId);
         Assert.Equal("vision.presence", presence.TypeKey);
-        Assert.Equal(ObservationRetention.Transient, presence.Retention);
+        Assert.True(presence.IsAttentionOnly);
         AttentionEffect effect = Assert.Single(presence.GetAttentionEffects(new ObservationContext(owner)));
         Assert.Equal("char:subject", effect.SubjectFullId);
         Assert.Equal(0.25f, effect.Contribution);
@@ -302,7 +294,7 @@ public sealed class ObservationTests
     public void ObservedVisualPresence_RejectsNonCanonicalSubjectId(string subjectId)
         => Assert.Throws<ArgumentException>(() => new ObservedVisualPresence(subjectId));
 
-    /// <summary>Base observations default to durable retention with no attention effects.</summary>
+    /// <summary>Base observations default to accepted retention with no attention effects.</summary>
     [Fact]
     public void Observation_DefaultsToDurableRetentionAndEmptyAttention()
     {
@@ -312,7 +304,7 @@ public sealed class ObservationTests
         };
         var observation = new DefaultObservation();
 
-        Assert.Equal(ObservationRetention.Durable, observation.Retention);
+        Assert.False(observation.IsAttentionOnly);
         Assert.Empty(observation.GetAttentionEffects(new ObservationContext(owner)));
     }
 
@@ -331,8 +323,6 @@ public sealed class ObservationTests
 
         Assert.Equal("vision.description", first.TypeKey);
         Assert.Equal(0.1f, first.CalculateImportance(new ObservationContext(owner)));
-        Assert.Equal(ObservationDuplicatePolicy.IgnoreEquivalent, first.DuplicatePolicy);
-        Assert.Equal("char:subject", first.DuplicateScope);
         Assert.True(first.IsSemanticallyEquivalentTo(same));
         Assert.False(first.IsSemanticallyEquivalentTo(changed));
         Assert.False(first.IsSemanticallyEquivalentTo(otherSubject));

@@ -39,63 +39,6 @@ internal static class TemplatingBaselineScenarios
     /// <summary>Deterministic reference timestamp supplied to every ago scenario.</summary>
     public static readonly DateTimeOffset AgoNow = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private const string NpcEventHistoryFragmentTypeKey = "speech.observed";
-    private const string NpcVisualDescriptionTypeKey = "vision.description";
-    private const string NpcRelativePositionTypeKey = "vision.relative_position";
-
-    // Captured verbatim from the shared NPC event-history asset's speech fragment before the Liquid migration
-    // (Handlebars syntax at capture time).
-    private const string NpcEventHistoryFragmentSource =
-        "{{#if ActorId}}{{#if (eqOrdinal ActorId @root.character.FullId)}}I said: {{Content}}"
-        + "{{else}}Heard {{ActorId}} say: {{Content}}{{/if}}"
-        + "{{else}}Heard an unknown speaker say: {{Content}}{{/if}}"
-        + "{{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n";
-
-    // Captured verbatim from the shared NPC event-history asset's fallback before the Liquid migration.
-    private const string NpcEventHistoryFallbackSource =
-        "((Received {{TypeKey}} event.)){{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n";
-
-    private const string NpcVisualDescriptionSource =
-        "Observed {{SubjectId}}: {{Description}}{{#if ObservedAt}}"
-        + " (at {{nf ObservedAt 1}}s game time){{/if}}\n";
-
-    // Handlebars-syntax view of the authored relative-position fragment, matching the post-near-removal authoring,
-    // written in the syntax the capture harness expects for dispatch-era scenarios.
-    private const string NpcRelativePositionSource =
-        "I observe {{SubjectId}} {{nf Distance 1}} m "
-        + "{{#if (eqOrdinal SubjectDirection \"Front\")}}ahead of me"
-        + "{{else if (eqOrdinal SubjectDirection \"Back\")}}behind me"
-        + "{{else if (eqOrdinal SubjectDirection \"Left\")}}to my left"
-        + "{{else}}to my right{{/if}}; "
-        + "{{#if (eqOrdinal ObserverDirection \"Front\")}}they are facing me"
-        + "{{else if (eqOrdinal ObserverDirection \"Back\")}}their back is turned to me"
-        + "{{else}}I am to their {{downcase ObserverDirection}}{{/if}}."
-        + "{{#if ObservedAt}} (at {{nf ObservedAt 1}}s game time){{/if}}\n";
-
-    /// <summary>
-    /// Liquid equivalent of the composed event-history dispatch source used to prove that the migrated engine
-    /// reproduces the Handlebars-era output once authored fragments move to Liquid syntax.
-    /// </summary>
-    private const string NpcEventHistoryDispatchFluidSource =
-        "{% for o in observations -%}"
-        + "{%- if o.TypeKey == 'speech.observed' %}"
-        + "{% if o.ActorId != blank %}{% if o.ActorId == character.FullId %}I said: {{ o.Content }}"
-        + "{% else %}Heard {{ o.ActorId }} say: {{ o.Content }}{% endif %}"
-        + "{% else %}Heard an unknown speaker say: {{ o.Content }}{% endif %}"
-        + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
-        + "{% elsif o.TypeKey == 'vision.description' %}Observed {{ o.SubjectId }}: {{ o.Description }}"
-        + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
-        + "{% elsif o.TypeKey == 'vision.relative_position' %}I observe {{ o.SubjectId }} {{ nf(o.Distance, 1) }} m "
-        + "{% if o.SubjectDirection == 'Front' %}ahead of me{% elsif o.SubjectDirection == 'Back' %}behind me"
-        + "{% elsif o.SubjectDirection == 'Left' %}to my left{% else %}to my right{% endif %}; "
-        + "{% if o.ObserverDirection == 'Front' %}they are facing me{% elsif o.ObserverDirection == 'Back' %}"
-        + "their back is turned to me{% else %}I am to their {{ o.ObserverDirection | downcase }}{% endif %}."
-        + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
-        + "{% else %}((Received {{ o.TypeKey }} event.))"
-        + "{% if o.ObservedAt != blank %} (at {{ nf(o.ObservedAt, 1) }}s game time){% endif %}\n"
-        + "{% endif -%}"
-        + "{%- endfor %}";
-
     /// <summary>Liquid equivalent of the authored scenario prompt section.</summary>
     private const string ScenarioSectionFluidSource =
         "{% if scenario %}You are currently engaged in the following scenario; pursue its objectives and heed "
@@ -144,12 +87,6 @@ internal static class TemplatingBaselineScenarios
             {
                 ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:npc_kaori" },
             });
-
-        yield return new TemplatingBaselineScenario(
-            "authored_npc_event_history_dispatch",
-            ComposeNpcEventHistorySource(),
-            NpcEventHistoryDispatchFluidSource,
-            CreateEventHistoryContext);
 
         yield return new TemplatingBaselineScenario(
             "authored_test_scenario_token_fixture",
@@ -428,89 +365,6 @@ internal static class TemplatingBaselineScenarios
                 ["unspecifiedKind"] = new DateTime(2026, 1, 1, 11, 59, 30, DateTimeKind.Unspecified),
                 ["now"] = AgoNow,
             });
-    }
-
-    private static string ComposeNpcEventHistorySource()
-    {
-        // Reproduces the pre-migration event-history composed dispatch source exactly, as it existed when the
-        // baselines were captured: the shared NPC asset's single authored speech fragment plus its fallback,
-        // both in the Handlebars syntax used at capture time. The composition is inlined here because unit tests
-        // must not instantiate Godot resource types outside the Godot runtime.
-        return "{{#each observations}}"
-            + "{{#if (eqOrdinal TypeKey \"" + NpcEventHistoryFragmentTypeKey + "\")}}"
-            + NpcEventHistoryFragmentSource
-            + "{{else}}"
-            + "{{#if (eqOrdinal TypeKey \"" + NpcVisualDescriptionTypeKey + "\")}}"
-            + NpcVisualDescriptionSource
-            + "{{else}}"
-            + "{{#if (eqOrdinal TypeKey \"" + NpcRelativePositionTypeKey + "\")}}"
-            + NpcRelativePositionSource
-            + "{{else}}"
-            + NpcEventHistoryFallbackSource
-            + "{{/if}}"
-            + "{{/if}}{{/each}}";
-    }
-
-    private static IReadOnlyDictionary<string, object?> CreateEventHistoryContext()
-    {
-        return new Dictionary<string, object?>
-        {
-            ["character"] = new Dictionary<string, object?> { ["FullId"] = "char:test_character" },
-            ["observations"] = new object?[]
-            {
-                new Dictionary<string, object?>
-                {
-                    ["ActorId"] = "char:test_character",
-                    ["Content"] = "Self line.",
-                    ["ObservedAt"] = 100.2d,
-                    ["TypeKey"] = "speech.observed",
-                },
-                new Dictionary<string, object?>
-                {
-                    ["ActorId"] = "char:rin",
-                    ["Content"] = "Known line.",
-                    ["ObservedAt"] = 7200d,
-                    ["TypeKey"] = "speech.observed",
-                },
-                new Dictionary<string, object?>
-                {
-                    ["ActorId"] = null,
-                    ["Content"] = "Unknown line.",
-                    ["ObservedAt"] = null,
-                    ["TypeKey"] = "speech.observed",
-                },
-                new Dictionary<string, object?>
-                {
-                    ["ActorId"] = "CHAR:TEST_CHARACTER",
-                    ["Content"] = "Case-distinct line.",
-                    ["ObservedAt"] = 864000d,
-                    ["TypeKey"] = "speech.observed",
-                },
-                new Dictionary<string, object?>
-                {
-                    ["SubjectId"] = "char:coat",
-                    ["Description"] = "A weathered red coat.",
-                    ["ObservedAt"] = 900000d,
-                    ["TypeKey"] = "vision.description",
-                },
-                new Dictionary<string, object?>
-                {
-                    ["SubjectId"] = "char:rin",
-                    ["Distance"] = 1.4f,
-                    ["SubjectDirection"] = "Left",
-                    ["ObserverDirection"] = "Front",
-                    ["ObservedAt"] = 900100d,
-                    ["TypeKey"] = "vision.relative_position",
-                },
-                new Dictionary<string, object?>
-                {
-                    ["ActorId"] = "char:nobody",
-                    ["Content"] = "door opened",
-                    ["ObservedAt"] = 300.55d,
-                    ["TypeKey"] = "world.changed",
-                },
-            },
-        };
     }
 
     private static string ReadGameFile(params string[] segments)

@@ -1,3 +1,4 @@
+using AlleyCat.Mind.AI.SceneStatus;
 using AlleyCat.Templating;
 using Godot;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,5 +33,35 @@ public partial class PromptStack : Resource
         ITemplateCompiler compiler = buildContext.Services.GetRequiredService<ITemplateCompiler>();
         string source = (await writer.WriteAsync(Sections ?? [], buildContext, cancellationToken)).Trim();
         return compiler.Compile(source);
+    }
+
+    /// <summary>
+    /// Compiles and validates a current-scene-status stack at session start. Projection sections are compiled
+    /// independently so each one can later render from its declared typed root.
+    /// </summary>
+    internal async Task<CompiledSceneStatusPrompt> CompileSceneStatusAsync(
+        PromptSectionBuildContext buildContext,
+        SceneStatusProjectorRegistry projectors,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(buildContext);
+        ArgumentNullException.ThrowIfNull(projectors);
+
+        PromptSection[] sections = Sections ?? [];
+        projectors.ValidateBindings(sections);
+        ITemplateCompiler compiler = buildContext.Services.GetRequiredService<ITemplateCompiler>();
+        List<CompiledSceneStatusSection> compiled = new(sections.Length);
+        foreach (PromptSection? section in sections)
+        {
+            if (section is null)
+            {
+                throw new InvalidOperationException("CurrentSceneStatus prompt stack cannot contain a null section.");
+            }
+
+            string source = await section.GetContentAsync(buildContext, cancellationToken);
+            compiled.Add(new CompiledSceneStatusSection(section, compiler.Compile(source)));
+        }
+
+        return new CompiledSceneStatusPrompt(compiled, projectors);
     }
 }

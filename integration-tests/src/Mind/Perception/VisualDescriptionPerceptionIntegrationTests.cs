@@ -45,7 +45,7 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
             eyes.SetLookTarget(cue);
             await mind.DrainPerceptionsForTestingAsync();
 
-            ObservedVisualDescription observation = Assert.IsType<ObservedVisualDescription>(Assert.Single(mind.Timeline));
+            ObservedVisualDescription observation = Assert.IsType<ObservedVisualDescription>(Assert.Single(mind.Retained));
             Assert.Equal("test:subject", observation.SubjectId);
             Assert.Equal("Focused description.", observation.Description);
         }
@@ -253,6 +253,8 @@ public sealed class VisualDescriptionPerceptionIntegrationTests
     private sealed partial class EndToEndMind(ICharacter owner) : MindBase
     {
         public IReadOnlyList<Observation> Timeline => GetObservationTimelineSnapshot();
+        public IReadOnlyList<Observation> Retained =>
+            [.. GetRetainedObservationSnapshot().Select(static entry => entry.Payload)];
         protected override ICharacter ResolveOwningCharacter() => owner;
     }
 
