@@ -36,6 +36,7 @@ public sealed class PhysicsChainIntegrationTests
     private const int InitialisationFrames = 8;
     private const double LongRunSimulationSeconds = 30.0;
     private const double StabilitySampleIntervalSeconds = 1.0;
+    private const int LongRunSimulationAccelerationScale = 10;
     private const float PriorPinJointTensionInitialEndpointSpanMetres = 0.7819f;
     private const float PriorPinJointTensionMaxEndpointSpanMetres = 0.8839f;
     private const float ExtendedChainTensionMaxEndpointSpanGrowthMetres = 0.050f;
@@ -287,36 +288,39 @@ public sealed class PhysicsChainIntegrationTests
         endWeight.ApplyCentralImpulse(new Vector3(0.55f, 0f, -0.25f));
 
         int stabilitySampleCount = (int)(LongRunSimulationSeconds / StabilitySampleIntervalSeconds);
-        for (int sampleIndex = 0; sampleIndex < stabilitySampleCount; sampleIndex++)
+        using (AcceleratePhysicsSimulation(LongRunSimulationAccelerationScale))
         {
-            await WaitForPhysicsSecondsAsync(sceneTree, StabilitySampleIntervalSeconds);
-
-            float elapsedSeconds = (sampleIndex + 1) * (float)StabilitySampleIntervalSeconds;
-            longestObservedWeightTravel = Math.Max(longestObservedWeightTravel, endWeight.GlobalPosition.DistanceTo(startWeightPosition));
-
-            float startAttachmentGap = startAnchorAttachment.GlobalPosition.DistanceTo(chainStartAttachment.GlobalPosition);
-            worstObservedStartAttachmentGap = Math.Max(worstObservedStartAttachmentGap, startAttachmentGap);
-            Assert.True(
-                startAttachmentGap <= AttachmentToleranceMetres,
-                $"Start anchor attachment point should remain locked to the chain start throughout the 30-second simulation. Elapsed: {elapsedSeconds:F1}s, gap: {startAttachmentGap:F4} m.");
-
-            float endAttachmentGap = endWeightAttachment.GlobalPosition.DistanceTo(chainEndAttachment.GlobalPosition);
-            worstObservedEndAttachmentGap = Math.Max(worstObservedEndAttachmentGap, endAttachmentGap);
-            Assert.True(
-                endAttachmentGap <= AttachmentToleranceMetres,
-                $"End weight attachment point should remain locked to the chain end throughout the 30-second simulation. Elapsed: {elapsedSeconds:F1}s, gap: {endAttachmentGap:F4} m.");
-
-            for (int linkIndex = 0; linkIndex < linksContainer.GetChildCount() - 1; linkIndex++)
+            for (int sampleIndex = 0; sampleIndex < stabilitySampleCount; sampleIndex++)
             {
-                var backAttachment = (Vector3)chain.Call("GetLinkBackAttachmentGlobalPosition", linkIndex);
-                var nextFrontAttachment = (Vector3)chain.Call("GetLinkFrontAttachmentGlobalPosition", linkIndex + 1);
-                float attachmentGap = backAttachment.DistanceTo(nextFrontAttachment);
-                worstObservedInterLinkGap = Math.Max(worstObservedInterLinkGap, attachmentGap);
+                await WaitForPhysicsSecondsAsync(sceneTree, StabilitySampleIntervalSeconds);
 
+                float elapsedSeconds = (sampleIndex + 1) * (float)StabilitySampleIntervalSeconds;
+                longestObservedWeightTravel = Math.Max(longestObservedWeightTravel, endWeight.GlobalPosition.DistanceTo(startWeightPosition));
+
+                float startAttachmentGap = startAnchorAttachment.GlobalPosition.DistanceTo(chainStartAttachment.GlobalPosition);
+                worstObservedStartAttachmentGap = Math.Max(worstObservedStartAttachmentGap, startAttachmentGap);
                 Assert.True(
-                    attachmentGap <= InterLinkAttachmentToleranceMetres,
-                    "Consecutive link attachment points should remain near each other during the full 30-second simulation. " +
-                    $"Elapsed: {elapsedSeconds:F1}s, links {linkIndex + 1}/{linkIndex + 2}, gap: {attachmentGap:F4} m.");
+                    startAttachmentGap <= AttachmentToleranceMetres,
+                    $"Start anchor attachment point should remain locked to the chain start throughout the 30-second simulation. Elapsed: {elapsedSeconds:F1}s, gap: {startAttachmentGap:F4} m.");
+
+                float endAttachmentGap = endWeightAttachment.GlobalPosition.DistanceTo(chainEndAttachment.GlobalPosition);
+                worstObservedEndAttachmentGap = Math.Max(worstObservedEndAttachmentGap, endAttachmentGap);
+                Assert.True(
+                    endAttachmentGap <= AttachmentToleranceMetres,
+                    $"End weight attachment point should remain locked to the chain end throughout the 30-second simulation. Elapsed: {elapsedSeconds:F1}s, gap: {endAttachmentGap:F4} m.");
+
+                for (int linkIndex = 0; linkIndex < linksContainer.GetChildCount() - 1; linkIndex++)
+                {
+                    var backAttachment = (Vector3)chain.Call("GetLinkBackAttachmentGlobalPosition", linkIndex);
+                    var nextFrontAttachment = (Vector3)chain.Call("GetLinkFrontAttachmentGlobalPosition", linkIndex + 1);
+                    float attachmentGap = backAttachment.DistanceTo(nextFrontAttachment);
+                    worstObservedInterLinkGap = Math.Max(worstObservedInterLinkGap, attachmentGap);
+
+                    Assert.True(
+                        attachmentGap <= InterLinkAttachmentToleranceMetres,
+                        "Consecutive link attachment points should remain near each other during the full 30-second simulation. " +
+                        $"Elapsed: {elapsedSeconds:F1}s, links {linkIndex + 1}/{linkIndex + 2}, gap: {attachmentGap:F4} m.");
+                }
             }
         }
 

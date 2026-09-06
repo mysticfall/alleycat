@@ -73,6 +73,13 @@ public static class TestUtils
     }
 
     /// <summary>
+    /// Temporarily accelerates simulated physics while preserving the current fixed solver timestep.
+    /// </summary>
+    /// <param name="scale">The integral factor by which to accelerate simulation.</param>
+    /// <returns>A scope that restores the previous engine settings when disposed.</returns>
+    public static IDisposable AcceleratePhysicsSimulation(int scale) => new PhysicsSimulationAccelerationScope(scale);
+
+    /// <summary>
     /// Loads a packed scene and throws when unavailable.
     /// </summary>
     public static PackedScene LoadPackedScene(string path)
@@ -109,5 +116,64 @@ public static class TestUtils
             : errors?.ToString() ?? string.Empty;
 
         Assert.True(succeeded, errorText);
+    }
+
+    private sealed class PhysicsSimulationAccelerationScope : IDisposable
+    {
+        private readonly double _timeScale;
+        private readonly int _physicsTicksPerSecond;
+        private readonly int _maxPhysicsStepsPerFrame;
+        private bool _disposed;
+
+        public PhysicsSimulationAccelerationScope(int scale)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(scale, 1);
+
+            _timeScale = Engine.TimeScale;
+            _physicsTicksPerSecond = Engine.PhysicsTicksPerSecond;
+            _maxPhysicsStepsPerFrame = Engine.MaxPhysicsStepsPerFrame;
+
+            try
+            {
+                Engine.TimeScale = _timeScale * scale;
+                Engine.PhysicsTicksPerSecond = checked(_physicsTicksPerSecond * scale);
+                Engine.MaxPhysicsStepsPerFrame = Math.Max(_maxPhysicsStepsPerFrame, checked(_maxPhysicsStepsPerFrame * scale));
+            }
+            catch
+            {
+                RestoreEngineSettings();
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            RestoreEngineSettings();
+        }
+
+        private void RestoreEngineSettings()
+        {
+            try
+            {
+                Engine.TimeScale = _timeScale;
+            }
+            finally
+            {
+                try
+                {
+                    Engine.PhysicsTicksPerSecond = _physicsTicksPerSecond;
+                }
+                finally
+                {
+                    Engine.MaxPhysicsStepsPerFrame = _maxPhysicsStepsPerFrame;
+                }
+            }
+        }
     }
 }
