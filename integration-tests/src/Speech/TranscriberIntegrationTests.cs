@@ -1255,17 +1255,17 @@ public sealed partial class TranscriberIntegrationTests : IDisposable
             Assert.True(fixture.Transcriber.IsRecording);
             Assert.Empty(GetNotificationTexts(fixture.NotificationWidget));
 
+            VBoxContainer messages = fixture.NotificationWidget.GetNode<VBoxContainer>("Messages");
+            SignalAwaiter transcriptionCompleted = sceneTree.ToSignal(
+                transcriber,
+                Transcriber.SignalName.TranscriptionCompleted);
+            SignalAwaiter dispatchNotificationDelivered = sceneTree.ToSignal(
+                messages,
+                Node.SignalName.ChildEnteredTree);
+
             fixture.LeftController.TriggerActionButtonReleased("speech_record");
-            await WaitUntilAsync(
-                sceneTree,
-                () => !fixture.Transcriber.IsRecording
-                    && !fixture.Transcriber.IsTranscribing
-                    && transcriber.TranscribeCallCount == 1,
-                maxFrames: 60);
-            await WaitUntilAsync(
-                sceneTree,
-                () => GetNotificationTexts(fixture.NotificationWidget).Count > 0,
-                maxFrames: 30);
+            _ = await dispatchNotificationDelivered;
+            _ = await transcriptionCompleted;
 
             // Exactly one dispatch toast per logical request, and no other STT notification.
             IReadOnlyList<string> notificationTexts = GetNotificationTexts(fixture.NotificationWidget);
