@@ -368,14 +368,21 @@ public sealed class OpticalFingerTrackingModifierIntegrationTests
                 "Expected tracked rotation to differ visibly from the authored grab pose.");
 
             // The modifier never mutates authored AnimationTree state: the grab pose stays selected at full
-            // blend (XR-002 TR19).
+            // blend, routed to the exact pose instance under its instance-exact key so the authored library
+            // entry is not substituted by name (XR-002 TR19, OG17).
             AnimationNodeBlendTree rootTree = Assert.IsType<AnimationNodeBlendTree>(tree.TreeRoot, exactMatch: false);
             AnimationNodeAnimation rightPoseNode = Assert.IsType<AnimationNodeAnimation>(
                 rootTree.GetNode(HandPoseAnimationTreePaths.GetPoseAnimationNodeName(LimbSide.Right)),
                 exactMatch: false);
+            AnimationPlayer animationPlayer = tree.GetNode<AnimationPlayer>(tree.AnimPlayer);
 
             Assert.Equal(1.0f, tree.Get(HandPoseAnimationTreePaths.GetHandBlendParameter(LimbSide.Right)).AsSingle(), 5);
-            Assert.Equal(new StringName("Grab-ball-40"), rightPoseNode.Animation);
+            StringName poseKey = rightPoseNode.Animation;
+            Assert.StartsWith("__alleycat_hand_pose_", poseKey.ToString(), StringComparison.Ordinal);
+            Assert.Same(grabBall, animationPlayer.GetAnimation(poseKey));
+            StringName authoredKey = new("Grab-ball-40");
+            Assert.True(animationPlayer.HasAnimation(authoredKey), "Expected the authored grab-ball key to remain registered.");
+            Assert.NotSame(grabBall, animationPlayer.GetAnimation(authoredKey));
         }
         finally
         {
