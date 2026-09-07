@@ -15,7 +15,7 @@ public sealed class NeckSpineIKIntegrationTests
         "res://assets/characters/templates/reference_male/reference_male_base.tscn";
     private const string IkNodeName = "NeckSpineIK";
 
-    // The female template carries the restored per-joint limitation frames (twist axes with pitch
+    // The female template carries the per-joint limitation frames (twist axes with pitch
     // offsets); the male template keeps the default frames.
     private static readonly int[] _femaleRotationAxes = [0, 0, 3, 3, 3];
     private static readonly JointLimitationFrame[] _femaleLimitationFrames =

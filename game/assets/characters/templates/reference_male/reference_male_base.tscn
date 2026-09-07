@@ -12,13 +12,13 @@
 [ext_resource type="Script" uid="uid://c7d4aa5yqpf4u" path="res://src/Rigging/Physics/DynamicPhysicalRig.cs" id="7_5rn12"]
 [ext_resource type="PackedScene" uid="uid://degycvmqbvjx1" path="res://assets/characters/templates/animation/animation_tree.tscn" id="9_xp4vs"]
 [ext_resource type="Script" uid="uid://ckmm3fnsp6y36" path="res://src/Vision/EyesBehaviour.cs" id="11_2lsar"]
-[ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="12_2m28j"]
 [ext_resource type="Script" uid="uid://clntm6ydqb54a" path="res://src/Interaction/Hands/HandComponentHolder.cs" id="12_5rn12"]
+[ext_resource type="AnimationLibrary" uid="uid://ccol2816n7hg4" path="res://assets/characters/reference/female/animations/runtime/idle/sad/idle_sad.tres" id="13_4p0d3"]
 [ext_resource type="Script" uid="uid://cxh7lfqn5k3nw" path="res://src/Interaction/Hands/HandPoseBehaviour.cs" id="13_b0yuh"]
 [ext_resource type="Script" uid="uid://tb33120b0yo" path="res://src/Vision/StaticVisualCue.cs" id="13_e6bn2"]
+[ext_resource type="AnimationLibrary" uid="uid://5fmhnu8v3xm5" path="res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad.tres" id="14_8w862"]
 [ext_resource type="Script" uid="uid://b8340t35vo8cv" path="res://src/Vision/SphereVisualBounds.cs" id="14_c6lj4"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bs4kur56aknxq" path="res://assets/characters/templates/animation/animation_tree_root_reference_male_npc.tres" id="19_4r77l"]
-[ext_resource type="AnimationLibrary" path="res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres" id="20_locomotion"]
 
 [sub_resource type="Resource" id="Resource_c6lj4"]
 script = ExtResource("14_c6lj4")
@@ -37,17 +37,16 @@ angle = 0.7853982
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_n6ra7"]
 angle = 0.34906584
 
-[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Locomotion", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
-Locomotion = NodePath("Locomotion")
+[node name="Male" unique_id=504240789 node_paths=PackedStringArray("Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
 AuthoredVisualCues = [NodePath("Male/GeneralSkeleton/Head/BodyVisualCue")]
 
-[node name="Male" parent="." index="0" unique_id=376582981]
+[node name="Male" parent="." index="0" unique_id=1093654452]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="Head" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="9" unique_id=913477995]
+[node name="Head" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="8" unique_id=913477995]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5999879, 0.046697006)
 bone_name = "Head"
 bone_idx = 46
@@ -75,17 +74,17 @@ ID = "body"
 Bounds = SubResource("Resource_c6lj4")
 metadata/_custom_type_script = "uid://tb33120b0yo"
 
-[node name="RightHand" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="10" unique_id=1844281610]
+[node name="RightHand" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="9" unique_id=1844281610]
 transform = Transform3D(0, -1, 0, 0, 0, -1, 1, 0, 0, -0.7032306, 1.3991615, 0.021352904)
 bone_name = "RightHand"
 bone_idx = 29
 
-[node name="LeftHand" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="11" unique_id=205444148]
+[node name="LeftHand" type="BoneAttachment3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="10" unique_id=205444148]
 transform = Transform3D(0, 1, 0, 0, 0, -1, -1, 0, 0, 0.7032306, 1.3991615, 0.021352904)
 bone_name = "LeftHand"
 bone_idx = 9
 
-[node name="FootTargetSyncController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="12" unique_id=6661495 node_paths=PackedStringArray("LeftFootTarget", "RightFootTarget")]
+[node name="FootTargetSyncController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="11" unique_id=6661495 node_paths=PackedStringArray("LeftFootTarget", "RightFootTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -107,7 +106,7 @@ LeftFootTarget = NodePath("../../../IKTargets/LeftFoot")
 RightFootTarget = NodePath("../../../IKTargets/RightFoot")
 metadata/_custom_type_script = "uid://bortwjgmky2ik"
 
-[node name="NeckSpineIK" type="CCDIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="13" unique_id=1704837405]
+[node name="NeckSpineIK" type="CCDIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="12" unique_id=1704837405]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/HeadSolve")
 settings/0/root_bone_name = "Spine"
@@ -135,7 +134,7 @@ settings/0/joints/3/limitation/rotation_offset = Quaternion(0, 0, 0, 1)
 settings/0/joints/4/rotation_axis = 0
 settings/0/joints/4/limitation = null
 
-[node name="HeadCopyRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="14" unique_id=1444903618]
+[node name="HeadCopyRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="13" unique_id=1444903618]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "Head"
@@ -147,7 +146,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="NeckTwistDisperser" type="BoneTwistDisperser3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="15" unique_id=1796367179]
+[node name="NeckTwistDisperser" type="BoneTwistDisperser3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="14" unique_id=1796367179]
 setting_count = 1
 settings/0/root_bone_name = "Hips"
 settings/0/root_bone = 1
@@ -160,7 +159,7 @@ settings/0/disperse_mode = 1
 settings/0/weight_position = 0.8
 settings/0/joint_count = 6
 
-[node name="RightArmIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="16" unique_id=574099080 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="RightArmIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="15" unique_id=574099080 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -184,7 +183,7 @@ Side = 1
 PoleAnchorSet = ExtResource("5_xp4vs")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="LeftArmIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="17" unique_id=1444382858 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="LeftArmIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="16" unique_id=1444382858 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -207,7 +206,7 @@ PoleTarget = NodePath("../../../IKTargets/LeftElbow")
 PoleAnchorSet = ExtResource("5_xp4vs")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="18" unique_id=2040878857]
+[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="17" unique_id=2040878857]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/RightHand")
 settings/0/pole_node = NodePath("../../../IKTargets/RightElbow")
@@ -221,7 +220,7 @@ settings/0/end_bone = 29
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="19" unique_id=734267041]
+[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="18" unique_id=734267041]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/LeftHand")
 settings/0/pole_node = NodePath("../../../IKTargets/LeftElbow")
@@ -235,7 +234,7 @@ settings/0/end_bone = 9
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="20" unique_id=19596339]
+[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="19" unique_id=19596339]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "RightHand"
@@ -247,7 +246,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="21" unique_id=2111700224]
+[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="20" unique_id=2111700224]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "LeftHand"
@@ -259,7 +258,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="ForearmTwistModifier" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="22" unique_id=1664921857]
+[node name="ForearmTwistModifier" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="21" unique_id=1664921857]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -279,7 +278,7 @@ influence = 1.0
 script = ExtResource("7_2vgb1")
 metadata/_custom_type_script = "uid://corwlye5lo1se"
 
-[node name="RightLegIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="23" unique_id=1259020909 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="RightLegIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="22" unique_id=1259020909 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -302,7 +301,7 @@ PoleTarget = NodePath("../../../IKTargets/RightKnee")
 Side = 1
 metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="24" unique_id=1211588738 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="23" unique_id=1211588738 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -324,7 +323,7 @@ FootTarget = NodePath("../../../IKTargets/LeftFoot")
 PoleTarget = NodePath("../../../IKTargets/LeftKnee")
 metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="RightLegTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="25" unique_id=380485889]
+[node name="RightLegTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="24" unique_id=380485889]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/RightFoot")
 settings/0/pole_node = NodePath("../../../IKTargets/RightKnee")
@@ -338,7 +337,7 @@ settings/0/end_bone = 53
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="LeftLegTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="26" unique_id=1684252337]
+[node name="LeftLegTwoBoneIKController" type="TwoBoneIK3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="25" unique_id=1684252337]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/LeftFoot")
 settings/0/pole_node = NodePath("../../../IKTargets/LeftKnee")
@@ -352,7 +351,7 @@ settings/0/end_bone = 49
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="CopyRightFootRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="27" unique_id=1628661334]
+[node name="CopyRightFootRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="26" unique_id=1628661334]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "RightFoot"
@@ -364,7 +363,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="CopyLeftFootRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="28" unique_id=2138406258]
+[node name="CopyLeftFootRotation" type="CopyTransformModifier3D" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="27" unique_id=2138406258]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "LeftFoot"
@@ -376,13 +375,14 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="DynamicPhysicalRig" type="Node" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(2066433516) index="29" unique_id=770734918]
+[node name="DynamicPhysicalRig" type="Node" parent="Male/GeneralSkeleton" parent_id_path=PackedInt32Array(1147400762) index="28" unique_id=770734918]
 script = ExtResource("7_5rn12")
 ColliderProfile = ExtResource("3_sypgb")
 metadata/_custom_type_script = "uid://c7d4aa5yqpf4u"
 
-[node name="AnimationPlayer" parent="." index="1" unique_id=932538226]
-libraries/locomotion = ExtResource("20_locomotion")
+[node name="AnimationPlayer" parent="." index="1" unique_id=1193931353]
+libraries/idle = ExtResource("13_4p0d3")
+libraries/locomotion = ExtResource("14_8w862")
 
 [node name="IKTargets" type="Node3D" parent="." index="2" unique_id=1352918098]
 
@@ -425,7 +425,14 @@ motion_mode = 1
 
 [node name="AnimationTree" parent="." index="3" unique_id=2098590596 instance=ExtResource("9_xp4vs")]
 root_node = NodePath("../Male")
+root_motion_local = true
 tree_root = ExtResource("19_4r77l")
+parameters/EyesVerticalLookSeek/seek_request = 0.5
+parameters/EyesHorizontalLookSeek/seek_request = 0.5
+parameters/States/AllFoursTransitioning/TimeSeek/seek_request = -1.0
+parameters/States/NPCTravel/Sustained/blend_position = Vector2(0, 0)
+parameters/States/NPCTravel/Rate/scale = 1.0
+parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0
 
 [node name="Eyes" type="Node" parent="." index="4" unique_id=1588776453 node_paths=PackedStringArray("AnimationTree", "EyeOrigin", "LeftEye", "RightEye")]
 script = ExtResource("11_2lsar")
@@ -469,12 +476,3 @@ LeftHandPoseWeight = 1.0
 RightHandPoseWeight = 1.0
 TransitionDuration = 0.2
 metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"
-
-[node name="Locomotion" type="Node" parent="." index="6" unique_id=262881787 node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference")]
-script = ExtResource("12_2m28j")
-TargetCharacterBodyNode = NodePath("..")
-AnimationTree = NodePath("../AnimationTree")
-RootMotionReference = NodePath("../Male")
-AnimationBlendParameter = &"parameters/States/Walking/Locomotion/Movement/blend_position"
-AnimationTurnBlendParameter = &"parameters/States/Walking/Locomotion/blend_position"
-metadata/_custom_type_script = "uid://cjt48dl58j31y"

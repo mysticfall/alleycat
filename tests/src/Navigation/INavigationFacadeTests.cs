@@ -60,7 +60,8 @@ public sealed class INavigationFacadeTests
         Assert.Contains(NavigationDestinationResult.Invalid, results);
         Assert.Contains(NavigationDestinationResult.Unreachable, results);
         Assert.Contains(NavigationDestinationResult.NotReady, results);
-        Assert.Equal(4, results.Distinct().Count());
+        Assert.Contains(NavigationDestinationResult.OutcomeBackpressure, results);
+        Assert.Equal(5, results.Distinct().Count());
     }
 
     /// <summary>

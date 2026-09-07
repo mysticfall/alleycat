@@ -10,6 +10,22 @@ The generator produces source assets that downstream Godot scene assembly can bi
 contract. Godot scene installation and refresh workflows use the Scene Installer System (CORE-005) to materialise
 runtime/editor-visible nodes such as animation trees, attachments, hand anchors, and physical rigs.
 
+## Tool Ownership and Usage Boundary
+
+The character generator owns the manually invoked character-generation workflow and its asset-import helpers under
+`tools/character-generator/`. Core generation entry points are:
+
+- `commands/generate_character.sh` for generated character output;
+- `commands/generate_body_colliders.py` for the tool-owned collider operation; and
+- `commands/update_character_import_retarget_metadata.py` for existing import-sidecar metadata.
+
+Forearm validation, diagnostic, and bone-binding commands are documented in [the operational README][readme].
+
+The command implementation and tests are colocated with the tool. [The operational README][readme] is normative for
+repository-root invocation, Blender/Godot prerequisites, inputs, outputs, and usage boundaries. It does not replace
+the character-generation behaviour specified below. This specification and RIG-002 remain authoritative for behaviour
+and acceptance.
+
 ## User Requirements
 - Artists and developers can generate character Blender files from JSON configuration presets.
 - Generated characters include proper rigging with MPFB-generated armature, collision meshes, and baked actions.
@@ -53,6 +69,7 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Configuration uses a simple JSON schema with `preset`, `name`, `outputFile`, and `amimations` fields.
 
 ## Technical Requirements
+- The developer-tool ownership boundary in [Developer Tool Layout](../index.md) is mandatory for this tool.
 - Accept a JSON configuration file with exactly these fields:
   - `preset`: Character preset identifier
   - `name`: Output name for the character
@@ -76,13 +93,12 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   output. Static/rest-pose-only actions must fail with diagnostics naming the offending action.
 - Retarget and bake Rigify actions from the source onto the MPFB-generated armature.
 - After baking, remove Rigify source objects/actions; retain only persisted local/baked actions on the armature.
-- Generate a sibling collider file using `<stem>.colliders.blend` via `tools/generate_body_colliders.py`.
+- Generate a sibling collider file using `<stem>.colliders.blend` through the tool-owned collider generator.
 - The collider generation process uses the generated `.body` mesh as input.
 - Reset armature/body pose state before collider mesh generation.
 - Strip animation actions and linked libraries from collider output.
 - Recalculate collider normals facing outward using `bpy.ops.mesh.normals_make_consistent(inside=False)`.
-- Provide a wrapper script `tools/generate_character.sh` that honours the `BLENDER_BIN` environment variable.
-- The test configuration is located at `game/assets/characters/test/Female.character.json`.
+- Provide a user-facing command that honours the `BLENDER_BIN` environment variable.
 - Generated Blender assets must use the configured character name for exported mesh names and must not require shared
   reference Rigify animation sources to be renamed per generated character.
 - Generated collider assets must remain paired with the generated character output by filename stem.
@@ -125,11 +141,11 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - delegate skeleton, animation, collider, and gameplay setup to module installers;
   - keep reusable topology visible in template scenes/assets for inspection and testing.
 - Forearm-twist source rig generation follows [RIG-002: Forearm Twist](../../rigging/002-forearm-twist/index.md):
-  the repository's generic reference sources under `tools/mpfb/` target Blender 5.2, MPFB 2.0.17, and schema
-  `110`; contributors install them manually, then use ordinary regeneration without direct generated-`.blend`
-  edits or an automatic installation script. Every generator run resolves the preset from the MPFB user config
-  directory through the enabled MPFB extension's public location service — the same installed file MPFB builds
-  the character from — and binds it via the generator-run ownership sidecar (schema version 8): preset name,
+  the repository's generic reference sources under `tools/character-generator/mpfb/` target Blender 5.2, MPFB 2.0.17,
+  and schema `110`; contributors install them manually, then use ordinary regeneration without direct
+  generated-`.blend` edits or an automatic installation script. Every generator run resolves the preset from the MPFB
+  user config directory through the enabled MPFB extension's public location service — the same installed file MPFB
+  builds the character from — and binds it via the generator-run ownership sidecar (schema version 8): preset name,
   resolved installed path, and sha256 digest, with the digest as the portable binding. A missing installed
   preset fails closed with guidance to install it first.
 - Helper-chain emission follows RIG-002: regenerated characters carry `LeftForearmTwist` and `RightForearmTwist`
@@ -142,7 +158,8 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   glTF import sidecar keeps `blender/nodes/modifiers=0` (the exporter applies no modifiers), so exported meshes would
   otherwise be raw unsubdivided geometry. Applying modifiers directly is not an alternative: Blender cannot apply
   subsurf to meshes carrying shape keys, which would destroy the ARKit/viseme blendshapes. The generator therefore
-  bakes render subdivision into the exported meshes through `tools/bake_subdivision_modifiers.py`.
+  bakes render subdivision into the exported meshes through
+  `tools/character-generator/character_generator/bake_subdivision_modifiers.py`.
 - Subdivision baking runs over the export-copy object set immediately after MPFB `export_copy` and immediately
   before the export physical-membership snapshot. The ordering is a hard contract: the RIG-002 membership
   snapshot/verify, forearm-twist manifests, axial authoring, and collider generation must all operate on the final
@@ -172,10 +189,12 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   phase completes the blend with zero twist support (the hand at the distal boundary, the lower arm at the proximal
   boundary). Comparisons stay exact under the epsilon-free doctrine; the rule derives from existing axial-reference
   side-group masses and requires no ledger schema change.
-- Subdivision baking and its downstream weight contracts are proven by `tools/tests/test_bake_subdivision_modifiers.py`
+- Subdivision baking and its downstream weight contracts are proven by
+  `tools/character-generator/tests/test_bake_subdivision_modifiers.py`
   (including its fake-BPY evaluation stand-in) and by
   `test_distal_hand_phase_concentration_retains_authored_side_zeros` in
-  `tools/tests/test_forearm_twist_generator_run_ownership.py`; the `tools/tests/` suite must pass.
+  `tools/character-generator/tests/test_forearm_twist_generator_run_ownership.py`; the
+  `tools/character-generator/tests/` suite must pass.
 - After MPFB `export_copy` and its subdivision bake, before cleanup or writing groups, snapshot each export mesh
   vertex's complete physical group membership map, including present zero-weight keys; keep this separate from the
   positive post-axial reference used for ownership and import validation. Before mirrored cleanup, protect complete
@@ -220,16 +239,18 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
 - Texture externalisation and HDRI configuration.
 - Path safety validation (relative to @game, no absolute/parent traversal).
 - Wrapper script execution environment handling.
+- The character generator's command, implementation, test, and README boundary.
 - Ensuring generated source assets provide names and collider outputs required by portable scene assembly.
 - Preserving and applying Godot import retarget metadata sidecars for generated character `.blend` outputs.
 - Preserving and applying the CHAR-002 main character root import metadata for generated character `.blend` outputs.
 - Preserving and applying the modular character import-script sidecar contract for generated character `.blend` outputs.
 - Godot post-import generation of eye animation libraries and collider wrapper/profile companion assets.
-- Generic MPFB forearm-twist source assets under `tools/mpfb/`, their manual installation, and ordinary
-  regeneration.
+- Generic MPFB forearm-twist source assets under `tools/character-generator/mpfb/`, their manual installation, and
+  ordinary regeneration.
 - Twist-helper chain emission, exclusions, axial authoring and reference snapshot, and bone-binding index
   refresh for RIG-002.
-- Subdivision baking of MPFB export-copy meshes through `tools/bake_subdivision_modifiers.py`, its placement before
+- Subdivision baking of MPFB export-copy meshes through
+  `tools/character-generator/character_generator/bake_subdivision_modifiers.py`, its placement before
   the export physical-membership snapshot, the authored-reference storable-range clamp, and the zero-ledger
   side-anchor rule.
 
@@ -363,9 +384,10 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
         non-eligible non-bilateral vertices — onto the lone anchor holding the entire authored side pool where a
         boundary phase completes the blend with zero twist support (the hand at the distal boundary, the lower arm
         at the proximal boundary); comparisons are exact with no epsilon.
-  - [ ] `tools/tests/test_bake_subdivision_modifiers.py` passes, including its fake-BPY evaluation stand-in coverage,
-        and `test_distal_hand_phase_concentration_retains_authored_side_zeros` in
-        `tools/tests/test_forearm_twist_generator_run_ownership.py` passes; the rest of `tools/tests/` stays green
+  - [ ] `tools/character-generator/tests/test_bake_subdivision_modifiers.py` passes, including its fake-BPY
+        evaluation stand-in coverage, and `test_distal_hand_phase_concentration_retains_authored_side_zeros` in
+        `tools/character-generator/tests/test_forearm_twist_generator_run_ownership.py` passes; the rest of
+        `tools/character-generator/tests/` stays green
         (the pre-existing `test_retarget_mixamo_animation.py` collection error under system Python is unrelated).
   - [ ] Ordinary generation and focused tests snapshot every export-stage physical membership, including zero keys,
         before cleanup or writing; bilateral protection precedes scoped cleanup. Only independently evidenced
@@ -393,22 +415,32 @@ runtime/editor-visible nodes such as animation trees, attachments, hand anchors,
   - [ ] After generator bone insertion, every `BoneAttachment3D` in emitted or updated templates satisfies stored
         `bone_idx` ↔ `bone_name` agreement at load (binding guard), proved by the check tool and integration
         test.
+  - [ ] Commands, implementation, and tests are colocated under the owning tool directory; commands are the supported
+        user-facing entry points.
+  - [ ] The operational README documents the supported commands, Blender and Godot environment, invocation context,
+        inputs, outputs, and verification.
 
 ## References
-- Source script: `tools/generate_character.py`
-- Wrapper script: `tools/generate_character.sh`
-- Test configuration: `game/assets/characters/test/Female.character.json`
-- Collider generation: `tools/generate_body_colliders.py`
+- [Developer Tool Layout](../index.md)
+- [Operational README][readme]
+- Generate command: `tools/character-generator/commands/generate_character.sh`
+- Generator implementation: `tools/character-generator/character_generator/generate_character.py`
+- Collider command: `tools/character-generator/commands/generate_body_colliders.py`
 - Godot character post-import pipeline: `game/assets/characters/import/character_import.gd`
 - Eye animation post-import module: `game/assets/characters/import/character_eye_animation_import.gd`
 - Collider profile post-import module: `game/assets/characters/import/character_collider_profile_import.gd`
-- Import sidecar metadata updater: `tools/update_character_import_retarget_metadata.py`
-- Forearm-twist weight pipeline: `tools/forearm_twist_weights.py`
-- Forearm-twist run ownership and zero ledger: `tools/forearm_twist_generator_run_ownership.py`
-- Subdivision baker: `tools/bake_subdivision_modifiers.py`
-- Subdivision baker tests: `tools/tests/test_bake_subdivision_modifiers.py`
-- Bone-binding guard: `tools/character_template_bone_bindings.py` and `tools/check_character_template_bone_bindings.py`
-- Portable character contract: @specs/character/001-character-skeleton/index.md
-- Character root import contract: @specs/character/002-character-root/index.md
-- Scene Installer System: @specs/core/005-scene-installer-system/index.md
-- Forearm twist: @specs/rigging/002-forearm-twist/index.md
+- Import-sidecar command: `tools/character-generator/commands/update_character_import_retarget_metadata.py`
+- Forearm-twist weight pipeline: `tools/character-generator/character_generator/forearm_twist_weights.py`
+- Forearm-twist run ownership and zero ledger:
+  `tools/character-generator/character_generator/forearm_twist_generator_run_ownership.py`
+- Subdivision baker: `tools/character-generator/character_generator/bake_subdivision_modifiers.py`
+- Subdivision baker tests: `tools/character-generator/tests/test_bake_subdivision_modifiers.py`
+- Bone-binding guard:
+  - Parser: `tools/character-generator/character_generator/character_template_bone_bindings.py`
+  - Check command: `tools/character-generator/commands/check_character_template_bone_bindings.py`
+- Portable character contract: [CHAR-001](../../character/001-character-skeleton/index.md)
+- Character root import contract: [CHAR-002](../../character/002-character-root/index.md)
+- Scene Installer System: [CORE-005](../../core/005-scene-installer-system/index.md)
+- Forearm twist: [RIG-002](../../rigging/002-forearm-twist/index.md)
+
+[readme]: ../../../tools/character-generator/README.md

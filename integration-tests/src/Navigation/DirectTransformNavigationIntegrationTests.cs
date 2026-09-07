@@ -529,6 +529,7 @@ public sealed partial class DirectTransformNavigationIntegrationTests
             scripted.SetPath(path, 1);
             NavigationMotionIntent before = rig.Navigation.Poll(GetWorldTransform(rig.Target));
             int beforeIndex = rig.Navigation.LastSampledPathIndex;
+            long beforeRevision = scripted.SampledRouteRevision;
             Vector3 beforeFacing = before.DesiredFacingDirection;
 
             SetActorPosition(rig, before.NextPathPosition);
@@ -536,6 +537,7 @@ public sealed partial class DirectTransformNavigationIntegrationTests
             NavigationMotionIntent after = rig.Navigation.Poll(GetWorldTransform(rig.Target));
 
             Assert.True(rig.Navigation.LastSampledPathIndex > beforeIndex);
+            Assert.Equal(beforeRevision, scripted.SampledRouteRevision);
             Assert.True(after.TravelledPathDistance >= before.TravelledPathDistance);
             Assert.Equal(2.0f, after.TravelledPathDistance, 4);
             Assert.True(float.IsFinite(after.TravelledPathDistance));
@@ -580,6 +582,9 @@ public sealed partial class DirectTransformNavigationIntegrationTests
             await StepNavigationAsync(sceneTree, rig, 0.1);
 
             NavigationMotionIntent afterStep = rig.Navigation.Poll(GetWorldTransform(rig.Target));
+            Assert.True(
+                afterStep.HasValidSample,
+                "A synchronously accepted route must remain usable while NavigationAgent3D has not yet published its path.");
             Assert.True(
                 GetWorldTransform(rig.Target).Origin.X > 0.05f,
                 $"Expected translation; position={GetWorldTransform(rig.Target).Origin}, speed={rig.Navigation.MovementSpeed}, travel={afterStep.TravelDirection}, next={afterStep.NextPathPosition}, valid={afterStep.HasValidSample}, reached={afterStep.PositionReached}.");
@@ -1121,6 +1126,8 @@ public sealed partial class DirectTransformNavigationIntegrationTests
 
             await WaitForPhysicsFramesAsync(sceneTree, 1);
         }
+
+        throw new TimeoutException("Navigation map did not become synchronised within 30 physics frames.");
     }
 
     private static async Task<NavigationMotionIntent> PollUntilValidAsync(SceneTree sceneTree, NavigationTestRig rig)
@@ -1433,6 +1440,8 @@ public sealed partial class DirectTransformNavigationIntegrationTests
     {
         private Vector3[]? _path;
         private int _pathIndex;
+
+        public long SampledRouteRevision => CurrentRouteSnapshot?.RouteRevision ?? 0;
 
         public void SetPath(Vector3[] path, int pathIndex)
         {

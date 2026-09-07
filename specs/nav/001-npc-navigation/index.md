@@ -7,290 +7,264 @@ title: NPC Navigation
 
 ## Requirement
 
-Define poll-based NPC navigation that reports coherent route intent and drives predictive NPC locomotion without taking
-ownership of actor movement.
+Define NPC route execution, exact finite stopping, and durable request outcomes without sustained exact animation
+forecasting or post-transition recovery.
 
 ## Goal
 
-NPC-capable actors can request or replace a destination and follow it with anticipated turns, braking, and terminal
-facing. Callers remain decoupled from Godot navigation nodes, and root motion remains the sole physical authority.
+NPCs should follow long routes at ordinary gait, stop through one complete authored forward-to-idle transition, and
+produce an unambiguous durable outcome without visible endpoint sliding, snapping, or hidden motion after the
+transition.
 
 ## User Requirements
 
-1. A navigation request accepts a world-space destination transform. Its origin defines the destination position and
-   its full basis remains authoritative intent, although this slice steers yaw only. Applying that yaw does not discard
-   the actor's scale, pitch, or roll.
-2. Production NPCs follow routes with persistent, receding-horizon intent rather than reacting independently to each
-    waypoint. They begin planned initial turns and moving turns before corners, brake before arrival, and settle into
-    terminal arrival and destination facing without correction or pivot thrashing. A genuine post-arrival miss still
-    returns to route recovery.
-3. Route following favours forward walking and route-directed walking arcs that reduce remaining route distance and
-   heading error. A short local rear or lateral correction enters at or below 1 m and uses a rear/lateral diagonal
-    blend; it releases at or above 1.25 m. For a distant rear destination, a held looped signed pivot is used only when
-    forward arc progress is unsuitable; otherwise the NPC turns while walking forward. A stationary deliberate facing
-    correction holds the matching ordinary unarmed signed 90-degree pivot and releases directly to route movement,
-    without a neutral or `Idle` interlude.
-4. Small path deviations produce small, sustained corrections. NPCs do not accumulate drift before issuing an
-   occasional sharp corrective turn, nor snap or warp back onto the path.
-5. Replacing a destination or receiving revised path geometry changes the route plan immediately while preserving
-   current control and animation continuity. The NPC blends coherently from its observed motion towards the new route.
-6. The direct-transform consumer retains its existing path-facing ramps, short-move behaviour, and deterministic
-   baseline semantics; predictive production-NPC planning does not alter that baseline.
-7. Slow and sub-metre routes remain actionable rather than completing from a broad destination tolerance. Position
-   completes only when the actor is close to the requested destination and to the terminal end of the remaining path,
-   preventing early completion when the actor is Euclidean-close across an obstacle corner.
-8. Navigation completes only when position and yaw-facing tolerances are both met. Reaching position with facing
-   outstanding exposes the matching supported stationary pivot until facing completes. A same-position request with an
-   empty path remains valid.
-9. An initially unreachable request is rejected atomically and does not replace an existing valid request. A request
-    made before the navigation map is ready is also rejected without changing request state and reports a distinct,
-    retryable not-ready outcome rather than accepted or unreachable.
-10. Production NPCs translate navigation intent into forward walking, bounded local rear/lateral diagonal correction,
-    walking arcs, and held looped signed bilateral 90-degree pivots without navigation directly moving the actor.
-11. NPC walking turns converge smoothly towards the requested facing and do not oscillate between full left and right
-     input near the target yaw. Both stationary pivots remain interruptible.
-12. Existing VR player locomotion remains tracker-driven and unaffected; AI navigation is not installed on players.
-13. Direction changes and destinations behind the NPC remain visually continuous and converge correctly through the
-    ANIM-003 role map. The reported destination transform remains the exact requested transform throughout replanning,
-    without skeleton resets, neutral or `Idle` interludes, or repeated stationary-pivot restarts.
+1. An accepted NPC navigation request has a stable identity and produces exactly one durable outcome: `Completed`,
+   `Blocked`, `Failed`, `Cancelled`, or `Superseded`.
+2. While the NPC is far from its stopping region, it travels at its current ordinary gait. Navigation must not introduce
+   repeated hesitation or visible corrections caused by full-route animation forecasting.
+3. Near the stopping region, the NPC chooses from only the next compatible same-lane and opposite-lane footfalls. It
+   stops through one complete, zero-offset, ordinary-rate `f2i` that does not loop, restart, slice, stretch, or slow.
+   The stop has no measurable terminal sliding, snapping, popping, hesitation, or recovery movement.
+4. Normal position and yaw convergence begins only with the transition into `f2i` and finishes with the final consumed
+   movement interval of that transition. There is no armed `wf` correction.
+5. After `f2i`, the NPC remains stationary while completion is confirmed. Navigation applies no translation, yaw,
+   contact contribution, collision move, snap-back, replan, or synthetic recovery after the final movement boundary.
+6. Completion requires the NPC to remain within the configured planar and yaw tolerances for four consecutive stationary
+   physics frames. The default tolerances are `0.001 m` and `0.1°` and remain configurable.
+7. Being outside tolerance at the final `f2i` movement boundary, or leaving tolerance during confirmation, fails the
+   request immediately and durably. Failure reporting exposes the requested and final transforms, both measured errors,
+   both configured tolerances, and signed margins calculated as `tolerance - error`.
+8. Displacement after a `Completed` outcome belongs to later gameplay or a later request; it cannot revise or invalidate
+   the completed request.
+9. Contact-lock-active and contact-lock-neutralised execution follows the same NAV route, stopping, hard-boundary, and
+   outcome policy. Contact fallback appearance remains owned by ANIM-002 and IK-003.
 
 ## Technical Requirements
 
-1. `NavigationBase` owns path, facing, ramp, tolerance, and completion policy, but never mutates the navigated actor.
-2. A concrete implementation passes the actor's authoritative current `Transform3D` to each poll and receives one
-   coherent, immutable navigation motion-intent snapshot. The base calculates against that current state and the stored
-   destination request; the implementation decides how, or whether, to apply the resulting intent.
-3. Each snapshot reports the next path position, travel direction, desired horizontal facing direction, signed yaw
-   error, remaining and travelled path distances, and separate position, facing, and combined completion states.
-4. Travel and facing remain separate so consumers can choose supported forward, lateral, walking-arc, or stationary
-   pivot behaviour. Public navigation APIs must not use animation or motion-matching vocabulary.
-5. Each poll performs one coherent Godot path sample/advance operation. The concrete implementation controls polling
-   frequency and caches the resulting snapshot between its own queries.
-6. The same poll sample used for completion and progress publishes a protected, immutable route snapshot containing
-   copied path points, active path index, destination transform, request generation, route revision, and fallback or
-   replan status. Consumers must not reconstruct a sample by querying mutable path getters after polling.
-7. Initial facing is captured from the first valid sample of an accepted request. Travelled path distance commits only
-   forward arc advancement projected from authoritative actor samples onto the active navigation path. Perpendicular
-   and backward movement add no progress. Fallback publication, path-index changes, and replans re-anchor without jumps
-   or rewinds; each sample still recomputes downstream waypoint and terminal intent from the current path.
-8. Ramp interpolation uses smoothstep. The initial ramp blends from captured facing towards initial path travel over
-   `InitialFacingRampDistance`; downstream ramps blend towards each requested facing over `FacingRampDistance` before
-   its waypoint. Downstream precedence and the short-move override are deterministic.
-9. Position completion requires both actor proximity to the requested destination within `DestinationReachedDistance`
-   and terminal remaining-path proximity within `PathDesiredDistance`. An empty path satisfies the path condition only
-    when the actor is already within the destination tolerance, preserving same-position facing requests.
-10. `DirectTransformNavigation` defaults `PathDesiredDistance` and `DestinationReachedDistance`, which maps to
-   `NavigationAgent3D.TargetDesiredDistance`, to 0.05 m. The defaults remain configurable for future consumers and keep
-   destination tolerance materially below the default `ShortMoveDistance`.
-11. Invalid or degenerate path positions, segment bearings, destination facing, or distance values produce finite,
-   stable intent and cannot leak non-finite vectors, yaw errors, or distances to consumers.
-12. Map readiness, destination validation, and initial reachability are resolved before request state is committed. A
-   rejection leaves the current valid request, Godot target, accepted path, and cached intent unchanged. Synchronous
-   reachability defaults to the base node's authoritative Node3D-ancestor world position. Implementations may override
-   that start; the direct implementation uses its resolved actor target rather than potentially stale NavigationServer
-   agent state.
-13. `NavigationBase` is the Godot-backed `NavigationAgent3D` boundary; the public navigation facade must not expose the
-      concrete agent. Request results distinguish accepted, unreachable, invalid, and map-not-ready requests.
-14. `DirectTransformNavigation` remains the baseline and test implementation. It may apply snapshots directly to an
-     explicitly configured `Node3D` target, with the closest `Node3D` ancestor as fallback. The target is normally an
-     ancestor so the agent follows it; other targets require external transform synchronisation. It applies gradual yaw
-     around world up to the complete existing world basis, preserving scale and non-yaw orientation beneath rotated and
-     non-uniformly scaled parents. It must not assign the actor transform when elapsed time is zero or intent is already
-     complete.
-15. Navigable actors expose navigation through the component-holder pattern; navigation does not discover or own them.
-16. Existing path inspection, threshold, and initial avoidance configuration remain available through the navigation
-    abstraction. Safe-velocity callback mechanics are not part of this slice.
-17. `LocomotiveNavigation` is the production NPC consumer. It retains `DirectTransformNavigation` as a deterministic
-    baseline rather than replacing or weakening that implementation.
-18. `LocomotiveNavigation` requires one explicitly exported actor node. The same node must be a `Node3D`, for
-    authoritative world-transform sampling, and implement `ILocomotive`, for command publication. Missing or invalid
-    binding disables command publication and produces a clear validation failure; navigation must not discover, move,
-    or own the actor implicitly.
-19. `LocomotiveNavigation` polls exactly once per navigation physics tick with the bound actor's current global
-    transform and owns a persistent, pure C# receding-horizon planner. It compiles each coherent route revision into
-    arc-length segments, corners, turn-start regions, braking intent, terminal facing, and short endpoint manoeuvres.
-20. Each physics tick, the planner projects observed root-motion progress onto the persistent route and evaluates
-    candidate movement and turn controls over 0.2, 0.5, and 1.0-second horizons. Scoring covers route progress,
-    cross-track and heading error, stop overshoot, terminal facing, control-rate change, and reversal. For large rear
-    routes, it prefers route-directed forward walking arcs that reduce remaining route distance and heading error.
-21. Candidate selection is forward-biased and constrained by the signed, character-aware locomotion response profile
-    defined by [ANIM-003](../../animation/003-standing-locomotion-catalogue/index.md). At a rear or lateral correction
-    distance of 1 m or less, it may select only the `BackwardWalk` plus matching lateral-role diagonal blend; it retains
-    that mode until distance reaches 1.25 m. Beyond that release distance, rear intent uses forward walking arcs unless
-    forward arc progress is unsuitable for route-distance and heading-error reduction. It may then select the matching
-    held looped signed stationary 90-degree pivot. It holds while its signed facing correction remains
-    necessary and, on release, transitions directly to route movement without a neutral or `Idle` interlude; moving
-    changes otherwise use walk arcs. This route policy must not alter ANIM-003 root-motion response data or graph blend
-    weights. Only the first control is published; future intent remains available for replanning from the next observed
-    Root-motion displacement.
-22. Destination replacement or asynchronous route revision rebuilds route geometry immediately. Current controls and
-    animation phase are retained, then changed through configurable finite slew and acceleration limits rather than
-    reset. Clear and completion stop smoothly; lifecycle invalidation still neutralises safely.
-23. Cross-track correction is continuous and supplementary. The rear/lateral diagonal correction enters only at or below
-    1 m and releases only at or above 1.25 m; these thresholds define its required hysteresis. It must not become a
-    second movement authority, cut the accepted navigation polyline, or produce dead-zone accumulation, sign-flipping,
-    saturated pulses, or motion warping.
-24. Navigation physics processing must run before `CharacterLocomotion` physics processing, so each locomotion step
-    consumes commands published from the current navigation sample rather than the previous physics tick.
-25. `LocomotiveNavigation` brings controls smoothly to neutral after combined completion or a successful clear. Invalid
-    actor sampling, disablement, or tree exit neutralises safely without preserving stale commands. A rejected
-    replacement request preserves the active request and controls until a valid sample or lifecycle event changes them.
-26. Route compilation, trajectory evaluation, world-to-local conversion, and control limiting must be isolated as
-    deterministic, Godot-runtime-independent logic for focused unit validation.
-27. `LocomotiveNavigation` is installed only by NPC role templates and navigation playtests. Production wiring and
-    playtest controllers depend on `INavigation`, the explicit actor, and `ILocomotive`, not on fields specific to
-    `DirectTransformNavigation`.
-28. Sharp-turn playback normatively depends on the deterministic Hips heading neutralisation defined by
-    [ANIM-003](../../animation/003-standing-locomotion-catalogue/index.md). Root remains the sole physical planar
-    translation and yaw authority; navigation must not use runtime clamps, motion warps, or direct actor, Root, or
-    skeleton corrections as substitutes.
-29. Navigation consumes only the nine-role ANIM-003 response profile and role map. It may select `BackwardWalk` only
-    through the bounded local correction policy. It must not select run, start/stop, combat, weapon, sad, hunched,
-    raised-arm, or unused roles, and must not bind, runtime-mirror, or synthesise a pivot. A fully processed,
-    ANIM-003-approved derived travel role remains a normal library binding.
-30. For a stationary facing correction, the planner selects and holds the looped pivot whose Root-yaw sign matches the
-    signed yaw error. It releases near the target facing directly to route movement, without a neutral or `Idle`
-    interlude or a repeated pivot restart. It preserves continuous root-motion consumption across loop wraps through the
-    CTRL-001 `GeneralSkeleton:Root` unique-name track contract. Corrected imported Root yaw maps directly to actor yaw;
-    navigation must not apply a coordinate, sign, or compensating-yaw conversion. Navigation remains responsible for
-    convergent route intent, not direct actor, Root, or skeleton correction.
-31. The immutable route snapshot retains and reports the exact requested destination `Transform3D` across route
-    compilation, revision, and replanning. Reported transform convergence must target that requested transform rather
-    than an intermediate route point or a locomotion-response approximation.
-32. Terminal arrival uses a bounded settle/release policy. While observed position and facing remain within configured
-    terminal conditions, it settles or releases the endpoint manoeuvre without repeated correction or pivot restarts.
-    An observed post-arrival position or facing deviation that exceeds the configured release condition returns to
-    normal route recovery. The policy must treat nearby route lengths consistently and must not change endpoint
-    manoeuvre solely because a route crosses an endpoint-length boundary.
+### Ownership Boundaries
+
+1. **NAV Ownership:** NAV-001 owns NPC request identity and lifecycle, route and gait progress, stopping estimates,
+   imminent candidate selection, transition-time convergence, collision-realised movement accounting, stationary
+   confirmation, and durable outcomes.
+2. **ANIM Ownership:** ANIM-002 owns `wf` release compatibility, `f2i` identity, exact duration, ordinary playback,
+   finite phase publication, root movement, and authored contact evidence. NAV consumes these contracts without changing
+   clip content or contact permission.
+3. **IK Ownership:** IK-003 owns per-foot provider selection, contact lifecycle, anchors, target resolution, handoff,
+   and foot actuation. It may return one already-authorised contact contribution while NAV movement is permitted. It
+   cannot select a route or candidate, correct an outcome, or move the actor after the hard boundary.
+4. **CTRL And CHAR Ownership:** CTRL-001 remains player-only and defines no NPC navigation policy. CHAR-003 owns
+   physical response intent and constraints, but cannot commit or revise a NAV request outcome. NAV alone accounts for
+   the collision-realised NPC movement used by this specification.
+
+### Far-Route Estimate
+
+5. Far sustained `wf` uses a cheap estimate based only on cached remaining route distance, current gait state, and
+   cached ordinary-rate animation movement data. It must not materialise or sample an exact animation forecast over the
+   full route on any far frame.
+6. Route construction or revision may compute cumulative segment distances once. Per-frame far-path work reads cached
+   progress and fixed-size gait/animation state, performs constant-time arithmetic, and allocates no memory. Its cost is
+   independent of route length.
+7. NAV periodically recalibrates estimated progress from collision-realised progress along the current route. The
+   configurable trigger may be time-, tick-, or distance-based, but one production configuration must use a stable
+   trigger, deterministic ordering, and the same realised samples for equivalent runs. Recalibration replaces
+   accumulated estimate error; it does not apply actor correction.
+8. Request acceptance, route replacement, route revision, gait change, teleport/reset, and navigation-clock generation
+   change invalidate the affected cached basis. NAV re-anchors distance and gait state at the realised transform before
+   making another estimate. No stale generation may contribute progress or candidate evidence.
+9. The stopping-region threshold is derived from cached ordinary-rate movement needed for a bounded lead-in, transition
+   crossfade, and complete `f2i`, plus configurable estimation uncertainty and final tolerance allowance. NAV enters the
+   region when cached remaining route distance reaches that threshold. Tuning may change the threshold inputs but may
+   not introduce full-route exact sampling.
+
+### Bounded Imminent Check
+
+10. Exact checking occurs only in the stopping region. One check evaluates at most two candidates: the next compatible
+    release on the current footfall lane and the next compatible release on the opposite lane. It covers only each
+    candidate's short lead-in, moving crossfade, and complete `f2i`.
+11. Candidate compatibility requires a matching ANIM-002 release/exit mapping, current request and clock generation,
+    finite exact interval coverage, ordinary-rate playback, and a projected correction that respects the configured
+    transition envelope and no-crossing rules. Missing or stale evidence rejects only that candidate.
+12. Selection is deterministic. Feasible candidates are ordered by earliest release crossing, then current lane before
+    opposite lane when crossings are equal, then stable ANIM event identity. If neither candidate is feasible, NAV keeps
+    ordinary uncorrected route travel and repeats the bounded check for the next imminent pair while the request remains
+    actionable. It never searches an unbounded command or occurrence set.
+13. Exact checking and candidate diagnostics use fixed-size value state, allocate no memory per frame, and have cost
+    independent of total route length. A far frame performs zero exact candidate checks; an imminent check evaluates no
+    more than two candidates.
+
+### Transition and Hard Motion Boundary
+
+14. The selected transition plays one full, zero-offset, ordinary-rate, non-looping `f2i`. NAV does not retain a
+    forecast reservation, perform authored-command search, rearm an occurrence, or use phase pause/resume to manufacture
+    convergence. No configuration, adapter, or compatibility mode may restore those paths or endpoint-tail recovery.
+15. NAV position/yaw convergence has one envelope: it opens on the first movement interval of the transition into `f2i`
+    and closes after the final consumed movement interval of `f2i`. Lead-in `wf`, producer latency, and any later state
+    own no NAV convergence correction.
+16. Each permitted movement interval composes authored root movement, at most one already-authorised IK contact
+    contribution, and NAV convergence into one collision move. NAV records requested movement, collision-realised
+    movement, and collision remainder. No component may issue a second move or silently compensate for the remainder.
+17. Transition correction must not cross the requested planar stopping point or yaw target. Exact projection and runtime
+    use the same interval, coordinate, wrapping, cap, and no-crossing semantics. Collision-realised progress, rather
+    than requested movement, is authoritative for the next interval and final measurement.
+18. AnimationTree latency is handled by tagged producer/consumer interval identity and clock generation. The final
+    boundary occurs after the one composed collision move that consumes the clip's final non-zero root/yaw interval, not
+    merely when a producer first publishes phase `1`. Stale, skipped, duplicate, or wrong-generation intervals cannot
+    move the actor or close the envelope.
+19. Beginning immediately after that final composed move, NAV applies no actor translation, yaw, contact contribution,
+    collision move, synthetic correction, or authored root contribution. NAV clears accumulated planar and yaw velocity
+    state before confirmation and rejects or gates stale velocity state so it cannot contribute after the boundary.
+    There is no held endpoint tail, phase pause, terminal recovery, snap-back, or collision replan. Animation and IK may
+    update stationary visual targets but cannot contribute actor motion.
+
+### Final Measurement and Confirmation
+
+20. The final movement boundary measures planar distance and wrapped yaw error against the request's retained transform.
+    It uses the request's retained tolerances, whose configurable defaults are `0.001 m` and `0.1°`. Signed planar and
+    yaw margins are exactly `tolerance - error`; a negative margin is failure.
+21. If either final margin is negative, NAV immediately commits `Failed`. It performs no confirmation, snap-back,
+    replan, or recovery. The terminal record retains the measured requested/final transforms, errors, tolerances, and
+    margins.
+22. If both margins are non-negative, NAV enters stationary confirmation with a count of zero. Each of the next four
+    physics frames performs no NAV movement and remeasures the realised transform. A negative margin immediately commits
+    `Failed`; four consecutive in-tolerance frames commit `Completed`.
+23. Terminal commitment is exact-once and first-terminal-wins. Once committed, later transforms, callbacks, clock
+    changes, cancellation, replacement, diagnostics, or acknowledgements cannot change the outcome.
+
+### Requests and Durable Outcomes
+
+24. Acceptance reserves a stable request identity and terminal-record capacity before replacing active work. An invalid,
+    not-ready, unreachable, or capacity-blocked attempt is rejected without changing the active request. Request
+    identity is never reused across reset or clock generations.
+25. Every terminal record is immutable and contains: request identity; request revision and clock generation; ordered
+    terminal sequence; outcome and reason; requested and final transforms; planar and wrapped-yaw errors; configured
+    tolerances; signed margins; acceptance and terminal physics ticks; and successor identity for `Superseded`, when
+    present. `Blocked` records the known obstruction context; `Cancelled` records the cancellation source.
+26. Terminal outcomes persist in bounded ordered storage until idempotently acknowledged by request identity and
+    terminal sequence. Storage never overwrites an unacknowledged outcome. When capacity cannot be reserved, NAV reports
+    outcome backpressure and leaves active work unchanged. Delivery and acknowledgement are bounded operations.
+27. Runtime status and terminal records use reusable or value-backed storage. Production behaviour cannot depend on test
+    APIs, and steady-state physics processing performs no per-frame outcome allocation.
+28. Explicit cancellation, navigation disable, owner removal, or reset commits `Cancelled` for active accepted work
+    before clearing its route, estimate, candidate, and clock state. Reset establishes a new generation and cannot erase
+    an unacknowledged record.
+29. Replacement reserves identity and outcome capacity first, commits the old request as `Superseded` with the successor
+    identity, and then activates the successor from the realised transform. If reservation fails, the old request
+    remains active and unchanged.
+30. A route or gait revision for the same request clears imminent evidence and deterministically re-anchors the
+    estimate. A clock-generation change before transition commitment invalidates the candidate and returns to bounded
+    selection. An unexpected generation change after `f2i` begins commits `Failed`; it cannot restart, rearm, or recover
+    the transition.
+31. A known route obstruction may commit `Blocked` before `f2i`. Any contract, clock, interval, or final-convergence
+    failure commits `Failed`. Neither outcome permits post-commit movement for that request.
+
+### Diagnostics and Validation
+
+32. Diagnostics are read-only and behaviour-neutral. Enabling, disabling, dropping, or consuming diagnostic records
+    cannot affect estimates, recalibration, candidate ordering, movement, confirmation, or outcomes.
+33. Objective validation must use a deterministic contiguous physics trace without coupling production implementation to
+    test APIs. The trace must cover request identity and route/gait generation; selected lane and ANIM event mapping;
+    the complete finite transition; transition-seam and per-foot continuity state; each composed movement contribution
+    and its requested, realised, and remainder values; the final movement boundary and realised terminal location; four
+    immutable confirmation-frame measurements; and terminal-record commitment.
+34. Visual evidence is limited to fixture setup: direction-marker readability, Origin, Destination, and hard-boundary
+    placement, and camera framing. Images are not evidence of motion smoothness, naturalness, stationarity, or the
+    absence of terminal sliding.
 
 ## In Scope
 
-- Navigation component and holder contracts, request result, Godot-backed policy base, and immutable polled intent.
-- Horizontal path-facing calculation, path-distance ramps, short-move override, and precise path-aware completion.
-- Atomic validation of new requests and stable handling of invalid or degenerate path data.
-- `DirectTransformNavigation` as a baseline and test consumer with precise, configurable distance defaults.
-- `LocomotiveNavigation` as the production NPC consumer, including explicit binding, command conversion, lifecycle
-  neutralisation, coherent route snapshots, persistent receding-horizon planning, and publish-before-consume ordering.
-- Planned initial turns, corner anticipation, braking, terminal facing, forward-biased route-directed walking arcs,
-   conditional held looped signed pivots for large rear routes, direct release to route movement, and bounded
-   rear/lateral diagonal correction with the required hysteresis.
-- Direction-change and behind-destination continuity, convergence, bilateral pivot selection, and lateral regression
-  coverage within the ANIM-003 role map.
-- Interface-based NPC template and navigation-playtest composition without player installation.
-- Path inspection, threshold configuration, and initial avoidance configuration through the navigation abstraction.
+- NPC request, route/gait estimate, stopping-region, bounded candidate, `wf → f2i`, collision accounting, confirmation,
+  and durable-outcome contracts.
+- Forward ordinary-walk stopping through ANIM-002-compatible `f2i_l` and `f2i_r` transitions.
+- NPC consumption of one IK-authorised contact contribution only while NAV movement remains permitted.
+- Behaviour-neutral diagnostics, deterministic runtime assertions, and visual fixture-setup evidence.
 
 ## Out Of Scope
 
-- Full motion matching, motion warping, start/stop one-shots, and player-specific snap turning.
-- Navigation-owned animation selection or root-motion application; predictive locomotion controls and their publication
-  to `ILocomotive` remain in scope.
-- Future dynamic route-blockage interruption and replanning, including stuck or deadlock detection policy.
-- Future dynamic speed-based short-move thresholds; `ShortMoveDistance` is directly configurable in this slice.
-- Future custom facing-ramp curves beyond the initial smoothstep implementation.
-- Off-mesh link traversal, custom route semantics, and future per-consumer tuning beyond the required baseline defaults.
-- Safe-velocity events, callbacks, and detailed avoidance steering policy.
-- Changes to VR player tracker locomotion.
+- Player movement or travel-release policy, which remains owned by CTRL-001.
+- Terrain adaptation, off-mesh traversal, semantic gameplay waypoints, gait synthesis, and animation or IK reauthoring.
+- Final tuning beyond the stated default tolerances and structural bounds.
+- Broad animation/IK seam-quality remediation beyond the required `f2i` seam and foot-continuity trace assertions,
+  including Oblique leg or foot continuity.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. An accepted request preserves the full destination transform as intent while deriving steering from horizontal yaw.
-2. A long route retains initial facing at its first valid sample, then smoothstep-aligns towards path travel over the
-   configured initial path distance.
-3. Route scenarios verify interior segment bearings, terminal destination facing, shared downstream ramp distance,
-   downstream overlap precedence, and permissible skipping of closely spaced waypoint facing.
-4. A route at or below the configured short-move threshold requests terminal facing from its first valid sample,
-   including a lateral side-step whose terminal facing equals its initial facing.
-5. Slow lateral route scenarios across 0.10–0.90 m remain actionable and settle within the configured destination
-   tolerance. A route whose destination is Euclidean-close across an obstacle corner continues along its path until
-   terminal path proximity is also met.
-6. Completion scenarios verify independent configurable position and yaw tolerances, combined completion, and matching
-   stationary-pivot intent after positional arrival while yaw remains outstanding. A same-position request with an empty
-   path remains valid and completes only after its requested facing is reached.
-7. Initially unreachable and map-not-ready requests leave an existing valid request unchanged. The not-ready result is
-    distinct from unreachable, and VR tracker locomotion remains unaffected.
-8. Production NPC scenarios demonstrate forward walking, local rear/lateral diagonal correction, walking arcs, and both
-   stationary pivots without navigation directly mutating the actor transform.
-9. NPC turning converges smoothly, can be interrupted or reversed immediately, and does not oscillate near the
-   requested facing. Player scenes retain their existing tracker-driven locomotion without AI navigation.
-10. The final user playtest confirms that the NPC turns before corners, follows continuous forward arcs, corrects small
-    deviations gradually, and does not produce occasional sharp corrective turns.
-11. The same playtest confirms smooth destination replacement, controlled non-oscillating terminal stopping and facing,
-    diagonal correction only at or below 1 m, release at or above 1.25 m, and route-directed forward walking arcs for
-   a distant rear destination. When forward arc progress is unsuitable, the matching signed pivot remains held and
-   looped until its direct release to route movement; no neutral or `Idle` interlude occurs. The slice is not accepted
-   until the user approves these cues.
-12. Direction-change and behind-destination playtests remain visually continuous and reach the requested route and
-    facing with the matching held looped bilateral pivot, no skeleton reset, no incorrect turn reversal, no neutral or
-    `Idle` interlude before route movement, and no repeated pivot restart at rest.
+1. **NAV-UAC-001:** Deterministic runtime scenarios prove ordinary sustained travel without forecast-induced
+   hesitation. Each stop uses one complete, zero-offset, ordinary-rate `f2i` and has no measurable terminal sliding,
+   snapping, popping, hesitation, or recovery movement.
+2. **NAV-UAC-002:** Active and neutralised contact scenarios follow the same route, candidate, hard-boundary,
+   confirmation, and outcome policy without claiming equivalent foot-contact appearance.
+3. **NAV-UAC-003:** In-tolerance scenarios remain stationary for four confirmation physics frames and then produce one
+   durable `Completed` record. Movement after success does not alter that record.
+4. **NAV-UAC-004:** Final-boundary and confirmation excursions outside either tolerance immediately produce one durable
+   `Failed` record containing the requested measurements and negative failing margin, with no snap-back or replan.
+5. **NAV-UAC-005:** Cancellation, obstruction, replacement, and failure scenarios expose stable, unambiguous durable
+   outcomes to consumers without losing or revising an earlier terminal result.
 
 ### Technical Requirement Acceptance
 
-1. Tests confirm `NavigationBase` calculates policy without mutating an actor and the concrete implementation supplies
-   the actor's authoritative current `Transform3D` to each poll. Snapshot calculations use that current transform while
-   preserving the accepted destination `Transform3D` as separate stored request intent.
-2. Each poll performs one Godot path sample/advance operation, exposes every required travel, facing, distance, and
-   completion value from that operation, and remains cached between implementation-controlled polls.
-3. Tests exercise supported forward, backward, side-step, walking-arc, and bilateral stationary-pivot intent without
-   coupling travel direction to facing direction or introducing animation-specific public vocabulary.
-4. Path-change tests cover fallback publication, longer and shorter replans, and path-index transitions. They preserve
-   captured facing and monotonic forward path distance while recomputing downstream intent. Tests reject perpendicular
-   and backward progress. Empty, single-point, and degenerate samples keep exposed values finite and stable.
-5. Completion tests independently falsify requested-destination proximity and terminal remaining-path proximity to
-   prove both are required. They cover close-across-corner traversal, precision arrival, and the valid empty-path
-   same-position case.
-6. Default-value regression tests confirm `DirectTransformNavigation` uses 0.05 m for `PathDesiredDistance` and
-   `DestinationReachedDistance`/`TargetDesiredDistance`, keeps both configurable, and keeps the destination tolerance
-   materially below the default `ShortMoveDistance`.
-7. Facade tests preserve the Godot-agent boundary, all request outcomes, path inspection, thresholds, and initial
-   avoidance configuration. Integration tests prove that every rejection commits no partial state and that synchronous
-   reachability starts from the direct implementation's authoritative actor position.
-8. Direct-consumer integration tests prove local and world scale preservation, gradual world-up yaw without pitch or
-    roll loss, correct conversion beneath a rotated and non-uniformly scaled parent, and exact transform equality for
-    zero-delta and already-complete no-op samples.
-9. Unit tests verify actor-local sign conventions for forward and backward travel, both lateral directions, and walking
-   arcs, plus finite, bounded, continuous walking-turn output on both sides of zero and around neutral.
-10. `LocomotiveNavigation` integration tests prove explicit `Node3D` and `ILocomotive` binding, one authoritative actor
-    sample per physics tick, no direct transform mutation, and command publication before `CharacterLocomotion`
-    consumption.
-11. Lifecycle tests verify smooth neutralisation after completion and clear, safe immediate neutralisation after invalid
-    sampling, disablement, and tree exit, and preservation of the prior request after a rejected replacement.
-12. NPC template and navigation-playtest inspection confirms interface-based production binding. Player templates do
-    not contain `LocomotiveNavigation`, and baseline direct-consumer tests continue to pass.
-13. Route-snapshot tests prove that completion, progress, copied geometry, destination, generations, revisions, and
-    fallback status come from one poll sample and remain immutable despite later Godot path changes.
-14. Focused planner tests cover route compilation, corner anticipation, forward bias, signed response prediction,
-    bounded control-rate changes, braking, terminal facing, replacement continuity, and continuous drift recovery
-    without sign-flipping or sharp pulses. They prove local correction enters at 1 m or less, releases at 1.25 m or
-    more, and uses the rear/lateral diagonal response. For a distant rear destination, they prove route-directed
-    forward arcs reduce route distance and heading error, while a held looped signed pivot is used only when forward
-    arc progress is unsuitable. They also prove stationary pivot selection follows signed yaw, remains held while its
-    correction is required, exits near target directly to route movement, and neither enters a neutral or `Idle`
-    interlude nor restarts while stationary. Godot-running coverage proves the held pivot continues Root yaw without a
-    discontinuity or double application at loop wraps through the `GeneralSkeleton:Root` track. End-to-end
-    near-forward route coverage on both signed sides of forward proves signed navigation yaw carries corrected imported
-    Root yaw directly to actor yaw, without an opposite-sign or compensating conversion.
-15. Godot-running checks cover right walk-arc interpolation, navigation-before-animation ordering, retained direct-
-    transform behaviour, and root-motion traversal of straight, right-angle, S-curve, and short endpoint routes. They
-    confirm that root motion alone changes the actor transform and that no motion warping occurs.
-16. Planner and graph checks prove all nine role bindings, both required stationary pivot bindings, and the bounded
-    correction policy; they reject runtime mirroring, a mirrored pivot substitute, or synthetic yaw. Independent visual
-    checks and user playtests
-    prove route progress and facing convergence through the supported role map, including both lateral destination
-    offsets and distant rear destinations, without skeleton resets, incorrect turn reversal, sad or hunched posture, or
-    raised-arm/combat poses.
-17. Snapshot and replan checks prove the reported destination `Transform3D` remains exact and converges to the requested
-    transform across large rear routes; they reject substitution of intermediate route points or root-motion response
-    approximations. Graph and response-profile checks prove the policy changes neither root-motion response data nor
-    blend weights.
-18. Focused deterministic regressions exercise route lengths on either side of the former endpoint boundary and an
-    observed post-arrival position or facing deviation. They prove consistent endpoint manoeuvre treatment, stable
-    settling without correction or pivot thrashing, and return to route recovery for a real miss.
+1. **NAV-TAC-001:** Instrumented far-route runs prove zero exact checks on far frames, no full-route animation sampling,
+   deterministic collision-realised recalibration, zero per-frame allocation, and constant cost as route length grows.
+2. **NAV-TAC-002:** Stopping-region tests prove derivation from cached lead-in/crossfade/`f2i` demand and uncertainty.
+    Candidate tests prove no check evaluates more than the next two compatible lanes and deterministic tie-breaking
+    selects the same result for equivalent state. Imminent-check instrumentation proves fixed-size value state, zero
+    per-frame allocation, and constant check cost as total route length grows.
+3. **NAV-TAC-003:** Interval tests prove exact checking covers only the short lead-in, crossfade, and complete `f2i`;
+   playback is full, zero-offset, ordinary-rate, and non-looping; and no forecast reservation, command search, rearm,
+   phase pause, endpoint tail, or recovery path participates.
+4. **NAV-TAC-004:** Latency and mutation tests prove correction starts on transition entry, finalises only after the
+   exact final consumed movement interval, rejects stale or wrong-generation intervals, and applies no armed `wf`
+   correction.
+5. **NAV-TAC-005:** Collision accounting proves each moving tick uses one composed move, retains requested, realised,
+   and remainder values, obeys no-crossing semantics, and issues no second or compensating move.
+6. **NAV-TAC-006:** Deterministic contiguous-physics-trace assertions cover the selected lane and ANIM event mapping,
+   the complete finite `f2i` transition, transition-seam and per-foot continuity state, every composed movement
+   contribution and its requested, realised, and remainder values, the final movement boundary and realised terminal
+   location, and four immutable confirmation-frame measurements. Hard-boundary assertions prove zero NAV translation,
+   yaw, contact contribution, collision moves, synthetic correction, and authored root contribution after the final
+   consumed `f2i` interval, including all four confirmation frames and after every terminal outcome. They verify
+   accumulated planar and yaw velocity state is cleared before confirmation and injected stale state is rejected or
+   gated without actor motion.
+7. **NAV-TAC-007:** Boundary tests use configurable tolerances with defaults of `0.001 m` and `0.1°`, verify inclusive
+   in-tolerance comparison, and verify exact signed margins. They cover immediate final failure, confirmation failure on
+   frames one through four, and completion only after four consecutive in-tolerance frames.
+8. **NAV-TAC-008:** Lifecycle tests prove stable non-reused identity, first-terminal-wins exact-once commitment,
+   immutable ordered outcomes, bounded persistence, idempotent acknowledgement, and no steady-state per-frame outcome
+   allocation or production dependency on test APIs. Every applicable terminal record asserts request identity,
+   revision, clock generation, terminal sequence, outcome, reason, requested and final transforms, planar and
+   wrapped-yaw errors, tolerances, signed margins, and acceptance and terminal ticks. `Blocked`, `Cancelled`, and
+   `Superseded` records additionally assert obstruction context, cancellation source, and successor identity,
+   respectively. Invalid, not-ready, unreachable, and capacity-blocked attempts, including outcome backpressure, assert
+   that the active request, route, estimate, candidate, and reserved outcome state remain unchanged.
+9. **NAV-TAC-009:** Reset, cancellation, disable, owner removal, replacement, route/gait revision, and pre- and
+   post-transition clock-generation tests prove the required clearing, re-anchoring, successor, and fail-closed
+   behaviour.
+10. **NAV-TAC-010:** Diagnostics-on, diagnostics-off, and dropped-diagnostics runs produce identical candidate,
+    movement, confirmation, and outcome results. Visual fixture review verifies only direction-marker readability,
+    Origin, Destination, and hard-boundary placement, and camera framing. Its images are not evidence of motion
+    smoothness, naturalness, stationarity, or the absence of terminal sliding; deterministic runtime assertions verify
+    the hard no-motion boundary.
+11. **NAV-TAC-011:** Ownership checks prove ANIM supplies content and contact evidence, IK alone resolves feet and
+    authorises contact contributions, NAV alone owns NPC movement/outcomes, CTRL remains player-only, and CHAR cannot
+    revise NAV outcomes.
+
+### Acceptance Traceability
+
+- User Requirements 1–9 → NAV-UAC-001–005.
+- Technical Requirements 1–4 → NAV-TAC-011.
+- Technical Requirements 5–9 → NAV-TAC-001–002 and NAV-TAC-009.
+- Technical Requirements 10–13 → NAV-TAC-002–003, including NAV-TAC-002 allocation and route-length cost assertions.
+- Technical Requirements 14–19 → NAV-TAC-003–006.
+- Technical Requirements 20–23 → NAV-TAC-006–007.
+- Technical Requirements 24–31 → NAV-TAC-008–009, including NAV-TAC-008 rejection and terminal-field assertions.
+- Technical Requirements 32–34 → NAV-TAC-006 and NAV-TAC-010.
 
 ## References
 
-- [CORE-003: Component/Trait System](../../core/003-component-system/index.md)
+- [Project Specifications Index](../../index.md)
+- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
+- [IK-003: Leg And Feet IK System](../../ik/003-leg-feet-ik/index.md)
+- [Contact-Lock Coordinator Contract](../../ik/003-leg-feet-ik/contact-lock-coordinator-contract.md)
 - [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)
-- [CHAR-002: Character Root](../../character/002-character-root/index.md)
-- `game/src/Navigation/`
+- [CHAR-003: Character Physical Response](../../character/003-physical-response/index.md)

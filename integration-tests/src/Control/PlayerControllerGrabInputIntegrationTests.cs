@@ -18,6 +18,43 @@ namespace AlleyCat.IntegrationTests.Control;
 /// </summary>
 public sealed class PlayerControllerGrabInputIntegrationTests
 {
+    /// <summary>
+    /// Production wiring revokes active player navigation before accepted translation reaches locomotion.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task ReferencePlayer_ManualInput_ArbitratesNavigationBeforeLocomotion()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        Node player = LoadPackedScene(PlayerScenePath).Instantiate();
+        sceneTree.Root.AddChild(player);
+        EnsureCharacterRuntimeInstalled(player);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        PlayerController controller = Assert.IsType<PlayerController>(player.GetNode("PlayerController"), exactMatch: false);
+        AlleyCat.Control.Locomotion.CharacterLocomotion locomotion = Assert.IsType<AlleyCat.Control.Locomotion.CharacterLocomotion>(player.GetNode("Locomotion"), exactMatch: false);
+        AlleyCat.Navigation.PlayerNavigation navigation = Assert.IsType<AlleyCat.Navigation.PlayerNavigation>(player.GetNode("PlayerNavigation"), exactMatch: false);
+        Assert.Same(navigation, controller.NavigationNode);
+
+        navigation.ActivateMovementAuthority();
+        InvokeInputUpdate(controller, "UpdateMovementInput", Vector2.Zero);
+        Assert.True(navigation.IsMovementAuthorityActive);
+
+        InvokeInputUpdate(controller, "UpdateMovementInput", new Vector2(0.25f, 0.5f));
+        Assert.False(navigation.IsMovementAuthorityActive);
+        Vector2 movementInput = GetLocomotionInput(locomotion, "_movementInput");
+        Assert.True(movementInput.Length() > 0f);
+        Assert.True(movementInput.Normalized().IsEqualApprox(new Vector2(0.25f, 0.5f).Normalized()));
+
+        navigation.ActivateMovementAuthority();
+        InvokeInputUpdate(controller, "UpdateRotationInput", new Vector2(0.25f, 0.0f));
+        Assert.True(navigation.IsMovementAuthorityActive);
+        Assert.True(GetLocomotionInput(locomotion, "_rotationInput").X > 0f);
+
+        player.QueueFree();
+        await WaitForFramesAsync(sceneTree, 2);
+    }
+
     private const string PlayerScenePath = "res://assets/characters/reference/ally_player.tscn";
 
     /// <summary>
@@ -306,6 +343,17 @@ public sealed class PlayerControllerGrabInputIntegrationTests
         object side = Enum.Parse(sideType, sideName);
         _ = handleGrabButtonPressed.Invoke(controller, [side, actionName]);
     }
+
+    private static void InvokeInputUpdate(PlayerController controller, string methodName, Vector2 value)
+    {
+        MethodInfo method = typeof(PlayerController).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Expected PlayerController {methodName} method.");
+        _ = method.Invoke(controller, [value]);
+    }
+
+    private static Vector2 GetLocomotionInput(object locomotion, string fieldName)
+        => (Vector2)(GetRuntimeField(locomotion, fieldName).GetValue(locomotion)
+            ?? throw new InvalidOperationException($"Expected locomotion field '{fieldName}' to contain Vector2 input."));
 
     private sealed partial class FakeLocomotion : Node, AlleyCat.Control.Locomotion.ILocomotion
     {

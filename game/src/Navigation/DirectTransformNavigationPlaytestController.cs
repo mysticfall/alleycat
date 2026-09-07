@@ -4,12 +4,30 @@ using Microsoft.Extensions.Logging;
 
 namespace AlleyCat.Navigation;
 
+/// <summary>Reference-character variants available in the navigation playtest scene.</summary>
+public enum NavigationPlaytestCharacterVariant
+{
+    /// <inheritdoc/>
+    ReferenceFemale,
+    /// <inheritdoc/>
+    ReferenceMale,
+}
+
+internal readonly record struct NavigationPlaytestCameraState(
+    Vector3 OrbitOrigin,
+    float Distance,
+    float Yaw,
+    float Pitch,
+    bool IsInitialised);
+
 /// <summary>
 /// Minimal non-XR click-to-move controller for an explicitly bound navigation actor.
 /// </summary>
 [GlobalClass]
 public partial class DirectTransformNavigationPlaytestController : Node3D
 {
+    private const string ActorNodeName = "NavigationTestNpc";
+    private const string ReferenceMaleNPCScenePath = "res://assets/characters/reference/vadim_npc.tscn";
     private const string RayHitPositionKey = "position";
     private const float MinPitchRadians = 0.15f;
     private const float MaxPitchRadians = 1.35f;
@@ -42,6 +60,20 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     private int _pendingDestinationPlacementReleaseRequestId;
     private int _activeDestinationPlacementRequestId;
     private ILogger<DirectTransformNavigationPlaytestController>? _logger;
+
+    /// <summary>
+    /// Gets or sets the reference character instantiated by the playtest. The authored reference female remains the
+    /// deterministic default; selecting the male replaces it before either actor enters the scene tree.
+    /// </summary>
+    [ExportGroup("Character Variant")]
+    [Export]
+    public NavigationPlaytestCharacterVariant CharacterVariant { get; set; } = NavigationPlaytestCharacterVariant.ReferenceFemale;
+
+    /// <summary>
+    /// Gets or sets whether ordinary left-button input may submit destinations. Programmatic placement remains available
+    /// for exact diagnostic routes. The production playtest default remains enabled.
+    /// </summary>
+    public bool ManualDestinationPlacementEnabled { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the camera used to project mouse clicks into the playtest world.
@@ -159,7 +191,52 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
     internal Vector3 CameraOrbitOrigin => _cameraOrbitOrigin;
 
+    /// <summary>Applies the selected variant before playtest consumers resolve actor and navigation references.</summary>
+    public void ApplyCharacterVariantSelection()
+    {
+        if (CharacterVariant != NavigationPlaytestCharacterVariant.ReferenceMale)
+        {
+            return;
+        }
+
+        Node3D authoredActor = GetNodeOrNull<Node3D>(ActorNodeName)
+            ?? throw new InvalidOperationException($"Navigation playtest requires its authored '{ActorNodeName}' reference-female actor.");
+        if (authoredActor.HasNode("Male/GeneralSkeleton"))
+        {
+            Actor = authoredActor;
+            NavigationPath = new NodePath($"{ActorNodeName}/Navigation");
+            Navigation = authoredActor.GetNodeOrNull<NavigationBase>("Navigation");
+            return;
+        }
+
+        PackedScene maleScene = ResourceLoader.Load<PackedScene>(ReferenceMaleNPCScenePath)
+            ?? throw new InvalidOperationException($"Navigation playtest could not load reference-male scene '{ReferenceMaleNPCScenePath}'.");
+        Node3D maleActor = maleScene.Instantiate<Node3D>();
+        RemoveChild(authoredActor);
+        authoredActor.Free();
+        maleActor.Name = ActorNodeName;
+        AddChild(maleActor);
+
+        Actor = maleActor;
+        NavigationPath = new NodePath($"{ActorNodeName}/Navigation");
+        Navigation = maleActor.GetNodeOrNull<NavigationBase>("Navigation")
+            ?? throw new InvalidOperationException("Selected reference-male playtest actor does not expose NPC Navigation.");
+    }
+
     internal Vector3 LastCameraOrbitPosition => _lastCameraOrbitPosition;
+
+    internal NavigationPlaytestCameraState CaptureCameraState()
+        => new(_cameraOrbitOrigin, _cameraDistance, _cameraYaw, _cameraPitch, _isCameraOrbitInitialised);
+
+    internal void RestoreCameraState(in NavigationPlaytestCameraState state)
+    {
+        _cameraOrbitOrigin = state.OrbitOrigin;
+        _cameraDistance = Mathf.Clamp(state.Distance, MinCameraDistance, MaxCameraDistance);
+        _cameraYaw = state.Yaw;
+        _cameraPitch = state.Pitch;
+        _isCameraOrbitInitialised = state.IsInitialised;
+        UpdateCameraTransform();
+    }
 
     internal bool HasPendingDestinationPlacementRequest
         => _hasPendingDestinationPlacementPress || _hasPendingDestinationPlacementRelease;
@@ -173,6 +250,7 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
     /// <inheritdoc/>
     public override void _Ready()
     {
+        ApplyCharacterVariantSelection();
         _logger = ResolveLogger();
         _startupCameraActivationFramesRemaining = StartupCameraActivationFrameCount;
         SetProcess(true);
@@ -250,6 +328,12 @@ public partial class DirectTransformNavigationPlaytestController : Node3D
 
         if (mouseButton.ButtonIndex == MouseButton.Left)
         {
+            if (!ManualDestinationPlacementEnabled)
+            {
+                CancelQueuedDestinationPlacement();
+                return;
+            }
+
             if (mouseButton.Pressed)
             {
                 BeginDestinationPlacement(mouseButton.Position);

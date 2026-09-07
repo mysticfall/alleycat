@@ -1,4 +1,3 @@
-using AlleyCat.Control.Locomotion;
 using AlleyCat.Core;
 using AlleyCat.Interaction.Hands;
 using AlleyCat.Navigation;
@@ -16,7 +15,7 @@ namespace AlleyCat.Character;
 /// out of authored prompts.
 /// </summary>
 [TemplateSealed]
-public interface ICharacter : IHasHands, IHasVoice, IHasHearing, ILocomotive, INavigator, IHasVision, IVisualSubject
+public interface ICharacter : IIdentifiable, IHasHands, IHasVoice, IHasHearing, INavigator, IHasVision, IVisualSubject
 {
     /// <inheritdoc />
     string IIdentifiable.Type => "char";

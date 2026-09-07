@@ -8,6 +8,8 @@ namespace AlleyCat.Navigation;
 [GlobalClass]
 public abstract partial class NavigationBase : NavigationAgent3D, INavigation
 {
+    private const int TerminalOutcomeCapacity = 32;
+
     private Transform3D _destination = Transform3D.Identity;
     private NavigationMotionIntent _intent = CompletedIntent(Vector3.Zero);
     private Vector3 _initialFacing = Vector3.Forward;
@@ -19,6 +21,29 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     private Vector3 _pathTraversalStart;
     private long _destinationRequestGeneration;
     private long _routeRevision;
+    private Transform3D _lastActorTransform = Transform3D.Identity;
+    private readonly NavigationRequestLifecycle _requestLifecycle = new(TerminalOutcomeCapacity);
+
+    /// <inheritdoc/>
+    [Export]
+    public bool IsMovementAuthorityActive { get; private set; } = true;
+
+    /// <inheritdoc/>
+    public void ActivateMovementAuthority()
+    {
+        IsMovementAuthorityActive = true;
+        _requestLifecycle.Enable();
+    }
+
+    /// <inheritdoc/>
+    public void DeactivateMovementAuthority()
+    {
+        IsMovementAuthorityActive = false;
+        _ = _requestLifecycle.Disable(
+            CreateLifecycleTerminalContext(_lastActorTransform, NavigationTerminalReason.Cancellation),
+            Engine.GetPhysicsFrames());
+        ClearDestinationState();
+    }
 
     /// <inheritdoc/>
     public bool HasDestination
@@ -30,10 +55,25 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     public Transform3D Destination => _destination;
 
     /// <inheritdoc/>
-    public bool IsNavigationRunning => HasDestination && !_intent.IsComplete;
+    public NavigationCurrentStatus CurrentStatus => _requestLifecycle.CurrentStatus;
 
     /// <inheritdoc/>
-    bool INavigation.IsNavigationFinished => !HasDestination || _intent.IsComplete;
+    public IReadOnlyList<NavigationTerminalOutcomeRecord> TerminalOutcomes => _requestLifecycle.TerminalOutcomes;
+
+    /// <inheritdoc/>
+    public bool TryAcknowledgeOutcome(NavigationRequestIdentity request, long terminalSequence)
+        => _requestLifecycle.TryAcknowledgeOutcome(request, terminalSequence);
+
+    /// <inheritdoc/>
+    public bool IsNavigationRunning => HasDestination && (!_intent.IsComplete || !CanReportNavigationComplete());
+
+    /// <inheritdoc/>
+    bool INavigation.IsNavigationFinished => !HasDestination || (_intent.IsComplete && CanReportNavigationComplete());
+
+    /// <summary>
+    /// Allows a movement consumer to retain public motion authority after the facade reaches its broad arrival policy.
+    /// </summary>
+    protected virtual bool CanReportNavigationComplete() => true;
 
     /// <inheritdoc/>
     [ExportGroup("Steering Distances")]
@@ -124,7 +164,7 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     /// <summary>
     /// Gets whether the latest call to <see cref="Poll" /> produced a valid sample rather than returning cached intent.
     /// </summary>
-    protected bool LastPollProducedValidSample
+    public bool LastPollProducedValidSample
     {
         get; private set;
     }
@@ -156,9 +196,27 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
             return NavigationDestinationResult.Unreachable;
         }
 
+        Transform3D realisedTransform = ResolveLifecycleTransform(navigationStartPosition);
+        NavigationTerminalContext? replacementContext = HasDestination
+            ? CreateLifecycleTerminalContext(realisedTransform, NavigationTerminalReason.Replacement)
+            : null;
+        long nextRouteRevision = _routeRevision + 1;
+        NavigationDestinationAttempt attempt = _requestLifecycle.RequestDestination(
+            ToOutcomeTransform(destination),
+            NavigationRequestValidation.Accepted,
+            nextRouteRevision,
+            clockGeneration: 0,
+            Engine.GetPhysicsFrames(),
+            replacementContext,
+            Engine.GetPhysicsFrames());
+        if (!attempt.IsAccepted)
+        {
+            return attempt.Result;
+        }
+
         TargetPosition = destination.Origin;
         _destinationRequestGeneration++;
-        _routeRevision++;
+        _routeRevision = nextRouteRevision;
         CurrentRouteSnapshot = null;
         _destination = destination;
         HasDestination = true;
@@ -179,6 +237,15 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     /// <inheritdoc/>
     public void ClearDestination()
     {
+        _ = _requestLifecycle.TryCancel(
+            NavigationCancellationSource.ExplicitClear,
+            CreateLifecycleTerminalContext(_lastActorTransform, NavigationTerminalReason.Cancellation),
+            Engine.GetPhysicsFrames());
+        ClearDestinationState();
+    }
+
+    private void ClearDestinationState()
+    {
         HasDestination = false;
         _hasInitialSample = false;
         _travelProgress.Reset();
@@ -195,6 +262,11 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     /// <inheritdoc/>
     public NavigationMotionIntent Poll(Transform3D actorTransform)
     {
+        if (actorTransform.IsFinite())
+        {
+            _lastActorTransform = actorTransform;
+        }
+
         LastPollProducedValidSample = false;
         if (!HasDestination || !IsNavigationMapReady)
         {
@@ -286,12 +358,10 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         bool geometryChanged = CurrentRouteSnapshot is not null
             && CurrentRouteSnapshot.DestinationRequestGeneration == _destinationRequestGeneration
             && !HasSamePath(CurrentRouteSnapshot.PathPoints, path);
-        bool indexChanged = CurrentRouteSnapshot is not null
-            && CurrentRouteSnapshot.DestinationRequestGeneration == _destinationRequestGeneration
-            && CurrentRouteSnapshot.ActivePathIndex != pathIndex;
-        if (geometryChanged || indexChanged)
+        if (geometryChanged)
         {
             _routeRevision++;
+            _ = _requestLifecycle.AdvanceRevision();
         }
 
         CurrentRouteSnapshot = new NavigationRouteSnapshot(
@@ -320,6 +390,58 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
     /// </summary>
     protected virtual void OnDestinationCleared()
     {
+    }
+
+    /// <summary>Commits measured successful terminal evidence through the shared exact-once lifecycle.</summary>
+    protected bool TryCommitCompletedOutcome(NavigationTerminalContext context, ulong terminalPhysicsTick)
+        => TryCommitAndClear(() => _requestLifecycle.TryComplete(context, terminalPhysicsTick));
+
+    /// <summary>Commits measured failed terminal evidence through the shared exact-once lifecycle.</summary>
+    protected bool TryCommitFailedOutcome(NavigationTerminalContext context, ulong terminalPhysicsTick)
+        => TryCommitAndClear(() => _requestLifecycle.TryFail(context, terminalPhysicsTick));
+
+    /// <summary>Commits a known obstruction through the shared exact-once lifecycle.</summary>
+    protected bool TryCommitBlockedOutcome(NavigationTerminalContext context, ulong terminalPhysicsTick)
+        => TryCommitAndClear(() => _requestLifecycle.TryBlock(context, terminalPhysicsTick));
+
+    /// <summary>Commits a caller-owned cancellation source before clearing active navigation state.</summary>
+    protected bool TryCancelActiveOutcome(
+        NavigationCancellationSource source,
+        NavigationTerminalContext context,
+        ulong terminalPhysicsTick)
+        => TryCommitAndClear(() => _requestLifecycle.TryCancel(source, context, terminalPhysicsTick));
+
+    /// <summary>Updates the retained clock generation without allocating a lifecycle record.</summary>
+    protected void SetActiveRequestClockGeneration(long clockGeneration)
+        => _requestLifecycle.SetClockGeneration(clockGeneration);
+
+    /// <summary>Marks active work temporarily neutralised without committing a terminal result.</summary>
+    protected void EnterActiveRequestNeutralisation() => _requestLifecycle.EnterTransientNeutralisation();
+
+    /// <summary>Marks active work waiting without committing a terminal result.</summary>
+    protected void EnterActiveRequestWaiting() => _requestLifecycle.EnterTransientWaiting();
+
+    /// <summary>Returns retained active work to route following.</summary>
+    protected void ResumeActiveRequestFollowing() => _requestLifecycle.ResumeFollowing();
+
+    /// <summary>Commits reset cancellation before clearing route state and advances the non-reused identity generation.</summary>
+    protected bool ResetNavigationRequestLifecycle(NavigationTerminalContext context, ulong terminalPhysicsTick)
+    {
+        bool committed = _requestLifecycle.Reset(context, terminalPhysicsTick);
+        ClearDestinationState();
+        return committed;
+    }
+
+    /// <summary>
+    /// Cancels active work and transfers every retained outcome before ending storage owned by a removed node.
+    /// </summary>
+    protected void EndNavigationOwnerLifecycle(
+        INavigationTerminalOutcomeSink survivingSink,
+        NavigationTerminalContext context,
+        ulong terminalPhysicsTick)
+    {
+        _requestLifecycle.RemoveOwner(survivingSink, context, terminalPhysicsTick);
+        ClearDestinationState();
     }
 
     /// <summary>
@@ -355,6 +477,46 @@ public abstract partial class NavigationBase : NavigationAgent3D, INavigation
         }
 
         return worldTransform.Origin.IsFinite() ? worldTransform.Origin : Vector3.Zero;
+    }
+
+    private bool TryCommitAndClear(Func<bool> commit)
+    {
+        bool committed = commit();
+        if (committed)
+        {
+            ClearDestinationState();
+        }
+
+        return committed;
+    }
+
+    private Transform3D ResolveLifecycleTransform(Vector3 navigationStartPosition)
+        => _lastActorTransform.IsFinite()
+            && (_lastActorTransform != Transform3D.Identity || navigationStartPosition == Vector3.Zero)
+                ? _lastActorTransform
+                : new Transform3D(Basis.Identity, navigationStartPosition);
+
+    /// <summary>Creates measured lifecycle evidence for cancellation and replacement transitions.</summary>
+    protected virtual NavigationTerminalContext CreateLifecycleTerminalContext(
+        Transform3D finalTransform,
+        NavigationTerminalReason reason)
+    {
+        NavigationOutcomeTransform final = ToOutcomeTransform(finalTransform);
+        NavigationOutcomeTransform requested = ToOutcomeTransform(_destination);
+        float planarError = new Vector2(final.X - requested.X, final.Z - requested.Z).Length();
+        float yawError = MathF.Abs(Mathf.Wrap(final.YawRadians - requested.YawRadians, -Mathf.Pi, Mathf.Pi));
+        var error = new NavigationPlanarYawError(planarError, yawError);
+        var tolerances = new NavigationTerminalTolerances(
+            Mathf.Max(DestinationReachedDistance, 0.0f),
+            Mathf.DegToRad(Mathf.Max(FacingToleranceDegrees, 0.0f)));
+        return new NavigationTerminalContext(final, error, tolerances, reason);
+    }
+
+    private static NavigationOutcomeTransform ToOutcomeTransform(Transform3D transform)
+    {
+        Vector3 facing = ExtractHorizontalFacing(transform.Basis, Vector3.Forward);
+        float yaw = MathF.Atan2(-facing.X, -facing.Z);
+        return new NavigationOutcomeTransform(transform.Origin.X, transform.Origin.Y, transform.Origin.Z, yaw);
     }
 
     private static Vector3 ExtractHorizontalFacing(Basis basis, Vector3 fallback)

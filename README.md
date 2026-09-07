@@ -89,6 +89,13 @@ Use the agent names found in `.opencode/agents/`; only the agents you list are o
 
 ---
 
+## 🛠️ Developer Tools
+
+`tools/` is the home for manually invoked developer tools. The three tool roots are character generation, Kimodo
+animation packaging, and GDScript API documentation. Each owns its commands, implementation,
+configuration where required, tests, and operational README. Start at [Developer Tool Layout](specs/tooling/index.md)
+for authoritative ownership and tool-specific links.
+
 ## 📜 Licence
 
 This project is open-source and available under the terms of the [MIT Licence](LICENSE).

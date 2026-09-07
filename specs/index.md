@@ -38,8 +38,7 @@
 ## Animation
 
 - [ANIM: Animation](animation/index.md)
-  - [ANIM-001: Animation Source Pipeline](animation/001-animation-source-pipeline/index.md)
-  - [ANIM-003: Standing Locomotion Catalogue](animation/003-standing-locomotion-catalogue/index.md)
+   - [ANIM-002: Locomotive Animation Set](animation/002-locomotive-animation-set/index.md)
 
 ## Scene
 
@@ -78,6 +77,7 @@
     - [Hand-Rotation Elbow Correction Contract](ik/002-arm-shoulder-ik/hand-rotation-correction-contract.md)
   - [IK-003: Leg And Feet IK System](ik/003-leg-feet-ik/index.md)
     - [Leg-Feet IK Contract](ik/003-leg-feet-ik/leg-feet-ik-contract.md)
+    - [Contact-Lock Coordinator Contract](ik/003-leg-feet-ik/contact-lock-coordinator-contract.md)
     - [Leg-Feet IK Test Setup Contract](ik/003-leg-feet-ik/test-setup-contract.md)
   - [IK-004: VRIK Pose State Machine And Hip Reconciliation](ik/004-vrik-pose-state-machine/index.md)
     - [Pose State Machine Contract](ik/004-vrik-pose-state-machine/pose-state-machine-contract.md)
@@ -132,5 +132,7 @@
 
 ## Tooling
 
-- [GDScript API Documentation Generator](tooling/gdscript-api-doc-generator/index.md)
+- [Developer Tool Layout](tooling/index.md)
 - [Character Generator](tooling/character-generator/index.md)
+- [Kimodo Locomotive Animation-Set Pipeline](tooling/kimodo-pipeline/locomotive-animation-set.md)
+- [GDScript API Documentation Generator](tooling/gdscript-api-doc-generator/index.md)

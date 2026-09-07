@@ -1,0 +1,97 @@
+{
+  "animation_library": "idle_sad.tres",
+  "clip_count": 1,
+  "clips": [
+    {
+      "boundary_kind": "confined_manoeuvre",
+      "capability": "idle_contact_free",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/idle/sad/metrics/idle_sad.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/idle/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "kimodo_m0a3dyf0"
+      },
+      "duration_seconds": 7.96666666666667,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "identity": "idle_sad",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "inapplicable"
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 3.98333333333333,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 7.96666666666667,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "idle",
+      "stitch_mappings": {
+        "applicability": "inapplicable"
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 240.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 239.0,
+        "duration_seconds": 7.96666666666667,
+        "fps": 30.0,
+        "frame_end": 240.0,
+        "frame_start": 1.0,
+        "period_frames": 239.0,
+        "runtime_sample_count": 239.0,
+        "sample_count": 240.0
+      }
+    }
+  ],
+  "godot_response_coordinates": {
+    "actor_local_planar": "[right, forward] = [root.x, -root.z]",
+    "root": "+X right, +Y up, -Z forward",
+    "yaw": "signed local-Y"
+  },
+  "package": "idle",
+  "package_variant": "sad",
+  "schema_version": 3
+}

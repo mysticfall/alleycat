@@ -52,7 +52,7 @@ test-framework/
 ├── test/                         # Unit tests for the test framework
 ├── AlleyCat.TestFramework.csproj
 └── AlleyCat.TestFramework.Tests.csproj
-tools/                            # Blender and documentation generation utilities
+tools/                            # Manually invoked developer tools, grouped by owner
 AlleyCat.sln                      # Root .NET solution wiring game and test projects
 AGENTS.md                         # Agent operating rules and project-specific instructions
 README.md                         # Repository overview and developer onboarding
@@ -83,6 +83,10 @@ All Markdown headings must be written in Title Case, capitalising every word, ex
 
 Always use **Context7** for API documentation, code generation, setup, or configuration tasks related to Godot and other
 libraries/frameworks. For Godot API, use `/godotengine/godot-docs` as `libraryId`.
+
+`tools/` is the home for every manually invoked developer tool. Each tool owns its commands, implementation,
+configuration where required, tests, and scope-appropriate README. See [Developer Tool Layout](specs/tooling/index.md)
+for the authoritative contract and tool-specific README links.
 
 When you encounter an image that you need to analyse, use the `read` tool to load the image file. The tool returns image
 contents for direct inspection.

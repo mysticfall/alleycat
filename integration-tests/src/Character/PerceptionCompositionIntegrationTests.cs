@@ -82,7 +82,7 @@ public sealed class PerceptionCompositionIntegrationTests
                     typeof(RelativePositionPerception),
                 ],
                 mind.GetChildren().OfType<IPerception>().Select(faculty => faculty.GetType()));
-            Assert.Equal(["CharacterLocomotion", "LocomotiveNavigation", "EyesBehaviour", "AIVoice", "Hearing", "HandPoseBehaviour", "HandPoseBehaviour"], npc.Components.Select(component => component.GetType().Name));
+            Assert.Equal(["EyesBehaviour", "NPCNavigation", "AIVoice", "Hearing", "HandPoseBehaviour", "HandPoseBehaviour"], npc.Components.Select(component => component.GetType().Name));
             Assert.Same(mind, femaleSelector.GetParent());
             Assert.False(femaleSelector is IComponent);
             Assert.DoesNotContain(npc.Components, component => ReferenceEquals(femaleSelector, component));

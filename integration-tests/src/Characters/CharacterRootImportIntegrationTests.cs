@@ -14,6 +14,7 @@ namespace AlleyCat.IntegrationTests.Characters;
 public sealed class CharacterRootImportIntegrationTests
 {
     private const string CharacterScriptPath = "res://src/Character/Character.cs";
+    private const string PlayerCharacterScriptPath = "res://src/Character/PlayerCharacter.cs";
     private const string CharacterImportScriptPath = "res://assets/characters/import/character_import.gd";
     private const string CharacterEyeImportScriptPath = "res://assets/characters/import/character_eye_animation_import.gd";
     private const string CharacterColliderImportScriptPath = "res://assets/characters/import/character_collider_profile_import.gd";
@@ -34,7 +35,7 @@ public sealed class CharacterRootImportIntegrationTests
 
         try
         {
-            AssertCharacterRoot(root, "Female");
+            AssertCharacterRoot(root, "Female", typeof(CharacterRoot), CharacterScriptPath, typeof(ICharacter));
         }
         finally
         {
@@ -61,7 +62,12 @@ public sealed class CharacterRootImportIntegrationTests
     [Headless]
     [Fact]
     public void PlayerScene_ResolvesRootAsCharacterBodyICharacterAndInstalls()
-        => AssertShippedCharacterScene(PlayerScenePath, "Player");
+        => AssertShippedCharacterScene(
+            PlayerScenePath,
+            "Player",
+            typeof(PlayerCharacter),
+            PlayerCharacterScriptPath,
+            typeof(IPlayer));
 
     /// <summary>
     /// The shipped ally scene inherits the imported Character root and remains installable.
@@ -69,16 +75,26 @@ public sealed class CharacterRootImportIntegrationTests
     [Headless]
     [Fact]
     public void AllyScene_ResolvesRootAsCharacterBodyICharacterAndInstalls()
-        => AssertShippedCharacterScene(AllyScenePath, "Ally");
+        => AssertShippedCharacterScene(
+            AllyScenePath,
+            "Ally",
+            typeof(CharacterRoot),
+            CharacterScriptPath,
+            typeof(ICharacter));
 
-    private static void AssertShippedCharacterScene(string scenePath, string expectedName)
+    private static void AssertShippedCharacterScene(
+        string scenePath,
+        string expectedName,
+        Type expectedType,
+        string expectedScriptPath,
+        Type expectedInterface)
     {
         PackedScene scene = LoadPackedScene(scenePath);
         Node root = scene.Instantiate();
 
         try
         {
-            AssertCharacterRoot(root, expectedName);
+            AssertCharacterRoot(root, expectedName, expectedType, expectedScriptPath, expectedInterface);
             Assert.NotNull(root.GetNodeOrNull("Female/GeneralSkeleton"));
 
             EnsureCharacterRuntimeInstalled(root);
@@ -89,15 +105,20 @@ public sealed class CharacterRootImportIntegrationTests
         }
     }
 
-    private static void AssertCharacterRoot(Node root, string expectedName)
+    private static void AssertCharacterRoot(
+        Node root,
+        string expectedName,
+        Type expectedType,
+        string expectedScriptPath,
+        Type expectedInterface)
     {
         Assert.Equal(expectedName, root.Name.ToString());
         _ = Assert.IsAssignableFrom<CharacterBody3D>(root);
-        Assert.Equal(typeof(CharacterRoot).FullName, root.GetType().FullName);
-        Assert.Contains(root.GetType().GetInterfaces(), type => type.FullName == typeof(ICharacter).FullName);
+        Assert.Equal(expectedType.FullName, root.GetType().FullName);
+        Assert.Contains(root.GetType().GetInterfaces(), type => type.FullName == expectedInterface.FullName);
 
         Script script = Assert.IsType<Script>(root.GetScript().AsGodotObject(), exactMatch: false);
-        Assert.Equal(CharacterScriptPath, script.ResourcePath);
+        Assert.Equal(expectedScriptPath, script.ResourcePath);
     }
 
     private static void AssertScriptLoads(string scriptPath)

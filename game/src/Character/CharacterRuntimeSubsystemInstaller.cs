@@ -22,6 +22,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
     private static readonly StringName _actorsGroupName = new("Actors");
     private static readonly StringName _visualSubjectsGroupName = new("VisualSubjects");
     private static readonly StringName _locomotionLibraryName = new("locomotion");
+    private static readonly StringName _idleLibraryName = new("idle");
     private static readonly StringName _authoredTreeRootResourcePathMeta = new("authored_tree_root_resource_path");
     private static readonly StringName[] _requiredEyeAnimationNames =
     [
@@ -94,7 +95,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
 
             AnimationPlayer? templateAnimationPlayer = FindSingleDescendant<AnimationPlayer>(context.TemplateRoot, required: false);
             bool animationLibrariesChanged = templateAnimationPlayer is not null
-                && RetainAuthoredLocomotionLibrary(templateAnimationPlayer, animationPlayer);
+                && RetainAuthoredAnimationLibraries(templateAnimationPlayer, animationPlayer);
             if (animationLibrariesChanged && animationTree.Active)
             {
                 animationTree.Active = false;
@@ -105,7 +106,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             ConfigureEyeAnimationTreeFilters(animationTree, eyeFilterTargets);
             ValidateEyes(targetCharacter.Eyes);
             ValidateHands(targetCharacter.LeftHand, targetCharacter.RightHand);
-            ValidateLocomotion(targetCharacter.Locomotion, context.TargetRoot);
+            ValidateRoleComposition(targetCharacter, templateCharacter, context.TargetRoot);
             ValidateNavigation(targetCharacter.Navigation, context.TargetRoot);
             ValidatePerception(templateCharacter, targetCharacter);
             IdentityValidator.Validate(targetCharacter, nameof(context));
@@ -119,6 +120,10 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             targetVoice.Id = targetCharacter.Id;
             ValidateVoiceIdentity(targetVoice, "final installed");
             targetCharacter.RefreshComponents();
+            if (targetCharacter.Navigation is NPCNavigation npcNavigation)
+            {
+                ActivateNPCNavigationWhenReady(npcNavigation);
+            }
 
             return SceneInstallationResult.Successful();
         }
@@ -173,6 +178,17 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
     private static string DescribeNode(IVoice voice)
         => voice is Node node ? node.GetPath().ToString() : voice.GetType().FullName ?? voice.GetType().Name;
 
+    private static void ActivateNPCNavigationWhenReady(NPCNavigation navigation)
+    {
+        if (navigation.IsInsideTree())
+        {
+            navigation.ActivateRuntimeBinding();
+            return;
+        }
+
+        _ = navigation.CallDeferred(NPCNavigation.MethodName.ActivateRuntimeBinding);
+    }
+
     private static void RebaseAnimationMixerRoots(AnimationTree animationTree, AnimationPlayer animationPlayer, Skeleton3D skeleton)
     {
         Node modelRoot = skeleton.GetParent()
@@ -183,26 +199,37 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         animationPlayer.RootNode = animationPlayer.GetPathTo(modelRoot);
     }
 
-    private static bool RetainAuthoredLocomotionLibrary(
+    private static bool RetainAuthoredAnimationLibraries(
         AnimationPlayer templateAnimationPlayer,
         AnimationPlayer targetAnimationPlayer)
     {
-        if (!templateAnimationPlayer.HasAnimationLibrary(_locomotionLibraryName))
+        bool changed = false;
+        changed |= RetainAuthoredAnimationLibrary(templateAnimationPlayer, targetAnimationPlayer, _locomotionLibraryName);
+        changed |= RetainAuthoredAnimationLibrary(templateAnimationPlayer, targetAnimationPlayer, _idleLibraryName);
+        return changed;
+    }
+
+    private static bool RetainAuthoredAnimationLibrary(
+        AnimationPlayer templateAnimationPlayer,
+        AnimationPlayer targetAnimationPlayer,
+        StringName libraryName)
+    {
+        if (!templateAnimationPlayer.HasAnimationLibrary(libraryName))
         {
             return false;
         }
 
-        if (targetAnimationPlayer.HasAnimationLibrary(_locomotionLibraryName))
+        if (targetAnimationPlayer.HasAnimationLibrary(libraryName))
         {
             return false;
         }
 
-        AnimationLibrary locomotionLibrary = templateAnimationPlayer.GetAnimationLibrary(_locomotionLibraryName);
-        Error result = targetAnimationPlayer.AddAnimationLibrary(_locomotionLibraryName, locomotionLibrary);
-        return result == Error.Ok && targetAnimationPlayer.HasAnimationLibrary(_locomotionLibraryName)
+        AnimationLibrary library = templateAnimationPlayer.GetAnimationLibrary(libraryName);
+        Error result = targetAnimationPlayer.AddAnimationLibrary(libraryName, library);
+        return result == Error.Ok && targetAnimationPlayer.HasAnimationLibrary(libraryName)
             ? true
             : throw new InvalidOperationException(
-                $"Character runtime subsystem installer could not retain authored AnimationLibrary '{_locomotionLibraryName}' on '{targetAnimationPlayer.GetPath()}'.");
+                $"Character runtime subsystem installer could not retain authored AnimationLibrary '{libraryName}' on '{targetAnimationPlayer.GetPath()}'.");
     }
 
     private static EyeAnimationTreeFilterTargets ValidateEyeAnimationLibrary(AnimationPlayer animationPlayer)
@@ -321,6 +348,7 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         if (!ReferenceEquals(instanceTreeRoot, treeRoot))
         {
             animationTree.TreeRoot = instanceTreeRoot;
+            animationTree.ClearCaches();
         }
 
         ConfigureFilteredNode<AnimationNodeBlend2>(
@@ -568,6 +596,21 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
         }
     }
 
+    private static void ValidateRoleComposition(Character target, Character template, Node targetRoot)
+    {
+        if (target is PlayerCharacter player && template is PlayerCharacter)
+        {
+            ValidateLocomotion(player.Locomotion, targetRoot);
+            return;
+        }
+
+        if (target is PlayerCharacter || template is PlayerCharacter)
+        {
+            throw new InvalidOperationException(
+                "Character runtime subsystem installer requires target and template roots to declare the same explicit player or NPC role.");
+        }
+    }
+
     private static void ValidateLocomotion(CharacterLocomotion? locomotion, Node targetRoot)
     {
         if (locomotion is null)
@@ -597,28 +640,15 @@ public partial class CharacterRuntimeSubsystemInstaller : RigSubsystemInstaller
             return;
         }
 
-        if (navigation is not LocomotiveNavigation locomotiveNavigation)
+        if (navigation is NPCNavigation npcNavigation)
         {
-            return;
+            npcNavigation.Actor ??= targetRoot as CharacterBody3D
+                ?? throw new InvalidOperationException(
+                    $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a CharacterBody3D for NPC navigation binding.");
+            RequireAssigned(npcNavigation.AnimationTree, npcNavigation, nameof(NPCNavigation.AnimationTree));
+            RequireAssigned(npcNavigation.RootMotionReference, npcNavigation, nameof(NPCNavigation.RootMotionReference));
         }
 
-        if (targetRoot is not Node3D actor || targetRoot is not ILocomotive)
-        {
-            throw new InvalidOperationException(
-                $"Character runtime subsystem installer expected target root '{targetRoot.GetPath()}' to be a Node3D implementing {nameof(ILocomotive)} for locomotive navigation binding.");
-        }
-
-        if (locomotiveNavigation.Actor is null)
-        {
-            throw new InvalidOperationException(
-                $"Character runtime subsystem installer requires template-authored '{nameof(LocomotiveNavigation.Actor)}' on '{locomotiveNavigation.GetPath()}'.");
-        }
-
-        if (!ReferenceEquals(locomotiveNavigation.Actor, actor) || locomotiveNavigation.Actor is not ILocomotive)
-        {
-            throw new InvalidOperationException(
-                $"Character runtime subsystem installer requires '{nameof(LocomotiveNavigation.Actor)}' on '{locomotiveNavigation.GetPath()}' to reference target root '{targetRoot.GetPath()}', which must implement {nameof(ILocomotive)}.");
-        }
     }
 
     internal static Character ValidateCharacterHub(Node targetRoot)

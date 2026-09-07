@@ -7,53 +7,47 @@ title: Animation
 
 ## Requirement
 
-Provide a discoverable entry point for the proven Mixamo source pipeline and the concrete animation catalogues that
-consume its reusable outputs.
+Provide discoverable ownership boundaries for locomotive animation content delivery and its runtime consumers.
 
 ## Goal
 
-Contributors and implementation agents can reach the normative Mixamo pipeline contract and the standing-locomotion
-catalogue contract directly.
+Contributors can reach the authoritative ANIM-002 delivery and contact contract without treating tooling or consumers
+as an alternative content source of truth.
 
 ## User Requirements
 
-1. Contributors can find the approved animation-source workflow from the project specifications index.
-2. Contributors can distinguish reusable Mixamo pipeline outputs from concrete animation selections, Godot packaging,
-   and runtime behaviour.
+1. Contributors can find the locomotive content delivery workflow and contact contract from the project index.
+2. Contributors can distinguish animation content ownership from player, navigation, and IK policy ownership.
 
 ## Technical Requirements
 
-1. [ANIM-001: Animation Source Pipeline](001-animation-source-pipeline/index.md) is the normative contract for the
-   working Mixamo acquisition, preview, retargeting, root-processing, batch-processing, metrics, and reusable output
-   schemas.
-2. [ANIM-003: Standing Locomotion Catalogue](003-standing-locomotion-catalogue/index.md) is the normative contract for
-   the concrete standing-locomotion selection, `locomotion_standing.blend`, extracted per-clip `.res` resources,
-   reusable Godot animation library, package metadata, and content-specific validation.
+1. [ANIM-002: Locomotive Animation Set](002-locomotive-animation-set/index.md) is normative for the locomotive
+   catalogue, character-owned variant-scoped embedded-library package delivery, central contact-permission table,
+   authored-track evidence, and side-specific contact-provider boundary.
+2. The [Kimodo pipeline specification](../tooling/kimodo-pipeline/locomotive-animation-set.md) owns the locomotion
+   authoring bootstrap and evidence production; it does not own or override contact permission.
 
 ## In Scope
 
-- Animation specification navigation.
-- Ownership boundaries between the reusable Mixamo pipeline and content-specific specifications.
+- Animation specification navigation and ownership boundaries.
 
 ## Out Of Scope
 
-- Runtime animation selection, transition behaviour, player locomotion, and navigation integration.
-- Duplicating technical contracts defined by child specifications.
+- Runtime locomotion policy, provider-specific production policy, navigation outcomes, and player movement arbitration.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. The project specifications index links this page, and this page links ANIM-001 and ANIM-003.
-2. The page identifies the ownership boundary between reusable pipeline schemas, concrete catalogue content, and
-   runtime consumers.
+1. The project index reaches this page and this page reaches ANIM-002.
+2. Navigation shows the content, tooling, and runtime-policy boundaries clearly.
 
 ### Technical Requirement Acceptance
 
-1. ANIM-001 is identified as the normative source-pipeline contract.
-2. ANIM-003 is identified as the normative standing-locomotion catalogue and Godot packaging contract.
+1. ANIM-002 is identified as the sole contact-permission authority and the tooling page as the authoring-bootstrap
+   and evidence owner, not a permission authority.
+2. No link from this page presents a runtime consumer as an alternative contact contract.
 
 ## Specifications
 
-- [ANIM-001: Animation Source Pipeline](001-animation-source-pipeline/index.md)
-- [ANIM-003: Standing Locomotion Catalogue](003-standing-locomotion-catalogue/index.md)
+- [ANIM-002: Locomotive Animation Set](002-locomotive-animation-set/index.md)

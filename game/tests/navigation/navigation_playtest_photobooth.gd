@@ -1,5 +1,6 @@
 extends Node3D
 
+# Manual-only, windowed navigation evidence tool; automated tests use synthetic fixtures instead.
 const NPC_SCENE := preload("res://assets/testing/navigation/navigation_test_npc.tscn")
 const OUTPUT_ROOT := "NAV-001/turn_sign"
 const TURN_PARAMETER := &"parameters/States/Walking/Locomotion/blend_position"

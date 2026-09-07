@@ -1,9 +1,9 @@
 [gd_resource type="Resource" script_class="StandingPoseState" format=3 uid="uid://byk1qyey80254"]
 
-[ext_resource type="Resource" uid="uid://c7f40jgif80ac" path="res://assets/characters/ik/pose/head_tracking_hip_profile.tres" id="2_6oie5"]
-[ext_resource type="Resource" uid="uid://cnupuy26n4xtb" path="res://assets/characters/ik/pose/standing_hip_offset_limits.tres" id="3_p0eiy"]
-[ext_resource type="Script" uid="uid://cjovqcnp8ie1q" path="res://src/IK/Pose/StandingPoseState.cs" id="3_wysak"]
-[ext_resource type="Resource" uid="uid://ba1j128cdsh5y" path="res://assets/characters/ik/pose/standing_continuum_crouched_hip_offset_limits.tres" id="4_vlfio"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/head_tracking_hip_profile.tres" id="2_6oie5"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/standing_hip_offset_limits.tres" id="3_p0eiy"]
+[ext_resource type="Script" path="res://src/IK/Pose/StandingPoseState.cs" id="3_wysak"]
+[ext_resource type="Resource" path="res://assets/characters/ik/pose/standing_continuum_crouched_hip_offset_limits.tres" id="4_vlfio"]
 
 [resource]
 resource_name = "StandingPoseState"

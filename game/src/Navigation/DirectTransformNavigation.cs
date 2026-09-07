@@ -45,7 +45,7 @@ public partial class DirectTransformNavigation : NavigationBase
         base._PhysicsProcess(delta);
 
         Node3D? targetNode = ResolveTarget();
-        if (targetNode is null || !HasDestination)
+        if (targetNode is null || !IsMovementAuthorityActive || !HasDestination)
         {
             return;
         }

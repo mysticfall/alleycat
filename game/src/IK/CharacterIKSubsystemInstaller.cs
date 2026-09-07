@@ -118,6 +118,11 @@ public partial class CharacterIKSubsystemInstaller : RigSubsystemInstaller
     /// </summary>
     protected virtual void ActivateBoundModifierPipeline(CharacterIK ik, Skeleton3D skeleton)
     {
+        // CharacterIK's provider stages and their native consumers must execute after physics-state producers on the
+        // same fixed tick. The installed skeleton is the authoritative runtime owner of that modifier pipeline;
+        // imported template defaults are not a scheduling contract for a role-installed character.
+        skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Physics;
+
         foreach (SkeletonModifier3D modifier in FindDescendants<SkeletonModifier3D>(skeleton))
         {
             ActivateModifier(modifier);

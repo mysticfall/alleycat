@@ -6,10 +6,29 @@ namespace AlleyCat.Navigation;
 /// <summary>
 /// Component facade for navigation and path-following state.
 /// </summary>
-public interface INavigation : IComponent
+public interface INavigation : IComponent, INavigationOutcomeSource
 {
     /// <summary>
-    /// Gets whether a destination has been requested and not explicitly cleared.
+    /// Gets whether navigation currently owns movement authority.
+    /// </summary>
+    bool IsMovementAuthorityActive
+    {
+        get;
+    }
+
+    /// <summary>
+    /// Explicitly grants movement authority to navigation.
+    /// </summary>
+    void ActivateMovementAuthority();
+
+    /// <summary>
+    /// Revokes navigation movement authority and clears its destination.
+    /// </summary>
+    void DeactivateMovementAuthority();
+
+    /// <summary>
+    /// Gets whether an accepted request remains active. Both success and failure are terminal and are distinguished by
+    /// their durable outcome records.
     /// </summary>
     bool HasDestination
     {
@@ -33,7 +52,8 @@ public interface INavigation : IComponent
     }
 
     /// <summary>
-    /// Gets whether the current navigation destination is finished or no destination is active.
+    /// Gets the coarse broad-completion signal. Inspect current status and terminal outcomes for authoritative lifecycle
+    /// state and to distinguish successful completion from failure.
     /// </summary>
     bool IsNavigationFinished
     {

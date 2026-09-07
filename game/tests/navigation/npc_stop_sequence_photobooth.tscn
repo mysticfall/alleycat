@@ -1,0 +1,92 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/photobooth.tscn" id="1_shas8"]
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/camera_rig.tscn" id="2_aqf2g"]
+[ext_resource type="Script" path="res://scripts/photobooth/camera_rig.gd" id="3_8pw3s"]
+[ext_resource type="PackedScene" path="res://assets/markers/debug_marker.tscn" id="4_tflmt"]
+[ext_resource type="Script" path="res://scripts/photobooth/debug_marker.gd" id="5_w2suq"]
+[ext_resource type="PackedScene" path="res://assets/testing/navigation/navigation_test.tscn" id="6_vetux"]
+[ext_resource type="Script" path="res://src/Navigation/DirectTransformNavigationPlaytestController.cs" id="7_23ve1"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gvnl8"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.85, 0.05, 0.55)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mr41a"]
+size = Vector3(0.05, 0.008, 2.58344)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_preview"]
+resource_name = "DestinationMarkerPreviewMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(0.1, 0.55, 1, 0.72)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dest_pressed"]
+resource_name = "DestinationMarkerPressedMaterial"
+transparency = 1
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(1, 0.65, 0.08, 0.82)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fllxo"]
+resource_name = "NavigationObstacleRedMaterial"
+albedo_color = Color(0.95, 0.04, 0.025, 1)
+roughness = 0.65
+
+[node name="Photobooth" unique_id=406188165 instance=ExtResource("1_shas8")]
+
+[node name="SideCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527 instance=ExtResource("2_aqf2g")]
+transform = Transform3D(-0.79108125, 0.054400656, -0.6092874, 0, 0.99603784, 0.08893193, 0.61171114, 0.07035238, -0.78794676, 0.33091962, 1.1, -3.7953467)
+script = ExtResource("3_8pw3s")
+orthogonal_scale = 2.2
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="FrontCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=542467868 instance=ExtResource("2_aqf2g")]
+transform = Transform3D(-0.61171114, -0.07035238, 0.78794676, 0, 0.99603784, 0.08893193, -0.79108125, 0.054400656, -0.6092874, 4.2587385, 1.1, -3.2931104)
+script = ExtResource("3_8pw3s")
+orthogonal_scale = 2.2
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="LowerBodyCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="2" unique_id=1956096932 instance=ExtResource("2_aqf2g")]
+transform = Transform3D(-0.9930693, 0.006707795, -0.11733846, 0, 0.99837, 0.05707303, 0.11753003, 0.056677476, -0.99145067, 1.8381174, 0.55, -3.317481)
+script = ExtResource("3_8pw3s")
+orthogonal_scale = 1.15
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="ThreeQuarterCamera" type="Node3D" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="3" unique_id=42696891 instance=ExtResource("2_aqf2g")]
+transform = Transform3D(-0.024092322, 0.2576983, -0.96592504, 0, 0.9662055, 0.25777313, 0.9997097, 0.006210353, -0.023278134, -2.0781982, 1.9, -1.6796544)
+script = ExtResource("3_8pw3s")
+projection = 0
+image_size = Vector2(640, 512)
+metadata/_custom_type_script = "uid://dxxg2ed4pj3mr"
+
+[node name="RouteDirectionHint" type="MeshInstance3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="0" unique_id=703142822]
+transform = Transform3D(0.6117112, 0, -0.79108125, 0, 1.0000001, 0, 0.79108125, 0, 0.6117112, 1.0218555, 0.004, -0.7901596)
+material_override = SubResource("StandardMaterial3D_gvnl8")
+mesh = SubResource("BoxMesh_mr41a")
+
+[node name="Destination" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="1" unique_id=1247060835 instance=ExtResource("4_tflmt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.043711, 0.012, -1.5803192)
+script = ExtResource("5_w2suq")
+label_text = "Destination"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="Origin" type="Node3D" parent="Markers" parent_id_path=PackedInt32Array(1939127363) index="2" unique_id=60146699 instance=ExtResource("4_tflmt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.012, 0)
+script = ExtResource("5_w2suq")
+label_text = "Origin"
+metadata/_custom_type_script = "uid://c4bxtowcrevfl"
+
+[node name="NavigationRuntime" type="Node3D" parent="." index="5" unique_id=1691104211 node_paths=PackedStringArray("Camera", "DestinationMarker", "DestinationMarkerSurface", "Actor") instance=ExtResource("6_vetux")]
+script = ExtResource("7_23ve1")
+Camera = NodePath("Camera3D")
+DestinationMarker = NodePath("DestinationMarker")
+DestinationMarkerSurface = NodePath("DestinationMarker/MarkerDisc")
+DestinationMarkerPreviewMaterial = SubResource("StandardMaterial3D_dest_preview")
+DestinationMarkerPressedMaterial = SubResource("StandardMaterial3D_dest_pressed")
+NavigationPath = NodePath("NavigationTestNpc/Navigation")
+Actor = NodePath("NavigationTestNpc")
+metadata/_custom_type_script = "uid://biulhrfvdujca"
+metadata/navigation_obstacle_material = SubResource("StandardMaterial3D_fllxo")

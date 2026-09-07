@@ -1,3 +1,4 @@
+using AlleyCat.IK;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -19,6 +20,7 @@ public sealed class ArmShoulderCorrectionIntegrationTests
     private const int SettleSkeletonUpdates = 4;
     private const int DeterminismSamples = 5;
     private const float MaximumDeterminismErrorRadians = 0.003f;
+    private const float MaximumBaselineInputDriftMetres = 0.0001f;
     private const float MaximumForwardPoseSymmetryDifferenceRadians = 0.08f;
     private const float MinimumOverheadGainOverLoweredRadians = 0.05f;
     private const float MinimumForwardGainOverLoweredRadians = 0.01f;
@@ -248,6 +250,68 @@ public sealed class ArmShoulderCorrectionIntegrationTests
         {
             leftController.Set("ShoulderWeight", leftDefaultShoulderWeight);
             rightController.Set("ShoulderWeight", rightDefaultShoulderWeight);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a held target uses a fixed pose-frame arm-origin baseline rather than feeding the
+    /// previously solved upper-arm position back into the next shoulder-correction sample.
+    /// </summary>
+    [Fact]
+    public async Task ArmShoulderCorrection_HeldTargetUsesStablePreCorrectionArmBaseline()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Error changeSceneError = sceneTree.ChangeSceneToPacked(LoadPackedScene(VerificationScenePath));
+        Assert.Equal(Error.Ok, changeSceneError);
+        await WaitForFramesAsync(sceneTree, 2);
+
+        Node sceneRoot = sceneTree.CurrentScene
+            ?? throw new Xunit.Sdk.XunitException("Expected verification scene to become current scene.");
+        Node3D handTargetPoses = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(HandTargetPosesPath), exactMatch: false);
+        Node3D leftHandTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(LeftHandTargetPath), exactMatch: false);
+        Node3D rightHandTarget = Assert.IsType<Node3D>(sceneRoot.GetNodeOrNull(RightHandTargetPath), exactMatch: false);
+        ArmIKController rightController = Assert.IsType<ArmIKController>(
+            sceneRoot.GetNodeOrNull(RightArmControllerPath),
+            exactMatch: false);
+        Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
+            ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in the verification scene.");
+        int rightShoulderIndex = RequireBone(skeleton, "RightShoulder");
+
+        await ApplyPoseAndSettleAsync(
+            sceneTree,
+            skeleton,
+            leftHandTarget,
+            rightHandTarget,
+            RequirePoseMarker(handTargetPoses, "LeftOverhead"),
+            RequirePoseMarker(handTargetPoses, "RightOverhead"));
+
+        ArmShoulderCorrectionTrace reference = rightController.LastShoulderCorrectionTrace;
+        Assert.True(
+            reference.InputUpperArmPosition.DistanceTo(reference.SolvedUpperArmPosition) > MaximumBaselineInputDriftMetres,
+            "The overhead scenario must visibly move the solved upper arm away from the fixed correction baseline.");
+
+        for (int sampleIndex = 0; sampleIndex < DeterminismSamples; sampleIndex++)
+        {
+            _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
+            ArmShoulderCorrectionTrace sample = rightController.LastShoulderCorrectionTrace;
+            float outputDrift = QuaternionAngularDistance(
+                reference.AppliedShoulderPoseRotation,
+                sample.AppliedShoulderPoseRotation);
+            float appliedPoseError = QuaternionAngularDistance(
+                sample.AppliedShoulderPoseRotation,
+                skeleton.GetBonePoseRotation(rightShoulderIndex).Normalized());
+
+            Assert.True(
+                outputDrift <= MaximumDeterminismErrorRadians,
+                $"Held-target shoulder correction must preserve its baseline-pose output instead of resampling a prior " +
+                $"solved arm pose. Sample {sampleIndex + 1} output drift: {outputDrift:F8} rad " +
+                $"(tolerance {MaximumDeterminismErrorRadians:F8} rad).");
+            Assert.True(
+                appliedPoseError <= MaximumDeterminismErrorRadians,
+                $"The right shoulder's runtime pose must match its ArmIKController baseline correction. " +
+                $"Sample {sampleIndex + 1} error: {appliedPoseError:F8} rad.");
         }
     }
 

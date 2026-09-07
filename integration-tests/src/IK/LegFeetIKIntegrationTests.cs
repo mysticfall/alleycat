@@ -23,6 +23,7 @@ public sealed class LegFeetIKIntegrationTests
     private const string HipsPoseMarkersPath = "Markers/HipsOverridePoses";
 
     private const string HipsHarnessPath = "Subject/Female/Female/GeneralSkeleton/HipsOverrideHarness";
+    private const string AnimationTreePath = "Subject/Female/AnimationTree";
 
     private const int SettleSkeletonUpdates = 4;
 
@@ -85,6 +86,13 @@ public sealed class LegFeetIKIntegrationTests
 
         Skeleton3D skeleton = FindFirstSkeleton(sceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in verification scene.");
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(
+            sceneRoot.GetNodeOrNull(AnimationTreePath),
+            exactMatch: false);
+        // The shared reference base now authors a live locomotion graph. This component fixture validates only the
+        // deterministic hips/leg modifier chain, so remove animation as an unrelated competing pose authority.
+        animationTree.Active = false;
+        skeleton.ResetBonePoses();
 
         int hipsIdx = RequireBone(skeleton, "Hips");
         int leftUpperLegIdx = RequireBone(skeleton, "LeftUpperLeg");

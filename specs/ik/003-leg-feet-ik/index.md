@@ -3,235 +3,140 @@ id: IK-003
 title: Leg And Feet IK System
 ---
 
-# Leg And Feet IK System
+# Leg and Feet IK System
 
 ## Requirement
 
-Provide a simplified lower-limb IK system that adjusts leg and foot posing
-for the player character while keeping feet solved towards provided read-only
-foot target goals.
+Define rig-neutral lower-limb IK and reusable production contact-lock composition for player and NPC rigs.
 
 ## Goal
 
-Define a spec-first, testable contract for implementing and validating a
-`TwoBoneIK3D`-based leg-and-feet IK setup whose knee pole direction is
-primarily derived from current animation geometry, with fallback to foot
-orientation when the animation-derived direction is degenerate, aligned with
-IK-002 naming, design, and test conventions.
+Both reference rigs retain stable ordinary foot targeting while valid authored contacts can lock and release without
+moving animation permission, locomotion policy, or target actuation into IK providers.
 
 ## User Requirements
 
-1. Players must see stable, natural lower-body posing during common standing
-   and crouch-adjacent poses.
-2. Feet must follow authored foot target goals without visual snapping or
-   instability.
-3. Knee bend direction must remain visually coherent and deterministic as
-   feet rotate, transitioning smoothly between animation-derived poses and
-   foot-orientation-derived fallback.
-4. Provider-driven foot targets must coexist with FootTargetSyncController
-   without conflict; explicit providers take precedence when assigned, while
-   player fallback providers preserve animation-synchronised feet when no
-   explicit foot provider is active.
-5. Provider influence of 0 on a foot must deactivate the corresponding leg IK
-   modifier.
+1. Player and NPC legs remain stable and natural when animation or a valid external foot-target provider is in
+   control.
+2. A valid authored planted-foot constraint may preserve contact and return continuously to ordinary fallback at
+   release.
+3. Invalid, missing, stale, or refused evidence leaves ordinary foot-target behaviour intact without hidden locomotion
+   intervention or forced discontinuity.
+4. Both production rigs expose enough same-tick per-foot evidence to diagnose contact, correction, handoff, and
+   fallback.
+5. Finite transitions retain package-declared polarity and valid partial lifecycle semantics without inventing a
+   boundary-censored endpoint or claiming broad animation/IK continuity.
 
 ## Technical Requirements
 
-1. Implementation must provide per-leg `TwoBoneIK3D` solving with per-leg
-   pole-target driving.
-2. **Primary geometric method**: Knee pole direction must be derived from
-   current animation geometry. Let `o2` = midpoint(upper leg origin, current
-   foot bone position). Primary pole direction = normalise(lower leg origin -
-   `o2`). Line origin for pole-target placement = `o2`.
-3. **Fallback trigger and method**: When the animation-derived direction from
-   `o2` to lower leg origin is degenerate (too short or near-zero magnitude),
-   the system must fall back to foot IK target orientation-based pole direction.
-   Fallback threshold is implementation-defined and deterministic.
-4. **Primary/fallback transition**: The transition between primary geometric
-   method and fallback must be deterministic and smooth, with no discontinuous
-   jumps in knee behaviour.
-5. Runtime structure, naming, and validation flow must remain consistent with
-   IK-002 conventions (controller-first, contract-first, photobooth +
-   integration-test validation).
-6. Foot target transforms must be treated as runtime inputs only and must not
-   be mutated by `LegIKController`, `TwoBoneIK3D`, or other IK-003 runtime
-   controller logic.
-7. **Foot target synchronisation stage**: Before each leg IK solve cycle, IK
-   targets must be re-synchronised from animated foot transforms to ensure the
-   solver operates on current animation state. This sync stage runs once per
-   tick, after the animation player produces its sampled pose but before the
-   leg IK controller computes pole targets. The sync reads the current animated
-   foot bone transforms (position + rotation) and copies them to the
-   corresponding foot target nodes for downstream pole prediction and solve.
-   This guarantees deterministic solve behaviour when animation timing or
-   `TimeSeek` position changes.
-8. **Ordering contract**: `FootTargetSyncController` must run before
-   `HipReconciliationModifier` and any other foot-mutating modifiers. This
-   ordering is a scene/pipeline authoring contract enforced through scene
-   authoring. Runtime auto-reordering is intentionally not used.
-9. Verification must use the lower-body photobooth basis scene and include a
-   hips-override harness implemented via `BoneAttachment3D` override bone
-   position without animation.
-10. Knee pole offset must always enforce a minimum floor using rest leg
-    half-length plus margin: `max(MinimumPoleOffset, (RestLegLength * 0.5) +
-    RestLegHalfPoleOffsetMargin)`. This floor applies unconditionally and is
-    not compression-gated.
-11. **Provider-driven foot targets**: Foot IK targets may be driven by
-    `IKTargetIntentProvider` in the same manner as hand targets. When a foot
-    provider is assigned and has non-zero influence, the provider-derived foot
-    target takes precedence over animation-synchronised targets.
-12. **Provider coexistence contract**: `FootTargetSyncController` runs first
-     to synchronise animation foot targets. A dedicated `CharacterIKFootProviderStage`
-     then evaluates the foot provider contract; when a provider is assigned and
-     has non-zero influence, it overrides the animation-synced target. Player
-     scenes preserve animation-synchronised target ownership by wiring explicit
-     animation-synchronised foot fallback providers that report active influence
-     without taking transform ownership. Generic/NPC `CharacterIK` instances
-     with no provider or fallback provider disable foot target gates and leg
-     modifiers by default. Provider influence 0 always disables the
-     corresponding target gate and leg modifier.
-13. **Provider influence gating**: When the corresponding `IKTargetIntentProvider`
-    reports desired influence of 0, the leg `TwoBoneIK3D` for that side must be
-    deactivated.
+1. IK-003 is rig-neutral and applies the same lower-limb and contact-lock contracts to NPC and player rigs. Neither
+   rig's topology, scene, provider, scheduler, or movement policy is normative for the other.
+2. `CharacterIK` is the generic resolver and sole actuator of the selected foot target, target activity gate, and
+   modifier influence. It owns no contact or locomotion policy.
+3. [Leg-Feet IK Contract](leg-feet-ik-contract.md) normatively owns target synchronisation, generic provider
+   composition, actuation boundaries, pole prediction, and two-bone solving.
+4. [Leg-Feet IK Test Setup Contract](test-setup-contract.md) owns the two-rig fixture and Gate A/B evidence topology.
+   Fixture diagnostics neither install nor establish production contact composition.
+5. ANIM-002 remains the sole contact-permission owner. Each side-specific, evidence-owning provider consumes the
+   central permission and immutable authored role-foot sample, returning a typed applicable result or refusal. It
+   refuses every member of the
+   [ANIM-002 Refusal Set](../../animation/002-locomotive-animation-set/index.md#canonical-contact-evidence).
+6. Modifier order is `sync → provider → hip reconciliation (when present) → lower-leg consumers`. `CharacterIK` repairs
+   ordering idempotently and performs sole actuation.
+7. The [Contact-Lock Coordinator Contract](contact-lock-coordinator-contract.md) is the normative production lifecycle,
+   anchor, correction, handoff, composition, identity, timing, diagnostics, and validation contract for NPC and player.
+   Each foot independently acquires, supports, releases, hands off, refuses, and falls back.
+8. Travel-release occurrence authority is separate from per-foot lifecycle evidence. IK lifecycle, anchor, support,
+   release, handoff, and correction state cannot permit CTRL-001's graph hop, while CTRL occurrence authority cannot
+   admit contact or repair IK evidence.
+9. Production composition installs two side-specific providers and one reusable coordinator after the relevant
+   character installers. Same-tick evaluation binds player role, clip, phase, foot, identity, and generation. Diagnostic
+   paths remain read-only and install no production provider or coordinator. A terminal animation-package validation
+   failure during installation is reported and latched once per installation attempt per the ANIM-002 delivery
+   contract; readiness retries remain legitimate only while required installers or nodes are genuinely missing.
+10. A current valid support may return at most one coordinator-authorised bounded translation/yaw correction. The
+    applicable movement owner consumes that value exactly once in its existing coherent movement operation. Release
+    handoff and absent, refused, stale, infeasible, or collision-divergent states produce zero correction.
+11. Each production physics tick emits immutable diagnostic-only per-foot records with the same-tick evaluated role,
+    clip, phase, foot, identity, generation, lifecycle, anchor, provider decision, selected target, gate, influence,
+    correction, handoff/fallback, collision realisation, and native/post-IK observations. Diagnostics never accept
+    contact, install composition, steer movement, or authorise a graph transition.
+12. Synthetic declared-package regressions cover cyclic wrap, idle-to-travel `Release`, travel-to-idle `Acquire`, finite
+    partial lifecycles, package replacement, fallback, and translation-only live-fallback handoff. Current production
+    packages are structural and immutability inputs, not behavioural contact oracles.
 
 ## In Scope
 
-- Per-leg `TwoBoneIK3D` lower-limb solving (upper leg → lower leg → foot) for
-  left and right sides.
-- A per-leg controller that computes knee pole-target positions before IK solve.
-- **Primary geometric method**: Animation-derived knee pole direction using
-  current animation geometry. Line origin (`o2`) = midpoint(upper leg origin,
-  current foot bone position). Primary pole direction = normalise(lower leg
-  origin - `o2`).
-- **Fallback method**: Foot orientation-derived pole direction when
-  animation-derived direction is degenerate.
-- Read-only foot target solving where runtime IK logic consumes targets as
-  goals without mutating target transforms.
-- **Foot target synchronisation stage**: Dedicated sync that re-synchronises
-  foot IK targets from animated foot transforms at the start of each IK solve
-  cycle, before pole-target computation. This guarantees the solver operates
-  on current animation state.
-- Unconditional knee pole minimum-offset safeguarding using a rest-leg-length
-  derived floor.
-- A portable leg-feet IK contract that does not depend on concrete `Female` node/mesh names, with a
-  lower-body photobooth verification workflow aligned to IK-002 structure.
-- Provider-driven foot target support via `IKTargetIntentProvider`, coexisting
-  with `FootTargetSyncController` without conflict.
-- Provider influence gating that deactivates leg IK when influence is 0.
+- Generic per-foot provider resolution, sole actuation, pole/two-bone solve, and both-rig production composition.
+- Independent contact lifecycle, anchor, support correction, release handoff, refusal, fallback, and diagnostics.
+- Existing Gate A/B controls and synthetic declared-package lifecycle regressions within their recorded evidence scope.
 
 ## Out Of Scope
 
-- Full-body IK orchestration beyond lower limbs.
-- Hip locomotion synthesis, gait generation, or animation state-machine design.
-- Footstep planning, terrain probing, and physics-based ground adaptation.
-- Retargeting across unrelated skeleton topologies.
-- Subjective animation polish beyond objective checks defined by this spec.
-- Resolution of the separate leg-up regression outside the unconditional
-  knee-pole safeguard contract.
+- Terrain probing or adaptation, pelvis or whole-body repositioning, motion warping, emergency interruption, gait
+  synthesis, and movement-policy ownership.
+- NAV route, destination, stopping, hard-boundary, or durable-outcome policy changes.
+- Broad fluidity or Oblique animation/IK seam-quality acceptance and exact tuning values.
 
 ## Acceptance Criteria
 
-All criteria remain normative. IDs are provided for traceability to contract
-pages.
+### User Requirement Acceptance
 
-- **AC-00** — The specification defines both user-visible lower-limb behaviour
-  outcomes and technical implementation contracts required for delivery and
-  validation. *(This Page)*
+1. Both production reference rigs demonstrate stable animation, applicable-provider, refusal, and ordinary-fallback
+   lower-limb behaviour for both feet.
+2. Valid support preserves its anchor and releases through a continuous non-contact handoff without forced release,
+   synthetic gliding, wrong-foot clearing, or a one-frame target discontinuity.
+3. Missing, invalid, stale, refused, or infeasible evidence retains ordinary fallback and causes no forced correction.
+4. Player and NPC production traces expose same-tick per-foot contact, correction, handoff, fallback, collision, and
+   post-IK evidence without affecting behaviour.
+5. Synthetic finite-transition regressions preserve declared polarity and partial lifecycles while broad animation/IK
+   continuity remains outside their claim.
 
-- **AC-01** — Each leg uses a `TwoBoneIK3D` node to solve upper-leg → lower-leg
-  → foot towards its leg/foot target path. *(Leg-Feet IK Contract)*
+### Technical Requirement Acceptance
 
-- **AC-02** — A per-leg controller computes the knee pole-target each frame
-  before downstream `TwoBoneIK3D` execution. *(Leg-Feet IK Contract)*
+1. Both-rig production checks prove rig neutrality, generic modifier order, two side-specific providers, post-installer
+   coordinator composition, one-shot latched reporting of a terminal package failure during installation, no diagnostic
+   installation, and `CharacterIK`-only target, gate, and influence actuation.
+2. Permission and refusal tests prove both roles consume the same central ANIM-002 permission and immutable authored
+   evidence without inference, override, symmetry substitution, or downstream repair.
+3. Per-foot tests prove independent acquire, support, release, handoff, refusal, fallback, disable, cancellation, and
+   replacement. Same-tick role, clip, phase, foot, identity, and generation mismatches fail closed.
+4. Correction tests prove at most one currently supported contribution, exact-once consumption in the existing movement
+   operation, and zero correction for release handoff, absence, refusal, staleness, infeasibility, cap breach, and
+   collision-realised divergence. No consumer calculates, selects, feeds back, compensates, or steers from the value.
+5. Boundary tests prove per-foot lifecycle evidence cannot authorise the CTRL graph hop and travel-release occurrence
+   evidence cannot admit contact, anchors, handoff, or correction.
+6. Trace checks prove immutable concurrent per-foot same-tick evidence and read-only diagnostics for both production
+   rigs.
+7. Synthetic declared-package checks prove both finite polarities, phase `1` retention where declared, no finite wrap,
+   no invented endpoint, package replacement, fallback, and translation-only live-fallback handoff without a broad
+   seam-quality claim.
 
-- **AC-03** — **Primary geometric method**: The controller derives knee pole
-  direction from current animation geometry:
-  - `o2` = midpoint(upper leg origin, current foot bone position)
-  - Primary pole direction = normalise(lower leg origin - `o2`)
-  - Line origin for placement uses `o2`. *(Leg-Feet IK Contract)*
+### Acceptance Traceability
 
-- **AC-04** — **Fallback trigger and method**: When the animation-derived
-  direction from `o2` to lower leg origin is degenerate (too short or
-  near-zero magnitude), the system falls back to foot IK target orientation-
-  based pole direction. Fallback threshold is deterministic and
-  implementation-defined. *(Leg-Feet IK Contract)*
+- User Requirements 1–5 → User Requirement Acceptance 1–5.
+- Technical Requirements 1–4, 6 → Technical Requirement Acceptance 1.
+- Technical Requirement 5 → Technical Requirement Acceptance 2–3.
+- Technical Requirements 7, 9 → Technical Requirement Acceptance 1, 3, 6.
+- Technical Requirement 8 → Technical Requirement Acceptance 5.
+- Technical Requirement 10 → Technical Requirement Acceptance 4.
+- Technical Requirement 11 → Technical Requirement Acceptance 6.
+- Technical Requirement 12 → Technical Requirement Acceptance 7.
 
-- **AC-05** — The primary-to-fallback transition is smooth and deterministic
-  with no discontinuous jumps in knee behaviour across required test poses.
-  *(Leg-Feet IK Contract)*
+## Decision Trace
 
-- **AC-06** — Per-leg IK solve consumes provided foot target transforms as goal
-  inputs each runtime update, without requiring an additional runtime
-  target-clamp contract. *(Leg-Feet IK Contract)*
-
-- **AC-06a** — A dedicated `FootTargetSyncController` re-synchronises foot IK
-  targets from animated foot transforms (position + rotation) at the beginning
-  of each IK solve cycle, before pole-target computation and solve. This sync
-  runs once per tick after animation sampling and guarantees the solver operates
-  on current animation state. `FootTargetSyncController` must run before
-  `HipReconciliationModifier` and any other foot-mutating modifiers — ordering
-  is a scene/pipeline authoring contract. *(Leg-Feet IK Contract)*
-
-- **AC-07** — Naming, node-role conventions, and modifier-order design are
-  consistent with IK-002 patterns (controller-first, contract split,
-  per-side instances). *(Leg-Feet IK Contract)*
-
-- **AC-08** — Portable IK contract defines `LegIKController` (left/right), `TwoBoneIK3D`
-  (left/right), and leg target nodes (`IKTargets/LeftFoot`, `IKTargets/RightFoot`) without
-  dependence on concrete `Female` node/mesh names. Consuming scenes compose these controllers via
-  template-authored exported references. *(This Page)*
-
-- **AC-09** — A photobooth verification scene exists under `@game/tests/` and
-  inherits `@game/assets/testing/photobooth/templates/lower_body_5_cams.tscn`,
-  following `@specs/testing/002-visual-verification-scope/index.md`.
-  *(Leg-Feet IK Test Setup Contract)*
-
-- **AC-10** — The verification setup provides a `BoneAttachment3D`-based hips
-  harness that can override hips bone position without animation playback.
-  *(Leg-Feet IK Test Setup Contract)*
-
-- **AC-11** — Visual checks confirm natural knee and foot behaviour without
-  obvious inversion, discontinuous knee-plane changes, or over-correction in
-  required poses. Includes verification that the primary geometric method
-  produces stable knee behaviour across test poses. *(Leg-Feet IK Test Setup Contract)*
-
-- **AC-12** — A C# integration test loads the same verification scene and
-  validates non-visual assertions: pole-direction continuity under continuous
-  animation changes, read-only foot-target input behaviour, and stable
-  hips-override response. *(Leg-Feet IK Test Setup Contract)*
-
-- **AC-13** — During IK-003 runtime updates, provided foot target transforms
-  remain unmodified by solver/controller logic and are consumed as read-only
-  goals for solving. *(Leg-Feet IK Contract)*
-
-- **AC-14** — Knee pole offset unconditionally enforces
-  `max(MinimumPoleOffset, (RestLegLength * 0.5) + RestLegHalfPoleOffsetMargin)`
-  as a minimum floor. This floor applies in all leg states and is not
-  compression-gated. *(Leg-Feet IK Contract)*
-
-- **AC-15** — Provider-driven foot targets take precedence over animation-synchronised
-  targets when a foot `IKTargetIntentProvider` is assigned with non-zero influence.
-  *(Provider Coexistence Contract)*
-
-- **AC-16** — Player scenes keep animation-synchronised foot targets active by
-  wiring explicit animation-synchronised foot fallback providers; generic/NPC
-  `CharacterIK` with no provider or fallback provider keeps foot IK disabled by
-  default. *(Provider Coexistence Contract)*
-
-- **AC-17** — Provider influence of 0 on a foot deactivates the corresponding leg
-  `TwoBoneIK3D` modifier. *(Provider Gating Contract)*
-
-- **AC-18** — Foot provider coexistence runs `FootTargetSyncController` first to
-  synchronise animation foot targets, then evaluates the provider contract; a
-  non-zero explicit provider overrides the synced target, an animation-synchronised
-  fallback provider preserves the synced target without rewriting it, and zero
-  influence disables the gated foot target. *(Provider Coexistence Contract)*
+1. NAV-001 route-policy and NPC-only NAV consumption boundaries remain unchanged.
+2. ANIM-002 centralises contact permission; player and NPC providers consume rather than duplicate it.
+3. `CharacterIK` remains policy-free and the sole target, gate, and influence actuator.
+4. Gate A/B fixture evidence remains test-only; production adoption is accepted only through the production composition
+   and both-rig evidence above.
 
 ## References
 
-- @game/assets/characters/reference/ally_player.tscn
-- @game/assets/testing/photobooth/templates/lower_body_5_cams.tscn
-- @specs/ik/002-arm-shoulder-ik/index.md
-- @specs/ik/003-leg-feet-ik/leg-feet-ik-contract.md
-- @specs/ik/003-leg-feet-ik/test-setup-contract.md
-- @specs/testing/002-visual-verification-scope/index.md
+- [Project Specifications Index](../../index.md)
+- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
+- [Leg-Feet IK Contract](leg-feet-ik-contract.md)
+- [Contact-Lock Coordinator Contract](contact-lock-coordinator-contract.md)
+- [Leg-Feet IK Test Setup Contract](test-setup-contract.md)
+- [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)
+- [CTRL-001: Locomotion](../../ctrl/001-locomotion/index.md)

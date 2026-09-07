@@ -28,4 +28,20 @@ public partial class AnimationSynchronizedFootTargetProvider : IKTargetIntentPro
             ? new IKTargetIntent(footTarget.GlobalTransform, 1.0f)
             : new IKTargetIntent(Transform3D.Identity, 0.0f);
     }
+
+    /// <inheritdoc />
+    public override bool TryGetTargetIntent(out IKTargetIntentResolution resolution)
+    {
+        Node3D? footTarget = FootTarget;
+        if (footTarget is null || !IsInstanceValid(footTarget))
+        {
+            resolution = default;
+            return false;
+        }
+
+        resolution = new IKTargetIntentResolution(
+            new IKTargetIntent(footTarget.GlobalTransform, 1.0f),
+            ShouldApplyTargetTransform);
+        return true;
+    }
 }

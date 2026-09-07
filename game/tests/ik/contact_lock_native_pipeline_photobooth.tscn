@@ -1,0 +1,29 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assets/testing/photobooth/templates/lower_body_5_cams.tscn" id="1_pq8ie"]
+[ext_resource type="Script" path="res://tests/ik/ContactLockNativePipelinePhotobooth.cs" id="2_frwxg"]
+
+[node name="" unique_id=406188165 instance=ExtResource("1_pq8ie")]
+
+[node name="FrontCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="0" unique_id=417711527]
+image_size = Vector2(1024, 768)
+orthogonal_scale = 1.52
+
+[node name="RightCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="1" unique_id=220196613]
+image_size = Vector2(1024, 768)
+orthogonal_scale = 1.52
+
+[node name="LeftCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="2" unique_id=1346924287]
+image_size = Vector2(1024, 768)
+orthogonal_scale = 1.52
+
+[node name="BackCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="3" unique_id=1890545406]
+image_size = Vector2(1024, 768)
+orthogonal_scale = 1.52
+
+[node name="BottomCamera" parent="Cameras" parent_id_path=PackedInt32Array(1601084) index="4" unique_id=633668266]
+image_size = Vector2(1024, 768)
+orthogonal_scale = 1.52
+
+[node name="NativePipelineController" type="Node3D" parent="." index="5" unique_id=650842619]
+script = ExtResource("2_frwxg")

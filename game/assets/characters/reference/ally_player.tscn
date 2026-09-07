@@ -2,10 +2,13 @@
 
 [ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_base"]
 [ext_resource type="PackedScene" uid="uid://deek4lix763je" path="res://assets/characters/templates/installers/player_installer.tscn" id="2_installer"]
+[ext_resource type="Script" uid="uid://df2cuf0s4w2v" path="res://src/Character/PlayerCharacter.cs" id="1_player"]
 
 [node name="Player" unique_id=619146847 node_paths=PackedStringArray("AuthoredVisualCues") groups=["Player"] instance=ExtResource("1_base")]
+script = ExtResource("1_player")
 Id = "ally"
 AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
+metadata/_custom_type_script = "uid://df2cuf0s4w2v"
 
 [node name="BodyVisualCue" parent="Female/GeneralSkeleton/Head" index="1" unique_id=977349589]
 transform = Transform3D(1.0000001, 0, 0, 0, 1.0000001, 0, 0, 0, 1.0000001, 0.00018767762, 0.012320638, 0.06855364)

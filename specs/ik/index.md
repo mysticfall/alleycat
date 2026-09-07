@@ -5,42 +5,43 @@ title: VRIK System
 
 # VRIK System
 
-## Purpose
+## Requirement
 
-Parent specification for the VR humanoid IK spec family. Defines system-level scope,
-capability levels, and delivery boundaries across IK sub-specifications. Covers both
-reusable character IK for NPCs and player-specific XR integration.
+Provide a discoverable parent for reusable character IK, player XR integration, and child component contracts.
+
+## Goal
+
+Characters retain a rig-neutral IK foundation while specialised child specifications define their own ownership and
+validation boundaries.
 
 ## User Requirements
 
-1. Players must experience full-body VR humanoid IK that follows headset and controller inputs.
-2. Characters must have a reusable character IK foundation that is agnostic to input source.
-3. Head, hands, feet, and other limbs must all support provider-driven target and influence control.
+1. Players experience coherent full-body VR posing from available headset and controller input.
+2. NPC and player characters can share reusable IK foundations without forcing common movement policy.
+3. Lower-limb authored contacts can participate in the Phase 1 IK-003 provider boundary on both reference rigs.
 
 ## Technical Requirements
 
-1. The IK system must provide a reusable base architecture supporting any humanoid character.
-2. Player-specific XR integration must attach to the base as a complementary layer.
-3. IKTargetIntentProvider must be extensible to all limbs in the same manner as hands.
-4. Provider influence must gate corresponding IK modifiers including indirect side effects.
+1. Reusable `CharacterIK` remains input-source agnostic; player XR integration is a complementary provider layer.
+2. Target-intent providers can control applicable limbs, with influence gating their corresponding IK behaviour.
+3. IK-003 is the rig-neutral lower-limb parent. It defines the side-specific, evidence-owning provider boundary;
+   the leg child owns generic target/provider/pole/two-bone solve, and its test child owns both-rig evidence topology.
+4. ANIM-002 remains the sole contact-permission authority. IK consumers do not infer or override permission.
+5. IK-003's generic lower-limb order is `sync → provider → hip reconciliation (when present) → lower-leg consumers`.
+   `CharacterIK` performs generic provider resolution and sole actuation. Its provider and leg contracts supersede
+   lower-limb-only implementation-note guidance without changing unrelated spine or player-VRIK guidance.
 
 ## In Scope
 
-- Reusable full-body humanoid IK system for any humanoid character.
-- IKTargetIntentProvider architecture covering head, hands, feet, and extensible to other limbs.
-- Player-specific XR-to-IK bridging for head and hand target driving.
-- Runtime XR-to-IK bridging for head and hand target driving.
-- Baseline support using headset and two controllers.
-- Optional refinement paths for additional tracking input when available.
-- Wide pose coverage beyond upright-only (kneeling, sitting, crawling, transitions).
+- IK-family navigation, reusable character IK boundaries, XR integration boundaries, and child-contract ownership.
 
 ## Out Of Scope
 
-- Feature-level solver-node configuration and rig-level implementation (deferred to child specs).
-- XR runtime implementation details beyond the XRManager contract.
-- Network replication and backend concerns.
+- Child solver configuration, navigation/player policy, terrain adaptation, and contact-permission ownership.
 
-## Input And Capability Levels
+## Acceptance Criteria
+
+### User Requirement Acceptance
 
 | Level | Input | Expected Outcome |
 |-------|-------|------------------|
@@ -48,9 +49,19 @@ reusable character IK for NPCs and player-specific XR integration.
 | 2 | Level 1 + optical hand tracking | Optical wrist drives hand targets; finger-only presentation. |
 | 3 | Level 1 + body tracking | Improved whole-body pose fidelity. Must degrade to lower levels. |
 
+1. The project index reaches this page and its IK-003 child contracts.
+2. Readers can distinguish reusable IK, player XR integration, and locomotion-policy responsibilities.
+
 Level 2 delivery ([XR-002: Optical Hand Tracking](../xr/002-optical-hand-tracking/index.md)): the optical wrist drives
 hand targets through the existing target pipeline, optical presentation is finger-only, VRIK retains wrist/arm
 intent, and delivery must degrade to Level 1.
+
+### Technical Requirement Acceptance
+
+1. IK-003 ownership links identify unique permission, provider-boundary, solve, and evidence responsibilities.
+2. The navigation path does not imply terrain adaptation or a shared NPC/player movement controller.
+3. The IK-003 path identifies generic provider resolution before hip and lower-leg consumers, and quarantines
+   superseded lower-limb-only implementation-note guidance.
 
 ## Runtime Integration Boundary
 
@@ -61,27 +72,14 @@ intent, and delivery must degrade to Level 1.
 - Player XR integration layer is defined in [IK Implementation Notes](implementation-notes.md).
 - IK component behaviour is defined by child IK specifications.
 
-## Layered Architecture
-
-### General Character IK Layer
-- Reusable `CharacterIK` component applicable to any humanoid character.
-- Operates independently of input source.
-- Accepts IKTargetIntentProvider for all configurable limbs.
-
-### Player XR Integration Layer
-- Attaches to `CharacterIK` as a complementary provider layer.
-- Exposes fallback provider properties for XR hand-controller target providers.
-- Falls back gracefully when XR is unavailable.
-
-### Provider Architecture
-- IKTargetIntentProvider is a general abstraction for any limb.
-- Provider influence gates corresponding IK modifiers and side effects.
-- Fallback providers are implemented as provider subclasses.
-
 ## Child Specifications
 
 - [IK Implementation Notes](implementation-notes.md)
 - [IK-001: Neck-Spine CCDIK Configuration](001-neck-spine-ik/index.md)
 - [IK-002: Arm And Shoulder IK System](002-arm-shoulder-ik/index.md)
 - [IK-003: Leg And Feet IK System](003-leg-feet-ik/index.md)
+  - [Leg-Feet IK Contract](003-leg-feet-ik/leg-feet-ik-contract.md)
+  - [Contact-Lock Coordinator Contract](003-leg-feet-ik/contact-lock-coordinator-contract.md)
+  - [Leg-Feet IK Test Setup Contract](003-leg-feet-ik/test-setup-contract.md)
 - [IK-004: VRIK Pose State Machine And Hip Reconciliation](004-vrik-pose-state-machine/index.md)
+- [IK-005: Target Pipeline](005-target-pipeline/index.md)

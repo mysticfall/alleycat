@@ -1685,6 +1685,154 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
+    /// Verifies a legacy explicit zero-influence foot intent remains terminal instead of selecting the fallback.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKFootProvider_LegacyZeroInfluenceRemainsTerminalOverFallback()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "LegacyZeroInfluenceFootFixture");
+        TestIKTargetIntentProvider explicitProvider = new()
+        {
+            Name = "ExplicitZeroInfluenceProvider",
+            TargetIntent = new IKTargetIntent(new Transform3D(Basis.Identity, new Vector3(2.0f, 1.0f, -1.0f)), 0.0f),
+        };
+        TestIKTargetIntentProvider fallbackProvider = new()
+        {
+            Name = "FallbackProvider",
+            TargetIntent = new IKTargetIntent(new Transform3D(Basis.Identity, new Vector3(0.3f, 0.2f, -0.4f)), 1.0f),
+        };
+        fixture.Root.AddChild(explicitProvider);
+        fixture.Root.AddChild(fallbackProvider);
+        await WaitForNextFrameAsync(sceneTree);
+
+        try
+        {
+            fixture.VRIK.RightFootTargetIntentProvider = explicitProvider;
+            fixture.VRIK.RightFootFallbackIntentProvider = fallbackProvider;
+            Transform3D initialTarget = fixture.RightFootIKTarget.GlobalTransform;
+            fixture.RightFootModifier.Active = true;
+            fixture.RightFootModifier.Influence = 0.4f;
+
+            fixture.VRIK._Ready();
+            fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
+
+            AssertTransformApproximately(initialTarget, fixture.RightFootIKTarget.GlobalTransform);
+            Assert.False(fixture.RightFootModifier.Active);
+            Assert.Equal(0.0f, fixture.RightFootModifier.Influence);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies an explicitly refusing provider selects the animation-synchronised fallback without taking target ownership.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKFootProvider_RefusalFallsThroughToAnimationFallbackWithoutTargetMutation()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "RefusingFootProviderFixture");
+        TestIKTargetIntentProvider refusingProvider = new()
+        {
+            Name = "RefusingProvider",
+            IsApplicable = false,
+        };
+        AnimationSynchronizedFootTargetProvider fallbackProvider = new()
+        {
+            Name = "AnimationFallback",
+            FootTarget = fixture.RightFootIKTarget,
+        };
+        fixture.Root.AddChild(refusingProvider);
+        fixture.Root.AddChild(fallbackProvider);
+        await WaitForNextFrameAsync(sceneTree);
+
+        try
+        {
+            fixture.RightFootIKTarget.GlobalTransform = new Transform3D(
+                Basis.FromEuler(new Vector3(0.1f, -0.2f, 0.3f)),
+                new Vector3(0.24f, 0.13f, -0.38f));
+            Transform3D synchronisedTarget = fixture.RightFootIKTarget.GlobalTransform;
+            fixture.VRIK.RightFootTargetIntentProvider = refusingProvider;
+            fixture.VRIK.RightFootFallbackIntentProvider = fallbackProvider;
+            fixture.RightFootModifier.Active = false;
+            fixture.RightFootModifier.Influence = 0.0f;
+
+            fixture.VRIK._Ready();
+            fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
+
+            AssertTransformApproximately(synchronisedTarget, fixture.RightFootIKTarget.GlobalTransform);
+            Assert.True(fixture.RightFootModifier.Active);
+            Assert.Equal(1.0f, fixture.RightFootModifier.Influence);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a future value-only anchor provider reaches the existing CharacterIK target and influence actuator through a chain.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKFootProvider_SyntheticAnchorIntentIsActuatedThroughPriorityChain()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "SyntheticAnchorFootProviderFixture");
+        IKTargetIntent anchorIntent = new(
+            new Transform3D(Basis.FromEuler(new Vector3(0.1f, 0.2f, -0.15f)), new Vector3(0.26f, 0.17f, -0.35f)),
+            0.72f);
+        SyntheticAnchorIntentProvider anchorProvider = new()
+        {
+            Name = "SyntheticAnchorProvider",
+            Resolution = new IKTargetIntentResolution(anchorIntent, true),
+        };
+        TestIKTargetIntentProvider ordinaryProvider = new()
+        {
+            Name = "OrdinaryFallbackProvider",
+            TargetIntent = new IKTargetIntent(Transform3D.Identity, 0.1f),
+        };
+        PriorityIKTargetIntentProvider chain = new()
+        {
+            Name = "RightFootProviderChain",
+            Providers = [anchorProvider, ordinaryProvider],
+        };
+        fixture.Root.AddChild(anchorProvider);
+        fixture.Root.AddChild(ordinaryProvider);
+        fixture.Root.AddChild(chain);
+        await WaitForNextFrameAsync(sceneTree);
+
+        try
+        {
+            fixture.VRIK.RightFootTargetIntentProvider = chain;
+
+            fixture.VRIK._Ready();
+            fixture.FootSyncController._ProcessModificationWithDelta(1.0d / 60.0d);
+            fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
+            fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
+
+            AssertTransformApproximately(anchorIntent.WorldTransform, fixture.RightFootIKTarget.Transform);
+            Assert.Equal(anchorIntent.DesiredInfluence, fixture.RightFootModifier.Influence);
+            Assert.True(fixture.RightFootModifier.Active);
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies crouch-like head descent does not lift animation-owned player foot targets.
     /// </summary>
     [Headless]
@@ -1823,6 +1971,85 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     }
 
     /// <summary>
+    /// Verifies CharacterIK repairs a misordered generic foot-target pipeline without role or scene policy.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public async Task CharacterIKStageOrder_WhenHipAndLowerLegConsumersAreMisordered_RepairsPipeline()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        CharacterIKFixture<CharacterIK> fixture = await CreateCharacterIKFixtureAsync<CharacterIK>(
+            sceneTree,
+            "MisorderedGenericFootTargetPipelineFixture");
+        HipReconciliationModifier hipReconciliation = new()
+        {
+            Name = "MisorderedHipReconciliation",
+            Active = false,
+        };
+        LegIKController legIK = new()
+        {
+            Name = "MisorderedLegIK",
+            FootTarget = fixture.RightFootIKTarget,
+            Active = false,
+        };
+        TwoBoneIK3D twoBoneIK = new()
+        {
+            Name = "MisorderedTwoBoneIK",
+            Active = false,
+        };
+        CopyTransformModifier3D footRotationCopy = new()
+        {
+            Name = "MisorderedFootRotationCopy",
+            Active = false,
+        };
+        FootTargetConsumer configuredFootGroupConsumer = new()
+        {
+            Name = "MisorderedConfiguredFootGroupConsumer",
+            Active = false,
+        };
+        fixture.Skeleton.AddChild(hipReconciliation);
+        fixture.Skeleton.AddChild(legIK);
+        fixture.Skeleton.AddChild(twoBoneIK);
+        fixture.Skeleton.AddChild(footRotationCopy);
+        fixture.Skeleton.AddChild(configuredFootGroupConsumer);
+        ConfigureNativeFootConsumers(fixture, twoBoneIK, footRotationCopy);
+        fixture.VRIK.RightFootModifierGroup = [configuredFootGroupConsumer];
+
+        fixture.Skeleton.MoveChild(hipReconciliation, fixture.FootSyncController.GetIndex());
+        fixture.Skeleton.MoveChild(legIK, fixture.FootSyncController.GetIndex());
+        fixture.Skeleton.MoveChild(twoBoneIK, fixture.FootSyncController.GetIndex());
+        fixture.Skeleton.MoveChild(footRotationCopy, fixture.FootSyncController.GetIndex());
+        fixture.Skeleton.MoveChild(configuredFootGroupConsumer, fixture.FootSyncController.GetIndex());
+
+        try
+        {
+            Assert.True(hipReconciliation.GetIndex() < fixture.FootSyncController.GetIndex());
+            Assert.True(legIK.GetIndex() < fixture.FootSyncController.GetIndex());
+            Assert.True(twoBoneIK.GetIndex() < fixture.FootSyncController.GetIndex());
+            Assert.True(footRotationCopy.GetIndex() < fixture.FootSyncController.GetIndex());
+            Assert.True(configuredFootGroupConsumer.GetIndex() < fixture.FootSyncController.GetIndex());
+
+            fixture.ResetAndRebind();
+            fixture.ResetAndRebind();
+
+            Assert.True(fixture.FootSyncController.GetIndex() < fixture.VRIKBeginStage.GetIndex());
+            Assert.True(fixture.VRIKBeginStage.GetIndex() < fixture.VRIKFootProviderStage.GetIndex());
+            Assert.True(fixture.VRIKFootProviderStage.GetIndex() < hipReconciliation.GetIndex());
+            Assert.True(hipReconciliation.GetIndex() < legIK.GetIndex());
+            Assert.True(hipReconciliation.GetIndex() < twoBoneIK.GetIndex());
+            Assert.True(hipReconciliation.GetIndex() < footRotationCopy.GetIndex());
+            Assert.True(hipReconciliation.GetIndex() < configuredFootGroupConsumer.GetIndex());
+            Assert.Equal(1, CountSkeletonChildrenNamed(fixture.Skeleton, "CharacterIKBeginStage"));
+            Assert.Equal(1, CountSkeletonChildrenNamed(fixture.Skeleton, "CharacterIKFootProviderStage"));
+            Assert.Equal(1, CountSkeletonChildrenNamed(fixture.Skeleton, "CharacterIKEndStage"));
+        }
+        finally
+        {
+            await fixture.DisposeAsync(sceneTree);
+        }
+    }
+
+    /// <summary>
     /// Verifies foot providers drive foot target/influence while preserving target physics-sync ownership.
     /// </summary>
     [Headless]
@@ -1843,26 +2070,64 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         fixture.VRIK.RightFootTargetIntentProvider = provider;
         fixture.VRIK.RightFootIKTarget = fixture.RightFootIKTarget;
         fixture.FootSyncController.Active = true;
+        LegIKController pole = new()
+        {
+            Name = "RightLegIKController",
+            FootTarget = fixture.RightFootIKTarget,
+        };
+        TwoBoneIK3D twoBone = new()
+        {
+            Name = "RightLegTwoBoneIKController",
+        };
+        CopyTransformModifier3D footRotation = new()
+        {
+            Name = "CopyRightFootRotation",
+        };
         FootTargetConsumer consumer = new()
         {
             Name = "RightFootConsumer",
             FootTarget = fixture.RightFootIKTarget,
         };
+        fixture.Skeleton.AddChild(pole);
+        fixture.Skeleton.AddChild(twoBone);
+        fixture.Skeleton.AddChild(footRotation);
         fixture.Skeleton.AddChild(consumer);
-        fixture.Skeleton.MoveChild(consumer, fixture.VRIKFootProviderStage.GetIndex() + 1);
+        ConfigureNativeFootConsumers(fixture, twoBone, footRotation);
+        fixture.Skeleton.MoveChild(pole, fixture.FootSyncController.GetIndex());
+        fixture.Skeleton.MoveChild(twoBone, fixture.FootSyncController.GetIndex());
+        fixture.Skeleton.MoveChild(footRotation, fixture.FootSyncController.GetIndex());
+        fixture.Skeleton.MoveChild(consumer, fixture.FootSyncController.GetIndex());
+        fixture.VRIK.RightFootModifierGroup = [fixture.RightFootModifier, pole, twoBone, footRotation, consumer];
+        // Rebind after adding the fixture's lower-leg consumers so CharacterIK applies its runtime pipeline ordering
+        // before this test manually drives the individual modifier stages.
+        fixture.ResetAndRebind();
 
         try
         {
             fixture.FootSyncController._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
+            pole._ProcessModificationWithDelta(1.0d / 60.0d);
+            twoBone._ProcessModificationWithDelta(1.0d / 60.0d);
+            footRotation._ProcessModificationWithDelta(1.0d / 60.0d);
             consumer._ProcessModificationWithDelta(1.0d / 60.0d);
 
             Assert.True(fixture.FootSyncController.GetIndex() < fixture.VRIKBeginStage.GetIndex());
             Assert.True(fixture.VRIKBeginStage.GetIndex() < fixture.VRIKFootProviderStage.GetIndex());
+            Assert.True(fixture.VRIKFootProviderStage.GetIndex() < fixture.RightFootModifier.GetIndex());
+            Assert.True(fixture.VRIKFootProviderStage.GetIndex() < pole.GetIndex());
+            Assert.True(fixture.VRIKFootProviderStage.GetIndex() < twoBone.GetIndex());
+            Assert.True(fixture.VRIKFootProviderStage.GetIndex() < footRotation.GetIndex());
             Assert.True(fixture.VRIKFootProviderStage.GetIndex() < consumer.GetIndex());
+            Assert.Equal(1, CountSkeletonChildrenNamed(fixture.Skeleton, "CharacterIKBeginStage"));
+            Assert.Equal(1, CountSkeletonChildrenNamed(fixture.Skeleton, "CharacterIKFootProviderStage"));
+            Assert.Equal(1, CountSkeletonChildrenNamed(fixture.Skeleton, "CharacterIKEndStage"));
             Assert.True(fixture.RightFootModifier.Active);
-            Assert.Equal(0.58f, fixture.RightFootModifier.Influence);
+            Assert.All(fixture.VRIK.RightFootModifierGroup, modifier =>
+            {
+                Assert.True(modifier.Active);
+                Assert.Equal(0.58f, modifier.Influence);
+            });
             Assert.True(fixture.FootSyncController.Active);
             Assert.Equal(1.0f, fixture.FootSyncController.Influence);
             AssertTransformApproximately(provider.TargetIntent.WorldTransform, fixture.RightFootIKTarget.Transform);
@@ -1876,12 +2141,18 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             Transform3D liveFootSyncFallback = fixture.RightFootIKTarget.GlobalTransform;
             fixture.VRIKBeginStage._ProcessModificationWithDelta(1.0d / 60.0d);
             fixture.VRIKFootProviderStage._ProcessModificationWithDelta(1.0d / 60.0d);
+            pole._ProcessModificationWithDelta(1.0d / 60.0d);
+            twoBone._ProcessModificationWithDelta(1.0d / 60.0d);
+            footRotation._ProcessModificationWithDelta(1.0d / 60.0d);
             consumer._ProcessModificationWithDelta(1.0d / 60.0d);
 
             AssertTransformApproximately(liveFootSyncFallback, fixture.RightFootIKTarget.GlobalTransform);
             AssertTransformApproximately(fixture.RightFootIKTarget.Transform, consumer.ConsumedLocalTransform);
-            Assert.False(fixture.RightFootModifier.Active);
-            Assert.Equal(0.0f, fixture.RightFootModifier.Influence);
+            Assert.All(fixture.VRIK.RightFootModifierGroup, modifier =>
+            {
+                Assert.False(modifier.Active);
+                Assert.Equal(0.0f, modifier.Influence);
+            });
             Assert.True(fixture.FootSyncController.Active);
             Assert.Equal(1.0f, fixture.FootSyncController.Influence);
         }
@@ -2413,6 +2684,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             RightHandIKTarget = rightHandIKTarget,
             LeftHandIKTarget = leftHandIKTarget,
             RightFootIKTarget = rightFootIKTarget,
+            LeftFootIKTarget = leftFootIKTarget,
             PhysicalRig = physicalRig,
             HeadModifierGroup = [headModifier],
             RightHandModifierGroup = [rightHandModifier],
@@ -2447,14 +2719,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         RestoreEnabledTarget(rightFootIKTarget);
         RestoreEnabledTarget(leftFootIKTarget);
 
-        SkeletonModifier3D vrikBeginStage = Assert.IsType<SkeletonModifier3D>(
-            skeleton.GetNodeOrNull("CharacterIKBeginStage"),
-            exactMatch: false);
-        SkeletonModifier3D vrikFootProviderStage = Assert.IsType<SkeletonModifier3D>(
-            skeleton.GetNodeOrNull("CharacterIKFootProviderStage"),
-            exactMatch: false);
-
-        return new CharacterIKFixture<TCharacterIK>(
+        CharacterIKFixture<TCharacterIK> fixture = new(
             root,
             characterIK,
             characterIK.PhysicsActuatorTickCount,
@@ -2469,9 +2734,59 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             rightHandModifier,
             leftHandModifier,
             rightFootModifier,
-            footSyncController,
-            vrikBeginStage,
-            vrikFootProviderStage);
+            footSyncController);
+        _ = fixture.VRIKBeginStage;
+        _ = fixture.VRIKFootProviderStage;
+        return fixture;
+    }
+
+    private static void ConfigureNativeFootConsumers<TCharacterIK>(
+        CharacterIKFixture<TCharacterIK> fixture,
+        TwoBoneIK3D twoBone,
+        CopyTransformModifier3D footRotation)
+        where TCharacterIK : CharacterIK
+    {
+        // Keep the original animation-synchronised RightFoot bone untouched by the dedicated native consumer chain.
+        Skeleton3D skeleton = fixture.Skeleton;
+        int upperLeg = skeleton.AddBone("NativeRightUpperLeg");
+        skeleton.SetBoneRest(upperLeg, new Transform3D(Basis.Identity, new Vector3(0.15f, 0.85f, 0.02f)));
+        int lowerLeg = skeleton.AddBone("NativeRightLowerLeg");
+        skeleton.SetBoneParent(lowerLeg, upperLeg);
+        skeleton.SetBoneRest(lowerLeg, new Transform3D(Basis.Identity, new Vector3(0.0f, -0.4f, 0.02f)));
+        int foot = skeleton.AddBone("NativeRightFoot");
+        skeleton.SetBoneParent(foot, lowerLeg);
+        skeleton.SetBoneRest(foot, new Transform3D(Basis.Identity, new Vector3(0.0f, -0.4f, -0.02f)));
+        skeleton.ResetBonePose(upperLeg);
+        skeleton.ResetBonePose(lowerLeg);
+        skeleton.ResetBonePose(foot);
+
+        twoBone.SettingCount = 1;
+        twoBone.SetRootBone(0, upperLeg);
+        twoBone.SetMiddleBone(0, lowerLeg);
+        twoBone.SetUseVirtualEnd(0, false);
+        twoBone.SetEndBone(0, foot);
+        twoBone.SetTargetNode(0, twoBone.GetPathTo(fixture.RightFootIKTarget));
+
+        footRotation.SettingCount = 1;
+        footRotation.SetReferenceType(0, BoneConstraint3D.ReferenceType.Node);
+        footRotation.SetReferenceNode(0, footRotation.GetPathTo(fixture.RightFootIKTarget));
+        footRotation.SetApplyBone(0, foot);
+        footRotation.SetAmount(0, 1.0f);
+        footRotation.SetCopyFlags(0, CopyTransformModifier3D.TransformFlag.Rotation);
+        footRotation.SetAxisFlags(0, CopyTransformModifier3D.AxisFlag.All);
+        footRotation.SetRelative(0, false);
+        footRotation.SetAdditive(0, false);
+
+        Assert.Equal(1, twoBone.SettingCount);
+        Assert.Equal(upperLeg, twoBone.GetRootBone(0));
+        Assert.Equal(lowerLeg, twoBone.GetMiddleBone(0));
+        Assert.Equal(foot, twoBone.GetEndBone(0));
+        Assert.Same(fixture.RightFootIKTarget, twoBone.GetNodeOrNull(twoBone.GetTargetNode(0)));
+        Assert.Equal(1, footRotation.SettingCount);
+        Assert.Equal(BoneConstraint3D.ReferenceType.Node, footRotation.GetReferenceType(0));
+        Assert.Same(fixture.RightFootIKTarget, footRotation.GetNodeOrNull(footRotation.GetReferenceNode(0)));
+        Assert.Equal(foot, footRotation.GetApplyBone(0));
+        Assert.Equal(CopyTransformModifier3D.TransformFlag.Rotation, footRotation.GetCopyFlags(0));
     }
 
     private static void InvokeOnBeginStage(CharacterIK characterIK, double delta)
@@ -2938,9 +3253,7 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         SkeletonModifier3D rightHandModifier,
         SkeletonModifier3D leftHandModifier,
         SkeletonModifier3D rightFootModifier,
-        FootTargetSyncController footSyncController,
-        SkeletonModifier3D vrikBeginStage,
-        SkeletonModifier3D vrikFootProviderStage)
+        FootTargetSyncController footSyncController)
         where TCharacterIK : CharacterIK
     {
         public Node3D Root { get; } = root;
@@ -2973,9 +3286,35 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
 
         public FootTargetSyncController FootSyncController { get; } = footSyncController;
 
-        public SkeletonModifier3D VRIKBeginStage { get; } = vrikBeginStage;
+        public SkeletonModifier3D VRIKBeginStage => GetLiveStage("CharacterIKBeginStage");
 
-        public SkeletonModifier3D VRIKFootProviderStage { get; } = vrikFootProviderStage;
+        public SkeletonModifier3D VRIKFootProviderStage => GetLiveStage("CharacterIKFootProviderStage");
+
+        public void ResetAndRebind()
+        {
+            SkeletonModifier3D oldBeginStage = VRIKBeginStage;
+            SkeletonModifier3D oldProviderStage = VRIKFootProviderStage;
+            VRIK.ResetRuntimeBindings();
+            VRIK._PhysicsProcess(1.0d / 60.0d);
+
+            Assert.Null(oldBeginStage.GetParent());
+            Assert.Null(oldProviderStage.GetParent());
+            Assert.NotSame(oldBeginStage, VRIKBeginStage);
+            Assert.NotSame(oldProviderStage, VRIKFootProviderStage);
+        }
+
+        private SkeletonModifier3D GetLiveStage(string name)
+        {
+            Assert.Same(Skeleton, VRIK.PhysicalRig!.GetParent());
+            Assert.Equal(1, CountSkeletonChildrenNamed(Skeleton, name));
+            SkeletonModifier3D stage = Assert.IsType<SkeletonModifier3D>(
+                Skeleton.GetNodeOrNull(name),
+                exactMatch: false);
+            Assert.Same(Skeleton, stage.GetParent());
+            Assert.True(stage.IsInsideTree());
+            Assert.False(stage.IsQueuedForDeletion());
+            return stage;
+        }
 
         public async Task DisposeAsync(SceneTree sceneTree)
         {
@@ -3051,6 +3390,20 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
     private static void AssertTargetProcessEnabled(Node3D target)
         => Assert.Equal(Node.ProcessModeEnum.Inherit, target.ProcessMode);
 
+    private static int CountSkeletonChildrenNamed(Skeleton3D skeleton, StringName name)
+    {
+        int count = 0;
+        foreach (Node child in skeleton.GetChildren())
+        {
+            if (child.Name == name)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     private static void AssertCollisionShapesDisabled(Node node, bool expectedDisabled)
     {
         int childCount = node.GetChildCount();
@@ -3096,7 +3449,10 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
         if (!succeeded)
         {
             object? errors = result.GetType().GetProperty("Errors")?.GetValue(result);
-            throw new Xunit.Sdk.XunitException(errors?.ToString() ?? "Runtime role installer failed.");
+            string errorText = errors is IEnumerable<string> typedErrors
+                ? string.Join('\n', typedErrors)
+                : errors?.ToString() ?? "Runtime role installer failed.";
+            throw new Xunit.Sdk.XunitException(errorText);
         }
     }
 
@@ -3268,8 +3624,35 @@ public sealed partial class PlayerVRIKBridgeIntegrationTests
             set;
         }
 
+        public bool IsApplicable { get; set; } = true;
+
         public override IKTargetIntent GetTargetIntent()
             => TargetIntent;
+
+        public override bool TryGetTargetIntent(out IKTargetIntentResolution resolution)
+        {
+            resolution = new IKTargetIntentResolution(TargetIntent, ShouldApplyTargetTransform);
+            return IsApplicable;
+        }
+    }
+
+    /// <summary>
+    /// Test-only future-provider shape. It exposes only an immutable resolution and never writes fixture nodes.
+    /// </summary>
+    private sealed partial class SyntheticAnchorIntentProvider : IKTargetIntentProvider
+    {
+        public IKTargetIntentResolution Resolution
+        {
+            get; init;
+        }
+
+        public override IKTargetIntent GetTargetIntent() => Resolution.Intent;
+
+        public override bool TryGetTargetIntent(out IKTargetIntentResolution resolution)
+        {
+            resolution = Resolution;
+            return true;
+        }
     }
 
     private sealed partial class TestPoseState : PoseState

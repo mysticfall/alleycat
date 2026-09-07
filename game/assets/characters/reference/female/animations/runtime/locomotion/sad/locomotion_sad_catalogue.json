@@ -1,0 +1,5008 @@
+{
+  "animation_library": "locomotion_sad.tres",
+  "clip_count": 22,
+  "clips": [
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_forward_primary",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_wf.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_wf_r_loop"
+      },
+      "duration_seconds": 1.26666666666667,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.000000157859176397324,
+        -1.32598197460175
+      ],
+      "identity": "loc_sad_wf",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.26666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.919395714891274,
+            "derivation_event_id": "release_l",
+            "derived_output_frame": 20.0,
+            "event_kind": "Release",
+            "id": "release_l",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.048403565924815,
+                "neighbour": -0.0541592168825034
+              },
+              "current_frame": 20.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                20.0,
+                21.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0279403594145823,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 20.0,
+                  "frame": 20.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.919395714891274,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.017247672539213,
+                    "phase_axis_velocity": 0.0746473645932686,
+                    "relative_velocity": [
+                      0.00178032368421554,
+                      -0.0318858083815385,
+                      0.0746473645932686
+                    ],
+                    "root_forward_position": 0.017247672539213,
+                    "root_forward_velocity": 0.0746473645932686,
+                    "semantic_lateral_position": 0.0703911259770393,
+                    "velocity_magnitude": 0.0811917690981367
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0293154718857461,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 21.0,
+                  "frame": 21.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.946492011183074,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0978007252813811,
+                    "phase_axis_velocity": 0.0805530527421729,
+                    "relative_velocity": [
+                      0.00213135778903961,
+                      -0.027383512379652,
+                      0.0805530527421729
+                    ],
+                    "root_forward_position": 0.0978007252813811,
+                    "root_forward_velocity": 0.0805530527421729,
+                    "semantic_lateral_position": 0.0725224837660789,
+                    "velocity_magnitude": 0.0851069547237754
+                  }
+                }
+              ],
+              "neighbour_frame": 19.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 20.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 20.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+                24.0
+              ],
+              "post_repair_output_frame": 20.0,
+              "post_repair_repair_intersection_frames": [
+                16.0,
+                24.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "source_detector_stencil_frames": [
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+                24.0
+              ],
+              "source_repair_intersection_frames": [
+                16.0,
+                24.0
+              ]
+            },
+            "time_seconds": 0.633333333333333
+          },
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.88147983642283,
+            "derivation_event_id": "release_r",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_r",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.040650433474859,
+                "neighbour": -0.0567350298668785
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                39.0,
+                2.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0273893935246369,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 39.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.88147983642283,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0252881611695202,
+                    "phase_axis_velocity": 0.0700525017111786,
+                    "relative_velocity": [
+                      -0.00222523510456085,
+                      -0.0374621205765977,
+                      0.0700525017111786
+                    ],
+                    "root_forward_position": 0.0252881611695202,
+                    "root_forward_velocity": 0.0700525017111786,
+                    "semantic_lateral_position": -0.0998284369707108,
+                    "velocity_magnitude": 0.0794714737837471
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0274320890874874,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 2.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.945938670005017,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.101728717031044,
+                    "phase_axis_velocity": 0.076440630367322,
+                    "relative_velocity": [
+                      -0.00140357017517089,
+                      -0.0261725245012707,
+                      0.076440630367322
+                    ],
+                    "root_forward_position": 0.101728717031044,
+                    "root_forward_velocity": 0.076440630367322,
+                    "semantic_lateral_position": -0.101231999695301,
+                    "velocity_magnitude": 0.0808092879498377
+                  }
+                }
+              ],
+              "neighbour_frame": 38.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ]
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 39.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 38.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 39.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.926706492900848
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.65811812877655
+            ],
+            "planar_velocity": [
+              0.0,
+              0.92056268453598
+            ],
+            "time_seconds": 0.633333333333333,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              1.32598197460175
+            ],
+            "planar_velocity": [
+              0.0,
+              0.797696053981781
+            ],
+            "time_seconds": 1.26666666666667,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "wf",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "release_l",
+              "role": "wf"
+            },
+            "to": {
+              "event": "release_l",
+              "role": "f2i_l"
+            }
+          },
+          {
+            "from": {
+              "event": "release_r",
+              "role": "wf"
+            },
+            "to": {
+              "event": "release_r",
+              "role": "f2i_r"
+            }
+          },
+          {
+            "from": {
+              "event": "release_l",
+              "role": "i2f_l"
+            },
+            "to": {
+              "event": "release_l",
+              "role": "wf"
+            }
+          },
+          {
+            "from": {
+              "event": "release_r",
+              "role": "i2f_r"
+            },
+            "to": {
+              "event": "release_r",
+              "role": "wf"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 39.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 38.0,
+        "duration_seconds": 1.26666666666667,
+        "fps": 30.0,
+        "frame_end": 39.0,
+        "frame_start": 1.0,
+        "period_frames": 38.0,
+        "runtime_sample_count": 38.0,
+        "sample_count": 39.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_backward_primary",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_wb.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_wb_r_loop"
+      },
+      "duration_seconds": 1.5,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        -0.000000185100361704826,
+        1.55118763446808
+      ],
+      "identity": "loc_sad_wb",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.5,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.940448371345747,
+            "derivation_event_id": "acquire_l",
+            "derived_output_frame": 23.0,
+            "event_kind": "Acquire",
+            "id": "acquire_l",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0721262758342007,
+                "neighbour": -0.0274263532061987
+              },
+              "current_frame": 23.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                23.0,
+                22.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0266395003905568,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 23.0,
+                  "frame": 23.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.940448371345747,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0181299427402308,
+                    "phase_axis_velocity": -0.0795419194595934,
+                    "relative_velocity": [
+                      0.00333616137504577,
+                      0.0285571873635857,
+                      -0.0795419194595934
+                    ],
+                    "root_forward_position": 0.0181299427402308,
+                    "root_forward_velocity": -0.0795419194595934,
+                    "semantic_lateral_position": 0.130872368812561,
+                    "velocity_magnitude": 0.084578719984141
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0270076198169101,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 22.0,
+                  "frame": 22.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.965998133313788,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0976718621998245,
+                    "phase_axis_velocity": -0.0844736678697973,
+                    "relative_velocity": [
+                      0.0053127035498619,
+                      0.021976298510916,
+                      -0.0844736678697973
+                    ],
+                    "root_forward_position": 0.0976718621998245,
+                    "root_forward_velocity": -0.0844736678697973,
+                    "semantic_lateral_position": 0.127536207437515,
+                    "velocity_magnitude": 0.0874470301303962
+                  }
+                }
+              ],
+              "neighbour_frame": 24.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 23.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 23.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                19.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0
+              ],
+              "post_repair_output_frame": 23.0,
+              "post_repair_repair_intersection_frames": [
+                19.0,
+                20.0,
+                27.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                20.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "source_detector_stencil_frames": [
+                19.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0
+              ],
+              "source_repair_intersection_frames": [
+                19.0,
+                20.0,
+                27.0
+              ]
+            },
+            "time_seconds": 0.733333333333333
+          },
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.948765794408815,
+            "derivation_event_id": "acquire_r",
+            "derived_output_frame": 1.0,
+            "event_kind": "Acquire",
+            "id": "acquire_r",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0710145868499623,
+                "neighbour": -0.0338737598588992
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                46.0,
+                45.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0279923499438828,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 46.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.948765794408815,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0125419466380308,
+                    "phase_axis_velocity": -0.0841958501927986,
+                    "relative_velocity": [
+                      -0.00471651554107666,
+                      0.0276413623479739,
+                      -0.0841958501927986
+                    ],
+                    "root_forward_position": 0.0125419466380308,
+                    "root_forward_velocity": -0.0841958501927986,
+                    "semantic_lateral_position": -0.0735234841704369,
+                    "velocity_magnitude": 0.0887425017733295
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0279477661976569,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 45.0,
+                  "frame": 45.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.983519139641452,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0967377968308298,
+                    "phase_axis_velocity": -0.0888271321571511,
+                    "relative_velocity": [
+                      -0.00914127379655838,
+                      0.0135309763260132,
+                      -0.0888271321571511
+                    ],
+                    "root_forward_position": 0.0967377968308298,
+                    "root_forward_velocity": -0.0888271321571511,
+                    "semantic_lateral_position": -0.0688069686293602,
+                    "velocity_magnitude": 0.0903156111324214
+                  }
+                }
+              ],
+              "neighbour_frame": 2.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                20.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ]
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 46.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 45.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 46.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              -1.00275886058807
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.816581845283508
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.818508207798004
+            ],
+            "time_seconds": 0.75,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -1.55118763446808
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.76825612783432
+            ],
+            "time_seconds": 1.5,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "wb",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "acquire_l",
+              "role": "i2b_l"
+            },
+            "to": {
+              "event": "acquire_l",
+              "role": "wb"
+            }
+          },
+          {
+            "from": {
+              "event": "acquire_r",
+              "role": "i2b_r"
+            },
+            "to": {
+              "event": "acquire_r",
+              "role": "wb"
+            }
+          },
+          {
+            "from": {
+              "event": "acquire_l",
+              "role": "wb"
+            },
+            "to": {
+              "event": "acquire_l",
+              "role": "b2i_l"
+            }
+          },
+          {
+            "from": {
+              "event": "acquire_r",
+              "role": "wb"
+            },
+            "to": {
+              "event": "acquire_r",
+              "role": "b2i_r"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 46.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 45.0,
+        "duration_seconds": 1.5,
+        "fps": 30.0,
+        "frame_end": 46.0,
+        "frame_start": 1.0,
+        "period_frames": 45.0,
+        "runtime_sample_count": 45.0,
+        "sample_count": 46.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_lateral_right_left_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_xr_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_xr_l_loop"
+      },
+      "duration_seconds": 1.4,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.744196236133575,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_xr_l",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.4,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.917095307907194,
+            "derivation_event_id": "release_l",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_l",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": -0.0341279739513993,
+                "neighbour": 0.0117421746253967
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                43.0,
+                2.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0107169415707276,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 43.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.923079250875659,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": -0.00890505313873291,
+                    "phase_axis_velocity": -0.036451518535614,
+                    "relative_velocity": [
+                      -0.036451518535614,
+                      -0.00303363912403442,
+                      0.0148818192575847
+                    ],
+                    "root_forward_position": -0.253065772039037,
+                    "root_forward_velocity": 0.0148818192575847,
+                    "semantic_lateral_position": -0.00890505313873291,
+                    "velocity_magnitude": 0.0394890454974858
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0107933990577663,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 2.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.917095307907194,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": -0.0456966459751129,
+                    "phase_axis_velocity": -0.0367917343974113,
+                    "relative_velocity": [
+                      -0.0367917343974113,
+                      -0.00109374643628756,
+                      0.015956193126119
+                    ],
+                    "root_forward_position": -0.237109549110592,
+                    "root_forward_velocity": 0.015956193126119,
+                    "semantic_lateral_position": -0.0456966459751129,
+                    "velocity_magnitude": 0.0401176781520885
+                  }
+                }
+              ],
+              "neighbour_frame": 42.0,
+              "phase_axis": "lateral"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0
+              ]
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 43.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 42.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 43.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.39197650551796,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.344080328941345,
+              0.0
+            ],
+            "planar_velocity": [
+              0.481481522321701,
+              0.0
+            ],
+            "time_seconds": 0.7,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.744196236133575,
+              0.0
+            ],
+            "planar_velocity": [
+              0.372694700956345,
+              0.0
+            ],
+            "time_seconds": 1.4,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "xr_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 43.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 42.0,
+        "duration_seconds": 1.4,
+        "fps": 30.0,
+        "frame_end": 43.0,
+        "frame_start": 1.0,
+        "period_frames": 42.0,
+        "runtime_sample_count": 42.0,
+        "sample_count": 43.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_lateral_right_right_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_xr_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_xr_r_loop"
+      },
+      "duration_seconds": 1.5,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.705458700656891,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_xr_r",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.5,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.99404654961044,
+            "derivation_event_id": "release_r",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_r",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": -0.0162020875141025,
+                "neighbour": 0.0390726327896118
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                46.0,
+                2.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.00930281490384021,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 46.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.99404654961044,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": 0.00928312540054321,
+                    "phase_axis_velocity": -0.0462352633476257,
+                    "relative_velocity": [
+                      -0.0462352633476257,
+                      -0.00504821542284777,
+                      0.00044499299560221
+                    ],
+                    "root_forward_position": 0.191756999610234,
+                    "root_forward_velocity": 0.00044499299560221,
+                    "semantic_lateral_position": 0.00928312540054321,
+                    "velocity_magnitude": 0.0465121712516833
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.00932893535452728,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 2.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.998470280437591,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": -0.0374084897339344,
+                    "phase_axis_velocity": -0.0466915033757687,
+                    "relative_velocity": [
+                      -0.0466915033757687,
+                      -0.00251024966149109,
+                      0.00061956029059921
+                    ],
+                    "root_forward_position": 0.19237657480199,
+                    "root_forward_velocity": 0.00061956029059921,
+                    "semantic_lateral_position": -0.0374084897339344,
+                    "velocity_magnitude": 0.0467630377093503
+                  }
+                }
+              ],
+              "neighbour_frame": 45.0,
+              "phase_axis": "lateral"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ]
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 46.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 45.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 46.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.444304019212723,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.429008483886719,
+              0.0
+            ],
+            "planar_velocity": [
+              0.390644043684006,
+              0.0
+            ],
+            "time_seconds": 0.75,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.705458700656891,
+              0.0
+            ],
+            "planar_velocity": [
+              0.213407263159752,
+              0.0
+            ],
+            "time_seconds": 1.5,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "xr_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 46.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 45.0,
+        "duration_seconds": 1.5,
+        "fps": 30.0,
+        "frame_end": 46.0,
+        "frame_start": 1.0,
+        "period_frames": 45.0,
+        "runtime_sample_count": 45.0,
+        "sample_count": 46.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_lateral_left_left_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_xl_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_xl_l_loop"
+      },
+      "duration_seconds": 1.4,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        -0.744196236133575,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_xl_l",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.4,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.935897876502121,
+            "derivation_event_id": "release_l",
+            "derived_output_frame": 18.0,
+            "event_kind": "Release",
+            "id": "release_l",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0200770795345306,
+                "neighbour": -0.0402194261550903
+              },
+              "current_frame": 18.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                18.0,
+                19.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0126637454505192,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 18.0,
+                  "frame": 18.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.935897876502121,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": -0.0219080299139023,
+                    "phase_axis_velocity": 0.0478813946247101,
+                    "relative_velocity": [
+                      0.0478813946247101,
+                      -0.00649136431789254,
+                      0.016812905179128
+                    ],
+                    "root_forward_position": 0.190825617410745,
+                    "root_forward_velocity": 0.016812905179128,
+                    "semantic_lateral_position": -0.0219080299139023,
+                    "velocity_magnitude": 0.05116091811605
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0122247821221227,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 19.0,
+                  "frame": 19.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.972515745214374,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": 0.0320551991462708,
+                    "phase_axis_velocity": 0.053963229060173,
+                    "relative_velocity": [
+                      0.053963229060173,
+                      -0.0055654057722414,
+                      0.0116595770687228
+                    ],
+                    "root_forward_position": 0.202485194479465,
+                    "root_forward_velocity": 0.0116595770687228,
+                    "semantic_lateral_position": 0.0320551991462708,
+                    "velocity_magnitude": 0.0554882831725031
+                  }
+                }
+              ],
+              "neighbour_frame": 17.0,
+              "phase_axis": "lateral"
+            },
+            "output_frame": 18.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 18.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                20.0,
+                21.0,
+                22.0
+              ],
+              "post_repair_output_frame": 18.0,
+              "post_repair_repair_intersection_frames": [
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0
+              ],
+              "source_detector_stencil_frames": [
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0,
+                20.0,
+                21.0,
+                22.0
+              ],
+              "source_repair_intersection_frames": [
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                19.0
+              ]
+            },
+            "time_seconds": 0.566666666666667
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 43.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 42.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 43.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.39197650551796,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              -0.344080328941345,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.481481522321701,
+              0.0
+            ],
+            "time_seconds": 0.7,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              -0.744196236133575,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.372694700956345,
+              0.0
+            ],
+            "time_seconds": 1.4,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "xl_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 43.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 42.0,
+        "duration_seconds": 1.4,
+        "fps": 30.0,
+        "frame_end": 43.0,
+        "frame_start": 1.0,
+        "period_frames": 42.0,
+        "runtime_sample_count": 42.0,
+        "sample_count": 43.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_lateral_left_right_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_xl_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_xl_r_loop"
+      },
+      "duration_seconds": 1.5,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        -0.705458700656891,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_xl_r",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.5,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.786855113246371,
+            "derivation_event_id": "release_r",
+            "derived_output_frame": 26.0,
+            "event_kind": "Release",
+            "id": "release_r",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0330323576927185,
+                "neighbour": -0.0166875720024109
+              },
+              "current_frame": 26.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                26.0,
+                27.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.01167786188095,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 26.0,
+                  "frame": 26.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.925823220090044,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": 0.0469374656677246,
+                    "phase_axis_velocity": 0.0381032228469849,
+                    "relative_velocity": [
+                      0.0381032228469849,
+                      -0.0039693128496796,
+                      0.0150402483327563
+                    ],
+                    "root_forward_position": -0.25089526793311,
+                    "root_forward_velocity": 0.0150402483327563,
+                    "semantic_lateral_position": 0.0469374656677246,
+                    "velocity_magnitude": 0.0411560457981157
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0118285863922194,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 27.0,
+                  "frame": 27.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.786855113246371,
+                    "phase_axis": "lateral",
+                    "phase_axis_position": 0.0800804793834686,
+                    "phase_axis_velocity": 0.033143013715744,
+                    "relative_velocity": [
+                      0.033143013715744,
+                      -0.00734293649105199,
+                      0.0249356919943757
+                    ],
+                    "root_forward_position": -0.225959575938738,
+                    "root_forward_velocity": 0.0249356919943757,
+                    "semantic_lateral_position": 0.0800804793834686,
+                    "velocity_magnitude": 0.0421208595557117
+                  }
+                }
+              ],
+              "neighbour_frame": 25.0,
+              "phase_axis": "lateral"
+            },
+            "output_frame": 26.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 26.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                22.0,
+                23.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0
+              ],
+              "post_repair_output_frame": 26.0,
+              "post_repair_repair_intersection_frames": [
+                29.0,
+                30.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0,
+                39.0,
+                40.0,
+                41.0,
+                42.0,
+                43.0,
+                44.0,
+                45.0
+              ],
+              "source_detector_stencil_frames": [
+                22.0,
+                23.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0
+              ],
+              "source_repair_intersection_frames": [
+                29.0,
+                30.0
+              ]
+            },
+            "time_seconds": 0.833333333333333
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 46.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 45.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 46.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.444304019212723,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              -0.429008483886719,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.390644043684006,
+              0.0
+            ],
+            "time_seconds": 0.75,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              -0.705458700656891,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.213407263159752,
+              0.0
+            ],
+            "time_seconds": 1.5,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "xl_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 46.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 45.0,
+        "duration_seconds": 1.5,
+        "fps": 30.0,
+        "frame_end": 46.0,
+        "frame_start": 1.0,
+        "period_frames": 45.0,
+        "runtime_sample_count": 45.0,
+        "sample_count": 46.0
+      }
+    },
+    {
+      "boundary_kind": "confined_manoeuvre",
+      "capability": "confined_side_step_right",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_sr.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_sr_loop"
+      },
+      "duration_seconds": 1.3,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.425742030143738,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_sr",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.3,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [],
+        "sample_semantics": {
+          "conceptual_sample_count": 40.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 39.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 40.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0433826707303524,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0752330347895622,
+              0.0
+            ],
+            "planar_velocity": [
+              0.257250428199768,
+              0.0
+            ],
+            "time_seconds": 0.65,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.425742030143738,
+              0.0
+            ],
+            "planar_velocity": [
+              0.248966202139854,
+              0.0
+            ],
+            "time_seconds": 1.3,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "sr",
+      "stitch_mappings": {
+        "applicability": "inapplicable"
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 40.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 39.0,
+        "duration_seconds": 1.3,
+        "fps": 30.0,
+        "frame_end": 40.0,
+        "frame_start": 1.0,
+        "period_frames": 39.0,
+        "runtime_sample_count": 39.0,
+        "sample_count": 40.0
+      }
+    },
+    {
+      "boundary_kind": "confined_manoeuvre",
+      "capability": "confined_side_step_left",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_sl.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_sl_loop"
+      },
+      "duration_seconds": 1.3,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        -0.425742030143738,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_sl",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.3,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [],
+        "sample_semantics": {
+          "conceptual_sample_count": 40.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 39.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 40.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.248966351151466,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              -0.350508987903595,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.257250666618347,
+              0.0
+            ],
+            "time_seconds": 0.65,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              -0.425742030143738,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.0433820448815823,
+              0.0
+            ],
+            "time_seconds": 1.3,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "sl",
+      "stitch_mappings": {
+        "applicability": "inapplicable"
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 40.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 39.0,
+        "duration_seconds": 1.3,
+        "fps": 30.0,
+        "frame_end": 40.0,
+        "frame_start": 1.0,
+        "period_frames": 39.0,
+        "runtime_sample_count": 39.0,
+        "sample_count": 40.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_arc_right_left_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_ar_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_ar_l_loop"
+      },
+      "duration_seconds": 1.26666666666667,
+      "endpoint_local_y_yaw": -0.654303133487701,
+      "endpoint_root_displacement_godot": [
+        0.325426697731018,
+        0.000000107334926724434,
+        -0.90022736787796
+      ],
+      "identity": "loc_sad_ar_l",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.26666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.963291860486723,
+            "derivation_event_id": "release_l",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_l",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0758360844357568,
+                "neighbour": -0.0131275999331351
+              },
+              "current_frame": 38.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                38.0,
+                39.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0216030652159424,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 38.0,
+                  "frame": 38.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.963291860486723,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.0100396355076846,
+                    "phase_axis_velocity": 0.0676462583512525,
+                    "relative_velocity": [
+                      -0.0410503149032593,
+                      -0.0186020772584596,
+                      0.0538539872430435
+                    ],
+                    "root_forward_position": 0.147387736097265,
+                    "root_forward_velocity": 0.0538539872430435,
+                    "semantic_lateral_position": 0.160582661628723,
+                    "velocity_magnitude": 0.0702240526739973
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0213996235125143,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 39.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.983165010223176,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.080212139434753,
+                    "phase_axis_velocity": 0.0693168130178889,
+                    "relative_velocity": [
+                      -0.0473048239946365,
+                      -0.0122599044067591,
+                      0.0508205285353102
+                    ],
+                    "root_forward_position": 0.198208264632576,
+                    "root_forward_velocity": 0.0508205285353102,
+                    "semantic_lateral_position": 0.113277837634087,
+                    "velocity_magnitude": 0.0705037428072772
+                  }
+                }
+              ],
+              "neighbour_frame": 37.0,
+              "phase_axis": "arc_tangent"
+            },
+            "output_frame": 38.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": -1.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": -1.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "post_repair_output_frame": 38.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ]
+            },
+            "time_seconds": 1.23333333333333
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 39.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 38.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 39.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.13190533220768,
+              0.380166083574295
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": -0.234223175793886
+          },
+          {
+            "cumulative_local_planar": [
+              0.00586273102089763,
+              0.450365215539932
+            ],
+            "planar_velocity": [
+              0.152019441127777,
+              0.605651676654816
+            ],
+            "time_seconds": 0.633333333333333,
+            "yaw": -0.291767627000809,
+            "yaw_rate": -0.461402535438536
+          },
+          {
+            "cumulative_local_planar": [
+              0.325426697731018,
+              0.90022736787796
+            ],
+            "planar_velocity": [
+              0.558174848556519,
+              0.672765910625458
+            ],
+            "time_seconds": 1.26666666666667,
+            "yaw": -0.654303133487701,
+            "yaw_rate": -0.893604755401615
+          }
+        ]
+      },
+      "role": "ar_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 39.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 38.0,
+        "duration_seconds": 1.26666666666667,
+        "fps": 30.0,
+        "frame_end": 39.0,
+        "frame_start": 1.0,
+        "period_frames": 38.0,
+        "runtime_sample_count": 38.0,
+        "sample_count": 39.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_arc_right_right_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_ar_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_ar_r_loop"
+      },
+      "duration_seconds": 1.16666666666667,
+      "endpoint_local_y_yaw": -0.671939313411713,
+      "endpoint_root_displacement_godot": [
+        0.704521954059601,
+        0.000000104308128356934,
+        -0.876447021961212
+      ],
+      "identity": "loc_sad_ar_r",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.16666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.967145324854419,
+            "derivation_event_id": "release_r",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_r",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.165325588733211,
+                "neighbour": -0.00776366889797941
+              },
+              "current_frame": 2.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                2.0,
+                3.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0252173655544212,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 2.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.967145324854419,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.105140700903419,
+                    "phase_axis_velocity": 0.0770224458537084,
+                    "relative_velocity": [
+                      -0.0242008790373802,
+                      -0.0193176324925877,
+                      0.0733724072892328
+                    ],
+                    "root_forward_position": 0.075125292852789,
+                    "root_forward_velocity": 0.0733724072892328,
+                    "semantic_lateral_position": -0.0927211940288544,
+                    "velocity_magnitude": 0.0796389579459554
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0254773889035731,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 3.0,
+                  "frame": 3.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.992110532864822,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.188955054495388,
+                    "phase_axis_velocity": 0.0802633720603808,
+                    "relative_velocity": [
+                      -0.0295740216970444,
+                      -0.00722277730355402,
+                      0.07495521699496
+                    ],
+                    "root_forward_position": 0.150080509847754,
+                    "root_forward_velocity": 0.07495521699496,
+                    "semantic_lateral_position": -0.122295215725899,
+                    "velocity_magnitude": 0.0809016429133274
+                  }
+                }
+              ],
+              "neighbour_frame": 1.0,
+              "phase_axis": "arc_tangent"
+            },
+            "output_frame": 2.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 1.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 1.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "post_repair_output_frame": 2.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                22.0,
+                23.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0
+              ]
+            },
+            "time_seconds": 0.0333333333333333
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 36.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 35.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 36.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.258645594120026,
+              0.616684377193451
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": -0.463502258062363
+          },
+          {
+            "cumulative_local_planar": [
+              0.318554490804672,
+              0.422243028879166
+            ],
+            "planar_velocity": [
+              0.557520389556885,
+              0.668827533721924
+            ],
+            "time_seconds": 0.583333333333333,
+            "yaw": -0.342079997062683,
+            "yaw_rate": -0.758526027202604
+          },
+          {
+            "cumulative_local_planar": [
+              0.704521954059601,
+              0.876447021961212
+            ],
+            "planar_velocity": [
+              0.805524528026581,
+              0.507330894470215
+            ],
+            "time_seconds": 1.16666666666667,
+            "yaw": -0.671939313411713,
+            "yaw_rate": -0.405896902084352
+          }
+        ]
+      },
+      "role": "ar_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 36.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 35.0,
+        "duration_seconds": 1.16666666666667,
+        "fps": 30.0,
+        "frame_end": 36.0,
+        "frame_start": 1.0,
+        "period_frames": 35.0,
+        "runtime_sample_count": 35.0,
+        "sample_count": 36.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_arc_left_left_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_al_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_al_l_loop"
+      },
+      "duration_seconds": 1.16666666666667,
+      "endpoint_local_y_yaw": 0.671939313411713,
+      "endpoint_root_displacement_godot": [
+        -0.704521954059601,
+        0.000000104308128356934,
+        -0.876447021961212
+      ],
+      "identity": "loc_sad_al_l",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.16666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.968109861825946,
+            "derivation_event_id": "release_l",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_l",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.162314018300407,
+                "neighbour": -0.0109600537816235
+              },
+              "current_frame": 2.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                2.0,
+                3.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0250922187714306,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 2.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.968109861825946,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.103456292211767,
+                    "phase_axis_velocity": 0.0772315100750235,
+                    "relative_velocity": [
+                      0.0252208188176155,
+                      -0.0193392093588169,
+                      0.0731713459196152
+                    ],
+                    "root_forward_position": 0.0746353798662369,
+                    "root_forward_velocity": 0.0731713459196152,
+                    "semantic_lateral_position": 0.089534118771553,
+                    "velocity_magnitude": 0.0797755638284251
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0253607025355162,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 3.0,
+                  "frame": 3.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.993255074740825,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.187317930920823,
+                    "phase_axis_velocity": 0.0804914035981707,
+                    "relative_velocity": [
+                      0.0306797921657562,
+                      -0.00723302927990188,
+                      0.0746564859651523
+                    ],
+                    "root_forward_position": 0.149291865831387,
+                    "root_forward_velocity": 0.0746564859651523,
+                    "semantic_lateral_position": 0.120213910937309,
+                    "velocity_magnitude": 0.0810379988435234
+                  }
+                }
+              ],
+              "neighbour_frame": 1.0,
+              "phase_axis": "arc_tangent"
+            },
+            "output_frame": 2.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 1.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 1.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "post_repair_output_frame": 2.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                22.0,
+                23.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0
+              ]
+            },
+            "time_seconds": 0.0333333333333333
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 36.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 35.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 36.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.258646786212921,
+              0.616685509681702
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.463500581681728
+          },
+          {
+            "cumulative_local_planar": [
+              -0.318554490804672,
+              0.422242939472198
+            ],
+            "planar_velocity": [
+              -0.557520389556885,
+              0.668827533721924
+            ],
+            "time_seconds": 0.583333333333333,
+            "yaw": 0.342079967260361,
+            "yaw_rate": 0.758526027202604
+          },
+          {
+            "cumulative_local_planar": [
+              -0.704521954059601,
+              0.876447021961212
+            ],
+            "planar_velocity": [
+              -0.805524528026581,
+              0.507330894470215
+            ],
+            "time_seconds": 1.16666666666667,
+            "yaw": 0.671939313411713,
+            "yaw_rate": 0.405896902084352
+          }
+        ]
+      },
+      "role": "al_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 36.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 35.0,
+        "duration_seconds": 1.16666666666667,
+        "fps": 30.0,
+        "frame_end": 36.0,
+        "frame_start": 1.0,
+        "period_frames": 35.0,
+        "runtime_sample_count": 35.0,
+        "sample_count": 36.0
+      }
+    },
+    {
+      "boundary_kind": "cyclic_travel",
+      "capability": "cyclic_arc_left_right_lane",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_al_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_al_r_loop"
+      },
+      "duration_seconds": 1.26666666666667,
+      "endpoint_local_y_yaw": 0.654303133487701,
+      "endpoint_root_displacement_godot": [
+        -0.325426697731018,
+        0.000000107334926724434,
+        -0.90022736787796
+      ],
+      "identity": "loc_sad_al_r",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.26666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": null,
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.964054379650834,
+            "derivation_event_id": "release_r",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_r",
+            "measurement": {
+              "boundary_context": null,
+              "boundary_context_supplies_omitted_neighbour": false,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0801196571078222,
+                "neighbour": -0.00884028892319577
+              },
+              "current_frame": 38.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                38.0,
+                39.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0215606048747103,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 38.0,
+                  "frame": 38.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.964054379650834,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.0139191305570563,
+                    "phase_axis_velocity": 0.0677108921419997,
+                    "relative_velocity": [
+                      0.0417574346065521,
+                      -0.0185326974136548,
+                      0.0533468709305325
+                    ],
+                    "root_forward_position": 0.152973406676949,
+                    "root_forward_velocity": 0.0533468709305325,
+                    "semantic_lateral_position": -0.161213994026184,
+                    "velocity_magnitude": 0.0702355526526663
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.021367838540671,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 39.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.982433065414074,
+                    "phase_axis": "arc_tangent",
+                    "phase_axis_position": 0.084061273368615,
+                    "phase_axis_velocity": 0.0692706697116968,
+                    "relative_velocity": [
+                      0.0479790419340134,
+                      -0.0122235455266861,
+                      0.0502011766741942
+                    ],
+                    "root_forward_position": 0.203174583351142,
+                    "root_forward_velocity": 0.0502011766741942,
+                    "semantic_lateral_position": -0.113234952092171,
+                    "velocity_magnitude": 0.0705093020077666
+                  }
+                }
+              ],
+              "neighbour_frame": 37.0,
+              "phase_axis": "arc_tangent"
+            },
+            "output_frame": 38.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": -1.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": -1.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": true,
+              "post_repair_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "post_repair_output_frame": 38.0,
+              "post_repair_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "repair_support_dilated_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                7.0,
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                24.0,
+                25.0,
+                26.0,
+                27.0,
+                28.0,
+                29.0,
+                30.0,
+                31.0,
+                32.0,
+                33.0,
+                34.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "source_detector_stencil_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ],
+              "source_repair_intersection_frames": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                35.0,
+                36.0,
+                37.0,
+                38.0
+              ]
+            },
+            "time_seconds": 1.23333333333333
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 39.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 38.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 39.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              -0.131907552480698,
+              0.3801628947258
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.234222798608243
+          },
+          {
+            "cumulative_local_planar": [
+              -0.00586272915825248,
+              0.450365215539932
+            ],
+            "planar_velocity": [
+              -0.152020424604416,
+              0.605652570724487
+            ],
+            "time_seconds": 0.633333333333333,
+            "yaw": 0.291767627000809,
+            "yaw_rate": 0.461408793926238
+          },
+          {
+            "cumulative_local_planar": [
+              -0.325426697731018,
+              0.90022736787796
+            ],
+            "planar_velocity": [
+              -0.558174848556519,
+              0.672762334346771
+            ],
+            "time_seconds": 1.26666666666667,
+            "yaw": 0.654303133487701,
+            "yaw_rate": 0.893604755401615
+          }
+        ]
+      },
+      "role": "al_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": []
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 39.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 38.0,
+        "duration_seconds": 1.26666666666667,
+        "fps": 30.0,
+        "frame_end": 39.0,
+        "frame_start": 1.0,
+        "period_frames": 38.0,
+        "runtime_sample_count": 38.0,
+        "sample_count": 39.0
+      }
+    },
+    {
+      "boundary_kind": "confined_manoeuvre",
+      "capability": "confined_pivot_right",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_pr45.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_pr45_loop"
+      },
+      "duration_seconds": 1.63333333333333,
+      "endpoint_local_y_yaw": -0.785398244857788,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_pr45",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.63333333333333,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [],
+        "sample_semantics": {
+          "conceptual_sample_count": 50.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 49.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 50.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": -0.187851064838469
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 0.816666666666667,
+            "yaw": -0.661469221115112,
+            "yaw_rate": -0.410245656967162
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 1.63333333333333,
+            "yaw": -0.785398244857788,
+            "yaw_rate": -0.0102424621582032
+          }
+        ]
+      },
+      "role": "pr45",
+      "stitch_mappings": {
+        "applicability": "inapplicable"
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 50.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 49.0,
+        "duration_seconds": 1.63333333333333,
+        "fps": 30.0,
+        "frame_end": 50.0,
+        "frame_start": 1.0,
+        "period_frames": 49.0,
+        "runtime_sample_count": 49.0,
+        "sample_count": 50.0
+      }
+    },
+    {
+      "boundary_kind": "confined_manoeuvre",
+      "capability": "confined_pivot_left",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_pl45.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_pl45_loop"
+      },
+      "duration_seconds": 1.63333333333333,
+      "endpoint_local_y_yaw": 0.785398244857788,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "identity": "loc_sad_pl45",
+      "loop_intent": true,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.63333333333333,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [],
+        "sample_semantics": {
+          "conceptual_sample_count": 50.0,
+          "duplicate_endpoint": true,
+          "is_loop": true,
+          "unique_runtime_sample_count": 49.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 50.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.187851064838469
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 0.816666666666667,
+            "yaw": 0.661469221115112,
+            "yaw_rate": 0.410245656967162
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0
+            ],
+            "time_seconds": 1.63333333333333,
+            "yaw": 0.785398244857788,
+            "yaw_rate": 0.0102424621582032
+          }
+        ]
+      },
+      "role": "pl45",
+      "stitch_mappings": {
+        "applicability": "inapplicable"
+      },
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 50.0,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 49.0,
+        "duration_seconds": 1.63333333333333,
+        "fps": 30.0,
+        "frame_end": 50.0,
+        "frame_start": 1.0,
+        "period_frames": 49.0,
+        "runtime_sample_count": 49.0,
+        "sample_count": 50.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "entry_forward_right",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_i2f_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_i2f_r"
+      },
+      "duration_seconds": 1.26666666666667,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.0000000835862010717392,
+        -0.700638651847839
+      ],
+      "identity": "loc_sad_i2f_r",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.26666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": "end",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.900672532816274,
+            "derivation_event_id": "release_r",
+            "derived_output_frame": 39.0,
+            "event_kind": "Release",
+            "id": "release_r",
+            "measurement": {
+              "boundary_context": "end",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0491984552466462,
+                "neighbour": -0.0446744470162912
+              },
+              "current_frame": 39.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                39.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0229072109126951,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 39.0,
+                  "frame": 39.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.900672532816274,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.00341355558748546,
+                    "phase_axis_velocity": 0.0709869836104289,
+                    "relative_velocity": [
+                      -0.00566281378269195,
+                      -0.0337737852284481,
+                      0.0709869836104289
+                    ],
+                    "root_forward_position": 0.00341355558748546,
+                    "root_forward_velocity": 0.0709869836104289,
+                    "semantic_lateral_position": -0.103017091751099,
+                    "velocity_magnitude": 0.078815530644043
+                  }
+                }
+              ],
+              "neighbour_frame": 38.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 39.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 39.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                39.0
+              ],
+              "post_repair_output_frame": 39.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                39.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 1.26666666666667
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 39.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 39.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 39.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0451281666755676
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.176373332738876
+            ],
+            "planar_velocity": [
+              0.0,
+              0.609972715377808
+            ],
+            "time_seconds": 0.633333333333333,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.700638651847839
+            ],
+            "planar_velocity": [
+              0.0,
+              0.742964684963226
+            ],
+            "time_seconds": 1.26666666666667,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "i2f_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "release_r",
+              "role": "i2f_r"
+            },
+            "to": {
+              "event": "release_r",
+              "role": "wf"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 38.0,
+        "duration_seconds": 1.26666666666667,
+        "fps": 30.0,
+        "frame_end": 39.0,
+        "frame_start": 1.0,
+        "sample_count": 39.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "exit_forward_right",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_f2i_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_f2i_r"
+      },
+      "duration_seconds": 1.0,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.000000074971467256546,
+        -0.630131781101227
+      ],
+      "identity": "loc_sad_f2i_r",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.0,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": "start",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.929030063674806,
+            "derivation_event_id": "release_r",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_r",
+            "measurement": {
+              "boundary_context": "start",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0443874766730872,
+                "neighbour": 0.0443874766730872
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                2.0,
+                2.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.025670324998034,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.929030063674806,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.112132460881384,
+                    "phase_axis_velocity": 0.0738763638894904,
+                    "relative_velocity": [
+                      -0.00836171954870224,
+                      -0.028209513042873,
+                      0.0738763638894904
+                    ],
+                    "root_forward_position": 0.112132460881384,
+                    "root_forward_velocity": 0.0738763638894904,
+                    "semantic_lateral_position": -0.117284752428532,
+                    "velocity_magnitude": 0.0795198850694565
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.025670324998034,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 2.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.929030063674806,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.112132460881384,
+                    "phase_axis_velocity": 0.0738763638894904,
+                    "relative_velocity": [
+                      -0.00836171954870224,
+                      -0.028209513042873,
+                      0.0738763638894904
+                    ],
+                    "root_forward_position": 0.112132460881384,
+                    "root_forward_velocity": 0.0738763638894904,
+                    "semantic_lateral_position": -0.117284752428532,
+                    "velocity_magnitude": 0.0795198850694565
+                  }
+                }
+              ],
+              "neighbour_frame": 1.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                1.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                1.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 31.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 31.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 31.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.811603546142578
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.438216626644135
+            ],
+            "planar_velocity": [
+              0.0,
+              0.617177128791809
+            ],
+            "time_seconds": 0.5,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.630131781101227
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.0562584362924099
+            ],
+            "time_seconds": 1.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "f2i_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "release_r",
+              "role": "wf"
+            },
+            "to": {
+              "event": "release_r",
+              "role": "f2i_r"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 30.0,
+        "duration_seconds": 1.0,
+        "fps": 30.0,
+        "frame_end": 31.0,
+        "frame_start": 1.0,
+        "sample_count": 31.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "entry_forward_left",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_i2f_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_i2f_l"
+      },
+      "duration_seconds": 1.26666666666667,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.0000000835862010717392,
+        -0.700638651847839
+      ],
+      "identity": "loc_sad_i2f_l",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.26666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": "end",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.899931912687065,
+            "derivation_event_id": "release_l",
+            "derived_output_frame": 39.0,
+            "event_kind": "Release",
+            "id": "release_l",
+            "measurement": {
+              "boundary_context": "end",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.053919143266711,
+                "neighbour": -0.0397971775895982
+              },
+              "current_frame": 39.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                39.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0227316180364889,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 39.0,
+                  "frame": 39.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.899931912687065,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.00475674632811973,
+                    "phase_axis_velocity": 0.0710133288600354,
+                    "relative_velocity": [
+                      0.00633598119020462,
+                      -0.0338186079233083,
+                      0.0710133288600354
+                    ],
+                    "root_forward_position": 0.00475674632811973,
+                    "root_forward_velocity": 0.0710133288600354,
+                    "semantic_lateral_position": 0.0996456742286682,
+                    "velocity_magnitude": 0.0789096684525833
+                  }
+                }
+              ],
+              "neighbour_frame": 38.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 39.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 39.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                39.0
+              ],
+              "post_repair_output_frame": 39.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                39.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 1.26666666666667
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 39.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 39.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 39.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0451281666755676
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.176373332738876
+            ],
+            "planar_velocity": [
+              0.0,
+              0.609972715377808
+            ],
+            "time_seconds": 0.633333333333333,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.700638651847839
+            ],
+            "planar_velocity": [
+              0.0,
+              0.742964684963226
+            ],
+            "time_seconds": 1.26666666666667,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "i2f_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "release_l",
+              "role": "i2f_l"
+            },
+            "to": {
+              "event": "release_l",
+              "role": "wf"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 38.0,
+        "duration_seconds": 1.26666666666667,
+        "fps": 30.0,
+        "frame_end": 39.0,
+        "frame_start": 1.0,
+        "sample_count": 39.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "exit_forward_left",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_f2i_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_f2i_l"
+      },
+      "duration_seconds": 1.0,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        0.000000074971467256546,
+        -0.630131781101227
+      ],
+      "identity": "loc_sad_f2i_l",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.0,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": "start",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.927121223721558,
+            "derivation_event_id": "release_l",
+            "derived_output_frame": 1.0,
+            "event_kind": "Release",
+            "id": "release_l",
+            "measurement": {
+              "boundary_context": "start",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0490402479902841,
+                "neighbour": 0.0490402479902841
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": 1.0,
+              "effective_derivative_frames": [
+                2.0,
+                2.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0256186237496123,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.927121223721558,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.112729565368006,
+                    "phase_axis_velocity": 0.0737133451766245,
+                    "relative_velocity": [
+                      0.00922000408172607,
+                      -0.0283340867381461,
+                      0.0737133451766245
+                    ],
+                    "root_forward_position": 0.112729565368006,
+                    "root_forward_velocity": 0.0737133451766245,
+                    "semantic_lateral_position": 0.114942833781242,
+                    "velocity_magnitude": 0.0795077744857698
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0256186237496123,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 2.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.927121223721558,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.112729565368006,
+                    "phase_axis_velocity": 0.0737133451766245,
+                    "relative_velocity": [
+                      0.00922000408172607,
+                      -0.0283340867381461,
+                      0.0737133451766245
+                    ],
+                    "root_forward_position": 0.112729565368006,
+                    "root_forward_velocity": 0.0737133451766245,
+                    "semantic_lateral_position": 0.114942833781242,
+                    "velocity_magnitude": 0.0795077744857698
+                  }
+                }
+              ],
+              "neighbour_frame": 1.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                1.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                1.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 31.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 31.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 31.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.811603546142578
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.438216626644135
+            ],
+            "planar_velocity": [
+              0.0,
+              0.617177128791809
+            ],
+            "time_seconds": 0.5,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.630131781101227
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.0562584362924099
+            ],
+            "time_seconds": 1.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "f2i_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "release_l",
+              "role": "wf"
+            },
+            "to": {
+              "event": "release_l",
+              "role": "f2i_l"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 30.0,
+        "duration_seconds": 1.0,
+        "fps": 30.0,
+        "frame_end": 31.0,
+        "frame_start": 1.0,
+        "sample_count": 31.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "entry_backward_right",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_i2b_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_i2b_r"
+      },
+      "duration_seconds": 1.0,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        -0.0000000752042979001999,
+        0.630131721496582
+      ],
+      "identity": "loc_sad_i2b_r",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.0,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": "end",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.929030089328952,
+            "derivation_event_id": "acquire_r",
+            "derived_output_frame": 31.0,
+            "event_kind": "Acquire",
+            "id": "acquire_r",
+            "measurement": {
+              "boundary_context": "end",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0443875241705385,
+                "neighbour": 0.0443875241705385
+              },
+              "current_frame": 31.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                31.0,
+                30.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0256703392515967,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 31.0,
+                  "frame": 31.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.929030089328952,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0382561044424676,
+                    "phase_axis_velocity": -0.0738763787906516,
+                    "relative_velocity": [
+                      0.00836171954870224,
+                      0.0282095130428743,
+                      -0.0738763787906516
+                    ],
+                    "root_forward_position": 0.0382561044424676,
+                    "root_forward_velocity": -0.0738763787906516,
+                    "semantic_lateral_position": -0.10892304033041,
+                    "velocity_magnitude": 0.0795198989130839
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0268434639534711,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 30.0,
+                  "frame": 30.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.961924374834924,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.112132483233125,
+                    "phase_axis_velocity": -0.0740372524042127,
+                    "relative_velocity": [
+                      0.00851032137870788,
+                      0.0192382391559414,
+                      -0.0740372524042127
+                    ],
+                    "root_forward_position": 0.112132483233125,
+                    "root_forward_velocity": -0.0740372524042127,
+                    "semantic_lateral_position": -0.117284759879112,
+                    "velocity_magnitude": 0.0769678514664089
+                  }
+                }
+              ],
+              "neighbour_frame": 31.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 31.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 31.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                31.0
+              ],
+              "post_repair_output_frame": 31.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                31.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 1.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 31.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 31.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 31.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0562598183751106
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.191915109753609
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.617177128791809
+            ],
+            "time_seconds": 0.5,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.630131721496582
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.811600625514984
+            ],
+            "time_seconds": 1.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "i2b_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "acquire_r",
+              "role": "i2b_r"
+            },
+            "to": {
+              "event": "acquire_r",
+              "role": "wb"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 30.0,
+        "duration_seconds": 1.0,
+        "fps": 30.0,
+        "frame_end": 31.0,
+        "frame_start": 1.0,
+        "sample_count": 31.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "exit_backward_right",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_b2i_r.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_b2i_r"
+      },
+      "duration_seconds": 1.26666666666667,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        -0.0000000835862010717392,
+        0.700638651847839
+      ],
+      "identity": "loc_sad_b2i_r",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.26666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Right",
+            "boundary_context": "start",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.900672503240495,
+            "derivation_event_id": "acquire_r",
+            "derived_output_frame": 1.0,
+            "event_kind": "Acquire",
+            "id": "acquire_r",
+            "measurement": {
+              "boundary_context": "start",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0491983474460582,
+                "neighbour": -0.0446744600548072
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                2.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0229071296783327,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.900672503240495,
+                    "phase_axis": "forward",
+                    "phase_axis_position": -0.0675734131217851,
+                    "phase_axis_velocity": -0.0709869687092677,
+                    "relative_velocity": [
+                      0.00566280633211135,
+                      0.0337737852284468,
+                      -0.0709869687092677
+                    ],
+                    "root_forward_position": -0.0675734131217851,
+                    "root_forward_velocity": -0.0709869687092677,
+                    "semantic_lateral_position": -0.0973542854189873,
+                    "velocity_magnitude": 0.0788155166876599
+                  }
+                }
+              ],
+              "neighbour_frame": 2.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                1.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                1.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 39.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 39.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 39.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.742965519428253
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.52426540851593
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.609971821308136
+            ],
+            "time_seconds": 0.633333333333333,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.700638651847839
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.0451254807412624
+            ],
+            "time_seconds": 1.26666666666667,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "b2i_r",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "acquire_r",
+              "role": "wb"
+            },
+            "to": {
+              "event": "acquire_r",
+              "role": "b2i_r"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 38.0,
+        "duration_seconds": 1.26666666666667,
+        "fps": 30.0,
+        "frame_end": 39.0,
+        "frame_start": 1.0,
+        "sample_count": 39.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "entry_backward_left",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_i2b_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_i2b_l"
+      },
+      "duration_seconds": 1.0,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        -0.0000000752042979001999,
+        0.630131721496582
+      ],
+      "identity": "loc_sad_i2b_l",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.0,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": "end",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.927121755495644,
+            "derivation_event_id": "acquire_l",
+            "derived_output_frame": 31.0,
+            "event_kind": "Acquire",
+            "id": "acquire_l",
+            "measurement": {
+              "boundary_context": "end",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0490402628914453,
+                "neighbour": 0.0490402628914453
+              },
+              "current_frame": 31.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                31.0,
+                30.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0256185929205259,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 31.0,
+                  "frame": 31.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.927121755495644,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.0390161829384752,
+                    "phase_axis_velocity": -0.0737133600777948,
+                    "relative_velocity": [
+                      -0.00921999663114547,
+                      0.0283339675288579,
+                      -0.0737133600777948
+                    ],
+                    "root_forward_position": 0.0390161829384752,
+                    "root_forward_velocity": -0.0737133600777948,
+                    "semantic_lateral_position": 0.105722837150097,
+                    "velocity_magnitude": 0.079507744954585
+                  }
+                },
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.0268145427173561,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 30.0,
+                  "frame": 30.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.959869129773551,
+                    "phase_axis": "forward",
+                    "phase_axis_position": 0.112729543016272,
+                    "phase_axis_velocity": -0.0738250598574812,
+                    "relative_velocity": [
+                      -0.00945229828357696,
+                      0.0193883236354657,
+                      -0.0738250598574812
+                    ],
+                    "root_forward_position": 0.112729543016272,
+                    "root_forward_velocity": -0.0738250598574812,
+                    "semantic_lateral_position": 0.114942833781242,
+                    "velocity_magnitude": 0.0769115888484691
+                  }
+                }
+              ],
+              "neighbour_frame": 31.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 31.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 31.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                31.0
+              ],
+              "post_repair_output_frame": 31.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                31.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 1.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 31.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 31.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 31.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              0.0562598183751106
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.191915109753609
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.617177128791809
+            ],
+            "time_seconds": 0.5,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.630131721496582
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.811600625514984
+            ],
+            "time_seconds": 1.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "i2b_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "acquire_l",
+              "role": "i2b_l"
+            },
+            "to": {
+              "event": "acquire_l",
+              "role": "wb"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 30.0,
+        "duration_seconds": 1.0,
+        "fps": 30.0,
+        "frame_end": 31.0,
+        "frame_start": 1.0,
+        "sample_count": 31.0
+      }
+    },
+    {
+      "boundary_kind": "transition",
+      "capability": "exit_backward_left",
+      "diagnostic_provenance_non_runtime_authoritative": {
+        "metrics": "res://assets/characters/reference/female/animations/processed/locomotion/sad/metrics/loc_sad_b2i_l.metrics.json",
+        "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "source_action": "loc_sad_b2i_l"
+      },
+      "duration_seconds": 1.26666666666667,
+      "endpoint_local_y_yaw": 0.0,
+      "endpoint_root_displacement_godot": [
+        0.0,
+        -0.0000000835862010717392,
+        0.700638651847839
+      ],
+      "identity": "loc_sad_b2i_l",
+      "loop_intent": false,
+      "phase_events": {
+        "applicability": "applicable",
+        "contract": "anim002_post_repair_directional_phase_events_v2",
+        "duration_seconds": 1.26666666666667,
+        "evaluation_stage": "final_repaired_evaluated_hierarchy",
+        "events": [
+          {
+            "accepted": true,
+            "anatomical_side": "Left",
+            "boundary_context": "start",
+            "canonicalised_from_duplicate_endpoint": null,
+            "confidence": 0.899931822931013,
+            "derivation_event_id": "acquire_l",
+            "derived_output_frame": 1.0,
+            "event_kind": "Acquire",
+            "id": "acquire_l",
+            "measurement": {
+              "boundary_context": "start",
+              "boundary_context_supplies_omitted_neighbour": true,
+              "coordinate_space": "generated Root-relative evaluated hierarchy",
+              "crossing_scalar": {
+                "current": 0.0539191278998885,
+                "neighbour": -0.0397971682763725
+              },
+              "current_frame": 1.0,
+              "declared_travel_direction": -1.0,
+              "effective_derivative_frames": [
+                2.0
+              ],
+              "hysteresis_samples": [
+                {
+                  "confidence_ok": true,
+                  "counterpart_velocity_magnitude": 0.022731626908345,
+                  "direction_ok": true,
+                  "evaluated_derivative_frame": 2.0,
+                  "frame": 1.0,
+                  "lifecycle_contrast": true,
+                  "transitioning": {
+                    "directional_release_confidence": 0.899931822931013,
+                    "phase_axis": "forward",
+                    "phase_axis_position": -0.0662565676307523,
+                    "phase_axis_velocity": -0.0710132916071324,
+                    "relative_velocity": [
+                      -0.00633598119020462,
+                      0.0338186079233051,
+                      -0.0710132916071324
+                    ],
+                    "root_forward_position": -0.0662565676307523,
+                    "root_forward_velocity": -0.0710132916071324,
+                    "semantic_lateral_position": 0.0933096930384636,
+                    "velocity_magnitude": 0.0789096349275074
+                  }
+                }
+              ],
+              "neighbour_frame": 2.0,
+              "phase_axis": "forward"
+            },
+            "output_frame": 1.0,
+            "reason": "accepted post-repair directional phase transition",
+            "repair_frame_delta": 0.0,
+            "seed_displacement_provenance": {
+              "canonical_delta_frames": 0.0,
+              "contract": "anim002_post_repair_phase_seed_displacement_v1",
+              "derived_output_frame": 1.0,
+              "displacement_authorised": false,
+              "post_repair_detector_stencil_frames": [
+                1.0
+              ],
+              "post_repair_output_frame": 1.0,
+              "post_repair_repair_intersection_frames": [],
+              "repair_support_dilated_frames": [],
+              "source_detector_stencil_frames": [
+                1.0
+              ],
+              "source_repair_intersection_frames": []
+            },
+            "time_seconds": 0.0
+          }
+        ],
+        "sample_semantics": {
+          "conceptual_sample_count": 39.0,
+          "duplicate_endpoint": false,
+          "is_loop": false,
+          "unique_runtime_sample_count": 39.0
+        },
+        "timeline": {
+          "fps": 30.0,
+          "frame_end": 39.0,
+          "frame_start": 1.0
+        }
+      },
+      "response": {
+        "sample_count": 3,
+        "samples": [
+          {
+            "cumulative_local_planar": [
+              0.0,
+              0.0
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.742965519428253
+            ],
+            "time_seconds": 0.0,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.52426540851593
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.609971821308136
+            ],
+            "time_seconds": 0.633333333333333,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          },
+          {
+            "cumulative_local_planar": [
+              0.0,
+              -0.700638651847839
+            ],
+            "planar_velocity": [
+              0.0,
+              -0.0451254807412624
+            ],
+            "time_seconds": 1.26666666666667,
+            "yaw": 0.0,
+            "yaw_rate": 0.0
+          }
+        ]
+      },
+      "role": "b2i_l",
+      "stitch_mappings": {
+        "applicability": "applicable",
+        "mappings": [
+          {
+            "from": {
+              "event": "acquire_l",
+              "role": "wb"
+            },
+            "to": {
+              "event": "acquire_l",
+              "role": "b2i_l"
+            }
+          }
+        ]
+      },
+      "transport": {
+        "boundary": "transition",
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 38.0,
+        "duration_seconds": 1.26666666666667,
+        "fps": 30.0,
+        "frame_end": 39.0,
+        "frame_start": 1.0,
+        "sample_count": 39.0
+      }
+    }
+  ],
+  "contact_evidence": {
+    "diagnostic_provenance_non_runtime_authoritative": {
+      "input": "res://assets/characters/reference/female/animations/processed/locomotion/sad/provenance/authored_per_foot_contacts_v1.json",
+      "processed_index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json"
+    },
+    "generation": "20260903-immutable-binding",
+    "identities": [
+      "loc_sad_al_l",
+      "loc_sad_al_r",
+      "loc_sad_ar_l",
+      "loc_sad_ar_r",
+      "loc_sad_b2i_l",
+      "loc_sad_b2i_r",
+      "loc_sad_f2i_l",
+      "loc_sad_f2i_r",
+      "loc_sad_i2b_l",
+      "loc_sad_i2b_r",
+      "loc_sad_i2f_l",
+      "loc_sad_i2f_r",
+      "loc_sad_wb",
+      "loc_sad_wf",
+      "loc_sad_xl_l",
+      "loc_sad_xl_r",
+      "loc_sad_xr_l",
+      "loc_sad_xr_r"
+    ],
+    "package_identity": "anim002-invariant-chain-20260903",
+    "path": "res://assets/characters/reference/female/animations/runtime/locomotion/sad/authored_per_foot_contacts_v1.json",
+    "schema_version": 1
+  },
+  "godot_response_coordinates": {
+    "actor_local_planar": "[right, forward] = [root.x, -root.z]",
+    "root": "+X right, +Y up, -Z forward",
+    "yaw": "signed local-Y"
+  },
+  "package": "locomotion",
+  "package_variant": "sad",
+  "schema_version": 3
+}

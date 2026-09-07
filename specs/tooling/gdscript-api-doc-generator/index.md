@@ -1,69 +1,56 @@
 # GDScript API Documentation Generator
 
 ## Requirement
+
 Generate concise Markdown API documentation for GDScript source files.
 
 ## Goal
-Generate concise Markdown API documentation for GDScript source files to support developer reference.
+
+Developers can generate a structural GDScript reference through one supported, repository-root command.
 
 ## User Requirements
-- Developers can generate API docs for GDScript classes with configurable verbosity and filtering.
-- Generated documentation includes class name, inheritance, constants, signals, exported variables, and functions.
-- Documentation output can be directed to stdout or a specified file.
-- Optional inclusion of private methods/signals and all variables (not just exported) is supported.
-- Summary length for descriptions can be constrained to improve readability.
-- The tool parses doc comments beginning with `##` for rich descriptions.
+
+1. Developers can generate documentation for GDScript classes with configurable filtering and summary length.
+2. Output can be written to standard output or a requested file.
 
 ## Technical Requirements
-- Accept a source root argument (relative to repo root or absolute), defaulting to `game/scripts`.
-- Parse GDScript files to extract:
-  - `class_name` declarations
-  - `extends` clauses
-  - Constants
-  - Signals
-  - Exported variables (those preceded by `@export`)
-  - Functions (including signatures and return types)
-- Recognise and include documentation comments that start with `##`.
-- Provide command-line flags:
-  - `--include-private`: Include private methods and signals in output
-  - `--include-all-vars`: Include all variables, not just exported ones
-  - `--max-summary-chars <N>`: Limit summary descriptions to N characters
-  - `--output <FILE>`: Write output to specified file (default: stdout)
-- Output formatted Markdown with clear sections for each class.
-- Exit with error if source root is missing or not a directory.
-- Create output path as requested when supplied; write to stdout when no output file specified.
+
+1. `tools/gdscript-api-doc-generator/` owns this workflow. Its sole supported entry point is
+   `tools/gdscript-api-doc-generator/commands/generate_gdscript_api_docs.sh`.
+2. The command delegates to the tool-owned implementation. Consumers must not invoke the implementation file directly.
+3. [The operational README][readme] is normative for invocation, inputs, output, flags, and verification.
+4. The command accepts an optional source root, defaults to `game/scripts`, and supports `--output`,
+   `--include-private`, `--include-all-vars`, and `--max-summary-chars`.
+5. The generated Markdown reports class name, inheritance, constants, signals, exported variables, functions, and
+   `##` documentation comments. A missing or non-directory source root fails.
 
 ## In Scope
-- Parsing GDScript syntax for structural elements.
-- Extracting and formatting doc comments.
-- Command-line interface for configuration.
-- Markdown output generation.
-- Missing or invalid source root reporting.
+
+- GDScript structural parsing, command-line options, and Markdown generation.
+- Canonical command ownership and operational documentation.
 
 ## Out Of Scope
-- Generating HTML or other documentation formats.
-- Cross-referencing between classes in output.
-- Dependency graph analysis or impact assessment.
-- Integration with Godot's built-in documentation system.
-- C# or other language API documentation generation.
+
+- HTML output, cross-class dependency analysis, Godot built-in documentation integration, and non-GDScript APIs.
+
+These exclusions do not defer the command, output, or invalid-input contracts.
 
 ## Acceptance Criteria
-- User Requirements:
-  - [ ] Running the tool without arguments generates docs for `game/scripts` to stdout.
-  - [ ] The `--output` flag correctly writes to the specified file.
-  - [ ] The `--include-private` flag includes private methods and signals in the output.
-  - [ ] The `--include-all-vars` flag includes non-exported variables.
-  - [ ] The `--max-summary-chars` flag truncates summaries appropriately.
-  - [ ] Doc comments starting with `##` are included in the output.
-- Technical Requirements:
-  - [ ] The tool correctly parses `class_name`, `extends`, constants, signals, exported vars, and functions.
-  - [ ] Output is valid Markdown with clear class separation.
-  - [ ] Default source root is `game/scripts` when no argument provided.
-  - [ ] The tool exits with an error when source root is missing or not a directory.
-  - [ ] When an output file is specified, the tool creates the file at the requested path.
-  - [ ] An explicit relative source root is accepted.
-  - [ ] An absolute source root is accepted.
-  - [ ] Missing/non-directory roots fail.
+
+### User Requirement Acceptance
+
+1. The README gives a repository-root command for standard output and file output.
+2. Optional private-member, all-variable, and summary-length controls are discoverable.
+
+### Technical Requirement Acceptance
+
+1. The canonical command delegates to the tool-owned implementation and accepts the documented flags.
+2. Valid output is structured Markdown; a missing or non-directory source root fails.
+3. The tool specification links normatively to its operational README and command location.
 
 ## References
-- Source script: `tools/generate_gdscript_api_docs.py`
+
+- [Developer Tool Layout](../index.md)
+- [Operational README][readme]
+
+[readme]: ../../../tools/gdscript-api-doc-generator/README.md

@@ -1,8 +1,10 @@
 using AlleyCat.Character;
 using AlleyCat.Control.Locomotion;
+using AlleyCat.Core;
 using AlleyCat.Core.Installer;
 using AlleyCat.IK;
 using AlleyCat.IK.Pose;
+using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Installation;
 using AlleyCat.Rigging.Physics;
@@ -652,7 +654,7 @@ public sealed class RigInstallerIntegrationTests
         AnimationTree animationTree = Assert.IsType<AnimationTree>(playerRoot.GetNode("AnimationTree"), exactMatch: false);
         Node locomotion = playerRoot.GetNode("Locomotion");
         Assert.Contains(typeof(LocomotionBase).FullName, GetTypeHierarchyNames(locomotion.GetType()), StringComparer.Ordinal);
-        AssertSharedRuntimeBindings(playerRoot);
+        AssertPlayerRuntimeBindings(playerRoot);
 
         Assert.Same(poseStateMachine, GetPropertyValue(playerVRIK, nameof(PlayerVRIK.PoseStateMachine)));
         Assert.Same(poseStateMachine, GetPropertyValue(hipModifier, nameof(HipReconciliationModifier.StateMachine)));
@@ -678,6 +680,12 @@ public sealed class RigInstallerIntegrationTests
 
         Assert.Same(playerVRIK.GetNode("RightHandGrabProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.RightHandIKTargetIntentProvider)));
         Assert.Same(playerVRIK.GetNode("LeftHandGrabProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftHandIKTargetIntentProvider)));
+        PlayerContactLockComposition contactComposition = playerRoot.GetNode<PlayerContactLockComposition>("PlayerContactLockComposition");
+        Assert.True(contactComposition.IsInstalled);
+        _ = Assert.IsType<ContactLockFootTargetProvider>(GetPropertyValue(playerVRIK, nameof(CharacterIK.RightFootTargetIntentProvider)), exactMatch: false);
+        _ = Assert.IsType<ContactLockFootTargetProvider>(GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftFootTargetIntentProvider)), exactMatch: false);
+        Assert.Same(contactComposition.RightProvider, GetPropertyValue(playerVRIK, nameof(CharacterIK.RightFootTargetIntentProvider)));
+        Assert.Same(contactComposition.LeftProvider, GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftFootTargetIntentProvider)));
         Assert.Same(playerVRIK.GetNode("HeadFallbackIntentProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.HeadFallbackIntentProvider)));
         Assert.Same(playerVRIK.GetNode("RightHandFallbackIntentProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.RightHandFallbackIntentProvider)));
         Assert.Same(playerVRIK.GetNode("LeftHandFallbackIntentProvider"), GetPropertyValue(playerVRIK, nameof(CharacterIK.LeftHandFallbackIntentProvider)));
@@ -688,6 +696,15 @@ public sealed class RigInstallerIntegrationTests
         Assert.Same(playerRoot.GetNode("Female/GeneralSkeleton/Head/Viewpoint"), GetPropertyValue(playerVRIK.GetNode("HeadFallbackIntentProvider"), nameof(XRHeadTargetIntentProvider.Viewpoint)));
         Assert.Same(playerRoot.GetNode("IKTargets/RightFoot"), GetPropertyValue(playerVRIK.GetNode("RightFootFallbackIntentProvider"), nameof(AnimationSynchronizedFootTargetProvider.FootTarget)));
         Assert.Same(playerRoot.GetNode("IKTargets/LeftFoot"), GetPropertyValue(playerVRIK.GetNode("LeftFootFallbackIntentProvider"), nameof(AnimationSynchronizedFootTargetProvider.FootTarget)));
+
+        CharacterLocomotion characterLocomotion = Assert.IsType<CharacterLocomotion>(locomotion, exactMatch: false);
+        Assert.True(characterLocomotion.IsContactLockCoordinatorBound);
+        contactComposition.Enabled = false;
+        Assert.False(characterLocomotion.IsContactLockCoordinatorBound);
+        Assert.False(contactComposition.Coordinator!.StateSnapshot.Left.HasAnchor);
+        Assert.False(contactComposition.Coordinator.StateSnapshot.Right.HasAnchor);
+        contactComposition.Enabled = true;
+        Assert.True(characterLocomotion.IsContactLockCoordinatorBound);
     }
 
     /// <summary>
@@ -918,7 +935,7 @@ public sealed class RigInstallerIntegrationTests
         Node playerRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected player scene to become current scene.");
 
-        AssertSharedRuntimeBindings(playerRoot);
+        AssertPlayerRuntimeBindings(playerRoot);
         Node playerVRIK = playerRoot.GetNode("VRIK");
         Node poseStateMachine = playerRoot.GetNode("VRIK/PoseStateMachine");
         Node locomotion = playerRoot.GetNode("Locomotion");
@@ -951,7 +968,7 @@ public sealed class RigInstallerIntegrationTests
         Node npcRoot = sceneTree.CurrentScene
             ?? throw new Xunit.Sdk.XunitException("Expected ally scene to become current scene.");
 
-        AssertSharedRuntimeBindings(npcRoot);
+        AssertNPCRuntimeBindings(npcRoot, expectRuntimeBindingActive: true);
         Node characterIK = npcRoot.GetNode("CharacterIK");
         Skeleton3D skeleton = npcRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
 
@@ -967,13 +984,28 @@ public sealed class RigInstallerIntegrationTests
     }
 
     /// <summary>
+    /// Uninstalled reference fixtures retain Godot's default idle modifier callback processing.
+    /// </summary>
+    [Headless]
+    [Fact]
+    public void ReferenceFemaleTemplate_SkeletonUsesIdleModifierCallbacks()
+    {
+        using Node templateRoot = LoadPackedScene(ReferenceFemaleScenePath).Instantiate();
+        Skeleton3D skeleton = templateRoot.GetNode<Skeleton3D>("Female/GeneralSkeleton");
+
+        Assert.Equal(
+            Skeleton3D.ModifierCallbackModeProcessEnum.Idle,
+            skeleton.ModifierCallbackModeProcess);
+    }
+
+    /// <summary>
     /// The high-level IK subsystem binds IK topology copied from the role-provided template context.
     /// </summary>
     [Headless]
     [Fact]
     public void CharacterIKSubsystemInstaller_BindsContextInstalledTargetsAndModifiers()
     {
-        using CharacterFixture fixture = CreateAliceFixture();
+        using CharacterFixture fixture = CreateAliceFixtureWithForearmTwistTopology();
         using Node templateRoot = LoadPackedScene(ReferenceFemaleNpcTemplatePath).Instantiate();
         RigInstallationContext context = CreateCharacterContext(fixture, templateRoot);
         using var rootInstaller = new RigTemplateSubtreeInstaller
@@ -991,7 +1023,6 @@ public sealed class RigInstallerIntegrationTests
         using var installer = new CharacterIKSubsystemInstaller
         {
             Name = "IKSubsystemInstaller",
-            BindCharacterIKNode = false,
         };
 
         Assert.True(rootInstaller.Install(context).Succeeded);
@@ -1006,6 +1037,9 @@ public sealed class RigInstallerIntegrationTests
         Assert.True(fixture.Skeleton.HasNode("CopyLeftFootRotation"));
         Assert.Equal(1, CountDirectChildren(fixture.Root, "IKTargets"));
         Assert.Equal(1, CountDirectChildren(fixture.Skeleton, "RightArmIKController"));
+        Assert.Equal(
+            Skeleton3D.ModifierCallbackModeProcessEnum.Physics,
+            fixture.Skeleton.ModifierCallbackModeProcess);
     }
 
     /// <summary>
@@ -1182,17 +1216,18 @@ public sealed class RigInstallerIntegrationTests
         Assert.True(skeleton.HasNode("DynamicPhysicalRig"));
         Assert.True(character.HasNode("AnimationTree"));
         Assert.True(character.HasNode("Eyes"));
-        Assert.True(character.HasNode("Locomotion"));
+        AssertNPCRuntimeBindings(character, expectRuntimeBindingActive: false);
         Assert.True(character.HasNode("Hands/RightHand"));
         Assert.False(composite.HasNode("IKTargets"));
         Assert.False(composite.HasNode("AnimationTree"));
         Assert.False(composite.HasNode("Eyes"));
         Assert.False(composite.HasNode("Locomotion"));
+        Assert.False(composite.HasNode("Navigation"));
         Assert.False(composite.HasNode("Hands"));
         Assert.Equal(1, CountDirectChildren(character, "IKTargets"));
         Assert.Equal(1, CountDirectChildren(character, "AnimationTree"));
         Assert.Equal(1, CountDirectChildren(character, "Eyes"));
-        Assert.Equal(1, CountDirectChildren(character, "Locomotion"));
+        Assert.Equal(1, CountDirectChildren(character, "Navigation"));
         Assert.Equal(1, CountDirectChildren(character, "Hands"));
         Assert.Equal(1, CountDirectChildren(skeleton, "Head"));
         Assert.Equal(1, CountDirectChildren(skeleton, "DynamicPhysicalRig"));
@@ -1322,48 +1357,55 @@ public sealed class RigInstallerIntegrationTests
         }
     }
 
-    private static void AssertReferenceFemaleInventory(Node character)
-    {
-        EnsureReferenceFemaleInventoryInstalled(character);
-
-        Assert.True(character.HasNode("Female/GeneralSkeleton/Head/Viewpoint"));
-        Assert.True(character.HasNode("Female/GeneralSkeleton/RightHand"));
-        Assert.True(character.HasNode("Female/GeneralSkeleton/LeftHand"));
-        Assert.True(character.HasNode("Female/GeneralSkeleton/DynamicPhysicalRig"));
-        Assert.True(character.HasNode("IKTargets/Head"));
-        Assert.True(character.HasNode("IKTargets/HeadSolve"));
-        Assert.True(character.HasNode("IKTargets/RightElbow"));
-        Assert.True(character.HasNode("IKTargets/LeftElbow"));
-        Assert.True(character.HasNode("IKTargets/RightHand"));
-        Assert.True(character.HasNode("IKTargets/LeftHand"));
-        Assert.True(character.HasNode("IKTargets/RightKnee"));
-        Assert.True(character.HasNode("IKTargets/LeftKnee"));
-        Assert.True(character.HasNode("IKTargets/RightFoot"));
-        Assert.True(character.HasNode("IKTargets/LeftFoot"));
-        Assert.True(character.HasNode("AnimationTree"));
-        Assert.True(character.HasNode("Eyes"));
-        Assert.True(character.HasNode("Locomotion"));
-        Assert.True(character.HasNode("Hands/RightHand"));
-        Assert.True(character.HasNode("Hands/LeftHand"));
-    }
-
     private static void AssertSharedRuntimeBindings(Node character)
     {
         AnimationTree animationTree = Assert.IsType<AnimationTree>(character.GetNode("AnimationTree"), exactMatch: false);
         Node rightHand = character.GetNode("Hands/RightHand");
         Node leftHand = character.GetNode("Hands/LeftHand");
-        Node locomotion = character.GetNode("Locomotion");
 
-        Assert.Contains(typeof(LocomotionBase).FullName, GetTypeHierarchyNames(locomotion.GetType()), StringComparer.Ordinal);
         Assert.Same(animationTree, GetPropertyValue(rightHand, "AnimationTree"));
         Assert.Same(animationTree, GetPropertyValue(leftHand, "AnimationTree"));
-        Assert.Same(animationTree, GetPropertyValue(locomotion, nameof(CharacterLocomotion.AnimationTree)));
         Assert.Same(character.GetNode("IKTargets/RightHand"), GetPropertyValue(rightHand, "HandTargetNode"));
         Assert.Same(character.GetNode("IKTargets/LeftHand"), GetPropertyValue(leftHand, "HandTargetNode"));
         Assert.Same(character.GetNode("Female/GeneralSkeleton/RightHand"), GetPropertyValue(rightHand, "HandBoneAttachment"));
         Assert.Same(character.GetNode("Female/GeneralSkeleton/LeftHand"), GetPropertyValue(leftHand, "HandBoneAttachment"));
         Assert.Same(character.GetNode("Female/GeneralSkeleton/DynamicPhysicalRig"), GetPropertyValue(rightHand, "PhysicalRig"));
         Assert.Same(character.GetNode("Female/GeneralSkeleton/DynamicPhysicalRig"), GetPropertyValue(leftHand, "PhysicalRig"));
+    }
+
+    private static void AssertPlayerRuntimeBindings(Node character)
+    {
+        AssertSharedRuntimeBindings(character);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(character.GetNode("AnimationTree"), exactMatch: false);
+        Node locomotion = character.GetNode("Locomotion");
+
+        Assert.Contains(typeof(LocomotionBase).FullName, GetTypeHierarchyNames(locomotion.GetType()), StringComparer.Ordinal);
+        Assert.Same(animationTree, GetPropertyValue(locomotion, nameof(CharacterLocomotion.AnimationTree)));
+    }
+
+    private static void AssertNPCRuntimeBindings(Node character, bool expectRuntimeBindingActive)
+    {
+        AssertSharedRuntimeBindings(character);
+        AnimationTree animationTree = Assert.IsType<AnimationTree>(character.GetNode("AnimationTree"), exactMatch: false);
+        NPCNavigation navigation = Assert.Single(character.GetChildren().OfType<NPCNavigation>());
+        NavigationBase movementAuthority = Assert.Single(character.GetChildren().OfType<NavigationBase>());
+        ICharacter characterContract = Assert.IsAssignableFrom<ICharacter>(character);
+
+        Assert.Same(navigation, movementAuthority);
+        Assert.Same(navigation, characterContract.RequireNavigation());
+        Assert.Same(character, navigation.Actor);
+        Assert.Same(animationTree, navigation.AnimationTree);
+        Assert.Same(character.GetNode<Node3D>("Female"), navigation.RootMotionReference);
+        Assert.True(navigation.AwaitInstallerActivation);
+        Assert.Equal(expectRuntimeBindingActive, navigation.IsRuntimeBindingActive);
+        Assert.Equal(expectRuntimeBindingActive, navigation.IsPhysicsProcessing());
+        Assert.True(navigation.IsMovementAuthorityActive);
+        _ = Assert.Single(character.GetChildren().OfType<NavigationBase>(), candidate => candidate.IsMovementAuthorityActive);
+        Assert.IsNotAssignableFrom<ILocomotive>(character);
+        Assert.False(character.HasNode("Locomotion"));
+        Assert.Empty(character.GetChildren().OfType<CharacterLocomotion>());
+        Assert.Empty(character.GetChildren().OfType<ILocomotion>());
+        Assert.DoesNotContain(characterContract.Components, component => component is ILocomotion);
     }
 
     private static void AssertPlayerAnimationTreeRuntime(
@@ -1862,6 +1904,31 @@ public sealed class RigInstallerIntegrationTests
         AddBone(skeleton, "RightHand", new Vector3(0.45f, 1.1f, 0.0f));
 
         return new CharacterFixture(root, skeleton);
+    }
+
+    private static CharacterFixture CreateAliceFixtureWithForearmTwistTopology()
+    {
+        CharacterFixture fixture = CreateAliceFixture();
+        Skeleton3D skeleton = fixture.Skeleton;
+        skeleton.ClearBones();
+        AddBone(skeleton, "Head", new Vector3(0.0f, 1.6f, 0.0f));
+
+        // RIG-002 TR1: one direct LowerArm -> ForearmTwist -> Hand chain per side.
+        // Parent-local rest offsets retain this fixture's original global wrist positions.
+        foreach ((string prefix, float direction) in new[] { ("Left", -1.0f), ("Right", 1.0f) })
+        {
+            int lowerArm = skeleton.GetBoneCount();
+            AddBone(skeleton, $"{prefix}LowerArm", new Vector3(direction * 0.25f, 1.1f, 0.0f));
+            int helper = skeleton.GetBoneCount();
+            AddBone(skeleton, $"{prefix}ForearmTwist", new Vector3(direction * 0.1f, 0.0f, 0.0f));
+            skeleton.SetBoneParent(helper, lowerArm);
+            int hand = skeleton.GetBoneCount();
+            AddBone(skeleton, $"{prefix}Hand", new Vector3(direction * 0.1f, 0.0f, 0.0f));
+            skeleton.SetBoneParent(hand, helper);
+        }
+
+        skeleton.ResetBonePoses();
+        return fixture;
     }
 
     private static void AddBone(Skeleton3D skeleton, string name, Vector3 restPosition)

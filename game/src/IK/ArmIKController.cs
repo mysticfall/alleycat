@@ -194,8 +194,21 @@ public partial class ArmIKController : SkeletonModifier3D
 
     private bool _bonesResolved;
     private bool _hasWarnedMissingPoleAnchorSet;
+    private bool _hasCachedShoulderCorrection;
+    private ShoulderCorrectionInputKey _cachedShoulderCorrectionInput;
+    private Quaternion _cachedShoulderPoseRotation = Quaternion.Identity;
 
     private Vector3? _previousPoleDirBody;
+
+    /// <summary>
+    /// The most recent pre-IK shoulder-correction sample. This is intentionally a value-type
+    /// diagnostic so focused runtime tests can distinguish the stable input baseline from the
+    /// arm pose produced later by the modifier chain.
+    /// </summary>
+    public ArmShoulderCorrectionTrace LastShoulderCorrectionTrace
+    {
+        get; private set;
+    }
 
     /// <inheritdoc />
     public override void _ProcessModificationWithDelta(double delta)
@@ -261,9 +274,30 @@ public partial class ArmIKController : SkeletonModifier3D
         // Phase 4 -- Pole Target Placement
         Vector3 poleDirGlobal = bodyBasis * baselinePole;
 
-        ApplyShoulderCorrectionPreIK(shoulderPos, handPos, poleDirGlobal, bodyUp, bodyRight);
+        var correctionInput = new ShoulderCorrectionInputKey(
+            handPos,
+            lShoulderPos,
+            rShoulderPos,
+            ShoulderWeight,
+            MaxElevationAngleDegrees,
+            MaxOverheadElevationBoostDegrees,
+            MaxProtractionAngleDegrees,
+            ForwardElevationDamping,
+            AnatomicalNeutralLateralBias);
+        ApplyShoulderCorrectionPreIK(
+            shoulderPos,
+            handPos,
+            poleDirGlobal,
+            bodyUp,
+            bodyRight,
+            correctionInput);
 
         Vector3 solvedShoulderPos = BoneGlobalPosition(_upperArmIdx);
+        LastShoulderCorrectionTrace = new ArmShoulderCorrectionTrace(
+            shoulderPos,
+            solvedShoulderPos,
+            handPos,
+            _skeleton.GetBonePoseRotation(_shoulderIdx).Normalized());
         Vector3 midpoint = (solvedShoulderPos + handPos) * 0.5f;
         float currentArmLength = solvedShoulderPos.DistanceTo(handPos);
         float ratioBasedOffset = currentArmLength * PoleOffsetRatio;
@@ -611,7 +645,6 @@ public partial class ArmIKController : SkeletonModifier3D
         _restArmLength = _upperSegmentLength + _lowerSegmentLength;
 
         _shoulderRestBasisInBody = (restBodyBasisInverse * shoulderGlobalRestPose.Basis).Orthonormalized();
-
         return true;
     }
 
@@ -620,8 +653,15 @@ public partial class ArmIKController : SkeletonModifier3D
         Vector3 handTargetPosition,
         Vector3 poleDirectionGlobal,
         Vector3 bodyUp,
-        Vector3 bodyRight)
+        Vector3 bodyRight,
+        ShoulderCorrectionInputKey correctionInput)
     {
+        if (_hasCachedShoulderCorrection && correctionInput.IsEquivalentTo(_cachedShoulderCorrectionInput))
+        {
+            _skeleton.SetBonePoseRotation(_shoulderIdx, _cachedShoulderPoseRotation);
+            return;
+        }
+
         if (!TryEstimateUpperArmDirection(
                 shoulderPosition,
                 handTargetPosition,
@@ -682,9 +722,11 @@ public partial class ArmIKController : SkeletonModifier3D
             ? _skeleton.GetBoneGlobalPose(shoulderParentBoneIndex).Basis
             : Basis.Identity;
         Basis targetShoulderLocalBasis = (parentGlobalBasis.Inverse() * targetShoulderGlobalBasis).Orthonormalized();
-        _skeleton.SetBonePoseRotation(
-            _shoulderIdx,
-            targetShoulderLocalBasis.GetRotationQuaternion().Normalized());
+        Quaternion targetShoulderPoseRotation = targetShoulderLocalBasis.GetRotationQuaternion().Normalized();
+        _skeleton.SetBonePoseRotation(_shoulderIdx, targetShoulderPoseRotation);
+        _cachedShoulderCorrectionInput = correctionInput;
+        _cachedShoulderPoseRotation = targetShoulderPoseRotation;
+        _hasCachedShoulderCorrection = true;
     }
 
     private static bool TryBuildBodyBasis(
@@ -803,6 +845,43 @@ public partial class ArmIKController : SkeletonModifier3D
     private static Vector3 ProjectPerpendicular(Vector3 vector, Vector3 normal) =>
         vector - (vector.Dot(normal) * normal);
 
+    private readonly record struct ShoulderCorrectionInputKey(
+        Vector3 HandTargetPosition,
+        Vector3 LeftShoulderPosition,
+        Vector3 RightShoulderPosition,
+        float ShoulderWeight,
+        float MaxElevationAngleDegrees,
+        float MaxOverheadElevationBoostDegrees,
+        float MaxProtractionAngleDegrees,
+        float ForwardElevationDamping,
+        float AnatomicalNeutralLateralBias)
+    {
+        // Small clavicle movement is a consequence of the paired shoulder modifiers. Do not
+        // promote that downstream movement into a new baseline; substantial body-pose changes
+        // still refresh the correction for a held hand target.
+        private const float PositionEpsilon = 0.05f;
+
+        public bool IsEquivalentTo(ShoulderCorrectionInputKey other) =>
+            HandTargetPosition.IsEqualApprox(other.HandTargetPosition)
+            && LeftShoulderPosition.DistanceSquaredTo(other.LeftShoulderPosition) <= PositionEpsilon * PositionEpsilon
+            && RightShoulderPosition.DistanceSquaredTo(other.RightShoulderPosition) <= PositionEpsilon * PositionEpsilon
+            && Mathf.IsEqualApprox(ShoulderWeight, other.ShoulderWeight)
+            && Mathf.IsEqualApprox(MaxElevationAngleDegrees, other.MaxElevationAngleDegrees)
+            && Mathf.IsEqualApprox(MaxOverheadElevationBoostDegrees, other.MaxOverheadElevationBoostDegrees)
+            && Mathf.IsEqualApprox(MaxProtractionAngleDegrees, other.MaxProtractionAngleDegrees)
+            && Mathf.IsEqualApprox(ForwardElevationDamping, other.ForwardElevationDamping)
+            && Mathf.IsEqualApprox(AnatomicalNeutralLateralBias, other.AnatomicalNeutralLateralBias);
+    }
+
     private Vector3 BoneGlobalPosition(int boneIdx) =>
         _skeleton.GlobalTransform * _skeleton.GetBoneGlobalPose(boneIdx).Origin;
 }
+
+/// <summary>
+/// Captures the stable shoulder-correction input and the downstream arm result from one modifier update.
+/// </summary>
+public readonly record struct ArmShoulderCorrectionTrace(
+    Vector3 InputUpperArmPosition,
+    Vector3 SolvedUpperArmPosition,
+    Vector3 HandTargetPosition,
+    Quaternion AppliedShoulderPoseRotation);

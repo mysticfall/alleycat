@@ -3,6 +3,9 @@
 [ext_resource type="PackedScene" uid="uid://c7xlydturc3b0" path="res://assets/characters/templates/reference_female/reference_female_base.tscn" id="1_edvvb"]
 [ext_resource type="Script" uid="uid://b70dso4dgqj6f" path="res://src/XR/HandTracking/OpticalFingerTrackingModifier.cs" id="4_maq48"]
 [ext_resource type="Resource" path="res://assets/xr/calibration/fingers_calibration_quest3.tres" id="5_3ka35"]
+[ext_resource type="Script" uid="uid://df2cuf0s4w2v" path="res://src/Character/PlayerCharacter.cs" id="2_player"]
+[ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="3_locomotion"]
+[ext_resource type="Script" uid="uid://b03b36f5a0hpv" path="res://src/Navigation/PlayerNavigation.cs" id="4_navigation"]
 [ext_resource type="Script" uid="uid://bfa76a86uhk1m" path="res://src/IK/Pose/HipReconciliationModifier.cs" id="5_hipmod"]
 [ext_resource type="PackedScene" uid="uid://couudrq528l5x" path="res://assets/characters/templates/ik/vrik.tscn" id="7_2a5tg"]
 [ext_resource type="Script" uid="uid://cmo0rjfoojh7u" path="res://src/Speech/Transcription/OpenAITranscriber.cs" id="7_j7l2f"]
@@ -11,8 +14,12 @@
 [ext_resource type="Script" path="res://src/Control/HandGrabInputCoordinator.cs" id="12_grabcoord"]
 [ext_resource type="AnimationNodeBlendTree" uid="uid://bge48ng374i85" path="res://assets/characters/templates/animation/animation_tree_root_player.tres" id="11_pose_tree"]
 
-[node name="Player" unique_id=1792987446 node_paths=PackedStringArray("Voice") groups=["Player"] instance=ExtResource("1_edvvb")]
+[node name="Player" unique_id=1792987446 node_paths=PackedStringArray("Voice", "Locomotion", "Navigation") groups=["Player"] instance=ExtResource("1_edvvb")]
+script = ExtResource("2_player")
 Voice = NodePath("Female/GeneralSkeleton/Head/Voice")
+Locomotion = NodePath("Locomotion")
+Navigation = NodePath("PlayerNavigation")
+metadata/_custom_type_script = "uid://df2cuf0s4w2v"
 
 [node name="Voice" type="Node3D" parent="Female/GeneralSkeleton/Head" index="1" unique_id=859780857 node_paths=PackedStringArray("Transcriber")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2221888e-05, -0.035407424, 0.08069722)
@@ -89,9 +96,10 @@ tree_root = ExtResource("11_pose_tree")
 parameters/States/AllFoursTransitioning/TimeSeek/seek_request = -1.0
 parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0
 
-[node name="PlayerController" type="Node" parent="." index="7" unique_id=500632269 node_paths=PackedStringArray("LocomotionNode", "HandHolderNode")]
+[node name="PlayerController" type="Node" parent="." index="7" unique_id=500632269 node_paths=PackedStringArray("LocomotionNode", "NavigationNode", "HandHolderNode")]
 script = ExtResource("10_ctrlplayer")
 LocomotionNode = NodePath("../Locomotion")
+NavigationNode = NodePath("../PlayerNavigation")
 HandHolderNode = NodePath("../Hands")
 metadata/_custom_type_script = "uid://2whl41iq7k4b"
 
@@ -99,6 +107,18 @@ metadata/_custom_type_script = "uid://2whl41iq7k4b"
 script = ExtResource("7_j7l2f")
 InputMode = 2
 metadata/_custom_type_script = "uid://cmo0rjfoojh7u"
+
+[node name="Locomotion" type="Node" parent="." index="9" node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference")]
+script = ExtResource("3_locomotion")
+TargetCharacterBodyNode = NodePath("..")
+AnimationTree = NodePath("../AnimationTree")
+RootMotionReference = NodePath("../Female")
+metadata/_custom_type_script = "uid://cjt48dl58j31y"
+
+[node name="PlayerNavigation" type="NavigationAgent3D" parent="." index="10"]
+process_mode = 4
+script = ExtResource("4_navigation")
+metadata/_custom_type_script = "uid://b03b36f5a0hpv"
 
 [node name="HandGrabInputCoordinator" type="Node" parent="." index="9" unique_id=962740513 node_paths=PackedStringArray("HandHolderNode")]
 script = ExtResource("12_grabcoord")

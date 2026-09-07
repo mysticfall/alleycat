@@ -1,0 +1,59 @@
+{
+  "binding": {
+    "processed_index_sha256": "d15aac5f920c9bec7f76b204d6af47da73aa530857564cbc20bf0887788d4be8",
+    "retained_contact_evidence_sha256": "72ac1bce9b2d0da047b0dcfaef6ff8c1d799bd3a824d868820ad454510f1ee11",
+    "retargeted_blend_sha256": "a0f88c73bfd8b07779605b4978d8e8d12b902ea0edc42dbdc09bb0efaea49130",
+    "runtime_catalogue_sha256": "437880f940a7aa7b9c82c38da2407ccb731a85a7fb96cd97cc8a7143595a1924",
+    "runtime_contact_evidence_sha256": "72ac1bce9b2d0da047b0dcfaef6ff8c1d799bd3a824d868820ad454510f1ee11",
+    "runtime_library_sha256": "56f5002f160860553c7eb45194daff5755621d4ad577ce1bd1791db03ed2fd10"
+  },
+  "blend": "res://assets/characters/reference/female/animations/processed/locomotion/locomotion_sad.blend",
+  "character": "female",
+  "contact_evidence": {
+    "generation": "20260903-immutable-binding",
+    "input": "res://assets/characters/reference/female/animations/processed/locomotion/sad/provenance/authored_per_foot_contacts_v1.json",
+    "package_identity": "anim002-invariant-chain-20260903",
+    "retained_input": "res://assets/characters/reference/female/animations/processed/locomotion/sad/provenance/authored_per_foot_contacts_v1.json",
+    "runtime_path": "authored_per_foot_contacts_v1.json"
+  },
+  "contact_evidence_required": true,
+  "index": "res://assets/characters/reference/female/animations/processed/locomotion/sad/processed-index.json",
+  "name": "locomotion",
+  "root": "res://assets/characters/reference/female/animations/runtime/locomotion/sad",
+  "schema_version": 2,
+  "stitch_edges": [
+    {
+      "from_role": "wf",
+      "to_role": "f2i_l"
+    },
+    {
+      "from_role": "wf",
+      "to_role": "f2i_r"
+    },
+    {
+      "from_role": "i2f_l",
+      "to_role": "wf"
+    },
+    {
+      "from_role": "i2f_r",
+      "to_role": "wf"
+    },
+    {
+      "from_role": "i2b_l",
+      "to_role": "wb"
+    },
+    {
+      "from_role": "i2b_r",
+      "to_role": "wb"
+    },
+    {
+      "from_role": "wb",
+      "to_role": "b2i_l"
+    },
+    {
+      "from_role": "wb",
+      "to_role": "b2i_r"
+    }
+  ],
+  "variant": "sad"
+}

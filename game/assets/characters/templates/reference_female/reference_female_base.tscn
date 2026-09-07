@@ -13,19 +13,17 @@
 [ext_resource type="Script" uid="uid://bortwjgmky2ik" path="res://src/IK/FootTargetSyncController.cs" id="7_56k28"]
 [ext_resource type="PackedScene" uid="uid://degycvmqbvjx1" path="res://assets/characters/templates/animation/animation_tree.tscn" id="8_2a5tg"]
 [ext_resource type="Script" uid="uid://corwlye5lo1se" path="res://src/Rigging/ForearmTwistModifier.cs" id="8_8lkn1"]
-[ext_resource type="Script" uid="uid://cjt48dl58j31y" path="res://src/Control/Locomotion/CharacterLocomotion.cs" id="9_ctrlloco"]
 [ext_resource type="Script" uid="uid://ckmm3fnsp6y36" path="res://src/Vision/EyesBehaviour.cs" id="10_eyesbehaviour"]
 [ext_resource type="Script" uid="uid://clntm6ydqb54a" path="res://src/Interaction/Hands/HandComponentHolder.cs" id="11_jgvmf"]
 [ext_resource type="Script" uid="uid://cxh7lfqn5k3nw" path="res://src/Interaction/Hands/HandPoseBehaviour.cs" id="12_kqwe4"]
-[ext_resource type="AnimationLibrary" path="res://assets/characters/reference/female/animations/locomotion/standing_locomotion_library.tres" id="13_locomotion"]
+[ext_resource type="AnimationLibrary" uid="uid://ccol2816n7hg4" path="res://assets/characters/reference/female/animations/runtime/idle/sad/idle_sad.tres" id="13_safef"]
+[ext_resource type="AnimationLibrary" uid="uid://5fmhnu8v3xm5" path="res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad.tres" id="14_qrr6g"]
+[ext_resource type="AnimationNodeBlendTree" uid="uid://c485owf86etdu" path="res://assets/characters/templates/animation/animation_tree_root_npc.tres" id="16_g336p"]
 
 [sub_resource type="Resource" id="Resource_42fxf"]
 script = ExtResource("4_8lkn1")
 Radius = 0.05
 metadata/_custom_type_script = "uid://b8340t35vo8cv"
-
-[sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
-radius = 0.1
 
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_55bxu"]
 angle = 0.87266463
@@ -39,17 +37,19 @@ angle = 0.7853982
 [sub_resource type="JointLimitationCone3D" id="JointLimitationCone3D_n6ra7"]
 angle = 0.34906584
 
-[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Locomotion", "Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
-Locomotion = NodePath("Locomotion")
+[sub_resource type="SphereShape3D" id="SphereShape3D_osxwe"]
+radius = 0.1
+
+[node name="Female" unique_id=1792987446 node_paths=PackedStringArray("Eyes", "LeftHand", "RightHand", "AuthoredVisualCues") groups=["Actors", "VisualSubjects"] instance=ExtResource("1_5molt")]
 Eyes = NodePath("Eyes")
 LeftHand = NodePath("Hands/LeftHand")
 RightHand = NodePath("Hands/RightHand")
 AuthoredVisualCues = [NodePath("Female/GeneralSkeleton/Head/BodyVisualCue")]
 
-[node name="Female" parent="." index="0" unique_id=690328271]
+[node name="Female" parent="." index="0" unique_id=204349547]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="Head" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="9" unique_id=694402195]
+[node name="Head" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="8" unique_id=694402195]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4594107, 0.04187462)
 bone_name = "Head"
 bone_idx = 48
@@ -77,17 +77,17 @@ ID = "body"
 Bounds = SubResource("Resource_42fxf")
 metadata/_custom_type_script = "uid://tb33120b0yo"
 
-[node name="RightHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="10" unique_id=190350548]
+[node name="RightHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="9" unique_id=190350548]
 transform = Transform3D(0, -1, 0, 0, 0, -1, 1, 0, 0, -0.601001, 1.2729235, 0.020496191)
 bone_name = "RightHand"
 bone_idx = 31
 
-[node name="LeftHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="11" unique_id=792521653]
+[node name="LeftHand" type="BoneAttachment3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="10" unique_id=792521653]
 transform = Transform3D(0, 1, 0, 0, 0, -1, -1, 0, 0, 0.601001, 1.2729235, 0.020496191)
 bone_name = "LeftHand"
 bone_idx = 11
 
-[node name="FootTargetSyncController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="12" unique_id=556407372 node_paths=PackedStringArray("LeftFootTarget", "RightFootTarget")]
+[node name="FootTargetSyncController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="11" unique_id=556407372 node_paths=PackedStringArray("LeftFootTarget", "RightFootTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -109,7 +109,7 @@ LeftFootTarget = NodePath("../../../IKTargets/LeftFoot")
 RightFootTarget = NodePath("../../../IKTargets/RightFoot")
 metadata/_custom_type_script = "uid://bortwjgmky2ik"
 
-[node name="NeckSpineIK" type="CCDIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="13" unique_id=1404822698]
+[node name="NeckSpineIK" type="CCDIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="12" unique_id=1404822698]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/HeadSolve")
 settings/0/root_bone_name = "Spine"
@@ -137,7 +137,7 @@ settings/0/joints/3/limitation/rotation_offset = Quaternion(0.258819, 0, 0, 0.96
 settings/0/joints/4/rotation_axis = 3
 settings/0/joints/4/limitation = null
 
-[node name="HeadCopyRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="14" unique_id=1092458642]
+[node name="HeadCopyRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="13" unique_id=1092458642]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "Head"
@@ -149,7 +149,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="NeckTwistDisperser" type="BoneTwistDisperser3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="15" unique_id=1811965255]
+[node name="NeckTwistDisperser" type="BoneTwistDisperser3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="14" unique_id=1811965255]
 setting_count = 1
 settings/0/root_bone_name = "Hips"
 settings/0/root_bone = 1
@@ -162,7 +162,7 @@ settings/0/disperse_mode = 1
 settings/0/weight_position = 0.8
 settings/0/joint_count = 6
 
-[node name="RightArmIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="16" unique_id=1938498185 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="RightArmIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="15" unique_id=1938498185 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -186,7 +186,7 @@ Side = 1
 PoleAnchorSet = ExtResource("5_vhysq")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="LeftArmIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="17" unique_id=266961635 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
+[node name="LeftArmIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="16" unique_id=266961635 node_paths=PackedStringArray("HandTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -209,7 +209,7 @@ PoleTarget = NodePath("../../../IKTargets/LeftElbow")
 PoleAnchorSet = ExtResource("5_vhysq")
 metadata/_custom_type_script = "uid://dwr11ki66nkby"
 
-[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="18" unique_id=1138822134]
+[node name="RightArmTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="17" unique_id=1138822134]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/RightHand")
 settings/0/pole_node = NodePath("../../../IKTargets/RightElbow")
@@ -223,7 +223,7 @@ settings/0/end_bone = 31
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="19" unique_id=1880374972]
+[node name="LeftArmTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="18" unique_id=1880374972]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/LeftHand")
 settings/0/pole_node = NodePath("../../../IKTargets/LeftElbow")
@@ -237,7 +237,7 @@ settings/0/end_bone = 11
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="20" unique_id=494947558]
+[node name="RightHandCopyRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="19" unique_id=494947558]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "RightHand"
@@ -249,7 +249,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="21" unique_id=631530392]
+[node name="LeftHandCopyRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="20" unique_id=631530392]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "LeftHand"
@@ -261,7 +261,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="ForearmTwistModifier" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="22" unique_id=582011768]
+[node name="ForearmTwistModifier" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="21" unique_id=582011768]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -281,7 +281,7 @@ influence = 1.0
 script = ExtResource("8_8lkn1")
 metadata/_custom_type_script = "uid://corwlye5lo1se"
 
-[node name="RightLegIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="23" unique_id=2092603835 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="RightLegIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="22" unique_id=2092603835 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -304,7 +304,7 @@ PoleTarget = NodePath("../../../IKTargets/RightKnee")
 Side = 1
 metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="24" unique_id=1960079574 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
+[node name="LeftLegIKController" type="SkeletonModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="23" unique_id=1960079574 node_paths=PackedStringArray("FootTarget", "PoleTarget")]
 unique_name_in_owner = false
 process_mode = 0
 process_priority = 0
@@ -326,7 +326,7 @@ FootTarget = NodePath("../../../IKTargets/LeftFoot")
 PoleTarget = NodePath("../../../IKTargets/LeftKnee")
 metadata/_custom_type_script = "uid://ca8x66d568byq"
 
-[node name="RightLegTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="25" unique_id=377304021]
+[node name="RightLegTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="24" unique_id=377304021]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/RightFoot")
 settings/0/pole_node = NodePath("../../../IKTargets/RightKnee")
@@ -340,7 +340,7 @@ settings/0/end_bone = 55
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="LeftLegTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="26" unique_id=1466883674]
+[node name="LeftLegTwoBoneIKController" type="TwoBoneIK3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="25" unique_id=1466883674]
 setting_count = 1
 settings/0/target_node = NodePath("../../../IKTargets/LeftFoot")
 settings/0/pole_node = NodePath("../../../IKTargets/LeftKnee")
@@ -354,7 +354,7 @@ settings/0/end_bone = 51
 settings/0/use_virtual_end = false
 settings/0/extend_end_bone = false
 
-[node name="CopyRightFootRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="27" unique_id=1085696978]
+[node name="CopyRightFootRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="26" unique_id=1085696978]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "RightFoot"
@@ -366,7 +366,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="CopyLeftFootRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="28" unique_id=1163019881]
+[node name="CopyLeftFootRotation" type="CopyTransformModifier3D" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="27" unique_id=1163019881]
 setting_count = 1
 settings/0/amount = 1.0
 settings/0/apply_bone_name = "LeftFoot"
@@ -378,7 +378,7 @@ settings/0/axes = 7
 settings/0/invert = 0
 settings/0/additive = false
 
-[node name="DynamicPhysicalRig" type="Node" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(480735522) index="29" unique_id=966532134]
+[node name="DynamicPhysicalRig" type="Node" parent="Female/GeneralSkeleton" parent_id_path=PackedInt32Array(225861748) index="28" unique_id=966532134]
 script = ExtResource("3_2a5tg")
 ColliderProfile = ExtResource("4_2a5tg")
 metadata/_custom_type_script = "uid://c7d4aa5yqpf4u"
@@ -426,11 +426,20 @@ motion_mode = 1
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 shape = SubResource("SphereShape3D_osxwe")
 
-[node name="AnimationPlayer" parent="." index="3" unique_id=487618715]
-libraries/locomotion = ExtResource("13_locomotion")
+[node name="AnimationPlayer" parent="." index="3" unique_id=1810701128]
+libraries/idle = ExtResource("13_safef")
+libraries/locomotion = ExtResource("14_qrr6g")
 
 [node name="AnimationTree" parent="." index="4" unique_id=527893103 instance=ExtResource("8_2a5tg")]
 root_node = NodePath("../Female")
+root_motion_local = true
+tree_root = ExtResource("16_g336p")
+parameters/EyesVerticalLookSeek/seek_request = 0.5
+parameters/EyesHorizontalLookSeek/seek_request = 0.5
+parameters/States/AllFoursTransitioning/TimeSeek/seek_request = -1.0
+parameters/States/NPCTravel/Sustained/blend_position = Vector2(0, 0)
+parameters/States/NPCTravel/Rate/scale = 1.0
+parameters/States/StandingCrouching/TimeSeek/seek_request = -1.0
 
 [node name="Eyes" type="Node" parent="." index="5" unique_id=1199535973 node_paths=PackedStringArray("AnimationTree", "EyeOrigin", "LeftEye", "RightEye")]
 script = ExtResource("10_eyesbehaviour")
@@ -474,12 +483,3 @@ LeftHandPoseWeight = 1.0
 RightHandPoseWeight = 1.0
 TransitionDuration = 0.2
 metadata/_custom_type_script = "uid://cxh7lfqn5k3nw"
-
-[node name="Locomotion" type="Node" parent="." index="7" unique_id=668991861 node_paths=PackedStringArray("TargetCharacterBodyNode", "AnimationTree", "RootMotionReference")]
-script = ExtResource("9_ctrlloco")
-TargetCharacterBodyNode = NodePath("..")
-AnimationTree = NodePath("../AnimationTree")
-RootMotionReference = NodePath("../Female")
-AnimationBlendParameter = &"parameters/States/Walking/Locomotion/Movement/blend_position"
-AnimationTurnBlendParameter = &"parameters/States/Walking/Locomotion/blend_position"
-metadata/_custom_type_script = "uid://cjt48dl58j31y"

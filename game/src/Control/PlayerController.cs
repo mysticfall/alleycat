@@ -1,6 +1,7 @@
 using AlleyCat.Control.Locomotion;
 using AlleyCat.Core.Logging;
 using AlleyCat.Interaction.Hands;
+using AlleyCat.Navigation;
 using AlleyCat.Rigging;
 using AlleyCat.XR;
 using Godot;
@@ -45,6 +46,8 @@ public partial class PlayerController : Node
     private IXRHandController? _leftHandController;
     private IXRHandController? _rightHandController;
     private ILocomotion? _locomotion;
+    private IManualTranslationAcceptance? _manualTranslationAcceptance;
+    private INavigation? _navigation;
     private IHasHands? _hands;
     private ILogger<PlayerController>? _logger;
     private bool _xrInitialised;
@@ -92,6 +95,15 @@ public partial class PlayerController : Node
     {
         get;
         set;
+    }
+
+    /// <summary>
+    /// Optional player navigation component whose active authority yields to manual input.
+    /// </summary>
+    [Export]
+    public Node? NavigationNode
+    {
+        get; set;
     }
 
     /// <summary>
@@ -150,7 +162,7 @@ public partial class PlayerController : Node
     /// <inheritdoc />
     public override void _Ready()
     {
-        _ = TryResolveLocomotion(out _locomotion);
+        EnsureLocomotionAndNavigationResolved();
         _hands = ResolveHands();
         QueueHandsResolutionRetryIfNeeded();
         _xrManager = ResolveXRManager();
@@ -355,6 +367,18 @@ public partial class PlayerController : Node
     private static XRManager ResolveXRManager()
         => Game.Instance.GetRequiredService<XRManager>();
 
+    private INavigation? ResolveNavigation()
+    {
+        Node? navigationNode = NavigationNode ?? GetParent()?.GetNodeOrNull<Node>("Navigation");
+        return navigationNode switch
+        {
+            null => null,
+            INavigation navigation => navigation,
+            _ => throw new InvalidOperationException(
+                $"Node '{navigationNode.GetPath()}' must implement {nameof(INavigation)}."),
+        };
+    }
+
     private IHasHands? ResolveHands()
     {
         Node? handHolderNode = HandHolderNode ?? GetParent()?.GetNodeOrNull<Node>("Hands");
@@ -436,7 +460,21 @@ public partial class PlayerController : Node
     }
 
     private bool TryResolveRuntimeDependencies()
-        => (_locomotion is not null || TryResolveLocomotion(out _locomotion)) && EnsureHandsResolved();
+    {
+        EnsureLocomotionAndNavigationResolved();
+        return _locomotion is not null && EnsureHandsResolved();
+    }
+
+    private void EnsureLocomotionAndNavigationResolved()
+    {
+        if (_locomotion is null)
+        {
+            _ = TryResolveLocomotion(out _locomotion);
+        }
+
+        _manualTranslationAcceptance ??= _locomotion as IManualTranslationAcceptance;
+        _navigation ??= ResolveNavigation();
+    }
 
     private void DisconnectControllers()
     {
@@ -662,10 +700,26 @@ public partial class PlayerController : Node
         => ref (side == LimbSide.Left ? ref _leftFloatGrabPressed : ref _rightFloatGrabPressed);
 
     private void UpdateMovementInput(Vector2 value)
-        => _locomotion?.Move(value);
+    {
+        EnsureLocomotionAndNavigationResolved();
+        CancelActiveNavigationForAcceptedManualTranslation(value);
+        _locomotion?.Move(value);
+    }
 
     private void UpdateRotationInput(Vector2 value)
-        => _locomotion?.Rotate(value);
+    {
+        EnsureLocomotionAndNavigationResolved();
+        _locomotion?.Rotate(value);
+    }
+
+    private void CancelActiveNavigationForAcceptedManualTranslation(Vector2 value)
+    {
+        if (_manualTranslationAcceptance?.IsManualTranslationAccepted(value) == true
+            && _navigation?.IsMovementAuthorityActive == true)
+        {
+            _navigation.DeactivateMovementAuthority();
+        }
+    }
 
     private void ZeroLocomotionInput()
     {

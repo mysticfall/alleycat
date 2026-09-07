@@ -1,0 +1,18 @@
+{
+  "binding": {
+    "processed_index_sha256": "758dcbe12bbd0db57a3233adff9f2ab5c003f634c48d1ae1689b35e51cd2de88",
+    "retargeted_blend_sha256": "f165ebca5f94fc0fb4b8650014ad96db8af4a73fa4d263fc21cd4efd64500549",
+    "runtime_catalogue_sha256": "24c9d2fba241c8fed1fabaea27138d7bd046bcb813fa082539deea196fe9811d",
+    "runtime_library_sha256": "d8531d16f3a71e5485e9f9947d36851f1af33301c6abaf78b48e7c26fc6cb507"
+  },
+  "blend": "res://assets/characters/reference/female/animations/processed/idle/idle_sad.blend",
+  "character": "female",
+  "contact_evidence": null,
+  "contact_evidence_required": false,
+  "index": "res://assets/characters/reference/female/animations/processed/idle/sad/processed-index.json",
+  "name": "idle",
+  "root": "res://assets/characters/reference/female/animations/runtime/idle/sad",
+  "schema_version": 2,
+  "stitch_edges": [],
+  "variant": "sad"
+}

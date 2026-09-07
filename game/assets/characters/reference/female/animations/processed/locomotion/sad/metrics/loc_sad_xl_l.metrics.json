@@ -1,0 +1,3422 @@
+{
+  "action": "loc_sad_xl_l-loop",
+  "coordinate_space": "evaluated_female_world_z_up",
+  "duration_seconds": 1.4,
+  "external_identity": "loc_sad_xl_l",
+  "fps": 30.0,
+  "frame_count": 43,
+  "frame_end": 43,
+  "frame_start": 1,
+  "root_source": "evaluated_kimodo_to_female_constraint_bake",
+  "root_transform_evidence": "baked_female_armature_local_transform_v1",
+  "samples": [
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.0,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 1,
+      "root_position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.0,
+        -0.0,
+        -0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.0,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0247905,
+          -0.0615187,
+          0.1096085
+        ],
+        "foot_r": [
+          -0.0128109,
+          0.2284952,
+          0.1172626
+        ],
+        "hand_l": [
+          0.3175235,
+          -0.0329995,
+          0.8951899
+        ],
+        "hand_r": [
+          -0.1969117,
+          -0.1014652,
+          0.9535751
+        ],
+        "head": [
+          0.0537938,
+          -0.0920217,
+          1.5922182
+        ],
+        "pelvis": [
+          -0.0003771,
+          0.0187371,
+          0.9406307
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.0122659,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 2,
+      "root_position": [
+        0.0122659,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.3679761,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.0333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.036842,
+          -0.0619946,
+          0.110409
+        ],
+        "foot_r": [
+          0.0236545,
+          0.2153253,
+          0.1145332
+        ],
+        "hand_l": [
+          0.3116816,
+          -0.0277398,
+          0.8922136
+        ],
+        "hand_r": [
+          -0.2018944,
+          -0.1039855,
+          0.9552109
+        ],
+        "head": [
+          0.0548213,
+          -0.0913355,
+          1.5912907
+        ],
+        "pelvis": [
+          7.02e-05,
+          0.0213666,
+          0.9401805
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.0254584,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 3,
+      "root_position": [
+        0.0254584,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.3957768,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.0666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0490711,
+          -0.0615096,
+          0.1105764
+        ],
+        "foot_r": [
+          0.0603087,
+          0.2014103,
+          0.1131287
+        ],
+        "hand_l": [
+          0.3058231,
+          -0.0219449,
+          0.8885769
+        ],
+        "hand_r": [
+          -0.2068704,
+          -0.1060165,
+          0.9561983
+        ],
+        "head": [
+          0.0558161,
+          -0.0902616,
+          1.5895401
+        ],
+        "pelvis": [
+          0.0005202,
+          0.0244122,
+          0.9389294
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.0401383,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 4,
+      "root_position": [
+        0.0401383,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.440396,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.1,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0656403,
+          -0.0650678,
+          0.1109862
+        ],
+        "foot_r": [
+          0.0711939,
+          0.1809846,
+          0.1080478
+        ],
+        "hand_l": [
+          0.2767488,
+          -0.0323031,
+          0.8807861
+        ],
+        "hand_r": [
+          -0.214134,
+          -0.1027183,
+          0.9563447
+        ],
+        "head": [
+          0.0549565,
+          -0.089389,
+          1.5861175
+        ],
+        "pelvis": [
+          0.0011952,
+          0.0330812,
+          0.9374884
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.0563982,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 5,
+      "root_position": [
+        0.0563982,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4877984,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.1333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0818317,
+          -0.0670887,
+          0.1113304
+        ],
+        "foot_r": [
+          0.0823002,
+          0.1581356,
+          0.1030165
+        ],
+        "hand_l": [
+          0.2539572,
+          -0.0355028,
+          0.8765215
+        ],
+        "hand_r": [
+          -0.2198811,
+          -0.1002454,
+          0.9558043
+        ],
+        "head": [
+          0.0521758,
+          -0.0870361,
+          1.5830792
+        ],
+        "pelvis": [
+          0.0019815,
+          0.0389368,
+          0.9355664
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.0735767,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 6,
+      "root_position": [
+        0.0735767,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.5153536,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.1666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0960282,
+          -0.0686117,
+          0.1116869
+        ],
+        "foot_r": [
+          0.0856241,
+          0.1367649,
+          0.0975101
+        ],
+        "hand_l": [
+          0.2310437,
+          -0.0378367,
+          0.8739452
+        ],
+        "hand_r": [
+          -0.2246158,
+          -0.0959464,
+          0.9544857
+        ],
+        "head": [
+          0.0481492,
+          -0.0829024,
+          1.5800208
+        ],
+        "pelvis": [
+          0.0027087,
+          0.0442704,
+          0.9332734
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.0908122,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 7,
+      "root_position": [
+        0.0908122,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.5170649,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.2,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1064271,
+          -0.0693575,
+          0.1122241
+        ],
+        "foot_r": [
+          0.0814544,
+          0.1220746,
+          0.0919102
+        ],
+        "hand_l": [
+          0.2097801,
+          -0.0391896,
+          0.8729134
+        ],
+        "hand_r": [
+          -0.2281041,
+          -0.0890678,
+          0.9523113
+        ],
+        "head": [
+          0.0434326,
+          -0.0763605,
+          1.577111
+        ],
+        "pelvis": [
+          0.0031675,
+          0.0490341,
+          0.930592
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.108753,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 8,
+      "root_position": [
+        0.108753,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.5382243,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.2333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1162545,
+          -0.0696553,
+          0.1131312
+        ],
+        "foot_r": [
+          0.0727654,
+          0.1157773,
+          0.0872375
+        ],
+        "hand_l": [
+          0.1919593,
+          -0.041438,
+          0.8729127
+        ],
+        "hand_r": [
+          -0.2300265,
+          -0.0805238,
+          0.9491016
+        ],
+        "head": [
+          0.0391195,
+          -0.0685881,
+          1.5742555
+        ],
+        "pelvis": [
+          0.0030984,
+          0.0525684,
+          0.9276091
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.1277938,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 9,
+      "root_position": [
+        0.1277938,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.571224,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.2666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1301814,
+          -0.0703562,
+          0.1136268
+        ],
+        "foot_r": [
+          0.0619067,
+          0.11357,
+          0.0829233
+        ],
+        "hand_l": [
+          0.1781332,
+          -0.0445813,
+          0.8731744
+        ],
+        "hand_r": [
+          -0.2308217,
+          -0.0697466,
+          0.9433081
+        ],
+        "head": [
+          0.0355576,
+          -0.0596896,
+          1.5705485
+        ],
+        "pelvis": [
+          0.0023235,
+          0.055604,
+          0.9235937
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.1450084,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 10,
+      "root_position": [
+        0.1450084,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.516437,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.3,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1438289,
+          -0.0713444,
+          0.1150552
+        ],
+        "foot_r": [
+          0.049451,
+          0.1120845,
+          0.0829744
+        ],
+        "hand_l": [
+          0.1703026,
+          -0.0487803,
+          0.8762398
+        ],
+        "hand_r": [
+          -0.2295207,
+          -0.0565571,
+          0.9375525
+        ],
+        "head": [
+          0.0351847,
+          -0.0508246,
+          1.5691954
+        ],
+        "pelvis": [
+          0.00053,
+          0.0586164,
+          0.9222233
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.1615089,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 11,
+      "root_position": [
+        0.1615089,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4950146,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.3333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1524145,
+          -0.072205,
+          0.1197071
+        ],
+        "foot_r": [
+          0.0361656,
+          0.1106498,
+          0.0841447
+        ],
+        "hand_l": [
+          0.1659815,
+          -0.0545861,
+          0.8829085
+        ],
+        "hand_r": [
+          -0.2277579,
+          -0.0412991,
+          0.9323506
+        ],
+        "head": [
+          0.0353715,
+          -0.042876,
+          1.5697854
+        ],
+        "pelvis": [
+          -0.0010237,
+          0.0614782,
+          0.922988
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.1778412,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 12,
+      "root_position": [
+        0.1778412,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4899716,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.3666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1570809,
+          -0.0747427,
+          0.1261583
+        ],
+        "foot_r": [
+          0.0246476,
+          0.1097278,
+          0.0841634
+        ],
+        "hand_l": [
+          0.1631689,
+          -0.0606754,
+          0.890328
+        ],
+        "hand_r": [
+          -0.2264387,
+          -0.0235512,
+          0.9273793
+        ],
+        "head": [
+          0.0339158,
+          -0.0364981,
+          1.5712401
+        ],
+        "pelvis": [
+          -0.0018018,
+          0.0638066,
+          0.9244502
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.193868,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 13,
+      "root_position": [
+        0.193868,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.480803,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.4,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1546001,
+          -0.0805604,
+          0.1336485
+        ],
+        "foot_r": [
+          0.013611,
+          0.108007,
+          0.0841396
+        ],
+        "hand_l": [
+          0.1615103,
+          -0.0659821,
+          0.8981196
+        ],
+        "hand_r": [
+          -0.2259357,
+          -0.0039443,
+          0.9241996
+        ],
+        "head": [
+          0.0306519,
+          -0.0312262,
+          1.5744693
+        ],
+        "pelvis": [
+          -0.0019652,
+          0.0658666,
+          0.9271005
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.2093363,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 14,
+      "root_position": [
+        0.2093363,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4640472,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.4333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1440935,
+          -0.0897782,
+          0.1398098
+        ],
+        "foot_r": [
+          0.001684,
+          0.1061096,
+          0.0846256
+        ],
+        "hand_l": [
+          0.1614694,
+          -0.0706126,
+          0.905351
+        ],
+        "hand_r": [
+          -0.2261423,
+          0.0158296,
+          0.9227366
+        ],
+        "head": [
+          0.0265481,
+          -0.0277204,
+          1.5786037
+        ],
+        "pelvis": [
+          -0.0017869,
+          0.0675851,
+          0.9303143
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.224239,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 15,
+      "root_position": [
+        0.224239,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4470836,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.4666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1268162,
+          -0.1022888,
+          0.1436944
+        ],
+        "foot_r": [
+          -0.0108756,
+          0.1044956,
+          0.0852553
+        ],
+        "hand_l": [
+          0.1633176,
+          -0.0744521,
+          0.9115731
+        ],
+        "hand_r": [
+          -0.2266522,
+          0.0353297,
+          0.9227756
+        ],
+        "head": [
+          0.0225759,
+          -0.0258103,
+          1.5829095
+        ],
+        "pelvis": [
+          -0.001434,
+          0.0693835,
+          0.933818
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.2386715,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 16,
+      "root_position": [
+        0.2386715,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4329725,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.5,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.1012402,
+          -0.1176911,
+          0.1451018
+        ],
+        "foot_r": [
+          -0.0236357,
+          0.1031643,
+          0.0859027
+        ],
+        "hand_l": [
+          0.1670702,
+          -0.0775718,
+          0.9164527
+        ],
+        "hand_r": [
+          -0.2272811,
+          0.0546507,
+          0.9238565
+        ],
+        "head": [
+          0.0194604,
+          -0.0251064,
+          1.5868206
+        ],
+        "pelvis": [
+          -0.0010374,
+          0.0714021,
+          0.9373081
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.2529021,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 17,
+      "root_position": [
+        0.2529021,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4269201,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.5333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0662193,
+          -0.1339493,
+          0.1435908
+        ],
+        "foot_r": [
+          -0.0360425,
+          0.1021441,
+          0.0866546
+        ],
+        "hand_l": [
+          0.1722814,
+          -0.0798522,
+          0.9193307
+        ],
+        "hand_r": [
+          -0.228235,
+          0.0730595,
+          0.9253828
+        ],
+        "head": [
+          0.0178934,
+          -0.0251465,
+          1.5897304
+        ],
+        "pelvis": [
+          -0.0007494,
+          0.0732466,
+          0.9402095
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.267167,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 18,
+      "root_position": [
+        0.267167,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4279456,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.5666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0223714,
+          -0.1487706,
+          0.1396085
+        ],
+        "foot_r": [
+          -0.0481732,
+          0.101445,
+          0.0873551
+        ],
+        "hand_l": [
+          0.1782836,
+          -0.0809702,
+          0.9199319
+        ],
+        "hand_r": [
+          -0.2297679,
+          0.0902557,
+          0.9268852
+        ],
+        "head": [
+          0.0178365,
+          -0.0254274,
+          1.5914369
+        ],
+        "pelvis": [
+          -0.0006326,
+          0.0745022,
+          0.9422215
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.2810808,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 19,
+      "root_position": [
+        0.2810808,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4174134,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.6,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.0269881,
+          -0.1593948,
+          0.1345516
+        ],
+        "foot_r": [
+          -0.0602046,
+          0.1011945,
+          0.0878619
+        ],
+        "hand_l": [
+          0.1841774,
+          -0.0805299,
+          0.9185152
+        ],
+        "hand_r": [
+          -0.2321517,
+          0.1055483,
+          0.928362
+        ],
+        "head": [
+          0.0189265,
+          -0.0254186,
+          1.5921048
+        ],
+        "pelvis": [
+          -0.0006694,
+          0.0749589,
+          0.9433568
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.2948248,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 20,
+      "root_position": [
+        0.2948248,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4123217,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.6333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.0783957,
+          -0.1635903,
+          0.1299341
+        ],
+        "foot_r": [
+          -0.0724687,
+          0.1013846,
+          0.088274
+        ],
+        "hand_l": [
+          0.1891998,
+          -0.078593,
+          0.9156182
+        ],
+        "hand_r": [
+          -0.2353484,
+          0.1182611,
+          0.9300139
+        ],
+        "head": [
+          0.0208088,
+          -0.0250959,
+          1.5920335
+        ],
+        "pelvis": [
+          -0.0008126,
+          0.0745823,
+          0.9438025
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.3086871,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 21,
+      "root_position": [
+        0.3086871,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4158694,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.6666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.1283845,
+          -0.1598044,
+          0.1263714
+        ],
+        "foot_r": [
+          -0.0851805,
+          0.10192,
+          0.0885906
+        ],
+        "hand_l": [
+          0.1927956,
+          -0.0758495,
+          0.9119224
+        ],
+        "hand_r": [
+          -0.2391162,
+          0.1278697,
+          0.9317843
+        ],
+        "head": [
+          0.02316,
+          -0.0246396,
+          1.5913196
+        ],
+        "pelvis": [
+          -0.0010776,
+          0.073338,
+          0.9435844
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.3230125,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 22,
+      "root_position": [
+        0.3230125,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4297623,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.7,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.1754155,
+          -0.148392,
+          0.1238629
+        ],
+        "foot_r": [
+          -0.0989227,
+          0.1024993,
+          0.0888613
+        ],
+        "hand_l": [
+          0.1949677,
+          -0.0733076,
+          0.9076555
+        ],
+        "hand_r": [
+          -0.2432812,
+          0.1340564,
+          0.9334205
+        ],
+        "head": [
+          0.0257885,
+          -0.0245005,
+          1.5900267
+        ],
+        "pelvis": [
+          -0.0014649,
+          0.0710796,
+          0.9426957
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.3388205,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 23,
+      "root_position": [
+        0.3388205,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4742387,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.7333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.2159781,
+          -0.1316353,
+          0.1222728
+        ],
+        "foot_r": [
+          -0.1142958,
+          0.1029842,
+          0.089326
+        ],
+        "hand_l": [
+          0.1959304,
+          -0.0718125,
+          0.9031128
+        ],
+        "hand_r": [
+          -0.2475454,
+          0.1364658,
+          0.934631
+        ],
+        "head": [
+          0.0286144,
+          -0.0250008,
+          1.5882607
+        ],
+        "pelvis": [
+          -0.0019749,
+          0.0680714,
+          0.9411523
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.3566325,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 24,
+      "root_position": [
+        0.3566325,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.5343613,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.7666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.2475147,
+          -0.1124239,
+          0.1208983
+        ],
+        "foot_r": [
+          -0.1319028,
+          0.1033828,
+          0.0901083
+        ],
+        "hand_l": [
+          0.1959332,
+          -0.0717993,
+          0.8984413
+        ],
+        "hand_r": [
+          -0.2520058,
+          0.1353984,
+          0.9353896
+        ],
+        "head": [
+          0.031484,
+          -0.0263454,
+          1.586125
+        ],
+        "pelvis": [
+          -0.0025669,
+          0.0644832,
+          0.939057
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.3763244,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 25,
+      "root_position": [
+        0.3763244,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.5907574,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.8,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.2675718,
+          -0.0944003,
+          0.1185609
+        ],
+        "foot_r": [
+          -0.1514041,
+          0.1038391,
+          0.0908419
+        ],
+        "hand_l": [
+          0.1951469,
+          -0.0733276,
+          0.8939254
+        ],
+        "hand_r": [
+          -0.2565342,
+          0.1310054,
+          0.9357553
+        ],
+        "head": [
+          0.034108,
+          -0.0288813,
+          1.5837255
+        ],
+        "pelvis": [
+          -0.0032283,
+          0.0604034,
+          0.9366237
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.3971901,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 26,
+      "root_position": [
+        0.3971901,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.6259704,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.8333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.2743715,
+          -0.0814122,
+          0.1138832
+        ],
+        "foot_r": [
+          -0.171946,
+          0.1045408,
+          0.091126
+        ],
+        "hand_l": [
+          0.1933755,
+          -0.0761926,
+          0.8896792
+        ],
+        "hand_r": [
+          -0.2608998,
+          0.1231918,
+          0.9356254
+        ],
+        "head": [
+          0.0359513,
+          -0.0328721,
+          1.58123
+        ],
+        "pelvis": [
+          -0.0038631,
+          0.0556278,
+          0.9340659
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.4191189,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 27,
+      "root_position": [
+        0.4191189,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.6578627,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.8666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.2660365,
+          -0.0766462,
+          0.106815
+        ],
+        "foot_r": [
+          -0.1937234,
+          0.1052014,
+          0.0913307
+        ],
+        "hand_l": [
+          0.1910492,
+          -0.0800335,
+          0.8860594
+        ],
+        "hand_r": [
+          -0.2652475,
+          0.1122435,
+          0.9347264
+        ],
+        "head": [
+          0.0367442,
+          -0.0378292,
+          1.5788981
+        ],
+        "pelvis": [
+          -0.0042392,
+          0.0506514,
+          0.9314983
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.4432283,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 28,
+      "root_position": [
+        0.4432283,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.7232827,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.9,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.2446538,
+          -0.0768177,
+          0.1033595
+        ],
+        "foot_r": [
+          -0.215096,
+          0.1068075,
+          0.0900457
+        ],
+        "hand_l": [
+          0.188044,
+          -0.0843668,
+          0.8848003
+        ],
+        "hand_r": [
+          -0.2691992,
+          0.0990709,
+          0.9345841
+        ],
+        "head": [
+          0.0360237,
+          -0.0438609,
+          1.5783817
+        ],
+        "pelvis": [
+          -0.0038669,
+          0.0459721,
+          0.9308459
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.4676805,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 29,
+      "root_position": [
+        0.4676805,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.7335645,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.9333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.2222138,
+          -0.0768573,
+          0.1051363
+        ],
+        "foot_r": [
+          -0.2339133,
+          0.1081939,
+          0.0904506
+        ],
+        "hand_l": [
+          0.1844969,
+          -0.090102,
+          0.8862827
+        ],
+        "hand_r": [
+          -0.2724855,
+          0.0835725,
+          0.9351961
+        ],
+        "head": [
+          0.0328999,
+          -0.0510406,
+          1.5793586
+        ],
+        "pelvis": [
+          -0.0027056,
+          0.0421841,
+          0.9313826
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.4916724,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 30,
+      "root_position": [
+        0.4916724,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.7197583,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 0.9666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.1997863,
+          -0.0768117,
+          0.1072317
+        ],
+        "foot_r": [
+          -0.2548296,
+          0.1080238,
+          0.0923303
+        ],
+        "hand_l": [
+          0.1828055,
+          -0.0962947,
+          0.888339
+        ],
+        "hand_r": [
+          -0.2739116,
+          0.0662376,
+          0.9355676
+        ],
+        "head": [
+          0.0291992,
+          -0.059034,
+          1.5799826
+        ],
+        "pelvis": [
+          -0.0015053,
+          0.0388424,
+          0.9314036
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.5152916,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 31,
+      "root_position": [
+        0.5152916,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.708577,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.0,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.177424,
+          -0.0766905,
+          0.1085734
+        ],
+        "foot_r": [
+          -0.2756418,
+          0.1075506,
+          0.0937384
+        ],
+        "hand_l": [
+          0.1843337,
+          -0.1024516,
+          0.8898659
+        ],
+        "hand_r": [
+          -0.2724411,
+          0.0476181,
+          0.9346347
+        ],
+        "head": [
+          0.0263848,
+          -0.0668559,
+          1.5799556
+        ],
+        "pelvis": [
+          -0.0005265,
+          0.0356031,
+          0.9307326
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.5371985,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 32,
+      "root_position": [
+        0.5371985,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.6572056,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.0333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.1568535,
+          -0.076586,
+          0.1099395
+        ],
+        "foot_r": [
+          -0.2942075,
+          0.1072509,
+          0.0954018
+        ],
+        "hand_l": [
+          0.1898073,
+          -0.1077308,
+          0.89111
+        ],
+        "hand_r": [
+          -0.2675289,
+          0.028404,
+          0.9329305
+        ],
+        "head": [
+          0.0252538,
+          -0.0734791,
+          1.5799608
+        ],
+        "pelvis": [
+          0.0001594,
+          0.0327122,
+          0.9302971
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.5577692,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 33,
+      "root_position": [
+        0.5577692,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.6171227,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.0666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.1371775,
+          -0.0764436,
+          0.1112205
+        ],
+        "foot_r": [
+          -0.3011124,
+          0.1116697,
+          0.0969968
+        ],
+        "hand_l": [
+          0.1994002,
+          -0.111096,
+          0.8921465
+        ],
+        "hand_r": [
+          -0.258781,
+          0.0107697,
+          0.9307557
+        ],
+        "head": [
+          0.0261153,
+          -0.0777838,
+          1.580438
+        ],
+        "pelvis": [
+          0.0004124,
+          0.030074,
+          0.9306994
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.5759401,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 34,
+      "root_position": [
+        0.5759401,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.545125,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.1,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.1197641,
+          -0.0764554,
+          0.1117806
+        ],
+        "foot_r": [
+          -0.2951629,
+          0.1253138,
+          0.1004436
+        ],
+        "hand_l": [
+          0.2124555,
+          -0.1117627,
+          0.8948923
+        ],
+        "hand_r": [
+          -0.2463129,
+          -0.0056477,
+          0.9305889
+        ],
+        "head": [
+          0.0287437,
+          -0.0804724,
+          1.5832341
+        ],
+        "pelvis": [
+          0.0003075,
+          0.027539,
+          0.9333891
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.5924219,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 35,
+      "root_position": [
+        0.5924219,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4944563,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.1333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.1038676,
+          -0.0764951,
+          0.1126038
+        ],
+        "foot_r": [
+          -0.2785249,
+          0.146849,
+          0.1055535
+        ],
+        "hand_l": [
+          0.2273112,
+          -0.1096664,
+          0.8986718
+        ],
+        "hand_r": [
+          -0.2315108,
+          -0.0211764,
+          0.9328137
+        ],
+        "head": [
+          0.0323731,
+          -0.0825918,
+          1.5874431
+        ],
+        "pelvis": [
+          3.5e-06,
+          0.0253194,
+          0.9370733
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.6081042,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 36,
+      "root_position": [
+        0.6081042,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4704666,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.1666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.0885492,
+          -0.0765209,
+          0.112633
+        ],
+        "foot_r": [
+          -0.2542324,
+          0.1711129,
+          0.1112812
+        ],
+        "hand_l": [
+          0.2426872,
+          -0.1055029,
+          0.9016861
+        ],
+        "hand_r": [
+          -0.216308,
+          -0.0365072,
+          0.9358989
+        ],
+        "head": [
+          0.0359076,
+          -0.0845669,
+          1.5913665
+        ],
+        "pelvis": [
+          -0.0003056,
+          0.0232274,
+          0.9398881
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.6229501,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 37,
+      "root_position": [
+        0.6229501,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4453772,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.2,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.0739653,
+          -0.076498,
+          0.1120103
+        ],
+        "foot_r": [
+          -0.2237565,
+          0.1951988,
+          0.1175213
+        ],
+        "hand_l": [
+          0.2582558,
+          -0.099245,
+          0.9027782
+        ],
+        "hand_r": [
+          -0.2016597,
+          -0.051916,
+          0.9388763
+        ],
+        "head": [
+          0.0389792,
+          -0.0862444,
+          1.5938894
+        ],
+        "pelvis": [
+          -0.0004818,
+          0.0211857,
+          0.9411759
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.6367453,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 38,
+      "root_position": [
+        0.6367453,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.4138577,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.2333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.0597785,
+          -0.0758526,
+          0.1110623
+        ],
+        "foot_r": [
+          -0.188557,
+          0.2164719,
+          0.1239504
+        ],
+        "hand_l": [
+          0.273246,
+          -0.0907968,
+          0.9021266
+        ],
+        "hand_r": [
+          -0.1900361,
+          -0.0662792,
+          0.9416068
+        ],
+        "head": [
+          0.0412189,
+          -0.0875185,
+          1.5948974
+        ],
+        "pelvis": [
+          -0.0004987,
+          0.0193358,
+          0.9412625
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.6500009,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 39,
+      "root_position": [
+        0.6500009,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.3976679,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.2666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.0448056,
+          -0.0741437,
+          0.1101303
+        ],
+        "foot_r": [
+          -0.1500756,
+          0.2330075,
+          0.1297489
+        ],
+        "hand_l": [
+          0.2878476,
+          -0.0799744,
+          0.9007765
+        ],
+        "hand_r": [
+          -0.1829484,
+          -0.078353,
+          0.9441277
+        ],
+        "head": [
+          0.0430692,
+          -0.0883007,
+          1.5949757
+        ],
+        "pelvis": [
+          -0.0004603,
+          0.0177329,
+          0.9409756
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.662796,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 40,
+      "root_position": [
+        0.662796,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.3838509,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.3,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          0.028978,
+          -0.0716322,
+          0.1097041
+        ],
+        "foot_r": [
+          -0.1103539,
+          0.2438847,
+          0.1339462
+        ],
+        "hand_l": [
+          0.3015789,
+          -0.0669675,
+          0.8999517
+        ],
+        "hand_r": [
+          -0.1806071,
+          -0.0879969,
+          0.9468174
+        ],
+        "head": [
+          0.0448841,
+          -0.0886994,
+          1.5949243
+        ],
+        "pelvis": [
+          -0.0004311,
+          0.0164579,
+          0.9410639
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.6750164,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 41,
+      "root_position": [
+        0.6750164,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.3666133,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.3333333,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0013068,
+          -0.0585664,
+          0.1077067
+        ],
+        "foot_r": [
+          -0.0844771,
+          0.2516776,
+          0.12799
+        ],
+        "hand_l": [
+          0.3291416,
+          -0.0427664,
+          0.9007469
+        ],
+        "hand_r": [
+          -0.1869505,
+          -0.0958146,
+          0.9499704
+        ],
+        "head": [
+          0.0516461,
+          -0.0930879,
+          1.5932071
+        ],
+        "pelvis": [
+          -0.0012625,
+          0.0138726,
+          0.94073
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.6869671,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 42,
+      "root_position": [
+        0.6869671,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.3585219,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.3666667,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0129381,
+          -0.0605157,
+          0.1089753
+        ],
+        "foot_r": [
+          -0.0489111,
+          0.2404735,
+          0.1220436
+        ],
+        "hand_l": [
+          0.3233448,
+          -0.0381506,
+          0.8983022
+        ],
+        "hand_r": [
+          -0.1919275,
+          -0.0988834,
+          0.9520944
+        ],
+        "head": [
+          0.0527354,
+          -0.092748,
+          1.5931244
+        ],
+        "pelvis": [
+          -0.0008213,
+          0.0160967,
+          0.9410808
+        ]
+      }
+    },
+    {
+      "baked_female_root_transform": {
+        "basis_columns": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            -1e-07
+          ],
+          [
+            0.0,
+            1e-07,
+            1.0
+          ]
+        ],
+        "coordinate_space": "female_armature_local_z_up",
+        "origin": [
+          0.6986296,
+          -1e-07,
+          -0.0020219
+        ]
+      },
+      "frame": 43,
+      "root_position": [
+        0.6986296,
+        0.0,
+        0.0
+      ],
+      "root_tilt_radians": 0.0,
+      "root_velocity": [
+        0.3498745,
+        0.0,
+        0.0
+      ],
+      "root_yaw_radians": 0.0,
+      "root_yaw_velocity_radians": 0.0,
+      "seconds": 1.4,
+      "tracked_bones_root_relative": {
+        "Root": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "foot_l": [
+          -0.0247907,
+          -0.0615188,
+          0.1096085
+        ],
+        "foot_r": [
+          -0.0128108,
+          0.2284951,
+          0.1172625
+        ],
+        "hand_l": [
+          0.3175235,
+          -0.0329993,
+          0.8951897
+        ],
+        "hand_r": [
+          -0.1969117,
+          -0.101465,
+          0.953575
+        ],
+        "head": [
+          0.053794,
+          -0.0920216,
+          1.5922182
+        ],
+        "pelvis": [
+          -0.0003772,
+          0.0187371,
+          0.9406307
+        ]
+      }
+    }
+  ],
+  "schema_version": 2,
+  "target_skeleton": "Female",
+  "tracked_bones": [
+    "Root",
+    "pelvis",
+    "head",
+    "foot_l",
+    "foot_r",
+    "hand_l",
+    "hand_r"
+  ]
+}

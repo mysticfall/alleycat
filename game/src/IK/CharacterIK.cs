@@ -1,3 +1,4 @@
+using AlleyCat.IK.Pose;
 using AlleyCat.Rigging;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.XR.HandTracking;
@@ -22,7 +23,13 @@ public partial class CharacterIK : Node3D
     private IKTargetPipeline? _leftHandTargetPipeline;
     private bool _warnedWaitingForBindings;
     private int _runtimeBindingAttempts;
-    private bool _stageModifiersInserted;
+    private StageModifier? _beginStageModifier;
+    private FootProviderStageModifier? _footProviderStageModifier;
+    private HandAuthorityStageModifier? _handAuthorityStageModifier;
+    private StageModifier? _endStageModifier;
+    private readonly List<FootTargetSyncController> _footSyncStages = [];
+    private readonly List<HipReconciliationModifier> _hipReconciliationModifiers = [];
+    private readonly List<SkeletonModifier3D> _lowerLegConsumers = [];
     private IKTargetPipeline? _rightHandTargetPipeline;
     private HandAuthorityState _rightHandAuthority = HandAuthorityState.Animation(LimbSide.Right);
     private HandAuthorityState _leftHandAuthority = HandAuthorityState.Animation(LimbSide.Left);
@@ -32,6 +39,10 @@ public partial class CharacterIK : Node3D
     private IKTargetActivityGate? _leftHandTargetActivityGate;
     private IKTargetActivityGate? _rightFootTargetActivityGate;
     private IKTargetActivityGate? _leftFootTargetActivityGate;
+    private FootTargetSyncController? _footTargetSyncStage;
+    private ulong _preparedFootProviderTick;
+    private CharacterIKFootActuationTrace _leftFootActuationTrace;
+    private CharacterIKFootActuationTrace _rightFootActuationTrace;
 
     private Transform3D _viewpointLocalTransform = Transform3D.Identity;
     /// <summary>
@@ -375,10 +386,17 @@ public partial class CharacterIK : Node3D
     /// </summary>
     public void ResetRuntimeBindings()
     {
-        if (_skeleton is { } skeleton && IsInstanceValid(skeleton))
-        {
-            RemoveInsertedStageModifiers(skeleton);
-        }
+        RemoveOwnedStageModifier(_beginStageModifier);
+        RemoveOwnedStageModifier(_footProviderStageModifier);
+        RemoveOwnedStageModifier(_handAuthorityStageModifier);
+        RemoveOwnedStageModifier(_endStageModifier);
+        _beginStageModifier = null;
+        _footProviderStageModifier = null;
+        _handAuthorityStageModifier = null;
+        _endStageModifier = null;
+        _footSyncStages.Clear();
+        _hipReconciliationModifiers.Clear();
+        _lowerLegConsumers.Clear();
 
         _skeleton = null;
         _headActuator = null;
@@ -392,9 +410,12 @@ public partial class CharacterIK : Node3D
         _leftHandTargetActivityGate = null;
         _rightFootTargetActivityGate = null;
         _leftFootTargetActivityGate = null;
-        _stageModifiersInserted = false;
         _rightHandAuthority = HandAuthorityState.Animation(LimbSide.Right);
         _leftHandAuthority = HandAuthorityState.Animation(LimbSide.Left);
+        _footTargetSyncStage = null;
+        _preparedFootProviderTick = 0;
+        _leftFootActuationTrace = default;
+        _rightFootActuationTrace = default;
         ResolvedViewpoint = null;
         ResolvedHeadIKTarget = null;
         ResolvedHeadIKSolveTarget = null;
@@ -406,6 +427,60 @@ public partial class CharacterIK : Node3D
         _viewpointLocalTransform = Transform3D.Identity;
         ViewpointLocalInverseTransform = Transform3D.Identity;
     }
+
+    /// <summary>
+    /// Runs the generic synchronisation and provider-resolution stages before a movement owner consumes an already
+    /// authorised contribution. CharacterIK remains the sole target, gate, and influence actuator.
+    /// </summary>
+    public bool PrepareFootTargetsForMovement(ulong physicsTick, double delta)
+    {
+        if (physicsTick == 0 || delta <= 0d || !double.IsFinite(delta))
+        {
+            return false;
+        }
+
+        if (_skeleton is null && !TryInitialiseRuntimeBindings())
+        {
+            return false;
+        }
+
+        if (_preparedFootProviderTick == physicsTick)
+        {
+            return true;
+        }
+
+        FootTargetSyncController? sync = _footTargetSyncStage;
+        if (sync is null)
+        {
+            foreach (Node child in GetResolvedSkeleton().GetChildren())
+            {
+                if (child is FootTargetSyncController candidate && IsFootTargetSyncStageForThisCharacter(candidate))
+                {
+                    sync = candidate;
+                    _footTargetSyncStage = candidate;
+                    break;
+                }
+            }
+        }
+        if (sync is null || !IsInstanceValid(sync))
+        {
+            return false;
+        }
+
+        sync._ProcessModificationWithDelta(delta);
+        if (!Active || !CanProcessProviderTargets)
+        {
+            return false;
+        }
+
+        ApplyFootTargetProviders(physicsTick);
+        _preparedFootProviderTick = physicsTick;
+        return true;
+    }
+
+    /// <summary>Returns the immutable signal-time result produced by this actuator for one foot.</summary>
+    public CharacterIKFootActuationTrace GetFootActuationTrace(LimbSide side)
+        => side == LimbSide.Left ? _leftFootActuationTrace : _rightFootActuationTrace;
 
     /// <summary>
     /// Last debug snapshot for the right-hand target pipeline.
@@ -535,11 +610,7 @@ public partial class CharacterIK : Node3D
             EnsureResolvedNodes();
             EnsureTargetActivityGates();
             EnsureActuators();
-            if (!_stageModifiersInserted)
-            {
-                InsertStageModifiers();
-                _stageModifiersInserted = true;
-            }
+            EnsureStageModifiers();
 
             _warnedWaitingForBindings = false;
             _runtimeBindingAttempts = 0;
@@ -984,12 +1055,16 @@ public partial class CharacterIK : Node3D
     private void OnFootProviderStage(double delta)
     {
         _ = delta;
+        if (_preparedFootProviderTick != 0UL && _preparedFootProviderTick == Engine.GetPhysicsFrames())
+        {
+            return;
+        }
         if (!Active || !CanProcessProviderTargets)
         {
             return;
         }
 
-        ApplyFootTargetProviders();
+        ApplyFootTargetProviders(Engine.GetPhysicsFrames());
     }
 
     private void OnEndStage(double delta)
@@ -1045,102 +1120,314 @@ public partial class CharacterIK : Node3D
         }
     }
 
-    private void InsertStageModifiers()
+    private void EnsureStageModifiers()
     {
         Skeleton3D skeleton = GetResolvedSkeleton();
 
-        StageModifier beginModifier = new()
-        {
-            Name = "CharacterIKBeginStage",
-            Callback = OnBeginStage,
-            Active = true,
-            Influence = 1.0f,
-        };
-
-        FootProviderStageModifier footProviderModifier = new()
-        {
-            Name = "CharacterIKFootProviderStage",
-            CharacterIK = this,
-            Active = true,
-            Influence = 1.0f,
-        };
-
+        RemoveStageModifierFromPreviousSkeleton(_beginStageModifier, skeleton);
+        RemoveStageModifierFromPreviousSkeleton(_footProviderStageModifier, skeleton);
+        RemoveStageModifierFromPreviousSkeleton(_handAuthorityStageModifier, skeleton);
+        RemoveStageModifierFromPreviousSkeleton(_endStageModifier, skeleton);
+        _beginStageModifier = EnsureStageModifier(
+            skeleton,
+            _beginStageModifier,
+            "CharacterIKBeginStage",
+            isBeginStage: true);
+        _footProviderStageModifier = EnsureFootProviderStageModifier(skeleton, _footProviderStageModifier);
         ForearmTwistModifier? forearmTwistModifier = skeleton.GetNodeOrNull<ForearmTwistModifier>("ForearmTwistModifier");
-        HandAuthorityStageModifier? handAuthorityModifier = forearmTwistModifier is not null
-            ? new HandAuthorityStageModifier
-            {
-                Name = "CharacterIKHandAuthorityStage",
-                CharacterIK = this,
-                ForearmTwistModifier = forearmTwistModifier,
-                Active = true,
-                Influence = 1.0f,
-            }
-            : null;
+        _handAuthorityStageModifier = EnsureHandAuthorityStageModifier(skeleton, forearmTwistModifier);
+        _endStageModifier = EnsureStageModifier(
+            skeleton,
+            _endStageModifier,
+            "CharacterIKEndStage",
+            isBeginStage: false);
 
-        StageModifier endModifier = new()
-        {
-            Name = "CharacterIKEndStage",
-            Callback = OnEndStage,
-            Active = true,
-            Influence = 1.0f,
-        };
-
-        skeleton.AddChild(beginModifier);
-        skeleton.MoveChild(beginModifier, ResolveBeginStageIndex(skeleton));
-
-        skeleton.AddChild(footProviderModifier);
-        skeleton.MoveChild(footProviderModifier, beginModifier.GetIndex() + 1);
-
-        if (handAuthorityModifier is not null && forearmTwistModifier is not null)
-        {
-            skeleton.AddChild(handAuthorityModifier);
-            // The hand-copy modifiers commit canonical hand pose before this stage. The forearm writer consumes the
-            // resulting atomically stamped side samples immediately afterwards.
-            skeleton.MoveChild(handAuthorityModifier, forearmTwistModifier.GetIndex());
-        }
-
-        skeleton.AddChild(endModifier);
-        Node? opticalFingerModifier = skeleton.GetNodeOrNull<OpticalFingerTrackingModifier>("OpticalFingerTrackingModifier");
-        skeleton.MoveChild(endModifier, opticalFingerModifier?.GetIndex() ?? (skeleton.GetChildCount() - 1));
+        OrderStagePipeline(skeleton, forearmTwistModifier);
     }
 
-    private static void RemoveInsertedStageModifiers(Skeleton3D skeleton)
+    private static void RemoveStageModifierFromPreviousSkeleton(SkeletonModifier3D? modifier, Skeleton3D skeleton)
     {
-        foreach (string name in new[]
-                 {
-                     "CharacterIKBeginStage",
-                     "CharacterIKFootProviderStage",
-                     "CharacterIKHandAuthorityStage",
-                     "CharacterIKEndStage",
-                 })
+        if (modifier is null
+            || !IsInstanceValid(modifier)
+            || modifier.GetParent() is not Skeleton3D previousSkeleton
+            || ReferenceEquals(previousSkeleton, skeleton))
         {
-            if (skeleton.GetNodeOrNull<Node>(name) is not { } stage || !IsInstanceValid(stage))
-            {
-                continue;
-            }
+            return;
+        }
 
-            skeleton.RemoveChild(stage);
-            stage.QueueFree();
+        RemoveOwnedStageModifier(modifier);
+    }
+
+    private static void RemoveOwnedStageModifier(SkeletonModifier3D? modifier)
+    {
+        if (modifier is null || !IsInstanceValid(modifier))
+        {
+            return;
+        }
+
+        modifier.Active = false;
+        switch (modifier)
+        {
+            case StageModifier stage:
+                stage.Callback = null;
+                break;
+            case FootProviderStageModifier footProviderStage:
+                footProviderStage.CharacterIK = null;
+                break;
+            case HandAuthorityStageModifier handAuthorityStage:
+                handAuthorityStage.CharacterIK = null;
+                handAuthorityStage.ForearmTwistModifier = null;
+                break;
+            default:
+                break;
+        }
+
+        modifier.GetParent()?.RemoveChild(modifier);
+        if (!modifier.IsQueuedForDeletion())
+        {
+            modifier.QueueFree();
         }
     }
 
-    private static int ResolveBeginStageIndex(Skeleton3D skeleton)
+    private StageModifier EnsureStageModifier(
+        Skeleton3D skeleton,
+        StageModifier? stageModifier,
+        StringName stageName,
+        bool isBeginStage)
     {
-        Node? footSyncController = skeleton.GetNodeOrNull("FootTargetSyncController");
-        return footSyncController is not null && IsInstanceValid(footSyncController)
-            ? footSyncController.GetIndex() + 1
-            : 0;
+        StageModifier modifier = stageModifier is not null && IsStageModifierAttachedToSkeleton(stageModifier, skeleton)
+            ? stageModifier
+            : new StageModifier
+            {
+                Name = stageName,
+                Callback = isBeginStage ? OnBeginStage : OnEndStage,
+            };
+        modifier.Active = true;
+        modifier.Influence = 1.0f;
+        if (modifier.GetParent() is null)
+        {
+            skeleton.AddChild(modifier);
+        }
+
+        return modifier;
     }
 
-    private void ApplyFootTargetProviders()
+    private HandAuthorityStageModifier? EnsureHandAuthorityStageModifier(
+        Skeleton3D skeleton,
+        ForearmTwistModifier? forearmTwistModifier)
     {
-        ApplyFootTargetProvider(
+        if (forearmTwistModifier is null)
+        {
+            RemoveOwnedStageModifier(_handAuthorityStageModifier);
+            return null;
+        }
+
+        HandAuthorityStageModifier modifier = IsStageModifierAttachedToSkeleton(_handAuthorityStageModifier, skeleton)
+            ? _handAuthorityStageModifier!
+            : new HandAuthorityStageModifier { Name = "CharacterIKHandAuthorityStage" };
+        modifier.CharacterIK = this;
+        modifier.ForearmTwistModifier = forearmTwistModifier;
+        modifier.Active = true;
+        modifier.Influence = 1.0f;
+        if (modifier.GetParent() is null)
+        {
+            skeleton.AddChild(modifier);
+        }
+
+        return modifier;
+    }
+
+    private FootProviderStageModifier EnsureFootProviderStageModifier(
+        Skeleton3D skeleton,
+        FootProviderStageModifier? stageModifier)
+    {
+        FootProviderStageModifier modifier = stageModifier is not null && IsStageModifierAttachedToSkeleton(stageModifier, skeleton)
+            ? stageModifier
+            : new FootProviderStageModifier { Name = "CharacterIKFootProviderStage" };
+        modifier.CharacterIK = this;
+        modifier.Active = true;
+        modifier.Influence = 1.0f;
+        if (modifier.GetParent() is null)
+        {
+            skeleton.AddChild(modifier);
+        }
+
+        return modifier;
+    }
+
+    private static bool IsStageModifierAttachedToSkeleton(SkeletonModifier3D? modifier, Skeleton3D skeleton)
+        => modifier is not null
+           && IsInstanceValid(modifier)
+           && !modifier.IsQueuedForDeletion()
+           && ReferenceEquals(modifier.GetParent(), skeleton);
+
+    private void OrderStagePipeline(
+        Skeleton3D skeleton,
+        ForearmTwistModifier? forearmTwistModifier)
+    {
+        // The ordering is inferred only from direct skeleton children, their configured foot targets,
+        // and this CharacterIK instance's configured foot modifier groups. It intentionally has no
+        // locomotion, contact, role, or scene-name policy.
+        // Reuse collection storage and callbacks on retries. Lower-limb dependencies do not require adjacency:
+        // packing the legs beside the provider would move them ahead of canonical hand copy and forearm twist.
+        _footSyncStages.Clear();
+        _hipReconciliationModifiers.Clear();
+        _lowerLegConsumers.Clear();
+        _footTargetSyncStage = null;
+        int insertionIndex = skeleton.GetChildCount();
+        int childCount = skeleton.GetChildCount();
+        for (int i = 0; i < childCount; i++)
+        {
+            Node child = skeleton.GetChild(i);
+            if (child is SkeletonModifier3D)
+            {
+                insertionIndex = Math.Min(insertionIndex, i);
+            }
+
+            if (child is FootTargetSyncController footSyncStage
+                && IsFootTargetSyncStageForThisCharacter(footSyncStage))
+            {
+                _footSyncStages.Add(footSyncStage);
+                _footTargetSyncStage ??= footSyncStage;
+            }
+            else if (child is HipReconciliationModifier hipReconciliationModifier)
+            {
+                _hipReconciliationModifiers.Add(hipReconciliationModifier);
+            }
+            else if (child is SkeletonModifier3D modifier && IsLowerLegConsumer(modifier))
+            {
+                _lowerLegConsumers.Add(modifier);
+            }
+        }
+
+        foreach (FootTargetSyncController footSyncStage in _footSyncStages)
+        {
+            MoveChildToPipelineIndex(skeleton, footSyncStage, ref insertionIndex);
+        }
+
+        MoveChildToPipelineIndex(skeleton, _beginStageModifier!, ref insertionIndex);
+        MoveChildToPipelineIndex(skeleton, _footProviderStageModifier!, ref insertionIndex);
+
+        Node lastPrerequisite = _footProviderStageModifier!;
+        foreach (HipReconciliationModifier hipReconciliationModifier in _hipReconciliationModifiers)
+        {
+            MoveChildAfterIfNeeded(skeleton, hipReconciliationModifier, lastPrerequisite);
+            lastPrerequisite = hipReconciliationModifier;
+        }
+
+        if (forearmTwistModifier is not null)
+        {
+            // Keep the authored neck/arm/hand-copy sequence intact. Publish the unchanged atomic side samples
+            // immediately before the retained forearm writer, and keep every participating leg downstream of it.
+            MoveChildImmediatelyBefore(skeleton, _handAuthorityStageModifier!, forearmTwistModifier);
+            if (forearmTwistModifier.GetIndex() > lastPrerequisite.GetIndex())
+            {
+                lastPrerequisite = forearmTwistModifier;
+            }
+        }
+
+        foreach (SkeletonModifier3D lowerLegConsumer in _lowerLegConsumers)
+        {
+            MoveChildAfterIfNeeded(skeleton, lowerLegConsumer, lastPrerequisite);
+            lastPrerequisite = lowerLegConsumer;
+        }
+
+        OpticalFingerTrackingModifier? opticalFingerModifier =
+            skeleton.GetNodeOrNull<OpticalFingerTrackingModifier>("OpticalFingerTrackingModifier");
+        if (opticalFingerModifier is not null)
+        {
+            int lastIndex = skeleton.GetChildCount() - 1;
+            if (opticalFingerModifier.GetIndex() != lastIndex)
+            {
+                skeleton.MoveChild(opticalFingerModifier, lastIndex);
+            }
+
+            MoveChildImmediatelyBefore(skeleton, _endStageModifier!, opticalFingerModifier);
+        }
+        else if (_endStageModifier!.GetIndex() != skeleton.GetChildCount() - 1)
+        {
+            skeleton.MoveChild(_endStageModifier, skeleton.GetChildCount() - 1);
+        }
+    }
+
+    private bool IsFootTargetSyncStageForThisCharacter(FootTargetSyncController footSyncStage)
+        => IsFootTarget(footSyncStage.LeftFootTarget) || IsFootTarget(footSyncStage.RightFootTarget);
+
+    private static void MoveChildToPipelineIndex(Skeleton3D skeleton, Node child, ref int insertionIndex)
+    {
+        if (child.GetIndex() != insertionIndex)
+        {
+            skeleton.MoveChild(child, insertionIndex);
+        }
+
+        insertionIndex++;
+    }
+
+    private static void MoveChildAfterIfNeeded(Skeleton3D skeleton, Node child, Node prerequisite)
+    {
+        if (child.GetIndex() < prerequisite.GetIndex())
+        {
+            // Removing an earlier child shifts the prerequisite left, so its old index is immediately after it.
+            skeleton.MoveChild(child, prerequisite.GetIndex());
+        }
+    }
+
+    private static void MoveChildImmediatelyBefore(Skeleton3D skeleton, Node child, Node successor)
+    {
+        int desiredIndex = successor.GetIndex() - (child.GetIndex() < successor.GetIndex() ? 1 : 0);
+        if (child.GetIndex() != desiredIndex)
+        {
+            skeleton.MoveChild(child, desiredIndex);
+        }
+    }
+
+    private bool IsLowerLegConsumer(SkeletonModifier3D modifier)
+        => modifier is not (FootTargetSyncController or StageModifier or FootProviderStageModifier or HandAuthorityStageModifier)
+           && ((modifier is LegIKController legIKController && IsFootTarget(legIKController.FootTarget))
+               || IsModifierInFootGroup(modifier)
+               || (modifier is TwoBoneIK3D && ReferencesFootTarget(modifier, "settings/0/target_node"))
+               || (modifier is CopyTransformModifier3D && ReferencesFootTarget(modifier, "settings/0/reference_node")));
+
+    private bool IsModifierInFootGroup(SkeletonModifier3D modifier)
+        => IsInModifierGroup(modifier, RightFootModifierGroup) || IsInModifierGroup(modifier, LeftFootModifierGroup);
+
+    private static bool IsInModifierGroup(SkeletonModifier3D modifier, SkeletonModifier3D[] modifierGroup)
+    {
+        foreach (SkeletonModifier3D groupModifier in modifierGroup)
+        {
+            if (ReferenceEquals(modifier, groupModifier))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool ReferencesFootTarget(Node modifier, StringName propertyName)
+    {
+        NodePath targetPath = modifier.Get(propertyName).AsNodePath();
+        return !targetPath.IsEmpty && IsFootTarget(modifier.GetNodeOrNull<Node3D>(targetPath));
+    }
+
+    private bool IsFootTarget(Node3D? target)
+        => target is not null
+           && (ReferenceEquals(target, ResolvedLeftFootIKTarget)
+               || ReferenceEquals(target, ResolvedRightFootIKTarget));
+
+    private void ApplyFootTargetProviders(ulong physicsTick)
+    {
+        _rightFootActuationTrace = ApplyFootTargetProvider(
+            physicsTick,
+            LimbSide.Right,
             RightFootTargetIntentProvider,
             RightFootFallbackIntentProvider,
             SelectValidTarget(ResolvedRightFootIKTarget, RightFootIKTarget),
             RightFootModifierGroup,
             _rightFootTargetActivityGate);
-        ApplyFootTargetProvider(
+        _leftFootActuationTrace = ApplyFootTargetProvider(
+            physicsTick,
+            LimbSide.Left,
             LeftFootTargetIntentProvider,
             LeftFootFallbackIntentProvider,
             SelectValidTarget(ResolvedLeftFootIKTarget, LeftFootIKTarget),
@@ -1151,41 +1438,106 @@ public partial class CharacterIK : Node3D
     private static Node3D? SelectValidTarget(Node3D? resolvedTarget, Node3D? exportedTarget)
         => resolvedTarget is not null && IsInstanceValid(resolvedTarget) ? resolvedTarget : exportedTarget;
 
-    private static void ApplyFootTargetProvider(
+    private static CharacterIKFootActuationTrace ApplyFootTargetProvider(
+        ulong physicsTick,
+        LimbSide side,
         IKTargetIntentProvider? provider,
         IKTargetIntentProvider? fallbackProvider,
         Node3D? target,
         SkeletonModifier3D[] modifierGroup,
         IKTargetActivityGate? targetActivityGate)
     {
-        if (provider is null && fallbackProvider is null)
+        if (!TryResolveFootTargetIntent(
+            provider,
+            fallbackProvider,
+            out IKTargetIntentResolution resolution,
+            out IKTargetIntentProvider? selectedProvider,
+            out string providerSelection))
         {
-            _ = ApplyFootModifierInfluence(
+            float inactiveInfluence = ApplyFootModifierInfluence(
                 new IKTargetIntent(target?.GlobalTransform ?? Transform3D.Identity, 0.0f),
                 modifierGroup);
             targetActivityGate?.Apply(active: false);
-            return;
+            return new(
+                true,
+                physicsTick,
+                side,
+                "none",
+                "none",
+                target?.GlobalTransform ?? Transform3D.Identity,
+                false,
+                inactiveInfluence,
+                false);
         }
 
-        IKTargetIntentProvider? effectiveProvider = SelectEffectiveProvider(provider, fallbackProvider);
-        IKTargetIntent intent = effectiveProvider?.GetTargetIntent()
-                              ?? new IKTargetIntent(target?.GlobalTransform ?? Transform3D.Identity, 0.0f);
+        IKTargetIntent intent = resolution.Intent;
         float influence = ApplyFootModifierInfluence(intent, modifierGroup);
-        targetActivityGate?.Apply(influence > 0.0f);
-        if (target is not null && influence > 0.0f && effectiveProvider?.ShouldApplyTargetTransform == true)
+        bool targetGate = influence > 0.0f;
+        targetActivityGate?.Apply(targetGate);
+        bool appliedTarget = target is not null && targetGate && resolution.ShouldApplyTargetTransform;
+        if (appliedTarget)
         {
-            SetWorldTransform(target, intent.WorldTransform);
+            SetWorldTransform(target!, intent.WorldTransform);
         }
+
+        return new(
+            true,
+            physicsTick,
+            side,
+            providerSelection,
+            selectedProvider is null ? "none" : DescribeProvider(selectedProvider),
+            intent.WorldTransform,
+            targetGate,
+            influence,
+            appliedTarget);
     }
 
-    private static IKTargetIntentProvider? SelectEffectiveProvider(
+    private static bool TryResolveFootTargetIntent(
         IKTargetIntentProvider? provider,
-        IKTargetIntentProvider? fallbackProvider)
-        => provider is not null && IsInstanceValid(provider)
-            ? provider
-            : fallbackProvider is not null && IsInstanceValid(fallbackProvider)
-            ? fallbackProvider
-            : null;
+        IKTargetIntentProvider? fallbackProvider,
+        out IKTargetIntentResolution resolution,
+        out IKTargetIntentProvider? selectedProvider,
+        out string providerSelection)
+    {
+        if (TryGetValidTargetIntent(provider, out resolution))
+        {
+            selectedProvider = provider;
+            providerSelection = "primary";
+            return true;
+        }
+        if (TryGetValidTargetIntent(fallbackProvider, out resolution))
+        {
+            selectedProvider = fallbackProvider;
+            providerSelection = "fallback";
+            return true;
+        }
+
+        resolution = default;
+        selectedProvider = null;
+        providerSelection = "none";
+        return false;
+    }
+
+    private static string DescribeProvider(IKTargetIntentProvider provider)
+        => provider.IsInsideTree()
+            ? $"{provider.GetType().Name}:{provider.GetPath()}"
+            : $"{provider.GetType().Name}:detached";
+
+    private static bool TryGetValidTargetIntent(
+        IKTargetIntentProvider? provider,
+        out IKTargetIntentResolution resolution)
+    {
+        if (provider is not null
+            && IsInstanceValid(provider)
+            && provider.TryGetTargetIntent(out resolution)
+            && resolution.IsFinite)
+        {
+            return true;
+        }
+
+        resolution = default;
+        return false;
+    }
 
     private static void SetWorldTransform(Node3D node, Transform3D worldTransform)
     {
@@ -1630,3 +1982,15 @@ public partial class CharacterIK : Node3D
         modifier.Active = active;
     }
 }
+
+/// <summary>Immutable observation emitted by CharacterIK's sole per-foot target actuator.</summary>
+public readonly record struct CharacterIKFootActuationTrace(
+    bool Observed,
+    ulong PhysicsTick,
+    LimbSide Side,
+    string ProviderSelection,
+    string ProviderIdentity,
+    Transform3D SelectedTarget,
+    bool TargetGate,
+    float ModifierInfluence,
+    bool TargetTransformApplied);

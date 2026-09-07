@@ -13,6 +13,7 @@ using AlleyCat.Rigging.Installation;
 using AlleyCat.Rigging.Physics;
 using AlleyCat.Scene;
 using AlleyCat.Speech;
+using AlleyCat.Speech.Generation;
 using AlleyCat.Speech.Voice;
 using AlleyCat.TestFramework;
 using AlleyCat.Vision;
@@ -65,8 +66,8 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
             fixture.CreateContext(targetSceneOverrides));
 
         Assert.True(result.Succeeded, string.Join('\n', result.Errors));
-        Assert.Equal(6, targetRoot.Components.Count);
-        Assert.Same(fixture.TargetLocomotion, targetRoot.Components[0]);
+        Assert.Equal(5, targetRoot.Components.Count);
+        Assert.Same(fixture.TargetEyes, targetRoot.Components[0]);
         Assert.Same(fixture.TargetNavigation, targetRoot.Components[1]);
         ICharacter character = targetRoot;
         Assert.Same(fixture.TargetNavigation, character.RequireNavigation());
@@ -74,7 +75,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         Assert.Same(fixture.TargetVoice, character.RequireVoice());
         Assert.Same(fixture.TargetLeftHand, character.RequireHand(LimbSide.Left));
         Assert.Same(fixture.TargetRightHand, character.RequireHand(LimbSide.Right));
-        Assert.Same(fixture.TargetLocomotion, targetRoot.RequireComponent<ILocomotion>());
+        Assert.False(targetRoot.TryGetComponent<ILocomotion>(out _));
         Assert.Same(targetRoot, fixture.TargetNavigation!.Target);
         Assert.Equal("voice", fixture.TargetVoice!.Type);
         Assert.Equal("target_override_identity", fixture.TargetVoice!.Id);
@@ -97,6 +98,85 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
 
         Assert.True(result.Succeeded, string.Join('\n', result.Errors));
         AssertGeneratedEyeFilters(fixture.TargetAnimationTree!);
+    }
+
+    /// <summary>Required eye animations must contain at least one declared blend-shape track.</summary>
+    [Headless]
+    [Fact]
+    public void Install_EmptyRequiredEyeAnimation_FailsValidation()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        fixture.ReplaceEyeAnimation(EyesAnimationTreePaths.VerticalLookAnimationName, new Animation());
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("at least one blend-shape track", string.Join('\n', result.Errors), StringComparison.Ordinal);
+        Assert.Contains(EyesAnimationTreePaths.VerticalLookAnimationName, string.Join('\n', result.Errors), StringComparison.Ordinal);
+    }
+
+    /// <summary>Blink validation requires independently declared targets for both eyelids.</summary>
+    [Headless]
+    [Fact]
+    public void Install_BlinkAnimationMissingOneEye_FailsValidation()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        fixture.ReplaceEyeAnimation(
+            EyesAnimationTreePaths.BlinkAnimationName,
+            fixture.CreateEyeBlendShapeAnimation(EyesAnimationTreePaths.EyeBlinkLeftBlendShapeName));
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(EyesAnimationTreePaths.EyeBlinkRightBlendShapeName, string.Join('\n', result.Errors), StringComparison.Ordinal);
+    }
+
+    /// <summary>Horizontal look validation rejects a blend-shape track outside its declared axis family.</summary>
+    [Headless]
+    [Fact]
+    public void Install_LookAnimationWithoutAxisTrack_FailsValidation()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        fixture.ReplaceEyeAnimation(
+            EyesAnimationTreePaths.HorizontalLookAnimationName,
+            fixture.CreateEyeBlendShapeAnimation(EyesAnimationTreePaths.EyeBlinkLeftBlendShapeName));
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("horizontal look blend-shape track", string.Join('\n', result.Errors), StringComparison.Ordinal);
+    }
+
+    /// <summary>Required eye animation tracks may not use a non-blend-shape track type.</summary>
+    [Headless]
+    [Fact]
+    public void Install_NonBlendShapeEyeTrack_FailsValidation()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+        Animation animation = new();
+        int trackIndex = animation.AddTrack(Animation.TrackType.Value);
+        animation.TrackSetPath(trackIndex, new NodePath("Face:position"));
+        fixture.ReplaceEyeAnimation(EyesAnimationTreePaths.VerticalLookAnimationName, animation);
+
+        SceneInstallationResult result = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("only blend-shape tracks", string.Join('\n', result.Errors), StringComparison.Ordinal);
+    }
+
+    /// <summary>Installer refreshes retain a target-owned speech style override without role-content assumptions.</summary>
+    [Headless]
+    [Fact]
+    public void Install_TargetSpeechStyleOverride_SurvivesRepeatedInstallation()
+    {
+        using var fixture = RuntimeInstallFixture.CreateWithActualRootHub();
+
+        SceneInstallationResult first = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+        SceneInstallationResult second = new CharacterRuntimeSubsystemInstaller().Install(fixture.CreateContext());
+
+        Assert.True(first.Succeeded, string.Join('\n', first.Errors));
+        Assert.True(second.Succeeded, string.Join('\n', second.Errors));
+        Assert.Equal("fixture_style", fixture.TargetSpeechGenerator!.VoiceOverride);
     }
 
     /// <summary>
@@ -573,6 +653,14 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
         {
             get; private init;
         }
+        public AnimationLibrary? EyeAnimationLibrary
+        {
+            get; private set;
+        }
+        public SupertonicSpeechGenerator? TargetSpeechGenerator
+        {
+            get; private init;
+        }
 
         public static RuntimeInstallFixture CreateWithActualRootHub()
         {
@@ -637,6 +725,12 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
             {
                 CapabilityNodes targetCapabilities = AddCapabilityNodes(targetCharacter, animationTree, "target");
                 CapabilityNodes templateCapabilities = AddCapabilityNodes(templateRoot, animationTree, "template");
+                var targetSpeechGenerator = new SupertonicSpeechGenerator
+                {
+                    Name = "SpeechGenerator",
+                    VoiceOverride = "fixture_style",
+                };
+                targetCapabilities.Voice.AddChild(targetSpeechGenerator);
 
                 targetCharacter.Locomotion = new CharacterLocomotion { Name = "StaleLocomotion" };
                 targetCharacter.Navigation = new DirectTransformNavigation { Name = "StaleNavigation" };
@@ -668,6 +762,7 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                     TemplateVoice = templateCapabilities.Voice,
                     TargetLeftHand = targetCapabilities.LeftHand,
                     TargetRightHand = targetCapabilities.RightHand,
+                    TargetSpeechGenerator = targetSpeechGenerator,
                 };
             }
 
@@ -684,8 +779,21 @@ public sealed class CharacterRuntimeSubsystemInstallerValidationIntegrationTests
                 StripEyesLibraryPrefix(EyesAnimationTreePaths.VerticalLookAnimationName),
                 fixture.CreateBlendShapeAnimation(EyesAnimationTreePaths.EyeLookUpLeftBlendShapeName));
             _ = animationPlayer.AddAnimationLibrary(_eyesLibraryName, eyeAnimationLibrary);
+            fixture.EyeAnimationLibrary = eyeAnimationLibrary;
 
             return fixture;
+        }
+
+        public Animation CreateEyeBlendShapeAnimation(params string[] blendShapeNames)
+            => CreateBlendShapeAnimation(blendShapeNames);
+
+        public void ReplaceEyeAnimation(string animationName, Animation animation)
+        {
+            AnimationLibrary library = EyeAnimationLibrary
+                ?? throw new InvalidOperationException("Expected the fixture to initialise an eye animation library.");
+            StringName libraryAnimationName = StripEyesLibraryPrefix(animationName);
+            library.RemoveAnimation(libraryAnimationName);
+            Assert.Equal(Error.Ok, library.AddAnimation(libraryAnimationName, animation));
         }
 
         public RigInstallationContext CreateContext(TargetSceneOverrides? targetSceneOverrides = null)

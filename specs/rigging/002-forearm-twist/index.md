@@ -53,10 +53,10 @@ than another helper bone (see Out Of Scope).
    `LowerArm → ForearmTwist → Hand`. No second helper bone exists on either side.
 2. Twist helpers are deformation-only and remain outside `SkeletonProfileHumanoid`, BoneMap, animation
    retargeting, IK chains and endpoints, physical rigs, and hand targets.
-3. Repository-owned generic MPFB source assets reside under `tools/mpfb/` and target Blender 5.2, MPFB 2.0.17,
-   and MPFB asset schema `110`; contributors manually install them before ordinary MPFB regeneration. Character
-   presets are not project-managed: the content creator installs them into their MPFB user config before running
-   the tool. The generator-run ownership stage binds the MPFB-installed preset — preset name, resolved installed
+3. Repository-owned generic MPFB source assets reside under `tools/character-generator/mpfb/` and target Blender
+   5.2, MPFB 2.0.17, and MPFB asset schema `110`; contributors manually install them before ordinary MPFB regeneration.
+   Character presets are not project-managed: the content creator installs them into their MPFB user config before
+   running the tool. The generator-run ownership stage binds the MPFB-installed preset — preset name, resolved installed
    path, and sha256 digest — for reproducible provenance; the digest is the portable binding. Generated `.blend`
    files are not corrected directly. Blender data, manifests, canonical welded IDs, and imported seam mappings
    are historical or generation provenance only. Schema-4 canonical welded provenance and imported-seam mapping

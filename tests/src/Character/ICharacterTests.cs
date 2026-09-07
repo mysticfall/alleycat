@@ -31,7 +31,7 @@ public sealed class ICharacterTests
         Assert.True(typeof(IHasVision).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasVoice).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IHasHearing).IsAssignableFrom(typeof(ICharacter)));
-        Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
+        Assert.False(typeof(ILocomotive).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(INavigator).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(IVisualSubject).IsAssignableFrom(typeof(ICharacter)));
         Assert.True(typeof(ISpatial).IsAssignableFrom(typeof(ICharacter)));
@@ -47,16 +47,13 @@ public sealed class ICharacterTests
         var eyes = new FakeEyes();
         var voice = new FakeVoice();
         var hearing = new FakeHearing();
-        var locomotion = new FakeLocomotion();
         var navigation = new FakeNavigation();
         Transform3D destination = Transform3D.Identity.Translated(new Vector3(1.0f, 0.0f, 2.0f));
-        ICharacter character = new FakeCharacter(leftHand, eyes, voice, hearing, locomotion, navigation);
+        ICharacter character = new FakeCharacter(leftHand, eyes, voice, hearing, navigation);
 
         Assert.Equal("char", character.Type);
         Assert.Equal("char:fake_character", character.FullId);
 
-        character.Move(new Vector2(0.5f, -0.25f));
-        character.Rotate(new Vector2(-1.0f, 0.25f));
         NavigationDestinationResult navigationResult = character.SetNavigationDestination(destination);
 
         Assert.True(character.TryGetHand(LimbSide.Left, out IHand? resolvedHand));
@@ -68,8 +65,16 @@ public sealed class ICharacterTests
         Assert.Same(navigation, character.RequireNavigation());
         Assert.Equal(NavigationDestinationResult.Accepted, navigationResult);
         Assert.Equal(destination, navigation.Destination);
-        Assert.Equal(new Vector2(0.5f, -0.25f), locomotion.LastMovementInput);
-        Assert.Equal(new Vector2(-1.0f, 0.25f), locomotion.LastRotationInput);
+    }
+
+    /// <summary>
+    /// The player role adds locomotion without changing the common character contract.
+    /// </summary>
+    [Fact]
+    public void IPlayer_ExtendsCharacterAndLocomotiveTraits()
+    {
+        Assert.True(typeof(ICharacter).IsAssignableFrom(typeof(IPlayer)));
+        Assert.True(typeof(ILocomotive).IsAssignableFrom(typeof(IPlayer)));
     }
 
     private sealed class FakeCharacter(params IComponent[] components) : ICharacter
@@ -171,25 +176,13 @@ public sealed class ICharacterTests
         public void ReceiveVoice(string speech, IVoice source) => Perceived?.Invoke(new SpeechPercept(speech, source.Id));
     }
 
-    private sealed class FakeLocomotion : ILocomotion
-    {
-        public Vector2 LastMovementInput
-        {
-            get; private set;
-        }
-
-        public Vector2 LastRotationInput
-        {
-            get; private set;
-        }
-
-        public void Move(Vector2 input) => LastMovementInput = input;
-
-        public void Rotate(Vector2 input) => LastRotationInput = input;
-    }
-
     private sealed class FakeNavigation : INavigation
     {
+        public bool IsMovementAuthorityActive
+        {
+            get; private set;
+        }
+
         public bool HasDestination
         {
             get; private set;
@@ -203,6 +196,10 @@ public sealed class ICharacterTests
         public bool IsNavigationRunning => HasDestination;
 
         public bool IsNavigationFinished => !HasDestination;
+
+        public NavigationCurrentStatus CurrentStatus => NavigationCurrentStatus.Inactive;
+
+        public IReadOnlyList<NavigationTerminalOutcomeRecord> TerminalOutcomes => [];
 
         public float PathDesiredDistance
         {
@@ -266,6 +263,16 @@ public sealed class ICharacterTests
         }
 
         public void ClearDestination() => HasDestination = false;
+
+        public bool TryAcknowledgeOutcome(NavigationRequestIdentity request, long terminalSequence) => false;
+
+        public void ActivateMovementAuthority() => IsMovementAuthorityActive = true;
+
+        public void DeactivateMovementAuthority()
+        {
+            IsMovementAuthorityActive = false;
+            ClearDestination();
+        }
 
         public NavigationMotionIntent Poll(Transform3D actorTransform)
         {

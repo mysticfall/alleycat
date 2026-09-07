@@ -61,13 +61,13 @@ public sealed class HandPoseBlendTreeIntegrationTests
             exactMatch: false);
         string contents = Godot.FileAccess.GetFileAsString(NpcAnimationTreeRootPath);
 
-        Assert.Contains("states/Idle/node", contents, StringComparison.Ordinal);
-        Assert.DoesNotContain("StandingCrouching", contents, StringComparison.Ordinal);
+        Assert.Contains("states/NPCIdle/node", contents, StringComparison.Ordinal);
+        Assert.Contains("states/NPCTravel/node", contents, StringComparison.Ordinal);
+        Assert.Contains("states/NPCI2FL/node", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("AnimationNodeTimeSeek_kcdmd", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("AnimationNodeTimeSeek_phcyr", contents, StringComparison.Ordinal);
         Assert.Contains(EyesAnimationTreePaths.HorizontalLookSeekNode, contents, StringComparison.Ordinal);
         Assert.Contains(EyesAnimationTreePaths.VerticalLookSeekNode, contents, StringComparison.Ordinal);
-        Assert.DoesNotContain("AllFours", contents, StringComparison.Ordinal);
         Assert.DoesNotContain("VRIK", contents, StringComparison.Ordinal);
 
         _ = Assert.IsType<AnimationNodeStateMachine>(root.GetNode(HandPoseAnimationTreePaths.UpstreamNode), exactMatch: false);

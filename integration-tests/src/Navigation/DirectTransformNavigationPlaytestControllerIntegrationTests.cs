@@ -1,4 +1,7 @@
+using AlleyCat.Core.Installer;
+using AlleyCat.IK;
 using AlleyCat.Navigation;
+using AlleyCat.Rigging.Installation;
 using AlleyCat.TestFramework;
 using Godot;
 using Microsoft.Extensions.Logging;
@@ -14,6 +17,110 @@ public sealed partial class DirectTransformNavigationPlaytestControllerIntegrati
 {
     private const float PositionTolerance = 0.08f;
     private const float BasisTolerance = 0.0001f;
+    private const string NavigationTestScenePath = "res://assets/testing/navigation/navigation_test.tscn";
+    private const string ContactLockCompositionCustomTypeUID = "uid://d4q6w2l9p3a8b";
+
+    /// <summary>Verifies the authored contact-lock composition retains its script identity and custom-type UID.</summary>
+    [Fact]
+    public void NavigationTestScene_ContactLockCompositionResolvesAuthoritativeCustomTypeUID()
+    {
+        DirectTransformNavigationPlaytestController controller = Assert.IsType<DirectTransformNavigationPlaytestController>(
+            LoadPackedScene(NavigationTestScenePath).Instantiate(),
+            exactMatch: false);
+
+        try
+        {
+            NPCContactLockPlaytestComposition composition = controller.GetNode<NPCContactLockPlaytestComposition>(
+                "NPCContactLockPlaytestComposition");
+            Assert.Equal(ContactLockCompositionCustomTypeUID, composition.GetMeta("_custom_type_script").AsString());
+        }
+        finally
+        {
+            controller.Free();
+        }
+    }
+
+    /// <summary>Verifies the authored navigation playtest remains reference-female by default.</summary>
+    [Fact]
+    public async Task NavigationTestScene_DefaultVariantIsReferenceFemale()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        DirectTransformNavigationPlaytestController controller = Assert.IsType<DirectTransformNavigationPlaytestController>(
+            LoadPackedScene(NavigationTestScenePath).Instantiate(),
+            exactMatch: false);
+        sceneTree.Root.AddChild(controller);
+        try
+        {
+            await WaitForNavigationAuthorityAsync(sceneTree, controller);
+            Assert.Equal(NavigationPlaytestCharacterVariant.ReferenceFemale, controller.CharacterVariant);
+            Node actor = controller.GetNode("NavigationTestNpc");
+            if (CountNavigationAuthorities(controller) == 0)
+            {
+                RigRoleTemplateSceneInstaller installer = actor.GetNode<RigRoleTemplateSceneInstaller>("NPCCharacterInstaller");
+                SceneInstallationResult installation = installer.Install(new SceneInstallationContext(actor));
+                Assert.True(installation.Succeeded, string.Join('\n', installation.Errors));
+            }
+            Assert.NotNull(actor.GetNodeOrNull("Female/GeneralSkeleton"));
+            Assert.Null(actor.GetNodeOrNull("Male/GeneralSkeleton"));
+            Assert.Equal(1, CountNavigationAuthorities(controller));
+        }
+        finally
+        {
+            controller.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
+
+    /// <summary>Verifies explicit male selection safely rebinds one actor and one navigation authority.</summary>
+    [Fact]
+    public async Task NavigationTestScene_ExplicitMaleVariantRebindsSingleAuthority()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        DirectTransformNavigationPlaytestController controller = Assert.IsType<DirectTransformNavigationPlaytestController>(
+            LoadPackedScene(NavigationTestScenePath).Instantiate(),
+            exactMatch: false);
+        controller.CharacterVariant = NavigationPlaytestCharacterVariant.ReferenceMale;
+        controller.ApplyCharacterVariantSelection();
+        sceneTree.Root.AddChild(controller);
+
+        try
+        {
+            await WaitForNavigationAuthorityAsync(sceneTree, controller);
+            Node3D actor = controller.GetNode<Node3D>("NavigationTestNpc");
+            NPCNavigation navigation = actor.GetNode<NPCNavigation>("Navigation");
+            Assert.True(
+                actor.GetNodeOrNull("Male/GeneralSkeleton") is not null,
+                $"Expected selected male skeleton. Actor children: {string.Join(", ", actor.GetChildren().Select(child => child.Name))}; variant={controller.CharacterVariant}");
+            Assert.Null(actor.GetNodeOrNull("Female/GeneralSkeleton"));
+            Assert.Same(actor, controller.Actor);
+            Assert.Same(navigation, controller.Navigation);
+            Assert.Equal(1, CountNavigationAuthorities(controller));
+        }
+        finally
+        {
+            controller.QueueFree();
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
+
+    private static int CountNavigationAuthorities(Node root)
+    {
+        int count = root is NavigationBase ? 1 : 0;
+        foreach (Node child in root.GetChildren())
+        {
+            count += CountNavigationAuthorities(child);
+        }
+
+        return count;
+    }
+
+    private static async Task WaitForNavigationAuthorityAsync(SceneTree sceneTree, Node root)
+    {
+        for (int frame = 0; frame < 120 && CountNavigationAuthorities(root) == 0; frame++)
+        {
+            await WaitForFramesAsync(sceneTree, 1);
+        }
+    }
 
     /// <summary>
     /// Verifies drag-to-release placement preserves the locked destination origin and selected facing.
@@ -113,6 +220,49 @@ public sealed partial class DirectTransformNavigationPlaytestControllerIntegrati
             Assert.True(rig.Navigation.HasDestination);
             Assert.Equal(3, rig.Controller.ProjectionAttemptCount);
             AssertVectorClose(new Vector3(1.0f, 0.0f, 1.0f), rig.Navigation.Destination.Origin);
+        }
+        finally
+        {
+            await DestroyRigAsync(sceneTree, rig);
+        }
+    }
+
+    /// <summary>Verifies manual placement can be isolated without disabling exact programmatic routes.</summary>
+    [Headless]
+    [Fact]
+    public async Task ManualDestinationPlacementDisabled_BlocksLeftClickButAllowsProgrammaticPlacement()
+    {
+        SceneTree sceneTree = GetSceneTree();
+        PlaytestControllerRig rig = await CreateRigAsync(sceneTree);
+
+        try
+        {
+            Assert.True(rig.Controller.ManualDestinationPlacementEnabled);
+            rig.Controller.ManualDestinationPlacementEnabled = false;
+            var mousePosition = new Vector2(1.0f, 1.0f);
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = true,
+                Position = mousePosition,
+            });
+            rig.Controller._UnhandledInput(new InputEventMouseButton
+            {
+                ButtonIndex = MouseButton.Left,
+                Pressed = false,
+                Position = mousePosition,
+            });
+            rig.Controller._PhysicsProcess(0.0);
+
+            Assert.False(rig.Controller.HasPendingDestinationPlacementRequest);
+            Assert.False(rig.Navigation.HasDestination);
+
+            Vector3 destination = new(1.0f, 0.0f, 1.0f);
+            rig.Controller.BeginDestinationPlacementAt(destination);
+            rig.Controller.UpdateDestinationFacingProbe(destination + Vector3.Forward);
+            rig.Controller.CompleteDestinationPlacementAt(destination + Vector3.Forward);
+            Assert.True(rig.Navigation.HasDestination);
+            AssertVectorClose(destination, rig.Navigation.Destination.Origin);
         }
         finally
         {
@@ -459,6 +609,8 @@ public sealed partial class DirectTransformNavigationPlaytestControllerIntegrati
 
             await WaitForPhysicsFramesAsync(sceneTree, 1);
         }
+
+        throw new TimeoutException("Navigation map did not become synchronised within 30 physics frames.");
     }
 
     private static async Task DestroyRigAsync(SceneTree sceneTree, PlaytestControllerRig rig)

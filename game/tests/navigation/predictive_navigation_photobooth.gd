@@ -1,5 +1,6 @@
 extends Node3D
 
+# Manual-only, windowed navigation evidence tool; automated tests use synthetic fixtures instead.
 const OUTPUT_ROOT := "NAV-001/predictive_navigation"
 const TRAIL_INTERVAL := 3
 const CAMERA_SIZE := 10.0
@@ -24,7 +25,9 @@ const EXACT_SHARP_TURN_DIAGNOSTIC_PATH := "res://temp/NAV-001/exact_sharp_turn_d
 const EXACT_DESTINATION_POSITION := Vector3(-0.23867352, 0.0, -2.7152236)
 const EXACT_ROUTE_YAW := 0.08767663
 const EXACT_DESTINATION_FORWARD := Vector3(-0.08756434, 0.0, -0.99615884)
-const TURN_IN_PLACE_RIGHT_ANIMATION_PATH := "res://assets/characters/reference/female/animations/locomotion/clips/mixamo_c9cef01d_b96c_11e4_a802_0aaa78deedf9.res"
+const TURN_IN_PLACE_RIGHT_CAPABILITY := "confined_pivot_right"
+const LOCOMOTION_CATALOGUE := "res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad_catalogue.json"
+const LOCOMOTION_LIBRARY := "res://assets/characters/reference/female/animations/runtime/locomotion/sad/locomotion_sad.tres"
 const MOVEMENT_BLEND_PARAMETER := &"parameters/States/Walking/Locomotion/Movement/blend_position"
 const TURN_BLEND_PARAMETER := &"parameters/States/Walking/Locomotion/blend_position"
 const STATE_PLAYBACK_PARAMETER := &"parameters/States/playback"
@@ -85,7 +88,6 @@ func _ready() -> void:
 		SceneUtils.fatal_error_and_quit("Verification camera framing is not a downward route overview")
 		return
 	_create_visual_layers()
-	_extend_rear_navigation_corridor()
 	_draw_axis_and_legend()
 	_create_telemetry_overlay()
 	print("PREDICTIVE_NAV_CAMERA position=%s forward=%s screen_right=%s screen_up=%s projection=orthogonal size=%.2f semantic_forward=-Z" % [camera.global_position, camera_forward, screen_right, screen_up, camera.size])
@@ -121,27 +123,6 @@ func _ready() -> void:
 	_verify_required_images()
 	get_tree().quit(0)
 
-func _extend_rear_navigation_corridor() -> void:
-	# This photobooth-only extension keeps the authored navigation-test obstacle geometry unchanged
-	# while making the contract's 10 m rear target reachable for visual verification.
-	var region := _runtime.get_node(^"NavigationRegion3D") as NavigationRegion3D
-	var source := region.navigation_mesh
-	if source == null:
-		SceneUtils.fatal_error_and_quit("Rear-correction fixture requires NavigationRegion3D mesh")
-		return
-	var mesh := source.duplicate(true) as NavigationMesh
-	var vertices := mesh.vertices
-	var base := vertices.size()
-	vertices.append_array(PackedVector3Array([
-		Vector3(5.8, 0.0, 10.2), Vector3(-5.8, 0.0, 10.2),
-	]))
-	mesh.vertices = vertices
-	# Reuse the authored z=5.8 edge (indices 7 and 63) so the new polygon is connected.
-	mesh.add_polygon(PackedInt32Array([7, 63, base, base + 1]))
-	region.navigation_mesh = mesh
-	NavigationServer3D.region_set_navigation_mesh(region.get_rid(), mesh)
-	print("REAR_CORRECTION_NAV_MESH corridor=+Z5.8_to_10.2")
-
 func _run_rear_correction_visuals() -> void:
 	var scenarios := [
 		{"name": "rear_1m_backward", "destination": Vector3(0.0, 0.0, 1.0), "expect_back": true},
@@ -170,24 +151,31 @@ func _run_rear_correction_visuals() -> void:
 		await _capture("rear_correction/%s" % scenario.name, "%s  movement=(%.2f, %.2f) turn=%.2f" % [scenario.name, movement.x, movement.y, turn])
 	await _reset_scenario(Transform3D.IDENTITY)
 	var distant := Transform3D.IDENTITY
-	distant.origin = Vector3(0.0, 0.0, 10.0)
-	_require_accepted(distant, "rear_10m")
+	# Runtime reachability mapping confirms this is the furthest directly rearward point on
+	# the authored mesh whose route terminates at the requested target (5.5 m, +Z).
+	distant.origin = Vector3(0.0, 0.0, 5.5)
+	_require_accepted(distant, "rear_5_5m")
+	var route_info: Dictionary = await _prepare_route_visual(distant, ROUTE_COLOR, "REACHABLE DISTANT REAR ROUTE", false)
+	var route: PackedVector3Array = route_info.path
+	if route.is_empty() or route[-1].distance_to(distant.origin) > 0.05:
+		SceneUtils.fatal_error_and_quit("rear_5_5m accepted route did not terminate at the reachable requested target")
+		return
 	await get_tree().physics_frame
 	var initial_movement: Vector2 = _navigation.get("LastPlannedMovement")
 	var initial_turn := float(_navigation.get("LastPlannedTurn"))
 	if initial_movement.length() > 0.01 or absf(initial_turn) < 0.01:
-		SceneUtils.fatal_error_and_quit("rear_10m did not begin with stationary pivot intent")
+		SceneUtils.fatal_error_and_quit("rear_5_5m did not begin with stationary pivot intent")
 		return
-	await _capture("rear_correction/rear_10m_pivot", "rear_10m pivot  movement=%s turn=%.2f" % [initial_movement, initial_turn])
+	await _capture("rear_correction/rear_5_5m_pivot", "REACHABLE DISTANT REAR ROUTE — PIVOT\nrequested 5.50 m | route points %d | endpoint error %.3f m\nmovement=%s turn=%.2f" % [route.size(), route[-1].distance_to(distant.origin), initial_movement, initial_turn])
 	for frame in range(360):
 		await get_tree().physics_frame
-		_sample(frame, "rear_10m")
+		_sample(frame, "rear_5_5m")
 		var movement: Vector2 = _navigation.get("LastPlannedMovement")
 		if movement.y > 0.15:
-			await _capture("rear_correction/rear_10m_forward", "rear_10m forward after pivot  movement=%s" % movement)
+			await _capture("rear_correction/rear_5_5m_forward", "REACHABLE DISTANT REAR ROUTE — FORWARD RELEASE\nAfter stationary rear pivot, movement=%s follows the yellow route" % movement)
 			print("REAR_CORRECTION_VISUAL_PASS")
 			return
-	SceneUtils.fatal_error_and_quit("rear_10m did not transition from pivot to forward travel")
+	SceneUtils.fatal_error_and_quit("rear_5_5m did not transition from pivot to forward travel")
 
 
 func _run_sharp_turn_diagnostic() -> void:
@@ -520,10 +508,19 @@ func _append_transform_sample(record: Dictionary, prefix: String, sample_transfo
 
 
 func _print_turn_animation_track_diagnostic() -> void:
-	var animation := ResourceLoader.load(TURN_IN_PLACE_RIGHT_ANIMATION_PATH) as Animation
-	if animation == null:
-		SceneUtils.fatal_error_and_quit("Unable to load turn-in-place-right animation for track diagnostics")
+	# The legacy Mixamo turn-in-place clip is retired; the delivered locomotion
+	# package's confined right pivot is its turn-in-place equivalent, resolved by
+	# capability through (library resource, animation identity).
+	var identity := _turn_in_place_right_identity()
+	if identity.is_empty():
+		SceneUtils.fatal_error_and_quit("Unable to resolve a turn-in-place-right capability in the delivered locomotion package")
 		return
+	var library := ResourceLoader.load(LOCOMOTION_LIBRARY) as AnimationLibrary
+	if library == null or not library.has_animation(identity):
+		SceneUtils.fatal_error_and_quit("Unable to load turn-in-place-right animation '%s' from the package library" % identity)
+		return
+	var animation := library.get_animation(identity)
+	var source := "%s#%s" % [LOCOMOTION_LIBRARY, identity]
 	for track_index in range(animation.get_track_count()):
 		var track_path := str(animation.track_get_path(track_index))
 		if not track_path.contains(":Root") and not track_path.contains(":Hips"):
@@ -536,7 +533,17 @@ func _print_turn_animation_track_diagnostic() -> void:
 		var angular_span := -1.0
 		if first_value is Quaternion and last_value is Quaternion:
 			angular_span = (first_value as Quaternion).angle_to(last_value as Quaternion)
-		print("EXACT_SHARP_TURN_TRACK resource=%s track=%d path=%s type=%d keys=%d first_time=%.6f last_time=%.6f angular_span=%.6f first=%s last=%s" % [TURN_IN_PLACE_RIGHT_ANIMATION_PATH, track_index, track_path, animation.track_get_type(track_index), key_count, first_time, last_time, angular_span, first_value, last_value])
+		print("EXACT_SHARP_TURN_TRACK resource=%s track=%d path=%s type=%d keys=%d first_time=%.6f last_time=%.6f angular_span=%.6f first=%s last=%s" % [source, track_index, track_path, animation.track_get_type(track_index), key_count, first_time, last_time, angular_span, first_value, last_value])
+
+
+func _turn_in_place_right_identity() -> String:
+	var catalogue_value = JSON.parse_string(FileAccess.get_file_as_string(LOCOMOTION_CATALOGUE))
+	if not catalogue_value is Dictionary:
+		return ""
+	for clip_value in (catalogue_value as Dictionary).get("clips", []):
+		if clip_value is Dictionary and String((clip_value as Dictionary).get("capability", "")) == TURN_IN_PLACE_RIGHT_CAPABILITY:
+			return String((clip_value as Dictionary).get("identity", ""))
+	return ""
 
 
 func _vector_array(value: Vector3) -> Array:
@@ -894,7 +901,7 @@ func _assert_stable_completion(destination: Transform3D, scenario: String) -> Di
 			neutralised = true
 			break
 		await get_tree().physics_frame
-		# Observe after LocomotiveNavigation's physics callback has published this tick's command.
+		# Observe after NPCNavigation's physics callback has executed this tick's animation programme.
 		await get_tree().process_frame
 		neutralisation_frames += 1
 	# `physics_frame` resumes before physics callbacks, so release is observed through a

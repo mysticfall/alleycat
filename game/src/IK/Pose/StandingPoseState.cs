@@ -69,6 +69,19 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
     } = 1.0f;
 
     /// <summary>
+    /// Head-descent ratio at which the standing-to-crouching animation reaches its authored
+    /// full-crouch pose. This is intentionally distinct from the reference hip-height ratio:
+    /// the former normalises an input head displacement, while the latter defines the output
+    /// hip anchor in skeleton-local space.
+    /// </summary>
+    [Export(PropertyHint.Range, "0,1,0.01,or_greater")]
+    public float FullCrouchAnimationDepthRatio
+    {
+        get;
+        set;
+    } = 0.4f;
+
+    /// <summary>
     /// Standing-envelope limits used at the upright end of the continuum.
     /// </summary>
     [Export]
@@ -426,7 +439,7 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
             return;
         }
 
-        float poseBlend = ComputePoseBlend(context);
+        float poseBlend = ComputeAnimationPoseBlend(context);
 
         WriteSeekRequest(context.AnimationTree, poseBlend);
     }
@@ -797,6 +810,13 @@ public partial class StandingPoseState : PoseState, ICrouchingPoseTransitionSour
             context.HeadTargetTransform.Origin.Y,
             context.RestHeadHeight,
             FullCrouchReferenceHipHeightRatio);
+
+    private float ComputeAnimationPoseBlend(PoseStateContext context)
+        => ComputePoseBlend(
+            context.HeadTargetRestTransform.Origin.Y,
+            context.HeadTargetTransform.Origin.Y,
+            context.RestHeadHeight,
+            FullCrouchAnimationDepthRatio);
 
     private TransitionBoundTranslationMask BuildStandingTransitionBoundTranslationMask()
     {

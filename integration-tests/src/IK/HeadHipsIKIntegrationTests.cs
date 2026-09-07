@@ -1,3 +1,4 @@
+using AlleyCat.IntegrationTests.Support;
 using Godot;
 using Xunit;
 using static AlleyCat.IntegrationTests.Support.TestUtils;
@@ -5,7 +6,8 @@ using static AlleyCat.IntegrationTests.Support.TestUtils;
 namespace AlleyCat.IntegrationTests.IK;
 
 /// <summary>
-/// Non-visual integration coverage for IK-001 neck-spine CCDIK behaviour.
+/// Non-visual integration coverage for IK-001 neck-spine CCDIK behaviour, sampled through a deterministic
+/// synthetic solver-time budget so results do not depend on host frame pacing.
 /// </summary>
 public sealed class HeadHipsIKIntegrationTests
 {
@@ -19,13 +21,23 @@ public sealed class HeadHipsIKIntegrationTests
     private static readonly string[] _spineBoneNameCandidates = ["Spine3", "Spine2", "Spine1", "Spine"];
     private const float MaximumDistanceRegression = 0.01f;
     private const float MaximumResidualDistance = 1.5f;
-    private const float MinimumDistanceImprovement = 0.001f;
+
+    // Sampling contract: each pose is driven through a fixed synthetic solver budget of
+    // SyntheticSolveStepsPerPose steps x CCDIKTargetSynchronisation.SyntheticSolveDeltaSeconds (4 x 1/60 s),
+    // matching the pre-rewrite four-frame settling contract. Response thresholds below are the historical
+    // single-pass values (0.001 / 0.0001 per ~16 ms pass) scaled by the same factor, so the required
+    // measurable response per unit of solver time is unchanged. The long-standing pre-rewrite contract (at
+    // 1ed2ded6) was 4 engine frames of settling with unscaled 0.001/0.0001 thresholds, so the scaled values
+    // (0.004/0.0004 over 4 synthetic passes) are strictly tighter than that oldest contract, not merely
+    // per-pass-equivalent.
+    private const int SyntheticSolveStepsPerPose = 4;
+    private const int SyntheticStepFramePumps = 2;
+    private const float MinimumDistanceImprovement = 0.004f;
     private const float MinimumDirectionalAlignment = 0.0f;
-    private const float MinimumExpectedMovement = 0.0001f;
-    private const float MinimumStoopForwardConstrainedMovement = 0.001f;
+    private const float MinimumExpectedMovement = 0.0004f;
+    private const float MinimumStoopForwardConstrainedMovement = 0.004f;
     private const float MinimumStoopForwardAbsoluteDirectionalAlignment = 0.6f;
     private const float MinimumStoopForwardDirectionalAlignmentFloor = -0.75f;
-    private const int PoseSettlementFrameCount = 4;
     private const string StoopForwardPoseName = "TargetStoopForward";
 
     private static readonly string[] _requiredPoseMarkerNames =
@@ -68,6 +80,15 @@ public sealed class HeadHipsIKIntegrationTests
         Dictionary<string, Node3D> poseMarkers = ResolveRequiredPoseMarkers(targetPoses);
         Skeleton3D skeleton = FindFirstSkeleton(verificationSceneRoot)
             ?? throw new Xunit.Sdk.XunitException("Expected at least one Skeleton3D in the verification scene.");
+        Assert.Equal(Skeleton3D.ModifierCallbackModeProcessEnum.Idle, skeleton.ModifierCallbackModeProcess);
+
+        // Sample the solver through a deterministic synthetic-time budget rather than real frame pacing:
+        // real-frame sampling made the measured response depend on await-continuation timing relative to
+        // the engine's deferred skeleton updates. Manual callback mode stops the engine's per-frame advance
+        // so only the test's Skeleton3D.Advance steps drive the solve, and freezing the animation tree keeps
+        // the base pose constant between samples.
+        skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
+        verificationSceneRoot.FindChild("AnimationTree", owned: true, recursive: true)?.Set("active", false);
 
         Node ikNode = BindLocalIkNode(skeleton, headTarget);
         NodePath expectedTargetPath = ikNode.GetPathTo(headTarget);
@@ -78,6 +99,13 @@ public sealed class HeadHipsIKIntegrationTests
         Assert.Equal(expectedTargetPath, configuredTargetPath);
 
         IReadOnlyList<int> trackedBoneIndices = ResolveTrackedBoneIndices(skeleton, ikNode);
+        SkeletonModifier3D neckSpineIK = Assert.IsAssignableFrom<SkeletonModifier3D>(ikNode);
+
+        await AssertStaleSignalTimeTargetIsRejectedAsync(
+            sceneTree,
+            neckSpineIK,
+            headTarget,
+            poseMarkers["TargetForward"]);
 
         foreach (IReadOnlyList<string> poseOrder in _poseOrderVariants)
         {
@@ -99,25 +127,25 @@ public sealed class HeadHipsIKIntegrationTests
         IReadOnlyList<string> poseOrder,
         IReadOnlyList<int> trackedBoneIndices)
     {
-        await SetHeadTargetToMarkerAsync(sceneTree, headTarget, poseMarkers["TargetForward"]);
-        Vector3 neutralMarkerPosition = poseMarkers["TargetForward"].GlobalPosition;
-        Dictionary<int, Vector3> neutralBonePositions = await CaptureTrackedBoneWorldPositionsAsync(
+        Dictionary<int, Vector3> neutralBonePositions = await SetHeadTargetToMarkerAsync(
             sceneTree,
             skeleton,
+            headTarget,
+            poseMarkers["TargetForward"],
             trackedBoneIndices);
+        Vector3 neutralMarkerPosition = poseMarkers["TargetForward"].GlobalPosition;
         float neutralResidualDistance = ResolveClosestDistanceToTarget(neutralBonePositions, neutralMarkerPosition);
         Assert.InRange(neutralResidualDistance, 0.0f, MaximumResidualDistance);
 
         foreach (string markerName in poseOrder)
         {
-            Node3D markerNode = poseMarkers[markerName];
-            await SetHeadTargetToMarkerAsync(sceneTree, headTarget, markerNode);
-
-            Vector3 markerPosition = markerNode.GlobalPosition;
-            Dictionary<int, Vector3> posedBonePositions = await CaptureTrackedBoneWorldPositionsAsync(
+            Dictionary<int, Vector3> posedBonePositions = await SetHeadTargetToMarkerAsync(
                 sceneTree,
                 skeleton,
+                headTarget,
+                poseMarkers[markerName],
                 trackedBoneIndices);
+            Vector3 markerPosition = poseMarkers[markerName].GlobalPosition;
 
             float baselineDistance = ResolveClosestDistanceToTarget(neutralBonePositions, markerPosition);
             float posedDistance = ResolveClosestDistanceToTarget(posedBonePositions, markerPosition);
@@ -141,6 +169,36 @@ public sealed class HeadHipsIKIntegrationTests
                 neutralBonePositions,
                 posedBonePositions,
                 trackedBoneIndices);
+        }
+    }
+
+    private static async Task AssertStaleSignalTimeTargetIsRejectedAsync(
+        SceneTree sceneTree,
+        SkeletonModifier3D neckSpineIK,
+        Node3D headTarget,
+        Node3D marker)
+    {
+        Transform3D staleTransform = new(marker.GlobalBasis, marker.GlobalPosition + Vector3.Up);
+        void ReplaceTargetWithStaleTransform()
+        {
+            headTarget.GlobalTransform = staleTransform;
+            headTarget.ForceUpdateTransform();
+        }
+
+        neckSpineIK.ModificationProcessed += ReplaceTargetWithStaleTransform;
+        try
+        {
+            Xunit.Sdk.XunitException exception = await Assert.ThrowsAsync<Xunit.Sdk.XunitException>(
+                () => CCDIKTargetSynchronisation.AssignTargetAndWaitForCurrentCCDIKAsync(
+                    sceneTree,
+                    neckSpineIK,
+                    headTarget,
+                    marker));
+            Assert.Contains("stale HeadTarget transform", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            neckSpineIK.ModificationProcessed -= ReplaceTargetWithStaleTransform;
         }
     }
 
@@ -223,28 +281,6 @@ public sealed class HeadHipsIKIntegrationTests
         }
 
         values.Add(value);
-    }
-
-    private static Dictionary<int, Vector3> CaptureTrackedBoneWorldPositions(
-        Skeleton3D skeleton,
-        IReadOnlyList<int> trackedBoneIndices)
-    {
-        var positions = new Dictionary<int, Vector3>(trackedBoneIndices.Count);
-        foreach (int trackedBoneIndex in trackedBoneIndices)
-        {
-            positions[trackedBoneIndex] = ResolveTrackedBoneWorldPosition(skeleton, trackedBoneIndex);
-        }
-
-        return positions;
-    }
-
-    private static async Task<Dictionary<int, Vector3>> CaptureTrackedBoneWorldPositionsAsync(
-        SceneTree sceneTree,
-        Skeleton3D skeleton,
-        IReadOnlyList<int> trackedBoneIndices)
-    {
-        _ = await sceneTree.ToSignal(skeleton, Skeleton3D.SignalName.SkeletonUpdated);
-        return CaptureTrackedBoneWorldPositions(skeleton, trackedBoneIndices);
     }
 
     private static float ResolveClosestDistanceToTarget(IReadOnlyDictionary<int, Vector3> trackedBonePositions, Vector3 target)
@@ -488,6 +524,9 @@ public sealed class HeadHipsIKIntegrationTests
 
         NodePath targetPath = ikNode.GetPathTo(headTarget);
         ikNode.Set("settings/0/target_node", targetPath);
+        CopyTransformModifier3D headCopyRotation = Assert.IsType<CopyTransformModifier3D>(
+            skeleton.GetNodeOrNull("HeadCopyRotation"));
+        headCopyRotation.Set("settings/0/reference_node", headCopyRotation.GetPathTo(headTarget));
         SetBooleanPropertyIfAvailable(ikNode, "active", true);
         SetBooleanPropertyIfAvailable(ikNode, "enabled", true);
 
@@ -543,13 +582,64 @@ public sealed class HeadHipsIKIntegrationTests
         return -1;
     }
 
-    private static Vector3 ResolveTrackedBoneWorldPosition(Skeleton3D skeleton, int boneIndex)
-        => skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(boneIndex).Origin;
+    private static async Task<Dictionary<int, Vector3>> CaptureTrackedBoneWorldPositionsAsync(
+        SceneTree sceneTree,
+        Skeleton3D skeleton,
+        IReadOnlyList<int> trackedBoneIndices)
+    {
+        Dictionary<int, Vector3>? capturedPositions = null;
+        int skeletonUpdateCount = 0;
+        void CaptureOnSkeletonUpdate()
+        {
+            skeletonUpdateCount++;
+            capturedPositions = CaptureTrackedBoneWorldPositions(skeleton, trackedBoneIndices);
+        }
 
-    private static async Task SetHeadTargetToMarkerAsync(SceneTree sceneTree, Node3D headTarget, Node3D marker)
+        skeleton.SkeletonUpdated += CaptureOnSkeletonUpdate;
+        try
+        {
+            for (int step = 0; step < SyntheticSolveStepsPerPose; step++)
+            {
+                skeleton.Advance(CCDIKTargetSynchronisation.SyntheticSolveDeltaSeconds);
+                await WaitForFramesAsync(sceneTree, SyntheticStepFramePumps);
+            }
+        }
+        finally
+        {
+            skeleton.SkeletonUpdated -= CaptureOnSkeletonUpdate;
+        }
+
+        Assert.Equal(
+            SyntheticSolveStepsPerPose,
+            skeletonUpdateCount);
+
+        return capturedPositions
+            ?? throw new Xunit.Sdk.XunitException("Expected the synthetic solve to update the skeleton.");
+    }
+
+    private static Dictionary<int, Vector3> CaptureTrackedBoneWorldPositions(
+        Skeleton3D skeleton,
+        IReadOnlyList<int> trackedBoneIndices)
+    {
+        var positions = new Dictionary<int, Vector3>(trackedBoneIndices.Count);
+        foreach (int trackedBoneIndex in trackedBoneIndices)
+        {
+            positions[trackedBoneIndex] = skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(trackedBoneIndex).Origin;
+        }
+
+        return positions;
+    }
+
+    private static Task<Dictionary<int, Vector3>> SetHeadTargetToMarkerAsync(
+        SceneTree sceneTree,
+        Skeleton3D skeleton,
+        Node3D headTarget,
+        Node3D marker,
+        IReadOnlyList<int> trackedBoneIndices)
     {
         headTarget.GlobalTransform = marker.GlobalTransform;
-        // Match the verification runner's settling contract so constrained CCDIK reaches the target from either pose order.
-        await WaitForFramesAsync(sceneTree, PoseSettlementFrameCount);
+        headTarget.ForceUpdateTransform();
+
+        return CaptureTrackedBoneWorldPositionsAsync(sceneTree, skeleton, trackedBoneIndices);
     }
 }

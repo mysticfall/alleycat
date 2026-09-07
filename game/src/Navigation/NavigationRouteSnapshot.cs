@@ -36,7 +36,7 @@ public sealed class NavigationRouteSnapshot
     public IReadOnlyList<Vector3> PathPoints => _pathPoints;
 
     /// <summary>
-    /// Gets the active route-point index used by the poll.
+    /// Gets the active route-point index used by the poll. Advancing this progress cursor does not revise route geometry.
     /// </summary>
     public int ActivePathIndex
     {
@@ -68,7 +68,7 @@ public sealed class NavigationRouteSnapshot
     }
 
     /// <summary>
-    /// Gets the monotonically increasing route revision.
+    /// Gets the monotonically increasing destination/path-geometry revision.
     /// </summary>
     public long RouteRevision
     {

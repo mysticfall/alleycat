@@ -1,0 +1,125 @@
+{
+  "action_count": 1,
+  "actions": [
+    {
+      "action": "idle_sad_loop",
+      "contacts": {
+        "left": "undetermined",
+        "left_confidence": 0.0,
+        "right": "undetermined",
+        "right_confidence": 0.0
+      },
+      "external_identity": "idle_sad",
+      "internal_loop_marker": true,
+      "is_loop": true,
+      "metrics": "metrics/idle_sad.metrics.json",
+      "provenance": {
+        "retarget": "evaluated_visual_constraint_bake",
+        "root_source": "evaluated_kimodo_to_female_constraint_bake",
+        "selected_side": null,
+        "selection_rationale": null
+      },
+      "role": "idle",
+      "runtime_capability": "idle_contact_free",
+      "source_action": "kimodo_m0a3dyf0",
+      "source_loop_marker": true,
+      "source_metadata": {},
+      "transport": {
+        "boundary": "loop",
+        "conceptual_boundary_frame": 240,
+        "contract": "anim002_sample_transport_v1",
+        "duration_frames": 239,
+        "duration_seconds": 7.966666666666667,
+        "fps": 30.0,
+        "frame_end": 240,
+        "frame_start": 1,
+        "period_frames": 239,
+        "runtime_sample_count": 239,
+        "sample_count": 240
+      }
+    }
+  ],
+  "coordinate_contract": {
+    "blender_rest": {
+      "basis_columns": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "coordinate_space": "female_armature_local_z_up",
+      "origin": [
+        0.0,
+        -6.8e-08,
+        -0.002021859
+      ]
+    },
+    "canonical_blender_to_godot": {
+      "basis_columns": [
+        [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ]
+      ],
+      "vector_mapping": "(-x,z,y)"
+    },
+    "expected_godot_root_rest": {
+      "basis_columns": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "coordinate_space": "imported_skeleton_local_y_up",
+      "origin": [
+        0.0,
+        -0.002021859,
+        -6.8e-08
+      ]
+    },
+    "root_bone": "Root",
+    "source_armature": "Female",
+    "strategy": "canonical_axis_conversion_with_strict_processed_root_rest",
+    "version": "anim002_female_root_rest_basis_v1"
+  },
+  "metrics_schema_version": 2,
+  "package": "idle",
+  "schema_version": 2,
+  "source_blend": "idle-standing.blend",
+  "source_path": "source/idle/idle-standing.blend",
+  "target_skeleton": "Female",
+  "variant": "sad"
+}

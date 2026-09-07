@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "mapping_identity": "anim002-female-contact-bones-v2",
+  "skeleton": "Female",
+  "root": "Root",
+  "hips": "pelvis",
+  "feet": {
+    "left": {
+      "foot_bone": "foot_l",
+      "shin_bone": "calf_l"
+    },
+    "right": {
+      "foot_bone": "foot_r",
+      "shin_bone": "calf_r"
+    }
+  }
+}

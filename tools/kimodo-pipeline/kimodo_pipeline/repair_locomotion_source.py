@@ -1,0 +1,11 @@
+"""Blender CLI entry point for transactional real-source repair."""
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from kimodo_pipeline.source_repair import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

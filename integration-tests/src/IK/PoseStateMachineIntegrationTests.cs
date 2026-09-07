@@ -32,6 +32,7 @@ public sealed class PoseStateMachineIntegrationTests
     private const string SkeletonPath = "Subject/Female/Female/GeneralSkeleton";
     private const string AnimationTreePath = "Subject/Female/AnimationTree";
     private const string SubjectRootPath = "Subject/Female";
+    private const string NavigationPath = "Navigation";
     private const string LeftFootTargetPath = "Subject/Female/IKTargets/LeftFoot";
     private const string RightFootTargetPath = "Subject/Female/IKTargets/RightFoot";
     private const string FootTargetSyncControllerPath = "Subject/Female/Female/GeneralSkeleton/FootTargetSyncController";
@@ -211,14 +212,18 @@ public sealed class PoseStateMachineIntegrationTests
         int leftUpperLegIndex = RequireBoneIndex(skeleton, "LeftUpperLeg");
         int leftLowerLegIndex = RequireBoneIndex(skeleton, "LeftLowerLeg");
         int leftFootIndex = RequireBoneIndex(skeleton, "LeftFoot");
+        // This assertion measures authored animation geometry. Keep all SkeletonModifier3D stages in manual mode
+        // for both samples so physics-timed hip/leg reconciliation cannot replace the AnimationTree pose.
+        skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
 
         TickStandingToKneelingFixtureScenario(sceneRoot, driver, "CrouchMidwayForward");
         await WaitForFramesAsync(sceneTree, 2);
         await WaitForFramesAsync(sceneTree, 2);
         var crouchMidwayState = (StringName)driver.Call("GetCurrentStateId");
         Assert.Equal("Standing", crouchMidwayState.ToString());
-        float crouchMidwayKneeFlexion = ComputeKneeFlexionRadians(
+        float crouchMidwayKneeFlexion = CaptureAuthoredKneeFlexion(
             skeleton,
+            animationTree,
             leftUpperLegIndex,
             leftLowerLegIndex,
             leftFootIndex);
@@ -254,15 +259,21 @@ public sealed class PoseStateMachineIntegrationTests
             KneelingPoseState.DefaultAnimationStateName,
             TransitionAutoAdvanceWaitFrames);
 
-        float kneelingKneeFlexion = ComputeKneeFlexionRadians(
+        // Kneeling is an authored looping clip. Restart it at its reference frame before the pre-IK sample so the
+        // comparison is independent of the phase reached while waiting for the transition to converge.
+        ResolvePlayback(animationTree).Start(KneelingPoseState.DefaultAnimationStateName, true);
+        animationTree.Advance(0.0);
+        float kneelingKneeFlexion = CaptureAuthoredKneeFlexion(
             skeleton,
+            animationTree,
             leftUpperLegIndex,
             leftLowerLegIndex,
             leftFootIndex);
 
         Assert.True(
             kneelingKneeFlexion >= crouchMidwayKneeFlexion + MinimumKneelingKneeFlexionIncreaseRadians,
-            "Kneeling should increase left-knee flexion beyond crouch-midway, guarding against implausible shallow kneel poses.");
+            "Kneeling should increase left-knee flexion beyond crouch-midway, guarding against implausible shallow kneel poses. " +
+            $"Crouch={crouchMidwayKneeFlexion:F4} rad, kneeling={kneelingKneeFlexion:F4} rad.");
 
         // Holding the retreated pose must not bounce the state back to standing while the
         // cross-transition neutral-return gate holds.
@@ -535,6 +546,9 @@ public sealed class PoseStateMachineIntegrationTests
         Assert.True(activeStandingSeek > 0f, "Standing state should write a positive crouch seek when its AnimationTree node is active.");
 
         InvokeMethod(standingToKneelingTransition, nameof(IPoseTransition.OnTransitionExit), kneelingContext);
+        // This test invokes the transition callback directly rather than through the fixture driver. Commit the
+        // resulting playback request explicitly so the assertion does not depend on callback scheduling.
+        animationTree.Advance(0.0);
         await WaitForFramesAsync(sceneTree, 2);
 
         AssertPlaybackNodeIsOneOf(playback, "KneelingEnter", "Kneeling");
@@ -1108,12 +1122,19 @@ public sealed class PoseStateMachineIntegrationTests
         EnsureCharacterRuntimeInstalled(characterRoot);
         await WaitForFramesAsync(sceneTree, 2);
 
+        Node navigation = Assert.IsType<Node>(characterRoot.GetNodeOrNull(NavigationPath), exactMatch: false);
+        navigation.ProcessMode = Node.ProcessModeEnum.Disabled;
+
         Node driver = Assert.IsType<Node>(sceneRoot.GetNodeOrNull(DriverPath), exactMatch: false);
         AnimationTree animationTree = Assert.IsType<AnimationTree>(sceneRoot.GetNodeOrNull(AnimationTreePath), exactMatch: false);
         Skeleton3D skeleton = Assert.IsType<Skeleton3D>(sceneRoot.GetNodeOrNull(SkeletonPath), exactMatch: false);
-        animationTree.TreeRoot = Assert.IsType<AnimationNodeBlendTree>(
+        AnimationNodeBlendTree poseTree = Assert.IsType<AnimationNodeBlendTree>(
             ResourceLoader.Load(PoseStateMachineTreeResourcePath),
             exactMatch: false);
+        animationTree.TreeRoot = poseTree;
+        // This isolated pose fixture disables the NPC navigation animation authority, so physics evaluation belongs
+        // solely to the test-controlled pose driver.
+        animationTree.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Physics;
         animationTree.Active = true;
 
         driver.Set("AnimationTree", animationTree);
@@ -1726,6 +1747,18 @@ public sealed class PoseStateMachineIntegrationTests
 
     private static Vector3 ResolveBoneWorldPosition(Skeleton3D skeleton, int boneIndex)
         => skeleton.GlobalTransform * skeleton.GetBoneGlobalPose(boneIndex).Origin;
+
+    private static float CaptureAuthoredKneeFlexion(
+        Skeleton3D skeleton,
+        AnimationTree animationTree,
+        int upperLegIndex,
+        int lowerLegIndex,
+        int footIndex)
+    {
+        skeleton.ResetBonePoses();
+        animationTree.Advance(0.0);
+        return ComputeKneeFlexionRadians(skeleton, upperLegIndex, lowerLegIndex, footIndex);
+    }
 
     private static float ComputeKneeFlexionRadians(
         Skeleton3D skeleton,

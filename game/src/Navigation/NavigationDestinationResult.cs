@@ -24,4 +24,9 @@ public enum NavigationDestinationResult
     /// The navigation map is not ready, so reachability is unknown and no request state was changed.
     /// </summary>
     NotReady,
+
+    /// <summary>
+    /// The bounded durable-outcome store cannot reserve capacity, so no request state was changed.
+    /// </summary>
+    OutcomeBackpressure,
 }

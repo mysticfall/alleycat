@@ -7,180 +7,131 @@ title: Locomotion
 
 ## Requirement
 
-Define character movement and rotation control, animation-owned standing root motion, and permission sources that let
-external systems gate locomotion behaviour.
+Define player-owned responsive locomotion, optional-navigation arbitration, contact-lock adoption, and authoritative
+travel-release consumption without creating animation-contact or IK actuation policy.
 
 ## Goal
 
-VR players and locomotive NPCs move responsively through one locomotion contract. Standing movement and physical yaw
-follow coherent animation root motion without disturbing unrelated player pose states.
+The player receives immediate input response, retains stable authored support, and leaves travel only at one validated
+live release occurrence.
 
 ## User Requirements
 
-1. Left-stick input drives immediate player movement and right-stick input drives precise, smooth rotation.
-2. NPC navigation uses the same locomotion input contract without replacing tracker-driven player control.
-3. Standing locomotion supports idle, forward and backward walking, smooth left and right walking arcs, short local
-   rear/lateral correction, and ordinary unarmed left and right 90-degree in-place pivots.
-4. Movement and rotation operate simultaneously without interference or double rotation.
-5. Standing translation and physical yaw follow selected animation Root motion, with interruptible walking turns and
-    held looped signed bilateral pivots.
-6. Movement feels responsive and grounded through smooth walking direction changes, short local corrections, and
-   bilateral deliberate pivots. NAV-001 owns the route policy for distant rear destinations; locomotion supplies the
-    supported forward-arc and held looped signed-pivot responses without changing their root-motion response data or
-    blend weights.
-7. Unsupported poses gate movement while rotation remains available for the MVP.
-8. Only `Walking` changes for standing locomotion; standing/crouching, kneeling, all-fours, hand, eye, and blink
-   behaviour remains unchanged.
-9. NPC route revisions, corner anticipation, braking, and drift correction remain continuous through existing walking
-   blend trees without animation-phase resets or discrete corrective turns.
-10. With zero locomotion input, NPCs and player-controlled characters using shared locomotion visibly hold an animated
-    idle pose rather than the skeleton rest pose.
+1. Player movement and yaw remain responsive, and optional navigation yields before non-neutral manual movement.
+2. A movement bout starts naturally, changes direction without needless restarts, and stops through one contact-safe
+   authored release rather than an arbitrary phase cut.
+3. Mismatched source, live animation identity, exit provenance, clock/cycle, or release interval evidence leaves
+   ordinary player motion and travel intact, as does cached, delayed, consumed, cancelled, replaced, or replayed
+   authority.
+4. Valid planted support remains stable on both production rigs. Missing or refused contact evidence leaves ordinary
+   animation-synchronised motion intact without forcing a discontinuity.
+5. Player and NPC locomotion remain independently controllable while respecting the same ANIM-002 contact permission.
+6. A valid support correction may reduce contact drift without introducing a second move, steering response, or release
+   handoff correction.
 
 ## Technical Requirements
 
-### Core Locomotion Contract
-
-1. `ILocomotion` retains `SetMovementInput(Vector2)` for unitless local lateral and forward intent and
-   `SetRotationInput(Vector2)` for signed horizontal turn intent.
-2. `CharacterLocomotion` implements `ILocomotive`, accepts movement and rotation together, and applies resulting
-   translation and yaw through one coherent `MoveAndSlide` step.
-3. In root-motion states, the component derives planar velocity from `AnimationTree` root motion and returns zero planar
-   velocity when movement is not allowed.
-4. Movement and rotation permission channels remain independent and aggregate permission sources separately.
-5. The component uses template-authored exported references, not a hard-coded base-scene inheritance. It requires the
-   root-level `AnimationTree` and `DynamicPhysicalRig`; consuming player scenes wire VRIK, pose-state permissions, and
-   `PlayerController`.
-
-### Animation-Owned Standing Motion
-
-6. Movement or rotation intent enters existing `Walking`; no additional top-level locomotion state is required.
-7. Only `Walking` in each NPC, player, and reference-male graph becomes a directional `AnimationNodeBlendTree`.
-8. Each walking tree supplies the nine ANIM-003 roles: idle, forward walk, backward walk, left/right walk arcs,
-   left/right sidesteps, and left/right 90-degree pivots. Both stationary pivot graph roles are required; it has no run,
-   start/stop, combat, weapon, sad, hunched, raised-arm, or unused alternative branch.
-9. `CharacterLocomotion` exposes explicit movement and signed-turn blend paths. Reference graphs use
-   `parameters/States/Walking`; simple test rigs may use equivalent `parameters/Walking` paths.
-10. While `Walking` is active, the component takes translation and yaw from one animation-tree root-motion sample,
-    applies each permitted valid component once, and does not apply direct smooth yaw. Its `AnimationTree` resolves
-    the exact `GeneralSkeleton:Root` root-motion track through the unique-name `GeneralSkeleton` binding. Corrected
-    imported Root yaw maps directly to actor yaw, without a post-import coordinate, sign, or compensating-yaw
-    conversion.
-11. Smooth walking yaw and bilateral in-place yaw are animation owned for NPCs and players. Input may change walking
-    direction without waiting for a clip to finish. Pivots are selected only for stationary deliberate facing changes,
-    remain held and looped with the Root-yaw sign matching the requested turn, and release directly to route movement
-    without a neutral or `Idle` interlude; moving changes use walk arcs. Runtime mirroring or synthetic yaw is not
-    permitted; ANIM-003 may supply a fully processed derived mirror under the ANIM-001 provenance contract.
-12. Non-finite root motion is ignored. Movement and rotation gates apply independently, and root motion is consumed only
-     in `Walking` or an explicitly selected pose-state locomotion root-motion state. Loop-wrap sampling remains
-     continuous and must not reset, suppress, or double-apply Root translation or yaw.
-13. Root motion is the sole standing physical translation and yaw authority. Navigation influences blend intent only and
-    does not add transform displacement, yaw, path snapping, or motion warping.
-14. Movement and turn controls use one predictable mapping without cascaded navigation and locomotion gains. NPC
-    supplementary correction remaps continuously around neutral without accumulating dead-zone error; player tracker
-    input remains isolated.
-15. The walk-arc regions interpolate coherently in every NPC, player, and reference-male graph without changing player
-     control ownership. The pivot regions select and hold the matching looped signed 90-degree role only while
-     stationary, preserve continuous Root yaw across every loop wrap, then exit near the target facing directly to route
-     movement without a neutral or `Idle` interlude; they must not restart a pivot while stationary.
-16. The graph exposes a rear/lateral diagonal blend using only `BackwardWalk` and the matching `SideStep` role. It is
-    available to navigation for a local correction at or below 1 m and remains active until the correction exceeds or
-    resolves below the 1.25 m release threshold. NAV-001 selects route-directed forward arcs and, only when unsuitable,
-    held looped signed pivots for distant rear intent; it must not change this response data or graph blend weights.
-    Threshold values are contract values, not tuning defaults.
-
-### Permission Source API
-
-17. `LocomotionPermissions` records `MovementAllowed` and `RotationAllowed` independently.
-18. `ILocomotionPermissionSource` exposes `LocomotionPermissions`.
-19. `LocomotionBase` exports `PermissionSourceNodes`, validates their interface, aggregates them with logical AND, and
-    exposes `GetCurrentLocomotionPermissions()`.
-
-### Player Controller Integration
-
-20. `PlayerController` in `Control` reads XR controller sticks and forwards input to locomotion.
-21. The player scene composes `PlayerController` and wires tracker input to character locomotion. AI navigation is not
-    installed and cannot replace or inject that input through player composition.
-
-### Locomotion Animation-State Override
-
-22. `IPoseState` defines `GetLocomotionStateTarget(PoseStateContext)`.
-23. The pose-state machine implements `ILocomotionAnimationSource`, which `CharacterLocomotion` queries.
-24. Standing preserves default fallback; `AllFours` continues to return `(AllFours, AllFoursForward)`.
-
-### Idle and Turn Configuration
-
-25. `CharacterLocomotion` supports configurable rotation sensitivity, proportional animation-turn response, movement
-    and turn blend paths, and `IdleAnimationStateName`.
-26. `IdleAnimationStateName` defaults to `Idle`, which receives the initial transition automatically. Player pose rigs
-    may use `StandingCrouching`; generic NPC roots use `Idle`. On zero locomotion input, the fallback resolves against
-    the runtime character `AnimationPlayer` and skeleton, and applies an animated non-rest pose for every shared
-    locomotion consumer.
+1. `ILocomotion` remains player-owned and independent of `INavigation`; neither implementation delegates movement
+   execution, route policy, or animation scheduling to the other.
+2. A non-neutral manual movement sample cancels optional navigation before locomotion runs. Neutral or transient
+   neutralisation, waiting, permission loss, and braking do not count as manual cancellation.
+3. The graph may enter its sole `*2i` exit only by exact-once consumption of an admitted occurrence defined by the
+   normative [Player Travel-Release Occurrence Contract](player-travel-release-occurrence-contract.md). Immediate intent
+   and authored braking do not authorise the graph hop. Its closed refusal set rejects source-identity; evaluated
+   role/clip/event/side; clock-generation/cycle-identity; exit-role/exit-clip/catalogue-provenance; and interval
+   mismatch.
+   Invalid, non-contiguous, non-crossing, stale, cached, delayed, duplicate, replayed, consumed, cancelled, or replaced
+   authority also fails closed while ordinary travel continues.
+4. Travel-release occurrence authority and per-foot contact-lock lifecycle evidence are separate. The occurrence permits
+   only the CTRL graph hop. ANIM-002 `Acquire`, `Support`, and `Release` evidence permits per-foot anchor, support,
+   release, handoff, and optional current-support correction through IK-003. Neither authority substitutes for,
+   reconstructs, or repairs the other.
+5. ANIM-002 remains the sole contact-permission owner. Player production providers consume the central permission and
+   immutable authored per-foot evidence. CTRL and IK neither infer, override, relax, nor duplicate that permission.
+6. Player composition adopts the reusable
+   [Contact-Lock Coordinator Contract](../../ik/003-leg-feet-ik/contact-lock-coordinator-contract.md), including two
+   side-specific providers and independent per-foot acquire, support, release, handoff, refusal, and fallback.
+   `CharacterIK` remains the sole target, activity-gate, and influence actuator.
+7. Current valid support may authorise at most one bounded translation/yaw correction. CTRL consumes that
+   already-authorised value exactly once in its existing coherent player movement operation. CTRL cannot calculate,
+   select, feed back, compensate, steer from, or override it. Release handoff and absent, refused, stale, or infeasible
+   states return zero correction. Collision-realised divergence fails closed to zero applied correction and diagnostics.
+8. `ImmediateSliced`, `TravelExitStrategy`, seam waivers, arbitrary-phase exits, static-schedule or phase-only release
+   shortcuts, and content-immutability waivers are prohibited. Insufficient authored content blocks the affected contact
+   or graph transition while ordinary travel continues.
+9. The player controller does not select, invoke, or actuate a foot provider; override foot targets, gates, modifiers,
+   hips, or skeleton; or treat validation metrics as steering feedback.
+10. CTRL introduces no terrain probing or adaptation, gait synthesis, motion matching, motion warping, whole-body
+    repositioning, emergency contact interruption, stopped-pose glide, or NAV route-policy change.
 
 ## In Scope
 
-- Shared NPC and player movement and rotation contracts, directional standing Root motion, and animation-owned yaw.
-- Walking blend parameters, interruptible reversible transitions, and continuous NPC control mapping.
-- Pose permissions and overrides, plus tracker-driven player composition isolated from NPC navigation.
+- Player intent, movement/yaw permission, movement authority arbitration, and authoritative travel-release consumption.
+- Production player contact-lock composition and exact-once bounded support-correction consumption.
+- Optional player-navigation cancellation and player-specific animation scheduling.
 
 ## Out Of Scope
 
-- Full XR mapping beyond stick reading, haptics, networking, and platform certification.
-- Bespoke kneeling or all-fours transitions and changes outside existing locomotion override paths.
-- Teleportation and navigation path policy, which is owned by [NAV-001](../../nav/001-npc-navigation/index.md).
-- Snap turning and snap-specific configuration; it requires a new player-specific feature.
-- Final tuning constants, full motion matching, motion warping, and additional animation roles.
+- NPC route planning, occurrence selection, terminal records, route outcomes, and NAV-001 remediation.
+- Terrain adaptation, gait synthesis, motion matching, broad visual/seam-quality acceptance, and exact tuning values.
+- Immediate slicing, arbitrary-phase exit, universal/exact arrival, and forced hard-contact exit.
 
 ## Acceptance Criteria
 
 ### User Requirement Acceptance
 
-1. Player playtesting confirms left-stick movement, smooth right-stick rotation, and simultaneous translation and
-   turning without snap turns.
-2. Player and NPC scenarios demonstrate the ANIM-003 forward, backward, walk-arc, sidestep, and bilateral pivot roles
-   with coherent animation-owned translation and yaw.
-3. Walking direction changes and short local rear/lateral diagonal corrections remain smooth. For a destination behind
-    at a distance greater than 1.25 m, NAV-001 can use route-directed forward arcs and only conditionally use a held
-    looped signed pivot. Independent visual review confirms each stationary pivot has opposing 90-degree Root yaw,
-    negligible translation, remains held until release near the target, then transitions directly to route movement
-    without a neutral or `Idle` interlude or a restart at rest.
-4. Movement and rotation permissions independently suppress only their corresponding root-motion component.
-5. Player regressions preserve non-walking pose, hand, eye, and blink behaviour and exclude NPC navigation from player
-   composition.
-6. NPC playtesting confirms continuous corner anticipation, braking, drift correction, and route replacement through
-   `Walking`, without phase resets, snapping, or turn amplification.
-7. With zero locomotion input, NPC and player scenarios visibly retain an animated idle pose rather than a T-pose or
-   other skeleton rest pose.
+1. Both production reference rigs show responsive player movement and yaw, with manual input cancelling optional
+   navigation before locomotion.
+2. Both rigs show bouts ending through one authored live release occurrence without slicing, an arbitrary-phase pop, or
+   forced planted-foot interruption.
+3. Source, evaluated role/clip/event/side, clock generation, cycle identity, exit role/clip, or catalogue provenance
+   mismatch retains ordinary player motion and travel without forcing the `*2i` hop.
+4. Invalid, non-contiguous, non-crossing, stale, or missed intervals and cached, delayed, duplicate, replayed, consumed,
+   cancelled, or replaced authority retain ordinary player motion and travel without a discontinuity.
+5. Both rigs show independent left/right contact support and continuous release-to-fallback handoff. Missing, refused,
+   stale, or infeasible evidence retains ordinary movement and travel.
+6. Player and NPC production compositions consume the same ANIM-002 permission while retaining independent controller
+   and NAV route policy.
+7. Valid current support may reduce drift through one bounded correction; refusal, handoff, collision divergence, and
+   absent support cause no forced correction or discontinuity.
 
 ### Technical Requirement Acceptance
 
-1. Contract and composition tests preserve `ILocomotion`, `ILocomotive`, permission APIs, exported references,
-   animation-owned turning, and tracker-driven `PlayerController` wiring.
-2. Graph inspection proves only `Walking` changed and binds precisely the nine ANIM-003 roles through explicit paths,
-   including both stationary pivot branches and no excluded role.
-3. Root-motion tests prove one valid, permission-gated sample from `GeneralSkeleton:Root` supplies translation and yaw,
-    each applied once through `MoveAndSlide` without direct smooth yaw or double rotation. They prove the unique-name
-    track binding, direct corrected-imported-Root-yaw-to-actor-yaw mapping, and continuous single application across
-    loop wraps.
-4. Focused checks cover simultaneous translation and yaw, walk-arc direction changes, both diagonal correction signs,
-    the 1 m entry and 1.25 m release thresholds, and both pivots. They reject runtime mirroring, synthetic yaw,
-    stationary-pivot restarts, using a pivot for a moving change, distant rear backward travel, a neutral or `Idle`
-    interlude between pivot release and route movement, loop-wrap Root-motion discontinuity, and navigation changes to
-    root-motion response data or graph blend weights.
-5. State tests prove intent enters `Walking`, configurable idle fallback, NPC `Idle`, optional player
-    `StandingCrouching`, runtime `AnimationPlayer` and skeleton resolution, an applied animated non-rest idle pose,
-    and preserved `AllFours` override behaviour for NPC and player consumers.
-6. Scene and graph regressions prove no player `LocomotiveNavigation` and no changes outside `Walking` or existing
-   locomotion-override paths.
-7. Control tests prove finite single-mapping input, continuous near-neutral correction, no cascaded turn amplification,
-   and root motion as the sole physical authority.
-8. Graph tests prove coherent right walk-arc interpolation while preserving tracker control, direct-transform navigation
-   baselines, and unrelated graph regions.
+1. Boundary and ordering checks prove the `ILocomotion`/`INavigation` separation and cancellation semantics in Technical
+   Requirements 1–2.
+2. Valid-occurrence tests cover every field, crossing/admission, freshness, exact-once consumption, cancellation, and
+   replacement in the normative occurrence contract. Refusal tests explicitly cover source-identity; evaluated
+   role/clip/event/side; clock-generation/cycle-identity; exit-role/exit-clip/catalogue-provenance; and malformed,
+   unknown, non-finite, invalid, non-contiguous, non-crossing, stale, or missed interval and tick evidence.
+3. Refusal tests reject cached, delayed, duplicate, replayed, consumed, cancelled, replaced, inferred, phase-only, and
+   static-schedule-only authority, proving that ordinary player motion and travel continue without cached reuse.
+4. Tests prove occurrence authority permits only the sole `*2i` hop and cannot admit contact; per-foot lifecycle
+   evidence controls only anchor/support/release/handoff/correction and cannot permit that hop.
+5. Both-rig production tests prove same-tick player role, clip, phase, foot, identity, and generation matching; two
+   side-specific providers; post-installer composition; no diagnostic installation; per-foot independence; and
+   `CharacterIK`-only target, gate, and influence actuation.
+6. Movement-operation tests prove at most one authorised support correction is consumed exactly once. They prove zero
+   correction for release handoff and absent, refused, stale, infeasible, or collision-divergent states, with no CTRL
+   calculation, selection, feedback, compensation, steering, second move, or target write.
+7. Regression checks prove missing or refused authority retains ordinary travel without cached reuse or discontinuity,
+   and that slicing, phase-only, inferred, and static-schedule shortcuts are absent.
+8. Review proves CTRL adds no NPC NAV occurrence, reservation, route, replan, terminal-tail, or outcome policy and makes
+   no broad visual/seam-quality or NAV completion claim.
+
+### Acceptance Traceability
+
+- User Requirements 1–6 → User Requirement Acceptance 1–7.
+- Technical Requirements 1–2 → Technical Requirement Acceptance 1.
+- Technical Requirements 3–4 → Technical Requirement Acceptance 2–4, 7.
+- Technical Requirements 5–6, 9 → Technical Requirement Acceptance 5.
+- Technical Requirement 7 → Technical Requirement Acceptance 6.
+- Technical Requirements 8, 10 → Technical Requirement Acceptance 7–8.
 
 ## References
 
 - [Project Specifications Index](../../index.md)
-- [CTRL: Player Character Control System](../index.md)
+- [Player Travel-Release Occurrence Contract](player-travel-release-occurrence-contract.md)
+- [ANIM-002: Locomotive Animation Set](../../animation/002-locomotive-animation-set/index.md)
 - [NAV-001: NPC Navigation](../../nav/001-npc-navigation/index.md)
-- [ANIM-003: Standing Locomotion Catalogue](../../animation/003-standing-locomotion-catalogue/index.md)
-- [IK-004: VRIK Pose State Machine And Hip Reconciliation](../../ik/004-vrik-pose-state-machine/index.md)
-- [XR-001: XRManager](../../xr/001-xr-manager/index.md)
+- [IK-003: Leg And Feet IK System](../../ik/003-leg-feet-ik/index.md)
+- [Contact-Lock Coordinator Contract](../../ik/003-leg-feet-ik/contact-lock-coordinator-contract.md)

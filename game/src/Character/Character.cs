@@ -26,7 +26,7 @@ public partial class Character : CharacterBody3D, ICharacter, IComponentProjecti
     } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the template-authored locomotion capability reference.
+    /// Gets or sets the player-role-authored locomotion reference. NPC templates leave it unassigned.
     /// </summary>
     [Export]
     public CharacterLocomotion? Locomotion
@@ -121,27 +121,12 @@ public partial class Character : CharacterBody3D, ICharacter, IComponentProjecti
 
     /// <summary>
     /// Rebuilds the deterministic component cache from explicit template-authored capability references.
-    /// The projection order is stable: locomotion, navigation, eyes, voice, hearing, left hand, right hand.
+    /// The common projection order is stable: eyes, navigation (optional), voice, hearing (optional), left hand, right hand.
     /// </summary>
     public void RefreshComponents()
     {
-        var components = new List<IComponent>(7)
-        {
-            RequireComponentReference(Locomotion, nameof(Locomotion)),
-        };
-        if (Navigation is not null)
-        {
-            components.Add(Navigation);
-        }
-
-        components.Add(RequireComponentReference(Eyes, nameof(Eyes)));
-        components.Add(RequireComponentReference(Voice, nameof(Voice)));
-        if (Hearing is not null)
-        {
-            components.Add(Hearing);
-        }
-        components.Add(RequireHandReference(LeftHand, LimbSide.Left, nameof(LeftHand)));
-        components.Add(RequireHandReference(RightHand, LimbSide.Right, nameof(RightHand)));
+        List<IComponent> components = [];
+        ComposeComponents(components);
 
         ValidateDistinctReferences(components);
         ValidateVisualCues();
@@ -152,7 +137,36 @@ public partial class Character : CharacterBody3D, ICharacter, IComponentProjecti
         ComponentsRefreshed?.Invoke();
     }
 
-    private IHand RequireHandReference(HandPoseBehaviour? hand, LimbSide expectedSide, string propertyName)
+    /// <summary>
+    /// Composes the stable role-appropriate capability projection.
+    /// </summary>
+    /// <param name="components">The component projection being built.</param>
+    protected virtual void ComposeComponents(List<IComponent> components)
+    {
+        components.Add(RequireComponentReference(Eyes, nameof(Eyes)));
+        if (Navigation is not null)
+        {
+            components.Add(Navigation);
+        }
+
+        components.Add(RequireComponentReference(Voice, nameof(Voice)));
+        if (Hearing is not null)
+        {
+            components.Add(Hearing);
+        }
+
+        components.Add(RequireHandReference(LeftHand, LimbSide.Left, nameof(LeftHand)));
+        components.Add(RequireHandReference(RightHand, LimbSide.Right, nameof(RightHand)));
+    }
+
+    /// <summary>
+    /// Resolves a required hand component and validates its authored side.
+    /// </summary>
+    /// <param name="hand">The authored hand reference.</param>
+    /// <param name="expectedSide">The required limb side.</param>
+    /// <param name="propertyName">The authoring property name.</param>
+    /// <returns>The validated hand component.</returns>
+    protected IHand RequireHandReference(HandPoseBehaviour? hand, LimbSide expectedSide, string propertyName)
     {
         HandPoseBehaviour component = RequireComponentReference(hand, propertyName);
         return component.Side != expectedSide
@@ -161,7 +175,14 @@ public partial class Character : CharacterBody3D, ICharacter, IComponentProjecti
             : component;
     }
 
-    private T RequireComponentReference<T>(T? node, string propertyName)
+    /// <summary>
+    /// Resolves a required role-authored component reference.
+    /// </summary>
+    /// <typeparam name="T">The required component node type.</typeparam>
+    /// <param name="node">The authored node reference.</param>
+    /// <param name="propertyName">The authoring property name.</param>
+    /// <returns>The required component.</returns>
+    protected T RequireComponentReference<T>(T? node, string propertyName)
         where T : Node, IComponent
         => node
             ?? throw new InvalidOperationException(

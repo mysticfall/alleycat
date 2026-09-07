@@ -19,6 +19,7 @@ obj/
 
 # Python
 __pycache__
+tools/kimodo-pipeline/.blender-python-deps/
 
 # Godot-generated solution in game project
 game/AlleyCat.sln
@@ -30,6 +31,9 @@ game/temp/*
 # Misc.
 *.blend1
 .ocx
+
+# Test-run output (regenerable)
+/test-results/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "stitch_edges": [
+    {
+      "from_role": "wf",
+      "to_role": "f2i_l"
+    },
+    {
+      "from_role": "wf",
+      "to_role": "f2i_r"
+    },
+    {
+      "from_role": "i2f_l",
+      "to_role": "wf"
+    },
+    {
+      "from_role": "i2f_r",
+      "to_role": "wf"
+    },
+    {
+      "from_role": "i2b_l",
+      "to_role": "wb"
+    },
+    {
+      "from_role": "i2b_r",
+      "to_role": "wb"
+    },
+    {
+      "from_role": "wb",
+      "to_role": "b2i_l"
+    },
+    {
+      "from_role": "wb",
+      "to_role": "b2i_r"
+    }
+  ]
+}
