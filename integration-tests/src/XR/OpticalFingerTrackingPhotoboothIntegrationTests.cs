@@ -55,7 +55,10 @@ public sealed class OpticalFingerTrackingPhotoboothIntegrationTests
     // mirrors); the guard only bounds finger-driven motion far below the visible finger change magnitude.
     private const float VrikSettleToleranceRadians = 0.2f;
 
-    private const int VrikSettleFrames = 40;
+    // VRIK and the skeleton modifier pipeline solve on physics ticks, while the project runs windowed sessions
+    // without vsync: process-frame settle windows then contain an environment-dependent number of solver ticks.
+    // Bounding the settle in physics frames keeps the re-settled comparison deterministic on every display.
+    private const int VrikSettlePhysicsFrames = 40;
 
     private static readonly Vector3 _rightWristRest = new(0.26f, 1.02f, -0.28f);
     private static readonly Vector3 _leftWristRest = new(-0.26f, 1.02f, -0.28f);
@@ -179,7 +182,7 @@ public sealed class OpticalFingerTrackingPhotoboothIntegrationTests
             // Session entry at the open flex: the first valid sample writes the tracked open outputs
             // immediately (XR-002 TR21) — the authored entry pose never enters the mapping.
             CommitOpticalMode(fixture, FlexOpen);
-            await WaitForFramesAsync(sceneTree, VrikSettleFrames);
+            await WaitForPhysicsFramesAsync(sceneTree, VrikSettlePhysicsFrames);
 
             Assert.True(fixture.Modifier.IsOpticalSessionActive);
 
@@ -197,7 +200,7 @@ public sealed class OpticalFingerTrackingPhotoboothIntegrationTests
             // A strong curl writes the stronger tracked outputs for every finger.
             InjectTrackedHandPose(fixture.Runtime, LimbSide.Left, FlexCurl);
             InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, FlexCurl);
-            await WaitForFramesAsync(sceneTree, VrikSettleFrames);
+            await WaitForPhysicsFramesAsync(sceneTree, VrikSettlePhysicsFrames);
 
             int materiallyChangingOutputs = 0;
             foreach ((LimbSide side, XRHandJoint joint) in FingerJoints())
@@ -227,7 +230,7 @@ public sealed class OpticalFingerTrackingPhotoboothIntegrationTests
             Dictionary<string, Quaternion> curledVrikBones = CaptureVrikOwnedRotations(fixture);
             InjectTrackedHandPose(fixture.Runtime, LimbSide.Left, FlexOpen);
             InjectTrackedHandPose(fixture.Runtime, LimbSide.Right, FlexOpen);
-            await WaitForFramesAsync(sceneTree, VrikSettleFrames);
+            await WaitForPhysicsFramesAsync(sceneTree, VrikSettlePhysicsFrames);
 
             foreach ((string vrikBone, Quaternion rotation) in curledVrikBones)
             {
@@ -1022,7 +1025,7 @@ public sealed class OpticalFingerTrackingPhotoboothIntegrationTests
             var poseCapture =
                 OpticalFingerTrackingModifierIntegrationTests.SkeletonPoseCapture.Attach(skeleton);
 
-            await WaitForFramesAsync(sceneTree, VrikSettleFrames);
+            await WaitForPhysicsFramesAsync(sceneTree, VrikSettlePhysicsFrames);
 
             Assert.True(poseCapture.CaptureCount > 0, "Expected the fixture pose capture to run at least once.");
 

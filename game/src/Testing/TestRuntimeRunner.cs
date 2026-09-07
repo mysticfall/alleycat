@@ -28,6 +28,7 @@ public partial class TestRuntimeRunner : Node
     private const string MainSceneSettingPath = "application/run/main_scene";
     private const int ProbeReadyFrameLimit = 5;
     private const int SessionFrameSettleCount = 2;
+    private const int RootGameFreeFrameLimit = 30;
     private const int SessionStartupSceneFrameLimit = 10;
     private const int SessionMalformedLinePreviewLength = 200;
     private const string SessionReadyEventKind = "ready";
@@ -529,12 +530,27 @@ public partial class TestRuntimeRunner : Node
             failureMessage = baselineDiagnostics;
         }
 
+        // Drain finalisers while the session is idle so wrappers of natively freed objects from this test are
+        // disposed under a live object database instead of racing a later test's execution or the teardown-time
+        // finaliser pass, where the same disposal has crashed whole sessions (SIGILL in GodotObject.Dispose).
+        DrainPendingFinalisers();
+
         EmitSessionResult(requestId, outcome, failureMessage, failureStack, sessionReusable);
 
         if (!sessionReusable)
         {
             GetTree().Quit(1);
         }
+    }
+
+    /// <summary>
+    /// Forces one full collection and waits for the finaliser queue to empty, used only while the session is
+    /// between commands so finaliser-time Godot object disposal happens against a live engine state.
+    /// </summary>
+    private static void DrainPendingFinalisers()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
     }
 
     private void HandleSessionShutdownCommand(string requestId)
@@ -544,6 +560,10 @@ public partial class TestRuntimeRunner : Node
         EmitSessionLine(
             new SessionShutdownCompletePayload(SessionCommandParser.ProtocolVersion, SessionShutdownCompleteEventKind, requestId),
             _sessionCompactPayloadOptions);
+
+        // Drain finalisers before quitting so the teardown-time finaliser pass finds an empty queue and cannot
+        // race engine object-database destruction.
+        DrainPendingFinalisers();
 
         GetTree().Quit(0);
     }
@@ -623,11 +643,19 @@ public partial class TestRuntimeRunner : Node
 
         await WaitForProcessFramesAsync(SessionFrameSettleCount);
 
-        Node? existingGlobal = root.GetNodeOrNull<Node>(GlobalAutoloadName);
-        if (existingGlobal is not null)
+        // Free the outgoing Global autoload by reference as well as by name before recreating it. The
+        // name-keyed lookup alone can miss the live autoload when Godot has assigned a generated
+        // "@Node@N" name through a sibling-name collision, and re-creating the autoload while its
+        // predecessor still claims the Game singleton would fail the single-instance guarantee.
+        List<Node> outgoingGames = CollectRootGames(root);
+        if (outgoingGames.Count > 0)
         {
-            existingGlobal.QueueFree();
-            await WaitForProcessFramesAsync(SessionFrameSettleCount);
+            foreach (Node outgoingGame in outgoingGames)
+            {
+                outgoingGame.QueueFree();
+            }
+
+            await WaitForRootGamesToLeaveTreeAsync(root, outgoingGames);
         }
 
         if (!TryRecreateGlobalAutoload(root, baseline, diagnostics))
@@ -836,14 +864,56 @@ public partial class TestRuntimeRunner : Node
             return;
         }
 
-        Node? global = GetTree().Root.GetNodeOrNull<Node>("Global");
-        if (global is null)
+        // Free every root-owned Game rather than only the one currently named "Global". Godot assigns
+        // generated "@Node@N" names when an added child's name collides with a live sibling, so a
+        // name-keyed lookup can miss a live autoload Game and leave the singleton claimed — the next
+        // fixture's Game._EnterTree would then fail the single-instance guarantee.
+        Window root = GetTree().Root;
+        List<Node> gameRoots = CollectRootGames(root);
+        if (gameRoots.Count == 0 && !Game.HasInstance)
         {
             return;
         }
 
-        global.QueueFree();
-        _ = await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        foreach (Node game in gameRoots)
+        {
+            game.QueueFree();
+        }
+
+        // Observe the frees completing instead of trusting a fixed frame count, so the incoming fixture
+        // can never enter while a predecessor's _ExitTree is still pending.
+        await WaitForRootGamesToLeaveTreeAsync(root, gameRoots);
+    }
+
+    private static List<Node> CollectRootGames(Window root)
+    {
+        List<Node> games = [];
+        for (int index = 0; index < root.GetChildCount(); index++)
+        {
+            if (root.GetChild(index) is Game game)
+            {
+                games.Add(game);
+            }
+        }
+
+        return games;
+    }
+
+    private async Task WaitForRootGamesToLeaveTreeAsync(Window root, IReadOnlyList<Node> freedGames)
+    {
+        for (int frame = 0; frame < RootGameFreeFrameLimit; frame++)
+        {
+            if (!freedGames.Any(IsInstanceValid) && CollectRootGames(root).Count == 0 && !Game.HasInstance)
+            {
+                return;
+            }
+
+            _ = await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+
+        LogSessionWarning(
+            "Root-owned Games did not leave the scene tree within the awaited frame budget; "
+            + "the next test may observe a stale Game singleton.");
     }
 
     private static bool RequiresIsolatedGameSingleton(string testTypeName)

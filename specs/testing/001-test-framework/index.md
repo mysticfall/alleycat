@@ -140,13 +140,23 @@ After every test — including failures — the runtime restores and validates t
 3. Restore the session-start `Engine.TimeScale`.
 4. Remove test-created scenes and root children, protecting the runner.
 5. Let deferred frees settle over frames.
-6. Re-create a fresh `Global` autoload; preserving it would leak its service provider, logging, XR, and `Game.Instance`
+6. Free every root-owned `Game` instance — matched by type, not name, so roots renamed to generated `@Node@N` names
+   cannot escape — and await observed completion (freed nodes invalid, no root `Game` remaining, no registered
+   singleton) within a bounded frame budget that warns on exhaustion; a surviving `Game` keeps the singleton claimed,
+   so the next fixture's `Game.SetInstance` would fail the single-instance guarantee.
+7. Re-create a fresh `Global` autoload; preserving it would leak its service provider, logging, XR, and `Game.Instance`
    state.
-7. Restore the fresh-process startup scene arrangement.
-8. Validate the baseline: runner alive, tree unpaused, `Global` present, no unexpected root children.
+8. Restore the fresh-process startup scene arrangement.
+9. Validate the baseline: runner alive, tree unpaused, `Global` present, no unexpected root children.
 
-The existing isolated-`Game` policy still frees `Global` before tests that require it; the baseline re-creates it
-afterwards.
+The runtime also drains pending finalisers — one full collection plus a finaliser-queue wait — after each test's
+baseline restoration while the session is idle between commands, and again before session quit, so dangling
+`GodotObject` wrappers are disposed against a live engine rather than racing a later test or teardown-time
+object-database destruction.
+
+The existing isolated-`Game` policy still removes the runtime global before tests that require it; the baseline
+re-creates it afterwards. Removal follows the same teardown contract: free every root-owned `Game` by type and await
+observed completion within a bounded frame budget — never a name-keyed free or a fixed frame count.
 
 ### Test-Owned Cleanup Limits
 
@@ -225,12 +235,20 @@ explicit framework capability for tests whose contracts do not depend on a rende
 
 ## Supported CLI Options
 
-- `--test-class <Fully.Qualified.TypeName>` — narrows selection to tests on the exact type.
-- `--test-method <Fully.Qualified.TypeName.MethodName>` — narrows selection to one exact test method.
+- `--test-class <Fully.Qualified.TypeName[,...]>` — narrows selection to tests whose declaring type exactly matches
+  any listed fully qualified class name.
+- `--test-method <Fully.Qualified.TypeName.MethodName[,...]>` — narrows selection to the listed exact test methods.
 - `--headless` — forces all tests to run in headless mode. Overrides per-test and per-class `HeadlessAttribute`
   settings. Intended for tests known to be safe without renderer-backed behaviour.
 
-**Precedence:** If both `--test-class` and `--test-method` are supplied, `--test-method` takes precedence.
+**Selector lists:** each selection option takes one value that may be a comma-separated list of exact, fully
+qualified selectors, selecting the union of all matches; a single selector behaves exactly as before. Every
+`--test-method` entry must be a well-formed `<Fully.Qualified.TypeName>.<MethodName>` selector, or the command is
+rejected during validation. Likewise, a `--test-class` list must contain at least one non-empty class name; an
+all-empty list (for example `","`) is rejected during validation.
+
+**Precedence:** If both `--test-class` and `--test-method` are supplied, `--test-method` takes precedence and
+`--test-class` is ignored.
 
 **Limitation:** Advanced trait or category filters are not yet supported.
 

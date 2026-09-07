@@ -28,19 +28,23 @@ godot-mono --path game --xr-mode off
 
 ## Filtering
 
-Selectors match exact fully qualified names; they are not pattern filters.
+Selectors match exact fully qualified names; they are not pattern filters. Both selector options accept one value
+that may be a comma-separated list of such names and select the union of all matches; a single name behaves exactly
+as before.
 
 ```bash
-# All supported [Fact] tests on one exact type.
+# All supported [Fact] tests on one exact type; comma-separate additional types to run their union.
 dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
   --test-class AlleyCat.IntegrationTests.Testing.ReusableSessionIntegrationTests
 
-# One exact method: <Fully.Qualified.TypeName>.<MethodName>.
+# Exact methods as <Fully.Qualified.TypeName>.<MethodName>; comma-separate entries to run several.
 dotnet run --project integration-tests/AlleyCat.IntegrationTests.csproj -- \
-  --test-method Fully.Qualified.TypeName.MethodName
+  --test-method Fully.Qualified.TypeName.MethodName,Other.Qualified.TypeName.OtherMethod
 ```
 
-`--test-method` takes precedence when both selectors are present. Trait and category filters are unsupported.
+`--test-method` takes precedence when both selectors are present. Every `--test-method` entry must be a well-formed
+`<Fully.Qualified.TypeName>.<MethodName>` selector, or the command is rejected. A `--test-class` list must contain at
+least one non-empty class name; an all-empty list is likewise rejected. Trait and category filters are unsupported.
 
 ## Choosing an Execution Mode
 

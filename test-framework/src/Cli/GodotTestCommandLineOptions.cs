@@ -15,12 +15,12 @@ internal static class GodotTestCommandLineOptions
     [
         new CommandLineOption(
             TestClassOptionName,
-            "Run only tests whose declaring type exactly matches a fully qualified class name.",
+            "Run only tests whose declaring type exactly matches one of the comma-separated fully qualified class names.",
             ArgumentArity.ExactlyOne,
             isHidden: false),
         new CommandLineOption(
             TestMethodOptionName,
-            "Run only the exact fully qualified test method (Type.FullName.MethodName).",
+            "Run only the exact fully qualified test methods (Type.FullName.MethodName), comma-separated.",
             ArgumentArity.ExactlyOne,
             isHidden: false),
         new CommandLineOption(
@@ -37,7 +37,7 @@ internal static class GodotTestCommandLineOptions
         bool hasValidTestClass = TryGetSingleValue(
             commandLineOptions,
             TestClassOptionName,
-            out _,
+            out string? classValue,
             out string? testClassErrorMessage);
         bool hasValidTestMethod = TryGetSingleValue(
             commandLineOptions,
@@ -49,9 +49,10 @@ internal static class GodotTestCommandLineOptions
             ? ValidationResult.Invalid(testClassErrorMessage!)
             : !hasValidTestMethod
             ? ValidationResult.Invalid(testMethodErrorMessage!)
-            : methodValue is null
-            ? ValidationResult.Valid()
-            : GodotCliTestSelector.TryParseMethod(methodValue, out _, out _)
+            : classValue is not null && !SplitClassList(classValue).Any()
+            ? ValidationResult.Invalid(
+                $"Option '{ToCommandLineName(TestClassOptionName)}' must contain at least one fully qualified class name.")
+            : methodValue is null || TryParseMethodList(methodValue, out _, out _)
             ? ValidationResult.Valid()
             : ValidationResult.Invalid(
                 $"Option '{ToCommandLineName(TestMethodOptionName)}' must be in format '<Fully.Qualified.TypeName>.<MethodName>'.");
@@ -63,11 +64,37 @@ internal static class GodotTestCommandLineOptions
         _ = TryGetSingleValue(commandLineOptions, TestMethodOptionName, out string? testMethod, out _);
 
         return testMethod is not null
-            && GodotCliTestSelector.TryParseMethod(testMethod, out string methodTypeName, out string methodName)
-            ? GodotCliTestSelector.ForMethod(methodTypeName, methodName)
+            && TryParseMethodList(testMethod, out string[] methodTypeNames, out string[] methodNames)
+            ? GodotCliTestSelector.ForMethods(methodTypeNames, methodNames)
             : testClass is null
             ? GodotCliTestSelector.None
-            : GodotCliTestSelector.ForClass(testClass);
+            : GodotCliTestSelector.ForClass([.. SplitClassList(testClass)]);
+    }
+
+    /// <summary>
+    /// Splits one raw <c>--test-class</c> value into trimmed, non-empty class names.
+    /// </summary>
+    private static IEnumerable<string> SplitClassList(string rawClassList) =>
+        rawClassList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>
+    /// Splits one raw comma-separated <c>--test-method</c> value into parallel type-name and method-name arrays.
+    /// </summary>
+    private static bool TryParseMethodList(string rawMethodList, out string[] methodTypeNames, out string[] methodNames)
+    {
+        string[] selectors = [.. rawMethodList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+        methodTypeNames = new string[selectors.Length];
+        methodNames = new string[selectors.Length];
+
+        for (int index = 0; index < selectors.Length; index++)
+        {
+            if (!GodotCliTestSelector.TryParseMethod(selectors[index], out methodTypeNames[index], out methodNames[index]))
+            {
+                return false;
+            }
+        }
+
+        return selectors.Length > 0;
     }
 
     private static bool TryGetSingleValue(
@@ -139,23 +166,43 @@ internal sealed class GodotTestCommandLineOptionsProvider : ICommandLineOptionsP
         Task.FromResult(GodotTestCommandLineOptions.Validate(commandLineOptions));
 }
 
-internal sealed record GodotCliTestSelector(string? ClassName, string? MethodTypeName, string? MethodName)
+internal sealed record GodotCliTestSelector(
+    string?[]? ClassNames,
+    string?[]? MethodTypeNames,
+    string?[]? MethodNames)
 {
     public static GodotCliTestSelector None { get; } = new(null, null, null);
 
-    public static GodotCliTestSelector ForClass(string className) => new(className, null, null);
+    public static GodotCliTestSelector ForClass(params string[] classNames) => new(classNames, null, null);
 
     public static GodotCliTestSelector ForMethod(string methodTypeName, string methodName) =>
-        new(null, methodTypeName, methodName);
+        new(null, [methodTypeName], [methodName]);
+
+    public static GodotCliTestSelector ForMethods(string[] methodTypeNames, string[] methodNames) =>
+        new(null, methodTypeNames, methodNames);
 
     public bool Matches(MethodInfo method)
     {
         string? declaringTypeFullName = method.DeclaringType?.FullName;
         return declaringTypeFullName is not null
-            && (MethodTypeName is not null && MethodName is not null
-            ? string.Equals(declaringTypeFullName, MethodTypeName, StringComparison.Ordinal)
-              && string.Equals(method.Name, MethodName, StringComparison.Ordinal)
-            : ClassName is null || string.Equals(declaringTypeFullName, ClassName, StringComparison.Ordinal));
+            && (MethodTypeNames is not null && MethodNames is not null
+            ? MatchesMethod(declaringTypeFullName, method.Name)
+            : ClassNames is null || ClassNames.Contains(declaringTypeFullName, StringComparer.Ordinal));
+    }
+
+    private bool MatchesMethod(string declaringTypeFullName, string methodName)
+    {
+        for (int index = 0; index < MethodTypeNames!.Length; index++)
+        {
+            if (string.Equals(declaringTypeFullName, MethodTypeNames[index], StringComparison.Ordinal)
+                && index < MethodNames!.Length
+                && string.Equals(methodName, MethodNames[index], StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static bool TryParseMethod(string value, out string methodTypeName, out string methodName, out string? errorMessage)

@@ -90,6 +90,12 @@ public partial class Game : Node, IServiceProvider
         ?? throw new InvalidOperationException("Game singleton is not available.");
 
     /// <summary>
+    /// Gets whether a game singleton is currently claimed, without throwing. Test infrastructure uses this to
+    /// observe singleton teardown completion; gameplay code should use <see cref="Instance" /> instead.
+    /// </summary>
+    internal static bool HasInstance => _instance is not null;
+
+    /// <summary>
     /// Gets or sets the global game pause state. Paused gameplay stops processing while
     /// always-processing subsystems (XR tracking, menus) continue.
     /// </summary>
